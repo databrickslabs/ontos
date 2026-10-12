@@ -113,7 +113,12 @@
     "selectDescription": "Seleziona un asset condiviso da allegare a questa entità",
     "noSharedNotes": "Nessuna nota condivisa disponibile",
     "noSharedLinks": "Nessun link condiviso disponibile",
-    "noSharedDocuments": "Nessun documento condiviso disponibile"
+    "noSharedDocuments": "Nessun documento condiviso disponibile",
+    "loading": "Caricamento asset condivisi...",
+    "attach": "Allega",
+    "levelInfo": "Livello: {{level}}",
+    "inheritable": "Ereditabile",
+    "notInheritable": "Non ereditabile"
   },
   "messages": {
     "loadFailed": "Caricamento metadati fallito",
@@ -121,17 +126,130 @@
     "attachFailed": "Allegamento asset condiviso fallito"
   },
   "tags": {
-    "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "title": "Tag",
+    "description": "Applica tag di governance a questo oggetto.",
+    "edit": "Modifica tag",
+    "refresh": "Aggiorna",
+    "placeholder": "Cerca e seleziona i tag...",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "noTags": "Nessun tag applicato.",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "Tag aggiornati",
+      "saveFailed": "Impossibile aggiornare i tag"
     }
+  },
+  "costs": {
+    "title": "Gestione dei Costi",
+    "total": "Totale",
+    "breakdown": "Ripartizione",
+    "noItems": "Nessun elemento",
+    "addExpense": "Aggiungi spesa",
+    "editExpense": "Modifica spesa",
+    "loading": "Caricamento",
+    "noItemsForMonth": "Nessuna voce di costo per questo mese.",
+    "donutAria": "Ripartizione dei costi",
+    "table": {
+      "title": "Titolo",
+      "center": "Centro",
+      "monthRange": "Intervallo di Mesi",
+      "amountMonth": "Importo/Mese"
+    },
+    "form": {
+      "title": "Titolo",
+      "center": "Centro",
+      "customCenter": "Centro personalizzato",
+      "amountCents": "Importo (centesimi)",
+      "currency": "Valuta",
+      "startMonth": "Mese di inizio (AAAA-MM)",
+      "endMonth": "Mese di fine (AAAA-MM)",
+      "monthPlaceholder": "AAAA-MM"
+    },
+    "validation": {
+      "required": "Obbligatorio"
+    },
+    "messages": {
+      "loadFailed": "Impossibile caricare i costi",
+      "missingFields": "Campi obbligatori mancanti",
+      "missingFieldsDescription": "Compila tutti i campi obbligatori.",
+      "added": "Costo aggiunto",
+      "updated": "Costo aggiornato",
+      "deleted": "Costo eliminato",
+      "deleteFailed": "Eliminazione non riuscita",
+      "saveFailed": "Salvataggio non riuscito"
+    }
+  },
+  "quality": {
+    "title": "Qualità dei Dati",
+    "overallScore": "Punteggio Complessivo",
+    "byDimension": "Per Dimensione",
+    "noMeasurements": "Nessuna misurazione",
+    "addMeasurement": "Aggiungi misurazione",
+    "editMeasurement": "Modifica misurazione",
+    "lastMeasured": "Ultima misurazione {{date}}",
+    "loading": "Caricamento",
+    "noMeasurementsRecorded": "Nessuna misurazione di qualità registrata.",
+    "gaugeAria": "Punteggio di qualità",
+    "table": {
+      "title": "Titolo",
+      "dimension": "Dimensione",
+      "source": "Origine",
+      "score": "Punteggio",
+      "measured": "Misurato"
+    },
+    "form": {
+      "title": "Titolo",
+      "dimension": "Dimensione",
+      "source": "Origine",
+      "score": "Punteggio (%)",
+      "checksPassed": "Controlli Superati",
+      "checksTotal": "Controlli Totali"
+    },
+    "validation": {
+      "required": "Obbligatorio",
+      "range": "0-100"
+    },
+    "messages": {
+      "loadFailed": "Impossibile caricare i dati di qualità",
+      "missingFields": "Campi obbligatori mancanti",
+      "added": "Misurazione aggiunta",
+      "updated": "Misurazione aggiornata",
+      "deleted": "Misurazione eliminata",
+      "deleteFailed": "Eliminazione non riuscita",
+      "saveFailed": "Salvataggio non riuscito"
+    }
+  },
+  "ratings": {
+    "title": "Valutazioni",
+    "youRated": "La tua valutazione: {{rating}}★",
+    "updateYourRating": "Aggiorna la tua valutazione",
+    "rateThisItem": "Valuta questo elemento",
+    "addReviewOptional": "Aggiungi una recensione (facoltativa)",
+    "reviewPlaceholder": "Condividi la tua esperienza...",
+    "submitting": "Invio in corso...",
+    "submitRating": "Invia Valutazione",
+    "labels": {
+      "poor": "Scarso",
+      "fair": "Sufficiente",
+      "good": "Buono",
+      "veryGood": "Molto Buono",
+      "excellent": "Eccellente"
+    }
+  },
+  "info": {
+    "entityInformation": "Informazioni sull'Entità",
+    "subscribed": "Iscritto",
+    "tableOfContents": "Indice",
+    "noNotesAvailable": "Nessuna nota disponibile.",
+    "noLinks": "Nessun link.",
+    "inherited": "Ereditato",
+    "shared": "Condiviso",
+    "ratingsAndReviews": "Valutazioni e Recensioni",
+    "loadingRatings": "Caricamento valutazioni...",
+    "yourRating": "La Tua Valutazione",
+    "addReviewPlaceholder": "Aggiungi una recensione (facoltativa)...",
+    "goToDetails": "Vai ai Dettagli",
+    "alreadySubscribed": "Già Iscritto",
+    "subscribe": "Iscriviti"
   }
 }

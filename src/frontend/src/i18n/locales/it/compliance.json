@@ -34,12 +34,73 @@
     "security": "Sicurezza",
     "dataQuality": "Qualità dei Dati",
     "privacy": "Privacy",
-    "governance": "Governance"
+    "governance": "Governance",
+    "maturity": "Maturità"
   },
   "errors": {
     "loadingPolicies": "Errore nel Caricamento delle Policy",
     "savingPolicy": "Errore nel Salvataggio della Policy",
-    "deletingPolicy": "Errore nell'Eliminazione della Policy"
+    "deletingPolicy": "Errore nell'Eliminazione della Policy",
+    "loadPolicyFailed": "Impossibile caricare il criterio",
+    "loadFailed": "Caricamento non riuscito",
+    "savePolicyFailed": "Impossibile salvare il criterio",
+    "deletePolicyFailed": "Impossibile eliminare il criterio",
+    "noDataReceived": "Nessun dato ricevuto dall'endpoint dei criteri di conformità.",
+    "saveNoDataReturned": "Impossibile salvare il criterio: nessun dato restituito",
+    "loadPoliciesFailed": "Impossibile caricare i criteri di conformità",
+    "loadRunResultsFailed": "Impossibile caricare i risultati dell'esecuzione",
+    "policyNotFound": "Criterio di conformità non trovato.",
+    "runNotFound": "Esecuzione non trovata."
+  },
+  "results": {
+    "passed": "Superato",
+    "failed": "Non superato",
+    "showFailed": "Mostra non superati",
+    "showAll": "Mostra tutti",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Torna all'elenco",
+    "run": "Esegui",
+    "id": "ID",
+    "examples": "Esempi",
+    "shouldPass": "Dovrebbe superare",
+    "shouldFail": "Dovrebbe fallire",
+    "noExamples": "Nessun esempio",
+    "runSummary": {
+      "title": "Riepilogo esecuzione",
+      "lastRunStarted": "Ultima esecuzione avviata il {{date}}",
+      "statusLabel": "Stato:",
+      "score": "Punteggio",
+      "passed": "Superati",
+      "failed": "Non superati",
+      "passedExamples": "Esempi superati",
+      "failedExamples": "Esempi non superati",
+      "noPassedExamples": "Nessun esempio superato in questa esecuzione",
+      "noFailures": "Nessun errore in questa esecuzione"
+    },
+    "runsList": {
+      "title": "Esecuzioni",
+      "mostRecentFirst": "Prima le più recenti",
+      "noRuns": "Ancora nessuna esecuzione",
+      "scoreLabel": "Punteggio:",
+      "scoreDetail": "{{passed}} superati / {{failed}} non superati",
+      "openRunDetails": "Apri dettagli esecuzione"
+    },
+    "resultsCard": {
+      "title": "Risultati",
+      "filteredFailed": "Filtrato solo sui non superati — ultima esecuzione {{date}}",
+      "filteredAll": "Filtrato su tutti — ultima esecuzione {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Esecuzione {{id}}",
+    "viewPolicy": "Visualizza criterio",
+    "statusLabel": "Stato:",
+    "scoreLabel": "Punteggio:",
+    "passedLabel": "Superati:",
+    "failedLabel": "Non superati:",
+    "startedLabel": "Avviata il: {{date}}"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' salvata con successo",
@@ -102,4 +163,3 @@
     }
   }
 }
-

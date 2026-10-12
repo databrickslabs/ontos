@@ -3,6 +3,7 @@ import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import type { Core, ElementDefinition, LayoutOptions } from 'cytoscape';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -213,6 +214,7 @@ export function BusinessLineageGraph({
   source = 'lineage',
 }: BusinessLineageGraphProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const cyRef = useRef<Core | null>(null);
   const layoutRef = useRef<any>(null);
   const initialLayoutDoneRef = useRef(false);
@@ -244,22 +246,22 @@ export function BusinessLineageGraph({
     try {
       if (source === 'relationships') {
         const res = await fetch(`/api/entities/${entityType}/${entityId}/relationships`);
-        if (!res.ok) throw new Error(`Failed to load relationships: ${res.status}`);
+        if (!res.ok) throw new Error(t('common:businessLineage.failedLoadRelationships', { status: res.status }));
         const raw = await res.json();
         setGraphData(relationshipsToGraph(raw, entityType, entityId, entityName));
       } else {
         const suffix = mode === 'impact' ? '/impact' : '';
         const params = new URLSearchParams({ max_depth: String(maxDepth) });
         const res = await fetch(`/api/business-lineage/${entityType}/${entityId}${suffix}?${params}`);
-        if (!res.ok) throw new Error(`Failed to load lineage: ${res.status}`);
+        if (!res.ok) throw new Error(t('common:businessLineage.failedLoadLineage', { status: res.status }));
         setGraphData(await res.json());
       }
     } catch (e: any) {
-      setError(e.message || 'Failed to load graph');
+      setError(e.message || t('common:businessLineage.failedLoadGraph'));
     } finally {
       setIsLoading(false);
     }
-  }, [entityType, entityId, entityName, mode, maxDepth, source]);
+  }, [entityType, entityId, entityName, mode, maxDepth, source, t]);
 
   useEffect(() => { fetchGraph(); }, [fetchGraph]);
 
@@ -470,7 +472,7 @@ export function BusinessLineageGraph({
     return (
       <div className={`flex items-center justify-center ${className || 'h-64'}`}>
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading relationships...</span>
+        <span className="ml-2 text-sm text-muted-foreground">{t('common:businessLineage.loadingRelationships')}</span>
       </div>
     );
   }
@@ -480,7 +482,7 @@ export function BusinessLineageGraph({
       <div className={`flex flex-col items-center justify-center gap-2 ${className || 'h-64'}`}>
         <AlertCircle className="w-6 h-6 text-destructive" />
         <p className="text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={fetchGraph}>Retry</Button>
+        <Button variant="outline" size="sm" onClick={fetchGraph}>{t('common:retry')}</Button>
       </div>
     );
   }
@@ -488,7 +490,7 @@ export function BusinessLineageGraph({
   if (!graphData || graphData.nodes.length === 0) {
     return (
       <div className={`flex items-center justify-center ${className || 'h-64'}`}>
-        <p className="text-sm text-muted-foreground">No relationship data found for this entity.</p>
+        <p className="text-sm text-muted-foreground">{t('common:businessLineage.noRelationshipData')}</p>
       </div>
     );
   }
@@ -503,13 +505,13 @@ export function BusinessLineageGraph({
         <div className="flex items-center gap-2">
           <Select value={layout} onValueChange={(v) => setLayout(v as LayoutType)}>
             <SelectTrigger className="w-[160px] h-8">
-              <SelectValue placeholder="Layout" />
+              <SelectValue placeholder={t('common:businessLineage.layoutPlaceholder')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="concentric">Concentric</SelectItem>
-              <SelectItem value="cose">Force-Directed</SelectItem>
-              <SelectItem value="circle">Circular</SelectItem>
-              <SelectItem value="breadthfirst">Hierarchical</SelectItem>
+              <SelectItem value="concentric">{t('common:businessLineage.layout.concentric')}</SelectItem>
+              <SelectItem value="cose">{t('common:businessLineage.layout.cose')}</SelectItem>
+              <SelectItem value="circle">{t('common:businessLineage.layout.circle')}</SelectItem>
+              <SelectItem value="breadthfirst">{t('common:businessLineage.layout.breadthfirst')}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -518,27 +520,27 @@ export function BusinessLineageGraph({
             size="icon"
             className="h-8 w-8"
             onClick={() => setShowGroups(g => !g)}
-            title={showGroups ? 'Ungroup by type' : 'Group by type'}
+            title={showGroups ? t('common:businessLineage.ungroupByType') : t('common:businessLineage.groupByType')}
           >
             {showGroups ? <Group className="h-4 w-4" /> : <Ungroup className="h-4 w-4" />}
           </Button>
 
           <Badge variant="secondary" className="text-xs">
-            {entityCount} entities, {edgeCount} relationships
+            {t('common:businessLineage.countBadge', { entities: entityCount, relationships: edgeCount })}
           </Badge>
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut} title="Zoom Out">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut} title={t('common:tooltips.zoomOut')}>
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn} title="Zoom In">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn} title={t('common:tooltips.zoomIn')}>
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleFit} title="Fit to View">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleFit} title={t('common:tooltips.fitToView')}>
             <Maximize className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleReset} title="Reset Layout">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleReset} title={t('common:tooltips.resetLayout')}>
             <RotateCcw className="h-4 w-4" />
           </Button>
         </div>

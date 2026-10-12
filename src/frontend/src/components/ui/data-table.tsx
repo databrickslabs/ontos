@@ -88,7 +88,7 @@ export function DataTable<TData, TValue>({
   searchValue,
   onSearchChange,
 }: DataTableProps<TData, TValue>) {
-  const { t } = useTranslation('data-table');
+  const { t } = useTranslation(['data-table', 'common']);
   
   // Helper function to detect the default sort column from columns
   const detectDefaultSortColumn = React.useCallback((): string | null => {
@@ -171,7 +171,7 @@ export function DataTable<TData, TValue>({
         <Checkbox
           checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label={t('common:dataTable.selectAll')}
           className="translate-y-[2px]"
         />
       ),
@@ -179,7 +179,7 @@ export function DataTable<TData, TValue>({
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label={t('common:dataTable.selectRow')}
           className="translate-y-[2px]"
         />
       ),

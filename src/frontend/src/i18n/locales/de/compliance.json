@@ -34,12 +34,73 @@
     "security": "Sicherheit",
     "dataQuality": "Datenqualität",
     "privacy": "Datenschutz",
-    "governance": "Governance"
+    "governance": "Governance",
+    "maturity": "Reifegrad"
   },
   "errors": {
     "loadingPolicies": "Fehler beim Laden der Richtlinien",
     "savingPolicy": "Fehler beim Speichern der Richtlinie",
-    "deletingPolicy": "Fehler beim Löschen der Richtlinie"
+    "deletingPolicy": "Fehler beim Löschen der Richtlinie",
+    "loadPolicyFailed": "Richtlinie konnte nicht geladen werden",
+    "loadFailed": "Laden fehlgeschlagen",
+    "savePolicyFailed": "Richtlinie konnte nicht gespeichert werden",
+    "deletePolicyFailed": "Richtlinie konnte nicht gelöscht werden",
+    "noDataReceived": "Keine Daten vom Endpunkt für Compliance-Richtlinien erhalten.",
+    "saveNoDataReturned": "Richtlinie konnte nicht gespeichert werden: Keine Daten zurückgegeben",
+    "loadPoliciesFailed": "Compliance-Richtlinien konnten nicht geladen werden",
+    "loadRunResultsFailed": "Ausführungsergebnisse konnten nicht geladen werden",
+    "policyNotFound": "Compliance-Richtlinie nicht gefunden.",
+    "runNotFound": "Ausführung nicht gefunden."
+  },
+  "results": {
+    "passed": "Bestanden",
+    "failed": "Fehlgeschlagen",
+    "showFailed": "Fehlgeschlagene anzeigen",
+    "showAll": "Alle anzeigen",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Zurück zur Liste",
+    "run": "Ausführen",
+    "id": "ID",
+    "examples": "Beispiele",
+    "shouldPass": "Sollte bestehen",
+    "shouldFail": "Sollte fehlschlagen",
+    "noExamples": "Keine Beispiele",
+    "runSummary": {
+      "title": "Ausführungsübersicht",
+      "lastRunStarted": "Letzte Ausführung gestartet {{date}}",
+      "statusLabel": "Status:",
+      "score": "Score",
+      "passed": "Bestanden",
+      "failed": "Fehlgeschlagen",
+      "passedExamples": "Bestandene Beispiele",
+      "failedExamples": "Fehlgeschlagene Beispiele",
+      "noPassedExamples": "Keine bestandenen Beispiele in dieser Ausführung",
+      "noFailures": "Keine Fehler in dieser Ausführung"
+    },
+    "runsList": {
+      "title": "Ausführungen",
+      "mostRecentFirst": "Neueste zuerst",
+      "noRuns": "Noch keine Ausführungen",
+      "scoreLabel": "Score:",
+      "scoreDetail": "{{passed}} bestanden / {{failed}} fehlgeschlagen",
+      "openRunDetails": "Ausführungsdetails öffnen"
+    },
+    "resultsCard": {
+      "title": "Ergebnisse",
+      "filteredFailed": "Gefiltert nur nach fehlgeschlagenen – letzte Ausführung {{date}}",
+      "filteredAll": "Gefiltert nach allen – letzte Ausführung {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Ausführung {{id}}",
+    "viewPolicy": "Richtlinie anzeigen",
+    "statusLabel": "Status:",
+    "scoreLabel": "Score:",
+    "passedLabel": "Bestanden:",
+    "failedLabel": "Fehlgeschlagen:",
+    "startedLabel": "Gestartet: {{date}}"
   },
   "toast": {
     "policySaved": "Richtlinie '{{name}}' erfolgreich gespeichert",
@@ -102,4 +163,3 @@
     }
   }
 }
-

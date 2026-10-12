@@ -56,7 +56,7 @@ export interface Estate {
 // --- End TypeScript Interfaces ---
 
 export default function EstateDetailsView() {
-  useTranslation(['estates', 'common']);
+  const { t } = useTranslation(['estates', 'common']);
   const { estateId } = useParams<{ estateId: string }>();
   const navigate = useNavigate();
   const { get, put } = useApi();
@@ -73,15 +73,15 @@ export default function EstateDetailsView() {
 
   useEffect(() => {
     // Set static breadcrumb for Estate Manager parent
-    setStaticSegments([{ label: 'Estate Manager', path: '/estate-manager' }]);
+    setStaticSegments([{ label: t('estates:title'), path: '/estate-manager' }]);
 
     if (estateId) {
       fetchEstateDetails(estateId);
       // Initial dynamic title while loading specific estate
-      setDynamicTitle('Loading...');
+      setDynamicTitle(t('common:states.loading'));
     } else {
       // If no estateId, this is an invalid state or direct access to a generic details page
-      setDynamicTitle('Estate Details');
+      setDynamicTitle(t('estates:details.pageTitle'));
     }
     
     // Cleanup breadcrumbs on unmount
@@ -96,10 +96,10 @@ export default function EstateDetailsView() {
     if (estate) {
       setDynamicTitle(estate.name);
     } else if (!isLoading && error) {
-      setDynamicTitle('Error');
+      setDynamicTitle(t('common:states.error'));
     } else if (!isLoading && !estateId) {
-      setDynamicTitle('Estate Details');
-    } 
+      setDynamicTitle(t('estates:details.pageTitle'));
+    }
   // Use stable setters in dependency array
   }, [estate, isLoading, error, setDynamicTitle, estateId, setStaticSegments]);
 
@@ -113,13 +113,13 @@ export default function EstateDetailsView() {
         setEstate(response.data);
         // setDynamicTitle(response.data.name); // Moved to useEffect
       } else {
-        throw new Error(response.error || 'Estate not found');
+        throw new Error(response.error || t('estates:details.notFound'));
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch estate details.');
+      setError(err.message || t('estates:details.errors.fetchFailed'));
       toast({
-        title: 'Error Fetching Estate',
-        description: err.message || 'Could not load estate details.',
+        title: t('estates:details.errors.fetchTitle'),
+        description: err.message || t('estates:details.errors.couldNotLoad'),
         variant: 'destructive',
       });
       setEstate(null); // Clear estate on error
@@ -132,8 +132,8 @@ export default function EstateDetailsView() {
   const handlePolicyAdded = async (newPolicy: SharingPolicy) => {
     if (!estate || !estateId) {
       toast({
-        title: 'Error',
-        description: 'Estate data is not available to add a policy.',
+        title: t('common:toast.error'),
+        description: t('estates:details.errors.noEstateData'),
         variant: 'destructive',
       });
       return;
@@ -158,22 +158,22 @@ export default function EstateDetailsView() {
       if (response.data) {
         setEstate(response.data); // Update with response from server, which should include the new policy with its ID
         toast({
-          title: 'Policy Added',
-          description: `Sharing policy "${newPolicy.name}" has been successfully added.`,
+          title: t('estates:details.policies.addedTitle'),
+          description: t('estates:details.policies.addedDescription', { name: newPolicy.name }),
         });
         setIsAddPolicyDialogOpen(false); // Close the dialog
       } else {
         // Revert optimistic update if it was done before API call
-        // setEstate(estate); 
-        throw new Error(response.error || 'Failed to save policy. Server returned no data.');
+        // setEstate(estate);
+        throw new Error(response.error || t('estates:details.policies.saveFailedNoData'));
       }
     } catch (err: any) {
       // Revert optimistic update if it was done before API call
       // setEstate(estate);
       console.error('Failed to add policy:', err);
       toast({
-        title: 'Error Adding Policy',
-        description: err.message || 'Could not save the new sharing policy. Please try again.',
+        title: t('estates:details.policies.addErrorTitle'),
+        description: err.message || t('estates:details.policies.addErrorDescription'),
         variant: 'destructive',
       });
     }
@@ -188,7 +188,7 @@ export default function EstateDetailsView() {
       <div className="flex flex-col items-center justify-center h-64 text-red-600">
         <p>{error}</p>
         <Button variant="outline" onClick={() => navigate('/estate-manager')} className="mt-4">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Estate Manager
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('estates:details.backToEstateManager')}
         </Button>
       </div>
     );
@@ -197,9 +197,9 @@ export default function EstateDetailsView() {
   if (!estate) {
     return (
         <div className="flex flex-col items-center justify-center h-64">
-            <p className="text-muted-foreground">Estate not found or could not be loaded.</p>
+            <p className="text-muted-foreground">{t('estates:details.notFoundOrLoad')}</p>
             <Button variant="outline" onClick={() => navigate('/estate-manager')} className="mt-4">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Estate Manager
+                <ArrowLeft className="mr-2 h-4 w-4" /> {t('estates:details.backToEstateManager')}
             </Button>
         </div>
     );
@@ -218,14 +218,14 @@ export default function EstateDetailsView() {
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate('/estate-manager')} size="sm">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to List
+          {t('estates:details.backToListButton')}
         </Button>
         <div className="flex gap-2">
             <Button variant="outline" size="sm">
-                <Settings2 className="mr-2 h-4 w-4" /> Configure Sync Job
+                <Settings2 className="mr-2 h-4 w-4" /> {t('estates:details.configureSyncJob')}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => alert('Edit Estate functionality to be implemented')}>
-                <Edit3 className="mr-2 h-4 w-4" /> Edit Estate
+            <Button variant="outline" size="sm" onClick={() => alert(t('estates:details.editNotImplemented'))}>
+                <Edit3 className="mr-2 h-4 w-4" /> {t('estates:editEstate')}
             </Button>
         </div>
       </div>
@@ -240,19 +240,19 @@ export default function EstateDetailsView() {
             </div>
             <Badge variant={estate.is_enabled ? 'default' : 'secondary'} className="capitalize text-sm px-3 py-1">
                 {estate.is_enabled ? <Zap className="mr-1 h-4 w-4"/> : <ZapOff className="mr-1 h-4 w-4"/>}
-                Sync {estate.is_enabled ? 'Enabled' : 'Disabled'}
+                {estate.is_enabled ? t('estates:details.syncEnabled') : t('estates:details.syncDisabled')}
             </Badge>
         </CardHeader>
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-            <InfoItem label="Workspace URL" value={estate.workspace_url} />
-            <InfoItem label="Cloud Provider">
+            <InfoItem label={t('common:labels.workspaceUrl')} value={estate.workspace_url} />
+            <InfoItem label={t('estates:details.labels.cloudProvider')}>
                 <Badge variant={estate.cloud_type === 'aws' ? 'secondary' : estate.cloud_type === 'azure' ? 'default' : 'outline'} className="capitalize">
                     {estate.cloud_type}
                 </Badge>
             </InfoItem>
-            <InfoItem label="Metastore Name" value={estate.metastore_name} />
-            <InfoItem label="Connection Type">
+            <InfoItem label={t('estates:form.metastoreName')} value={estate.metastore_name} />
+            <InfoItem label={t('estates:form.connectionType')}>
                 <div className="flex items-center gap-1 capitalize">
                     {estate.connection_type === 'delta_share' ? 
                     <Share2 className="h-4 w-4 text-blue-500" /> : 
@@ -260,9 +260,9 @@ export default function EstateDetailsView() {
                     {estate.connection_type.replace('_', ' ')}
                 </div>
             </InfoItem>
-            <InfoItem label="Sync Schedule" value={estate.sync_schedule} />
-            <InfoItem label="Last Sync Time" value={estate.last_sync_time ? new Date(estate.last_sync_time).toLocaleString() : 'Never'} />
-            <InfoItem label="Last Sync Status">
+            <InfoItem label={t('estates:form.syncSchedule')} value={estate.sync_schedule} />
+            <InfoItem label={t('estates:details.labels.lastSyncTime')} value={estate.last_sync_time ? new Date(estate.last_sync_time).toLocaleString() : t('estates:details.never')} />
+            <InfoItem label={t('estates:details.labels.lastSyncStatus')}>
               {estate.last_sync_status ? (
                 <Badge 
                     variant={estate.last_sync_status === 'success' ? 'default' : estate.last_sync_status === 'failed' ? 'destructive' : 'secondary'}
@@ -271,14 +271,14 @@ export default function EstateDetailsView() {
                   {estate.last_sync_status}
                 </Badge>
               ) : (
-                <Badge variant="outline">Unknown</Badge>
+                <Badge variant="outline">{t('common:states.unknown')}</Badge>
               )}
             </InfoItem>
             {estate.last_sync_status === 'failed' && estate.last_sync_error && (
-              <InfoItem label="Last Sync Error" value={estate.last_sync_error} />
+              <InfoItem label={t('estates:details.labels.lastSyncError')} value={estate.last_sync_error} />
             )}
-            <InfoItem label="Created At" value={new Date(estate.created_at).toLocaleString()} />
-            <InfoItem label="Last Updated At" value={new Date(estate.updated_at).toLocaleString()} />
+            <InfoItem label={t('common:labels.createdAt')} value={new Date(estate.created_at).toLocaleString()} />
+            <InfoItem label={t('estates:details.labels.lastUpdatedAt')} value={new Date(estate.updated_at).toLocaleString()} />
           </div>
         </CardContent>
       </Card>
@@ -289,13 +289,13 @@ export default function EstateDetailsView() {
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle className="text-xl flex items-center"><ShieldCheck className="mr-2 h-6 w-6 text-primary"/> Sharing Policies</CardTitle>
+            <CardTitle className="text-xl flex items-center"><ShieldCheck className="mr-2 h-6 w-6 text-primary"/> {t('estates:details.policies.title')}</CardTitle>
             <Button variant="outline" size="sm" onClick={() => setIsAddPolicyDialogOpen(true)}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add Policy
+                <PlusCircle className="mr-2 h-4 w-4" /> {t('estates:details.policies.add')}
             </Button>
           </div>
           <CardDescription>
-            Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.
+            {t('estates:details.policies.sectionDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -308,12 +308,12 @@ export default function EstateDetailsView() {
                         <CardTitle className="text-lg">{policy.name}</CardTitle>
                         <div className="flex items-center gap-2">
                             <Badge variant={policy.is_enabled ? 'default' : 'secondary'} className="capitalize">
-                                {policy.is_enabled ? 'Enabled' : 'Disabled'}
+                                {policy.is_enabled ? t('common:labels.enabled') : t('common:labels.disabled')}
                             </Badge>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => alert(`Edit policy: ${policy.name}`)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => alert(t('estates:details.policies.editPolicyAlert', { name: policy.name }))}>
                                 <Edit3 className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => alert(`Delete policy: ${policy.name}`)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" onClick={() => alert(t('estates:details.policies.deletePolicyAlert', { name: policy.name }))}>
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
@@ -321,18 +321,18 @@ export default function EstateDetailsView() {
                     {policy.description && <CardDescription className="pt-1">{policy.description}</CardDescription>}
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm font-semibold mb-1">Resource Type: <Badge variant="outline" className="capitalize">{policy.resource_type.replace('_', ' ')}</Badge></p>
-                    <p className="text-sm font-semibold mb-1">Rules ({policy.rules.length}):</p>
+                    <p className="text-sm font-semibold mb-1">{t('estates:details.policies.resourceTypeLabel')} <Badge variant="outline" className="capitalize">{policy.resource_type.replace('_', ' ')}</Badge></p>
+                    <p className="text-sm font-semibold mb-1">{t('estates:details.policies.rulesLabel', { count: policy.rules.length })}</p>
                     {policy.rules.length > 0 ? (
                         <ul className="list-disc list-inside pl-2 space-y-1 text-sm text-muted-foreground">
                         {policy.rules.map((rule, ruleIndex) => (
                             <li key={ruleIndex}>
-                            Filter by <span className="font-medium text-foreground">{rule.filter_type}</span> where value <span className="font-medium text-foreground">{rule.operator.replace('_', ' ')}</span> <span className="font-medium text-foreground">'{rule.filter_value}'</span>
+                            {t('estates:details.policies.filterBy')} <span className="font-medium text-foreground">{rule.filter_type}</span> {t('estates:details.policies.whereValue')} <span className="font-medium text-foreground">{rule.operator.replace('_', ' ')}</span> <span className="font-medium text-foreground">'{rule.filter_value}'</span>
                             </li>
                         ))}
                         </ul>
                     ) : (
-                        <p className="text-sm text-muted-foreground italic">No rules defined for this policy.</p>
+                        <p className="text-sm text-muted-foreground italic">{t('estates:details.policies.noRules')}</p>
                     )}
                   </CardContent>
                 </Card>
@@ -341,8 +341,8 @@ export default function EstateDetailsView() {
           ) : (
             <div className="text-center text-muted-foreground py-8">
               <ListFilter className="mx-auto h-12 w-12 text-gray-400 mb-2" />
-              <p className="font-semibold">No sharing policies defined for this estate.</p>
-              <p className="text-sm">Click "Add Policy" to start sharing resources.</p>
+              <p className="font-semibold">{t('estates:details.policies.emptyTitle')}</p>
+              <p className="text-sm">{t('estates:details.policies.emptyHint')}</p>
             </div>
           )}
         </CardContent>

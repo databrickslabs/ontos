@@ -5,5 +5,25 @@
     "build": "Bouwen",
     "govern": "Besturen",
     "deploy": "Uitrollen"
+  },
+  "dbDown": {
+    "title": "Database niet beschikbaar",
+    "body": "De applicatie kan de metadatadatabase niet bereiken. De meeste functies geven fouten totdat de verbinding is hersteld.",
+    "retrying": "Opnieuw proberen…",
+    "retryConnection": "Verbinding opnieuw proberen",
+    "retryFailed": "Opnieuw proberen mislukt",
+    "autoRetrying": "Automatisch opnieuw proberen elke {{seconds}} seconden",
+    "pausedTitle": "Applicatie gepauzeerd",
+    "pausedBodyBefore": "De metadatadatabase is onbereikbaar, dus navigatie en dataweergaven zijn uitgeschakeld om het tonen van inconsistente status te voorkomen. Gebruik",
+    "pausedBodyAfter": "hierboven (of wacht op de volgende automatische poging) om te hervatten."
+  },
+  "warning": {
+    "title": "Systeemwaarschuwing",
+    "workspaceFailed": "Verbinding met Databricks-werkruimte mislukt. Sommige functies zijn mogelijk niet beschikbaar."
+  },
+  "routeError": {
+    "title": "Er is iets misgegaan",
+    "body": "Er is een onverwachte fout opgetreden bij het weergeven van deze pagina. Je kunt het opnieuw proberen of teruggaan naar de startpagina.",
+    "goHome": "Naar Home"
   }
 }

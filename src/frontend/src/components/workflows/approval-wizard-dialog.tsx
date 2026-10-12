@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -52,10 +53,11 @@ function simpleMarkdown(text: string): string {
 interface ReferenceDoc { label: string; url: string; }
 
 function ReferenceDocuments({ refs }: { refs?: ReferenceDoc[] }) {
+  const { t } = useTranslation(['workflows', 'common']);
   if (!refs || refs.length === 0) return null;
   return (
     <div className="mt-4 border-t pt-3">
-      <p className="text-xs font-medium text-muted-foreground mb-2">Reference documents</p>
+      <p className="text-xs font-medium text-muted-foreground mb-2">{t('workflows:approvalWizard.referenceDocuments')}</p>
       <ul className="space-y-1">
         {refs.map((ref, i) => (
           <li key={i}>
@@ -188,6 +190,7 @@ export function FetchedSelectField(props: {
   fetcher: <T,>(url: string) => Promise<{ data?: T; error?: string | null }>;
 }) {
   const { field, value, onChange, disabled, fetcher } = props;
+  const { t } = useTranslation(['workflows', 'common']);
   const [options, setOptions] = useState<Array<{ value: string; label: string }>>(field.options ?? []);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -223,7 +226,7 @@ export function FetchedSelectField(props: {
           .filter((o): o is { value: string; label: string } => o !== null);
         setOptions(normalized);
       } catch (e: any) {
-        if (!cancelled) setFetchError(e?.message ?? 'Failed to load options');
+        if (!cancelled) setFetchError(e?.message ?? t('workflows:approvalWizard.failedToLoadOptions'));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -236,7 +239,7 @@ export function FetchedSelectField(props: {
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled || isLoading}>
       <SelectTrigger id={field.id}>
-        <SelectValue placeholder={isLoading ? 'Loading…' : (field.label ?? 'Select…')} />
+        <SelectValue placeholder={isLoading ? t('workflows:approvalWizard.loadingEllipsis') : (field.label ?? t('workflows:approvalWizard.selectEllipsis'))} />
       </SelectTrigger>
       <SelectContent>
         {options.map((opt) => (
@@ -246,7 +249,7 @@ export function FetchedSelectField(props: {
         ))}
         {options.length === 0 && !isLoading && (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            {fetchError ?? 'No options available'}
+            {fetchError ?? t('workflows:approvalWizard.noOptionsAvailable')}
           </div>
         )}
       </SelectContent>
@@ -318,6 +321,7 @@ export default function ApprovalWizardDialog({
 }: ApprovalWizardDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['workflows', 'common']);
   const [workflows, setWorkflows] = useState<ApprovalWorkflowRef[]>([]);
   const [, setSelectedWorkflowId] = useState<string | null>(preselectedWorkflowId ?? null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -463,7 +467,7 @@ export default function ApprovalWizardDialog({
         // exactly what a real session would render at step 0.
         if (previewMode) {
           if (!wf?.steps || wf.steps.length === 0) {
-            toast({ title: 'Nothing to preview', description: 'Workflow has no steps.', variant: 'destructive' });
+            toast({ title: t('workflows:approvalWizard.messages.nothingToPreview'), description: t('workflows:approvalWizard.messages.nothingToPreviewDesc'), variant: 'destructive' });
             return;
           }
           const orderedSteps = [...wf.steps].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -498,7 +502,7 @@ export default function ApprovalWizardDialog({
           body,
         );
         if (res.error || !res.data) {
-          toast({ title: 'Error', description: res.error || 'Failed to start session', variant: 'destructive' });
+          toast({ title: t('common:toast.error'), description: res.error || t('workflows:approvalWizard.messages.startSessionFailed'), variant: 'destructive' });
           return;
         }
         setSessionId((res.data as { session_id: string }).session_id);
@@ -506,12 +510,12 @@ export default function ApprovalWizardDialog({
         setStepResults(((res.data as { step_results?: unknown[] }).step_results ?? []) as Array<{ step_id: string; payload: Record<string, unknown> }>);
         setPayload({});
       } catch (e) {
-        toast({ title: 'Error', description: 'Failed to start session', variant: 'destructive' });
+        toast({ title: t('common:toast.error'), description: t('workflows:approvalWizard.messages.startSessionFailed'), variant: 'destructive' });
       } finally {
         setLoading(false);
       }
     },
-    [entityType, entityId, completionAction, onBehalfOf, post, toast, workflows, previewMode],
+    [entityType, entityId, completionAction, onBehalfOf, post, toast, workflows, previewMode, t],
   );
 
   useEffect(() => {
@@ -643,7 +647,7 @@ export default function ApprovalWizardDialog({
         if (decision.kind === 'terminal') {
           setCompleteResult({ agreement_id: null, pdf_storage_path: null, pdf_url: null });
           setCurrentStep(null);
-          toast({ title: 'Preview complete', description: 'No agreement was created and no notifications were sent.' });
+          toast({ title: t('workflows:approvalWizard.messages.previewComplete'), description: t('workflows:approvalWizard.messages.previewCompleteDesc') });
           return;
         }
         if (decision.nextVisualIndex >= 0) setCurrentStepIndex(decision.nextVisualIndex);
@@ -688,14 +692,14 @@ export default function ApprovalWizardDialog({
         { step_id: currentStep.step_id, payload: submissionPayload },
       );
       if (res.error || !res.data) {
-        toast({ title: 'Error', description: (res as { error?: string }).error || 'Failed to submit step', variant: 'destructive' });
+        toast({ title: t('common:toast.error'), description: (res as { error?: string }).error || t('workflows:approvalWizard.messages.submitStepFailed'), variant: 'destructive' });
         return;
       }
       const data = res.data as { complete?: boolean; agreement_id?: string; pdf_storage_path?: string; pdf_url?: string; current_step?: WizardStep; step_results?: unknown[] };
       if (data.complete) {
         setCompleteResult({ agreement_id: data.agreement_id ?? null, pdf_storage_path: data.pdf_storage_path ?? null, pdf_url: data.pdf_url ?? null });
         setCurrentStep(null);
-        toast({ title: 'Completed', description: 'Approval workflow completed successfully.' });
+        toast({ title: t('workflows:approvalWizard.messages.completed'), description: t('workflows:approvalWizard.messages.completedDesc') });
         // Defer onComplete — let user see the completion screen and download PDF first.
         // onComplete fires when they click Close (see handleCloseAfterComplete below).
       } else {
@@ -719,11 +723,11 @@ export default function ApprovalWizardDialog({
         setOboJustification('');
       }
     } catch (e) {
-      toast({ title: 'Error', description: 'Failed to submit step', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: t('workflows:approvalWizard.messages.submitStepFailed'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onOpenChange, previewMode, workflows]);
+  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onOpenChange, previewMode, workflows, t]);
 
   /** Auto-advance non-visual steps (persist_agreement, generate_pdf, deliver). */
   useEffect(() => {
@@ -741,14 +745,14 @@ export default function ApprovalWizardDialog({
 
   const abortSession = async () => {
     if (!sessionId) {
-      toast({ title: 'Cancelled', variant: 'default' });
+      toast({ title: t('workflows:approvalWizard.messages.cancelled'), variant: 'default' });
       onOpenChange(false);
       return;
     }
     // Preview mode never persists a session, so there's nothing to abort
     // server-side — just close the dialog quietly.
     if (previewMode) {
-      toast({ title: 'Preview cancelled', variant: 'default' });
+      toast({ title: t('workflows:approvalWizard.messages.previewCancelled'), variant: 'default' });
       onOpenChange(false);
       return;
     }
@@ -759,7 +763,7 @@ export default function ApprovalWizardDialog({
       // ignore
     }
     setLoading(false);
-    toast({ title: 'Cancelled', variant: 'default' });
+    toast({ title: t('workflows:approvalWizard.messages.cancelled'), variant: 'default' });
     onOpenChange(false);
   };
 
@@ -771,7 +775,7 @@ export default function ApprovalWizardDialog({
       onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
     } else if (!open && !completeResult) {
       // User closed via X or escape mid-flow — treat as cancel
-      toast({ title: previewMode ? 'Preview cancelled' : 'Cancelled', variant: 'default' });
+      toast({ title: previewMode ? t('workflows:approvalWizard.messages.previewCancelled') : t('workflows:approvalWizard.messages.cancelled'), variant: 'default' });
     }
     onOpenChange(open);
   };
@@ -795,7 +799,7 @@ export default function ApprovalWizardDialog({
   /** Human-readable action name derived from completionAction. */
   const actionLabel = completionAction
     ? completionAction.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-    : 'proceed';
+    : t('workflows:approvalWizard.proceed');
 
   const refs = currentStep?.config?.references as ReferenceDoc[] | undefined;
 
@@ -804,18 +808,18 @@ export default function ApprovalWizardDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Approval wizard
+            {t('workflows:approvalWizard.title')}
             {previewMode && (
               <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
                 <Eye className="h-3 w-3" />
-                Preview
+                {t('workflows:approvalWizard.previewBadge')}
               </Badge>
             )}
           </DialogTitle>
           <DialogDescription>
             {previewMode ? (
-              'Dry run \u2014 nothing is persisted and no notifications are sent.'
-            ) : !sessionId ? 'Choose an approval workflow to run for this entity.' : currentStep ? `Step: ${currentStep.name}` : completeResult ? 'Completed.' : 'Loading\u2026'}
+              t('workflows:approvalWizard.dryRunDescription')
+            ) : !sessionId ? t('workflows:approvalWizard.chooseWorkflow') : currentStep ? t('workflows:approvalWizard.stepPrefix', { name: currentStep.name }) : completeResult ? t('workflows:approvalWizard.completedShort') : t('workflows:approvalWizard.loadingEllipsis')}
           </DialogDescription>
         </DialogHeader>
 
@@ -837,7 +841,7 @@ export default function ApprovalWizardDialog({
               ))}
             </div>
             <span className="text-xs text-muted-foreground ml-1">
-              Step {currentStepIndex + 1}: {stepNames[currentStepIndex] ?? currentStep?.name ?? ''}
+              {t('workflows:approvalWizard.progressStep', { number: currentStepIndex + 1, name: stepNames[currentStepIndex] ?? currentStep?.name ?? '' })}
             </span>
           </div>
         )}
@@ -845,7 +849,7 @@ export default function ApprovalWizardDialog({
         {/* Contextual header — shown when session is active */}
         {sessionId && !completeResult && entityName && !previewMode && (
           <p className="text-sm text-muted-foreground px-1">
-            Complete the following before {actionLabel.toLowerCase()} to <strong>{entityName}</strong>
+            {t('workflows:approvalWizard.completeBefore', { action: actionLabel.toLowerCase() })} <strong>{entityName}</strong>
           </p>
         )}
 
@@ -853,11 +857,11 @@ export default function ApprovalWizardDialog({
           <div className="space-y-2 py-4">
             <p className="text-sm text-muted-foreground">
               {previewMode
-                ? 'Preview complete. No agreement was created and no notifications were sent.'
-                : 'Agreement recorded.'}
+                ? t('workflows:approvalWizard.previewCompleteScreen')
+                : t('workflows:approvalWizard.agreementRecorded')}
             </p>
             {!previewMode && completeResult.agreement_id && (
-              <p className="text-xs text-muted-foreground">Agreement ID: {completeResult.agreement_id}</p>
+              <p className="text-xs text-muted-foreground">{t('workflows:approvalWizard.agreementId', { id: completeResult.agreement_id })}</p>
             )}
             {!previewMode && completeResult.pdf_url && (
               <Button
@@ -866,7 +870,7 @@ export default function ApprovalWizardDialog({
                 onClick={() => window.open(completeResult.pdf_url!, '_blank')}
               >
                 <FileText className="h-4 w-4 mr-2" />
-                Download Agreement
+                {t('workflows:approvalWizard.downloadAgreement')}
               </Button>
             )}
             <DialogFooter>
@@ -875,7 +879,7 @@ export default function ApprovalWizardDialog({
                   onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
                 }
                 onOpenChange(false);
-              }}>Close</Button>
+              }}>{t('common:actions.close')}</Button>
             </DialogFooter>
           </div>
         )}
@@ -883,7 +887,7 @@ export default function ApprovalWizardDialog({
         {!sessionId && (
           <div className="space-y-2 py-4">
             {workflows.length === 0 && !loading && workflowsLoaded && (
-              <p className="text-sm text-muted-foreground">No approval workflows available. Add them in Settings &rarr; Workflows (Approval workflows).</p>
+              <p className="text-sm text-muted-foreground">{t('workflows:approvalWizard.noWorkflowsAvailable')}</p>
             )}
             {workflows.map((wf) => (
               <Button
@@ -898,7 +902,7 @@ export default function ApprovalWizardDialog({
               </Button>
             ))}
             <DialogFooter>
-              <Button variant="ghost" onClick={() => { toast({ title: 'Cancelled', variant: 'default' }); onOpenChange(false); }}>Cancel</Button>
+              <Button variant="ghost" onClick={() => { toast({ title: t('workflows:approvalWizard.messages.cancelled'), variant: 'default' }); onOpenChange(false); }}>{t('common:actions.cancel')}</Button>
             </DialogFooter>
           </div>
         )}
@@ -909,19 +913,17 @@ export default function ApprovalWizardDialog({
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               {previewMode ? (
-                <>
-                  {currentStep.step_type === 'persist_agreement' ? 'Would save agreement' :
-                   currentStep.step_type === 'generate_pdf' ? 'Would generate document' :
-                   currentStep.step_type === 'deliver' ? 'Would send notifications' :
-                   'Would finalize'} — skipped in preview
-                </>
+                t('workflows:approvalWizard.preview.skipped', {
+                  action: currentStep.step_type === 'persist_agreement' ? t('workflows:approvalWizard.preview.wouldSaveAgreement') :
+                   currentStep.step_type === 'generate_pdf' ? t('workflows:approvalWizard.preview.wouldGenerateDocument') :
+                   currentStep.step_type === 'deliver' ? t('workflows:approvalWizard.preview.wouldSendNotifications') :
+                   t('workflows:approvalWizard.preview.wouldFinalize'),
+                })
               ) : (
-                <>
-                  {currentStep.step_type === 'persist_agreement' ? 'Saving agreement...' :
-                   currentStep.step_type === 'generate_pdf' ? 'Generating document...' :
-                   currentStep.step_type === 'deliver' ? 'Sending notifications...' :
-                   'Finalizing...'}
-                </>
+                currentStep.step_type === 'persist_agreement' ? t('workflows:approvalWizard.progress.savingAgreement') :
+                 currentStep.step_type === 'generate_pdf' ? t('workflows:approvalWizard.progress.generatingDocument') :
+                 currentStep.step_type === 'deliver' ? t('workflows:approvalWizard.progress.sendingNotifications') :
+                 t('workflows:approvalWizard.progress.finalizing')
               )}
             </p>
           </div>
@@ -1007,12 +1009,12 @@ export default function ApprovalWizardDialog({
                   }}
                 >
                   <div dangerouslySetInnerHTML={{
-                    __html: simpleMarkdown(currentStep.config?.body_markdown as string || '*No document content provided.*')
+                    __html: simpleMarkdown(currentStep.config?.body_markdown as string || t('workflows:approvalWizard.noDocumentContent'))
                   }} />
                 </div>
                 {(currentStep.config?.require_scroll_to_end as boolean) && !scrolledToEnd && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Please scroll to the bottom of the document to continue.
+                    {t('workflows:approvalWizard.scrollToBottom')}
                   </p>
                 )}
                 {(currentStep.config?.require_acknowledgement_checkbox as boolean) && (
@@ -1024,7 +1026,7 @@ export default function ApprovalWizardDialog({
                       disabled={loading}
                     />
                     <Label htmlFor="legal-ack" className="text-sm cursor-pointer leading-tight">
-                      {(currentStep.config?.acknowledgement_label as string) || 'I have read and understood the above'}
+                      {(currentStep.config?.acknowledgement_label as string) || t('workflows:approvalWizard.acknowledgeDefault')}
                     </Label>
                   </div>
                 )}
@@ -1062,7 +1064,7 @@ export default function ApprovalWizardDialog({
                   <Input
                     value={coSignerInput}
                     onChange={(e) => setCoSignerInput(e.target.value)}
-                    placeholder={(currentStep.config?.label as string) || 'Enter email or group name'}
+                    placeholder={(currentStep.config?.label as string) || t('workflows:approvalWizard.coSignerPlaceholder')}
                     disabled={loading}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && coSignerInput.trim()) {
@@ -1086,7 +1088,7 @@ export default function ApprovalWizardDialog({
                       }
                     }}
                   >
-                    Add
+                    {t('common:actions.add')}
                   </Button>
                 </div>
                 {coSigners.length > 0 && (
@@ -1106,10 +1108,10 @@ export default function ApprovalWizardDialog({
                 )}
                 <p className="text-xs text-muted-foreground">
                   {((currentStep.config?.min_count as number) ?? 0) > 0
-                    ? `Minimum ${(currentStep.config?.min_count as number)} co-signer(s) required.`
-                    : 'Co-signers are optional for this step.'}
-                  {' '}Maximum: {(currentStep.config?.max_count as number) ?? 5}.
-                  {' '}Co-signers are recorded on the agreement for audit purposes.
+                    ? t('workflows:approvalWizard.coSigners.minRequired', { count: (currentStep.config?.min_count as number) })
+                    : t('workflows:approvalWizard.coSigners.optional')}
+                  {' '}{t('workflows:approvalWizard.coSigners.maximum', { count: (currentStep.config?.max_count as number) ?? 5 })}
+                  {' '}{t('workflows:approvalWizard.coSigners.auditNote')}
                 </p>
               </div>
             )}
@@ -1139,7 +1141,7 @@ export default function ApprovalWizardDialog({
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="self" id="wizard-obo-self" />
                         <Label htmlFor="wizard-obo-self" className="font-normal cursor-pointer">
-                          For myself
+                          {t('workflows:approvalWizard.obo.forMyself')}
                         </Label>
                       </div>
                     )}
@@ -1156,9 +1158,9 @@ export default function ApprovalWizardDialog({
                             htmlFor="wizard-obo-my-group"
                             className={`font-normal cursor-pointer ${myGroups.length === 0 ? 'text-muted-foreground' : ''}`}
                           >
-                            For a group I'm part of
+                            {t('workflows:approvalWizard.obo.forMyGroup')}
                             {myGroups.length === 0 && (
-                              <span className="ml-1 text-xs">(no groups available)</span>
+                              <span className="ml-1 text-xs">{t('workflows:approvalWizard.obo.noGroupsAvailable')}</span>
                             )}
                           </Label>
                         </div>
@@ -1166,7 +1168,7 @@ export default function ApprovalWizardDialog({
                           <div className="ml-6">
                             <Select value={oboGroup} onValueChange={setOboGroup}>
                               <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select one of your groups" />
+                                <SelectValue placeholder={t('workflows:approvalWizard.obo.selectGroup')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {myGroups.map((g) => (
@@ -1186,7 +1188,7 @@ export default function ApprovalWizardDialog({
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="other" id="wizard-obo-other" />
                           <Label htmlFor="wizard-obo-other" className="font-normal cursor-pointer">
-                            Other group or service principal
+                            {t('workflows:approvalWizard.obo.otherGroupOrSp')}
                           </Label>
                         </div>
                         {oboMode === 'other' && (
@@ -1199,18 +1201,18 @@ export default function ApprovalWizardDialog({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="group">Group (display name)</SelectItem>
-                                <SelectItem value="service_principal">Service principal (display name or applicationId)</SelectItem>
+                                <SelectItem value="group">{t('workflows:approvalWizard.obo.groupOption')}</SelectItem>
+                                <SelectItem value="service_principal">{t('workflows:approvalWizard.obo.servicePrincipalOption')}</SelectItem>
                               </SelectContent>
                             </Select>
                             <Input
-                              placeholder={oboOtherType === 'group' ? 'e.g., sales_consumers' : 'e.g., 11111111-2222-3333-4444-555555555555'}
+                              placeholder={oboOtherType === 'group' ? t('workflows:approvalWizard.obo.groupPlaceholder') : t('workflows:approvalWizard.obo.spPlaceholder')}
                               value={oboOther}
                               onChange={(e) => setOboOther(e.target.value)}
                               disabled={loading}
                             />
                             <p className="text-xs text-muted-foreground">
-                              Validated against the workspace directory before the request is recorded.
+                              {t('workflows:approvalWizard.obo.validationNote')}
                             </p>
                           </div>
                         )}
@@ -1221,13 +1223,13 @@ export default function ApprovalWizardDialog({
                   {requireJustification && (
                     <div className="space-y-1">
                       <Label htmlFor="wizard-obo-justification">
-                        Justification <span className="text-destructive">*</span>
+                        {t('workflows:approvalWizard.obo.justification')} <span className="text-destructive">*</span>
                       </Label>
                       <Textarea
                         id="wizard-obo-justification"
                         value={oboJustification}
                         onChange={(e) => setOboJustification(e.target.value)}
-                        placeholder="Why are you requesting access for this principal?"
+                        placeholder={t('workflows:approvalWizard.obo.justificationPlaceholder')}
                         rows={3}
                         disabled={loading}
                       />
@@ -1245,9 +1247,9 @@ export default function ApprovalWizardDialog({
                   const rfs = (currentStep.config?.required_fields as Array<{ id: string; label: string; type: string; required?: boolean }>) ?? [];
                   const pfid = cfg2.primary_field_id || rfs.find((f) => f.required)?.id || rfs[0]?.id || 'reason';
                   const pv = payload[pfid]?.trim() ?? '';
-                  if (cfg2.requires_input && !pv) return 'This step requires input.';
+                  if (cfg2.requires_input && !pv) return t('workflows:approvalWizard.validation.requiresInput');
                   if (cfg2.minimum_input_length != null && cfg2.minimum_input_length > 0 && pv.length < cfg2.minimum_input_length)
-                    return `Minimum length: ${cfg2.minimum_input_length} characters (${pv.length} entered).`;
+                    return t('workflows:approvalWizard.validation.minLength', { min: cfg2.minimum_input_length, entered: pv.length });
                   return null;
                 })()}
               </p>
@@ -1256,11 +1258,11 @@ export default function ApprovalWizardDialog({
             <DialogFooter>
               <Button variant="ghost" onClick={abortSession} disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                Cancel
+                {t('common:actions.cancel')}
               </Button>
               <Button onClick={submitStep} disabled={loading || !isStepValid}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {isLastVisualStep ? 'Complete' : 'Next'}
+                {isLastVisualStep ? t('workflows:approvalWizard.completeButton') : t('common:actions.next')}
               </Button>
             </DialogFooter>
           </div>

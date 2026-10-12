@@ -99,6 +99,15 @@ class Settings(BaseSettings):
     # Interval in seconds between job run polling cycles
     # Lower values = more responsive updates but higher API load
     JOB_POLLING_INTERVAL_SECONDS: int = Field(300, env='JOB_POLLING_INTERVAL_SECONDS')
+    # Schema Importer: at or above this many previewed items, the UI offers a
+    # background (async) import instead of a blocking synchronous one.
+    # Overridable at runtime via General Settings (SCHEMA_IMPORT_ASYNC_THRESHOLD).
+    SCHEMA_IMPORT_ASYNC_THRESHOLD: int = Field(200, env='SCHEMA_IMPORT_ASYNC_THRESHOLD')
+    # Maximum number of child assets the Schema Importer fetches per path when
+    # browsing or collecting for import. Bounded by the connector contract
+    # (ListAssetsOptions: 1..10000). Overridable at runtime via General Settings
+    # (SCHEMA_IMPORT_CHILD_LIMIT in app_settings). Default preserves historic behavior.
+    SCHEMA_IMPORT_CHILD_LIMIT: int = Field(500, env='SCHEMA_IMPORT_CHILD_LIMIT')
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
     enabled_jobs: List[str] = Field(default_factory=list)
@@ -109,6 +118,11 @@ class Settings(BaseSettings):
 
     # Database Reset Flag
     APP_DB_DROP_ON_START: bool = Field(False, env='APP_DB_DROP_ON_START')
+
+    # Search backend: "memory" (in-process index, default) or "postgres" (DB-backed
+    # full-text search over the search_documents table). Postgres-native search
+    # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
+    SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')

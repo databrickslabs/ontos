@@ -1,0 +1,196 @@
+{
+  "title": "Gerenciador de Estates",
+  "subtitle": "Gerencie seus estates de dados e a sincronização",
+  "newEstate": "Novo Estate",
+  "addEstate": "Adicionar Estate",
+  "editEstate": "Editar Estate",
+  "searchPlaceholder": "Buscar estates...",
+  "loading": "Carregando estates...",
+  "errors": {
+    "fetchEstates": "Erro ao Buscar Estates",
+    "couldNotLoad": "Não foi possível carregar os estates.",
+    "savingEstate": "Erro ao Salvar Estate",
+    "deletingEstate": "Erro ao Excluir Estate",
+    "triggeringSync": "Erro ao Iniciar Sincronização",
+    "validationError": "Erro de Validação",
+    "validationMessage": "Preencha todos os campos obrigatórios: Nome, Descrição, URL do Workspace, Nome do Metastore, Tipo de Nuvem e Tipo de Conexão."
+  },
+  "toast": {
+    "estateCreated": "Estate criado com sucesso",
+    "estateUpdated": "Estate atualizado com sucesso",
+    "estateDeleted": "Estate excluído com sucesso",
+    "triggeringSync": "Iniciando Sincronização",
+    "syncRequested": "Solicitando sincronização para o estate...",
+    "syncTriggered": "Sincronização iniciada com sucesso. Atualizando dados..."
+  },
+  "form": {
+    "createTitle": "Adicionar Novo Estate",
+    "editTitle": "Editar Estate",
+    "dialogDescription": "Configure a conexão do estate Databricks e as configurações básicas. As políticas de compartilhamento são gerenciadas na página de detalhes.",
+    "name": "Nome",
+    "description": "Descrição",
+    "type": "Tipo",
+    "workspaceUrl": "URL do Workspace",
+    "cloud": "Nuvem",
+    "selectCloudProvider": "Selecione o provedor de nuvem",
+    "connectionType": "Tipo de Conexão",
+    "selectConnectionType": "Selecione o tipo de conexão",
+    "connectionString": "String de Conexão",
+    "metastoreName": "Nome do Metastore",
+    "syncSchedule": "Agendamento de Sincronização",
+    "enableSync": "Habilitar Sincronização",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "namePlaceholder": "ex.: Workspace de Produção dos EUA",
+    "descriptionPlaceholder": "ex.: Ambiente de produção principal da região EUA",
+    "workspaceUrlPlaceholder": "ex.: https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "ex.: primary_prod_metastore"
+  },
+  "connectionTypes": {
+    "deltaShare": "Delta Share",
+    "unityCatalog": "Unity Catalog",
+    "database": "Banco de Dados (Uso Futuro)"
+  },
+  "table": {
+    "name": "Nome",
+    "workspaceUrl": "URL do Workspace",
+    "cloud": "Nuvem",
+    "connection": "Conexão",
+    "metastore": "Metastore",
+    "syncStatus": "Status da Sincronização",
+    "lastSync": "Última Sincronização",
+    "type": "Tipo",
+    "status": "Status",
+    "assets": "Ativos",
+    "actions": "Ações",
+    "neverSynced": "Nunca Sincronizado",
+    "openMenu": "Abrir menu",
+    "syncTooltip": {
+      "status": "Status: {{status}}",
+      "time": "Horário: {{time}}",
+      "error": "Erro: {{error}}",
+      "inProgress": "Sincronização em andamento ou na fila..."
+    }
+  },
+  "filters": {
+    "allStatus": "Todos os Status"
+  },
+  "messages": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "deleteConfirm": "Tem certeza de que deseja excluir este estate?",
+    "deleteSuccess": "Estate excluído com sucesso",
+    "deleteError": "Falha ao excluir o estate",
+    "syncSuccess": "Sincronização iniciada com sucesso",
+    "syncError": "Falha ao iniciar a sincronização"
+  },
+  "status": {
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "syncing": "Sincronizando",
+    "error": "Erro"
+  },
+  "details": {
+    "backToList": "Voltar para Estates",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "sync": "Sincronizar Agora",
+    "viewDetails": "Ver Detalhes",
+    "notFound": "Estate não encontrado",
+    "loading": "Carregando...",
+    "pageTitle": "Detalhes do Estate",
+    "backToEstateManager": "Voltar para o Gerenciador de Estates",
+    "backToListButton": "Voltar para a Lista",
+    "configureSyncJob": "Configurar Job de Sincronização",
+    "editNotImplemented": "Funcionalidade de edição de estate a ser implementada",
+    "syncEnabled": "Sincronização Habilitada",
+    "syncDisabled": "Sincronização Desabilitada",
+    "never": "Nunca",
+    "notFoundOrLoad": "Estate não encontrado ou não pôde ser carregado.",
+    "labels": {
+      "cloudProvider": "Provedor de Nuvem",
+      "lastSyncTime": "Horário da Última Sincronização",
+      "lastSyncStatus": "Status da Última Sincronização",
+      "lastSyncError": "Erro da Última Sincronização",
+      "lastUpdatedAt": "Última Atualização Em"
+    },
+    "errors": {
+      "fetchTitle": "Erro ao Buscar Estate",
+      "fetchFailed": "Falha ao buscar os detalhes do estate.",
+      "couldNotLoad": "Não foi possível carregar os detalhes do estate.",
+      "noEstateData": "Os dados do estate não estão disponíveis para adicionar uma política."
+    },
+    "policies": {
+      "title": "Políticas de Compartilhamento",
+      "add": "Adicionar Política",
+      "sectionDescription": "Defina regras para compartilhar produtos de dados ou termos de modelos semânticos específicos com este estate. Os recursos compartilhados ficarão acessíveis por meio do tipo de conexão configurado.",
+      "resourceTypeLabel": "Tipo de Recurso:",
+      "rulesLabel": "Regras ({{count}}):",
+      "filterBy": "Filtrar por",
+      "whereValue": "onde o valor",
+      "noRules": "Nenhuma regra definida para esta política.",
+      "emptyTitle": "Nenhuma política de compartilhamento definida para este estate.",
+      "emptyHint": "Clique em \"Adicionar Política\" para começar a compartilhar recursos.",
+      "editPolicyAlert": "Editar política: {{name}}",
+      "deletePolicyAlert": "Excluir política: {{name}}",
+      "addedTitle": "Política Adicionada",
+      "addedDescription": "A política de compartilhamento \"{{name}}\" foi adicionada com sucesso.",
+      "addErrorTitle": "Erro ao Adicionar Política",
+      "addErrorDescription": "Não foi possível salvar a nova política de compartilhamento. Tente novamente.",
+      "saveFailedNoData": "Falha ao salvar a política. O servidor não retornou dados."
+    },
+    "overview": {
+      "title": "Visão Geral do Estate",
+      "type": "Tipo",
+      "status": "Status",
+      "lastSync": "Última Sincronização",
+      "created": "Criado"
+    },
+    "assets": {
+      "title": "Ativos",
+      "catalogs": "Catálogos",
+      "schemas": "Esquemas",
+      "tables": "Tabelas"
+    },
+    "syncHistory": {
+      "title": "Histórico de Sincronização",
+      "noHistory": "Nenhum histórico de sincronização"
+    }
+  },
+  "sharingPolicy": {
+    "dialogTitle": "Adicionar Nova Política de Compartilhamento",
+    "dialogDescription": "Defina uma nova política para compartilhar recursos a partir deste estate ou com ele.",
+    "submit": "Adicionar Política",
+    "addRule": "Adicionar Regra",
+    "rulesHeading": "Regras",
+    "ruleLabel": "Regra {{number}}",
+    "fields": {
+      "name": "Nome da Política",
+      "description": "Descrição (Opcional)",
+      "resourceType": "Tipo de Recurso",
+      "enablePolicy": "Habilitar Política",
+      "filterType": "Tipo de Filtro",
+      "operator": "Operador",
+      "value": "Valor"
+    },
+    "placeholders": {
+      "name": "ex.: Compartilhar Produtos de Dados de Produção",
+      "description": "Descrição detalhada do objetivo da política...",
+      "resourceType": "Selecione o tipo de recurso",
+      "operator": "Selecione o operador",
+      "filterType": "ex.: tag, domínio, status",
+      "value": "ex.: finanças, Ativo"
+    },
+    "validation": {
+      "nameMin": "O nome da política deve ter pelo menos 3 caracteres",
+      "filterTypeRequired": "O tipo de filtro é obrigatório",
+      "filterValueRequired": "O valor do filtro é obrigatório",
+      "rulesMin": "Pelo menos uma regra é obrigatória"
+    },
+    "toast": {
+      "submittedTitle": "Política Enviada",
+      "submittedDescription": "A política de compartilhamento \"{{name}}\" está sendo processada.",
+      "addErrorDescription": "Falha ao adicionar a política de compartilhamento. Verifique o console para detalhes."
+    }
+  }
+}

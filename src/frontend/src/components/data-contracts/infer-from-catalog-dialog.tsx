@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -48,6 +49,7 @@ export default function InferFromCatalogDialog({
   onInfer,
 }: InferFromCatalogDialogProps) {
   const { get: apiGet } = useApi();
+  const { t } = useTranslation(['data-contracts', 'common']);
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [isLoadingConnections, setIsLoadingConnections] = useState(true);
@@ -129,24 +131,24 @@ export default function InferFromCatalogDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="w-[85vw] max-w-5xl h-[80vh] max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Infer Schema from Catalog</DialogTitle>
+          <DialogTitle>{t('data-contracts:infer.catalogDialogTitle', 'Infer Schema from Catalog')}</DialogTitle>
           <DialogDescription>
-            Browse a connected catalog and select tables or views to infer their schema into this contract.
+            {t('data-contracts:infer.catalogDialogDescription', 'Browse a connected catalog and select tables or views to infer their schema into this contract.')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 flex flex-col min-h-0 gap-4">
           {/* Connection selector */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-sm font-medium whitespace-nowrap">Connection:</span>
+            <span className="text-sm font-medium whitespace-nowrap">{t('data-contracts:infer.connectionLabel', 'Connection:')}</span>
             {isLoadingConnections ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
+                {t('common:states.loading')}
               </div>
             ) : connections.length === 0 ? (
               <span className="text-sm text-muted-foreground">
-                No connections configured. Add one in Settings &gt; Connectors.
+                {t('data-contracts:infer.noConnections', 'No connections configured. Add one in Settings > Connectors.')}
               </span>
             ) : (
               <Select
@@ -154,7 +156,7 @@ export default function InferFromCatalogDialog({
                 onValueChange={handleConnectionChange}
               >
                 <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="Choose connection..." />
+                  <SelectValue placeholder={t('data-contracts:infer.chooseConnection', 'Choose connection...')} />
                 </SelectTrigger>
                 <SelectContent>
                   {connections.map((c) => (
@@ -171,7 +173,7 @@ export default function InferFromCatalogDialog({
               </Select>
             )}
             {selectedPaths.size > 0 && (
-              <Badge variant="secondary">{selectedPaths.size} selected</Badge>
+              <Badge variant="secondary">{t('data-contracts:infer.selectedCount', '{{count}} selected', { count: selectedPaths.size })}</Badge>
             )}
           </div>
 
@@ -187,14 +189,20 @@ export default function InferFromCatalogDialog({
 
         <DialogFooter className="flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={handleInfer}
             disabled={selectedPaths.size === 0 || isInferring}
           >
             {isInferring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Infer {selectedPaths.size > 0 ? `${selectedPaths.size} Schema${selectedPaths.size > 1 ? 's' : ''}` : 'Schema'}
+            {selectedPaths.size > 0
+              ? t('data-contracts:infer.inferSchemasButton', {
+                  count: selectedPaths.size,
+                  defaultValue: 'Infer {{count}} Schema',
+                  defaultValue_other: 'Infer {{count}} Schemas',
+                })
+              : t('data-contracts:infer.inferSchema', 'Infer Schema')}
           </Button>
         </DialogFooter>
       </DialogContent>

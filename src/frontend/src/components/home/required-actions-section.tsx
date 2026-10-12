@@ -14,7 +14,7 @@ interface ApprovalsQueue {
 }
 
 export default function RequiredActionsSection() {
-  const { t, i18n } = useTranslation('home');
+  const { t, i18n } = useTranslation(['home', 'common']);
   const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationsStore();
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
   const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
@@ -43,7 +43,7 @@ export default function RequiredActionsSection() {
         });
       } catch (e: any) {
         setApprovals({ contracts: [], products: [] });
-        setApprovalsError(e?.message || 'Failed to load approvals');
+        setApprovalsError(e?.message || t('requiredActionsSection.loadError'));
       } finally {
         setLoadingApprovals(false);
       }
@@ -84,8 +84,8 @@ export default function RequiredActionsSection() {
     ...roleRequests.map(req => ({
       id: req.id,
       type: 'role_request' as const,
-      title: req.action_payload?.requester_email || 'Unknown user',
-      subtitle: req.action_payload?.role_name || 'Unknown role',
+      title: req.action_payload?.requester_email || t('requiredActionsSection.unknownUser'),
+      subtitle: req.action_payload?.role_name || t('requiredActionsSection.unknownRole'),
       date: req.created_at,
       payload: req.action_payload ?? undefined,
     })),
@@ -111,7 +111,7 @@ export default function RequiredActionsSection() {
     ...workflowApprovalNotifications.map(n => ({
       id: n.id,
       type: 'workflow_approval' as const,
-      title: n.action_payload?.entity_name || n.title || 'Approval request',
+      title: n.action_payload?.entity_name || n.title || t('requiredActionsSection.approvalRequest'),
       subtitle: n.action_payload?.requester_email || n.subtitle,
       date: n.created_at,
       payload: n.action_payload ?? undefined,
@@ -161,19 +161,19 @@ export default function RequiredActionsSection() {
   const getTypeBadge = (type: UnifiedApproval['type']) => {
     const badges = {
       role_request: {
-        label: 'Role Request',
+        label: t('requiredActionsSection.badges.roleRequest'),
         className: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
       },
       contract: {
-        label: 'Contract',
+        label: t('requiredActionsSection.badges.contract'),
         className: 'bg-purple-500/15 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
       },
       product: {
-        label: 'Product',
+        label: t('requiredActionsSection.badges.product'),
         className: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-300'
       },
       workflow_approval: {
-        label: 'Approval',
+        label: t('requiredActionsSection.badges.approval'),
         className: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
       },
     };
@@ -201,11 +201,11 @@ export default function RequiredActionsSection() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 border-b">
                     <tr>
-                      <th className="text-left p-2.5 font-medium">Type</th>
-                      <th className="text-left p-2.5 font-medium">Requester / Name</th>
-                      <th className="text-left p-2.5 font-medium">Role / Status / Reason</th>
-                      <th className="text-left p-2.5 font-medium">Date</th>
-                      <th className="text-right p-2.5 font-medium">Actions</th>
+                      <th className="text-left p-2.5 font-medium">{t('requiredActionsSection.table.type')}</th>
+                      <th className="text-left p-2.5 font-medium">{t('requiredActionsSection.table.requesterName')}</th>
+                      <th className="text-left p-2.5 font-medium">{t('requiredActionsSection.table.roleStatusReason')}</th>
+                      <th className="text-left p-2.5 font-medium">{t('requiredActionsSection.table.date')}</th>
+                      <th className="text-right p-2.5 font-medium">{t('requiredActionsSection.table.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -248,7 +248,7 @@ export default function RequiredActionsSection() {
                                   variant="ghost"
                                   className="h-7 px-2"
                                   onClick={() => handleOpenConfirmDialog(item.payload!)}
-                                  title="Approve/Deny request"
+                                  title={t('requiredActionsSection.approveDenyRequest')}
                                 >
                                   <CheckSquare className="h-3.5 w-3.5" />
                                 </Button>
@@ -259,13 +259,13 @@ export default function RequiredActionsSection() {
                                 variant="ghost"
                                 className="h-7 px-2"
                                 onClick={() => handleOpenWfApproval(item.payload!)}
-                                title="Approve/Deny workflow request"
+                                title={t('requiredActionsSection.approveDenyWorkflow')}
                               >
                                 <CheckSquare className="h-3.5 w-3.5" />
                               </Button>
                             ) : (
                               <Button asChild size="sm" variant="ghost" className="h-7 px-2">
-                                <Link to={item.link!}>Open</Link>
+                                <Link to={item.link!}>{t('requiredActionsSection.openButton')}</Link>
                               </Button>
                             )}
                           </div>

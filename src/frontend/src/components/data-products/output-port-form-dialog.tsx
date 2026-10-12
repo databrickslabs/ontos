@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { OutputPort, DataProduct } from '@/types/data-product';
 import type { DataContractListItem } from '@/types/data-contract';
 import type { DeliveryMethodRead } from '@/types/delivery-method';
@@ -25,6 +26,7 @@ type OutputPortFormProps = {
 
 export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, initial, product }: OutputPortFormProps) {
   const { toast } = useToast();
+  const { t } = useTranslation(['data-products', 'common']);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState('');
@@ -180,9 +182,9 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Deliverable' : 'Add Deliverable'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-products:outputPortForm.editTitle') : t('data-products:outputPortForm.addTitle')}</DialogTitle>
           <DialogDescription>
-            Define a deliverable for this data product. Assets can be linked after creation.
+            {t('data-products:outputPortForm.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -191,13 +193,13 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">
-                Name <span className="text-destructive">*</span>
+                {t('common:labels.name')} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Daily Churn Rate"
+                placeholder={t('data-products:outputPortForm.placeholders.name')}
                 autoFocus
               />
             </div>
@@ -218,7 +220,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
           {/* Delivery Method */}
           <div className="border-t pt-4">
             <div className="space-y-2">
-              <Label htmlFor="deliveryMethod">Delivery Method</Label>
+              <Label htmlFor="deliveryMethod">{t('data-products:outputPortForm.labels.deliveryMethod')}</Label>
               {isLoadingDeliveryMethods ? (
                 <div className="flex items-center gap-2 p-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -227,7 +229,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
               ) : (
                 <Select value={deliveryMethodId} onValueChange={setDeliveryMethodId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select delivery method..." />
+                    <SelectValue placeholder={t('data-products:outputPortForm.placeholders.deliveryMethod')} />
                   </SelectTrigger>
                   <SelectContent>
                     {deliveryMethods.map((dm) => (
@@ -251,57 +253,57 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
 
           {/* Optional Fields */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium mb-3">Details</h4>
+            <h4 className="text-sm font-medium mb-3">{t('common:labels.details')}</h4>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{t('common:labels.description')}</Label>
                 <Textarea
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe what this deliverable provides"
+                  placeholder={t('data-products:outputPortForm.placeholders.description')}
                   rows={2}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type">{t('common:labels.type')}</Label>
                 <Input
                   id="type"
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  placeholder="e.g., table, api, stream"
+                  placeholder={t('data-products:outputPortForm.placeholders.type')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status">{t('common:labels.status')}</Label>
                 <Input
                   id="status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  placeholder="e.g., active, draft"
+                  placeholder={t('data-products:outputPortForm.placeholders.status')}
                 />
               </div>
 
               <div className="space-y-3">
-                <Label>Contract Assignment</Label>
+                <Label>{t('data-products:outputPortForm.labels.contractAssignment')}</Label>
                 <RadioGroup value={contractSelectionMode} onValueChange={(value: 'none' | 'existing' | 'create') => {
                   setContractSelectionMode(value);
                   if (value === 'none') setContractId('');
                 }}>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="none" id="no-contract" />
-                    <Label htmlFor="no-contract">No Contract</Label>
+                    <Label htmlFor="no-contract">{t('data-products:outputPortForm.contractOptions.noContract')}</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="existing" id="existing-contract" />
-                    <Label htmlFor="existing-contract">Select Existing Contract</Label>
+                    <Label htmlFor="existing-contract">{t('data-products:outputPortForm.contractOptions.selectExisting')}</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="create" id="create-contract" />
-                    <Label htmlFor="create-contract">Create New Contract</Label>
+                    <Label htmlFor="create-contract">{t('data-products:outputPortForm.contractOptions.createNew')}</Label>
                   </div>
                 </RadioGroup>
 
@@ -315,7 +317,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                       <>
                         <Select value={contractId} onValueChange={setContractId}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Choose a contract..." />
+                            <SelectValue placeholder={t('data-products:outputPortForm.placeholders.chooseContract')} />
                           </SelectTrigger>
                           <SelectContent>
                             {contracts.length === 0 ? (
@@ -366,7 +368,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
 
           {/* Flags */}
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium mb-3">Access & Privacy</h4>
+            <h4 className="text-sm font-medium mb-3">{t('data-products:outputPortForm.labels.accessAndPrivacy')}</h4>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between space-y-0 rounded-lg border p-4">

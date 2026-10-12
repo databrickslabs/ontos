@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, SparklesIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { LLMConfig, LLMConsentState } from '@/types/llm';
 
 const CONSENT_STORAGE_KEY = 'llm_consent_state';
@@ -28,6 +29,7 @@ export default function LLMConsentDialog({
     onAccept,
     llmConfig,
 }: LLMConsentDialogProps) {
+    const { t } = useTranslation('common');
     const [accepted, setAccepted] = useState(false);
 
     return (
@@ -36,10 +38,10 @@ export default function LLMConsentDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <SparklesIcon className="w-5 h-5 text-purple-500" />
-                        AI-Powered Analysis
+                        {t('common:llmConsent.title')}
                     </DialogTitle>
                     <DialogDescription>
-                        Please review and accept the terms before using AI features.
+                        {t('common:llmConsent.description')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -52,12 +54,12 @@ export default function LLMConsentDialog({
                     </Alert>
 
                     <div className="space-y-2 text-sm text-muted-foreground">
-                        <p><strong>How it works:</strong></p>
+                        <p><strong>{t('common:llmConsent.howItWorks')}</strong></p>
                         <ul className="list-disc list-inside space-y-1 ml-2">
-                            <li>Your content is analyzed by a Databricks-hosted language model</li>
-                            <li>Analysis includes security checks and compliance verification</li>
-                            <li>Results are AI-generated suggestions, not definitive assessments</li>
-                            <li>All analysis happens within your Databricks workspace</li>
+                            <li>{t('common:llmConsent.point1')}</li>
+                            <li>{t('common:llmConsent.point2')}</li>
+                            <li>{t('common:llmConsent.point3')}</li>
+                            <li>{t('common:llmConsent.point4')}</li>
                         </ul>
                     </div>
 
@@ -71,7 +73,7 @@ export default function LLMConsentDialog({
                             htmlFor="consent-checkbox"
                             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                         >
-                            I understand and accept the use of AI for content analysis
+                            {t('common:llmConsent.consentLabel')}
                         </label>
                     </div>
                 </div>
@@ -81,7 +83,7 @@ export default function LLMConsentDialog({
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                     >
-                        Cancel
+                        {t('common:actions.cancel')}
                     </Button>
                     <Button
                         onClick={() => {
@@ -97,7 +99,7 @@ export default function LLMConsentDialog({
                         }}
                         disabled={!accepted}
                     >
-                        Accept and Continue
+                        {t('common:llmConsent.acceptContinue')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

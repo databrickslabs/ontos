@@ -30,11 +30,14 @@ def test_odcs_upload_then_export_roundtrip(client: TestClient, db_session: Sessi
             # Upload reference contract
             resp = client.post(
                 "/api/data-contracts/upload",
-                files={"file": ("full-example.odcs.yaml", file_bytes, "application/x-yaml")},
+                files={"files": ("full-example.odcs.yaml", file_bytes, "application/x-yaml")},
             )
             assert resp.status_code == 200, resp.text
             created = resp.json()
-            contract_id = created["id"]
+            # Endpoint now returns a BatchImportResult; a single-object upload
+            # yields exactly one created entity.
+            assert created["created"] == 1, resp.text
+            contract_id = created["created_ids"][0]
 
             # Export back to ODCS YAML
             export_resp = client.get(f"/api/data-contracts/{contract_id}/odcs/export")

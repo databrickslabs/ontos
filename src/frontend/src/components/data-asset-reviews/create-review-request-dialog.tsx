@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -48,6 +49,7 @@ const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?
 };
 
 export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, onSubmitSuccess }: CreateReviewRequestDialogProps) {
+    const { t } = useTranslation(['data-asset-reviews', 'common']);
     const { post, get } = api;
     const { toast } = useToast();
     const [requesterEmail, setRequesterEmail] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
             setRequesterEmail(userData.email || 'not-found@example.com'); // Set email or fallback
         } catch (err: any) {
              console.error("Error fetching user info:", err);
-             toast({ title: 'Error', description: 'Could not fetch your email.', variant: 'destructive' });
+             toast({ title: t('common:toast.error'), description: t('data-asset-reviews:dialog.messages.emailFetchError'), variant: 'destructive' });
              setRequesterEmail('error@example.com'); // Indicate error
         } finally {
             setIsFetchingUser(false);
@@ -105,7 +107,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
             const data = checkApiResponse(response, 'Catalogs');
             setCatalogItems(Array.isArray(data) ? data : []);
         } catch (err: any) {
-            setCatalogError(err.message || 'Failed to load catalog structure');
+            setCatalogError(err.message || t('data-asset-reviews:dialog.messages.catalogLoadFailed'));
             setCatalogItems([]);
         } finally {
             setIsLoadingCatalog(false);
@@ -185,7 +187,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                 } catch (err: any) {
                     // Log individual fetch errors but continue combining results from others
                     console.error("Error fetching children from", urls[index], ":", err);
-                    toast({ title: 'Partial Load Error', description: `Could not load some children for ${nodeId}: ${err.message}`, variant: 'default' });
+                    toast({ title: t('data-asset-reviews:dialog.messages.partialLoadTitle'), description: t('data-asset-reviews:dialog.messages.partialLoadError', { node: nodeId, error: err.message }), variant: 'default' });
                 }
             });
 
@@ -193,7 +195,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
 
         } catch (err: any) {
             console.error('Error fetching children:', err);
-            toast({ title: 'Error', description: `Could not load children for ${nodeId}: ${err.message}`, variant: 'destructive' });
+            toast({ title: t('common:toast.error'), description: t('data-asset-reviews:dialog.messages.childrenLoadError', { node: nodeId, error: err.message }), variant: 'destructive' });
             return [];
         } finally {
              setLoadingNodes(prev => {
@@ -292,16 +294,16 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
         setFormError(null);
 
         if (!requesterEmail || requesterEmail.includes('error') || requesterEmail.includes('not-found')) {
-            setFormError('Could not verify requester email. Please refresh.');
+            setFormError(t('data-asset-reviews:dialog.messages.requesterVerifyError'));
             return;
         }
 
         if (!reviewerEmail) {
-            setFormError('Reviewer email is required.');
+            setFormError(t('data-asset-reviews:dialog.messages.reviewerRequired'));
             return;
         }
         if (selectedAssetFqns.size === 0) {
-            setFormError('Please select at least one asset to review.');
+            setFormError(t('data-asset-reviews:dialog.messages.selectAtLeastOne'));
             return;
         }
         setIsSubmitting(true);
@@ -318,8 +320,8 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
             const newRequest = checkApiResponse(response, 'Create Review Request');
             onSubmitSuccess(newRequest);
         } catch (err: any) {
-            setFormError(err.message || 'An unexpected error occurred.');
-            toast({ title: 'Submission Failed', description: err.message, variant: 'destructive' });
+            setFormError(err.message || t('data-asset-reviews:dialog.messages.unexpectedError'));
+            toast({ title: t('data-asset-reviews:dialog.messages.submitFailedTitle'), description: err.message, variant: 'destructive' });
         } finally {
             setIsSubmitting(false);
         }
@@ -329,22 +331,22 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Create New Data Asset Review Request</DialogTitle>
-                    <DialogDescription>Select assets and assign a reviewer.</DialogDescription>
+                    <DialogTitle>{t('data-asset-reviews:createRequest')}</DialogTitle>
+                    <DialogDescription>{t('data-asset-reviews:dialog.description')}</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4 px-1">
                         <div>
-                            <Label htmlFor="requester-email">Your Email</Label>
+                            <Label htmlFor="requester-email">{t('data-asset-reviews:dialog.yourEmailLabel')}</Label>
                             <Input
                                 id="requester-email"
-                                value={requesterEmail ?? 'Loading...'}
+                                value={requesterEmail ?? t('common:states.loading')}
                                 disabled
                                 aria-disabled={true}
                             />
                         </div>
                         <div>
-                            <Label htmlFor="reviewer-email">Reviewer *</Label>
+                            <Label htmlFor="reviewer-email">{t('data-asset-reviews:dialog.reviewerLabel')}</Label>
                             <PrincipalPicker
                                 id="reviewer-email"
                                 accepts={['user']}
@@ -353,13 +355,13 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                                     setReviewerEmail(next ?? '');
                                     setFormError(null);
                                 }}
-                                placeholder="user@example.com"
-                                aria-label="Reviewer"
+                                placeholder={t('data-asset-reviews:dialog.reviewerPlaceholder')}
+                                aria-label={t('common:labels.reviewer')}
                             />
                         </div>
                     </div>
                     <div className="px-1">
-                        <Label htmlFor="review-title">Title (Optional)</Label>
+                        <Label htmlFor="review-title">{t('data-asset-reviews:form.titleLabel')}</Label>
                         <Input
                             id="review-title"
                             value={title}
@@ -368,11 +370,11 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                                 setTitle(e.target.value);
                                 setFormError(null);
                             }}
-                            placeholder="Leave empty to auto-generate from selected assets"
+                            placeholder={t('data-asset-reviews:form.titlePlaceholder')}
                         />
                     </div>
                     <div className="px-1">
-                        <Label htmlFor="notes">Notes (Optional)</Label>
+                        <Label htmlFor="notes">{t('data-asset-reviews:dialog.notesLabel')}</Label>
                         <Textarea
                             id="notes"
                             value={notes}
@@ -380,13 +382,13 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                                 setNotes(e.target.value);
                                 setFormError(null);
                             }}
-                            placeholder="Add any relevant context for the reviewer..."
+                            placeholder={t('data-asset-reviews:dialog.notesPlaceholder')}
                             rows={3}
                         />
                     </div>
 
                     <div className="flex-1 overflow-hidden border rounded-md mx-1">
-                         <Label className="text-sm font-medium block p-2 border-b">Select Assets *</Label>
+                         <Label className="text-sm font-medium block p-2 border-b">{t('data-asset-reviews:dialog.selectAssetsLabel')}</Label>
                          <div className="h-[300px] overflow-y-auto p-2">
                             {isLoadingCatalog ? (
                                  <div className="flex justify-center items-center h-full">
@@ -416,10 +418,10 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                 </form>
                  <DialogFooter className="mt-auto pt-4 border-t">
                     <DialogClose asChild>
-                        <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
+                        <Button type="button" variant="outline" disabled={isSubmitting}>{t('common:actions.cancel')}</Button>
                     </DialogClose>
                     <Button type="submit" onClick={handleSubmit} disabled={isSubmitting || selectedAssetFqns.size === 0}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit Request
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('data-asset-reviews:dialog.submitRequest')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

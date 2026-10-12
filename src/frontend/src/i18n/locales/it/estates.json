@@ -23,13 +23,33 @@
     "syncRequested": "Richiesta sincronizzazione per l'estate...",
     "syncTriggered": "Sincronizzazione avviata con successo. Aggiornamento dati..."
   },
+  "form": {
+    "createTitle": "Crea Estate",
+    "editTitle": "Modifica Estate",
+    "dialogDescription": "Configura la connessione dell'estate Databricks e le impostazioni di base. Le politiche di condivisione sono gestite nella pagina dei dettagli.",
+    "name": "Nome",
+    "description": "Descrizione",
+    "type": "Tipo",
+    "workspaceUrl": "URL Workspace",
+    "cloud": "Cloud",
+    "selectCloudProvider": "Seleziona provider cloud",
+    "connectionType": "Tipo di Connessione",
+    "selectConnectionType": "Seleziona tipo di connessione",
+    "connectionString": "Stringa di Connessione",
+    "metastoreName": "Nome Metastore",
+    "syncSchedule": "Programma di Sincronizzazione",
+    "enableSync": "Abilita Sincronizzazione",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "namePlaceholder": "es. Workspace di Produzione US",
+    "descriptionPlaceholder": "es. Ambiente di produzione principale per la regione US",
+    "workspaceUrlPlaceholder": "es. https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "es. primary_prod_metastore"
+  },
   "connectionTypes": {
     "deltaShare": "Delta Share",
     "unityCatalog": "Unity Catalog",
     "database": "Database (Uso Futuro)"
-  },
-  "filters": {
-    "allStatus": "Tutti gli Stati"
   },
   "table": {
     "name": "Nome",
@@ -38,11 +58,22 @@
     "connection": "Connessione",
     "metastore": "Metastore",
     "syncStatus": "Stato Sincronizzazione",
+    "lastSync": "Ultima Sincronizzazione",
     "type": "Tipo",
     "status": "Stato",
-    "lastSync": "Ultima Sincronizzazione",
     "assets": "Asset",
-    "actions": "Azioni"
+    "actions": "Azioni",
+    "neverSynced": "Mai Sincronizzato",
+    "openMenu": "Apri menu",
+    "syncTooltip": {
+      "status": "Stato: {{status}}",
+      "time": "Ora: {{time}}",
+      "error": "Errore: {{error}}",
+      "inProgress": "Sincronizzazione in corso o in coda..."
+    }
+  },
+  "filters": {
+    "allStatus": "Tutti gli Stati"
   },
   "messages": {
     "success": "Successo",
@@ -67,6 +98,47 @@
     "viewDetails": "Visualizza Dettagli",
     "notFound": "Estate non trovato",
     "loading": "Caricamento...",
+    "pageTitle": "Dettagli Estate",
+    "backToEstateManager": "Torna al Gestore Estate",
+    "backToListButton": "Torna all'Elenco",
+    "configureSyncJob": "Configura Job di Sincronizzazione",
+    "editNotImplemented": "Funzionalità di Modifica Estate da implementare",
+    "syncEnabled": "Sincronizzazione Abilitata",
+    "syncDisabled": "Sincronizzazione Disabilitata",
+    "never": "Mai",
+    "notFoundOrLoad": "Estate non trovato o impossibile da caricare.",
+    "labels": {
+      "cloudProvider": "Provider Cloud",
+      "lastSyncTime": "Ora Ultima Sincronizzazione",
+      "lastSyncStatus": "Stato Ultima Sincronizzazione",
+      "lastSyncError": "Errore Ultima Sincronizzazione",
+      "lastUpdatedAt": "Ultimo Aggiornamento"
+    },
+    "errors": {
+      "fetchTitle": "Errore nel Recupero dell'Estate",
+      "fetchFailed": "Impossibile recuperare i dettagli dell'estate.",
+      "couldNotLoad": "Impossibile caricare i dettagli dell'estate.",
+      "noEstateData": "I dati dell'estate non sono disponibili per aggiungere una politica."
+    },
+    "policies": {
+      "title": "Politiche di Condivisione",
+      "add": "Aggiungi Politica",
+      "sectionDescription": "Definisci regole per condividere Prodotti Dati specifici o termini di Modelli Semantici con questo estate. Le risorse condivise saranno accessibili tramite il tipo di connessione configurato.",
+      "resourceTypeLabel": "Tipo di Risorsa:",
+      "rulesLabel": "Regole ({{count}}):",
+      "filterBy": "Filtra per",
+      "whereValue": "dove il valore",
+      "noRules": "Nessuna regola definita per questa politica.",
+      "emptyTitle": "Nessuna politica di condivisione definita per questo estate.",
+      "emptyHint": "Clicca su \"Aggiungi Politica\" per iniziare a condividere risorse.",
+      "editPolicyAlert": "Modifica politica: {{name}}",
+      "deletePolicyAlert": "Elimina politica: {{name}}",
+      "addedTitle": "Politica Aggiunta",
+      "addedDescription": "La politica di condivisione \"{{name}}\" è stata aggiunta con successo.",
+      "addErrorTitle": "Errore nell'Aggiunta della Politica",
+      "addErrorDescription": "Impossibile salvare la nuova politica di condivisione. Riprova.",
+      "saveFailedNoData": "Impossibile salvare la politica. Il server non ha restituito dati."
+    },
     "overview": {
       "title": "Panoramica Estate",
       "type": "Tipo",
@@ -85,24 +157,40 @@
       "noHistory": "Nessuna cronologia di sincronizzazione"
     }
   },
-  "form": {
-    "createTitle": "Crea Estate",
-    "editTitle": "Modifica Estate",
-    "dialogDescription": "Configura la connessione dell'estate Databricks e le impostazioni di base. Le politiche di condivisione sono gestite nella pagina dei dettagli.",
-    "name": "Nome",
-    "description": "Descrizione",
-    "type": "Tipo",
-    "workspaceUrl": "URL Workspace",
-    "cloud": "Cloud",
-    "selectCloudProvider": "Seleziona provider cloud",
-    "connectionType": "Tipo di Connessione",
-    "selectConnectionType": "Seleziona tipo di connessione",
-    "connectionString": "Stringa di Connessione",
-    "metastoreName": "Nome Metastore",
-    "syncSchedule": "Programma di Sincronizzazione",
-    "enableSync": "Abilita Sincronizzazione",
-    "cancel": "Annulla",
-    "save": "Salva"
+  "sharingPolicy": {
+    "dialogTitle": "Aggiungi Nuova Politica di Condivisione",
+    "dialogDescription": "Definisci una nuova politica per condividere risorse da o con questo estate.",
+    "submit": "Aggiungi Politica",
+    "addRule": "Aggiungi Regola",
+    "rulesHeading": "Regole",
+    "ruleLabel": "Regola {{number}}",
+    "fields": {
+      "name": "Nome Politica",
+      "description": "Descrizione (Facoltativa)",
+      "resourceType": "Tipo di Risorsa",
+      "enablePolicy": "Abilita Politica",
+      "filterType": "Tipo di Filtro",
+      "operator": "Operatore",
+      "value": "Valore"
+    },
+    "placeholders": {
+      "name": "es. Condividi Prodotti Dati di Produzione",
+      "description": "Descrizione dettagliata dello scopo della politica...",
+      "resourceType": "Seleziona tipo di risorsa",
+      "operator": "Seleziona operatore",
+      "filterType": "es. tag, dominio, stato",
+      "value": "es. finance, Attivo"
+    },
+    "validation": {
+      "nameMin": "Il nome della politica deve contenere almeno 3 caratteri",
+      "filterTypeRequired": "Il tipo di filtro è obbligatorio",
+      "filterValueRequired": "Il valore del filtro è obbligatorio",
+      "rulesMin": "È richiesta almeno una regola"
+    },
+    "toast": {
+      "submittedTitle": "Politica Inviata",
+      "submittedDescription": "La politica di condivisione \"{{name}}\" è in fase di elaborazione.",
+      "addErrorDescription": "Impossibile aggiungere la politica di condivisione. Controlla la console per i dettagli."
+    }
   }
 }
-

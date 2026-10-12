@@ -86,12 +86,12 @@ function SimpleWorkflowFlow({
   workflow: ProcessWorkflow;
   execution: WorkflowExecution;
 }) {
-  const { t } = useTranslation(['common']);
-  
+  const { t } = useTranslation(['workflows', 'common']);
+
   if (!workflow.steps?.length) {
     return (
       <div className="text-center text-muted-foreground py-8">
-        No steps defined
+        {t('workflows:execution.noSteps')}
       </div>
     );
   }
@@ -106,7 +106,7 @@ function SimpleWorkflowFlow({
         <div className="flex items-center gap-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border-2 border-purple-500">
           <Zap className="h-5 w-5 text-purple-500" />
           <div>
-            <div className="font-medium text-sm">Trigger</div>
+            <div className="font-medium text-sm">{t('workflows:execution.trigger')}</div>
             <div className="text-xs text-muted-foreground">
               {getTriggerTypeLabel(workflow.trigger.type, t)} → {workflow.trigger.entity_types.map(et => getEntityTypeLabel(et, t)).join(', ')}
             </div>
@@ -136,12 +136,12 @@ function SimpleWorkflowFlow({
         };
         
         const stateLabels: Record<StepExecutionState, { label: string; icon: React.ReactNode }> = {
-          pending: { label: 'Pending', icon: <Clock className="h-4 w-4 text-muted-foreground" /> },
-          running: { label: 'Running', icon: <Play className="h-4 w-4 text-blue-500" /> },
-          succeeded: { label: 'Completed', icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> },
-          failed: { label: 'Failed', icon: <XCircle className="h-4 w-4 text-red-500" /> },
-          skipped: { label: 'Skipped', icon: <Clock className="h-4 w-4 text-muted-foreground" /> },
-          current: { label: 'Waiting', icon: <Pause className="h-4 w-4 text-amber-500" /> },
+          pending: { label: t('workflows:execution.states.pending'), icon: <Clock className="h-4 w-4 text-muted-foreground" /> },
+          running: { label: t('workflows:execution.states.running'), icon: <Play className="h-4 w-4 text-blue-500" /> },
+          succeeded: { label: t('workflows:execution.states.completed'), icon: <CheckCircle className="h-4 w-4 text-emerald-500" /> },
+          failed: { label: t('workflows:execution.states.failed'), icon: <XCircle className="h-4 w-4 text-red-500" /> },
+          skipped: { label: t('workflows:execution.states.skipped'), icon: <Clock className="h-4 w-4 text-muted-foreground" /> },
+          current: { label: t('workflows:execution.states.waiting'), icon: <Pause className="h-4 w-4 text-amber-500" /> },
         };
         
         return (
@@ -180,7 +180,7 @@ export function WorkflowExecutionDialog({
   open,
   onOpenChange,
 }: WorkflowExecutionDialogProps) {
-  const { t: _t } = useTranslation(['common']);
+  const { t } = useTranslation(['workflows', 'common']);
   const { get } = useApi();
   const [workflow, setWorkflow] = useState<ProcessWorkflow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -223,10 +223,10 @@ export function WorkflowExecutionDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
-            {execution.workflow_name || 'Workflow Execution'}
+            {execution.workflow_name || t('workflows:execution.titleFallback')}
           </DialogTitle>
           <DialogDescription>
-            Execution ID: {execution.id.slice(0, 8)}...
+            {t('workflows:execution.executionId', { id: execution.id.slice(0, 8) })}
           </DialogDescription>
         </DialogHeader>
         
@@ -234,14 +234,14 @@ export function WorkflowExecutionDialog({
           {/* Execution Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">Status</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('common:labels.status')}</div>
               <Badge variant={statusConfig.variant} className={statusConfig.className}>
                 {execution.status}
               </Badge>
             </Card>
-            
+
             <Card className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">Entity</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('workflows:execution.summary.entity')}</div>
               <div className="font-medium text-sm truncate">
                 {execution.entity_name || execution.entity_id || '-'}
               </div>
@@ -253,7 +253,7 @@ export function WorkflowExecutionDialog({
             </Card>
             
             <Card className="p-3">
-              <div className="text-xs text-muted-foreground mb-1">Started</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('workflows:execution.summary.started')}</div>
               <div className="text-sm">
                 {execution.started_at 
                   ? new Date(execution.started_at).toLocaleString()
@@ -263,10 +263,10 @@ export function WorkflowExecutionDialog({
             
             <Card className="p-3">
               <div className="text-xs text-muted-foreground mb-1">
-                {execution.status === 'paused' ? 'Waiting At' : 'Progress'}
+                {execution.status === 'paused' ? t('workflows:execution.summary.waitingAt') : t('workflows:execution.summary.progress')}
               </div>
               <div className="font-medium text-sm truncate">
-                {execution.current_step_name || `${execution.success_count}/${workflow?.steps?.length || '?'} steps`}
+                {execution.current_step_name || t('workflows:execution.stepsProgress', { done: execution.success_count, total: workflow?.steps?.length || '?' })}
               </div>
             </Card>
           </div>
@@ -275,7 +275,7 @@ export function WorkflowExecutionDialog({
           {execution.triggered_by && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <User className="h-4 w-4" />
-              <span>Triggered by: {execution.triggered_by}</span>
+              <span>{t('workflows:execution.triggeredBy', { user: execution.triggered_by })}</span>
             </div>
           )}
           
@@ -284,7 +284,7 @@ export function WorkflowExecutionDialog({
           {/* Workflow Visualization */}
           <div className="border rounded-lg bg-muted/30">
             <div className="p-3 border-b bg-muted/50">
-              <h4 className="font-medium text-sm">Workflow Steps</h4>
+              <h4 className="font-medium text-sm">{t('workflows:execution.workflowSteps')}</h4>
             </div>
             <ScrollArea className="h-[350px]">
               {loading ? (
@@ -295,7 +295,7 @@ export function WorkflowExecutionDialog({
                 <SimpleWorkflowFlow workflow={workflow} execution={execution} />
               ) : (
                 <div className="text-center text-muted-foreground py-8">
-                  Failed to load workflow definition
+                  {t('workflows:execution.loadDefinitionFailed')}
                 </div>
               )}
             </ScrollArea>

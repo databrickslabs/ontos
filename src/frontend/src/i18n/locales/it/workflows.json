@@ -1,0 +1,651 @@
+{
+  "designer": {
+    "newWorkflow": "Nuovo workflow",
+    "newStepName": "Nuovo passaggio {{type}}",
+    "deleteConnection": "Elimina connessione",
+    "actions": {
+      "done": "Fatto"
+    },
+    "keyValue": {
+      "keyRequired": "Chiave obbligatoria",
+      "keyExistsAdd": "La chiave esiste già — modifica la voce esistente",
+      "keyExistsEdit": "La chiave esiste già — scegli un nome diverso",
+      "addEntry": "Aggiungi voce",
+      "noEntries": "Nessuna voce.",
+      "checkTemplate": "Controlla template",
+      "keyPlaceholder": "chiave",
+      "valuePlaceholder": "valore",
+      "newEntryKeyAria": "Chiave nuova voce",
+      "newEntryValueAria": "Valore nuova voce",
+      "editEntryKeyAria": "Modifica chiave voce",
+      "editEntryValueAria": "Modifica valore voce",
+      "saveEditAria": "Salva modifica",
+      "cancelEditAria": "Annulla modifica",
+      "editRowAria": "Modifica riga",
+      "removeRowAria": "Rimuovi riga"
+    },
+    "schema": {
+      "noProperties": "Nessuna proprietà configurabile per questo tipo di passaggio."
+    },
+    "roles": {
+      "special": "Speciale",
+      "requesterOriginalUser": "Richiedente (utente originale)",
+      "ownerEntityOwner": "Proprietario (proprietario dell'entità)",
+      "appRoles": "Ruoli dell'app",
+      "businessRoles": "Ruoli aziendali",
+      "noGroups": "Nessun gruppo"
+    },
+    "messages": {
+      "loadWorkflowFailed": "Impossibile caricare il workflow",
+      "validationError": "Errore di convalida",
+      "selectWorkflowType": "Seleziona un tipo di workflow",
+      "nameRequired": "Il nome del workflow è obbligatorio",
+      "createdSuccess": "Workflow creato correttamente",
+      "updatedSuccess": "Workflow aggiornato correttamente",
+      "createFailed": "Impossibile creare il workflow: {{error}}",
+      "updateFailed": "Impossibile aggiornare il workflow: {{error}}"
+    },
+    "badges": {
+      "default": "Predefinito",
+      "approval": "Approvazione",
+      "process": "Processo",
+      "unsavedChanges": "Modifiche non salvate"
+    },
+    "placeholders": {
+      "workflowName": "Nome workflow"
+    },
+    "preview": {
+      "saveToPreview": "Salva le modifiche per visualizzare l'anteprima dell'ultima versione",
+      "dryRunTitle": "Esegui la procedura guidata in modalità dry-run",
+      "previewWizard": "Anteprima procedura guidata"
+    },
+    "typeChooser": {
+      "title": "Che tipo di workflow?",
+      "subtitle": "Scegli il tipo in base a come verrà usato questo workflow.",
+      "processTitle": "Workflow di processo",
+      "processDescription": "Automazione in background attivata da eventi — convalida, notifica, applica tag, esegui script.",
+      "approvalTitle": "Workflow di approvazione",
+      "approvalDescription": "Procedura guidata interattiva prima delle azioni dell'utente — raccogli consenso, termini, conferme."
+    },
+    "palette": {
+      "addStep": "Aggiungi passaggio",
+      "soonSuffix": " (prossimamente)",
+      "policy_check": "Controllo criterio",
+      "validation": "Convalida",
+      "approval": "Richiedi approvazione",
+      "entity_action": "Azione entità",
+      "notification": "Notifica",
+      "assign_tag": "Assegna tag",
+      "conditional": "Condizionale",
+      "script": "Script",
+      "create_asset_review": "Revisione asset",
+      "webhook": "Webhook",
+      "grant_permissions": "Concedi autorizzazioni",
+      "on_behalf_of": "Per conto di",
+      "legal_document": "Documento legale",
+      "acknowledgement_checklist": "Checklist di conferma",
+      "user_action": "Azione utente",
+      "co_signers": "Cofirmatari",
+      "persist_agreement": "Salva accordo",
+      "generate_pdf": "Genera PDF",
+      "deliver": "Consegna"
+    },
+    "discard": {
+      "description": "Hai modifiche non salvate in questo workflow. Se esci ora, le tue modifiche andranno perse.",
+      "stay": "Rimani",
+      "confirm": "Ignora modifiche"
+    },
+    "triggerConfig": {
+      "title": "Configurazione trigger",
+      "fromStatus": "Da stato",
+      "fromStatusPlaceholder": "es. bozza",
+      "toStatus": "A stato",
+      "toStatusPlaceholder": "es. attivo",
+      "descriptionPlaceholder": "Descrizione del workflow"
+    },
+    "stepConfig": {
+      "title": "Configurazione passaggio",
+      "stepName": "Nome passaggio",
+      "stepType": "Tipo di passaggio",
+      "deleteStep": "Elimina passaggio"
+    },
+    "entityAction": {
+      "action": "Azione",
+      "certify": "Certifica",
+      "decertify": "Revoca certificazione",
+      "publish": "Pubblica",
+      "unpublish": "Annulla pubblicazione",
+      "certLevelSource": "Origine del livello di certificazione",
+      "levelFromRequest": "Dalla richiesta",
+      "levelFixed": "Livello fisso",
+      "levelFromApproval": "Dall'approvazione",
+      "fixedLevel": "Livello fisso",
+      "fixedLevelPlaceholder": "es. 1",
+      "scopeSource": "Origine dell'ambito di pubblicazione",
+      "scopeFromRequest": "Dalla richiesta",
+      "scopeFixed": "Ambito fisso",
+      "scopeFromApproval": "Dall'approvazione",
+      "fixedScope": "Ambito fisso",
+      "scopeDomain": "Dominio",
+      "scopeOrganization": "Organizzazione",
+      "scopeExternal": "Esterno",
+      "help": "Esegue un'azione del ciclo di vita sull'entità che ha attivato questo workflow (dopo l'approvazione quando usato con trigger di richiesta)."
+    },
+    "userAction": {
+      "title": "Titolo",
+      "titlePlaceholder": "es. Inserisci un motivo",
+      "descriptionPlaceholder": "Descrizione facoltativa per il passaggio della procedura guidata",
+      "requiresInput": "Richiede input",
+      "requiresInputHelp": "Se attivo, l'utente deve inserire qualcosa nel campo principale prima di continuare.",
+      "minInputLength": "Lunghezza minima dell'input",
+      "minInputPlaceholder": "es. 10",
+      "minInputHelp": "Numero minimo di caratteri per il campo principale (lascia vuoto per nessun minimo).",
+      "fieldsHelp": "I passaggi di tipo Azione utente raccolgono input nei workflow di approvazione (es. motivo, accettazioni). Aggiungi i campi sopra e seleziona \"Principale\" su quello in cui arriva l'input principale dell'utente.",
+      "primaryRequiredTooltip": "Scegli un campo principale sopra prima di chiudere."
+    },
+    "policyCheck": {
+      "label": "Criterio di conformità",
+      "placeholder": "Seleziona un criterio di conformità",
+      "noPolicies": "Nessun criterio attivo trovato",
+      "help": "Questo passaggio valuterà la regola DSL del criterio di conformità selezionato in fase di esecuzione."
+    },
+    "validation": {
+      "dslRule": "Regola DSL",
+      "dslPlaceholder": "MATCH (obj:Object)\nASSERT obj.name MATCHES '^[a-z_]+$'"
+    },
+    "notification": {
+      "recipientsRole": "Destinatari (ruolo)",
+      "recipientsPlaceholder": "Seleziona destinatari",
+      "additionalRecipientsAria": "Destinatari aggiuntivi",
+      "template": "Template",
+      "selectTemplate": "Seleziona template",
+      "templates": {
+        "requestSubmitted": "Richiesta inviata",
+        "requestApproved": "Richiesta approvata",
+        "requestDenied": "Richiesta rifiutata",
+        "validationFailed": "Convalida non riuscita",
+        "validationPassed": "Convalida superata",
+        "productApproved": "Prodotto approvato",
+        "productRejected": "Prodotto rifiutato",
+        "piiDetected": "PII rilevate"
+      },
+      "customMessage": "Messaggio personalizzato",
+      "customMessagePlaceholder": "Sostituisci il messaggio del template. Supporta ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
+      "variablesLabel": "Variabili:",
+      "channels": "Canali",
+      "channelsHelp": "Se non ne selezioni nessuno, viene usata l'impostazione globale."
+    },
+    "customPrincipals": {
+      "label": "Principal personalizzati",
+      "help": "Aggiungi utenti o gruppi specifici insieme al ruolo.",
+      "usersGroups": "Utenti e gruppi",
+      "addPlaceholder": "Aggiungi utenti o gruppi…"
+    },
+    "assignTag": {
+      "tagKey": "Chiave tag",
+      "tagKeyPlaceholder": "es. owner",
+      "valueSource": "Origine del valore",
+      "selectSource": "Seleziona origine",
+      "sourceCurrentUser": "Utente corrente",
+      "sourceProjectName": "Nome progetto",
+      "sourceTimestamp": "Timestamp"
+    },
+    "approval": {
+      "approversRole": "Approvatori (ruolo)",
+      "selectRole": "Seleziona ruolo",
+      "additionalApproversAria": "Approvatori aggiuntivi",
+      "timeoutDays": "Timeout (giorni)"
+    },
+    "assetReview": {
+      "reviewerRole": "Ruolo revisore",
+      "selectReviewerRole": "Seleziona ruolo revisore",
+      "reviewerRoleHelp": "Il ruolo i cui membri possono revisionare l'asset.",
+      "reviewType": "Tipo di revisione",
+      "selectReviewType": "Seleziona tipo di revisione",
+      "typeStandard": "Revisione standard",
+      "typeExpedited": "Revisione accelerata",
+      "typeCompliance": "Revisione di conformità",
+      "typeSecurity": "Revisione di sicurezza",
+      "notesPlaceholder": "Note aggiuntive per il revisore..."
+    },
+    "webhook": {
+      "mode": "Modalità",
+      "selectMode": "Seleziona modalità",
+      "modeConnection": "Connessione UC (consigliato)",
+      "modeInline": "URL inline",
+      "modeHelp": "Le connessioni UC archiviano le credenziali in modo sicuro in Unity Catalog.",
+      "httpConnection": "Connessione HTTP",
+      "selectConnection": "Seleziona una connessione HTTP UC",
+      "noConnections": "Nessuna connessione HTTP trovata",
+      "pathPlaceholder": "/api/now/table/incident",
+      "pathHelp": "Percorso aggiunto all'URL di base della connessione.",
+      "url": "URL",
+      "urlPlaceholder": "https://api.example.com/webhook",
+      "inlineWarning": "Attenzione: le credenziali inline vengono archiviate nella configurazione del workflow.",
+      "httpMethod": "Metodo HTTP",
+      "selectMethod": "Seleziona metodo",
+      "bodyTemplate": "Template del corpo",
+      "bodyPlaceholder": "{\n  \"description\": \"Avviso per ${entity_name}\",\n  \"entity_type\": \"${entity_type}\"\n}",
+      "bodyHelp": "Usa ${variable} per la sostituzione. Consulta il pannello per tutte le variabili nell'ambito.",
+      "additionalHeaders": "Header aggiuntivi",
+      "additionalHeadersHelp": "Uniti agli header della richiesta. Sovrascrivono `headers` in caso di collisione di chiavi. I valori supportano la sostituzione ${variable}.",
+      "headerKeyPlaceholder": "X-Trace-Id",
+      "headerValuePlaceholder": "${execution_id}",
+      "additionalQueryParams": "Parametri di query aggiuntivi",
+      "additionalQueryParamsHelp": "Aggiunti all'URL/percorso della richiesta come stringa di query. I valori supportano la sostituzione ${variable} e sono codificati per URL.",
+      "queryKeyPlaceholder": "caller",
+      "queryValuePlaceholder": "ontos",
+      "pathSuffix": "Suffisso del percorso",
+      "pathSuffixPlaceholder": "/${entity_id}",
+      "pathSuffixHelp": "Aggiunto al percorso prima della stringa di query. Supporta la sostituzione ${variable}.",
+      "timeoutSeconds": "Timeout (secondi)",
+      "retryCount": "Numero di tentativi",
+      "retryHelp": "Numero di nuovi tentativi in caso di errore (0-5)."
+    }
+  },
+  "approvalResponse": {
+    "titleFallback": "Approva o rifiuta",
+    "descriptionFallback": "Fornisci un motivo per la tua decisione di approvazione o rifiuto.",
+    "requestDetails": "Dettagli della richiesta",
+    "adjustTerms": "Modifica i termini di approvazione",
+    "durationDays": "Durata (giorni)",
+    "permissionLevel": "Livello di autorizzazione",
+    "reasonLabel": "Motivo dell'approvazione o del rifiuto",
+    "reasonPlaceholder": "Inserisci il tuo motivo...",
+    "approved": "Approvato",
+    "rejected": "Rifiutato",
+    "requestFallback": "Richiesta",
+    "days_one": "{{count}} giorno",
+    "days_other": "{{count}} giorni",
+    "rows": {
+      "onBehalfOf": "Per conto di",
+      "resource": "Risorsa",
+      "duration": "Durata",
+      "reason": "Motivo",
+      "workflow": "Workflow"
+    },
+    "messages": {
+      "reasonRequiredTitle": "Motivo obbligatorio",
+      "reasonRequiredDesc": "Inserisci un motivo per la tua decisione.",
+      "processFailed": "Impossibile elaborare l'approvazione.",
+      "processFailedRetry": "Impossibile elaborare l'approvazione. Riprova.",
+      "entityApproved": "{{name}} è stato approvato.",
+      "entityRejected": "{{name}} è stato rifiutato."
+    }
+  },
+  "approvalWizard": {
+    "title": "Procedura guidata di approvazione",
+    "previewBadge": "Anteprima",
+    "referenceDocuments": "Documenti di riferimento",
+    "loadingEllipsis": "Caricamento…",
+    "selectEllipsis": "Seleziona…",
+    "failedToLoadOptions": "Impossibile caricare le opzioni",
+    "noOptionsAvailable": "Nessuna opzione disponibile",
+    "dryRunDescription": "Dry run — nulla viene salvato e non viene inviata alcuna notifica.",
+    "chooseWorkflow": "Scegli un workflow di approvazione da eseguire per questa entità.",
+    "stepPrefix": "Passaggio: {{name}}",
+    "completedShort": "Completato.",
+    "progressStep": "Passaggio {{number}}: {{name}}",
+    "completeBefore": "Completa quanto segue prima di {{action}} per",
+    "proceed": "procedere",
+    "previewCompleteScreen": "Anteprima completata. Non è stato creato alcun accordo e non è stata inviata alcuna notifica.",
+    "agreementRecorded": "Accordo registrato.",
+    "agreementId": "ID accordo: {{id}}",
+    "downloadAgreement": "Scarica accordo",
+    "noWorkflowsAvailable": "Nessun workflow di approvazione disponibile. Aggiungili in Impostazioni → Workflow (workflow di approvazione).",
+    "completeButton": "Completa",
+    "acknowledgeDefault": "Ho letto e compreso quanto sopra",
+    "scrollToBottom": "Scorri fino in fondo al documento per continuare.",
+    "coSignerPlaceholder": "Inserisci email o nome del gruppo",
+    "noDocumentContent": "*Nessun contenuto del documento fornito.*",
+    "preview": {
+      "skipped": "{{action}} — saltato in anteprima",
+      "wouldSaveAgreement": "Salverebbe l'accordo",
+      "wouldGenerateDocument": "Genererebbe il documento",
+      "wouldSendNotifications": "Invierebbe le notifiche",
+      "wouldFinalize": "Finalizzerebbe"
+    },
+    "progress": {
+      "savingAgreement": "Salvataggio dell'accordo...",
+      "generatingDocument": "Generazione del documento...",
+      "sendingNotifications": "Invio delle notifiche...",
+      "finalizing": "Finalizzazione..."
+    },
+    "coSigners": {
+      "minRequired_one": "È richiesto almeno {{count}} cofirmatario.",
+      "minRequired_other": "Sono richiesti almeno {{count}} cofirmatari.",
+      "optional": "I cofirmatari sono facoltativi per questo passaggio.",
+      "maximum": "Massimo: {{count}}.",
+      "auditNote": "I cofirmatari vengono registrati sull'accordo a fini di audit."
+    },
+    "obo": {
+      "forMyself": "Per me stesso",
+      "forMyGroup": "Per un gruppo di cui faccio parte",
+      "noGroupsAvailable": "(nessun gruppo disponibile)",
+      "selectGroup": "Seleziona uno dei tuoi gruppi",
+      "otherGroupOrSp": "Altro gruppo o service principal",
+      "groupOption": "Gruppo (nome visualizzato)",
+      "servicePrincipalOption": "Service principal (nome visualizzato o applicationId)",
+      "groupPlaceholder": "es. sales_consumers",
+      "spPlaceholder": "es. 11111111-2222-3333-4444-555555555555",
+      "validationNote": "Convalidato rispetto alla directory del workspace prima che la richiesta venga registrata.",
+      "justification": "Giustificazione",
+      "justificationPlaceholder": "Perché stai richiedendo l'accesso per questo principal?"
+    },
+    "validation": {
+      "requiresInput": "Questo passaggio richiede un input.",
+      "minLength": "Lunghezza minima: {{min}} caratteri ({{entered}} inseriti)."
+    },
+    "messages": {
+      "nothingToPreview": "Niente da visualizzare in anteprima",
+      "nothingToPreviewDesc": "Il workflow non ha passaggi.",
+      "startSessionFailed": "Impossibile avviare la sessione",
+      "previewComplete": "Anteprima completata",
+      "previewCompleteDesc": "Non è stato creato alcun accordo e non è stata inviata alcuna notifica.",
+      "submitStepFailed": "Impossibile inviare il passaggio",
+      "completed": "Completato",
+      "completedDesc": "Workflow di approvazione completato correttamente.",
+      "cancelled": "Annullato",
+      "previewCancelled": "Anteprima annullata"
+    }
+  },
+  "entityTypeSelect": {
+    "label": "Si applica a",
+    "helper": "Su quali tipi di oggetti viene attivato",
+    "firesRegardless": "Questo trigger si attiva indipendentemente dal tipo di entità."
+  },
+  "execution": {
+    "noSteps": "Nessun passaggio definito",
+    "trigger": "Trigger",
+    "titleFallback": "Esecuzione del workflow",
+    "executionId": "ID esecuzione: {{id}}...",
+    "stepsProgress": "{{done}}/{{total}} passaggi",
+    "triggeredBy": "Attivato da: {{user}}",
+    "workflowSteps": "Passaggi del workflow",
+    "loadDefinitionFailed": "Impossibile caricare la definizione del workflow",
+    "states": {
+      "pending": "In sospeso",
+      "running": "In esecuzione",
+      "completed": "Completato",
+      "failed": "Non riuscito",
+      "skipped": "Saltato",
+      "waiting": "In attesa"
+    },
+    "summary": {
+      "entity": "Entità",
+      "started": "Avviato",
+      "waitingAt": "In attesa a",
+      "progress": "Avanzamento"
+    }
+  },
+  "nodes": {
+    "checklistTitle": "Checklist",
+    "assetReviewTitle": "Revisione asset",
+    "successTitle": "Successo",
+    "failureTitle": "Errore",
+    "stepFallback": "Passaggio",
+    "notificationTo": "A: {{recipient}}",
+    "actionLabel": "Azione: {{action}}",
+    "noActionSet": "Nessuna azione impostata",
+    "itemCount_one": "{{count}} elemento",
+    "itemCount_other": "{{count}} elementi",
+    "keyLabel": "Chiave: {{key}}",
+    "policyLabel": "Criterio: {{name}}",
+    "idLabel": "ID: {{id}}",
+    "noPolicySelected": "Nessun criterio selezionato",
+    "reviewerLabel": "Revisore:",
+    "notSet": "Non impostato",
+    "connectionLabel": "Connessione: {{name}}",
+    "notConfigured": "Non configurato",
+    "configureUrlOrConnection": "Configura URL o connessione",
+    "requestApproval": "richiedere l'approvazione"
+  },
+  "requiredFields": {
+    "title": "Campi personalizzati",
+    "emptyState": "Ancora nessun campo personalizzato. Aggiungi i campi che il richiedente deve compilare prima dell'invio.",
+    "primaryError": "Scegli un campo principale — l'input principale dell'utente va lì. Obbligatorio perché \"Richiede input\" è attivo.",
+    "errors": {
+      "idRequired": "L'ID è obbligatorio.",
+      "idInvalid": "L'ID deve contenere lettere minuscole, cifre o trattini bassi e iniziare con una lettera.",
+      "idDuplicate": "L'ID deve essere univoco all'interno di questo passaggio."
+    },
+    "fieldIdLabel": "ID campo",
+    "fieldIdPlaceholder": "es. target_group",
+    "labelLabel": "Etichetta",
+    "labelPlaceholder": "Mostrata al richiedente",
+    "typeText": "Testo",
+    "typeSelect": "Selezione",
+    "requiredShort": "Obbl.",
+    "primaryTooltip": "Contrassegna questa riga come campo di input principale del passaggio",
+    "primary": "Principale",
+    "primaryAriaLabel": "Campo principale",
+    "removeFieldAriaLabel": "Rimuovi campo",
+    "staticOptions": "Opzioni statiche",
+    "fromEndpoint": "Da endpoint",
+    "optionValuePlaceholder": "valore",
+    "optionLabelPlaceholder": "etichetta",
+    "removeOptionAriaLabel": "Rimuovi opzione",
+    "addOption": "Aggiungi opzione",
+    "optionsEndpoint": "Endpoint delle opzioni",
+    "endpointPlaceholder": "/api/workspace/groups",
+    "endpointHint": "Endpoint backend che restituisce JSON",
+    "addField": "Aggiungi campo"
+  },
+  "templateVars": {
+    "copiedToClipboard": "{{placeholder}} copiato negli appunti.",
+    "copyFailed": "Copia non riuscita",
+    "copyBlocked": "Il browser ha bloccato l'accesso agli appunti.",
+    "copyPlaceholder": "Copia {{placeholder}}",
+    "sampleLabel": "es. {{sample}}",
+    "loadFailed": "Impossibile caricare le variabili",
+    "pickTriggerBefore": "Scegli un trigger e un tipo di entità per vedere le variabili disponibili per la",
+    "pickTriggerAfter": "sostituzione.",
+    "loadingVariables": "Caricamento variabili…",
+    "loadFailedWithError": "Impossibile caricare le variabili: {{error}}",
+    "noDescriptors": "Nessun descrittore di variabile è ancora registrato per questo trigger e tipo di entità. Puoi comunque usare i placeholder universali (",
+    "noDescriptorsSuffix": ", ecc.).",
+    "availableVariables": "Variabili disponibili",
+    "copyHint": "Fai clic sull'icona di copia per acquisire un placeholder.",
+    "filterPlaceholder": "Filtra per nome o descrizione…",
+    "searchAriaLabel": "Cerca variabili del template",
+    "clearSearchAriaLabel": "Cancella ricerca",
+    "matches_one": "{{count}} corrispondenza",
+    "matches_other": "{{count}} corrispondenze",
+    "noMatch": "Nessuna variabile corrisponde"
+  },
+  "triggerPicker": {
+    "label": "Si attiva su",
+    "helper": "Quale azione fa eseguire questo workflow",
+    "placeholder": "Seleziona un trigger…",
+    "noTypes": "Nessun tipo di trigger disponibile.",
+    "availableToAny": "Disponibile per qualsiasi utente autenticato.",
+    "groups": {
+      "lifecycle": "Eventi del ciclo di vita",
+      "request_flow": "Flusso di richiesta",
+      "validation_gates": "Gate di convalida",
+      "system_scheduled": "Sistema e pianificati"
+    },
+    "requiredPermission": {
+      "label": "Autorizzazione richiesta:",
+      "prefix": "gli utenti necessitano di",
+      "suffix": "o superiore per vedere ed eseguire questo workflow. Impostalo in Impostazioni → Ruoli."
+    }
+  },
+  "view": {
+    "subtitle": "Configura workflow automatizzati per convalida, approvazione e notifiche.",
+    "readOnlyAccess": "(Accesso in sola lettura)",
+    "copyNameSuffix": "{{name}} (copia)",
+    "approvalWorkflowFallback": "Workflow di approvazione",
+    "stepLabel": "Passaggio {{number}}",
+    "errorDetails": "Dettagli errore",
+    "actions": {
+      "loadDefaults": "Carica predefiniti",
+      "createWorkflow": "Crea workflow",
+      "previewWizard": "Anteprima procedura guidata",
+      "duplicate": "Duplica",
+      "forceApprove": "Forza approvazione",
+      "forceReject": "Forza rifiuto"
+    },
+    "loadDefaults": {
+      "menuLabel": "Workflow predefiniti",
+      "newOnly": "Carica solo i nuovi",
+      "reloadAll": "Ricarica tutti i predefiniti"
+    },
+    "badges": {
+      "default": "Predefinito",
+      "approval": "Approvazione",
+      "process": "Processo"
+    },
+    "columns": {
+      "steps": "Passaggi",
+      "workflow": "Workflow",
+      "entity": "Entità",
+      "currentStep": "Passaggio corrente",
+      "started": "Avviato",
+      "completed": "Completato",
+      "error": "Errore"
+    },
+    "help": {
+      "process": "Processo: viene eseguito dopo gli eventi (notifica, tag, convalida)",
+      "approval": "Approvazione: compare prima delle azioni (consenso, termini)",
+      "chain": "Si concatenano: prima l'approvazione, poi il processo"
+    },
+    "stats": {
+      "activeWorkflows": "Workflow attivi",
+      "ofTotal": "su {{count}} totali",
+      "inactiveCount": "({{count}} inattivi)",
+      "defaultWorkflows": "Workflow predefiniti",
+      "builtInWorkflows": "workflow integrati",
+      "inProgress": "In corso",
+      "runningOrPaused": "in esecuzione o in pausa",
+      "recentFailures": "Errori recenti",
+      "inLast50Runs": "nelle ultime 50 esecuzioni"
+    },
+    "filter": {
+      "label": "Filtrato: {{filter}}",
+      "active": "Workflow attivi",
+      "inactive": "Workflow inattivi",
+      "default": "Workflow predefiniti",
+      "running": "Esecuzioni in corso",
+      "failed": "Esecuzioni non riuscite",
+      "clear": "Cancella filtro"
+    },
+    "sections": {
+      "definitionsTitle": "Definizioni dei workflow",
+      "executionsTitle": "Esecuzioni recenti",
+      "executionsDescription": "Monitora le esecuzioni dei workflow e il loro stato."
+    },
+    "empty": {
+      "noWorkflows": "Ancora nessun workflow configurato.",
+      "noWorkflowsHint": "Fai clic su \"Carica predefiniti\" per iniziare con i workflow predefiniti.",
+      "noExecutions": "Ancora nessuna esecuzione di workflow.",
+      "noExecutionsHint": "Le esecuzioni verranno visualizzate qui quando i workflow vengono attivati."
+    },
+    "bulk": {
+      "enable": "Abilita ({{count}})",
+      "disable": "Disabilita ({{count}})",
+      "delete": "Elimina ({{count}})",
+      "cancel": "Annulla ({{count}})",
+      "retry": "Riprova ({{count}})"
+    },
+    "dialogs": {
+      "duplicateTitle": "Duplica workflow",
+      "duplicateDescription": "Crea una copia di \"{{name}}\" con un nuovo nome.",
+      "deleteExecutionTitle": "Elimina esecuzione",
+      "deleteExecutionDescription": "Vuoi davvero eliminare questa esecuzione del workflow? Questa azione non può essere annullata."
+    },
+    "placeholders": {
+      "newWorkflowName": "Nome del nuovo workflow"
+    },
+    "detail": {
+      "workflow": "Workflow:",
+      "status": "Stato:",
+      "entity": "Entità:"
+    },
+    "tooltips": {
+      "clickFullError": "Fai clic per vedere l'errore completo"
+    },
+    "permission": {
+      "denied": "Autorizzazione negata",
+      "modifyWorkflows": "Non disponi delle autorizzazioni per modificare i workflow.",
+      "deleteWorkflows": "Non disponi delle autorizzazioni per eliminare i workflow.",
+      "loadDefaults": "Non disponi delle autorizzazioni per caricare i workflow predefiniti.",
+      "cancelExecutions": "Non disponi delle autorizzazioni per annullare le esecuzioni.",
+      "retryExecutions": "Non disponi delle autorizzazioni per riprovare le esecuzioni.",
+      "overrideApprovals": "Non disponi delle autorizzazioni per ignorare le approvazioni dei workflow.",
+      "deleteExecutions": "Non disponi delle autorizzazioni per eliminare le esecuzioni."
+    },
+    "confirm": {
+      "deleteWorkflows_one": "Vuoi davvero eliminare {{count}} workflow?",
+      "deleteWorkflows_other": "Vuoi davvero eliminare {{count}} workflow?",
+      "deleteWorkflowsSkipped_one": " ({{count}} workflow predefinito verrà ignorato)",
+      "deleteWorkflowsSkipped_other": " ({{count}} workflow predefiniti verranno ignorati)",
+      "deleteExecutions_one": "Vuoi davvero eliminare {{count}} esecuzione?",
+      "deleteExecutions_other": "Vuoi davvero eliminare {{count}} esecuzioni?",
+      "deleteExecutionsSkipped_one": " ({{count}} esecuzione in corso/in pausa verrà ignorata)",
+      "deleteExecutionsSkipped_other": " ({{count}} esecuzioni in corso/in pausa verranno ignorate)"
+    },
+    "messages": {
+      "loadFailed": "Impossibile caricare i workflow",
+      "workflowEnabled": "Workflow abilitato",
+      "workflowDisabled": "Workflow disabilitato",
+      "updateStatusFailed": "Impossibile aggiornare lo stato del workflow",
+      "duplicateSuccess": "Workflow duplicato correttamente",
+      "duplicateFailed": "Impossibile duplicare il workflow",
+      "cannotDelete": "Impossibile eliminare",
+      "cannotDeleteDefault": "I workflow predefiniti non possono essere eliminati. Disabilitali invece.",
+      "deleteSuccess": "Workflow eliminato",
+      "deleteFailed": "Impossibile eliminare il workflow",
+      "loadDefaultsFailed": "Impossibile caricare i workflow predefiniti",
+      "cancelSuccess": "Esecuzione annullata correttamente",
+      "cancelFailed": "Impossibile annullare l'esecuzione",
+      "retryStarted": "Nuovo tentativo di esecuzione avviato",
+      "retryFailed": "Impossibile riprovare l'esecuzione",
+      "executionDeleteSuccess": "Esecuzione eliminata correttamente",
+      "executionDeleteFailed": "Impossibile eliminare l'esecuzione",
+      "forceApprovedByAdmin": "Approvazione forzata dall'amministratore",
+      "forceRejectedByAdmin": "Rifiuto forzato dall'amministratore",
+      "approveResumeSuccess": "Workflow approvato e ripreso",
+      "approveFailed": "Impossibile approvare il workflow",
+      "rejectResumeSuccess": "Workflow rifiutato e ripreso",
+      "rejectFailed": "Impossibile rifiutare il workflow",
+      "noChanges": "Nessuna modifica",
+      "allAlreadyEnabled": "Tutti i workflow selezionati sono già abilitati.",
+      "allAlreadyDisabled": "Tutti i workflow selezionati sono già disabilitati.",
+      "workflowsEnabled_one": "{{count}} workflow abilitato.",
+      "workflowsEnabled_other": "{{count}} workflow abilitati.",
+      "workflowsDisabled_one": "{{count}} workflow disabilitato.",
+      "workflowsDisabled_other": "{{count}} workflow disabilitati.",
+      "workflowsFailedUpdate_one": "Aggiornamento non riuscito per {{count}} workflow.",
+      "workflowsFailedUpdate_other": "Aggiornamento non riuscito per {{count}} workflow.",
+      "updateWorkflowsFailed": "Impossibile aggiornare i workflow",
+      "allDefaultsCannotDelete": "Tutti i workflow selezionati sono predefiniti e non possono essere eliminati.",
+      "workflowsDeleted_one": "{{count}} workflow eliminato.",
+      "workflowsDeleted_other": "{{count}} workflow eliminati.",
+      "workflowsFailedDelete_one": "Eliminazione non riuscita per {{count}} workflow.",
+      "workflowsFailedDelete_other": "Eliminazione non riuscita per {{count}} workflow.",
+      "deleteWorkflowsFailed": "Impossibile eliminare i workflow",
+      "noCancellable": "Nessuna esecuzione annullabile",
+      "noCancellableDesc": "Nessuna delle esecuzioni selezionate può essere annullata.",
+      "executionsCancelled_one": "{{count}} esecuzione annullata.",
+      "executionsCancelled_other": "{{count}} esecuzioni annullate.",
+      "executionsFailedCancel_one": "Annullamento non riuscito per {{count}} esecuzione.",
+      "executionsFailedCancel_other": "Annullamento non riuscito per {{count}} esecuzioni.",
+      "cancelExecutionsFailed": "Impossibile annullare le esecuzioni",
+      "noRetriable": "Nessuna esecuzione ripetibile",
+      "noRetriableDesc": "Nessuna delle esecuzioni selezionate può essere ripetuta.",
+      "executionsRetryStarted_one": "Nuovo tentativo avviato per {{count}} esecuzione.",
+      "executionsRetryStarted_other": "Nuovo tentativo avviato per {{count}} esecuzioni.",
+      "executionsFailedRetry_one": "Nuovo tentativo non riuscito per {{count}} esecuzione.",
+      "executionsFailedRetry_other": "Nuovo tentativo non riuscito per {{count}} esecuzioni.",
+      "retryExecutionsFailed": "Impossibile riprovare le esecuzioni",
+      "runningCannotDelete": "Le esecuzioni in corso o in pausa non possono essere eliminate.",
+      "executionsDeleted_one": "{{count}} esecuzione eliminata.",
+      "executionsDeleted_other": "{{count}} esecuzioni eliminate.",
+      "executionsFailedDelete_one": "Eliminazione non riuscita per {{count}} esecuzione.",
+      "executionsFailedDelete_other": "Eliminazione non riuscita per {{count}} esecuzioni.",
+      "deleteExecutionsFailed": "Impossibile eliminare le esecuzioni",
+      "errorCopied": "Errore copiato negli appunti."
+    }
+  }
+}

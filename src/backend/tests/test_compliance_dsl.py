@@ -381,6 +381,121 @@ class TestRuleEvaluation:
         assert passed is False
 
 
+class TestBooleanLiterals:
+    """Test boolean literal parsing and evaluation (issue #684)."""
+
+    def test_lexer_bool_keywords(self):
+        """True/False (any case) lex as TRUE/FALSE keyword tokens, not identifiers."""
+        for text, expected in [
+            ("True", TokenType.TRUE),
+            ("False", TokenType.FALSE),
+            ("true", TokenType.TRUE),
+            ("false", TokenType.FALSE),
+        ]:
+            tokens = Lexer(text).tokenize()
+            assert tokens[0].type == expected
+
+    def test_parse_bool_literal_is_python_bool(self):
+        """A bare True/False parses to a Literal holding a real Python bool."""
+        for text, expected in [("True", True), ("False", False),
+                               ("true", True), ("false", False)]:
+            parser = Parser(Lexer(text).tokenize())
+            ast = parser.parse_primary()
+            assert isinstance(ast, Literal)
+            assert ast.value is expected
+
+    def test_eq_true_against_bool_field(self):
+        """`field = True` evaluates True when field is bool True, False when bool False."""
+        rule = "ASSERT obj.has_owner = True"
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': True})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': False})
+        assert passed is False
+
+    def test_eq_false_against_bool_field(self):
+        """`field = False` evaluates True when field is bool False, False when bool True."""
+        rule = "ASSERT obj.has_pii = False"
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': False})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': True})
+        assert passed is False
+
+    def test_neq_true_against_bool_field(self):
+        """`field != True` behaves as bool-to-bool inequality."""
+        rule = "ASSERT obj.has_owner != True"
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': False})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': True})
+        assert passed is False
+
+    def test_neq_false_against_bool_field(self):
+        """`field != False` behaves as bool-to-bool inequality."""
+        rule = "ASSERT obj.has_pii != False"
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': True})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': False})
+        assert passed is False
+
+    def test_lowercase_bool_matches_bool_field(self):
+        """Lowercase true/false evaluate the same as True/False."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.has_owner = true", {'has_owner': True})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.has_pii = false", {'has_pii': False})
+        assert passed is True
+
+    def test_bool_literal_not_equal_to_string(self):
+        """Regression: bool literal is a real bool, so True != the string 'True'."""
+        evaluator = Evaluator({})
+        ast = Parser(Lexer("True").tokenize()).parse_primary()
+        assert evaluator.evaluate(ast) is True
+        assert evaluator.evaluate(ast) != "True"
+
+    def test_bool_literal_does_not_coerce_integer_field(self):
+        """Integer fields are not equal to booleans, while numeric equality is unchanged."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = true", {'count': 1})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count != true", {'count': 1})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = false", {'count': 0})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count != false", {'count': 0})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1})
+        assert passed is True
+
+    def test_bool_literal_does_not_coerce_float_field(self):
+        """Float fields are not equal to booleans, while numeric equality is unchanged."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = true", {'count': 1.0})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1.0})
+        assert passed is True
+
+    def test_bool_literal_does_not_equal_string_field(self):
+        """Quoting regression: string properties do not match bare boolean literals."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.status = true", {'status': 'active'})
+        assert passed is False
+
+    def test_tag_string_true_requires_quoted_literal(self):
+        """Quoting regression: string TAG values require quoted string literals."""
+        obj = {'tags': {'enabled': 'true'}}
+        passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = true", obj)
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = 'true'", obj)
+        assert passed is True
+
+    @pytest.mark.parametrize('field', [
+        'has_owner',
+        'has_description',
+        'has_upstream_lineage',
+        'has_delivery_channels',
+        'has_contract',
+    ])
+    def test_live_maturity_boolean_gates_still_pass(self, field):
+        """Live maturity gates continue comparing real booleans normally."""
+        passed, _ = evaluate_rule_on_object(f"ASSERT obj.{field} = True", {field: True})
+        assert passed is True
+
+
 class TestRuleParsing:
     """Test full rule parsing."""
 

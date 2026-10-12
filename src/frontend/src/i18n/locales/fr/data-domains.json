@@ -6,6 +6,8 @@
   "editDomain": "Modifier le domaine",
   "deleteDomain": "Supprimer le domaine",
   "noDomainsYet": "Pas encore de domaines de données.",
+  "openMenu": "Ouvrir le menu",
+  "previewMetadata": "Aperçu des métadonnées",
   "table": {
     "name": "Nom",
     "description": "Description",
@@ -28,12 +30,133 @@
     "domainDeletedSuccess": "Le domaine de données a été supprimé avec succès.",
     "errorFetchingDomains": "Erreur lors de la récupération des domaines",
     "errorDeletingDomain": "Erreur lors de la suppression du domaine",
-    "errorLoadingData": "Erreur lors du chargement des données"
+    "errorLoadingData": "Erreur lors du chargement des données",
+    "failedLoadDomains": "Échec du chargement des domaines de données",
+    "failedDeleteDomain": "Échec de la suppression du domaine."
   },
   "deleteDialog": {
     "title": "Êtes-vous absolument sûr ?",
     "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement le domaine de données.",
     "cancel": "Annuler",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "cannotDelete": "Ce domaine ne peut pas être supprimé.",
+    "primaryForAssignments_one": "Il s'agit du domaine principal pour {{count}} affectation d'entité :",
+    "primaryForAssignments_other": "Il s'agit du domaine principal pour {{count}} affectations d'entités :",
+    "assignmentCount": "{{count}} {{type}}(s)",
+    "reassignFirst": "Réaffectez-les d'abord à un autre domaine principal."
+  },
+  "form": {
+    "editTitle": "Modifier le domaine de données",
+    "createTitle": "Créer un nouveau domaine de données",
+    "editDescription": "Apporter des modifications au domaine de données existant.",
+    "createDescription": "Ajouter un nouveau domaine de données au système.",
+    "createSubmit": "Créer le domaine",
+    "nameLabel": "Nom *",
+    "namePlaceholder": "par ex. Analyse des ventes",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Décrivez l'objectif de ce domaine...",
+    "tagsLabel": "Étiquettes",
+    "tagsPlaceholder": "Rechercher et sélectionner des étiquettes pour ce domaine de données...",
+    "parentLabel": "Domaine parent",
+    "parentPlaceholder": "Sélectionner un domaine parent (optionnel)",
+    "noParent": "Aucun parent",
+    "validation": {
+      "nameMin": "Le nom doit comporter au moins 2 caractères.",
+      "descriptionMax": "La description ne doit pas dépasser 500 caractères."
+    },
+    "discardDescription": "Vous avez des modifications non enregistrées qui seront perdues si vous fermez cette boîte de dialogue. Êtes-vous sûr de vouloir les abandonner ?",
+    "continueEditing": "Continuer la modification",
+    "discardChanges": "Abandonner les modifications",
+    "toasts": {
+      "updated": "Domaine mis à jour",
+      "created": "Domaine créé",
+      "saveSuccess": "'{{name}}' enregistré avec succès.",
+      "saveError": "Erreur lors de l'enregistrement du domaine"
+    }
+  },
+  "details": {
+    "backToList": "Retour à la liste",
+    "backToDataDomains": "Retour aux domaines de données",
+    "edit": "Modifier",
+    "notFound": "Domaine de données introuvable ou impossible à charger.",
+    "noDomainIdProvided": "Aucun ID de domaine fourni.",
+    "invalidDomain": "Domaine invalide",
+    "relatedEntities": "Entités liées",
+    "addConcept": "Ajouter un concept",
+    "hierarchyContext": "Contexte de hiérarchie du domaine",
+    "info": {
+      "id": "ID",
+      "parentDomain": "Domaine parent",
+      "childrenCount": "Nombre d'enfants",
+      "tags": "Étiquettes",
+      "createdBy": "Créé par",
+      "createdAt": "Créé le",
+      "lastUpdatedAt": "Dernière mise à jour le",
+      "linkedBusinessConcepts": "Concepts métier liés"
+    },
+    "childDomains": {
+      "title": "Domaines de données enfants ({{count}})",
+      "description": "Domaines de données directement imbriqués.",
+      "empty": "Aucun domaine enfant trouvé",
+      "columns": {
+        "name": "Nom",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "Équipes du domaine",
+      "countBadge_one": "{{count}} équipe",
+      "countBadge_other": "{{count}} équipes",
+      "create": "Créer une équipe",
+      "description": "Équipes affectées à ce domaine de données. Les équipes héritent des permissions et responsabilités propres au domaine.",
+      "empty": "Aucune équipe affectée",
+      "emptyHint": "Créez une équipe pour l'affecter à ce domaine de données.",
+      "createFirst": "Créer la première équipe",
+      "columns": {
+        "name": "Nom de l'équipe",
+        "title": "Titre",
+        "noTitle": "Aucun titre",
+        "members": "Membres",
+        "memberCount_one": "{{count}} membre",
+        "memberCount_other": "{{count}} membres",
+        "actions": "Actions",
+        "edit": "Modifier"
+      }
+    },
+    "assignedEntities": {
+      "title": "Entités affectées",
+      "description": "Produits de données, contrats et actifs affectés à ce domaine (principal ou additionnel).",
+      "dataProducts": "Produits de données",
+      "dataContracts": "Contrats de données",
+      "assets": "Actifs",
+      "primaryDomain": "Domaine principal",
+      "additionalDomain": "Domaine additionnel",
+      "noneAssigned": "Aucun affecté."
+    },
+    "linkedAssets": {
+      "title": "Actifs liés",
+      "description": "Actifs (produits de données, contrats, etc.) liés à ce domaine de données par des relations sémantiques.",
+      "empty": "Aucun actif lié trouvé",
+      "countBadge": "{{count}} au total",
+      "columns": {
+        "name": "Nom de l'actif",
+        "type": "Type",
+        "unknownType": "Inconnu",
+        "path": "Chemin",
+        "domain": "Domaine"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "Concept métier lié au domaine de données.",
+    "conceptUnlinked": "Concept métier dissocié du domaine de données.",
+    "linkConceptError": "Échec de la liaison du concept métier",
+    "unlinkConceptError": "Échec de la dissociation du concept métier",
+    "errorFetchingDomain": "Erreur lors de la récupération du domaine",
+    "couldNotLoadDomain": "Impossible de charger les détails du domaine.",
+    "failedFetchDomain": "Échec de la récupération des détails du domaine.",
+    "metadataLoadFailed": "Échec du chargement des métadonnées",
+    "couldNotLoadMetadata": "Impossible de charger les métadonnées.",
+    "editTeamLoadError": "Échec du chargement des détails de l'équipe pour modification."
   }
 }

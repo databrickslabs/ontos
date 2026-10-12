@@ -19,18 +19,66 @@ from src.models.teams import (
 from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.errors import ConflictError, NotFoundError
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.database import get_session_factory
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-class TeamsManager:
+class TeamsManager(SearchableAsset):
     def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.team_repo = team_repo
         self.team_member_repo = team_member_repo
         self.domain_repo = data_domain_repo
         self.tags_manager = tags_manager or TagsManager()
         logger.debug("TeamsManager initialized.")
+
+    # --- SearchableAsset Implementation ---
+    def _build_search_index_item(self, team: TeamDb) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a Team DB model."""
+        if not getattr(team, 'id', None) or not getattr(team, 'name', None):
+            return None
+        return SearchIndexItem(
+            id=f"team::{team.id}",
+            type="team",
+            feature_id="teams",
+            title=team.name,
+            description=getattr(team, 'description', '') or "",
+            link=f"/teams/{team.id}",
+            tags=[],
+            extra_data={"title": getattr(team, 'title', '') or ""},
+        )
+
+    def _update_search_index(self, team: TeamDb) -> None:
+        """Build + upsert the search-index item for a team (keeps global search fresh on
+        every create/update, not just at startup; #919 review)."""
+        try:
+            item = self._build_search_index_item(team)
+            if item:
+                self._notify_index_upsert(item)
+        except Exception as e:
+            logger.debug(f"Failed to upsert team {getattr(team, 'id', '?')} in search index: {e}")
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetch teams and map them to SearchIndexItem format for global search."""
+        logger.info("Fetching teams for search indexing...")
+        items: List[SearchIndexItem] = []
+        try:
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index teams.")
+                return []
+            with session_factory() as db:
+                for team in self.team_repo.get_multi_with_members(db, limit=10000):
+                    item = self._build_search_index_item(team)
+                    if item:
+                        items.append(item)
+            logger.info(f"Prepared {len(items)} teams for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping teams for search: {e}", exc_info=True)
+            return []
 
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""
@@ -189,6 +237,8 @@ class TeamsManager:
                     )
 
             logger.info(f"Successfully created team '{db_team.name}' with id: {db_team.id}")
+            # Index the new team so global search finds it before the next full rebuild (#919 review).
+            self._update_search_index(db_team)
             return self._convert_db_to_read_model(db_team, db)
         except IntegrityError as e:
             db.rollback()
@@ -307,6 +357,8 @@ class TeamsManager:
                 )
 
             logger.info(f"Successfully updated team '{updated_db_team.name}' (id: {team_id})")
+            # Re-index so renames/description edits don't stay stale in global search (#919 review).
+            self._update_search_index(updated_db_team)
             return self._convert_db_to_read_model(updated_db_team, db)
         except IntegrityError as e:
             db.rollback()
@@ -333,6 +385,8 @@ class TeamsManager:
             entity_domain_repo.remove_all_for_entity(db, entity_type="team", entity_id=team_id)
             self.team_repo.remove(db=db, id=team_id)
             logger.info(f"Successfully deleted team '{read_model.name}' (id: {team_id})")
+            # Remove from the global search index so a deleted team isn't still findable (#919 review).
+            self._notify_index_remove(f"team::{team_id}")
             return read_model
         except Exception as e:
             db.rollback()

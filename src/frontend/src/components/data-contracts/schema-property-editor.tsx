@@ -34,15 +34,16 @@ const getTabsWithValues = (prop: ColumnProperty) => ({
 
 // Compact 6-square indicator showing which tabs have values configured
 const TabIndicator = ({ prop }: { prop: ColumnProperty }) => {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const tabs = getTabsWithValues(prop)
   const indicators = [
-    { key: 'constraints', label: 'Constraints', active: tabs.constraints },
-    { key: 'quality', label: 'Quality', active: tabs.quality },
-    { key: 'governance', label: 'Governance', active: tabs.governance },
-    { key: 'business', label: 'Business', active: tabs.business },
-    { key: 'transform', label: 'Transform', active: tabs.transform },
-    { key: 'semantics', label: 'Semantics', active: tabs.semantics },
-    { key: 'relationships', label: 'Relationships', active: tabs.relationships },
+    { key: 'constraints', label: t('data-contracts:property.tabs.constraints', 'Constraints'), active: tabs.constraints },
+    { key: 'quality', label: t('data-contracts:property.tabs.quality', 'Quality'), active: tabs.quality },
+    { key: 'governance', label: t('data-contracts:property.tabs.governance', 'Governance'), active: tabs.governance },
+    { key: 'business', label: t('data-contracts:property.tabs.business', 'Business'), active: tabs.business },
+    { key: 'transform', label: t('data-contracts:property.tabs.transform', 'Transform'), active: tabs.transform },
+    { key: 'semantics', label: t('data-contracts:property.tabs.semantics', 'Semantics'), active: tabs.semantics },
+    { key: 'relationships', label: t('data-contracts:property.tabs.relationships', 'Relationships'), active: tabs.relationships },
   ]
   
   return (
@@ -141,7 +142,7 @@ function SchemaPropertyEditorInner(
   ref: React.Ref<SchemaPropertyEditorHandle>
 ) {
   const { toast } = useToast()
-  const { t } = useTranslation('data-contracts')
+  const { t } = useTranslation(['data-contracts', 'common'])
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
   // Core fields
@@ -377,7 +378,7 @@ function SchemaPropertyEditorInner(
 
   const handleAddOrUpdate = () => {
     if (!name.trim()) {
-      toast({ title: 'Validation Error', description: 'Column name is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:property.toast.validationError', 'Validation Error'), description: t('data-contracts:property.toast.columnNameRequired', 'Column name is required'), variant: 'destructive' })
       return
     }
 
@@ -443,33 +444,33 @@ function SchemaPropertyEditorInner(
             <div className="space-y-1">
               <div className="flex items-center gap-2 pb-2 border-b mb-2">
                 <Edit className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">{t('schemaEditor.editingColumn')}: <span className="font-mono text-primary">{name || properties[editingIndex]?.name}</span></h3>
+                <h3 className="text-lg font-semibold">{t('data-contracts:schemaEditor.editingColumn', 'Editing Column')}: <span className="font-mono text-primary">{name || properties[editingIndex]?.name}</span></h3>
                 {isDirty && (
-                  <Badge variant="secondary" className="text-xs font-normal">{t('schemaEditor.unsavedChanges')}</Badge>
+                  <Badge variant="secondary" className="text-xs font-normal">{t('data-contracts:schemaEditor.unsavedChanges', 'Unsaved changes')}</Badge>
                 )}
               </div>
               {isDirty && (
-                <p className="text-xs text-muted-foreground">{t('schemaEditor.applyWithUpdateOrSave')}</p>
+                <p className="text-xs text-muted-foreground">{t('data-contracts:schemaEditor.applyWithUpdateOrSave', 'Apply with Update Column, or Save Changes to include them in the schema.')}</p>
               )}
             </div>
           ) : (
             <div className="flex items-center gap-2 pb-2 border-b mb-2">
               <Plus className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">{t('schemaEditor.addingNewColumn')}</h3>
+              <h3 className="text-lg font-semibold">{t('data-contracts:schemaEditor.addingNewColumn', 'Adding New Column')}</h3>
             </div>
           )}
           
           <Tabs defaultValue="core" className="w-full">
             <TabsList className="grid w-full grid-cols-8">
-              <TabsTrigger value="core">Core</TabsTrigger>
-              <TabsTrigger value="constraints">Constraints</TabsTrigger>
-              <TabsTrigger value="quality">Quality</TabsTrigger>
-              <TabsTrigger value="governance">Governance</TabsTrigger>
-              <TabsTrigger value="business">Business</TabsTrigger>
-              <TabsTrigger value="transform">Transform</TabsTrigger>
-              <TabsTrigger value="semantics">Semantics</TabsTrigger>
+              <TabsTrigger value="core">{t('data-contracts:property.tabs.core', 'Core')}</TabsTrigger>
+              <TabsTrigger value="constraints">{t('data-contracts:property.tabs.constraints', 'Constraints')}</TabsTrigger>
+              <TabsTrigger value="quality">{t('data-contracts:property.tabs.quality', 'Quality')}</TabsTrigger>
+              <TabsTrigger value="governance">{t('data-contracts:property.tabs.governance', 'Governance')}</TabsTrigger>
+              <TabsTrigger value="business">{t('data-contracts:property.tabs.business', 'Business')}</TabsTrigger>
+              <TabsTrigger value="transform">{t('data-contracts:property.tabs.transform', 'Transform')}</TabsTrigger>
+              <TabsTrigger value="semantics">{t('data-contracts:property.tabs.semantics', 'Semantics')}</TabsTrigger>
               <TabsTrigger value="relationships">
-                Relationships
+                {t('data-contracts:property.tabs.relationships', 'Relationships')}
                 {propRelationships.length > 0 && (
                   <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">{propRelationships.length}</Badge>
                 )}
@@ -481,19 +482,19 @@ function SchemaPropertyEditorInner(
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="prop-name" className="text-xs">
-                    Column Name <span className="text-destructive">*</span>
+                    {t('data-contracts:property.fields.columnName', 'Column Name')} <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="prop-name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., customer_id"
+                    placeholder={t('data-contracts:property.fields.columnNamePlaceholder', 'e.g., customer_id')}
                     className="h-9"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="prop-logical-type" className="text-xs">
-                    Logical Type <span className="text-destructive">*</span>
+                    {t('data-contracts:property.fields.logicalType', 'Logical Type')} <span className="text-destructive">*</span>
                   </Label>
                   <Select value={logicalType} onValueChange={setLogicalType}>
                     <SelectTrigger id="prop-logical-type" className="h-9">
@@ -513,27 +514,27 @@ function SchemaPropertyEditorInner(
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="prop-physical-type" className="text-xs flex items-center">
-                    Physical Type
-                    <FieldTooltip content="Physical data type like VARCHAR(50), INT, DECIMAL(10,2)" />
+                    {t('data-contracts:property.fields.physicalType', 'Physical Type')}
+                    <FieldTooltip content={t('data-contracts:property.tooltips.physicalType', 'Physical data type like VARCHAR(50), INT, DECIMAL(10,2)')} />
                   </Label>
                   <Input
                     id="prop-physical-type"
                     value={physicalType}
                     onChange={(e) => setPhysicalType(e.target.value)}
-                    placeholder="e.g., VARCHAR(50)"
+                    placeholder={t('data-contracts:property.fields.physicalTypePlaceholder', 'e.g., VARCHAR(50)')}
                     className="h-9"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="prop-physical-name" className="text-xs flex items-center">
-                    Physical Name
-                    <FieldTooltip content="Physical column name in the database" />
+                    {t('data-contracts:property.fields.physicalName', 'Physical Name')}
+                    <FieldTooltip content={t('data-contracts:property.tooltips.physicalName', 'Physical column name in the database')} />
                   </Label>
                   <Input
                     id="prop-physical-name"
                     value={physicalName}
                     onChange={(e) => setPhysicalName(e.target.value)}
-                    placeholder="e.g., cust_id"
+                    placeholder={t('data-contracts:property.fields.physicalNamePlaceholder', 'e.g., cust_id')}
                     className="h-9"
                   />
                 </div>
@@ -541,13 +542,13 @@ function SchemaPropertyEditorInner(
 
               <div className="space-y-1.5">
                 <Label htmlFor="prop-description" className="text-xs">
-                  Description
+                  {t('common:labels.description', 'Description')}
                 </Label>
                 <Input
                   id="prop-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe this column"
+                  placeholder={t('data-contracts:property.fields.descriptionPlaceholder', 'Describe this column')}
                   className="h-9"
                 />
               </div>
@@ -564,7 +565,7 @@ function SchemaPropertyEditorInner(
                       onCheckedChange={(checked) => setRequired(checked as boolean)}
                     />
                     <Label htmlFor="prop-required" className="text-sm font-normal cursor-pointer">
-                      Required (NOT NULL)
+                      {t('data-contracts:property.fields.required', 'Required (NOT NULL)')}
                     </Label>
                   </div>
                   <div className="flex items-center gap-2">
@@ -574,7 +575,7 @@ function SchemaPropertyEditorInner(
                       onCheckedChange={(checked) => setUnique(checked as boolean)}
                     />
                     <Label htmlFor="prop-unique" className="text-sm font-normal cursor-pointer">
-                      Unique
+                      {t('data-contracts:property.fields.unique', 'Unique')}
                     </Label>
                   </div>
                 </div>
@@ -587,15 +588,15 @@ function SchemaPropertyEditorInner(
                       onCheckedChange={(checked) => setPrimaryKey(checked as boolean)}
                     />
                     <Label htmlFor="prop-primary-key" className="text-sm font-normal cursor-pointer flex items-center">
-                      Primary Key
-                      <FieldTooltip content="Mark this column as part of the primary key" />
+                      {t('data-contracts:property.fields.primaryKey', 'Primary Key')}
+                      <FieldTooltip content={t('data-contracts:property.tooltips.primaryKey', 'Mark this column as part of the primary key')} />
                     </Label>
                   </div>
                   {primaryKey && (
                     <div className="ml-6 space-y-1.5">
                       <Label htmlFor="prop-pk-position" className="text-xs flex items-center">
-                        Primary Key Position
-                        <FieldTooltip content="Position in composite primary key (starting from 1)" />
+                        {t('data-contracts:property.fields.primaryKeyPosition', 'Primary Key Position')}
+                        <FieldTooltip content={t('data-contracts:property.tooltips.primaryKeyPosition', 'Position in composite primary key (starting from 1)')} />
                       </Label>
                       <Input
                         id="prop-pk-position"
@@ -603,7 +604,7 @@ function SchemaPropertyEditorInner(
                         min="1"
                         value={primaryKeyPosition}
                         onChange={(e) => setPrimaryKeyPosition(e.target.value)}
-                        placeholder="e.g., 1"
+                        placeholder={t('data-contracts:property.fields.positionPlaceholder', 'e.g., 1')}
                         className="h-9 w-32"
                       />
                     </div>
@@ -618,15 +619,15 @@ function SchemaPropertyEditorInner(
                       onCheckedChange={(checked) => setPartitioned(checked as boolean)}
                     />
                     <Label htmlFor="prop-partitioned" className="text-sm font-normal cursor-pointer flex items-center">
-                      Partition Column
-                      <FieldTooltip content="This column is used for table partitioning" />
+                      {t('data-contracts:property.fields.partitionColumn', 'Partition Column')}
+                      <FieldTooltip content={t('data-contracts:property.tooltips.partitionColumn', 'This column is used for table partitioning')} />
                     </Label>
                   </div>
                   {partitioned && (
                     <div className="ml-6 space-y-1.5">
                       <Label htmlFor="prop-partition-position" className="text-xs flex items-center">
-                        Partition Position
-                        <FieldTooltip content="Position in partition key (starting from 1)" />
+                        {t('data-contracts:property.fields.partitionPosition', 'Partition Position')}
+                        <FieldTooltip content={t('data-contracts:property.tooltips.partitionPosition', 'Position in partition key (starting from 1)')} />
                       </Label>
                       <Input
                         id="prop-partition-position"
@@ -634,7 +635,7 @@ function SchemaPropertyEditorInner(
                         min="1"
                         value={partitionKeyPosition}
                         onChange={(e) => setPartitionKeyPosition(e.target.value)}
-                        placeholder="e.g., 1"
+                        placeholder={t('data-contracts:property.fields.positionPlaceholder', 'e.g., 1')}
                         className="h-9 w-32"
                       />
                     </div>
@@ -645,15 +646,15 @@ function SchemaPropertyEditorInner(
                   {logicalType === 'string' && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-min-length" className="text-xs">Min Length</Label>
+                        <Label htmlFor="prop-min-length" className="text-xs">{t('data-contracts:property.fields.minLength', 'Min Length')}</Label>
                         <Input id="prop-min-length" type="number" min="0" value={minLength} onChange={(e) => setMinLength(e.target.value)} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-max-length" className="text-xs">Max Length</Label>
+                        <Label htmlFor="prop-max-length" className="text-xs">{t('data-contracts:property.fields.maxLength', 'Max Length')}</Label>
                         <Input id="prop-max-length" type="number" min="0" value={maxLength} onChange={(e) => setMaxLength(e.target.value)} className="h-9" />
                       </div>
                       <div className="space-y-1.5 col-span-3">
-                        <Label htmlFor="prop-pattern" className="text-xs">Pattern (ECMA-262 regex)</Label>
+                        <Label htmlFor="prop-pattern" className="text-xs">{t('data-contracts:property.fields.pattern', 'Pattern (ECMA-262 regex)')}</Label>
                         <Input id="prop-pattern" value={pattern} onChange={(e) => setPattern(e.target.value)} className="h-9" />
                       </div>
                     </div>
@@ -662,20 +663,20 @@ function SchemaPropertyEditorInner(
                   {(logicalType === 'number' || logicalType === 'integer') && (
                     <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-minimum" className="text-xs">Minimum</Label>
+                        <Label htmlFor="prop-minimum" className="text-xs">{t('data-contracts:property.fields.minimum', 'Minimum')}</Label>
                         <Input id="prop-minimum" type="number" value={minimum} onChange={(e) => setMinimum(e.target.value)} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-maximum" className="text-xs">Maximum</Label>
+                        <Label htmlFor="prop-maximum" className="text-xs">{t('data-contracts:property.fields.maximum', 'Maximum')}</Label>
                         <Input id="prop-maximum" type="number" value={maximum} onChange={(e) => setMaximum(e.target.value)} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-multiple-of" className="text-xs">Multiple Of</Label>
+                        <Label htmlFor="prop-multiple-of" className="text-xs">{t('data-contracts:property.fields.multipleOf', 'Multiple Of')}</Label>
                         <Input id="prop-multiple-of" type="number" value={multipleOf} onChange={(e) => setMultipleOf(e.target.value)} className="h-9" />
                       </div>
                       {logicalType === 'number' && (
                         <div className="space-y-1.5">
-                          <Label htmlFor="prop-precision" className="text-xs">Precision</Label>
+                          <Label htmlFor="prop-precision" className="text-xs">{t('data-contracts:property.fields.precision', 'Precision')}</Label>
                           <Input id="prop-precision" type="number" min="0" value={precision} onChange={(e) => setPrecision(e.target.value)} className="h-9" />
                         </div>
                       )}
@@ -685,15 +686,15 @@ function SchemaPropertyEditorInner(
                   {logicalType === 'date' && (
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-date-format" className="text-xs">Format</Label>
-                        <Input id="prop-date-format" value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} placeholder="e.g., yyyy-MM-dd" className="h-9" />
+                        <Label htmlFor="prop-date-format" className="text-xs">{t('data-contracts:property.fields.format', 'Format')}</Label>
+                        <Input id="prop-date-format" value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} placeholder={t('data-contracts:property.fields.formatPlaceholder', 'e.g., yyyy-MM-dd')} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-timezone" className="text-xs">Timezone</Label>
-                        <Input id="prop-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="e.g., UTC" className="h-9" />
+                        <Label htmlFor="prop-timezone" className="text-xs">{t('data-contracts:property.fields.timezone', 'Timezone')}</Label>
+                        <Input id="prop-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder={t('data-contracts:property.fields.timezonePlaceholder', 'e.g., UTC')} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-custom-format" className="text-xs">Custom Format</Label>
+                        <Label htmlFor="prop-custom-format" className="text-xs">{t('data-contracts:property.fields.customFormat', 'Custom Format')}</Label>
                         <Input id="prop-custom-format" value={customFormat} onChange={(e) => setCustomFormat(e.target.value)} className="h-9" />
                       </div>
                     </div>
@@ -702,15 +703,15 @@ function SchemaPropertyEditorInner(
                   {logicalType === 'array' && (
                     <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-item-type" className="text-xs">Item Type</Label>
-                        <Input id="prop-item-type" value={itemType} onChange={(e) => setItemType(e.target.value)} placeholder="string | number | object..." className="h-9" />
+                        <Label htmlFor="prop-item-type" className="text-xs">{t('data-contracts:property.fields.itemType', 'Item Type')}</Label>
+                        <Input id="prop-item-type" value={itemType} onChange={(e) => setItemType(e.target.value)} placeholder={t('data-contracts:property.fields.itemTypePlaceholder', 'string | number | object...')} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-min-items" className="text-xs">Min Items</Label>
+                        <Label htmlFor="prop-min-items" className="text-xs">{t('data-contracts:property.fields.minItems', 'Min Items')}</Label>
                         <Input id="prop-min-items" type="number" min="0" value={minItems} onChange={(e) => setMinItems(e.target.value)} className="h-9" />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="prop-max-items" className="text-xs">Max Items</Label>
+                        <Label htmlFor="prop-max-items" className="text-xs">{t('data-contracts:property.fields.maxItems', 'Max Items')}</Label>
                         <Input id="prop-max-items" type="number" min="0" value={maxItems} onChange={(e) => setMaxItems(e.target.value)} className="h-9" />
                       </div>
                     </div>
@@ -724,8 +725,8 @@ function SchemaPropertyEditorInner(
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold flex items-center">
-                    Property-Level Quality Checks
-                    <FieldTooltip content="ODCS quality checks that apply specifically to this column" />
+                    {t('data-contracts:property.quality.title', 'Property-Level Quality Checks')}
+                    <FieldTooltip content={t('data-contracts:property.tooltips.qualityChecks', 'ODCS quality checks that apply specifically to this column')} />
                   </Label>
                   <Button
                     type="button"
@@ -738,7 +739,7 @@ function SchemaPropertyEditorInner(
                     className="h-7"
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    Add Check
+                    {t('data-contracts:property.quality.addCheck', 'Add Check')}
                   </Button>
                 </div>
                 
@@ -796,8 +797,8 @@ function SchemaPropertyEditorInner(
                   </div>
                 ) : (
                   <div className="text-center py-6 border-2 border-dashed rounded-lg">
-                    <p className="text-sm text-muted-foreground">No quality checks defined for this column</p>
-                    <p className="text-xs text-muted-foreground mt-1">Click "Add Check" to define quality rules</p>
+                    <p className="text-sm text-muted-foreground">{t('data-contracts:property.quality.empty', 'No quality checks defined for this column')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('data-contracts:property.quality.emptyHint', 'Click "Add Check" to define quality rules')}</p>
                   </div>
                 )}
               </div>
@@ -807,12 +808,12 @@ function SchemaPropertyEditorInner(
             <TabsContent value="governance" className="space-y-3 mt-4">
               <div className="space-y-1.5">
                 <Label htmlFor="prop-classification" className="text-xs flex items-center">
-                  Classification
-                  <FieldTooltip content="Data sensitivity: public, internal, confidential, restricted, pii, or 1-5" />
+                  {t('data-contracts:property.fields.classification', 'Classification')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.classification', 'Data sensitivity: public, internal, confidential, restricted, pii, or 1-5')} />
                 </Label>
                 <Select value={classification || undefined} onValueChange={setClassification}>
                   <SelectTrigger id="prop-classification" className="h-9">
-                    <SelectValue placeholder="Select classification" />
+                    <SelectValue placeholder={t('data-contracts:property.fields.classificationPlaceholder', 'Select classification')} />
                   </SelectTrigger>
                   <SelectContent>
                     {CLASSIFICATION_LEVELS.map((level) => (
@@ -826,28 +827,28 @@ function SchemaPropertyEditorInner(
 
               <div className="space-y-1.5">
                 <Label htmlFor="prop-examples" className="text-xs flex items-center">
-                  Examples
-                  <FieldTooltip content="Sample values, comma-separated or as JSON array" />
+                  {t('data-contracts:property.fields.examples', 'Examples')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.examples', 'Sample values, comma-separated or as JSON array')} />
                 </Label>
                 <Input
                   id="prop-examples"
                   value={examples}
                   onChange={(e) => setExamples(e.target.value)}
-                  placeholder='e.g., "John", "Jane" or ["value1", "value2"]'
+                  placeholder={t('data-contracts:property.fields.examplesPlaceholder', 'e.g., "John", "Jane" or ["value1", "value2"]')}
                   className="h-9"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="prop-tags" className="text-xs flex items-center">
-                  Tags
-                  <FieldTooltip content="ODCS tags for categorization (comma-separated)" />
+                  {t('common:labels.tags', 'Tags')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.tags', 'ODCS tags for categorization (comma-separated)')} />
                 </Label>
                 <Input
                   id="prop-tags"
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
-                  placeholder='e.g., "finance", "sensitive", "employee_record"'
+                  placeholder={t('data-contracts:property.fields.tagsPlaceholder', 'e.g., "finance", "sensitive", "employee_record"')}
                   className="h-9"
                 />
               </div>
@@ -857,28 +858,28 @@ function SchemaPropertyEditorInner(
             <TabsContent value="business" className="space-y-3 mt-4">
               <div className="space-y-1.5">
                 <Label htmlFor="prop-business-name" className="text-xs flex items-center">
-                  Business Name
-                  <FieldTooltip content="Human-readable business name for this column" />
+                  {t('data-contracts:property.fields.businessName', 'Business Name')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.businessName', 'Human-readable business name for this column')} />
                 </Label>
                 <Input
                   id="prop-business-name"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="e.g., Customer Identifier"
+                  placeholder={t('data-contracts:property.fields.businessNamePlaceholder', 'e.g., Customer Identifier')}
                   className="h-9"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="prop-encrypted-name" className="text-xs flex items-center">
-                  Encrypted Name
-                  <FieldTooltip content="Column name containing encrypted version of this data" />
+                  {t('data-contracts:property.fields.encryptedName', 'Encrypted Name')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.encryptedName', 'Column name containing encrypted version of this data')} />
                 </Label>
                 <Input
                   id="prop-encrypted-name"
                   value={encryptedName}
                   onChange={(e) => setEncryptedName(e.target.value)}
-                  placeholder="e.g., customer_id_encrypted"
+                  placeholder={t('data-contracts:property.fields.encryptedNamePlaceholder', 'e.g., customer_id_encrypted')}
                   className="h-9"
                 />
               </div>
@@ -890,8 +891,8 @@ function SchemaPropertyEditorInner(
                   onCheckedChange={(checked) => setCriticalDataElement(checked as boolean)}
                 />
                 <Label htmlFor="prop-cde" className="text-sm font-normal cursor-pointer flex items-center">
-                  Critical Data Element (CDE)
-                  <FieldTooltip content="Mark as critical data element requiring special governance" />
+                  {t('data-contracts:property.fields.criticalDataElement', 'Critical Data Element (CDE)')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.criticalDataElement', 'Mark as critical data element requiring special governance')} />
                 </Label>
               </div>
             </TabsContent>
@@ -900,42 +901,42 @@ function SchemaPropertyEditorInner(
             <TabsContent value="transform" className="space-y-3 mt-4">
               <div className="space-y-1.5">
                 <Label htmlFor="prop-transform-logic" className="text-xs flex items-center">
-                  Transform Logic
-                  <FieldTooltip content="The transformation logic/formula applied to generate this column" />
+                  {t('data-contracts:property.fields.transformLogic', 'Transform Logic')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.transformLogic', 'The transformation logic/formula applied to generate this column')} />
                 </Label>
                 <Input
                   id="prop-transform-logic"
                   value={transformLogic}
                   onChange={(e) => setTransformLogic(e.target.value)}
-                  placeholder="e.g., UPPER(source_column)"
+                  placeholder={t('data-contracts:property.fields.transformLogicPlaceholder', 'e.g., UPPER(source_column)')}
                   className="h-9"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="prop-transform-sources" className="text-xs flex items-center">
-                  Transform Source Objects
-                  <FieldTooltip content="Source tables/columns used in transformation (comma-separated)" />
+                  {t('data-contracts:property.fields.transformSourceObjects', 'Transform Source Objects')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.transformSourceObjects', 'Source tables/columns used in transformation (comma-separated)')} />
                 </Label>
                 <Input
                   id="prop-transform-sources"
                   value={transformSourceObjects}
                   onChange={(e) => setTransformSourceObjects(e.target.value)}
-                  placeholder="e.g., source_table.column1, other_table.column2"
+                  placeholder={t('data-contracts:property.fields.transformSourceObjectsPlaceholder', 'e.g., source_table.column1, other_table.column2')}
                   className="h-9"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="prop-transform-desc" className="text-xs flex items-center">
-                  Transform Description
-                  <FieldTooltip content="Simple description of what the transformation does" />
+                  {t('data-contracts:property.fields.transformDescription', 'Transform Description')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.transformDescription', 'Simple description of what the transformation does')} />
                 </Label>
                 <Input
                   id="prop-transform-desc"
                   value={transformDescription}
                   onChange={(e) => setTransformDescription(e.target.value)}
-                  placeholder="e.g., Converts name to uppercase"
+                  placeholder={t('data-contracts:property.fields.transformDescriptionPlaceholder', 'e.g., Converts name to uppercase')}
                   className="h-9"
                 />
               </div>
@@ -945,8 +946,8 @@ function SchemaPropertyEditorInner(
             <TabsContent value="semantics" className="space-y-3 mt-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center">
-                  Linked Business Concepts
-                  <FieldTooltip content="Link this property to business concepts from your semantic model (ontology)" />
+                  {t('data-contracts:property.semantics.title', 'Linked Business Concepts')}
+                  <FieldTooltip content={t('data-contracts:property.tooltips.semantics', 'Link this property to business concepts from your semantic model (ontology)')} />
                 </Label>
                 <BusinessConceptsDisplay
                   concepts={semanticConcepts}
@@ -973,8 +974,8 @@ function SchemaPropertyEditorInner(
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold flex items-center">
-                    Foreign Key Relationships
-                    <FieldTooltip content="ODCS v3.1.0 property-level relationships (e.g., foreign keys to other schema/table columns)" />
+                    {t('data-contracts:property.relationships.title', 'Foreign Key Relationships')}
+                    <FieldTooltip content={t('data-contracts:property.tooltips.relationships', 'ODCS v3.1.0 property-level relationships (e.g., foreign keys to other schema/table columns)')} />
                   </Label>
                 </div>
 
@@ -1003,16 +1004,16 @@ function SchemaPropertyEditorInner(
                 <div className="border rounded-lg p-3 bg-background space-y-2">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 space-y-1">
-                      <Label className="text-xs">Target Reference (to)</Label>
+                      <Label className="text-xs">{t('data-contracts:property.relationships.targetReference', 'Target Reference (to)')}</Label>
                       <Input
                         value={newRelTo}
                         onChange={(e) => setNewRelTo(e.target.value)}
-                        placeholder="e.g., schema.table.column"
+                        placeholder={t('data-contracts:property.relationships.targetReferencePlaceholder', 'e.g., schema.table.column')}
                         className="h-9 font-mono text-xs"
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Type</Label>
+                      <Label className="text-xs">{t('common:labels.type', 'Type')}</Label>
                       <Select value={newRelType} onValueChange={setNewRelType}>
                         <SelectTrigger className="h-9">
                           <SelectValue />
@@ -1037,14 +1038,14 @@ function SchemaPropertyEditorInner(
                     className="h-7"
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    Add Relationship
+                    {t('data-contracts:property.relationships.add', 'Add Relationship')}
                   </Button>
                 </div>
 
                 {propRelationships.length === 0 && (
                   <div className="text-center py-4 border-2 border-dashed rounded-lg">
-                    <p className="text-sm text-muted-foreground">No relationships defined</p>
-                    <p className="text-xs text-muted-foreground mt-1">Add a foreign key reference to link this property to another entity</p>
+                    <p className="text-sm text-muted-foreground">{t('data-contracts:property.relationships.empty', 'No relationships defined')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('data-contracts:property.relationships.emptyHint', 'Add a foreign key reference to link this property to another entity')}</p>
                   </div>
                 )}
               </div>
@@ -1062,18 +1063,18 @@ function SchemaPropertyEditorInner(
               {editingIndex !== null ? (
                 <>
                   <Edit className="h-3.5 w-3.5 mr-1.5" />
-                  {t('schemaEditor.updateColumn')}
+                  {t('data-contracts:schemaEditor.updateColumn', 'Update Column')}
                 </>
               ) : (
                 <>
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  {t('schemaEditor.addColumn')}
+                  {t('data-contracts:schemaEditor.addColumn', 'Add Column')}
                 </>
               )}
             </Button>
             {editingIndex !== null && (
               <Button type="button" size="sm" variant="outline" onClick={resetForm} className="h-8">
-                {t('schemaEditor.cancel')}
+                {t('data-contracts:schemaEditor.cancel', 'Cancel')}
               </Button>
             )}
           </div>
@@ -1086,25 +1087,25 @@ function SchemaPropertyEditorInner(
           <table className="w-full text-sm">
             <thead className="bg-muted">
               <tr>
-                <th className="text-left p-2 font-medium">Name</th>
-                <th className="text-left p-2 font-medium">Type</th>
-                <th className="text-left p-2 font-medium">Constraints</th>
-                <th className="text-left p-2 font-medium">Governance</th>
-                <th className="text-left p-2 font-medium">Description</th>
-                {!readOnly && <th className="text-right p-2 font-medium">Actions</th>}
+                <th className="text-left p-2 font-medium">{t('common:labels.name', 'Name')}</th>
+                <th className="text-left p-2 font-medium">{t('common:labels.type', 'Type')}</th>
+                <th className="text-left p-2 font-medium">{t('data-contracts:property.tabs.constraints', 'Constraints')}</th>
+                <th className="text-left p-2 font-medium">{t('data-contracts:property.tabs.governance', 'Governance')}</th>
+                <th className="text-left p-2 font-medium">{t('common:labels.description', 'Description')}</th>
+                {!readOnly && <th className="text-right p-2 font-medium">{t('common:labels.actions', 'Actions')}</th>}
               </tr>
             </thead>
             <tbody>
               {properties.map((prop, idx) => {
                 const constraints: string[] = []
-                if (prop.required) constraints.push('Required')
-                if (prop.unique) constraints.push('Unique')
-                if (prop.primaryKey) constraints.push(`PK${prop.primaryKeyPosition ? `(${prop.primaryKeyPosition})` : ''}`)
-                if (prop.partitioned) constraints.push(`Part${prop.partitionKeyPosition ? `(${prop.partitionKeyPosition})` : ''}`)
+                if (prop.required) constraints.push(t('data-contracts:property.constraintChips.required', 'Required'))
+                if (prop.unique) constraints.push(t('data-contracts:property.constraintChips.unique', 'Unique'))
+                if (prop.primaryKey) constraints.push(`${t('data-contracts:property.constraintChips.primaryKey', 'PK')}${prop.primaryKeyPosition ? `(${prop.primaryKeyPosition})` : ''}`)
+                if (prop.partitioned) constraints.push(`${t('data-contracts:property.constraintChips.partition', 'Part')}${prop.partitionKeyPosition ? `(${prop.partitionKeyPosition})` : ''}`)
 
                 const governance: string[] = []
                 if (prop.classification) governance.push(prop.classification)
-                if (prop.criticalDataElement) governance.push('CDE')
+                if (prop.criticalDataElement) governance.push(t('data-contracts:property.constraintChips.cde', 'CDE'))
 
                 return (
                   <tr
@@ -1199,7 +1200,7 @@ function SchemaPropertyEditorInner(
         </div>
       ) : (
         <p className="text-sm text-muted-foreground text-center py-8 border rounded-lg bg-muted/30">
-          {readOnly ? 'No columns defined.' : 'No columns added yet. Add at least one column above.'}
+          {readOnly ? t('data-contracts:property.emptyReadOnly', 'No columns defined.') : t('data-contracts:property.empty', 'No columns added yet. Add at least one column above.')}
         </p>
       )}
 

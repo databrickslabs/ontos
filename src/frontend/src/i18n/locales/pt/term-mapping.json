@@ -1,0 +1,154 @@
+{
+  "title": "Mapeamento de termos",
+  "subtitle": "Sugira em massa atribuições de conceitos de ontologia para ativos, contratos de dados e produtos de dados. As decisões são tomadas no workspace de revisões de ativos.",
+  "actions": {
+    "refresh": "Atualizar",
+    "newRun": "Nova execução",
+    "cancel": "Cancelar",
+    "applyAuto": "Aplicar automáticas ({{count}})",
+    "generateReview": "Gerar revisão",
+    "undo": "Desfazer",
+    "selectRunHint": "Selecione uma execução à esquerda ou inicie uma nova."
+  },
+  "recent": {
+    "title": "Execuções recentes",
+    "loading": "Carregando execuções…",
+    "empty": "Ainda não há execuções. Inicie uma com <strong>Nova execução</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} sugestões"
+  },
+  "detail": {
+    "runLabel": "Execução",
+    "createdAt": "Criada",
+    "createdBy": "por {{email}}",
+    "sourcesTitle": "Fontes das sugestões",
+    "customerOntologies": "Ontologias do cliente",
+    "shippedTaxonomies": "Taxonomias incluídas",
+    "reviewsLinkPrefix": "As revisões dos stewards ficam no workspace de",
+    "reviewsLinkText": "Revisões de ativos",
+    "reviewsLinkSuffix": ". Cada sugestão se torna um ReviewedAsset lá; as decisões retornam automaticamente a esta execução."
+  },
+  "stats": {
+    "targets": "Destinos",
+    "suggestions": "Sugestões",
+    "pending": "Pendentes",
+    "autoApply": "Aplicação automática",
+    "accepted": "Aceitas",
+    "rejected": "Rejeitadas",
+    "linksCreated": "Vínculos criados",
+    "linksSkipped": "Vínculos ignorados"
+  },
+  "toast": {
+    "applied": "Aplicado",
+    "appliedDescription": "{{created}} vínculos criados, {{skipped}} ignorados",
+    "applyFailed": "Falha ao aplicar",
+    "undone": "Desfeito",
+    "undoneDescription": "{{removed}} vínculos removidos, {{reverted}} sugestões revertidas",
+    "undoFailed": "Falha ao desfazer",
+    "loadRunFailed": "Falha ao carregar execução",
+    "unknownError": "erro desconhecido"
+  },
+  "confirm": {
+    "undo": "Desfazer a execução {{id}}? Isso remove todos os vínculos criados por esta execução."
+  },
+  "errors": {
+    "loadRunsFailed": "Falha ao carregar execuções"
+  },
+  "runConfig": {
+    "title": "Nova execução de mapeamento de termos",
+    "description": "Escolha as ontologias e as entidades de destino. O sugeridor heurístico proporá atribuições de conceitos que você pode revisar antes de aplicar.",
+    "customerOntologies": "Ontologias do cliente",
+    "enabledCount": "{{count}} habilitadas",
+    "loadingOntologies": "Carregando ontologias…",
+    "noCustomerOntologies": "Ainda não há ontologias do cliente carregadas. Envie uma em Configurações → Fontes RDF, ou gere uma pelo Gerador de ontologias, e depois reabra esta caixa de diálogo.",
+    "useAll": "Usar todas as ontologias do cliente habilitadas",
+    "shippedTitle": "Incluir também as taxonomias incluídas",
+    "shippedHelp": "A taxonomia interna <code>urn:taxonomy:ontos-ontology</code> (esquema de tipagem de ativos do Ontos) nunca é um destino válido de mapeamento.",
+    "targetTypes": "Tipos de entidade de destino",
+    "assetTypesLabel": "Nomes de tipos de ativo (separados por vírgula). O padrão é \"Column\".",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Limite",
+    "comment": "Comentário (opcional)",
+    "commentPlaceholder": "Para que serve esta execução?",
+    "previewNoOntologies": "(nenhuma ontologia — escolha uma acima)",
+    "previewCustomerOne": "1 ontologia do cliente",
+    "previewCustomerMany": "{{count}} instâncias de ontologias do cliente",
+    "previewShippedOne": "1 taxonomia incluída",
+    "previewShippedMany": "{{count}} taxonomias incluídas",
+    "previewTargetTypeOne": "1 tipo de destino",
+    "previewTargetTypeMany": "{{count}} tipos de destino",
+    "previewLine": "Buscará em <strong>{{customerPart}}</strong> em <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Buscará em <strong>{{customerPart}}</strong> mais <strong>{{shippedPart}}</strong> em <strong>{{targetPart}}</strong>.",
+    "submit": "Criar execução",
+    "submitting": "Executando sugeridor…",
+    "validation": {
+      "noTargetType": "Escolha pelo menos um tipo de destino",
+      "noTargetTypeDescription": "Selecione que tipo de entidade o sugeridor deve analisar.",
+      "noOntology": "Escolha pelo menos uma ontologia",
+      "noOntologyDescription": "Deixe a opção \"Usar todas as ontologias do cliente habilitadas\" ativada ou escolha ontologias específicas."
+    },
+    "toast": {
+      "created": "Execução criada",
+      "createdDescriptionOne": "1 sugestão gerada em {{targets}} destino(s).",
+      "createdDescriptionMany": "{{total}} sugestões geradas em {{targets}} destino(s).",
+      "createdEmpty": "Execução criada, mas a resposta estava vazia",
+      "failed": "Falha ao criar execução",
+      "loadOntologiesFailed": "Falha ao carregar ontologias"
+    }
+  },
+  "generateReview": {
+    "title": "Gerar revisão para a execução",
+    "description": "Cria uma revisão de ativos de dados contendo todas as sugestões desta execução. As decisões tomadas na revisão retornam à fila de sugestões.",
+    "reviewerEmail": "E-mail do revisor *",
+    "reviewerEmailHelp": "Por padrão, é você. Transfira para um steward de domínio, se necessário.",
+    "reviewerEmailPlaceholder": "steward@company.com",
+    "notes": "Notas",
+    "notesPlaceholder": "Contexto opcional para o revisor.",
+    "includeAccepted": "Incluir também sugestões já aceitas",
+    "includeAcceptedHelp": "Útil quando você quer que o revisor confirme decisões anteriores, e não apenas triar linhas pendentes.",
+    "eligibleSummaryOne": "1 sugestão se tornará um ativo revisável ({{pending}} pendente{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} sugestões se tornarão ativos revisáveis ({{pending}} pendentes{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} aceitas",
+    "submit": "Gerar revisão",
+    "validation": {
+      "reviewerRequired": "O e-mail do revisor é obrigatório."
+    },
+    "toast": {
+      "created": "Revisão criada",
+      "createdDescriptionOne": "1 sugestão enfileirada para revisão.",
+      "createdDescriptionMany": "{{count}} sugestões enfileiradas para revisão.",
+      "failed": "Falha ao criar revisão"
+    }
+  },
+  "suggestion": {
+    "header": "Sugestão de mapeamento de termos",
+    "progress": "{{current}} de {{total}}",
+    "concept": "conceito",
+    "confidence": "Confiança",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "candidata a aplicação automática",
+    "whyMatch": "Por que esta correspondência",
+    "noReason": "—",
+    "overrideIri": "Substituir IRI de destino (opcional)",
+    "overrideIriHelp": "Deixe em branco para aceitar o IRI sugerido. Substitua para vincular um conceito diferente da mesma ontologia.",
+    "comment": "Comentário",
+    "commentPlaceholder": "Notas para o revisor / trilha de auditoria.",
+    "needsClarification": "Precisa de esclarecimento",
+    "reject": "Rejeitar",
+    "acceptApply": "Aceitar e aplicar",
+    "acceptNext": "Aceitar e próxima",
+    "invalidFqn": "FQN de ativo de mapeamento de termos inválido.",
+    "errors": {
+      "unparseable": "FQN de mapeamento de termos não analisável: {{fqn}}",
+      "notFound": "Sugestão não encontrada na execução",
+      "loadFailed": "Falha ao carregar sugestão"
+    },
+    "toast": {
+      "approved": "Sugestão aprovada",
+      "rejected": "Sugestão rejeitada",
+      "clarified": "Marcada para esclarecimento",
+      "savedWithWarnings": "Salvo com avisos",
+      "decisionFailed": "Falha na decisão"
+    }
+  }
+}

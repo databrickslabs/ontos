@@ -35,6 +35,11 @@ SRC_DIRS = [
 # Reference language (source of truth for keys)
 REFERENCE_LANG = "en"
 
+# Value prefix marking a key that exists structurally but is not yet translated.
+# Per issue #471: makes the gap visible in the UI instead of silently falling back
+# to English, and gives translators a machine-findable worklist.
+TODO_MARKER = "__TODO__ "
+
 # File extensions to scan for translation usage
 SOURCE_EXTENSIONS = {".tsx", ".ts", ".jsx", ".js"}
 
@@ -245,20 +250,34 @@ def check_source_keys(translations: dict, verbose: bool = False) -> list[dict]:
         for key, line_num, _ in file_keys:
             keys_used[key].append((file_path, line_num))
     
+    # i18next plural/context suffixes: a base key is satisfied by any suffixed form.
+    plural_suffixes = ("_zero", "_one", "_two", "_few", "_many", "_other")
+
+    def key_present(subkey: str, keyset: set[str]) -> bool:
+        if subkey in keyset:
+            return True
+        # base key used in code, plural variants defined in JSON
+        return any(f"{subkey}{suf}" in keyset for suf in plural_suffixes)
+
     # Check each used key
     for key, locations in keys_used.items():
         key_found = False
-        
+
+        # Ignore regex false-positives: a "namespace" containing a space is not a
+        # real namespace (e.g. placeholder text like "e.g., xsd:string").
+        if ":" in key and " " in key.split(":", 1)[0]:
+            continue
+
         # Check if key has namespace prefix (namespace:key)
         if ":" in key:
             namespace, subkey = key.split(":", 1)
             if namespace in available_keys:
-                if subkey in available_keys[namespace]:
+                if key_present(subkey, available_keys[namespace]):
                     key_found = True
         else:
             # Key without namespace - check all namespaces
             for namespace, keys in available_keys.items():
-                if key in keys:
+                if key_present(key, keys):
                     key_found = True
                     break
         
@@ -312,6 +331,139 @@ def check_unused_keys(translations: dict, verbose: bool = False) -> list[dict]:
                     })
     
     return issues
+
+
+def _ordered_merge(
+    en_obj: dict,
+    tgt_obj: Any,
+    lang: str,
+    namespace: str,
+    path: str,
+    manifest: list[dict],
+    extras: list[dict],
+) -> dict:
+    """
+    Build a dict that follows `en_obj`'s key order.
+    - Nested dicts recurse.
+    - Leaf keys keep an existing *translated* target value.
+    - Missing leaves (or values still carrying TODO_MARKER) are seeded with the
+      English value prefixed by TODO_MARKER and recorded in `manifest`.
+    - Target-only keys absent from `en_obj` are PRESERVED verbatim (never dropped —
+      they are usually real translations for keys en is missing) and recorded in
+      `extras` so en can be back-filled separately.
+    """
+    out: dict = {}
+    tgt = tgt_obj if isinstance(tgt_obj, dict) else {}
+    for key, en_val in en_obj.items():
+        cur_path = f"{path}.{key}" if path else key
+        if isinstance(en_val, dict):
+            out[key] = _ordered_merge(
+                en_val, tgt.get(key), lang, namespace, cur_path, manifest, extras
+            )
+        else:
+            existing = tgt.get(key)
+            is_translated = (
+                isinstance(existing, str)
+                and not existing.startswith(TODO_MARKER)
+                and key in tgt
+            )
+            if is_translated:
+                out[key] = existing
+            else:
+                out[key] = f"{TODO_MARKER}{en_val}" if isinstance(en_val, str) else en_val
+                manifest.append({
+                    "language": lang,
+                    "namespace": namespace,
+                    "key": cur_path,
+                    "en": en_val,
+                })
+    # Preserve target-only keys (en is missing them) after the en-ordered keys.
+    for key, tgt_val in tgt.items():
+        if key in en_obj:
+            continue
+        cur_path = f"{path}.{key}" if path else key
+        out[key] = tgt_val
+        for leaf, val in flatten_keys_with_values(tgt_val, cur_path).items():
+            extras.append({"language": lang, "namespace": namespace, "key": leaf, "value": val})
+    return out
+
+
+def flatten_keys_with_values(obj: Any, prefix: str = "") -> dict[str, Any]:
+    """Flatten to {dot.path: leaf_value}; a non-dict at top level maps prefix->value."""
+    if not isinstance(obj, dict):
+        return {prefix: obj}
+    out: dict[str, Any] = {}
+    for key, value in obj.items():
+        fp = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            out.update(flatten_keys_with_values(value, fp))
+        else:
+            out[fp] = value
+    return out
+
+
+def scaffold_locales(translations: dict, manifest_path: Path) -> None:
+    """
+    Bring every target language up to en's key set:
+    - create missing namespace files,
+    - insert missing keys as TODO-marked English values,
+    - preserve existing real translations,
+    - write a manifest of every seeded key for the translation pass.
+    Does not touch the reference language.
+    """
+    ref = translations.get(REFERENCE_LANG, {})
+    if not ref:
+        print(f"{Colors.RED}Reference language '{REFERENCE_LANG}' has no data; aborting.{Colors.RESET}")
+        sys.exit(1)
+
+    languages = [l for l in get_languages() if l != REFERENCE_LANG]
+    manifest: list[dict] = []
+    extras: list[dict] = []
+    files_written = 0
+    files_created = 0
+
+    for lang in languages:
+        lang_dir = I18N_DIR / lang
+        lang_dir.mkdir(parents=True, exist_ok=True)
+        for namespace, en_content in ref.items():
+            path = lang_dir / f"{namespace}.json"
+            existed = path.exists()
+            tgt_content = translations.get(lang, {}).get(namespace, {})
+            merged = _ordered_merge(
+                en_content, tgt_content, lang, namespace, "", manifest, extras
+            )
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(merged, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            files_written += 1
+            if not existed:
+                files_created += 1
+
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+    print(f"\n{Colors.GREEN}{Colors.BOLD}Scaffold complete{Colors.RESET}")
+    print(f"  Files written:        {files_written} ({files_created} newly created)")
+    print(f"  Keys seeded as TODO:  {len(manifest)}")
+    if extras:
+        # Distinct key paths (across languages) that exist in targets but not in en.
+        distinct = sorted({f"{e['namespace']}:{e['key']}" for e in extras})
+        print(f"  {Colors.YELLOW}Target-only keys PRESERVED (missing from en): "
+              f"{len(extras)} across langs, {len(distinct)} distinct{Colors.RESET}")
+        print(f"    {Colors.YELLOW}→ consider back-filling these into en/*.json:{Colors.RESET}")
+        for d in distinct[:20]:
+            print(f"      - {d}")
+        if len(distinct) > 20:
+            print(f"      ... and {len(distinct) - 20} more")
+    print(f"  Manifest (worklist):  {manifest_path}")
+    # Per-language breakdown
+    by_lang = defaultdict(int)
+    for m in manifest:
+        by_lang[m["language"]] += 1
+    for lang in sorted(by_lang):
+        print(f"    {Colors.CYAN}{lang}{Colors.RESET}: {by_lang[lang]} keys")
 
 
 def print_report(issues: list[dict], title: str, color: str = Colors.RED) -> None:
@@ -404,8 +556,27 @@ def main():
         action="store_true",
         help="Output results as JSON",
     )
-    
+    parser.add_argument(
+        "--scaffold",
+        action="store_true",
+        help="Create missing namespace files and seed missing keys with TODO-marked "
+             "English values in every non-reference language (preserves existing translations)",
+    )
+    parser.add_argument(
+        "--scaffold-manifest",
+        default=str(SCRIPT_DIR / "i18n_scaffold_manifest.json"),
+        help="Path to write the seeded-key worklist when using --scaffold",
+    )
+
     args = parser.parse_args()
+
+    # Scaffold mode: mutate locale files, then exit (skips the read-only checks).
+    if args.scaffold:
+        print(f"{Colors.BOLD}Translation Scaffold{Colors.RESET}")
+        print(f"i18n directory: {I18N_DIR}")
+        translations = load_all_translations()
+        scaffold_locales(translations, Path(args.scaffold_manifest))
+        sys.exit(0)
     
     print(f"{Colors.BOLD}Translation Validation Script{Colors.RESET}")
     print(f"i18n directory: {I18N_DIR}")

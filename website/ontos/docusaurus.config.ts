@@ -12,9 +12,23 @@ const config: Config = {
   favicon: '/img/ontos-logo2.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
-  // Improve compatibility with the upcoming Docusaurus v4
+  // Improve compatibility with the upcoming Docusaurus v4.
+  // We enable the v4 flags individually rather than via `v4: true`, because two
+  // of the implied flags don't work for this site yet:
+  //  - fasterByDefault turns on the Docusaurus Faster (rspack) bundler, which
+  //    requires the @docusaurus/faster package; we can't add that dependency
+  //    here (its transitive deps aren't on our npm proxy), so we keep webpack.
+  //  - mdx1CompatDisabledByDefault enables strict MDX, which breaks the
+  //    `{#heading-id}` anchors in getting_started/install_databricks.md.
+  // The remaining flags are safe and keep the site v4-ready.
   future: {
-    v4: true, 
+    v4: {
+      removeLegacyPostBuildHeadAttribute: true,
+      useCssCascadeLayers: true,
+      siteStorageNamespacing: true,
+      fasterByDefault: false,
+      mdx1CompatDisabledByDefault: false,
+    },
   },
 
   // Set the production url of your site here
@@ -32,7 +46,10 @@ const config: Config = {
   onBrokenMarkdownLinks: 'throw',
   onDuplicateRoutes: 'throw',
   onBrokenAnchors: 'throw',
-  //deploymentBranch: 'gh-pages',
+  // Deployment is handled by the "Deploy Docs to GitHub Pages" GitHub Actions
+  // workflow (Actions -> Pages artifact), so no deploymentBranch is needed here.
+  // Only set this if you switch back to the classic `docusaurus deploy` command.
+  // deploymentBranch: 'gh-pages',
   trailingSlash: false,
 
   // Even if you don't use internationalization, you can use this field to set
@@ -66,12 +83,10 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          exclude: ['dev_guide/api_reference.md', 
-            'dev_guide/custom_migrations.md',
-            'admin_guide/**',
-            'user_guide/**',
-            'getting_started/install_local.md',
-            'getting_started/demo_project.md',
+          exclude: ['admin_guide/jobs_workflows.md',
+            'admin_guide/personas.md',
+            'admin_guide/previews.md',
+            'admin_guide/roles.md',
             'troubleshooting.md'],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -85,6 +100,9 @@ const config: Config = {
       } satisfies Preset.Options,
     ],
   ],
+
+
+  
 
   themeConfig: {
     // Replace with your project's social card
@@ -110,8 +128,9 @@ const config: Config = {
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
         },
-
       ],
+
+
     },
     footer: {
       style: 'dark',

@@ -26,7 +26,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { t } = useTranslation(['search']);
+  const { t } = useTranslation(['navigation', 'common', 'search']);
   const shortName = useUICustomizationStore((s) => s.getShortName());
   const isSidebarCollapsed = useLayoutStore((state) => state.isSidebarCollapsed);
   const { toggleSidebar } = useLayoutStore((state) => state.actions);
@@ -76,14 +76,14 @@ export default function Layout({ children }: LayoutProps) {
         window.location.reload();
         return;
       }
-      setRetryError(d?.detail || 'Retry failed');
+      setRetryError(d?.detail || t('navigation:dbDown.retryFailed'));
       await refreshHealth();
     } catch (e) {
-      setRetryError(e instanceof Error ? e.message : 'Network error');
+      setRetryError(e instanceof Error ? e.message : t('common:errors.networkError'));
     } finally {
       setIsRetrying(false);
     }
-  }, [refreshHealth]);
+  }, [refreshHealth, t]);
 
   const isDbDown = !!health && !health.db_ok;
   // Suppress the soft warning banner when the DB is down: startup short-circuits
@@ -115,12 +115,9 @@ export default function Layout({ children }: LayoutProps) {
           <div className="px-6 pt-4">
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Database unavailable</AlertTitle>
+              <AlertTitle>{t('navigation:dbDown.title')}</AlertTitle>
               <AlertDescription className="space-y-2">
-                <p>
-                  The application cannot reach its metadata database. Most features will
-                  return errors until the connection is restored.
-                </p>
+                <p>{t('navigation:dbDown.body')}</p>
                 {health?.db_error && (
                   <pre className="text-xs whitespace-pre-wrap break-words bg-muted/40 rounded p-2 max-h-32 overflow-auto">
                     {health.db_error}
@@ -128,13 +125,13 @@ export default function Layout({ children }: LayoutProps) {
                 )}
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
                   <Button size="sm" onClick={handleRetry} disabled={isRetrying}>
-                    {isRetrying ? 'Retrying…' : 'Retry connection'}
+                    {isRetrying ? t('navigation:dbDown.retrying') : t('navigation:dbDown.retryConnection')}
                   </Button>
                   {retryError && (
                     <span className="text-xs text-destructive">{retryError}</span>
                   )}
                   <span className="text-xs text-muted-foreground ml-auto">
-                    Auto-retrying every {HEALTH_POLL_INTERVAL_MS / 1000} seconds
+                    {t('navigation:dbDown.autoRetrying', { seconds: HEALTH_POLL_INTERVAL_MS / 1000 })}
                   </span>
                 </div>
               </AlertDescription>
@@ -145,10 +142,10 @@ export default function Layout({ children }: LayoutProps) {
           <div className="px-6 pt-4">
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>System Warning</AlertTitle>
+              <AlertTitle>{t('navigation:warning.title')}</AlertTitle>
               <AlertDescription>
                 {!health.ws_ok && (
-                  <p>Databricks workspace connection failed. Some features may be unavailable.</p>
+                  <p>{t('navigation:warning.workspaceFailed')}</p>
                 )}
                 {health.warnings?.map((w, i) => <p key={i}>{w}</p>)}
               </AlertDescription>
@@ -165,13 +162,12 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex flex-col items-center justify-center text-center py-24 text-muted-foreground">
               <DatabaseZap className="h-12 w-12 mb-4 opacity-60" />
               <h2 className="text-lg font-medium text-foreground mb-1">
-                Application paused
+                {t('navigation:dbDown.pausedTitle')}
               </h2>
               <p className="text-sm max-w-md">
-                The metadata database is unreachable, so navigation and data
-                views are disabled to avoid showing inconsistent state. Use
-                <span className="font-medium"> Retry connection </span>
-                above (or wait for the next auto-retry) to resume.
+                {t('navigation:dbDown.pausedBodyBefore')}
+                <span className="font-medium"> {t('navigation:dbDown.retryConnection')} </span>
+                {t('navigation:dbDown.pausedBodyAfter')}
               </p>
             </div>
           ) : (

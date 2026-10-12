@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import type { ManagementPort } from '@/types/data-product';
 
 type ManagementPortFormProps = {
@@ -20,6 +21,7 @@ const MANAGEMENT_PORT_TYPES = ['rest', 'topic'];
 
 export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmit, initial }: ManagementPortFormProps) {
   const { toast } = useToast();
+  const { t } = useTranslation(['data-products', 'common']);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState('');
@@ -100,22 +102,22 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Management Port' : 'Add Management Port'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-products:managementPortForm.editTitle') : t('data-products:managementPortForm.addTitle')}</DialogTitle>
           <DialogDescription>
-            Management ports provide access to observability, control, discoverability, and data dictionary endpoints (ODPS v1.0.0).
+            {t('data-products:managementPortForm.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">
-              Port Name <span className="text-destructive">*</span>
+              {t('data-products:managementPortForm.labels.portName')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., observability-endpoint, data-dictionary"
+              placeholder={t('data-products:managementPortForm.placeholders.name')}
               autoFocus
             />
           </div>
@@ -123,7 +125,7 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="content">
-                Content Type <span className="text-destructive">*</span>
+                {t('data-products:managementPortForm.labels.contentType')} <span className="text-destructive">*</span>
               </Label>
               <Select value={content} onValueChange={setContent}>
                 <SelectTrigger id="content">
@@ -143,7 +145,7 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="type">Port Type</Label>
+              <Label htmlFor="type">{t('data-products:managementPortForm.labels.portType')}</Label>
               <Select value={type} onValueChange={setType}>
                 <SelectTrigger id="type">
                   <SelectValue />
@@ -160,13 +162,13 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="url">URL</Label>
+            <Label htmlFor="url">{t('data-products:managementPortForm.labels.url')}</Label>
             <Input
               id="url"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://observability.example.com/metrics"
+              placeholder={t('data-products:managementPortForm.placeholders.url')}
             />
             <p className="text-xs text-muted-foreground">
               Access URL for this management port
@@ -174,12 +176,12 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="channel">Channel</Label>
+            <Label htmlFor="channel">{t('data-products:managementPortForm.labels.channel')}</Label>
             <Input
               id="channel"
               value={channel}
               onChange={(e) => setChannel(e.target.value)}
-              placeholder="e.g., prometheus-metrics, openapi-spec"
+              placeholder={t('data-products:managementPortForm.placeholders.channel')}
             />
             <p className="text-xs text-muted-foreground">
               Communication channel identifier
@@ -187,12 +189,12 @@ export default function ManagementPortFormDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the purpose and usage of this management port"
+              placeholder={t('data-products:managementPortForm.placeholders.description')}
               rows={3}
             />
           </div>

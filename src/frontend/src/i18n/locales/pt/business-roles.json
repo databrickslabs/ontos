@@ -1,0 +1,78 @@
+{
+  "title": "Papéis de negócio",
+  "subtitle": "Papéis nomeados que podem ser atribuídos a usuários como responsáveis por diversos objetos.",
+  "addNew": "Adicionar papel",
+  "editRole": "Editar papel",
+  "deleteRole": "Excluir papel",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menu",
+  "table": {
+    "name": "Nome",
+    "description": "Descrição",
+    "category": "Categoria",
+    "status": "Status",
+    "system": "Sistema",
+    "lastUpdated": "Última atualização",
+    "actions": "Ações"
+  },
+  "categories": {
+    "governance": "Governança",
+    "technical": "Técnico",
+    "business": "Negócios",
+    "operational": "Operacional"
+  },
+  "statuses": {
+    "active": "Ativo",
+    "deprecated": "Obsoleto"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar papéis de negócio.",
+    "deniedCreate": "Você não tem permissão para criar papéis de negócio.",
+    "deniedEdit": "Você não tem permissão para editar papéis de negócio.",
+    "deniedDelete": "Você não tem permissão para excluir papéis de negócio.",
+    "permissionDenied": "Permissão negada"
+  },
+  "messages": {
+    "errorFetching": "Erro ao buscar papéis de negócio",
+    "loadFailed": "Falha ao carregar papéis de negócio",
+    "errorDeleting": "Erro ao excluir papel de negócio",
+    "deleted": "Papel de negócio excluído",
+    "deletedSuccess": "O papel de negócio foi excluído com sucesso.",
+    "errorLoadingData": "Erro ao carregar dados"
+  },
+  "deleteDialog": {
+    "title": "Excluir papel de negócio?",
+    "description": "Esta ação não pode ser desfeita. Atribuições de responsáveis existentes que usam este papel podem ficar órfãs.",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  },
+  "emptyState": {
+    "title": "Nenhum papel de negócio definido ainda",
+    "description": "Crie seu primeiro papel de negócio (ex.: Responsável pelos dados, Responsável pelo domínio)."
+  },
+  "form": {
+    "createTitle": "Criar papel de negócio",
+    "createDescription": "Adicione um novo papel de negócio que pode ser atribuído a usuários.",
+    "editTitle": "Editar papel de negócio",
+    "editDescription": "Atualize os detalhes deste papel de negócio.",
+    "create": "Criar",
+    "update": "Salvar alterações",
+    "noCategory": "Sem categoria",
+    "isApprover": "Aprovador de fluxo de trabalho",
+    "isApproverDescription": "Exibir este papel nos menus suspensos de aprovadores de fluxo de trabalho e destinatários de notificações.",
+    "isApproverInUse": "Não é possível desativar — usado em {{count}} fluxo(s) de trabalho: {{workflows}}.",
+    "placeholders": {
+      "name": "ex.: Responsável pelos dados",
+      "description": "Descreva as responsabilidades deste papel...",
+      "category": "Selecione uma categoria"
+    },
+    "toasts": {
+      "created": "Papel de negócio criado",
+      "createdDescription": "\"{{name}}\" foi criado.",
+      "updated": "Papel de negócio atualizado",
+      "updatedDescription": "\"{{name}}\" foi atualizado.",
+      "createFailed": "Falha ao criar",
+      "updateFailed": "Falha ao atualizar"
+    }
+  }
+}

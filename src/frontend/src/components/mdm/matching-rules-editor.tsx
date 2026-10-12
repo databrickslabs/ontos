@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ export default function MatchingRulesEditor({
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<'matching' | 'survivorship'>('matching');
 
+  const { t } = useTranslation(['mdm', 'common']);
   const { put } = useApi();
   const { toast } = useToast();
 
@@ -57,14 +59,14 @@ export default function MatchingRulesEditor({
       });
 
       if (response.data) {
-        toast({ title: 'Success', description: 'Rules updated successfully' });
+        toast({ title: t('common:status.success'), description: t('mdm:editor.saveSuccess') });
         onSuccess();
         onClose();
       }
     } catch (err: any) {
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to save rules',
+        title: t('common:status.error'),
+        description: err.message || t('mdm:editor.saveFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -119,9 +121,9 @@ export default function MatchingRulesEditor({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Edit MDM Rules</DialogTitle>
+          <DialogTitle>{t('mdm:configDetails.editRules')}</DialogTitle>
           <DialogDescription>
-            Configure matching and survivorship rules for {config.name}
+            {t('mdm:editor.dialogDescription', { name: config.name })}
           </DialogDescription>
         </DialogHeader>
 
@@ -132,14 +134,14 @@ export default function MatchingRulesEditor({
             size="sm"
             onClick={() => setActiveSection('matching')}
           >
-            Matching Rules ({matchingRules.length})
+            {t('mdm:rulesTab.title')} ({matchingRules.length})
           </Button>
           <Button
             variant={activeSection === 'survivorship' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setActiveSection('survivorship')}
           >
-            Survivorship Rules ({survivorshipRules.length})
+            {t('mdm:survivorship.title')} ({survivorshipRules.length})
           </Button>
         </div>
 
@@ -149,17 +151,17 @@ export default function MatchingRulesEditor({
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">
-                  Define how records are matched between source and master
+                  {t('mdm:editor.matchingHint')}
                 </p>
                 <Button size="sm" onClick={addMatchingRule}>
                   <Plus className="h-4 w-4 mr-1" />
-                  Add Rule
+                  {t('mdm:editor.addRule')}
                 </Button>
               </div>
 
               {matchingRules.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  No matching rules defined. Click "Add Rule" to create one.
+                  {t('mdm:editor.noMatchingRules')}
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -172,7 +174,7 @@ export default function MatchingRulesEditor({
                             value={rule.name}
                             onChange={(e) => updateMatchingRule(idx, { name: e.target.value })}
                             className="w-48 h-8"
-                            placeholder="Rule name"
+                            placeholder={t('mdm:editor.ruleNamePlaceholder')}
                           />
                         </div>
                         <Button
@@ -187,7 +189,7 @@ export default function MatchingRulesEditor({
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <Label className="text-xs">Type</Label>
+                          <Label className="text-xs">{t('common:labels.type')}</Label>
                           <Select
                             value={rule.type}
                             onValueChange={(value) =>
@@ -198,14 +200,14 @@ export default function MatchingRulesEditor({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="deterministic">Deterministic (Exact)</SelectItem>
-                              <SelectItem value="probabilistic">Probabilistic (Fuzzy)</SelectItem>
+                              <SelectItem value="deterministic">{t('mdm:editor.deterministic')}</SelectItem>
+                              <SelectItem value="probabilistic">{t('mdm:editor.probabilistic')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div className="space-y-1">
-                          <Label className="text-xs">Fields (comma-separated)</Label>
+                          <Label className="text-xs">{t('mdm:editor.fieldsLabel')}</Label>
                           <Input
                             value={rule.fields.join(', ')}
                             onChange={(e) =>
@@ -214,12 +216,12 @@ export default function MatchingRulesEditor({
                               })
                             }
                             className="h-8"
-                            placeholder="email, phone"
+                            placeholder={t('mdm:editor.fieldsPlaceholder')}
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <Label className="text-xs">Weight (0-1)</Label>
+                          <Label className="text-xs">{t('mdm:editor.weightLabel')}</Label>
                           <Input
                             type="number"
                             min="0"
@@ -234,7 +236,7 @@ export default function MatchingRulesEditor({
                         </div>
 
                         <div className="space-y-1">
-                          <Label className="text-xs">Threshold (0-1)</Label>
+                          <Label className="text-xs">{t('mdm:editor.thresholdLabel')}</Label>
                           <Input
                             type="number"
                             min="0"
@@ -250,7 +252,7 @@ export default function MatchingRulesEditor({
 
                         {rule.type === 'probabilistic' && (
                           <div className="space-y-1 col-span-2">
-                            <Label className="text-xs">Algorithm</Label>
+                            <Label className="text-xs">{t('mdm:rulesTab.algorithm')}</Label>
                             <Select
                               value={rule.algorithm || 'jaro_winkler'}
                               onValueChange={(value) => updateMatchingRule(idx, { algorithm: value })}
@@ -259,9 +261,9 @@ export default function MatchingRulesEditor({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="jaro_winkler">Jaro-Winkler</SelectItem>
-                                <SelectItem value="levenshtein">Levenshtein</SelectItem>
-                                <SelectItem value="token_sort">Token Sort Ratio</SelectItem>
+                                <SelectItem value="jaro_winkler">{t('mdm:editor.algoJaroWinkler')}</SelectItem>
+                                <SelectItem value="levenshtein">{t('mdm:editor.algoLevenshtein')}</SelectItem>
+                                <SelectItem value="token_sort">{t('mdm:editor.algoTokenSort')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -279,17 +281,17 @@ export default function MatchingRulesEditor({
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">
-                  Define how conflicting values are resolved when merging records
+                  {t('mdm:editor.survivorshipHint')}
                 </p>
                 <Button size="sm" onClick={addSurvivorshipRule}>
                   <Plus className="h-4 w-4 mr-1" />
-                  Add Rule
+                  {t('mdm:editor.addRule')}
                 </Button>
               </div>
 
               {survivorshipRules.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  No survivorship rules defined. Source values will be used by default.
+                  {t('mdm:editor.noSurvivorshipRules')}
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -298,7 +300,7 @@ export default function MatchingRulesEditor({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <GripVertical className="h-4 w-4 text-muted-foreground" />
-                          <Badge variant="outline">{rule.field || 'Unnamed Field'}</Badge>
+                          <Badge variant="outline">{rule.field || t('mdm:editor.unnamedField')}</Badge>
                         </div>
                         <Button
                           size="sm"
@@ -312,19 +314,19 @@ export default function MatchingRulesEditor({
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <Label className="text-xs">Field Name</Label>
+                          <Label className="text-xs">{t('mdm:editor.fieldNameLabel')}</Label>
                           <Input
                             value={rule.field}
                             onChange={(e) =>
                               updateSurvivorshipRule(idx, { field: e.target.value })
                             }
                             className="h-8"
-                            placeholder="e.g., email"
+                            placeholder={t('mdm:editor.fieldNamePlaceholder')}
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <Label className="text-xs">Strategy</Label>
+                          <Label className="text-xs">{t('mdm:editor.strategyLabel')}</Label>
                           <Select
                             value={rule.strategy}
                             onValueChange={(value) =>
@@ -335,17 +337,17 @@ export default function MatchingRulesEditor({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="most_recent">Most Recent</SelectItem>
-                              <SelectItem value="most_trusted">Most Trusted</SelectItem>
-                              <SelectItem value="most_complete">Most Complete</SelectItem>
-                              <SelectItem value="source_priority">Source Priority</SelectItem>
+                              <SelectItem value="most_recent">{t('mdm:editor.stratMostRecent')}</SelectItem>
+                              <SelectItem value="most_trusted">{t('mdm:editor.stratMostTrusted')}</SelectItem>
+                              <SelectItem value="most_complete">{t('mdm:editor.stratMostComplete')}</SelectItem>
+                              <SelectItem value="source_priority">{t('mdm:editor.stratSourcePriority')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         {rule.strategy === 'most_trusted' && (
                           <div className="space-y-1 col-span-2">
-                            <Label className="text-xs">Priority (comma-separated source names)</Label>
+                            <Label className="text-xs">{t('mdm:editor.priorityLabel')}</Label>
                             <Input
                               value={(rule.priority || []).join(', ')}
                               onChange={(e) =>
@@ -354,7 +356,7 @@ export default function MatchingRulesEditor({
                                 })
                               }
                               className="h-8"
-                              placeholder="e.g., ERP, CRM, Marketing"
+                              placeholder={t('mdm:editor.priorityPlaceholder')}
                             />
                           </div>
                         )}
@@ -369,18 +371,18 @@ export default function MatchingRulesEditor({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
+                {t('common:actions.saving')}
               </>
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save Rules
+                {t('mdm:editor.saveButton')}
               </>
             )}
           </Button>

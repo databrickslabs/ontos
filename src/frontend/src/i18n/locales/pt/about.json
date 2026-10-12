@@ -1,0 +1,95 @@
+{
+  "title": "Sobre o {{appName}}",
+  "intro": "Este aplicativo roda como um Databricks App e fornece serviços do Unity Catalog e relacionados, com foco em gerenciamento de metadados, governança e ferramentas operacionais.",
+  "version": "Versão",
+  "runningSince": "Em execução desde",
+  "loading": "Carregando...",
+  "unavailable": "Indisponível",
+  "coreFeatures": "Recursos Principais",
+  "noFeatures": "Nenhum recurso disponível para as prévias de recursos selecionadas.",
+  "techStack": "Stack de Tecnologia",
+  "stack": {
+    "frontend": {
+      "title": "Frontend",
+      "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite"
+    },
+    "backend": {
+      "title": "Backend",
+      "desc": "Python, FastAPI"
+    },
+    "database": {
+      "title": "Banco de Dados",
+      "desc": "PostgreSQL"
+    },
+    "platform": {
+      "title": "Plataforma",
+      "desc": "Databricks Apps"
+    }
+  },
+  "userGuide": {
+    "title": "Guia do Usuário",
+    "tableOfContents": "Sumário",
+    "loadError": "Falha ao carregar o guia do usuário: {{statusText}}",
+    "loadErrorGeneric": "Falha ao carregar o guia do usuário"
+  },
+  "learnMore": "Contribua e Saiba Mais",
+  "cta": {
+    "github": "Ver no GitHub",
+    "docs": "Ler a Documentação"
+  },
+  "details": {
+    "data-domains": [
+      "• Defina e gerencie domínios de dados, subdomínios e estruturas de propriedade.",
+      "• Visualize relacionamentos entre domínios e produtos de dados dependentes.",
+      "• Atribua ativos e produtos a domínios para maior clareza de responsabilidade.",
+      "• Segue o padrão BITOL Open Data Domain Standard (ODDS)."
+    ],
+    "data-contracts": [
+      "• Instrumente produtos de dados com metadados técnicos baseados no Open Data Contract Standard (ODCS).",
+      "• Validação de esquema, verificações de qualidade, verificação de controle de acesso, exibição de dados de amostra.",
+      "• Os contratos podem ser baseados em texto (ex.: JSON/YAML); suporta o esquema JSON do BITOL ODCS."
+    ],
+    "data-products": [
+      "• Agrupe ativos do Databricks (tabelas, views, funções, modelos, dashboards, jobs, notebooks).",
+      "• Use tags (ex.: data-product-name, data-product-domain)."
+    ],
+    "business-glossary": [
+      "• Glossários hierárquicos por unidade organizacional (empresa, área de negócio, departamento, equipe, projeto).",
+      "• Mesclados de baixo para cima para os usuários, permitindo substituições.",
+      "• Os termos têm tags, descrições em markdown, status de ciclo de vida e ativos atribuídos."
+    ],
+    "master-data": [
+      "• Integra-se ao Zingg.ai para recursos de MDM."
+    ],
+    "compliance": [
+      "• Defina e verifique regras de conformidade.",
+      "• Calcule uma pontuação geral de conformidade."
+    ],
+    "estate-manager": [
+      "• Visão centralizada de múltiplos workspaces.",
+      "• Monitore o uso de recursos e os custos.",
+      "• Gerencie configurações entre estates."
+    ],
+    "security": [
+      "• Habilite recursos avançados de segurança (ex.: privacidade diferencial) em ativos."
+    ],
+    "entitlements": [
+      "• Defina personas reutilizáveis (ex.: Analista, Engenheiro).",
+      "• Atribua personas a grupos do Databricks.",
+      "• Simplifique o gerenciamento de privilégios em escala."
+    ],
+    "entitlements-sync": [
+      "• Mantenha os direitos de acesso alinhados com sistemas externos (ex.: IDP).",
+      "• Detecte e resolva conflitos de sincronização.",
+      "• Mantenha logs de auditoria de todas as alterações."
+    ],
+    "catalog-commander": [
+      "• Explorador de painel duplo inspirado no Norton Commander para gerenciar ativos do catálogo.",
+      "• Copie/mova tabelas e esquemas com facilidade."
+    ],
+    "data-asset-reviews": [
+      "• Fluxo de trabalho para revisar e aprovar ativos (tabelas, views, funções).",
+      "• Inclui notificações para revisores e solicitantes."
+    ]
+  }
+}

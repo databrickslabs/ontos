@@ -7,6 +7,11 @@ import os
 from pathlib import Path
 
 SOURCE_ID_PROPERTY = "sourceId"
+# Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
+# convention (both written during the transition; either read); ontosEntityId is the
+# current Ontos primary key, re-derived on export so a re-import can detect/rebind.
+ONTOS_ORIGINAL_ID_PROPERTY = "ontosOriginalId"
+ONTOS_ENTITY_ID_PROPERTY = "ontosEntityId"
 
 
 def _is_valid_uuid(value: str) -> bool:
@@ -16,9 +21,44 @@ def _is_valid_uuid(value: str) -> bool:
     except (ValueError, AttributeError):
         return False
 
+
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    ``uuid.UUID`` accepts upper/lower case, braced, URN and hyphenless spellings
+    (all of which refer to the same logical UUID), but the import duplicate
+    check compares strings. Canonicalizing before lookup and storage prevents a
+    second identity for the same logical UUID (#853 review item 2).
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _upsert_custom_property(data: dict, prop: str, value) -> None:
+    """Set a customProperties entry on an ODCS payload dict, tolerating the
+    list-of-{property,value} form and the legacy {key: value} dict form."""
+    cprops = data.get('customProperties')
+    if cprops is None:
+        cprops = data.get('custom_properties')
+    if isinstance(cprops, dict):
+        cprops[prop] = value
+        data['customProperties'] = cprops
+        return
+    if not isinstance(cprops, list):
+        cprops = []
+    cprops = [c for c in cprops if not (isinstance(c, dict) and c.get('property') == prop)]
+    cprops.append({"property": prop, "value": value})
+    data['customProperties'] = cprops
+
 import yaml
 from sqlalchemy.orm import Session
 
+from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.models.data_contracts import (
     ColumnDefinition,
     DataContract,
@@ -59,7 +99,7 @@ from src.db_models.data_contracts import (
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.controller.domain_export_adapter import domain_export_adapter
+from src.controller.domain_export_adapter import domain_export_adapter, ONTOS_ORIGINAL_DOMAIN_PROPERTY
 
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
@@ -961,7 +1001,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['transformLogic'] = prop.transform_logic
                         if prop.transform_source_objects:
                             try:
-                                import json
                                 prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['transformSourceObjects'] = prop.transform_source_objects
@@ -969,7 +1008,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['description'] = prop.transform_description
                         if prop.examples:
                             try:
-                                import json
                                 prop_dict['examples'] = json.loads(prop.examples)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['examples'] = prop.examples
@@ -977,7 +1015,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['criticalDataElement'] = prop.critical_data_element
                         if prop.logical_type_options_json:
                             try:
-                                import json
                                 logical_type_options = json.loads(prop.logical_type_options_json)
                                 prop_dict.update(logical_type_options)  # Merge constraints into property
                             except (json.JSONDecodeError, TypeError):
@@ -1066,7 +1103,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 prop_value = custom_prop.value
                                 try:
                                     # Try to parse JSON if it's a serialized object
-                                    import json
                                     prop_value = json.loads(custom_prop.value)
                                 except (json.JSONDecodeError, TypeError):
                                     pass  # Keep as string
@@ -1461,6 +1497,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 custom_props_list, odcs.get('customProperties')
             )
 
+        # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
+        # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
+        _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
+
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
             auth_defs = []
@@ -1538,14 +1578,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             odcs['servers'] = servers
 
         # Inject semantic assignments from EntitySemanticLinks
+        from contextlib import nullcontext
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.common.database import get_db_session
         from src.utils.semantic_helpers import get_semantic_assignment_type
 
         SEMANTIC_ASSIGNMENT_TYPE = get_semantic_assignment_type()
 
+        # Reuse the caller's session when one was passed, rather than opening a
+        # second session via get_db_session(). The read-only semantic lookups don't
+        # need their own session, and get_db_session() commits on exit — under the
+        # test harness's shared single SQLite connection that commit lands on the
+        # outer per-test transaction, defeating its rollback and leaking rows across
+        # tests; in production it was simply a redundant session + commit per export.
         try:
-            with get_db_session() as db:
+            session_cm = nullcontext(db_session) if db_session is not None else get_db_session()
+            with session_cm as db:
                 semantic_manager = SemanticLinksManager(db)
 
                 # Inject contract-level semantic assignments
@@ -1651,20 +1699,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 domain_obj = data_domain_repo.get_by_name(db, name=domain_name)
                 if domain_obj:
                     return domain_obj.id
-                # Auto-create missing domain
-                try:
-                    from src.controller.data_domains_manager import DataDomainManager
-                    from src.models.data_domains import DataDomainCreate
-                    manager = DataDomainManager(repository=data_domain_repo)
-                    created_read = manager.create_domain(
-                        db,
-                        domain_in=DataDomainCreate(name=domain_name, description=None, owner=['system'], tags=[], parent_id=None),
-                        current_user_id='system'
-                    )
-                    return str(created_read.id)
-                except Exception as ce:
-                    logger.warning(f"Auto-create domain failed for '{domain_name}': {ce}")
-                    return None
+                # No match → leave unassigned (#851). The previous silent auto-create is
+                # gone; auto-create is now an explicit, opt-in import toggle handled in the
+                # reconciliation path (domain_export_adapter.parse_odcs(create_missing=...)).
+                logger.info("Domain name '%s' not found; leaving unassigned.", domain_name)
+                return None
         except ValueError:
             raise
         except Exception as e:
@@ -2888,19 +2927,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self,
         db,
         parsed_odcs: dict,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        create_missing_domains: bool = False,
+        adopt_ids: bool = True,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
-        
+
         Args:
             db: Database session
             parsed_odcs: Parsed ODCS dictionary
             current_user: Username of current user
-            
+            create_missing_domains: When True, auto-create by name any domain that
+                doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+
         Returns:
             Created DataContractDb instance
-            
+
         Raises:
             ValueError: If validation fails
             Exception: If creation fails
@@ -2926,31 +2969,77 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             elif not isinstance(description, dict):
                 description = {}
             
-            # Resolve the domain assignment from the parsed ODCS payload (primary name +
-            # customProperties.additionalDomains, or app round-trip domainIds).
-            import_domain_ids, import_primary_domain_id = domain_export_adapter.parse_odcs(parsed_odcs, db)
+            # Reconcile the domain assignment from the parsed payload: best-effort ID→name
+            # (authoritative ontosDomainId key first, then legacy keys, then the standard
+            # `domain` name). No match → unassigned unless create_missing_domains is set (#851).
+            import_domain_ids, import_primary_domain_id = domain_export_adapter.parse_odcs(
+                parsed_odcs, db, create_missing=create_missing_domains, created_by=current_user,
+            )
+            # Always preserve the raw incoming domain string(s) as provenance so the original
+            # is never lost (and a later export can surface it via ontosOriginalDomain).
+            original_domains = domain_export_adapter.extract_original_domain_strings(parsed_odcs)
+            if original_domains:
+                cprops = parsed_odcs.get('customProperties')
+                if not isinstance(cprops, list):
+                    cprops = [] if cprops is None else cprops
+                if isinstance(cprops, list):
+                    cprops = [
+                        c for c in cprops
+                        if not (isinstance(c, dict) and c.get('property') == ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+                    ]
+                    cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
+                    parsed_odcs['customProperties'] = cprops
 
             # Try to resolve owner as team name
             owner_team_id = self._resolve_team_name_to_id(db, owner_val)
-            
+
+            # Mirror the create() path (see there for the full rationale): a
+            # draft contract with no owning team would otherwise be invisible to
+            # its own uploader under the PRD #442 role-aware visibility filter,
+            # because the family is "elevated" only for the draft_owner or
+            # owner_team members. Stamp the uploader as the personal-draft owner
+            # so they can find the contract they just uploaded. Team-owned drafts
+            # are team-visible from the start, so draft_owner_id stays unset
+            # there; it is cleared again on the draft->proposed transition.
+            draft_owner_id_val = (
+                current_user
+                if (status_val or '').lower() == 'draft' and not owner_team_id
+                else None
+            )
+
             # Preserve original external ID (e.g. URN) as a custom property
             original_id = parsed_odcs.get('id')
-            if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
-                custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties') or []
-                if isinstance(custom_props, list):
-                    custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
-                elif isinstance(custom_props, dict):
-                    custom_props[SOURCE_ID_PROPERTY] = original_id
-                parsed_odcs['customProperties'] = custom_props
+            if original_id and isinstance(original_id, str):
+                # ontosOriginalId (#853) records the source id verbatim; legacy sourceId is
+                # also written for non-UUID ids during the transition.
+                _upsert_custom_property(parsed_odcs, ONTOS_ORIGINAL_ID_PROPERTY, original_id)
+                if not _is_valid_uuid(original_id):
+                    _upsert_custom_property(parsed_odcs, SOURCE_ID_PROPERTY, original_id)
 
-            # Create main contract record (always use auto-generated UUID)
+            # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
+            # so YAML-expressed cross-entity links survive import; else auto-generate.
+            # Canonicalize before lookup and storage so an upper/braced/urn spelling
+            # cannot bypass the duplicate check and create a second identity for the
+            # same logical UUID (#853 review item 2).
+            adopted_id = None
+            canon_id = _canonical_uuid(original_id) if isinstance(original_id, str) else None
+            if (
+                adopt_ids
+                and canon_id is not None
+                and data_contract_repo.get(db, canon_id) is None
+            ):
+                adopted_id = canon_id
+
+            # Create main contract record (adopt the file id when eligible, else default UUID).
             db_obj = DataContractDb(
+                **({"id": adopted_id} if adopted_id else {}),
                 name=name_val,
                 version=version_val,
                 status=status_val,
                 owner_team_id=owner_team_id,
                 kind=kind_val,
                 api_version=api_version_val,
+                draft_owner_id=draft_owner_id_val,
                 tenant=parsed_odcs.get('tenant'),
                 # Store dataProduct from imported ODCS for reference, but actual linkage is via Output Ports
                 data_product=parsed_odcs.get('dataProduct') or parsed_odcs.get('data_product'),
@@ -3057,7 +3146,188 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error creating contract from upload: {e}", exc_info=True)
             raise
-    
+
+    def parse_uploaded_entities(
+        self, file_content: str, filename: str, content_type: str
+    ) -> List[dict]:
+        """Parse an uploaded file into a list of ODCS entity dicts.
+
+        Parity with the products path (`upload_products_batch`): a file may hold a
+        single ODCS object or a top-level array of them. A dict yields ``[dict]``;
+        a list is returned as-is.
+
+        Only structured ODCS files (``.yaml``/``.yml``/``.json``) are accepted. We
+        deliberately do NOT fabricate a contract from free-form text — there is no
+        meaningful mapping from arbitrary prose (e.g. a README) to an ODCS entity,
+        and doing so previously produced junk contracts. An unsupported extension or
+        a non-structured payload raises ``ValueError``, which the batch importer
+        records as a failed item.
+        """
+        name = (filename or '').lower()
+        if name.endswith(('.yaml', '.yml')):
+            fmt = 'yaml'
+        elif name.endswith('.json'):
+            fmt = 'json'
+        elif content_type == 'application/x-yaml':
+            fmt = 'yaml'
+        elif content_type and 'json' in content_type:
+            fmt = 'json'
+        else:
+            raise ValueError(
+                f"Unsupported file type: {filename}. "
+                "Expected an ODCS Data Contract as .yaml, .yml, or .json."
+            )
+
+        try:
+            parsed = yaml.safe_load(file_content) if fmt == 'yaml' else json.loads(file_content)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML: {e}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {e}")
+
+        if isinstance(parsed, list):
+            return [item for item in parsed]
+        if isinstance(parsed, dict):
+            return [parsed]
+        raise ValueError("File must contain an ODCS object or an array of ODCS objects.")
+
+    def create_contracts_from_files(
+        self,
+        db,
+        files: List[tuple],
+        current_user: Optional[str] = None,
+        create_missing_domains: bool = False,
+        adopt_ids: bool = True,
+        on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
+    ) -> BatchImportResult:
+        """Import ODCS contracts from one or more uploaded files.
+
+        Args:
+            db: Database session.
+            files: List of ``(filename, content_text, content_type)`` tuples. Each
+                file may contain a single ODCS object or an array of them.
+            current_user: Username of the uploader.
+            create_missing_domains: opt-in "Create missing domains" import toggle (#851),
+                applied per-upload to every entity in the batch.
+            adopt_ids: "Adopt IDs from file" toggle (#853, default on). A valid, non-colliding
+                UUID is adopted as the primary key; otherwise a fresh UUID is generated.
+            on_duplicate: what to do when the payload id is a valid UUID that already exists —
+                "skip" (default, recorded as skipped) or "new" (import as a new copy with a
+                fresh UUID). Import stays create-only either way.
+
+        Returns:
+            A :class:`BatchImportResult`. Per-entity failures are captured as failed
+            items; one bad entity never aborts the batch (each contract commits in
+            its own transaction inside `create_from_upload`).
+        """
+        result = BatchImportResult()
+        index = 0
+        for filename, content_text, content_type in files:
+            try:
+                entities = self.parse_uploaded_entities(content_text, filename, content_type)
+            except Exception as e:  # pragma: no cover - defensive; parse falls back to text
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message=f"Could not parse file: {e}",
+                ))
+                index += 1
+                continue
+
+            if not entities:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no contract entities",
+                ))
+                index += 1
+                continue
+
+            for entity in entities:
+                source_id = entity.get('id') if isinstance(entity, dict) else None
+                if not isinstance(entity, dict):
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, status="failed",
+                        message="Entity is not an object/mapping",
+                    ))
+                    index += 1
+                    continue
+                # Only import a recognizable ODCS Data Contract. An ODPS product is
+                # routed to the right page; anything unrecognizable is skipped rather
+                # than fabricated into a junk contract. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the contracts table.
+                entity_kind = classify_import_entity(entity)
+                if entity_kind != "contract":
+                    if entity_kind == "product":
+                        skip_msg = (
+                            f"Skipped: this is an {describe_import_entity(entity)} "
+                            "(kind: DataProduct), not a Data Contract. "
+                            "Import it from the Data Products page."
+                        )
+                    else:
+                        skip_msg = (
+                            "Skipped: not a recognizable ODCS Data Contract "
+                            "(expected kind: DataContract or a contract schema)."
+                        )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="skipped", message=skip_msg,
+                    ))
+                    index += 1
+                    continue
+                # Duplicate-id handling (#853): a valid UUID already present is either
+                # skipped (default) or imported as a new copy with a fresh UUID.
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and data_contract_repo.get(db, canon_source) is not None)
+                if dup and on_duplicate == "skip":
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            entity_id=canon_source, name=entity.get('name'), status="skipped",
+                            message="already present (same id)",
+                        ))
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
+                    index += 1
+                    continue
+                try:
+                    created = self.create_from_upload(
+                        db=db, parsed_odcs=entity, current_user=current_user,
+                        create_missing_domains=create_missing_domains,
+                        adopt_ids=adopt_ids and not dup,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        entity_id=created.id, name=created.name, status="created",
+                    ))
+                except Exception as e:
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import contract at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="failed",
+                        message="Could not import this contract. See server logs for details.",
+                    ))
+                index += 1
+
+        logger.info(
+            "Contract batch import complete: %d created, %d skipped, %d failed (%d total)",
+            result.created, result.skipped, result.failed, result.total,
+        )
+        return result
+
     # --- Nested Resource CRUD Methods ---
     
     def create_custom_property(
@@ -6617,7 +6887,41 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 project_name = project.name if project else None
             except Exception as e:
                 logger.debug(f"Could not resolve project: {e}")
-        
+
+        # Resolve the referenced data product (#854): the contract's `dataProduct` holds a
+        # raw id/name; resolve it to a (name, id) so the detail view can render a navigable
+        # link. By id first (the import/round-trip form), then a best-effort name match.
+        # Missing/ambiguous → name stays None and the UI falls back to the raw value.
+        data_product_name = None
+        data_product_id = None
+        if db_contract.data_product:
+            try:
+                from src.repositories.data_products_repository import data_product_repo
+                from src.db_models.data_products import DataProductDb
+                product = data_product_repo.get(db, id=db_contract.data_product)
+                if not product:
+                    # Product names are non-unique (versions, drafts): require a UNIQUE
+                    # match or leave the resolution empty — otherwise `.first()` picks
+                    # an arbitrary row and the UI links to the wrong product (#854 review).
+                    name_matches = (
+                        db.query(DataProductDb)
+                        .filter(DataProductDb.name == db_contract.data_product)
+                        .limit(2)
+                        .all()
+                    )
+                    if len(name_matches) == 1:
+                        product = name_matches[0]
+                    elif len(name_matches) > 1:
+                        logger.debug(
+                            "dataProduct %r matches multiple products; leaving unresolved",
+                            db_contract.data_product,
+                        )
+                if product:
+                    data_product_name = product.name
+                    data_product_id = product.id
+            except Exception as e:
+                logger.debug(f"Could not resolve data product: {e}")
+
         logger.debug(f"Building API model for contract {db_contract.id}")
 
         return DataContractRead(
@@ -6637,6 +6941,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             domainIds=contract_domain_ids,  # All assigned domain IDs (primary first)
             primaryDomainId=contract_primary_domain_id,
             dataProduct=db_contract.data_product,
+            dataProductName=data_product_name,
+            dataProductId=data_product_id,
             description=description,
             tags=tags,  # Include tags in response
             schema=schema_objects,

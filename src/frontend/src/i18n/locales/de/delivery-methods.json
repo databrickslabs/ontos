@@ -1,0 +1,75 @@
+{
+  "title": "Bereitstellungsmethoden",
+  "subtitle": "Legen Sie fest, wie Daten über Deliverables an Verbraucher bereitgestellt werden (z. B. Tabellenzugriff, Serving-Endpunkt).",
+  "addNew": "Methode hinzufügen",
+  "editMethod": "Methode bearbeiten",
+  "deleteMethod": "Methode löschen",
+  "systemBadge": "System",
+  "openMenu": "Menü öffnen",
+  "table": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "category": "Kategorie",
+    "status": "Status",
+    "system": "System",
+    "lastUpdated": "Zuletzt aktualisiert",
+    "actions": "Aktionen"
+  },
+  "categories": {
+    "access": "Zugriff",
+    "endpoint": "Endpunkt",
+    "export": "Export",
+    "streaming": "Streaming"
+  },
+  "statuses": {
+    "active": "Aktiv",
+    "deprecated": "Veraltet"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Bereitstellungsmethoden anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Bereitstellungsmethoden zu erstellen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Bereitstellungsmethoden zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Bereitstellungsmethoden zu löschen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "errorFetching": "Fehler beim Abrufen der Bereitstellungsmethoden",
+    "loadFailed": "Bereitstellungsmethoden konnten nicht geladen werden",
+    "errorDeleting": "Fehler beim Löschen der Bereitstellungsmethode",
+    "deleted": "Bereitstellungsmethode gelöscht",
+    "deletedSuccess": "Die Bereitstellungsmethode wurde erfolgreich gelöscht.",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "deleteDialog": {
+    "title": "Bereitstellungsmethode löschen?",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Bestehende Deliverables, die diese Methode verwenden, könnten verwaist werden.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "emptyState": {
+    "title": "Noch keine Bereitstellungsmethoden definiert",
+    "description": "Erstellen Sie Ihre erste Bereitstellungsmethode (z. B. Tabellenzugriff, Serving-Endpunkt, Dateiexport)."
+  },
+  "form": {
+    "createTitle": "Bereitstellungsmethode erstellen",
+    "createDescription": "Fügen Sie eine neue Bereitstellungsmethode für die Datenverteilung hinzu.",
+    "editTitle": "Bereitstellungsmethode bearbeiten",
+    "editDescription": "Aktualisieren Sie die Details dieser Bereitstellungsmethode.",
+    "create": "Erstellen",
+    "update": "Änderungen speichern",
+    "noCategory": "Keine Kategorie",
+    "placeholders": {
+      "name": "z. B. Tabellenzugriff",
+      "description": "Beschreiben Sie, wie Daten bereitgestellt werden...",
+      "category": "Kategorie auswählen"
+    },
+    "toasts": {
+      "created": "Bereitstellungsmethode erstellt",
+      "createdDescription": "\"{{name}}\" wurde erstellt.",
+      "updated": "Bereitstellungsmethode aktualisiert",
+      "updatedDescription": "\"{{name}}\" wurde aktualisiert.",
+      "createFailed": "Erstellen fehlgeschlagen",
+      "updateFailed": "Aktualisieren fehlgeschlagen"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,7 @@ const BUSINESS_IMPACTS = ['operational', 'regulatory']
 const QUALITY_LEVELS = ['contract', 'object', 'property']
 
 export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, initial }: QualityRuleFormProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -61,7 +63,7 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      toast({ title: 'Validation Error', description: 'Rule name is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:quality.validationError', 'Validation Error'), description: t('data-contracts:quality.nameRequired', 'Rule name is required'), variant: 'destructive' })
       return
     }
 
@@ -83,8 +85,8 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
       onOpenChange(false)
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save quality rule',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:quality.saveError', 'Failed to save quality rule'),
         variant: 'destructive',
       })
     } finally {
@@ -96,39 +98,39 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Quality Rule' : 'Add Quality Rule'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-contracts:quality.editTitle', 'Edit Quality Rule') : t('data-contracts:quality.addTitle', 'Add Quality Rule')}</DialogTitle>
           <DialogDescription>
-            Define a data quality check for this contract.
+            {t('data-contracts:quality.description', 'Define a data quality check for this contract.')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">
-              Rule Name <span className="text-destructive">*</span>
+              {t('data-contracts:quality.nameLabel', 'Rule Name')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Check for null values"
+              placeholder={t('data-contracts:quality.namePlaceholder', 'e.g., Check for null values')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe what this rule checks"
+              placeholder={t('data-contracts:quality.descriptionPlaceholder', 'Describe what this rule checks')}
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="level">Level</Label>
+              <Label htmlFor="level">{t('data-contracts:quality.levelLabel', 'Level')}</Label>
               <Select value={level} onValueChange={setLevel}>
                 <SelectTrigger id="level">
                   <SelectValue />
@@ -144,7 +146,7 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dimension">Dimension</Label>
+              <Label htmlFor="dimension">{t('data-contracts:quality.dimensionLabel', 'Dimension')}</Label>
               <Select value={dimension} onValueChange={setDimension}>
                 <SelectTrigger id="dimension">
                   <SelectValue />
@@ -162,7 +164,7 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="severity">Severity</Label>
+              <Label htmlFor="severity">{t('data-contracts:quality.severityLabel', 'Severity')}</Label>
               <Select value={severity} onValueChange={setSeverity}>
                 <SelectTrigger id="severity">
                   <SelectValue />
@@ -178,7 +180,7 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="businessImpact">Business Impact</Label>
+              <Label htmlFor="businessImpact">{t('data-contracts:quality.businessImpactLabel', 'Business Impact')}</Label>
               <Select value={businessImpact} onValueChange={setBusinessImpact}>
                 <SelectTrigger id="businessImpact">
                   <SelectValue />
@@ -195,7 +197,7 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="type">Type</Label>
+            <Label htmlFor="type">{t('data-contracts:quality.typeLabel', 'Type')}</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger id="type">
                 <SelectValue />
@@ -212,12 +214,12 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
 
           {type === 'sql' && (
             <div className="space-y-2">
-              <Label htmlFor="query">SQL Query</Label>
+              <Label htmlFor="query">{t('data-contracts:quality.sqlQueryLabel', 'SQL Query')}</Label>
               <Textarea
                 id="query"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="SELECT COUNT(*) FROM table WHERE..."
+                placeholder={t('data-contracts:quality.sqlQueryPlaceholder', 'SELECT COUNT(*) FROM table WHERE...')}
                 rows={4}
                 className="font-mono text-sm"
               />
@@ -225,12 +227,12 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="rule">Rule Expression</Label>
+            <Label htmlFor="rule">{t('data-contracts:quality.ruleExpressionLabel', 'Rule Expression')}</Label>
             <Textarea
               id="rule"
               value={rule}
               onChange={(e) => setRule(e.target.value)}
-              placeholder="e.g., col_name is not null"
+              placeholder={t('data-contracts:quality.ruleExpressionPlaceholder', 'e.g., col_name is not null')}
               rows={2}
             />
           </div>
@@ -238,10 +240,10 @@ export default function QualityRuleFormDialog({ isOpen, onOpenChange, onSubmit, 
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Save Changes' : 'Add Rule'}
+            {isSubmitting ? t('common:actions.saving') : initial ? t('common:actions.saveChanges') : t('data-contracts:quality.addButton', 'Add Rule')}
           </Button>
         </DialogFooter>
       </DialogContent>

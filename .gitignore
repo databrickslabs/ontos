@@ -1,8 +1,11 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-node_modules/
-node_modules.bak/
+# No trailing slash: match both a real directory AND a symlink (git treats a
+# symlink as a file, which a "node_modules/" dir-only pattern would miss — as
+# happens with the per-worktree node_modules symlinks used in local dev).
+node_modules
+node_modules.bak
 .pnp/
 .pnp.js
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ export default function LinkProductToContractDialog({
   contractName,
   onSuccess
 }: LinkProductToContractDialogProps) {
+  const { t } = useTranslation(['data-contracts', 'common']);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
@@ -67,13 +69,13 @@ export default function LinkProductToContractDialog({
     try {
       const response = await fetch('/api/data-products');
       if (!response.ok) throw new Error('Failed to fetch products');
-      
+
       const data: DataProduct[] = await response.json();
       setProducts(data);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to load products',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:linkProduct.loadProductsError', 'Failed to load products'),
         variant: 'destructive'
       });
     } finally {
@@ -85,13 +87,13 @@ export default function LinkProductToContractDialog({
     try {
       const response = await fetch(`/api/data-products/${productId}`);
       if (!response.ok) throw new Error('Failed to fetch product details');
-      
+
       const data: DataProduct = await response.json();
       setSelectedProduct(data);
-      
+
       // Reset port selection when product changes
       setSelectedPortIndex('');
-      
+
       // Auto-select mode based on available ports
       if (data.outputPorts && data.outputPorts.some(p => !p.contractId)) {
         setAssignmentMode('existing');
@@ -100,8 +102,8 @@ export default function LinkProductToContractDialog({
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to load product details',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:linkProduct.loadDetailsError', 'Failed to load product details'),
         variant: 'destructive'
       });
     }
@@ -110,8 +112,8 @@ export default function LinkProductToContractDialog({
   const handleSubmit = async () => {
     if (!selectedProductId || !selectedProduct) {
       toast({
-        title: 'Validation Error',
-        description: 'Please select a product',
+        title: t('data-contracts:linkProduct.validationError', 'Validation Error'),
+        description: t('data-contracts:linkProduct.selectProductError', 'Please select a product'),
         variant: 'destructive'
       });
       return;
@@ -119,8 +121,8 @@ export default function LinkProductToContractDialog({
 
     if (assignmentMode === 'existing' && selectedPortIndex === '') {
       toast({
-        title: 'Validation Error',
-        description: 'Please select a deliverable',
+        title: t('data-contracts:linkProduct.validationError', 'Validation Error'),
+        description: t('data-contracts:linkProduct.selectDeliverableError', 'Please select a deliverable'),
         variant: 'destructive'
       });
       return;
@@ -129,16 +131,16 @@ export default function LinkProductToContractDialog({
     if (assignmentMode === 'new') {
       if (!newPortName.trim()) {
         toast({
-          title: 'Validation Error',
-          description: 'Port name is required',
+          title: t('data-contracts:linkProduct.validationError', 'Validation Error'),
+          description: t('data-contracts:linkProduct.portNameRequired', 'Port name is required'),
           variant: 'destructive'
         });
         return;
       }
       if (!newPortVersion.trim()) {
         toast({
-          title: 'Validation Error',
-          description: 'Port version is required',
+          title: t('data-contracts:linkProduct.validationError', 'Validation Error'),
+          description: t('data-contracts:linkProduct.portVersionRequired', 'Port version is required'),
           variant: 'destructive'
         });
         return;
@@ -168,7 +170,7 @@ export default function LinkProductToContractDialog({
       }
 
       // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = selectedProduct.tags?.map((tag: any) => 
+      const normalizedTags = selectedProduct.tags?.map((tag: any) =>
         typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
       );
 
@@ -186,15 +188,15 @@ export default function LinkProductToContractDialog({
       if (!updateResponse.ok) throw new Error('Failed to link contract to product');
 
       toast({
-        title: 'Contract Linked',
-        description: `Contract "${contractName}" successfully linked to product deliverable`
+        title: t('data-contracts:linkProduct.contractLinked', 'Contract Linked'),
+        description: t('data-contracts:linkProduct.linkSuccess', 'Contract "{{contractName}}" successfully linked to product deliverable', { contractName })
       });
 
       onSuccess();
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to link contract to product',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:linkProduct.linkError', 'Failed to link contract to product'),
         variant: 'destructive'
       });
     } finally {
@@ -206,9 +208,9 @@ export default function LinkProductToContractDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Link Contract to Existing Product</DialogTitle>
+          <DialogTitle>{t('data-contracts:linkProduct.title', 'Link Contract to Existing Product')}</DialogTitle>
           <DialogDescription>
-            Link <strong>{contractName}</strong> to a deliverable of an existing data product
+            {t('data-contracts:linkProduct.descriptionBefore', 'Link')} <strong>{contractName}</strong> {t('data-contracts:linkProduct.descriptionAfter', 'to a deliverable of an existing data product')}
           </DialogDescription>
         </DialogHeader>
 
@@ -216,7 +218,7 @@ export default function LinkProductToContractDialog({
           {/* Product Selection */}
           <div className="space-y-2">
             <Label htmlFor="product">
-              Select Product <span className="text-destructive">*</span>
+              {t('data-contracts:linkProduct.selectProductLabel', 'Select Product')} <span className="text-destructive">*</span>
             </Label>
             {isLoadingProducts ? (
               <div className="flex items-center justify-center p-4">
@@ -225,19 +227,19 @@ export default function LinkProductToContractDialog({
             ) : (
               <Select value={selectedProductId} onValueChange={setSelectedProductId}>
                 <SelectTrigger id="product">
-                  <SelectValue placeholder="Choose a product..." />
+                  <SelectValue placeholder={t('data-contracts:linkProduct.chooseProductPlaceholder', 'Choose a product...')} />
                 </SelectTrigger>
                 <SelectContent>
                   {products.length === 0 ? (
                     <div className="p-2 text-sm text-muted-foreground text-center">
-                      No products available
+                      {t('data-contracts:linkProduct.noProducts', 'No products available')}
                     </div>
                   ) : (
                     products.map((product) => (
                       <SelectItem key={product.id} value={product.id}>
                         <div className="flex items-center gap-2">
-                          <span>{product.name || 'Unnamed Product'}</span>
-                          <Badge variant="secondary" className="text-xs">v{product.version || 'N/A'}</Badge>
+                          <span>{product.name || t('data-contracts:linkProduct.unnamedProduct', 'Unnamed Product')}</span>
+                          <Badge variant="secondary" className="text-xs">v{product.version || t('common:states.notAvailable')}</Badge>
                           <Badge variant="outline" className="text-xs">{product.status}</Badge>
                         </div>
                       </SelectItem>
@@ -252,27 +254,27 @@ export default function LinkProductToContractDialog({
           {selectedProduct && (
             <>
               <div className="border-t pt-4 space-y-4">
-                <Label>Deliverable Assignment</Label>
-                
+                <Label>{t('data-contracts:linkProduct.deliverableAssignment', 'Deliverable Assignment')}</Label>
+
                 <RadioGroup value={assignmentMode} onValueChange={(value: 'existing' | 'new') => setAssignmentMode(value)}>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="existing" id="existing" disabled={availablePorts.length === 0} />
                     <Label htmlFor="existing" className={availablePorts.length === 0 ? 'text-muted-foreground' : ''}>
-                      Assign to Existing Deliverable {availablePorts.length === 0 && '(no available deliverables)'}
+                      {t('data-contracts:linkProduct.assignExisting', 'Assign to Existing Deliverable')} {availablePorts.length === 0 && t('data-contracts:linkProduct.noAvailableDeliverables', '(no available deliverables)')}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="new" id="new" />
-                    <Label htmlFor="new">Create New Deliverable</Label>
+                    <Label htmlFor="new">{t('data-contracts:linkProduct.createNew', 'Create New Deliverable')}</Label>
                   </div>
                 </RadioGroup>
 
                 {assignmentMode === 'existing' && availablePorts.length > 0 && (
                   <div className="space-y-2 ml-6">
-                    <Label htmlFor="port">Select Deliverable</Label>
+                    <Label htmlFor="port">{t('data-contracts:linkProduct.selectDeliverableLabel', 'Select Deliverable')}</Label>
                     <Select value={selectedPortIndex} onValueChange={setSelectedPortIndex}>
                       <SelectTrigger id="port">
-                        <SelectValue placeholder="Choose a deliverable..." />
+                        <SelectValue placeholder={t('data-contracts:linkProduct.chooseDeliverablePlaceholder', 'Choose a deliverable...')} />
                       </SelectTrigger>
                       <SelectContent>
                         {availablePorts.map((port) => {
@@ -290,7 +292,7 @@ export default function LinkProductToContractDialog({
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Only showing deliverables without an assigned contract
+                      {t('data-contracts:linkProduct.onlyUnassigned', 'Only showing deliverables without an assigned contract')}
                     </p>
                   </div>
                 )}
@@ -299,24 +301,24 @@ export default function LinkProductToContractDialog({
                   <div className="space-y-4 ml-6">
                     <div className="space-y-2">
                       <Label htmlFor="portName">
-                        Deliverable Name <span className="text-destructive">*</span>
+                        {t('data-contracts:linkProduct.deliverableNameLabel', 'Deliverable Name')} <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="portName"
                         value={newPortName}
                         onChange={(e) => setNewPortName(e.target.value)}
-                        placeholder="e.g., analytics-output"
+                        placeholder={t('data-contracts:linkProduct.deliverableNamePlaceholder', 'e.g., analytics-output')}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="portVersion">
-                        Deliverable Version <span className="text-destructive">*</span>
+                        {t('data-contracts:linkProduct.deliverableVersionLabel', 'Deliverable Version')} <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="portVersion"
                         value={newPortVersion}
                         onChange={(e) => setNewPortVersion(e.target.value)}
-                        placeholder="1.0.0"
+                        placeholder={t('data-contracts:linkProduct.deliverableVersionPlaceholder', '1.0.0')}
                       />
                     </div>
                   </div>
@@ -325,15 +327,14 @@ export default function LinkProductToContractDialog({
 
               {/* Product Info Summary */}
               <div className="rounded-lg bg-muted p-4 space-y-2">
-                <Label className="text-sm font-medium">Selected Product</Label>
+                <Label className="text-sm font-medium">{t('data-contracts:linkProduct.selectedProduct', 'Selected Product')}</Label>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{selectedProduct.name}</span>
                     <Badge variant="outline">v{selectedProduct.version}</Badge>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Current deliverables: {selectedProduct.outputPorts?.length || 0} 
-                    {' '}({availablePorts.length} available for linking)
+                    {t('data-contracts:linkProduct.currentDeliverables', 'Current deliverables: {{total}} ({{available}} available for linking)', { total: selectedProduct.outputPorts?.length || 0, available: availablePorts.length })}
                   </div>
                 </div>
               </div>
@@ -342,24 +343,24 @@ export default function LinkProductToContractDialog({
         </div>
 
         <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)} 
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
-          <Button 
-            onClick={handleSubmit} 
+          <Button
+            onClick={handleSubmit}
             disabled={isSubmitting || !selectedProductId}
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Linking...
+                {t('data-contracts:linkProduct.linking', 'Linking...')}
               </>
             ) : (
-              'Link to Product'
+              t('data-contracts:linkProduct.linkButton', 'Link to Product')
             )}
           </Button>
         </DialogFooter>
@@ -367,4 +368,3 @@ export default function LinkProductToContractDialog({
     </Dialog>
   );
 }
-

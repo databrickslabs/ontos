@@ -29,6 +29,9 @@ from src.models.schema_import import (
     ImportPreviewItem,
     ImportRequest,
     ImportResult,
+    SchemaImportRunDetail,
+    SchemaImportRunSummary,
+    StartImportRunResponse,
 )
 from src.models.assets import AssetMetadata
 
@@ -190,6 +193,114 @@ async def execute_import(
     except Exception as exc:
         logger.error(f"Import failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ------------------------------------------------------------------
+# Async import (background execution)
+# ------------------------------------------------------------------
+
+def _get_runs_manager(request: Request):
+    """Fetch the singleton SchemaImportRunsManager from app state."""
+    manager = getattr(request.app.state, "schema_import_runs_manager", None)
+    if not manager:
+        raise HTTPException(status_code=503, detail="Async schema import service not configured.")
+    return manager
+
+
+def _user_token(request: Request) -> Optional[str]:
+    """OBO token forwarded by the Databricks app proxy (None in local dev)."""
+    return request.headers.get("x-forwarded-access-token")
+
+
+@router.post(
+    "/import-async",
+    response_model=StartImportRunResponse,
+    status_code=202,
+    summary="Start a background import; returns a run id to poll",
+)
+async def start_import_async(
+    payload: ImportRequest,
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Kick off the import on a background thread. The response returns
+    immediately with a run id; poll GET /runs/{run_id} (or watch the
+    notification bell) for progress and completion."""
+    runs_manager = _get_runs_manager(request)
+    user_id = current_user.username if current_user else "system"
+    try:
+        run_id = runs_manager.start_run(
+            db=db, request=payload, user_id=user_id, user_token=_user_token(request),
+        )
+        return StartImportRunResponse(run_id=run_id)
+    except ValueError as exc:
+        # Concurrency cap or connection resolution error
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"Failed to start async import: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get(
+    "/runs",
+    response_model=list[SchemaImportRunSummary],
+    summary="List the current user's recent import runs",
+)
+async def list_import_runs(
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    runs_manager = _get_runs_manager(request)
+    user_id = current_user.username if current_user else "system"
+    return runs_manager.list_runs_for_user(db, user_id)
+
+
+@router.get(
+    "/runs/{run_id}",
+    response_model=SchemaImportRunDetail,
+    summary="Get the status/progress of a background import run",
+)
+async def get_import_run(
+    run_id: str,
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    runs_manager = _get_runs_manager(request)
+    user_id = current_user.username if current_user else "system"
+    run = runs_manager.get_run_for_user(db, run_id, user_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Import run '{run_id}' not found")
+    # Pick up the latest values written by the background thread.
+    db.refresh(run)
+    return run
+
+
+@router.post(
+    "/runs/{run_id}/cancel",
+    response_model=SchemaImportRunDetail,
+    summary="Request cancellation of a running import",
+)
+async def cancel_import_run(
+    run_id: str,
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    runs_manager = _get_runs_manager(request)
+    user_id = current_user.username if current_user else "system"
+    run = runs_manager.get_run_for_user(db, run_id, user_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=f"Import run '{run_id}' not found")
+    runs_manager.cancel_run(run_id)
+    db.refresh(run)
+    return run
 
 
 # ------------------------------------------------------------------

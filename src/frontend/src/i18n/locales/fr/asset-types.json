@@ -1,0 +1,80 @@
+{
+  "title": "Types d'actifs",
+  "subtitle": "Modèles réutilisables définissant la structure des différents types d'actifs.",
+  "addNew": "Ajouter un type d'actif",
+  "editAssetType": "Modifier le type d'actif",
+  "deleteAssetType": "Supprimer le type d'actif",
+  "systemBadge": "Système",
+  "openMenu": "Ouvrir le menu",
+  "table": {
+    "name": "Nom",
+    "description": "Description",
+    "category": "Catégorie",
+    "status": "Statut",
+    "assetCount": "Actifs",
+    "lastUpdated": "Dernière mise à jour",
+    "actions": "Actions"
+  },
+  "categories": {
+    "data": "Données",
+    "analytics": "Analytique",
+    "integration": "Intégration",
+    "system": "Système",
+    "custom": "Personnalisé"
+  },
+  "statuses": {
+    "active": "Actif",
+    "deprecated": "Obsolète"
+  },
+  "permissions": {
+    "deniedView": "Vous n'avez pas la permission de voir les types d'actifs.",
+    "deniedCreate": "Vous n'avez pas la permission de créer des types d'actifs.",
+    "deniedEdit": "Vous n'avez pas la permission de modifier les types d'actifs.",
+    "deniedDelete": "Vous n'avez pas la permission de supprimer les types d'actifs.",
+    "permissionDenied": "Permission refusée"
+  },
+  "messages": {
+    "errorFetching": "Erreur lors de la récupération des types d'actifs",
+    "loadFailed": "Échec du chargement des types d'actifs",
+    "errorDeleting": "Erreur lors de la suppression du type d'actif",
+    "deleted": "Type d'actif supprimé",
+    "deletedSuccess": "Le type d'actif a été supprimé avec succès.",
+    "errorLoadingData": "Erreur de chargement des données"
+  },
+  "deleteDialog": {
+    "title": "Supprimer le type d'actif ?",
+    "description": "Cette action est irréversible. Les actifs existants de ce type peuvent devenir orphelins.",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  },
+  "emptyState": {
+    "title": "Aucun type d'actif défini pour le moment",
+    "description": "Créez votre premier type d'actif pour commencer à définir des modèles d'actifs."
+  },
+  "form": {
+    "createTitle": "Créer un type d'actif",
+    "createDescription": "Ajoutez un nouveau modèle de type d'actif.",
+    "editTitle": "Modifier le type d'actif",
+    "editDescription": "Mettez à jour les détails de ce type d'actif.",
+    "create": "Créer",
+    "update": "Enregistrer les modifications",
+    "noCategory": "Aucune catégorie",
+    "labels": {
+      "icon": "Icône"
+    },
+    "placeholders": {
+      "name": "ex. : Tableau de bord",
+      "description": "Décrivez ce type d'actif...",
+      "category": "Sélectionner une catégorie",
+      "icon": "ex. : BarChart"
+    },
+    "toasts": {
+      "created": "Type d'actif créé",
+      "createdDescription": "« {{name}} » a été créé.",
+      "updated": "Type d'actif mis à jour",
+      "updatedDescription": "« {{name}} » a été mis à jour.",
+      "createFailed": "Échec de la création",
+      "updateFailed": "Échec de la mise à jour"
+    }
+  }
+}

@@ -24,7 +24,8 @@
     "noEdit": "データ製品を編集する権限がありません。",
     "noDelete": "データ製品を削除する権限がありません。",
     "noBulkDelete": "一括削除の権限がありません。",
-    "noGenieSpace": "Genie Spaceを作成する権限がありません。"
+    "noGenieSpace": "Genie Spaceを作成する権限がありません。",
+    "noUpload": "データ製品をアップロードする権限がありません。"
   },
   "bulk": {
     "deleteConfirm": "選択した{{count}}個の製品を削除してもよろしいですか？",
@@ -54,7 +55,8 @@
     "uploading": "アップロード中...",
     "tooltipTitle": "データ製品をアップロード (ODPS形式)",
     "tooltipDescription": "ODPS (Open Data Product Standard) スキーマに準拠したYAMLまたはJSONファイルを受け付けます。",
-    "tooltipHint": "データ契約 (ODCS) については、データ契約ページを使用してください。"
+    "tooltipHint": "データ契約 (ODCS) については、データ契約ページを使用してください。",
+    "odcsHint": "ヒント: このページはデータ製品 (ODPS形式) 用です。データ契約 (ODCS形式) をアップロードしようとしている場合は、代わりにデータ契約ページを使用してください。"
   },
   "genie": {
     "noSelection": "選択なし",
@@ -85,7 +87,11 @@
     "viewDetails": "詳細を表示",
     "editProduct": "製品を編集",
     "deleteProduct": "製品を削除",
-    "subscribed": "購読済み"
+    "subscribed": "購読済み",
+    "unnamedProduct": "名前のない製品",
+    "previewMetadata": "メタデータをプレビュー",
+    "editDenied": "編集（権限がありません）",
+    "deleteDenied": "削除（権限がありません）"
   },
   "messages": {
     "deleteConfirm": "このデータ製品を削除してもよろしいですか？",
@@ -95,7 +101,13 @@
     "importSuccess": "データ製品が正常にインポートされました",
     "importError": "データ製品のインポートに失敗しました",
     "success": "成功",
-    "error": "エラー"
+    "error": "エラー",
+    "validationErrors": "{{count}} 件の検証エラーが発生しました",
+    "validationTitle": "検証エラー",
+    "loadInitialError": "初期データの読み込みに失敗しました",
+    "refreshError": "製品リストの更新に失敗しました",
+    "unknownError": "不明なエラー",
+    "unknownErrorFormat": "不明なエラー形式"
   },
   "status": {
     "draft": "下書き",
@@ -108,7 +120,8 @@
     "certified": "認定済み",
     "deprecated": "非推奨",
     "retired": "廃止",
-    "published": "公開済み"
+    "published": "公開済み",
+    "personalDraft": "個人下書き"
   },
   "viewMode": {
     "table": "テーブル",
@@ -135,7 +148,15 @@
       "updated": "更新日",
       "tags": "タグ",
       "noTags": "タグなし",
-      "notAssigned": "未割り当て"
+      "notAssigned": "未割り当て",
+      "project": "プロジェクト",
+      "tenant": "テナント",
+      "ownerTeam": "チーム",
+      "apiVersion": "APIバージョン",
+      "certification": "認定",
+      "publishedLabel": "公開済み",
+      "quality": "品質",
+      "linkedConcepts": "リンクされたビジネスコンセプト"
     },
     "sections": {
       "overview": "概要",
@@ -172,7 +193,9 @@
         "email": "メール",
         "subscribed": "購読日",
         "reason": "理由"
-      }
+      },
+      "titleWithCount": "購読者 ({{count}})",
+      "notificationSubtitle": "この製品を購読しているユーザーには、ステータス変更、コンプライアンス問題、新バージョンに関する通知が届きます。"
     },
     "subscription": {
       "subscribed": "購読済み",
@@ -183,7 +206,155 @@
     },
     "deleteConfirm": "「{{name}}」を削除してもよろしいですか？",
     "deleteSuccess": "データ製品が正常に削除されました",
-    "deleteError": "データ製品の削除に失敗しました"
+    "deleteError": "データ製品の削除に失敗しました",
+    "unnamedProduct": "名前のない製品",
+    "ratings": {
+      "title": "評価とレビュー"
+    },
+    "actions": {
+      "requestAccess": "リクエスト...",
+      "certify": "認定",
+      "createGenieSpace": "Genie Spaceを作成",
+      "cloneForEditing": "編集用に複製",
+      "commitChanges": "変更をコミット",
+      "discardDraft": "下書きを破棄",
+      "newVersion": "新しいバージョン",
+      "exportODPS": "ODPSをエクスポート",
+      "manageLineage": "リネージを管理"
+    },
+    "banners": {
+      "personalDraftTitle": "個人下書き",
+      "personalDraftMessage": "これはあなたの個人下書きです。あなただけが表示できます。チームと共有するには変更をコミットしてください。",
+      "readOnlyTitle": "読み取り専用",
+      "readOnlyMessage": "この製品は{{status}}です。編集用の個人下書きを作成するには複製してください。"
+    },
+    "contacts": {
+      "title": "連絡先",
+      "fromImportedData": "インポートされたデータから",
+      "teamAssignmentOnly": "チーム割り当てのみ",
+      "defaultRole": "オーナー",
+      "teamRole": "チーム",
+      "importedContactsLabel": "インポートされた連絡先",
+      "noContactsAssigned": "連絡先が割り当てられていません"
+    },
+    "deliverables": {
+      "titleWithCount": "デリバラブル ({{count}})",
+      "addDeliverable": "デリバラブルを追加",
+      "subtitle": "デリバラブルとその配信方法を定義します。各デリバラブルにアセットと契約をリンクしてください。",
+      "noDeliverables": "デリバラブルが定義されていません。",
+      "noDeliverablesWithEdit": "デリバラブルが定義されていません。準備ができたらデリバラブルを追加してアセットをリンクしてください。",
+      "contractLabel": "契約: {{name}}",
+      "editTitle": "デリバラブルを編集",
+      "deleteTitle": "デリバラブルを削除",
+      "linkAsset": "アセットをリンク",
+      "linkAssetsTitle": "\"{{portName}}\" にアセットをリンク",
+      "linkAssetsDescription": "デリバラブルのアセット種別（テーブル、ビュー、データセット、API エンドポイント、ML モデル）のみを出力ポートにリンクできます。",
+      "linkedToPort": "ポートにリンク済み",
+      "assetsLinkedTitle": "アセットをリンクしました",
+      "assetsLinked": "{{count}} 件のアセットを {{portName}} にリンクしました",
+      "assetUnlinked": "アセットのリンクを解除しました",
+      "linkAssetsFailed": "アセットのリンクに失敗しました",
+      "unlinkAssetFailed": "アセットのリンク解除に失敗しました"
+    },
+    "description": {
+      "purposeLabel": "目的",
+      "limitationsLabel": "制限事項",
+      "usageLabel": "使用方法"
+    },
+    "lineage": {
+      "businessLineageTitle": "ビジネスリネージ"
+    },
+    "consumables": {
+      "titleWithCount": "コンシューマブル ({{count}})",
+      "addConsumable": "コンシューマブルを追加",
+      "contractLabel": "契約: {{contractId}}",
+      "noConsumables": "コンシューマブルが定義されていません"
+    },
+    "managementPorts": {
+      "titleWithCount": "管理ポート ({{count}})",
+      "addManagementPort": "管理ポートを追加",
+      "subtitle": "可観測性、制御、発見可能性のエンドポイント",
+      "contentLabel": "コンテンツ",
+      "urlLabel": "URL",
+      "noManagementPorts": "管理ポートが定義されていません"
+    },
+    "teamMetadata": {
+      "titleWithCount": "ODPS チームメタデータ（{{count}} 名のメンバー）",
+      "subtitle": "インポートされた製品 YAML からの読み取り専用の来歴情報です。オーナーシップは上記のオーナーパネルから管理してください。",
+      "defaultRole": "メンバー"
+    },
+    "supportChannels": {
+      "titleWithCount": "サポートチャネル ({{count}})",
+      "addChannel": "チャネルを追加",
+      "toolLabel": "ツール",
+      "noChannels": "サポートチャネルが定義されていません"
+    },
+    "relatedEntities": {
+      "title": "関連エンティティ"
+    },
+    "toasts": {
+      "loadError": "データの読み込みに失敗しました: {{error}}",
+      "certifyTitle": "認定しました",
+      "certifySuccess": "認定レベルが適用されました。",
+      "publishTitle": "公開を更新しました",
+      "publishSuccess": "公開範囲が保存されました。",
+      "deleteError": "削除に失敗しました: {{error}}",
+      "draftCreatedTitle": "下書きを作成しました",
+      "draftCreatedMessage": "個人下書きを作成しました。編集できるようになりました。",
+      "draftDiscardedTitle": "下書きを破棄しました",
+      "draftDiscardedMessage": "個人下書きが破棄されました。",
+      "approvalNotConfiguredTitle": "承認ワークフローが設定されていません",
+      "approvalNotConfiguredMessage": "直接購読します。承認フローを使用するには、設定でデフォルトのワークフローを読み込んでください。",
+      "subscribedTitle": "購読しました",
+      "subscribedMessage": "この製品に関する通知を受け取るようになります。",
+      "unsubscribedTitle": "購読を解除しました",
+      "unsubscribedMessage": "この製品に関する通知を受け取らなくなります。",
+      "updatedTitle": "更新しました",
+      "updatedMessage": "製品を正常に更新しました。",
+      "createNewVersionTitle": "新しいバージョンを作成",
+      "createNewVersionMessage": "新しいバージョンを作成すると、この製品が複製されます。作成後、新しいバージョンに変更を適用してください。",
+      "creatingVersionTitle": "新しいバージョンを作成中",
+      "creatingVersionMessage": "バージョン {{version}} を作成中...",
+      "versionCreatedMessage": "バージョン {{version}} を作成しました！",
+      "consumableUpdatedTitle": "コンシューマブルを更新しました",
+      "consumableUpdatedMessage": "コンシューマブルを正常に更新しました。",
+      "consumableDeletedTitle": "コンシューマブルを削除しました",
+      "consumableDeletedMessage": "コンシューマブルを正常に削除しました。",
+      "deliverableUpdatedTitle": "デリバラブルを更新しました",
+      "deliverableUpdatedMessage": "デリバラブルを正常に更新しました。",
+      "deliverableDeletedTitle": "デリバラブルを削除しました",
+      "deliverableDeletedMessage": "デリバラブルを正常に削除しました。",
+      "managementPortUpdatedTitle": "管理ポートを更新しました",
+      "managementPortUpdatedMessage": "管理ポートを正常に更新しました。",
+      "managementPortDeletedTitle": "管理ポートを削除しました",
+      "managementPortDeletedMessage": "管理ポートを正常に削除しました。",
+      "teamMemberAddedTitle": "チームメンバーを追加しました",
+      "teamMemberAddedMessage": "チームメンバーを正常に追加しました。",
+      "teamMemberUpdatedTitle": "チームメンバーを更新しました",
+      "teamMemberUpdatedMessage": "チームメンバーを正常に更新しました。",
+      "supportChannelUpdatedTitle": "サポートチャネルを更新しました",
+      "supportChannelUpdatedMessage": "サポートチャネルを正常に更新しました。",
+      "supportChannelDeletedTitle": "サポートチャネルを削除しました",
+      "supportChannelDeletedMessage": "サポートチャネルを正常に削除しました。",
+      "contractUnlinkedTitle": "契約のリンクを解除しました",
+      "contractUnlinkedMessage": "契約のデリバラブルへのリンクを正常に解除しました",
+      "iriLinkedTitle": "リンクしました",
+      "iriLinkedMessage": "IRI をデータ製品にリンクしました。",
+      "iriRemovedTitle": "削除しました",
+      "iriRemovedMessage": "IRI リンクを削除しました。",
+      "genieSpaceRequesting": "Genie Space の作成をリクエスト中...",
+      "genieSpaceInitiated": "Genie Space の作成が開始されました。"
+    },
+    "confirms": {
+      "deleteProduct": "データ製品 \"{{name}}\" を削除しますか？",
+      "discardDraft": "この下書きを破棄しますか？この操作は元に戻せません。",
+      "deleteConsumable": "このコンシューマブルを削除しますか？",
+      "deleteDeliverable": "このデリバラブルを削除しますか？",
+      "deleteManagementPort": "この管理ポートを削除しますか？",
+      "deleteSupportChannel": "このサポートチャネルを削除しますか？",
+      "unlinkContract": "このデリバラブルから契約のリンクを解除しますか？",
+      "createGenieSpace": "\"{{name}}\" の Genie Space を作成しますか？"
+    }
   },
   "form": {
     "createTitle": "データ製品を作成",
@@ -214,7 +385,144 @@
     "createSuccess": "データ製品が正常に作成されました",
     "updateSuccess": "データ製品が正常に更新されました",
     "createError": "データ製品の作成に失敗しました",
-    "updateError": "データ製品の更新に失敗しました"
+    "updateError": "データ製品の更新に失敗しました",
+    "dialogDescription": "データ製品の詳細を入力してください。タブを使用して UI エディターと JSON エディターを切り替えます。",
+    "loadingDetails": "製品の詳細を読み込み中...",
+    "tabs": {
+      "uiEditor": "UI エディター",
+      "jsonEditor": "JSON エディター"
+    },
+    "fields": {
+      "id": "ID（一意の識別子）",
+      "title": "タイトル *",
+      "owner": "所有者 *",
+      "productType": "製品タイプ *",
+      "project": "プロジェクト",
+      "domains": "ドメイン",
+      "archetype": "アーキタイプ"
+    },
+    "placeholders": {
+      "systemId": "（システム ID）",
+      "productIdOptional": "例: my-unique-product（任意）",
+      "selectProductType": "製品タイプを選択",
+      "selectProject": "プロジェクトを選択（任意）",
+      "selectDomains": "ドメインを選択...",
+      "selectArchetype": "アーキタイプを選択",
+      "selectStatus": "ステータスを選択"
+    },
+    "projectTeamCount": "（{{count}} チーム）",
+    "projectMemberHint": "メンバーであるプロジェクトのみ選択できます",
+    "sections": {
+      "info": "情報",
+      "infoDescription": "データ製品に関する基本情報です。",
+      "consumables": "コンシューマブル",
+      "consumablesDescription": "この製品に供給されるソースです。メタストアからテーブルを選択してください。",
+      "deliverables": "デリバラブル",
+      "deliverablesDescription": "このデータ製品が提供する出力です。",
+      "tagsDescription": "関連するタグを追加してください（カンマ区切り）。",
+      "consumerGroups": "コンシューマーグループ",
+      "consumerGroupsDescriptionPart1": "この製品の想定される消費者を表すワークスペースグループです。各エントリは型付きプリンシパルとして保存されます ",
+      "consumerGroupsDescriptionPart2": " ; 次を介して購読 webhook に公開されます ",
+      "links": "リンク",
+      "linksDescription": "関連するリンク（例: ドキュメント、ダッシュボード）を追加してください。",
+      "customProperties": "カスタムプロパティ",
+      "customPropertiesDescription": "カスタムのキーと値のメタデータを追加してください。"
+    },
+    "validation": {
+      "titleRequired": "タイトルは必須です",
+      "ownerRequired": "所有者は必須です",
+      "productTypeRequired": "製品タイプは必須です",
+      "loadingSchema": "スキーマを読み込み中...",
+      "schemaReady": "スキーマの準備ができました。",
+      "schemaError": "スキーマエラー",
+      "schemaNotReady": "スキーマの準備ができていません。",
+      "schemaValid": "スキーマは有効です",
+      "schemaErrors": "{{count}} 件のスキーマ検証エラー",
+      "invalidJsonSyntax": "無効な JSON 構文",
+      "dataFailedValidation": "データがスキーマ検証に失敗しました。ハイライトされたフィールドまたは JSON エディターを確認してください。"
+    },
+    "consumable": {
+      "idLabel": "コンシューマブル ID *",
+      "idRequired": "コンシューマブル ID は必須です",
+      "nameLabel": "コンシューマブル名 *",
+      "nameRequired": "コンシューマブル名は必須です",
+      "sourceTableLabel": "ソーステーブル（メタストア）*",
+      "sourceTableRequired": "ソーステーブルは必須です",
+      "selectSourceTable": "ソーステーブルを選択...",
+      "searchMetastore": "メタストアのテーブルを検索...",
+      "searching": "検索中...",
+      "noTablesFound": "テーブルが見つかりません。",
+      "tagsPlaceholder": "このコンシューマブルのタグを検索して選択...",
+      "defaultName": "新しいコンシューマブル",
+      "add": "コンシューマブルを追加",
+      "removeTitle": "コンシューマブルを削除"
+    },
+    "deliverable": {
+      "idLabel": "デリバラブル ID *",
+      "idRequired": "デリバラブル ID は必須です",
+      "nameLabel": "デリバラブル名 *",
+      "nameRequired": "デリバラブル名は必須です",
+      "tagsPlaceholder": "このデリバラブルのタグを検索して選択...",
+      "defaultName": "新しいデリバラブル",
+      "add": "デリバラブルを追加",
+      "removeTitle": "デリバラブルを削除"
+    },
+    "tagsProductPlaceholder": "このデータ製品のタグを検索して選択...",
+    "links": {
+      "keyPlaceholder": "リンクキー（例: docs）",
+      "urlPlaceholder": "URL *",
+      "descriptionPlaceholder": "説明",
+      "removeTitle": "リンクを削除",
+      "add": "リンクを追加"
+    },
+    "customProps": {
+      "keyPlaceholder": "プロパティキー",
+      "valuePlaceholder": "プロパティ値（文字列）",
+      "removeTitle": "プロパティを削除",
+      "add": "カスタムプロパティを追加"
+    },
+    "portEditor": {
+      "portLinks": "ポートリンク",
+      "linkKey": "リンクキー",
+      "url": "URL",
+      "removeLink": "リンクを削除",
+      "addLink": "リンクを追加",
+      "portCustomProperties": "ポートのカスタムプロパティ",
+      "propertyKey": "プロパティキー",
+      "propertyValue": "プロパティ値",
+      "removeProperty": "プロパティを削除",
+      "addCustomProperty": "カスタムプロパティを追加"
+    },
+    "buttons": {
+      "updateProduct": "製品を更新",
+      "createProduct": "製品を作成",
+      "updateViaJson": "JSON で更新",
+      "createViaJson": "JSON で作成"
+    },
+    "jsonPayloadLabel": "JSON ペイロード",
+    "jsonPlaceholder": "データ製品の JSON を入力または編集...",
+    "validationStatusLabel": "検証ステータス:",
+    "showValidationDetails": "{{count}} 件の検証詳細を表示",
+    "confirmUnsavedClose": "未保存の変更があります。閉じてもよろしいですか？",
+    "messages": {
+      "syncError": "同期エラー",
+      "couldNotSyncUiToJson": "UI の状態を JSON エディターに同期できませんでした。",
+      "invalidJson": "無効な JSON",
+      "invalidJsonDescription": "UI エディターに切り替えられません。先にスキーマ検証エラーを修正してください。",
+      "couldNotParseJson": "JSON を解析できませんでした: {{message}}",
+      "validationError": "検証エラー",
+      "pleaseFixValidation": "保存する前に検証エラーを修正してください。",
+      "jsonDataFailedValidation": "JSON データがスキーマ検証に失敗しました。保存できません。",
+      "saveError": "保存エラー",
+      "errorLoadingData": "データの読み込みエラー",
+      "couldNotFetchDetails": "詳細を取得できませんでした。{{message}}",
+      "failedToLoadDetails": "製品の詳細の読み込みに失敗しました: {{message}}",
+      "invalidJsonError": "無効な JSON: {{message}}",
+      "couldNotLoadSchema": "スキーマを読み込めませんでした: {{message}}",
+      "failedToSerialize": "UI の状態を JSON にシリアライズできませんでした。",
+      "unexpectedError": "予期しないエラーが発生しました。"
+    },
+    "syntaxErrorLabel": "構文エラー:"
   },
   "import": {
     "title": "データ製品をインポート",
@@ -224,6 +532,621 @@
     "cancel": "キャンセル",
     "import": "インポート",
     "importing": "インポート中..."
+  },
+  "versionFamily": {
+    "showAllVersions": "すべてのバージョンを表示"
+  },
+  "authoritativeDefinitionForm": {
+    "editTitle": "正式な定義を編集",
+    "addTitle": "正式な定義を追加",
+    "dialogDescription": "ビジネス定義、実装、チュートリアルなどの正式なソースにリンクします（ODPS v1.0.0）。",
+    "typeLabel": "タイプ",
+    "typeHint": "正式なソースのタイプ",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://docs.example.com/definitions/customer",
+    "urlHint": "正式なソースへの完全な URL",
+    "descriptionPlaceholder": "このソースが提供する情報を記述してください",
+    "addButton": "定義を追加",
+    "validationTypeRequired": "タイプは必須です",
+    "validationUrlRequired": "URL は必須です",
+    "validationUrlInvalid": "有効な URL を入力してください",
+    "successAdded": "正式な定義を追加しました",
+    "successUpdated": "正式な定義を更新しました",
+    "saveError": "正式な定義の保存に失敗しました"
+  },
+  "consumerGroups": {
+    "searchPlaceholder": "ワークスペースグループを検索…",
+    "removeAriaLabel": "{{name}} を削除",
+    "loadError": "ワークスペースグループを読み込めませんでした（{{error}}）。名前を入力して Enter を押すことでグループを追加できます。"
+  },
+  "customProperty": {
+    "editTitle": "カスタムプロパティを編集",
+    "addTitle": "カスタムプロパティを追加",
+    "dialogDescription": "ODPS v1.0.0 データ製品スキーマを拡張するカスタムメタデータを追加します。",
+    "propertyNameLabel": "プロパティ名",
+    "propertyNamePlaceholder": "例: internalId, deploymentRegion",
+    "propertyNameHint": "camelCase である必要があります（ODPS の要件）",
+    "propertyValueLabel": "プロパティ値",
+    "propertyValuePlaceholder": "単純なテキストまたは JSON: {\"key\": \"value\"}",
+    "propertyValueHint": "文字列、数値、真偽値、オブジェクト、配列など任意の型が使用できます。JSON 値は自動的に解析されます。",
+    "descriptionPlaceholder": "このカスタムプロパティの目的を説明してください",
+    "addButton": "プロパティを追加",
+    "validationNameRequired": "プロパティ名は必須です",
+    "validationValueRequired": "プロパティ値は必須です",
+    "validationCamelCase": "プロパティ名は camelCase である必要があります（小文字で始めてください）",
+    "successAdded": "カスタムプロパティを追加しました",
+    "successUpdated": "カスタムプロパティを更新しました",
+    "saveError": "カスタムプロパティの保存に失敗しました"
+  },
+  "teamMemberForm": {
+    "editTitle": "チームメンバーを編集",
+    "addTitle": "チームメンバーを追加",
+    "dialogDescription": "このデータ製品を担当するチームメンバーを追加します（ODPS v1.0.0）。",
+    "usernameLabel": "ユーザー名",
+    "usernamePlaceholder": "例: user@example.com またはユーザー名",
+    "usernameHint": "ユーザーのユーザー名またはメールアドレス（ODPS で必須）",
+    "fullNameLabel": "氏名",
+    "fullNamePlaceholder": "氏名（任意）",
+    "roleLabel": "ロール",
+    "rolePlaceholder": "例: owner, data steward, contributor",
+    "roleHint": "チーム内でのユーザーのロール（例: owner, data steward, contributor）",
+    "descriptionPlaceholder": "このチームメンバーに関する追加情報",
+    "dateJoinedLabel": "参加日",
+    "dateLeftLabel": "離脱日",
+    "addButton": "メンバーを追加",
+    "validationUsernameRequired": "ユーザー名は必須です",
+    "successAdded": "チームメンバーを追加しました",
+    "successUpdated": "チームメンバーを更新しました",
+    "saveError": "チームメンバーの保存に失敗しました"
+  },
+  "readiness": {
+    "title": "本番稼働準備状況",
+    "checking": "準備状況を確認中...",
+    "loadError": "準備状況レポートの読み込みに失敗しました",
+    "loadFallbackError": "準備状況レポートを読み込めません",
+    "passCount": "{{total}} 個中 {{passed}} 個が合格",
+    "retry": "再試行",
+    "status": {
+      "ready": "準備完了",
+      "notReady": "準備未完了",
+      "partial": "一部準備完了"
+    }
+  },
+  "requestAction": {
+    "types": {
+      "access": {
+        "title": "製品へのアクセスをリクエスト",
+        "description": "このデータ製品を表示および使用する権限をリクエストします。"
+      },
+      "review": {
+        "title": "データスチュワードのレビューをリクエスト",
+        "description": "この製品をデータスチュワードのレビューに提出します（PROPOSED ステータスに遷移します）。"
+      },
+      "publish": {
+        "title": "マーケットプレイスへの公開をリクエスト",
+        "description": "この承認済みの製品を組織全体のマーケットプレイスに公開するようリクエストします。"
+      },
+      "certify": {
+        "title": "認定をリクエスト",
+        "description": "この製品を特定のレベルで認定するようリクエストします。"
+      },
+      "statusChange": {
+        "titleDirect": "ステータスを変更",
+        "titleRequest": "ステータス変更をリクエスト",
+        "descriptionDirect": "この製品のライフサイクルステータスを直接変更します。",
+        "descriptionRequest": "この製品のライフサイクルステータスの変更について承認をリクエストします。"
+      }
+    },
+    "transitions": {
+      "moveToSandbox": "サンドボックスに移動",
+      "submitForReview": "レビューに提出",
+      "returnToDraft": "下書きに戻す",
+      "startReview": "レビューを開始",
+      "approve": "承認",
+      "rejectReturnToDraft": "却下（下書きに戻す）",
+      "publishActivate": "公開／アクティブ化",
+      "deprecate": "非推奨にする",
+      "retire": "廃止する",
+      "reactivate": "再アクティブ化"
+    },
+    "validation": {
+      "reasonRequired": "アクセスをリクエストする理由を入力してください",
+      "reasonTooShort": "より詳細な理由を入力してください（10文字以上）",
+      "targetStatusRequired": "ターゲットステータスを選択してください",
+      "justificationRequired": "ステータス変更の正当な理由を入力してください",
+      "justificationTooShort": "より詳細な正当な理由を入力してください（20文字以上）",
+      "certLevelRequired": "認定レベルを選択してください"
+    },
+    "errors": {
+      "cannotRequest": "ステータスが '{{productStatus}}' の製品に対して {{requestType}} をリクエストできません",
+      "failedToSubmit": "リクエストの送信に失敗しました"
+    },
+    "toast": {
+      "statusChanged": "ステータスを変更しました",
+      "statusChangedDesc": "製品のステータスが \"{{fromStatus}}\" から \"{{toStatus}}\" に変更されました。",
+      "requestSubmitted": "リクエストを送信しました",
+      "requestSubmittedDesc": "{{type}} のリクエストが送信されました。決定について通知されます。"
+    },
+    "labels": {
+      "requestType": "リクエストの種類",
+      "targetStatus": "ターゲットステータス",
+      "justification": "正当な理由",
+      "justificationOptional": "正当な理由（任意）",
+      "messageOptional": "メッセージ（任意）",
+      "publicationScope": "公開範囲",
+      "certLevel": "認定レベル"
+    },
+    "placeholders": {
+      "selectRequestType": "リクエストの種類を選択",
+      "selectTargetStatus": "ターゲットステータスを選択",
+      "justification": "このステータス変更が必要な理由と関連する背景を説明してください...",
+      "reviewMessage": "レビュアー向けのメモを追加...",
+      "publishJustification": "この製品を公開すべき理由は何ですか？",
+      "certMessage": "この製品を認定すべき理由は何ですか？",
+      "selectCertLevel": "認定レベルを選択"
+    },
+    "selectItems": {
+      "review": "レビューをリクエスト",
+      "publish": "公開をリクエスト",
+      "certify": "認定をリクエスト",
+      "access": "アクセスをリクエスト"
+    },
+    "scopes": {
+      "organization": "組織",
+      "external": "外部"
+    },
+    "wizard": {
+      "noticeBefore": "このリクエストには複数ステップのウィザードが設定されています。次をクリック",
+      "noticeAfter": "して開始してください。"
+    },
+    "hints": {
+      "noTransitionsAvailable": "現在のステータスから利用可能なステータス遷移はありません。",
+      "justificationMinChars": "20文字以上が必要です。これは管理者によってレビューされます。"
+    },
+    "buttons": {
+      "changingStatus": "ステータスを変更中...",
+      "opening": "開いています...",
+      "sendingRequest": "リクエストを送信中...",
+      "continue": "続行",
+      "sendRequest": "リクエストを送信"
+    }
+  },
+  "statusTransition": {
+    "title": "製品ステータスを変更",
+    "description": "{{name}} のライフサイクルステータスを遷移します（ODPS v1.0.0）",
+    "thisProduct": "このデータ製品",
+    "currentStatus": "現在のステータス:",
+    "recommended": "推奨:",
+    "selectTargetStatus": "ターゲットステータスを選択",
+    "terminalState": "終端状態:",
+    "terminalDesc": "{{statusLabel}} ステータスから利用可能な遷移はありません。この製品を他のステータスに変更することはできません。",
+    "notesLabel": "遷移メモ（任意）",
+    "notesPlaceholder": "このステータス変更を行う理由についてメモを追加...",
+    "notesHint": "これらのメモは監査目的で記録されます",
+    "lifecycleTitle": "ODPS v1.0.0 ライフサイクルフロー:",
+    "lifecycleHint": "現在のステータスがハイライトされています。緊急の非推奨化は任意のステータスから許可されています。",
+    "toast": {
+      "validationError": "検証エラー",
+      "selectTargetStatus": "ターゲットステータスを選択してください",
+      "invalidTransition": "無効な遷移",
+      "transitionFailed": "遷移に失敗しました",
+      "failedToUpdate": "製品ステータスの更新に失敗しました"
+    },
+    "buttons": {
+      "updating": "更新中...",
+      "updateStatus": "ステータスを更新"
+    }
+  },
+  "outputPortForm": {
+    "addTitle": "デリバラブルを追加",
+    "editTitle": "デリバラブルを編集",
+    "description": "このデータ製品のデリバラブルを定義します。作成後にアセットをリンクできます。",
+    "labels": {
+      "deliveryMethod": "配信方法",
+      "contractAssignment": "契約の割り当て",
+      "accessAndPrivacy": "アクセスとプライバシー",
+      "containsPii": "PII を含む",
+      "autoApprove": "自動承認"
+    },
+    "placeholders": {
+      "name": "例: 日次チャーン率",
+      "deliveryMethod": "配信方法を選択...",
+      "description": "このデリバラブルが提供する内容を記述してください",
+      "type": "例: table, api, stream",
+      "status": "例: active, draft",
+      "chooseContract": "契約を選択..."
+    },
+    "contractOptions": {
+      "noContract": "契約なし",
+      "selectExisting": "既存の契約を選択",
+      "createNew": "新しい契約を作成"
+    },
+    "hints": {
+      "deliveryMethodHint": "このデリバラブルが消費者にデータを提供する方法（例: テーブルアクセス、サービングエンドポイント）",
+      "onlyActiveContracts": "アクティブ／承認済み／認定済みの契約のみを表示しています",
+      "containsPiiHint": "このデリバラブルには個人を特定できる情報が含まれていますか？",
+      "autoApproveHint": "このデリバラブルのアクセスリクエストを自動的に承認しますか？",
+      "afterCreation": "このデリバラブルを作成した後、詳細ページからアセット（テーブル、ビュー、データセットなど）をリンクできます。"
+    },
+    "messages": {
+      "noActiveContracts": "利用可能なアクティブ／承認済みの契約がありません",
+      "contractCreated": "契約を作成しました:",
+      "deliverableAdded": "デリバラブルを追加しました",
+      "deliverableUpdated": "デリバラブルを更新しました"
+    },
+    "validation": {
+      "error": "検証エラー",
+      "nameRequired": "名前は必須です",
+      "versionRequired": "バージョンは必須です"
+    },
+    "errors": {
+      "failedToLoadContracts": "契約の読み込みに失敗しました",
+      "failedToSaveDeliverable": "デリバラブルの保存に失敗しました"
+    },
+    "actions": {
+      "addDeliverable": "デリバラブルを追加"
+    },
+    "warnings": {
+      "couldNotLoadDeliveryMethods": "配信方法を読み込めませんでした"
+    }
+  },
+  "inputPortForm": {
+    "addTitle": "コンシューマブルを追加",
+    "editTitle": "コンシューマブルを編集",
+    "description": "このデータ製品の入力データ依存関係を定義します（ODPS v1.0.0）。",
+    "labels": {
+      "consumableName": "コンシューマブル名",
+      "contractId": "契約 ID",
+      "databricksExtensions": "Databricks 拡張（任意）",
+      "assetType": "アセット種別",
+      "assetIdentifier": "アセット識別子"
+    },
+    "placeholders": {
+      "name": "例: customer-data-input",
+      "contractId": "例: customer-data-contract-v1",
+      "assetType": "例: table, notebook, job",
+      "assetIdentifier": "例: catalog.schema.table, /path/to/notebook"
+    },
+    "hints": {
+      "versionHint": "このコンシューマブルのバージョン（例: 1.0.0, 2.1.3）",
+      "contractIdHint": "データ契約 ID への参照（ODPS v1.0.0 で必須）",
+      "assetTypeHint": "Databricks アセットの種別",
+      "assetIdentifierHint": "Databricks アセットの一意の識別子"
+    },
+    "messages": {
+      "consumableAdded": "コンシューマブルを追加しました",
+      "consumableUpdated": "コンシューマブルを更新しました"
+    },
+    "validation": {
+      "error": "検証エラー",
+      "portNameRequired": "ポート名は必須です",
+      "portVersionRequired": "ポートのバージョンは必須です",
+      "contractIdRequired": "契約 ID は必須です（ODPS v1.0.0 の要件）"
+    },
+    "errors": {
+      "failedToSaveConsumable": "コンシューマブルの保存に失敗しました"
+    },
+    "actions": {
+      "addConsumable": "コンシューマブルを追加"
+    }
+  },
+  "managementPortForm": {
+    "addTitle": "管理ポートを追加",
+    "editTitle": "管理ポートを編集",
+    "description": "管理ポートは、可観測性、制御、発見可能性、データディクショナリのエンドポイントへのアクセスを提供します（ODPS v1.0.0）。",
+    "labels": {
+      "portName": "ポート名",
+      "contentType": "コンテンツタイプ",
+      "portType": "ポート種別",
+      "url": "URL",
+      "channel": "チャネル"
+    },
+    "placeholders": {
+      "name": "例: observability-endpoint, data-dictionary",
+      "url": "https://observability.example.com/metrics",
+      "channel": "例: prometheus-metrics, openapi-spec",
+      "description": "この管理ポートの目的と使用方法を記述してください"
+    },
+    "hints": {
+      "contentTypeHint": "この管理ポートの目的",
+      "urlHint": "この管理ポートのアクセス URL",
+      "channelHint": "通信チャネルの識別子"
+    },
+    "messages": {
+      "portAdded": "管理ポートを追加しました",
+      "portUpdated": "管理ポートを更新しました"
+    },
+    "validation": {
+      "error": "検証エラー",
+      "portNameRequired": "ポート名は必須です",
+      "contentTypeRequired": "コンテンツタイプは必須です",
+      "invalidUrl": "有効な URL を入力してください"
+    },
+    "errors": {
+      "failedToSave": "管理ポートの保存に失敗しました"
+    },
+    "actions": {
+      "addPort": "ポートを追加"
+    }
+  },
+  "linkContract": {
+    "title": "契約をデリバラブルにリンク",
+    "descriptionPrefix": "既存の契約を選択するか、新しい契約を作成してリンクします:",
+    "thisDeliverable": "このデリバラブル",
+    "labels": {
+      "deliverable": "デリバラブル",
+      "selectContract": "契約を選択",
+      "or": "または"
+    },
+    "placeholders": {
+      "chooseContract": "契約を選択…"
+    },
+    "hints": {
+      "contractFilter": "'active'、'approved'、または 'certified' ステータスの契約のみを表示しています。特定のバージョンを選択してください — 同名の契約はバージョンをインラインで表示するようになりました。"
+    },
+    "messages": {
+      "contractLinked": "契約をリンクしました",
+      "contractLinkedDescription": "契約をデリバラブルに正常にリンクしました"
+    },
+    "validation": {
+      "error": "検証エラー",
+      "selectContract": "契約を選択してください"
+    },
+    "errors": {
+      "failedToLink": "契約のリンクに失敗しました"
+    },
+    "actions": {
+      "createNewContract": "新しい契約を作成",
+      "linkContract": "契約をリンク",
+      "linking": "リンク中..."
+    }
+  },
+  "hierarchy": {
+    "title": "データ階層",
+    "loadFailed": "階層の読み込みに失敗しました",
+    "noDatasets": "このデータ製品にはまだデータセットがリンクされていません。",
+    "noTablesOrViews": "リンクされたテーブルまたはビューがありません",
+    "contract": "契約",
+    "governedByContract": "契約 {{id}} によって管理されています",
+    "objectCount_one": "{{count}} オブジェクト",
+    "objectCount_other": "{{count}} オブジェクト",
+    "datasetCount_one": "{{count}} データセット",
+    "datasetCount_other": "{{count}} データセット",
+    "colCount_one": "{{count}} 列",
+    "colCount_other": "{{count}} 列"
+  },
+  "commitDraft": {
+    "title": "下書きの変更をコミット",
+    "description": "個人下書きをコミットして、チームに表示されるようにします。",
+    "analyzing": "変更を分析中...",
+    "changeAnalysisTitle": "変更分析",
+    "changeAnalysisDescription": "変更内容に基づき、{{bump}} バージョンアップを推奨します。",
+    "selectVersion": "バージョンを選択",
+    "patch": "パッチ",
+    "patchDescription": "バグ修正",
+    "minor": "マイナー",
+    "minorDescription": "新機能",
+    "major": "メジャー",
+    "majorDescription": "破壊的変更",
+    "customVersion": "カスタムバージョン",
+    "customVersionPlaceholder": "例: 2.0.0",
+    "changeSummaryLabel": "変更サマリー *",
+    "changeSummaryPlaceholder": "このバージョンで行った変更を記述してください...",
+    "validationInvalidVersion": "有効なバージョン番号を入力してください（例: 1.0.0）",
+    "validationNoSummary": "変更のサマリーを入力してください",
+    "errorAnalyze": "変更の分析に失敗しました",
+    "errorCommit": "下書きのコミットに失敗しました",
+    "toastCommittedTitle": "下書きをコミットしました",
+    "toastCommittedDescription": "製品バージョン {{version}} がチームに表示されるようになりました。",
+    "committing": "コミット中...",
+    "commitButton": "下書きをコミット"
+  },
+  "supportChannelForm": {
+    "titleAdd": "サポートチャネルを追加",
+    "titleEdit": "サポートチャネルを編集",
+    "description": "このデータ製品のユーザー向けのサポートチャネルを定義します（ODPS v1.0.0）。",
+    "channelName": "チャネル名",
+    "channelNamePlaceholder": "例: data-product-support",
+    "accessUrl": "アクセス URL",
+    "accessUrlPlaceholder": "https://slack.com/channels/data-product-support",
+    "accessUrlHint": "このサポートチャネルにアクセスするための URL",
+    "tool": "ツール",
+    "scope": "スコープ",
+    "invitationUrl": "招待 URL",
+    "invitationUrlPlaceholder": "https://slack.com/invite/...",
+    "invitationUrlHint": "新規メンバー向けの任意の招待リンク",
+    "descriptionPlaceholder": "ユーザーがこのサポートチャネルをどのように使用すべきかを記述してください",
+    "addChannel": "チャネルを追加",
+    "validationErrorTitle": "検証エラー",
+    "channelRequired": "チャネル名は必須です",
+    "urlRequired": "URL は必須です",
+    "invalidUrl": "有効な URL を入力してください",
+    "invalidInvitationUrl": "有効な招待 URL を入力してください",
+    "successUpdated": "サポートチャネルを更新しました",
+    "successAdded": "サポートチャネルを追加しました",
+    "errorSave": "サポートチャネルの保存に失敗しました"
+  },
+  "maturity": {
+    "title": "成熟度",
+    "evaluating": "成熟度を評価中...",
+    "loadFailed": "成熟度レポートの読み込みに失敗しました",
+    "unableToLoad": "成熟度レポートを読み込めません",
+    "gatesPassed": "{{total}} 個中 {{passed}} 個のゲートを通過",
+    "reevaluate": "成熟度を再評価",
+    "gates": "{{total}} 個中 {{passed}} 個のゲート",
+    "required": "必須",
+    "advisory": "推奨",
+    "overTime": "成熟度の推移",
+    "retry": "再試行"
+  },
+  "createDialog": {
+    "editTitle": "データ製品のメタデータを編集",
+    "createTitle": "データ製品を作成（ODPS v1.0.0）",
+    "editDescription": "このデータ製品のコアメタデータを更新します。",
+    "createDescription": "必須情報を含む新しいデータ製品を作成します。ポート、チームメンバー、サポートチャネルは詳細ビューで追加できます。",
+    "productNameLabel": "製品名",
+    "productNamePlaceholder": "例: 顧客分析データ",
+    "versionPlaceholder": "0.0.1",
+    "productTypeLabel": "製品タイプ",
+    "productTypePlaceholder": "製品タイプを選択...",
+    "productTypeHint": "データバリューチェーン内での位置付け",
+    "selectTeamPlaceholder": "チームを選択...",
+    "loadingTeams": "チームを読み込み中...",
+    "ownerTeamHint": "この製品を担当するチーム",
+    "projectLabel": "プロジェクト",
+    "selectProjectPlaceholder": "プロジェクトを選択（任意）",
+    "projectOption_one": "{{name}}（{{count}} チーム）",
+    "projectOption_other": "{{name}}（{{count}} チーム）",
+    "projectMemberHint": "メンバーであるプロジェクトのみ選択できます",
+    "domainsLabel": "ドメイン",
+    "domainsPlaceholder": "ドメインを選択...",
+    "tenantLabel": "テナント／組織",
+    "tenantPlaceholder": "例: acme-corp",
+    "descriptionSectionTitle": "説明（ODPS 構造化）",
+    "purposePlaceholder": "このデータの意図された目的は何ですか？",
+    "limitationsLabel": "制限事項",
+    "limitationsPlaceholder": "技術的、コンプライアンス上、法的な制限事項",
+    "usagePlaceholder": "このデータの推奨される使用方法",
+    "tagsPlaceholder": "このデータ製品のタグを検索して選択...",
+    "tagsHint": "このデータ製品を分類・整理するためのタグを追加します",
+    "consumerGroupsLabel": "コンシューマーグループ",
+    "createProductButton": "製品を作成",
+    "discardDescription": "未保存の変更があります。このダイアログを閉じると失われます。破棄してもよろしいですか？",
+    "continueEditing": "編集を続ける",
+    "discardChanges": "変更を破棄",
+    "messages": {
+      "createSuccessDesc": "データ製品を正常に作成しました。詳細ビューでポートとチームを追加してください。"
+    },
+    "validation": {
+      "nameRequired": "製品名は必須です",
+      "versionRequired": "バージョンは必須です",
+      "statusRequired": "ステータスは必須です"
+    }
+  },
+  "createFromContract": {
+    "title": "契約からデータ製品を作成",
+    "description": "この契約を使用して1つのデリバラブルを管理する新しいデータ製品を作成します。製品は契約のドメイン、所有者チーム、プロジェクトを継承します。",
+    "contractLabel": "契約:",
+    "productNameLabel": "製品名 *",
+    "productNamePlaceholder": "例: 顧客分析製品",
+    "productTypeLabel": "製品タイプ *",
+    "productTypePlaceholder": "製品タイプを選択",
+    "versionLabel": "バージョン *",
+    "versionPlaceholder": "例: v1.0.0",
+    "deliverableNameLabel": "デリバラブル名（任意）",
+    "deliverableNamePlaceholder": "デフォルト: {{contractName}}",
+    "deliverableNameHint": "指定しない場合、デリバラブルは契約名を使用します",
+    "creating": "作成中...",
+    "createButton": "製品を作成",
+    "errors": {
+      "nameRequired": "製品名は必須です",
+      "versionRequired": "バージョンは必須です",
+      "typeRequired": "製品タイプは必須です",
+      "createError": "契約からの製品作成に失敗しました"
+    },
+    "messages": {
+      "productCreated": "製品を作成しました",
+      "productCreatedDesc": "データ製品 \"{{productName}}\" が契約から正常に作成されました。"
+    }
+  },
+  "createVersion": {
+    "title": "新しいバージョンを作成",
+    "description": "データ製品 \"{{productTitle}}\" の新しいバージョン識別子を入力してください。現在のバージョン（{{currentVersion}}）を基準に増分すると便利です。",
+    "versionLabel": "新しいバージョン文字列",
+    "versionPlaceholder": "例: v1.1, v2.0-beta",
+    "createButton": "バージョンを作成",
+    "errors": {
+      "versionEmpty": "バージョン文字列は空にできません。"
+    }
+  },
+  "graphView": {
+    "unnamedProduct": "名前のない製品",
+    "switchToTableView": "テーブル表示に切り替え",
+    "switchToGraphView": "グラフ表示に切り替え",
+    "inputPortLabel": "{{name}}（コンシューマブル）",
+    "outputPortLabel": "{{name}}（デリバラブル）",
+    "labels": {
+      "contract": "契約"
+    }
+  },
+  "importExport": {
+    "title": "ODPS v1.0.0 インポート／エクスポート",
+    "description": "Open Data Product Standard v1.0.0 JSON 形式でデータ製品をインポートまたはエクスポートします",
+    "pasteLabel": "ODPS v1.0.0 JSON を貼り付け",
+    "validationErrors": "検証エラー:",
+    "validate": "検証",
+    "validationFailed": "検証に失敗しました",
+    "errorsFound_one": "{{count}} 件のエラーが見つかりました",
+    "errorsFound_other": "{{count}} 件のエラーが見つかりました",
+    "validationPassed": "検証に合格しました",
+    "validationPassedDesc": "JSON は有効な ODPS v1.0.0 形式です",
+    "invalidJson": "無効な JSON",
+    "cannotImportErrors_one": "インポートできません: {{count}} 件のエラーが見つかりました",
+    "cannotImportErrors_other": "インポートできません: {{count}} 件のエラーが見つかりました",
+    "importSuccessful": "インポートに成功しました",
+    "importSuccessfulDesc": "データ製品 \"{{name}}\" を正常にインポートしました",
+    "importFailed": "インポートに失敗しました",
+    "noProductSelected": "製品が選択されていません",
+    "noProductSelectedDesc": "製品なしではエクスポートできません",
+    "exportSuccessful": "エクスポートに成功しました",
+    "exportSuccessfulDesc": "{{filename}} をダウンロードしました",
+    "exportFailed": "エクスポートに失敗しました",
+    "exportFailedDesc": "データ製品のエクスポートに失敗しました",
+    "exportDescription": "「エクスポート」をクリックすると、この製品が ODPS v1.0.0 準拠の JSON ファイルとしてダウンロードされます。移植性のため、監査フィールド（created_at, updated_at）は除外されます。",
+    "exportAsJson": "JSON としてエクスポート",
+    "currentProduct": "現在の製品",
+    "unnamed": "名前なし",
+    "noProductDesc": "製品が選択されていません。エクスポートするには、製品の詳細ページからこのダイアログを開いてください。"
+  },
+  "subscribeDialog": {
+    "title": "データ製品を購読",
+    "descriptionPre": "次を購読:",
+    "descriptionPost": "更新、変更、コンプライアンスステータスに関する通知を受け取ります。",
+    "subscribeAs": "購読対象",
+    "forMyself": "自分自身",
+    "forMyGroup": "所属するグループ",
+    "noGroupsAvailable": "（利用可能なグループがありません）",
+    "selectGroup": "所属グループのいずれかを選択",
+    "otherGroupOrSP": "その他のグループまたはサービスプリンシパル",
+    "groupDisplayName": "グループ（表示名）",
+    "spDisplayName": "サービスプリンシパル（表示名または applicationId）",
+    "groupPlaceholder": "例: sales_consumers",
+    "spPlaceholder": "例: 11111111-2222-3333-4444-555555555555",
+    "validationNote": "リクエストが記録される前に、ワークスペースディレクトリと照合して検証されます。",
+    "reasonLabel": "購読する理由は何ですか？",
+    "optional": "（任意）",
+    "reasonPlaceholder": "例: 四半期レポートに必要、ダッシュボードの構築など。",
+    "reasonHint": "これにより、データ所有者は自身の製品がどのように使用されているかを把握できます。",
+    "subscribedTitle": "購読しました！",
+    "subscribedDesc": "\"{{productName}}\" を購読しました。更新と変更に関する通知を受け取ります。",
+    "subscribedOnBehalfGroup": "グループ \"{{value}}\" を代理して \"{{productName}}\" を購読しました。",
+    "subscribedOnBehalfSP": "サービスプリンシパル \"{{value}}\" を代理して \"{{productName}}\" を購読しました。",
+    "subscriptionFailed": "購読に失敗しました",
+    "failedToSubscribe": "購読に失敗しました",
+    "subscribing": "購読中..."
+  },
+  "myProductsView": {
+    "retry": "再試行",
+    "untitled": "無題",
+    "productsAvailable_one": "{{count}} 件の製品が利用可能",
+    "productsAvailable_other": "{{count}} 件の製品が利用可能"
+  },
+  "ownerConsumers": {
+    "breadcrumb": "消費者",
+    "totalProducts": "製品の合計",
+    "activeProducts": "アクティブな製品",
+    "totalSubscribers": "購読者の合計",
+    "products": "製品",
+    "noProducts": "製品が見つかりません",
+    "noDomain": "ドメインなし",
+    "subscribersFor": "購読者 — {{name}}",
+    "selectProduct": "製品を選択",
+    "filterPlaceholder": "購読者をフィルター...",
+    "selectProductHint": "製品を選択して購読者を表示します",
+    "noSubscribersMatch": "フィルターに一致する購読者がいません",
+    "noSubscribers": "まだ購読者がいません",
+    "colSubscriber": "購読者",
+    "colSubscribed": "購読日",
+    "colReason": "理由"
   }
 }
-

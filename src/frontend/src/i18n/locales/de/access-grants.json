@@ -2,16 +2,23 @@
   "request": {
     "title": "Zugang anfordern",
     "description": "Berechtigung zum Anzeigen und Verwenden dieses {{entityType}} anfordern.",
+    "dialogTitle": "Zeitlich begrenzten Zugang anfordern",
+    "dialogDescription": "Beantragen Sie temporären Zugang zu diesem {{entityType}}. Wählen Sie die Dauer und geben Sie eine Begründung an.",
+    "permissionLabel": "Berechtigungsstufe",
     "reason": {
       "label": "Begründung für den Zugang",
+      "fullLabel": "Begründung der Zugriffsanfrage",
       "placeholder": "Erklären Sie, warum Sie Zugang zu diesem {{entityType}} benötigen...",
+      "detailedPlaceholder": "Bitte erläutern Sie, warum Sie Zugang zu dieser Ressource benötigen. Geben Sie Details zum geplanten Anwendungsfall, zu Projektanforderungen oder zur geschäftlichen Begründung an...",
       "required": "Bitte geben Sie einen Grund für die Zugriffsanfrage an",
-      "minLength": "Bitte geben Sie eine detailliertere Begründung an (mindestens 10 Zeichen)"
+      "minLength": "Bitte geben Sie eine detailliertere Begründung an (mindestens 10 Zeichen)",
+      "help": "Mindestens 10 Zeichen erforderlich. Diese Angaben werden von Administratoren geprüft."
     },
     "duration": {
       "label": "Zugangsdauer",
       "placeholder": "Dauer auswählen",
       "helpText": "Der Zugang läuft nach der ausgewählten Dauer ab. Sie können vor Ablauf eine Verlängerung beantragen.",
+      "help": "Ihr Zugang läuft nach diesem Zeitraum automatisch ab.",
       "days": "{{count}} Tag",
       "days_plural": "{{count}} Tage",
       "months": "{{count}} Monat",
@@ -21,7 +28,13 @@
     },
     "submit": "Anfrage senden",
     "submitting": "Anfrage wird gesendet...",
-    "success": "Ihre Zugriffsanfrage wurde eingereicht und Sie werden über die Entscheidung informiert."
+    "submitButtonWithDuration": "Zugang für {{duration}} anfordern",
+    "success": "Ihre Zugriffsanfrage wurde eingereicht und Sie werden über die Entscheidung informiert.",
+    "submittedTitle": "Anfrage eingereicht",
+    "submittedDescription_one": "Ihre Zugriffsanfrage für {{count}} Tag wurde eingereicht. Sie werden über die Entscheidung informiert.",
+    "submittedDescription_other": "Ihre Zugriffsanfrage für {{count}} Tage wurde eingereicht. Sie werden über die Entscheidung informiert.",
+    "cancel": "Abbrechen",
+    "error": "Zugriffsanfrage konnte nicht eingereicht werden"
   },
   "panel": {
     "title": "Zugriffsberechtigungen",
@@ -31,31 +44,120 @@
     "requestButton": "Zugang anfordern",
     "refresh": "Aktualisieren",
     "activeGrants": "Aktive Berechtigungen",
+    "activeGrantsCount": "Aktive Berechtigungen ({{count}})",
     "pendingRequests": "Ausstehende Anfragen",
+    "pendingRequestsCount": "Ausstehende Anfragen ({{count}})",
     "expiresAt": "Läuft ab",
     "grantedAt": "Gewährt",
     "requestedAt": "Angefordert",
     "revoke": "Widerrufen",
     "revokeConfirm": "Sind Sie sicher, dass Sie den Zugriff für {{user}} widerrufen möchten?",
+    "revokeConfirmDetailed": "Sind Sie sicher, dass Sie den Zugriff für <bold>{{user}}</bold> widerrufen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "revokeTitle": "Zugriff widerrufen",
     "revokeSuccess": "Zugriff erfolgreich widerrufen",
-    "handle": "Anfrage bearbeiten"
+    "revokedTitle": "Zugriff widerrufen",
+    "revokedDescription": "Der Zugriff für {{user}} wurde widerrufen.",
+    "revokeError": "Zugriff konnte nicht widerrufen werden",
+    "review": "Prüfen",
+    "expiringBadge": "{{count}} laufen ab",
+    "expiringSoonTooltip_one": "{{count}} Berechtigung läuft bald ab",
+    "expiringSoonTooltip_other": "{{count}} Berechtigungen laufen bald ab",
+    "durationDays_one": "{{count}} Tag",
+    "durationDays_other": "{{count}} Tage",
+    "expiresTooltip": "Läuft ab: {{date}}",
+    "handle": "Anfrage bearbeiten",
+    "columns": {
+      "actions": "Aktionen",
+      "expires": "Läuft ab",
+      "granted": "Gewährt",
+      "grantedBy": "Gewährt von",
+      "permission": "Berechtigungsstufe",
+      "user": "Benutzer",
+      "requester": "Antragsteller",
+      "duration": "Dauer"
+    },
+    "expiry": {
+      "unknown": "Unbekannt",
+      "expired": "Abgelaufen",
+      "today": "Heute",
+      "days_one": "{{count}} Tag",
+      "days_other": "{{count}} Tage",
+      "weeks_one": "{{count}} Woche",
+      "weeks_other": "{{count}} Wochen",
+      "months_one": "{{count}} Monat",
+      "months_other": "{{count}} Monate"
+    }
   },
   "handle": {
     "title": "Zugriffsanfrage bearbeiten",
+    "description": "Prüfen Sie diese Zugriffsanfrage und genehmigen oder lehnen Sie sie ab.",
     "approve": "Genehmigen",
+    "approveWithDuration": "Genehmigen ({{duration}})",
     "deny": "Ablehnen",
     "clarify": "Klärung anfordern",
     "grantDuration": "Gewährte Dauer",
+    "durationToGrant": "Zu gewährende Dauer",
+    "permissionToGrant": "Zu gewährende Berechtigungsstufe",
+    "requestedSuffix": " (angefordert)",
     "response": "Antwortnachricht",
     "responsePlaceholder": "Geben Sie Feedback oder zusätzliche Informationen an...",
+    "messageLabel": "Nachricht an Antragsteller (optional)",
+    "messagePlaceholder": "Fügen Sie eine Nachricht für den Antragsteller hinzu (z. B. Genehmigungsbedingungen, Ablehnungsgrund)...",
+    "adjustNote": "Bei Genehmigung können Sie den gewährten Zugang anpassen:",
+    "approvedTitle": "Anfrage genehmigt",
+    "deniedTitle": "Anfrage abgelehnt",
+    "approvedDescription": "Zugang für {{duration}} gewährt.",
+    "deniedDescription": "Der Antragsteller wurde benachrichtigt.",
+    "error": "Entscheidung konnte nicht verarbeitet werden",
     "approveSuccess": "Zugriffsanfrage genehmigt",
     "denySuccess": "Zugriffsanfrage abgelehnt",
-    "clarifySuccess": "Klärung angefordert"
+    "clarifySuccess": "Klärung angefordert",
+    "fields": {
+      "requester": "Antragsteller:",
+      "resource": "Ressource:",
+      "requestedDuration": "Angeforderte Dauer:",
+      "requestedPermission": "Angeforderte Berechtigung:",
+      "submitted": "Eingereicht:",
+      "reason": "Begründung:"
+    }
   },
   "entityTypes": {
     "data_product": "Datenprodukt",
     "dataset": "Datensatz",
     "data_contract": "Datenvertrag"
+  },
+  "entityTypeLabels": {
+    "data_product": "Datenprodukt",
+    "data_contract": "Datenvertrag",
+    "table": "Tabelle",
+    "schema": "Schema",
+    "catalog": "Katalog"
+  },
+  "permissionLevels": {
+    "READ": "Lesen",
+    "WRITE": "Schreiben",
+    "MANAGE": "Verwalten"
+  },
+  "permissionOptions": {
+    "READ": "Nur Lesen",
+    "WRITE": "Lesen & Schreiben",
+    "MANAGE": "Vollzugriff (Verwalten)"
+  },
+  "permissionSelectPlaceholder": "Berechtigungsstufe auswählen",
+  "statuses": {
+    "active": "Aktiv",
+    "expired": "Abgelaufen",
+    "revoked": "Widerrufen",
+    "pending": "Ausstehend"
+  },
+  "resource": "Ressource",
+  "resourceCapitalized": "Ressource",
+  "duration": {
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "months_one": "{{count}} Monat",
+    "months_other": "{{count}} Monate",
+    "years_one": "{{count}} Jahr",
+    "years_other": "{{count}} Jahre"
   }
 }
-

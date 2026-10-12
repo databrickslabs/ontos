@@ -62,6 +62,8 @@ import {
   Eye,
   EyeOff,
   Cpu,
+  Star,
+  StarOff,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { TableSkeleton } from '@/components/common/list-view-skeleton';
@@ -88,6 +90,7 @@ export default function MCPTokensSettings() {
   const [newTokenName, setNewTokenName] = useState('');
   const [newTokenScopes, setNewTokenScopes] = useState<string[]>([]);
   const [newTokenExpiresDays, setNewTokenExpiresDays] = useState<number | null>(90);
+  const [newTokenKeylessDefault, setNewTokenKeylessDefault] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   // Token created dialog (shows the token once)
@@ -157,6 +160,7 @@ export default function MCPTokensSettings() {
         name: newTokenName.trim(),
         scopes: newTokenScopes,
         expires_days: newTokenExpiresDays,
+        is_keyless_default: newTokenKeylessDefault,
       };
 
       const response = await post<MCPTokenResponse>('/api/mcp-tokens', payload);
@@ -171,6 +175,7 @@ export default function MCPTokensSettings() {
         setNewTokenName('');
         setNewTokenScopes([]);
         setNewTokenExpiresDays(90);
+        setNewTokenKeylessDefault(false);
         loadTokens();
       }
     } catch (error: any) {
@@ -219,6 +224,48 @@ export default function MCPTokensSettings() {
       toast({
         title: t('common:toast.error'),
         description: error.message || t('settings:mcpTokens.messages.revokeError'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Designate a token as the keyless default (supersedes any existing default)
+  const handleSetKeylessDefault = async (token: MCPTokenInfo) => {
+    try {
+      const response = await post(`/api/mcp-tokens/${token.id}/keyless-default`, {});
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      toast({
+        title: t('common:toast.success'),
+        description: t('settings:mcpTokens.messages.keylessDefaultSet', { name: token.name }),
+      });
+      loadTokens();
+    } catch (error: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: error.message || t('settings:mcpTokens.messages.keylessDefaultError'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Clear the keyless default, disabling keyless MCP access
+  const handleClearKeylessDefault = async (token: MCPTokenInfo) => {
+    try {
+      const response = await del('/api/mcp-tokens/keyless-default');
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      toast({
+        title: t('common:toast.success'),
+        description: t('settings:mcpTokens.messages.keylessDefaultCleared', { name: token.name }),
+      });
+      loadTokens();
+    } catch (error: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: error.message || t('settings:mcpTokens.messages.keylessDefaultError'),
         variant: 'destructive',
       });
     }
@@ -314,7 +361,26 @@ export default function MCPTokensSettings() {
               <TableBody>
                 {tokens.map((token) => (
                   <TableRow key={token.id} className={!token.is_active ? 'opacity-50' : ''}>
-                    <TableCell className="font-medium">{token.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {token.name}
+                        {token.is_keyless_default && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="outline" className="text-xs flex items-center gap-1 border-amber-500 text-amber-600">
+                                  <Star className="h-3 w-3 fill-current" />
+                                  {t('settings:mcpTokens.table.keylessDefault')}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                {t('settings:mcpTokens.tooltips.keylessDefaultBadge')}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1 max-w-[300px]">
                         {token.scopes.slice(0, 3).map((scope) => (
@@ -407,20 +473,53 @@ export default function MCPTokensSettings() {
                     </TableCell>
                     <TableCell>
                       {token.is_active && !token.is_expired && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setTokenToRevoke(token)}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('settings:mcpTokens.tooltips.revokeToken')}</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <div className="flex items-center gap-1">
+                          {token.is_keyless_default ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleClearKeylessDefault(token)}
+                                  >
+                                    <StarOff className="h-4 w-4 text-amber-600" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('settings:mcpTokens.tooltips.clearKeylessDefault')}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleSetKeylessDefault(token)}
+                                  >
+                                    <Star className="h-4 w-4 text-muted-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('settings:mcpTokens.tooltips.setKeylessDefault')}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setTokenToRevoke(token)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{t('settings:mcpTokens.tooltips.revokeToken')}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -498,6 +597,31 @@ export default function MCPTokensSettings() {
                   {t('settings:mcpTokens.createDialog.expirationHelp')}
                 </span>
               </div>
+            </div>
+
+            {/* Keyless default */}
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="token-keyless-default"
+                  checked={newTokenKeylessDefault}
+                  onCheckedChange={(checked) => setNewTokenKeylessDefault(!!checked)}
+                />
+                <div className="grid gap-0.5">
+                  <Label htmlFor="token-keyless-default" className="text-sm font-medium cursor-pointer">
+                    {t('settings:mcpTokens.createDialog.keylessDefault')}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings:mcpTokens.createDialog.keylessDefaultHelp')}
+                  </p>
+                </div>
+              </div>
+              {newTokenKeylessDefault && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{t('settings:mcpTokens.createDialog.keylessDefaultWarning')}</span>
+                </div>
+              )}
             </div>
 
             {/* Scopes */}

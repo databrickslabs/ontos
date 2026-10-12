@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 // StarRating commented out - not currently used in panel
 // import { StarRating } from './star-rating';
@@ -36,12 +37,13 @@ export interface RatingPanelProps {
 export function RatingPanel({
   entityType,
   entityId,
-  title = 'Ratings',
+  title,
   showDistribution = true,
   compact = false,
   allowSubmit = true,
   className,
 }: RatingPanelProps) {
+  const { t } = useTranslation(['metadata', 'common']);
   const { createRating, fetchRatingAggregation, ratingAggregation, loading: _loading } = useComments();
   
   const [localAggregation, setLocalAggregation] = useState<RatingAggregation | null>(null);
@@ -119,10 +121,10 @@ export function RatingPanel({
     <Card className={cn('', className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <span>{title}</span>
+          <span>{title ?? t('metadata:ratings.title')}</span>
           {userHasRated && (
             <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded">
-              You rated: {localAggregation?.user_current_rating}★
+              {t('metadata:ratings.youRated', { rating: localAggregation?.user_current_rating })}
             </span>
           )}
         </CardTitle>
@@ -140,7 +142,7 @@ export function RatingPanel({
           <div className="pt-3 border-t space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {userHasRated ? 'Update your rating' : 'Rate this item'}
+                {userHasRated ? t('metadata:ratings.updateYourRating') : t('metadata:ratings.rateThisItem')}
               </span>
               <StarRatingInput
                 value={selectedRating}
@@ -154,12 +156,12 @@ export function RatingPanel({
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <MessageSquare className="h-3.5 w-3.5" />
-                  <span>Add a review (optional)</span>
+                  <span>{t('metadata:ratings.addReviewOptional')}</span>
                 </div>
                 <Textarea
                   value={reviewText}
                   onChange={(e) => setReviewText(e.target.value)}
-                  placeholder="Share your experience..."
+                  placeholder={t('metadata:ratings.reviewPlaceholder')}
                   className="resize-none h-20"
                   disabled={isSubmitting}
                 />
@@ -174,7 +176,7 @@ export function RatingPanel({
                     }}
                     disabled={isSubmitting}
                   >
-                    Cancel
+                    {t('common:actions.cancel')}
                   </Button>
                   <Button
                     size="sm"
@@ -184,12 +186,12 @@ export function RatingPanel({
                     {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        Submitting...
+                        {t('metadata:ratings.submitting')}
                       </>
                     ) : (
                       <>
                         <Send className="h-4 w-4 mr-1" />
-                        Submit Rating
+                        {t('metadata:ratings.submitRating')}
                       </>
                     )}
                   </Button>

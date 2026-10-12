@@ -1,0 +1,75 @@
+{
+  "title": "Leveringsmethoden",
+  "subtitle": "Definieer hoe data via leveringen aan consumenten wordt geleverd (bijv. Tabeltoegang, Serving Endpoint).",
+  "addNew": "Methode toevoegen",
+  "editMethod": "Methode bewerken",
+  "deleteMethod": "Methode verwijderen",
+  "systemBadge": "Systeem",
+  "openMenu": "Menu openen",
+  "table": {
+    "name": "Naam",
+    "description": "Beschrijving",
+    "category": "Categorie",
+    "status": "Status",
+    "system": "Systeem",
+    "lastUpdated": "Laatst Bijgewerkt",
+    "actions": "Acties"
+  },
+  "categories": {
+    "access": "Toegang",
+    "endpoint": "Endpoint",
+    "export": "Export",
+    "streaming": "Streaming"
+  },
+  "statuses": {
+    "active": "Actief",
+    "deprecated": "Verouderd"
+  },
+  "permissions": {
+    "deniedView": "Je hebt geen toestemming om leveringsmethoden te bekijken.",
+    "deniedCreate": "Je hebt geen toestemming om leveringsmethoden aan te maken.",
+    "deniedEdit": "Je hebt geen toestemming om leveringsmethoden te bewerken.",
+    "deniedDelete": "Je hebt geen toestemming om leveringsmethoden te verwijderen.",
+    "permissionDenied": "Geen Toegang"
+  },
+  "messages": {
+    "errorFetching": "Fout bij ophalen leveringsmethoden",
+    "loadFailed": "Laden van leveringsmethoden mislukt",
+    "errorDeleting": "Fout bij verwijderen leveringsmethode",
+    "deleted": "Leveringsmethode Verwijderd",
+    "deletedSuccess": "De leveringsmethode is succesvol verwijderd.",
+    "errorLoadingData": "Fout bij Laden Data"
+  },
+  "deleteDialog": {
+    "title": "Leveringsmethode verwijderen?",
+    "description": "Deze actie kan niet ongedaan worden gemaakt. Bestaande leveringen die deze methode gebruiken kunnen verweesd raken.",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen"
+  },
+  "emptyState": {
+    "title": "Nog geen leveringsmethoden gedefinieerd",
+    "description": "Maak je eerste leveringsmethode aan (bijv. Tabeltoegang, Serving Endpoint, Bestandsexport)."
+  },
+  "form": {
+    "createTitle": "Leveringsmethode aanmaken",
+    "createDescription": "Voeg een nieuwe leveringsmethode toe voor datadistributie.",
+    "editTitle": "Leveringsmethode bewerken",
+    "editDescription": "Werk de details van deze leveringsmethode bij.",
+    "create": "Aanmaken",
+    "update": "Wijzigingen opslaan",
+    "noCategory": "Geen categorie",
+    "placeholders": {
+      "name": "bijv. Tabeltoegang",
+      "description": "Beschrijf hoe data wordt geleverd...",
+      "category": "Selecteer een categorie"
+    },
+    "toasts": {
+      "created": "Leveringsmethode Aangemaakt",
+      "createdDescription": "\"{{name}}\" is aangemaakt.",
+      "updated": "Leveringsmethode Bijgewerkt",
+      "updatedDescription": "\"{{name}}\" is bijgewerkt.",
+      "createFailed": "Aanmaken Mislukt",
+      "updateFailed": "Bijwerken Mislukt"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export function ConsumerGroupsPicker({ value, onChange }: Props) {
+  const { t } = useTranslation(['data-products', 'common']);
   const [available, setAvailable] = useState<WorkspaceGroup[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -90,7 +92,7 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
               {p.value}
               <button
                 type="button"
-                aria-label={`Remove ${p.value}`}
+                aria-label={t('data-products:consumerGroups.removeAriaLabel', { name: p.value })}
                 className="hover:text-destructive"
                 onClick={() => removeGroup(p.value)}
               >
@@ -104,7 +106,7 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
       {/* Search + free-text add */}
       <div className="flex items-center gap-2">
         <Input
-          placeholder="Search workspace groups…"
+          placeholder={t('data-products:consumerGroups.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
@@ -127,7 +129,7 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
               setSearch('');
             }}
           >
-            Add
+            {t('common:actions.add')}
           </Button>
         )}
       </div>
@@ -150,7 +152,7 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
 
       {error && (
         <p className="text-xs text-muted-foreground">
-          Could not load workspace groups ({error}). You can still add groups by typing the name and pressing Enter.
+          {t('data-products:consumerGroups.loadError', { error })}
         </p>
       )}
     </div>

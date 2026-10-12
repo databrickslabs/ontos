@@ -1,0 +1,80 @@
+{
+  "title": "Tipos de ativos",
+  "subtitle": "Modelos reutilizáveis que definem como diferentes tipos de ativos são estruturados.",
+  "addNew": "Adicionar tipo de ativo",
+  "editAssetType": "Editar tipo de ativo",
+  "deleteAssetType": "Excluir tipo de ativo",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menu",
+  "table": {
+    "name": "Nome",
+    "description": "Descrição",
+    "category": "Categoria",
+    "status": "Status",
+    "assetCount": "Ativos",
+    "lastUpdated": "Última atualização",
+    "actions": "Ações"
+  },
+  "categories": {
+    "data": "Dados",
+    "analytics": "Análise",
+    "integration": "Integração",
+    "system": "Sistema",
+    "custom": "Personalizado"
+  },
+  "statuses": {
+    "active": "Ativo",
+    "deprecated": "Obsoleto"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar tipos de ativos.",
+    "deniedCreate": "Você não tem permissão para criar tipos de ativos.",
+    "deniedEdit": "Você não tem permissão para editar tipos de ativos.",
+    "deniedDelete": "Você não tem permissão para excluir tipos de ativos.",
+    "permissionDenied": "Permissão negada"
+  },
+  "messages": {
+    "errorFetching": "Erro ao buscar tipos de ativos",
+    "loadFailed": "Falha ao carregar tipos de ativos",
+    "errorDeleting": "Erro ao excluir tipo de ativo",
+    "deleted": "Tipo de ativo excluído",
+    "deletedSuccess": "O tipo de ativo foi excluído com sucesso.",
+    "errorLoadingData": "Erro ao carregar dados"
+  },
+  "deleteDialog": {
+    "title": "Excluir tipo de ativo?",
+    "description": "Esta ação não pode ser desfeita. Ativos existentes deste tipo podem ficar órfãos.",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  },
+  "emptyState": {
+    "title": "Nenhum tipo de ativo definido ainda",
+    "description": "Crie seu primeiro tipo de ativo para começar a definir modelos de ativos."
+  },
+  "form": {
+    "createTitle": "Criar tipo de ativo",
+    "createDescription": "Adicione um novo modelo de tipo de ativo.",
+    "editTitle": "Editar tipo de ativo",
+    "editDescription": "Atualize os detalhes deste tipo de ativo.",
+    "create": "Criar",
+    "update": "Salvar alterações",
+    "noCategory": "Sem categoria",
+    "labels": {
+      "icon": "Ícone"
+    },
+    "placeholders": {
+      "name": "ex.: Dashboard",
+      "description": "Descreva este tipo de ativo...",
+      "category": "Selecione uma categoria",
+      "icon": "ex.: BarChart"
+    },
+    "toasts": {
+      "created": "Tipo de ativo criado",
+      "createdDescription": "\"{{name}}\" foi criado.",
+      "updated": "Tipo de ativo atualizado",
+      "updatedDescription": "\"{{name}}\" foi atualizado.",
+      "createFailed": "Falha ao criar",
+      "updateFailed": "Falha ao atualizar"
+    }
+  }
+}

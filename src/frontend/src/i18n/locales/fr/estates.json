@@ -23,13 +23,33 @@
     "syncRequested": "Demande de synchronisation pour l'estate...",
     "syncTriggered": "Synchronisation déclenchée avec succès. Actualisation des données..."
   },
+  "form": {
+    "createTitle": "Créer un Estate",
+    "editTitle": "Modifier l'Estate",
+    "dialogDescription": "Configurez la connexion de l'estate Databricks et les paramètres de base. Les politiques de partage sont gérées sur la page de détails.",
+    "name": "Nom",
+    "description": "Description",
+    "type": "Type",
+    "workspaceUrl": "URL du Workspace",
+    "cloud": "Cloud",
+    "selectCloudProvider": "Sélectionner le fournisseur cloud",
+    "connectionType": "Type de Connexion",
+    "selectConnectionType": "Sélectionner le type de connexion",
+    "connectionString": "Chaîne de Connexion",
+    "metastoreName": "Nom du Metastore",
+    "syncSchedule": "Programme de Synchronisation",
+    "enableSync": "Activer la Synchronisation",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "namePlaceholder": "ex. : Workspace de production US",
+    "descriptionPlaceholder": "ex. : Environnement de production principal pour la région US",
+    "workspaceUrlPlaceholder": "e.g., https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "e.g., primary_prod_metastore"
+  },
   "connectionTypes": {
     "deltaShare": "Delta Share",
     "unityCatalog": "Unity Catalog",
     "database": "Base de Données (Usage Futur)"
-  },
-  "filters": {
-    "allStatus": "Tous les Statuts"
   },
   "table": {
     "name": "Nom",
@@ -38,11 +58,22 @@
     "connection": "Connexion",
     "metastore": "Metastore",
     "syncStatus": "État de Synchronisation",
+    "lastSync": "Dernière Synchronisation",
     "type": "Type",
     "status": "Statut",
-    "lastSync": "Dernière Synchronisation",
     "assets": "Actifs",
-    "actions": "Actions"
+    "actions": "Actions",
+    "neverSynced": "Jamais synchronisé",
+    "openMenu": "Ouvrir le menu",
+    "syncTooltip": {
+      "status": "Statut : {{status}}",
+      "time": "Heure : {{time}}",
+      "error": "Erreur : {{error}}",
+      "inProgress": "Synchronisation en cours ou en file d'attente..."
+    }
+  },
+  "filters": {
+    "allStatus": "Tous les Statuts"
   },
   "messages": {
     "success": "Succès",
@@ -67,6 +98,47 @@
     "viewDetails": "Voir les Détails",
     "notFound": "Estate non trouvé",
     "loading": "Chargement...",
+    "pageTitle": "Détails de l'estate",
+    "backToEstateManager": "Retour au gestionnaire d'estates",
+    "backToListButton": "Retour à la liste",
+    "configureSyncJob": "Configurer la tâche de synchronisation",
+    "editNotImplemented": "Fonctionnalité de modification d'estate à implémenter",
+    "syncEnabled": "Synchronisation activée",
+    "syncDisabled": "Synchronisation désactivée",
+    "never": "Jamais",
+    "notFoundOrLoad": "Estate introuvable ou impossible à charger.",
+    "labels": {
+      "cloudProvider": "Fournisseur cloud",
+      "lastSyncTime": "Heure de la dernière synchronisation",
+      "lastSyncStatus": "Statut de la dernière synchronisation",
+      "lastSyncError": "Erreur de la dernière synchronisation",
+      "lastUpdatedAt": "Dernière mise à jour"
+    },
+    "errors": {
+      "fetchTitle": "Erreur lors de la récupération de l'estate",
+      "fetchFailed": "Échec de la récupération des détails de l'estate.",
+      "couldNotLoad": "Impossible de charger les détails de l'estate.",
+      "noEstateData": "Les données de l'estate ne sont pas disponibles pour ajouter une politique."
+    },
+    "policies": {
+      "title": "Politiques de partage",
+      "add": "Ajouter une politique",
+      "sectionDescription": "Définissez des règles pour partager des produits de données ou des termes de modèle sémantique spécifiques avec cet estate. Les ressources partagées seront accessibles via le type de connexion configuré.",
+      "resourceTypeLabel": "Type de ressource :",
+      "rulesLabel": "Règles ({{count}}) :",
+      "filterBy": "Filtrer par",
+      "whereValue": "où la valeur",
+      "noRules": "Aucune règle définie pour cette politique.",
+      "emptyTitle": "Aucune politique de partage définie pour cet estate.",
+      "emptyHint": "Cliquez sur « Ajouter une politique » pour commencer à partager des ressources.",
+      "editPolicyAlert": "Modifier la politique : {{name}}",
+      "deletePolicyAlert": "Supprimer la politique : {{name}}",
+      "addedTitle": "Politique ajoutée",
+      "addedDescription": "La politique de partage « {{name}} » a été ajoutée avec succès.",
+      "addErrorTitle": "Erreur lors de l'ajout de la politique",
+      "addErrorDescription": "Impossible d'enregistrer la nouvelle politique de partage. Veuillez réessayer.",
+      "saveFailedNoData": "Échec de l'enregistrement de la politique. Le serveur n'a renvoyé aucune donnée."
+    },
     "overview": {
       "title": "Aperçu de l'Estate",
       "type": "Type",
@@ -85,24 +157,40 @@
       "noHistory": "Aucun historique de synchronisation"
     }
   },
-  "form": {
-    "createTitle": "Créer un Estate",
-    "editTitle": "Modifier l'Estate",
-    "dialogDescription": "Configurez la connexion de l'estate Databricks et les paramètres de base. Les politiques de partage sont gérées sur la page de détails.",
-    "name": "Nom",
-    "description": "Description",
-    "type": "Type",
-    "workspaceUrl": "URL du Workspace",
-    "cloud": "Cloud",
-    "selectCloudProvider": "Sélectionner le fournisseur cloud",
-    "connectionType": "Type de Connexion",
-    "selectConnectionType": "Sélectionner le type de connexion",
-    "connectionString": "Chaîne de Connexion",
-    "metastoreName": "Nom du Metastore",
-    "syncSchedule": "Programme de Synchronisation",
-    "enableSync": "Activer la Synchronisation",
-    "cancel": "Annuler",
-    "save": "Enregistrer"
+  "sharingPolicy": {
+    "dialogTitle": "Ajouter une nouvelle politique de partage",
+    "dialogDescription": "Définissez une nouvelle politique pour partager des ressources depuis ou avec cet estate.",
+    "submit": "Ajouter une politique",
+    "addRule": "Ajouter une règle",
+    "rulesHeading": "Règles",
+    "ruleLabel": "Règle {{number}}",
+    "fields": {
+      "name": "Nom de la politique",
+      "description": "Description (facultatif)",
+      "resourceType": "Type de ressource",
+      "enablePolicy": "Activer la politique",
+      "filterType": "Type de filtre",
+      "operator": "Opérateur",
+      "value": "Valeur"
+    },
+    "placeholders": {
+      "name": "ex. : Partager les produits de données de production",
+      "description": "Description détaillée de l'objet de la politique...",
+      "resourceType": "Sélectionner le type de ressource",
+      "operator": "Sélectionner un opérateur",
+      "filterType": "e.g., tag, domain, status",
+      "value": "e.g., finance, Active"
+    },
+    "validation": {
+      "nameMin": "Le nom de la politique doit comporter au moins 3 caractères",
+      "filterTypeRequired": "Le type de filtre est obligatoire",
+      "filterValueRequired": "La valeur du filtre est obligatoire",
+      "rulesMin": "Au moins une règle est requise"
+    },
+    "toast": {
+      "submittedTitle": "Politique soumise",
+      "submittedDescription": "La politique de partage « {{name}} » est en cours de traitement.",
+      "addErrorDescription": "Échec de l'ajout de la politique de partage. Consultez la console pour plus de détails."
+    }
   }
 }
-

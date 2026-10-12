@@ -79,19 +79,19 @@ export default function CompliancePolicyDetails() {
   const [isSaving, setIsSaving] = useState(false);
 
   const resultsColumns: ColumnDef<Result>[] = useMemo(() => [
-    { accessorKey: 'object_type', header: 'Type' },
-    { accessorKey: 'object_name', header: 'Name', cell: ({ row }) => (
+    { accessorKey: 'object_type', header: t('common:labels.type') },
+    { accessorKey: 'object_name', header: t('common:labels.name'), cell: ({ row }) => (
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
-    { accessorKey: 'passed', header: 'Status', cell: ({ row }) => (
+    { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
       <Badge variant={row.original.passed ? 'secondary' : 'destructive'}>
-        {row.original.passed ? 'Passed' : 'Failed'}
+        {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
       </Badge>
     ) },
-    { accessorKey: 'message', header: 'Message', cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">{row.original.message || '-'}</span>
+    { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
     ) },
-  ], []);
+  ], [t]);
 
   const fetchRuns = useCallback(async (pid: string) => {
     const runsRes = await get<Run[]>(`/api/compliance/policies/${pid}/runs`);
@@ -120,27 +120,27 @@ export default function CompliancePolicyDetails() {
     setError(null);
     try {
       const policyRes = await get<Policy>(`/api/compliance/policies/${policyId}`);
-      if (!policyRes.data) throw new Error(policyRes.error || 'Failed to load policy');
+      if (!policyRes.data) throw new Error(policyRes.error || t('compliance:errors.loadPolicyFailed'));
       setPolicy(policyRes.data);
       setDynamicTitle(policyRes.data.name);
       await fetchRuns(policyId);
     } catch (e: any) {
-      setError(e.message || 'Failed to load');
+      setError(e.message || t('compliance:errors.loadFailed'));
       setPolicy(null);
-      setDynamicTitle('Error');
+      setDynamicTitle(t('common:states.error'));
     } finally {
       setLoading(false);
     }
-  }, [get, policyId, fetchRuns, setDynamicTitle]);
+  }, [get, policyId, fetchRuns, setDynamicTitle, t]);
 
   useEffect(() => {
-    setStaticSegments([{ label: 'Compliance', path: '/compliance' }]);
+    setStaticSegments([{ label: t('compliance:title'), path: '/compliance' }]);
     load();
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [load, setStaticSegments, setDynamicTitle]);
+  }, [load, setStaticSegments, setDynamicTitle, t]);
 
   useEffect(() => {
     if (activeRun) {
@@ -184,7 +184,7 @@ export default function CompliancePolicyDetails() {
       const response = await put<Policy>(`/api/compliance/policies/${policyId}`, updatedPolicy);
       
       if (response.error || !response.data) {
-        throw new Error(response.error || 'Failed to save policy');
+        throw new Error(response.error || t('compliance:errors.savePolicyFailed'));
       }
       
       setPolicy(response.data);
@@ -196,7 +196,7 @@ export default function CompliancePolicyDetails() {
       
       setIsEditDialogOpen(false);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save policy';
+      const errorMessage = err instanceof Error ? err.message : t('compliance:errors.savePolicyFailed');
       toast({
         variant: 'destructive',
         title: t('compliance:errors.savingPolicy'),
@@ -214,7 +214,7 @@ export default function CompliancePolicyDetails() {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error || 'Compliance policy not found.'}</AlertDescription>
+        <AlertDescription>{error || t('compliance:errors.policyNotFound')}</AlertDescription>
       </Alert>
     );
   }
@@ -224,7 +224,7 @@ export default function CompliancePolicyDetails() {
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate('/compliance')} size="sm">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to List
+          {t('compliance:policyDetails.backToList')}
         </Button>
         <div className="flex items-center gap-2">
           <CommentSidebar
@@ -235,9 +235,9 @@ export default function CompliancePolicyDetails() {
             className="h-8"
           />
           <Button variant="outline" onClick={() => setIsEditDialogOpen(true)} size="sm">
-            <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Pencil className="mr-2 h-4 w-4" /> {t('common:actions.edit')}
           </Button>
-          <Button variant="outline" onClick={runNow} size="sm"><PlayCircle className="mr-2 h-4 w-4" /> Run</Button>
+          <Button variant="outline" onClick={runNow} size="sm"><PlayCircle className="mr-2 h-4 w-4" /> {t('compliance:policyDetails.run')}</Button>
         </div>
       </div>
 
@@ -250,28 +250,28 @@ export default function CompliancePolicyDetails() {
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
           <div>
-            <div className="text-sm text-muted-foreground">ID</div>
+            <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.id')}</div>
             <code className="text-xs bg-muted px-2 py-1 rounded">{policy.id}</code>
           </div>
           <div>
-            <div className="text-sm text-muted-foreground">Category</div>
+            <div className="text-sm text-muted-foreground">{t('common:labels.category')}</div>
             <Badge variant="outline">{policy.category || 'General'}</Badge>
           </div>
           <div>
-            <div className="text-sm text-muted-foreground">Severity</div>
+            <div className="text-sm text-muted-foreground">{t('common:labels.severity')}</div>
             <Badge>{policy.severity || 'medium'}</Badge>
           </div>
           <div className="md:col-span-3">
-            <div className="text-sm text-muted-foreground">Rule</div>
+            <div className="text-sm text-muted-foreground">{t('common:labels.rule')}</div>
             <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-48 whitespace-pre-wrap">{policy.rule}</pre>
           </div>
           {policy.examples && (policy.examples.pass?.length || policy.examples.fail?.length) ? (
             <div className="md:col-span-3">
-              <div className="text-sm font-semibold mb-2">Examples</div>
+              <div className="text-sm font-semibold mb-2">{t('compliance:policyDetails.examples')}</div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <div className="mb-2">
-                    <Badge variant="secondary">Should Pass</Badge>
+                    <Badge variant="secondary">{t('compliance:policyDetails.shouldPass')}</Badge>
                   </div>
                   {policy.examples.pass && policy.examples.pass.length > 0 ? (
                     <ul className="list-disc pl-5 space-y-1">
@@ -282,12 +282,12 @@ export default function CompliancePolicyDetails() {
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-sm text-muted-foreground">No examples</div>
+                    <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.noExamples')}</div>
                   )}
                 </div>
                 <div>
                   <div className="mb-2">
-                    <Badge variant="destructive">Should Fail</Badge>
+                    <Badge variant="destructive">{t('compliance:policyDetails.shouldFail')}</Badge>
                   </div>
                   {policy.examples.fail && policy.examples.fail.length > 0 ? (
                     <ul className="list-disc pl-5 space-y-1">
@@ -298,7 +298,7 @@ export default function CompliancePolicyDetails() {
                       ))}
                     </ul>
                   ) : (
-                    <div className="text-sm text-muted-foreground">No examples</div>
+                    <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.noExamples')}</div>
                   )}
                 </div>
               </div>
@@ -310,30 +310,30 @@ export default function CompliancePolicyDetails() {
       {activeRun && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Run Summary</CardTitle>
+            <CardTitle className="text-xl">{t('compliance:policyDetails.runSummary.title')}</CardTitle>
             <CardDescription>
-              Last run started {new Date(activeRun.started_at).toLocaleString()} • Status: <span className="font-medium">{activeRun.status}</span>
+              {t('compliance:policyDetails.runSummary.lastRunStarted', { date: new Date(activeRun.started_at).toLocaleString() })} • {t('compliance:policyDetails.runSummary.statusLabel')} <span className="font-medium">{activeRun.status}</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-3 gap-4 mb-4">
               <div>
-                <div className="text-sm text-muted-foreground">Score</div>
+                <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.score')}</div>
                 <div className="text-2xl font-semibold">{activeRun.score}%</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Passed</div>
+                <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.passed')}</div>
                 <div className="text-2xl font-semibold text-green-600">{activeRun.success_count}</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Failed</div>
+                <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.failed')}</div>
                 <div className="text-2xl font-semibold text-red-600">{activeRun.failure_count}</div>
               </div>
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <div className="mb-2">
-                  <Badge variant="secondary">Passed examples</Badge>
+                  <Badge variant="secondary">{t('compliance:policyDetails.runSummary.passedExamples')}</Badge>
                 </div>
                 <ul className="list-disc pl-5 space-y-1">
                   {results.filter(r => r.passed).slice(0, 5).map((r) => (
@@ -342,13 +342,13 @@ export default function CompliancePolicyDetails() {
                     </li>
                   ))}
                   {results.filter(r => r.passed).length === 0 && (
-                    <li className="text-sm text-muted-foreground">No passed examples in this run</li>
+                    <li className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.noPassedExamples')}</li>
                   )}
                 </ul>
               </div>
               <div>
                 <div className="mb-2">
-                  <Badge variant="destructive">Failed examples</Badge>
+                  <Badge variant="destructive">{t('compliance:policyDetails.runSummary.failedExamples')}</Badge>
                 </div>
                 <ul className="list-disc pl-5 space-y-1">
                   {results.filter(r => !r.passed).slice(0, 5).map((r) => (
@@ -358,7 +358,7 @@ export default function CompliancePolicyDetails() {
                     </li>
                   ))}
                   {results.filter(r => !r.passed).length === 0 && (
-                    <li className="text-sm text-muted-foreground">No failures in this run</li>
+                    <li className="text-sm text-muted-foreground">{t('compliance:policyDetails.runSummary.noFailures')}</li>
                   )}
                 </ul>
               </div>
@@ -369,12 +369,12 @@ export default function CompliancePolicyDetails() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Runs</CardTitle>
-          <CardDescription>Most recent first</CardDescription>
+          <CardTitle className="text-xl">{t('compliance:policyDetails.runsList.title')}</CardTitle>
+          <CardDescription>{t('compliance:policyDetails.runsList.mostRecentFirst')}</CardDescription>
         </CardHeader>
         <CardContent>
           {runs.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No runs yet</div>
+            <div className="text-sm text-muted-foreground">{t('compliance:policyDetails.runsList.noRuns')}</div>
           ) : (
             <div className="flex flex-col gap-2">
               {runs.map(r => (
@@ -382,10 +382,10 @@ export default function CompliancePolicyDetails() {
                   <div className="flex items-center gap-3">
                     <Badge variant="outline">{r.status}</Badge>
                     <div className="text-sm">{new Date(r.started_at).toLocaleString()}</div>
-                    <div className="ml-auto text-sm">Score: <span className="font-semibold">{r.score}%</span> • {r.success_count} passed / {r.failure_count} failed</div>
+                    <div className="ml-auto text-sm">{t('compliance:policyDetails.runsList.scoreLabel')} <span className="font-semibold">{r.score}%</span> • {t('compliance:policyDetails.runsList.scoreDetail', { passed: r.success_count, failed: r.failure_count })}</div>
                   </div>
                   <div className="mt-2 text-xs">
-                    <a href={`/compliance/runs/${r.id}`} className="text-primary hover:underline">Open run details</a>
+                    <a href={`/compliance/runs/${r.id}`} className="text-primary hover:underline">{t('compliance:policyDetails.runsList.openRunDetails')}</a>
                   </div>
                 </button>
               ))}
@@ -397,15 +397,17 @@ export default function CompliancePolicyDetails() {
       {activeRun && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Results</CardTitle>
-            <CardDescription>Filtered to {onlyFailed ? 'failed only' : 'all'} — latest run {new Date(activeRun.started_at).toLocaleString()}</CardDescription>
+            <CardTitle className="text-xl">{t('compliance:policyDetails.resultsCard.title')}</CardTitle>
+            <CardDescription>{onlyFailed
+              ? t('compliance:policyDetails.resultsCard.filteredFailed', { date: new Date(activeRun.started_at).toLocaleString() })
+              : t('compliance:policyDetails.resultsCard.filteredAll', { date: new Date(activeRun.started_at).toLocaleString() })}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between mb-3">
               <div />
               <div className="flex items-center gap-2">
-                <Button size="sm" variant={onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(true)}>Show Failed</Button>
-                <Button size="sm" variant={!onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(false)}>Show All</Button>
+                <Button size="sm" variant={onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(true)}>{t('compliance:results.showFailed')}</Button>
+                <Button size="sm" variant={!onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(false)}>{t('compliance:results.showAll')}</Button>
               </div>
             </div>
             <DataTable columns={resultsColumns} data={results} searchColumn="object_name" />

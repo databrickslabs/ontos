@@ -4,6 +4,8 @@
   "addNew": "Add Role",
   "editRole": "Edit Role",
   "deleteRole": "Delete Role",
+  "systemBadge": "System",
+  "openMenu": "Open menu",
   "table": {
     "name": "Name",
     "description": "Description",
@@ -32,6 +34,7 @@
   },
   "messages": {
     "errorFetching": "Error fetching business roles",
+    "loadFailed": "Failed to load business roles",
     "errorDeleting": "Error deleting business role",
     "deleted": "Business Role Deleted",
     "deletedSuccess": "The business role was successfully deleted.",

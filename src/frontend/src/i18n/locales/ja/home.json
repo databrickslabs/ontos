@@ -63,6 +63,10 @@
     "requestAccess": "アクセスをリクエスト",
     "moreRoles": "他に{{count}}個のロールが利用可能..."
   },
+  "myActions": {
+    "title": "マイアクション",
+    "approvals": "承認"
+  },
   "quickActions": {
     "title": "クイックアクション",
     "loading": "読み込み中...",
@@ -111,7 +115,13 @@
     "unknown": "不明",
     "status": "N/A",
     "untitled": "無題",
-    "info": "情報"
+    "info": "情報",
+    "manage": "管理",
+    "mySubscriptions": "マイ購読",
+    "subscribe": "購読",
+    "subscribed": "購読済み",
+    "unknownProduct": "不明な製品",
+    "viewAllSubscribed": "購読済みをすべて表示"
   },
   "dataCurationSection": {
     "title": "データキュレーション",
@@ -151,7 +161,26 @@
     "openButton": "開く",
     "markReadButton": "既読にする",
     "readLabel": "既読",
-    "alertMessage": "このリストには、あなたのロールに割り当てられたアクション必須の通知のみが表示されます。"
+    "alertMessage": "このリストには、あなたのロールに割り当てられたアクション必須の通知のみが表示されます。",
+    "loadError": "承認の読み込みに失敗しました",
+    "unknownUser": "不明なユーザー",
+    "unknownRole": "不明なロール",
+    "approvalRequest": "承認リクエスト",
+    "badges": {
+      "roleRequest": "ロールリクエスト",
+      "contract": "コントラクト",
+      "product": "製品",
+      "approval": "承認"
+    },
+    "table": {
+      "type": "種別",
+      "requesterName": "リクエスト元 / 名前",
+      "roleStatusReason": "ロール / ステータス / 理由",
+      "date": "日付",
+      "actions": "アクション"
+    },
+    "approveDenyRequest": "リクエストを承認／却下",
+    "approveDenyWorkflow": "ワークフローリクエストを承認／却下"
   },
   "marketplace": {
     "welcome": "こんにちは",
@@ -182,7 +211,9 @@
       "browseToSubscribe": "「探索」タブを参照して、購読する製品を見つけてください。",
       "exploreProducts": "データ製品を探索",
       "owner": "所有者",
-      "unknown": "不明"
+      "unknown": "不明",
+      "unknownProduct": "不明な製品",
+      "untitled": "無題"
     },
     "datasets": {
       "available": "{{count}}個のデータセットが利用可能",
@@ -218,6 +249,47 @@
       "three": "3列",
       "four": "4列"
     },
-    "openInDetails": "詳細ビューで開く"
+    "scopeFilter": {
+      "placeholder": "スコープ",
+      "all": "すべてのスコープ"
+    },
+    "openInDetails": "詳細ビューで開く",
+    "loadError": "製品の読み込みに失敗しました"
+  },
+  "myProducts": {
+    "title": "マイ製品",
+    "description": "あなたが購読しているデータ製品です。",
+    "loading": "製品を読み込み中...",
+    "empty": "まだデータ製品を購読していません。",
+    "browseMarketplace": "マーケットプレイスを参照"
+  },
+  "myRequests": {
+    "title": "マイリクエスト",
+    "description": "あなたが作成した承認が必要なリクエスト（アクセスおよび購読を含む）です。",
+    "loading": "リクエストを読み込み中...",
+    "empty": "リクエストを作成していません。",
+    "entity": "エンティティ",
+    "type": "種別",
+    "status": "ステータス",
+    "requestedAt": "リクエスト日",
+    "handledAt": "解決日",
+    "cancel": "キャンセル",
+    "cancelSuccess": "リクエストをキャンセルしました",
+    "statusPending": "保留中",
+    "statusApproved": "承認済み",
+    "statusDenied": "却下",
+    "statusCancelled": "キャンセル済み",
+    "statusExpired": "期限切れ",
+    "statusInProgress": "進行中",
+    "statusCompleted": "完了",
+    "statusAbandoned": "中止",
+    "typeAccess": "アクセス",
+    "typeSubscription": "購読",
+    "typeApproval": "承認",
+    "entityType": "エンティティ種別",
+    "name": "名前",
+    "entityTypeDataProduct": "データ製品",
+    "entityTypeDataset": "データセット",
+    "entityTypeDataContract": "データコントラクト"
   }
 }

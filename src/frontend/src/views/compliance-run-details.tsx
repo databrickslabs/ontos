@@ -41,7 +41,7 @@ interface Result {
 }
 
 export default function ComplianceRunDetails() {
-  useTranslation(['compliance', 'common']);
+  const { t } = useTranslation(['compliance', 'common']);
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
   const { get } = useApi();
@@ -55,19 +55,19 @@ export default function ComplianceRunDetails() {
   const [onlyFailed, setOnlyFailed] = useState(true);
 
   const columns: ColumnDef<Result>[] = useMemo(() => [
-    { accessorKey: 'object_type', header: 'Type' },
-    { accessorKey: 'object_name', header: 'Name', cell: ({ row }) => (
+    { accessorKey: 'object_type', header: t('common:labels.type') },
+    { accessorKey: 'object_name', header: t('common:labels.name'), cell: ({ row }) => (
       <code className="text-xs bg-muted px-2 py-1 rounded">{row.original.object_name || row.original.object_id}</code>
     ) },
-    { accessorKey: 'passed', header: 'Status', cell: ({ row }) => (
+    { accessorKey: 'passed', header: t('common:labels.status'), cell: ({ row }) => (
       <Badge variant={row.original.passed ? 'secondary' : 'destructive'}>
-        {row.original.passed ? 'Passed' : 'Failed'}
+        {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
       </Badge>
     ) },
-    { accessorKey: 'message', header: 'Message', cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">{row.original.message || '-'}</span>
+    { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
     ) },
-  ], []);
+  ], [t]);
 
   const load = useCallback(async () => {
     if (!runId) return;
@@ -75,28 +75,28 @@ export default function ComplianceRunDetails() {
     setError(null);
     try {
       const res = await get<any>(`/api/compliance/runs/${runId}/results?only_failed=${onlyFailed ? 'true' : 'false'}`);
-      if (!res.data) throw new Error(res.error || 'Failed to load run results');
+      if (!res.data) throw new Error(res.error || t('compliance:errors.loadRunResultsFailed'));
       setRun(res.data.run);
       setResults(Array.isArray(res.data.results) ? res.data.results : []);
-      setDynamicTitle(`Run ${runId}`);
+      setDynamicTitle(t('compliance:runDetails.runTitle', { id: runId }));
     } catch (e: any) {
-      setError(e.message || 'Failed to load');
+      setError(e.message || t('compliance:errors.loadFailed'));
       setRun(null);
       setResults([]);
-      setDynamicTitle('Error');
+      setDynamicTitle(t('common:states.error'));
     } finally {
       setLoading(false);
     }
-  }, [get, runId, onlyFailed, setDynamicTitle]);
+  }, [get, runId, onlyFailed, setDynamicTitle, t]);
 
   useEffect(() => {
-    setStaticSegments([{ label: 'Compliance', path: '/compliance' }]);
+    setStaticSegments([{ label: t('compliance:title'), path: '/compliance' }]);
     load();
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [load, setStaticSegments, setDynamicTitle]);
+  }, [load, setStaticSegments, setDynamicTitle, t]);
 
   useEffect(() => {
     load();
@@ -115,7 +115,7 @@ export default function ComplianceRunDetails() {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error || 'Run not found.'}</AlertDescription>
+        <AlertDescription>{error || t('compliance:errors.runNotFound')}</AlertDescription>
       </Alert>
     );
   }
@@ -125,27 +125,27 @@ export default function ComplianceRunDetails() {
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate(-1)} size="sm">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+          {t('common:actions.back')}
         </Button>
         <div className="flex items-center gap-2">
-          <Link to={`/compliance/policies/${run.policy_id}`} className="text-sm text-primary hover:underline">View Policy</Link>
+          <Link to={`/compliance/policies/${run.policy_id}`} className="text-sm text-primary hover:underline">{t('compliance:runDetails.viewPolicy')}</Link>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Run {run.id}</CardTitle>
+          <CardTitle className="text-xl">{t('compliance:runDetails.runTitle', { id: run.id })}</CardTitle>
           <CardDescription>
-            Status: <span className="font-medium">{run.status}</span> • Score: <span className="font-medium">{run.score}%</span> •
-            {' '}Passed: <span className="font-medium text-green-600">{run.success_count}</span> / Failed: <span className="font-medium text-red-600">{run.failure_count}</span>
+            {t('compliance:runDetails.statusLabel')} <span className="font-medium">{run.status}</span> • {t('compliance:runDetails.scoreLabel')} <span className="font-medium">{run.score}%</span> •
+            {' '}{t('compliance:runDetails.passedLabel')} <span className="font-medium text-green-600">{run.success_count}</span> / {t('compliance:runDetails.failedLabel')} <span className="font-medium text-red-600">{run.failure_count}</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm text-muted-foreground">Started: {new Date(run.started_at).toLocaleString()}</div>
+            <div className="text-sm text-muted-foreground">{t('compliance:runDetails.startedLabel', { date: new Date(run.started_at).toLocaleString() })}</div>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant={onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(true)}>Show Failed</Button>
-              <Button size="sm" variant={!onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(false)}>Show All</Button>
+              <Button size="sm" variant={onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(true)}>{t('compliance:results.showFailed')}</Button>
+              <Button size="sm" variant={!onlyFailed ? 'default' : 'outline'} onClick={() => setOnlyFailed(false)}>{t('compliance:results.showAll')}</Button>
             </div>
           </div>
           <DataTable columns={columns} data={results} searchColumn="object_name" />

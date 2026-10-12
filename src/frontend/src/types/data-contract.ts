@@ -264,6 +264,8 @@ export interface DataContract {
   domainIds?: string[] // Multi-domain assignment (primary first)
   primaryDomainId?: string | null
   dataProduct?: string
+  dataProductName?: string // Resolved product name at query time (#854)
+  dataProductId?: string // Resolved product id at query time, for linking (#854)
   owner_team_id?: string // UUID of the owning team
   owner_team_name?: string // Display name of the owning team
   project_id?: string // Project association

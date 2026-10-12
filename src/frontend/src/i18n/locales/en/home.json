@@ -63,6 +63,10 @@
     "requestAccess": "Request Access",
     "moreRoles": "And {{count}} more roles available..."
   },
+  "myActions": {
+    "title": "My Actions",
+    "approvals": "Approvals"
+  },
   "quickActions": {
     "title": "Quick Actions",
     "loading": "Loading...",
@@ -111,7 +115,13 @@
     "unknown": "Unknown",
     "status": "N/A",
     "untitled": "Untitled",
-    "info": "Info"
+    "info": "Info",
+    "manage": "Manage",
+    "mySubscriptions": "My Subscriptions",
+    "subscribe": "Subscribe",
+    "subscribed": "Subscribed",
+    "unknownProduct": "Unknown product",
+    "viewAllSubscribed": "View all subscribed"
   },
   "dataCurationSection": {
     "title": "Data Curation",
@@ -151,7 +161,26 @@
     "openButton": "Open",
     "markReadButton": "Mark read",
     "readLabel": "Read",
-    "alertMessage": "This list shows only action-required notifications assigned to your role(s)."
+    "alertMessage": "This list shows only action-required notifications assigned to your role(s).",
+    "loadError": "Failed to load approvals",
+    "unknownUser": "Unknown user",
+    "unknownRole": "Unknown role",
+    "approvalRequest": "Approval request",
+    "badges": {
+      "roleRequest": "Role Request",
+      "contract": "Contract",
+      "product": "Product",
+      "approval": "Approval"
+    },
+    "table": {
+      "type": "Type",
+      "requesterName": "Requester / Name",
+      "roleStatusReason": "Role / Status / Reason",
+      "date": "Date",
+      "actions": "Actions"
+    },
+    "approveDenyRequest": "Approve/Deny request",
+    "approveDenyWorkflow": "Approve/Deny workflow request"
   },
   "marketplace": {
     "welcome": "Hello",
@@ -182,7 +211,9 @@
       "browseToSubscribe": "Browse the Explore tab to find products to subscribe to.",
       "exploreProducts": "Explore Data Products",
       "owner": "Owner",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "unknownProduct": "Unknown product",
+      "untitled": "Untitled"
     },
     "datasets": {
       "available": "{{count}} dataset available",
@@ -222,7 +253,8 @@
       "placeholder": "Scope",
       "all": "All Scopes"
     },
-    "openInDetails": "Open in details view"
+    "openInDetails": "Open in details view",
+    "loadError": "Failed to load products"
   },
   "myProducts": {
     "title": "My Products",

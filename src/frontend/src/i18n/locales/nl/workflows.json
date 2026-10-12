@@ -1,0 +1,651 @@
+{
+  "designer": {
+    "newWorkflow": "Nieuwe Workflow",
+    "newStepName": "Nieuwe {{type}}-stap",
+    "deleteConnection": "Verbinding verwijderen",
+    "actions": {
+      "done": "Gereed"
+    },
+    "keyValue": {
+      "keyRequired": "Sleutel vereist",
+      "keyExistsAdd": "Sleutel bestaat al — bewerk de bestaande vermelding",
+      "keyExistsEdit": "Sleutel bestaat al — kies een andere naam",
+      "addEntry": "Vermelding toevoegen",
+      "noEntries": "Geen vermeldingen.",
+      "checkTemplate": "Sjabloon controleren",
+      "keyPlaceholder": "sleutel",
+      "valuePlaceholder": "waarde",
+      "newEntryKeyAria": "Nieuwe vermeldingssleutel",
+      "newEntryValueAria": "Nieuwe vermeldingswaarde",
+      "editEntryKeyAria": "Vermeldingssleutel bewerken",
+      "editEntryValueAria": "Vermeldingswaarde bewerken",
+      "saveEditAria": "Bewerking opslaan",
+      "cancelEditAria": "Bewerking annuleren",
+      "editRowAria": "Rij bewerken",
+      "removeRowAria": "Rij verwijderen"
+    },
+    "schema": {
+      "noProperties": "Geen configureerbare eigenschappen voor dit staptype."
+    },
+    "roles": {
+      "special": "Speciaal",
+      "requesterOriginalUser": "Aanvrager (Oorspronkelijke Gebruiker)",
+      "ownerEntityOwner": "Eigenaar (Entiteitseigenaar)",
+      "appRoles": "App-rollen",
+      "businessRoles": "Bedrijfsrollen",
+      "noGroups": "Geen groepen"
+    },
+    "messages": {
+      "loadWorkflowFailed": "Kon workflow niet laden",
+      "validationError": "Validatiefout",
+      "selectWorkflowType": "Selecteer een workflowtype",
+      "nameRequired": "Workflownaam is vereist",
+      "createdSuccess": "Workflow succesvol aangemaakt",
+      "updatedSuccess": "Workflow succesvol bijgewerkt",
+      "createFailed": "Kon workflow niet aanmaken: {{error}}",
+      "updateFailed": "Kon workflow niet bijwerken: {{error}}"
+    },
+    "badges": {
+      "default": "Standaard",
+      "approval": "Goedkeuring",
+      "process": "Proces",
+      "unsavedChanges": "Niet-opgeslagen wijzigingen"
+    },
+    "placeholders": {
+      "workflowName": "Workflownaam"
+    },
+    "preview": {
+      "saveToPreview": "Sla wijzigingen op om de nieuwste versie te bekijken",
+      "dryRunTitle": "Voer de wizard uit in dry-run-modus",
+      "previewWizard": "Wizard voorvertonen"
+    },
+    "typeChooser": {
+      "title": "Welk type workflow?",
+      "subtitle": "Kies het type op basis van hoe deze workflow wordt gebruikt.",
+      "processTitle": "Procesworkflow",
+      "processDescription": "Achtergrondautomatisering geactiveerd door gebeurtenissen — valideren, melden, taggen, scripts uitvoeren.",
+      "approvalTitle": "Goedkeuringsworkflow",
+      "approvalDescription": "Interactieve wizard vóór gebruikersacties — verzamel toestemming, voorwaarden, bevestigingen."
+    },
+    "palette": {
+      "addStep": "Stap Toevoegen",
+      "soonSuffix": "  (binnenkort)",
+      "policy_check": "Beleidscontrole",
+      "validation": "Validatie",
+      "approval": "Goedkeuring Aanvragen",
+      "entity_action": "Entiteitsactie",
+      "notification": "Melding",
+      "assign_tag": "Tag Toewijzen",
+      "conditional": "Voorwaardelijk",
+      "script": "Script",
+      "create_asset_review": "Asset-beoordeling",
+      "webhook": "Webhook",
+      "grant_permissions": "Machtigingen Verlenen",
+      "on_behalf_of": "Namens",
+      "legal_document": "Juridisch Document",
+      "acknowledgement_checklist": "Bevestigingschecklist",
+      "user_action": "Gebruikersactie",
+      "co_signers": "Medeondertekenaars",
+      "persist_agreement": "Overeenkomst Vastleggen",
+      "generate_pdf": "PDF Genereren",
+      "deliver": "Afleveren"
+    },
+    "discard": {
+      "description": "Je hebt niet-opgeslagen wijzigingen aan deze workflow. Als je nu weggaat, gaan je wijzigingen verloren.",
+      "stay": "Blijven",
+      "confirm": "Wijzigingen Verwerpen"
+    },
+    "triggerConfig": {
+      "title": "Triggerconfiguratie",
+      "fromStatus": "Van Status",
+      "fromStatusPlaceholder": "bijv. concept",
+      "toStatus": "Naar Status",
+      "toStatusPlaceholder": "bijv. actief",
+      "descriptionPlaceholder": "Workflowbeschrijving"
+    },
+    "stepConfig": {
+      "title": "Stapconfiguratie",
+      "stepName": "Stapnaam",
+      "stepType": "Staptype",
+      "deleteStep": "Stap Verwijderen"
+    },
+    "entityAction": {
+      "action": "Actie",
+      "certify": "Certificeren",
+      "decertify": "Decertificeren",
+      "publish": "Publiceren",
+      "unpublish": "Publicatie Ongedaan Maken",
+      "certLevelSource": "Bron van certificeringsniveau",
+      "levelFromRequest": "Van verzoek",
+      "levelFixed": "Vast niveau",
+      "levelFromApproval": "Van goedkeuring",
+      "fixedLevel": "Vast niveau",
+      "fixedLevelPlaceholder": "bijv. 1",
+      "scopeSource": "Bron van publicatiebereik",
+      "scopeFromRequest": "Van verzoek",
+      "scopeFixed": "Vast bereik",
+      "scopeFromApproval": "Van goedkeuring",
+      "fixedScope": "Vast bereik",
+      "scopeDomain": "Domein",
+      "scopeOrganization": "Organisatie",
+      "scopeExternal": "Extern",
+      "help": "Voert een levenscyclusactie uit op de entiteit die deze workflow heeft geactiveerd (na goedkeuring bij gebruik met verzoektriggers)."
+    },
+    "userAction": {
+      "title": "Titel",
+      "titlePlaceholder": "bijv. Voer een reden in",
+      "descriptionPlaceholder": "Optionele beschrijving voor de wizardstap",
+      "requiresInput": "Vereist invoer",
+      "requiresInputHelp": "Indien ingeschakeld, moet de gebruiker iets invoeren in het primaire veld voordat wordt doorgegaan.",
+      "minInputLength": "Minimale invoerlengte",
+      "minInputPlaceholder": "bijv. 10",
+      "minInputHelp": "Minimum aantal tekens voor het primaire veld (laat leeg voor geen minimum).",
+      "fieldsHelp": "Gebruikersactie-stappen verzamelen invoer in goedkeuringsworkflows (bijv. reden, acceptaties). Voeg hierboven velden toe en vink \"Primair\" aan bij het veld waar de hoofdinvoer van de gebruiker terechtkomt.",
+      "primaryRequiredTooltip": "Kies hierboven een primair veld voordat je sluit."
+    },
+    "policyCheck": {
+      "label": "Compliance-beleid",
+      "placeholder": "Selecteer een compliance-beleid",
+      "noPolicies": "Geen actief beleid gevonden",
+      "help": "Deze stap evalueert de DSL-regel van het geselecteerde compliance-beleid tijdens runtime."
+    },
+    "validation": {
+      "dslRule": "DSL-regel",
+      "dslPlaceholder": "MATCH (obj:Object)\nASSERT obj.name MATCHES '^[a-z_]+$'"
+    },
+    "notification": {
+      "recipientsRole": "Ontvangers (Rol)",
+      "recipientsPlaceholder": "Selecteer ontvangers",
+      "additionalRecipientsAria": "Aanvullende ontvangers",
+      "template": "Sjabloon",
+      "selectTemplate": "Selecteer sjabloon",
+      "templates": {
+        "requestSubmitted": "Verzoek Ingediend",
+        "requestApproved": "Verzoek Goedgekeurd",
+        "requestDenied": "Verzoek Afgewezen",
+        "validationFailed": "Validatie Mislukt",
+        "validationPassed": "Validatie Geslaagd",
+        "productApproved": "Product Goedgekeurd",
+        "productRejected": "Product Afgewezen",
+        "piiDetected": "PII Gedetecteerd"
+      },
+      "customMessage": "Aangepast Bericht",
+      "customMessagePlaceholder": "Overschrijf sjabloonbericht. Ondersteunt ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
+      "variablesLabel": "Variabelen:",
+      "channels": "Kanalen",
+      "channelsHelp": "Valt terug op de globale instelling als er niets is geselecteerd."
+    },
+    "customPrincipals": {
+      "label": "Aangepaste principals",
+      "help": "Voeg specifieke gebruikers of groepen toe naast de rol.",
+      "usersGroups": "Gebruikers & groepen",
+      "addPlaceholder": "Gebruikers of groepen toevoegen…"
+    },
+    "assignTag": {
+      "tagKey": "Tag-sleutel",
+      "tagKeyPlaceholder": "bijv. eigenaar",
+      "valueSource": "Waardebron",
+      "selectSource": "Selecteer bron",
+      "sourceCurrentUser": "Huidige Gebruiker",
+      "sourceProjectName": "Projectnaam",
+      "sourceTimestamp": "Tijdstempel"
+    },
+    "approval": {
+      "approversRole": "Goedkeurders (Rol)",
+      "selectRole": "Selecteer rol",
+      "additionalApproversAria": "Aanvullende goedkeurders",
+      "timeoutDays": "Time-out (dagen)"
+    },
+    "assetReview": {
+      "reviewerRole": "Beoordelaarsrol",
+      "selectReviewerRole": "Selecteer beoordelaarsrol",
+      "reviewerRoleHelp": "De rol waarvan de leden de asset kunnen beoordelen.",
+      "reviewType": "Beoordelingstype",
+      "selectReviewType": "Selecteer beoordelingstype",
+      "typeStandard": "Standaardbeoordeling",
+      "typeExpedited": "Versnelde Beoordeling",
+      "typeCompliance": "Compliance-beoordeling",
+      "typeSecurity": "Beveiligingsbeoordeling",
+      "notesPlaceholder": "Aanvullende notities voor de beoordelaar..."
+    },
+    "webhook": {
+      "mode": "Modus",
+      "selectMode": "Selecteer modus",
+      "modeConnection": "UC-verbinding (Aanbevolen)",
+      "modeInline": "Inline URL",
+      "modeHelp": "UC-verbindingen slaan referenties veilig op in Unity Catalog.",
+      "httpConnection": "HTTP-verbinding",
+      "selectConnection": "Selecteer een UC HTTP-verbinding",
+      "noConnections": "Geen HTTP-verbindingen gevonden",
+      "pathPlaceholder": "/api/now/table/incident",
+      "pathHelp": "Pad toegevoegd aan de basis-URL van de verbinding.",
+      "url": "URL",
+      "urlPlaceholder": "https://api.example.com/webhook",
+      "inlineWarning": "Waarschuwing: inline referenties worden opgeslagen in de workflowconfiguratie.",
+      "httpMethod": "HTTP-methode",
+      "selectMethod": "Selecteer methode",
+      "bodyTemplate": "Body-sjabloon",
+      "bodyPlaceholder": "{\n  \"description\": \"Alert for ${entity_name}\",\n  \"entity_type\": \"${entity_type}\"\n}",
+      "bodyHelp": "Gebruik ${variable} voor substitutie. Zie het paneel voor alle variabelen binnen bereik.",
+      "additionalHeaders": "Aanvullende Headers",
+      "additionalHeadersHelp": "Samengevoegd in de request-headers. Overschrijven `headers` bij sleutelconflict. Waarden ondersteunen ${variable}-substitutie.",
+      "headerKeyPlaceholder": "X-Trace-Id",
+      "headerValuePlaceholder": "${execution_id}",
+      "additionalQueryParams": "Aanvullende Queryparameters",
+      "additionalQueryParamsHelp": "Toegevoegd aan de request-URL/-pad als querystring. Waarden ondersteunen ${variable}-substitutie en worden URL-gecodeerd.",
+      "queryKeyPlaceholder": "caller",
+      "queryValuePlaceholder": "ontos",
+      "pathSuffix": "Padsuffix",
+      "pathSuffixPlaceholder": "/${entity_id}",
+      "pathSuffixHelp": "Toegevoegd aan Pad vóór de querystring. Ondersteunt ${variable}-substitutie.",
+      "timeoutSeconds": "Time-out (seconden)",
+      "retryCount": "Aantal Nieuwe Pogingen",
+      "retryHelp": "Aantal nieuwe pogingen bij mislukking (0-5)."
+    }
+  },
+  "approvalResponse": {
+    "titleFallback": "Goedkeuren of afwijzen",
+    "descriptionFallback": "Geef een reden voor je goedkeurings- of afwijzingsbeslissing.",
+    "requestDetails": "Verzoekdetails",
+    "adjustTerms": "Goedkeuringsvoorwaarden aanpassen",
+    "durationDays": "Duur (dagen)",
+    "permissionLevel": "Machtigingsniveau",
+    "reasonLabel": "Reden voor goedkeuring of afwijzing",
+    "reasonPlaceholder": "Voer je reden in...",
+    "approved": "Goedgekeurd",
+    "rejected": "Afgewezen",
+    "requestFallback": "Verzoek",
+    "days_one": "{{count}} dag",
+    "days_other": "{{count}} dagen",
+    "rows": {
+      "onBehalfOf": "Namens",
+      "resource": "Resource",
+      "duration": "Duur",
+      "reason": "Reden",
+      "workflow": "Workflow"
+    },
+    "messages": {
+      "reasonRequiredTitle": "Reden vereist",
+      "reasonRequiredDesc": "Voer een reden in voor je beslissing.",
+      "processFailed": "Kon goedkeuring niet verwerken.",
+      "processFailedRetry": "Kon goedkeuring niet verwerken. Probeer het opnieuw.",
+      "entityApproved": "{{name}} is goedgekeurd.",
+      "entityRejected": "{{name}} is afgewezen."
+    }
+  },
+  "approvalWizard": {
+    "title": "Goedkeuringswizard",
+    "previewBadge": "Voorvertoning",
+    "referenceDocuments": "Referentiedocumenten",
+    "loadingEllipsis": "Laden…",
+    "selectEllipsis": "Selecteer…",
+    "failedToLoadOptions": "Kon opties niet laden",
+    "noOptionsAvailable": "Geen opties beschikbaar",
+    "dryRunDescription": "Dry run — er wordt niets vastgelegd en er worden geen meldingen verzonden.",
+    "chooseWorkflow": "Kies een goedkeuringsworkflow om uit te voeren voor deze entiteit.",
+    "stepPrefix": "Stap: {{name}}",
+    "completedShort": "Voltooid.",
+    "progressStep": "Stap {{number}}: {{name}}",
+    "completeBefore": "Voltooi het volgende voordat je {{action}} om",
+    "proceed": "verder te gaan",
+    "previewCompleteScreen": "Voorvertoning voltooid. Er is geen overeenkomst aangemaakt en er zijn geen meldingen verzonden.",
+    "agreementRecorded": "Overeenkomst vastgelegd.",
+    "agreementId": "Overeenkomst-ID: {{id}}",
+    "downloadAgreement": "Overeenkomst Downloaden",
+    "noWorkflowsAvailable": "Geen goedkeuringsworkflows beschikbaar. Voeg ze toe in Instellingen → Workflows (Goedkeuringsworkflows).",
+    "completeButton": "Voltooien",
+    "acknowledgeDefault": "Ik heb het bovenstaande gelezen en begrepen",
+    "scrollToBottom": "Scroll naar de onderkant van het document om door te gaan.",
+    "coSignerPlaceholder": "Voer e-mail of groepsnaam in",
+    "noDocumentContent": "*Geen documentinhoud opgegeven.*",
+    "preview": {
+      "skipped": "{{action}} — overgeslagen in voorvertoning",
+      "wouldSaveAgreement": "Zou overeenkomst opslaan",
+      "wouldGenerateDocument": "Zou document genereren",
+      "wouldSendNotifications": "Zou meldingen verzenden",
+      "wouldFinalize": "Zou afronden"
+    },
+    "progress": {
+      "savingAgreement": "Overeenkomst opslaan...",
+      "generatingDocument": "Document genereren...",
+      "sendingNotifications": "Meldingen verzenden...",
+      "finalizing": "Afronden..."
+    },
+    "coSigners": {
+      "minRequired_one": "Minimaal {{count}} medeondertekenaar vereist.",
+      "minRequired_other": "Minimaal {{count}} medeondertekenaars vereist.",
+      "optional": "Medeondertekenaars zijn optioneel voor deze stap.",
+      "maximum": "Maximum: {{count}}.",
+      "auditNote": "Medeondertekenaars worden op de overeenkomst vastgelegd voor auditdoeleinden."
+    },
+    "obo": {
+      "forMyself": "Voor mezelf",
+      "forMyGroup": "Voor een groep waar ik deel van uitmaak",
+      "noGroupsAvailable": "(geen groepen beschikbaar)",
+      "selectGroup": "Selecteer een van je groepen",
+      "otherGroupOrSp": "Andere groep of service principal",
+      "groupOption": "Groep (weergavenaam)",
+      "servicePrincipalOption": "Service principal (weergavenaam of applicationId)",
+      "groupPlaceholder": "bijv. sales_consumers",
+      "spPlaceholder": "bijv. 11111111-2222-3333-4444-555555555555",
+      "validationNote": "Gevalideerd tegen de werkruimtedirectory voordat het verzoek wordt vastgelegd.",
+      "justification": "Rechtvaardiging",
+      "justificationPlaceholder": "Waarom vraag je toegang aan voor deze principal?"
+    },
+    "validation": {
+      "requiresInput": "Deze stap vereist invoer.",
+      "minLength": "Minimale lengte: {{min}} tekens ({{entered}} ingevoerd)."
+    },
+    "messages": {
+      "nothingToPreview": "Niets om voor te vertonen",
+      "nothingToPreviewDesc": "Workflow heeft geen stappen.",
+      "startSessionFailed": "Kon sessie niet starten",
+      "previewComplete": "Voorvertoning voltooid",
+      "previewCompleteDesc": "Er is geen overeenkomst aangemaakt en er zijn geen meldingen verzonden.",
+      "submitStepFailed": "Kon stap niet indienen",
+      "completed": "Voltooid",
+      "completedDesc": "Goedkeuringsworkflow succesvol voltooid.",
+      "cancelled": "Geannuleerd",
+      "previewCancelled": "Voorvertoning geannuleerd"
+    }
+  },
+  "entityTypeSelect": {
+    "label": "Van toepassing op",
+    "helper": "Op welke soorten objecten dit wordt geactiveerd",
+    "firesRegardless": "Deze trigger wordt geactiveerd ongeacht het entiteitstype."
+  },
+  "execution": {
+    "noSteps": "Geen stappen gedefinieerd",
+    "trigger": "Trigger",
+    "titleFallback": "Workflow-uitvoering",
+    "executionId": "Uitvoerings-ID: {{id}}...",
+    "stepsProgress": "{{done}}/{{total}} stappen",
+    "triggeredBy": "Geactiveerd door: {{user}}",
+    "workflowSteps": "Workflowstappen",
+    "loadDefinitionFailed": "Kon workflowdefinitie niet laden",
+    "states": {
+      "pending": "In Afwachting",
+      "running": "Wordt Uitgevoerd",
+      "completed": "Voltooid",
+      "failed": "Mislukt",
+      "skipped": "Overgeslagen",
+      "waiting": "Wachtend"
+    },
+    "summary": {
+      "entity": "Entiteit",
+      "started": "Gestart",
+      "waitingAt": "Wachtend Bij",
+      "progress": "Voortgang"
+    }
+  },
+  "nodes": {
+    "checklistTitle": "Checklist",
+    "assetReviewTitle": "Asset-beoordeling",
+    "successTitle": "Succes",
+    "failureTitle": "Mislukking",
+    "stepFallback": "Stap",
+    "notificationTo": "Aan: {{recipient}}",
+    "actionLabel": "Actie: {{action}}",
+    "noActionSet": "Geen actie ingesteld",
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
+    "keyLabel": "Sleutel: {{key}}",
+    "policyLabel": "Beleid: {{name}}",
+    "idLabel": "ID: {{id}}",
+    "noPolicySelected": "Geen beleid geselecteerd",
+    "reviewerLabel": "Beoordelaar:",
+    "notSet": "Niet ingesteld",
+    "connectionLabel": "Verbinding: {{name}}",
+    "notConfigured": "Niet geconfigureerd",
+    "configureUrlOrConnection": "Configureer URL of Verbinding",
+    "requestApproval": "goedkeuring aanvragen"
+  },
+  "requiredFields": {
+    "title": "Aangepaste velden",
+    "emptyState": "Nog geen aangepaste velden. Voeg velden toe die de aanvrager moet invullen voordat wordt ingediend.",
+    "primaryError": "Kies een primair veld — de hoofdinvoer van de gebruiker komt daar terecht. Vereist omdat \"Vereist invoer\" is ingeschakeld.",
+    "errors": {
+      "idRequired": "ID is vereist.",
+      "idInvalid": "ID moet bestaan uit kleine letters, cijfers of underscores en met een letter beginnen.",
+      "idDuplicate": "ID moet uniek zijn binnen deze stap."
+    },
+    "fieldIdLabel": "Veld-ID",
+    "fieldIdPlaceholder": "bijv. target_group",
+    "labelLabel": "Label",
+    "labelPlaceholder": "Getoond aan aanvrager",
+    "typeText": "Tekst",
+    "typeSelect": "Selectie",
+    "requiredShort": "Vereist",
+    "primaryTooltip": "Markeer deze rij als het primaire invoerveld van de stap",
+    "primary": "Primair",
+    "primaryAriaLabel": "Primair veld",
+    "removeFieldAriaLabel": "Veld verwijderen",
+    "staticOptions": "Statische opties",
+    "fromEndpoint": "Vanaf endpoint",
+    "optionValuePlaceholder": "waarde",
+    "optionLabelPlaceholder": "label",
+    "removeOptionAriaLabel": "Optie verwijderen",
+    "addOption": "Optie toevoegen",
+    "optionsEndpoint": "Opties-endpoint",
+    "endpointPlaceholder": "/api/workspace/groups",
+    "endpointHint": "Backend-endpoint dat JSON teruggeeft",
+    "addField": "Veld toevoegen"
+  },
+  "templateVars": {
+    "copiedToClipboard": "{{placeholder}} gekopieerd naar klembord.",
+    "copyFailed": "Kopiëren mislukt",
+    "copyBlocked": "Browser blokkeerde toegang tot klembord.",
+    "copyPlaceholder": "{{placeholder}} kopiëren",
+    "sampleLabel": "bijv. {{sample}}",
+    "loadFailed": "Kon variabelen niet laden",
+    "pickTriggerBefore": "Kies een trigger en entiteitstype om de beschikbare variabelen te zien voor",
+    "pickTriggerAfter": "substitutie.",
+    "loadingVariables": "Variabelen laden…",
+    "loadFailedWithError": "Kon variabelen niet laden: {{error}}",
+    "noDescriptors": "Er zijn nog geen variabelebeschrijvingen geregistreerd voor deze trigger en dit entiteitstype. Je kunt nog steeds de universele placeholders gebruiken (",
+    "noDescriptorsSuffix": ", enz.).",
+    "availableVariables": "Beschikbare variabelen",
+    "copyHint": "Klik op het kopieerpictogram om een placeholder te pakken.",
+    "filterPlaceholder": "Filteren op naam of beschrijving…",
+    "searchAriaLabel": "Sjabloonvariabelen zoeken",
+    "clearSearchAriaLabel": "Zoekopdracht wissen",
+    "matches_one": "{{count}} match",
+    "matches_other": "{{count}} matches",
+    "noMatch": "Geen variabelen komen overeen"
+  },
+  "triggerPicker": {
+    "label": "Wordt geactiveerd bij",
+    "helper": "Welke actie deze workflow laat uitvoeren",
+    "placeholder": "Selecteer een trigger…",
+    "noTypes": "Geen triggertypes beschikbaar.",
+    "availableToAny": "Beschikbaar voor elke geverifieerde gebruiker.",
+    "groups": {
+      "lifecycle": "Levenscyclusgebeurtenissen",
+      "request_flow": "Verzoekstroom",
+      "validation_gates": "Validatiepoorten",
+      "system_scheduled": "Systeem & gepland"
+    },
+    "requiredPermission": {
+      "label": "Vereiste machtiging:",
+      "prefix": "gebruikers hebben",
+      "suffix": "of hoger nodig om deze workflow te zien en uit te voeren. Stel dit in bij Instellingen → Rollen."
+    }
+  },
+  "view": {
+    "subtitle": "Configureer geautomatiseerde workflows voor validatie, goedkeuring en meldingen.",
+    "readOnlyAccess": "(Alleen-lezen toegang)",
+    "copyNameSuffix": "{{name}} (Kopie)",
+    "approvalWorkflowFallback": "Goedkeuringsworkflow",
+    "stepLabel": "Stap {{number}}",
+    "errorDetails": "Foutdetails",
+    "actions": {
+      "loadDefaults": "Standaardwaarden Laden",
+      "createWorkflow": "Workflow Aanmaken",
+      "previewWizard": "Wizard voorvertonen",
+      "duplicate": "Dupliceren",
+      "forceApprove": "Goedkeuring Forceren",
+      "forceReject": "Afwijzing Forceren"
+    },
+    "loadDefaults": {
+      "menuLabel": "Standaardworkflows",
+      "newOnly": "Alleen Nieuwe Laden",
+      "reloadAll": "Alle Standaardwaarden Herladen"
+    },
+    "badges": {
+      "default": "Standaard",
+      "approval": "Goedkeuring",
+      "process": "Proces"
+    },
+    "columns": {
+      "steps": "Stappen",
+      "workflow": "Workflow",
+      "entity": "Entiteit",
+      "currentStep": "Huidige Stap",
+      "started": "Gestart",
+      "completed": "Voltooid",
+      "error": "Fout"
+    },
+    "help": {
+      "process": "Proces: wordt uitgevoerd na gebeurtenissen (melden, taggen, valideren)",
+      "approval": "Goedkeuring: verschijnt vóór acties (toestemming, voorwaarden)",
+      "chain": "Ze koppelen: eerst goedkeuring, dan proces"
+    },
+    "stats": {
+      "activeWorkflows": "Actieve Workflows",
+      "ofTotal": "van {{count}} totaal",
+      "inactiveCount": "({{count}} inactief)",
+      "defaultWorkflows": "Standaardworkflows",
+      "builtInWorkflows": "ingebouwde workflows",
+      "inProgress": "Bezig",
+      "runningOrPaused": "wordt uitgevoerd of gepauzeerd",
+      "recentFailures": "Recente Mislukkingen",
+      "inLast50Runs": "in laatste 50 uitvoeringen"
+    },
+    "filter": {
+      "label": "Gefilterd: {{filter}}",
+      "active": "Actieve workflows",
+      "inactive": "Inactieve workflows",
+      "default": "Standaardworkflows",
+      "running": "Lopende uitvoeringen",
+      "failed": "Mislukte uitvoeringen",
+      "clear": "Filter wissen"
+    },
+    "sections": {
+      "definitionsTitle": "Workflowdefinities",
+      "executionsTitle": "Recente Uitvoeringen",
+      "executionsDescription": "Bewaak workflow-uitvoeringen en hun status."
+    },
+    "empty": {
+      "noWorkflows": "Nog geen workflows geconfigureerd.",
+      "noWorkflowsHint": "Klik op \"Standaardwaarden Laden\" om te beginnen met standaardworkflows.",
+      "noExecutions": "Nog geen workflow-uitvoeringen.",
+      "noExecutionsHint": "Uitvoeringen verschijnen hier wanneer workflows worden geactiveerd."
+    },
+    "bulk": {
+      "enable": "Inschakelen ({{count}})",
+      "disable": "Uitschakelen ({{count}})",
+      "delete": "Verwijderen ({{count}})",
+      "cancel": "Annuleren ({{count}})",
+      "retry": "Opnieuw proberen ({{count}})"
+    },
+    "dialogs": {
+      "duplicateTitle": "Workflow Dupliceren",
+      "duplicateDescription": "Maak een kopie van \"{{name}}\" met een nieuwe naam.",
+      "deleteExecutionTitle": "Uitvoering Verwijderen",
+      "deleteExecutionDescription": "Weet je zeker dat je deze workflow-uitvoering wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+    },
+    "placeholders": {
+      "newWorkflowName": "Nieuwe workflownaam"
+    },
+    "detail": {
+      "workflow": "Workflow:",
+      "status": "Status:",
+      "entity": "Entiteit:"
+    },
+    "tooltips": {
+      "clickFullError": "Klik om de volledige fout te zien"
+    },
+    "permission": {
+      "denied": "Geen Toegang",
+      "modifyWorkflows": "Je hebt geen toestemming om workflows te wijzigen.",
+      "deleteWorkflows": "Je hebt geen toestemming om workflows te verwijderen.",
+      "loadDefaults": "Je hebt geen toestemming om standaardworkflows te laden.",
+      "cancelExecutions": "Je hebt geen toestemming om uitvoeringen te annuleren.",
+      "retryExecutions": "Je hebt geen toestemming om uitvoeringen opnieuw te proberen.",
+      "overrideApprovals": "Je hebt geen toestemming om workflow-goedkeuringen te overschrijven.",
+      "deleteExecutions": "Je hebt geen toestemming om uitvoeringen te verwijderen."
+    },
+    "confirm": {
+      "deleteWorkflows_one": "Weet je zeker dat je {{count}} workflow wilt verwijderen?",
+      "deleteWorkflows_other": "Weet je zeker dat je {{count}} workflows wilt verwijderen?",
+      "deleteWorkflowsSkipped_one": "  ({{count}} standaardworkflow wordt overgeslagen)",
+      "deleteWorkflowsSkipped_other": "  ({{count}} standaardworkflows worden overgeslagen)",
+      "deleteExecutions_one": "Weet je zeker dat je {{count}} uitvoering wilt verwijderen?",
+      "deleteExecutions_other": "Weet je zeker dat je {{count}} uitvoeringen wilt verwijderen?",
+      "deleteExecutionsSkipped_one": "  ({{count}} lopende/gepauzeerde uitvoering wordt overgeslagen)",
+      "deleteExecutionsSkipped_other": "  ({{count}} lopende/gepauzeerde uitvoeringen worden overgeslagen)"
+    },
+    "messages": {
+      "loadFailed": "Kon workflows niet laden",
+      "workflowEnabled": "Workflow ingeschakeld",
+      "workflowDisabled": "Workflow uitgeschakeld",
+      "updateStatusFailed": "Kon workflowstatus niet bijwerken",
+      "duplicateSuccess": "Workflow succesvol gedupliceerd",
+      "duplicateFailed": "Kon workflow niet dupliceren",
+      "cannotDelete": "Kan Niet Verwijderen",
+      "cannotDeleteDefault": "Standaardworkflows kunnen niet worden verwijderd. Schakel ze in plaats daarvan uit.",
+      "deleteSuccess": "Workflow verwijderd",
+      "deleteFailed": "Kon workflow niet verwijderen",
+      "loadDefaultsFailed": "Kon standaardworkflows niet laden",
+      "cancelSuccess": "Uitvoering succesvol geannuleerd",
+      "cancelFailed": "Kon uitvoering niet annuleren",
+      "retryStarted": "Nieuwe poging voor uitvoering gestart",
+      "retryFailed": "Kon uitvoering niet opnieuw proberen",
+      "executionDeleteSuccess": "Uitvoering succesvol verwijderd",
+      "executionDeleteFailed": "Kon uitvoering niet verwijderen",
+      "forceApprovedByAdmin": "Geforceerd goedgekeurd door beheerder",
+      "forceRejectedByAdmin": "Geforceerd afgewezen door beheerder",
+      "approveResumeSuccess": "Workflow goedgekeurd en hervat",
+      "approveFailed": "Kon workflow niet goedkeuren",
+      "rejectResumeSuccess": "Workflow afgewezen en hervat",
+      "rejectFailed": "Kon workflow niet afwijzen",
+      "noChanges": "Geen Wijzigingen",
+      "allAlreadyEnabled": "Alle geselecteerde workflows zijn al ingeschakeld.",
+      "allAlreadyDisabled": "Alle geselecteerde workflows zijn al uitgeschakeld.",
+      "workflowsEnabled_one": "{{count}} workflow ingeschakeld.",
+      "workflowsEnabled_other": "{{count}} workflows ingeschakeld.",
+      "workflowsDisabled_one": "{{count}} workflow uitgeschakeld.",
+      "workflowsDisabled_other": "{{count}} workflows uitgeschakeld.",
+      "workflowsFailedUpdate_one": "{{count}} workflow kon niet worden bijgewerkt.",
+      "workflowsFailedUpdate_other": "{{count}} workflows konden niet worden bijgewerkt.",
+      "updateWorkflowsFailed": "Kon workflows niet bijwerken",
+      "allDefaultsCannotDelete": "Alle geselecteerde workflows zijn standaardworkflows en kunnen niet worden verwijderd.",
+      "workflowsDeleted_one": "{{count}} workflow verwijderd.",
+      "workflowsDeleted_other": "{{count}} workflows verwijderd.",
+      "workflowsFailedDelete_one": "{{count}} workflow kon niet worden verwijderd.",
+      "workflowsFailedDelete_other": "{{count}} workflows konden niet worden verwijderd.",
+      "deleteWorkflowsFailed": "Kon workflows niet verwijderen",
+      "noCancellable": "Geen Annuleerbare Uitvoeringen",
+      "noCancellableDesc": "Geen van de geselecteerde uitvoeringen kan worden geannuleerd.",
+      "executionsCancelled_one": "{{count}} uitvoering geannuleerd.",
+      "executionsCancelled_other": "{{count}} uitvoeringen geannuleerd.",
+      "executionsFailedCancel_one": "{{count}} uitvoering kon niet worden geannuleerd.",
+      "executionsFailedCancel_other": "{{count}} uitvoeringen konden niet worden geannuleerd.",
+      "cancelExecutionsFailed": "Kon uitvoeringen niet annuleren",
+      "noRetriable": "Geen Opnieuw Uitvoerbare Uitvoeringen",
+      "noRetriableDesc": "Geen van de geselecteerde uitvoeringen kan opnieuw worden geprobeerd.",
+      "executionsRetryStarted_one": "Nieuwe poging voor {{count}} uitvoering gestart.",
+      "executionsRetryStarted_other": "Nieuwe poging voor {{count}} uitvoeringen gestart.",
+      "executionsFailedRetry_one": "{{count}} uitvoering kon niet opnieuw worden geprobeerd.",
+      "executionsFailedRetry_other": "{{count}} uitvoeringen konden niet opnieuw worden geprobeerd.",
+      "retryExecutionsFailed": "Kon uitvoeringen niet opnieuw proberen",
+      "runningCannotDelete": "Lopende of gepauzeerde uitvoeringen kunnen niet worden verwijderd.",
+      "executionsDeleted_one": "{{count}} uitvoering verwijderd.",
+      "executionsDeleted_other": "{{count}} uitvoeringen verwijderd.",
+      "executionsFailedDelete_one": "{{count}} uitvoering kon niet worden verwijderd.",
+      "executionsFailedDelete_other": "{{count}} uitvoeringen konden niet worden verwijderd.",
+      "deleteExecutionsFailed": "Kon uitvoeringen niet verwijderen",
+      "errorCopied": "Fout gekopieerd naar klembord."
+    }
+  }
+}

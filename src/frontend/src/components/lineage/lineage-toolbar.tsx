@@ -37,6 +37,7 @@ interface LineageToolbarProps {
   onDetailChange: (d: LineageDetail) => void;
   nodeCount: number;
   edgeCount: number;
+  truncated?: boolean;
   viewOptions: ViewOptions;
   onViewOptionsChange: (o: ViewOptions) => void;
   /** Active path selection, or null */
@@ -62,6 +63,7 @@ export default function LineageToolbar({
   onDetailChange,
   nodeCount,
   edgeCount,
+  truncated,
   viewOptions,
   onViewOptionsChange,
   selection,
@@ -136,6 +138,15 @@ export default function LineageToolbar({
       <Badge variant="secondary" className="text-xs font-normal">
         {t('data-catalog:lineage.toolbar.entitiesEdges', { nodes: nodeCount, edges: edgeCount })}
       </Badge>
+      {truncated && (
+        <Badge
+          variant="outline"
+          className="text-xs font-normal border-amber-500/50 text-amber-700 dark:text-amber-400"
+          title={t('data-catalog:lineage.toolbar.truncatedHint')}
+        >
+          {t('data-catalog:lineage.toolbar.truncated')}
+        </Badge>
+      )}
 
       {/* View options: layers, edge kinds, labels */}
       <Popover>

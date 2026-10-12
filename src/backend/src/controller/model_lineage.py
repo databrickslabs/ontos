@@ -55,7 +55,12 @@ REL_LABELS = {
 
 # Containment links that do not consume BFS breadth and ignore the direction
 # filter — a contract is shown with its schema, a product with its ports.
+# All are stored parent → child.
 ZERO_COST_RELS = {REL_HAS_OUTPUT_PORT, REL_HAS_SCHEMA, REL_HAS_PROPERTY, "hasColumn"}
+
+# Hard cap on nodes per lineage graph — each visited node costs several
+# queries, and containment adds nodes without consuming depth.
+MAX_LINEAGE_NODES = 500
 
 # Layer fallback for types the ontology does not annotate with ontos:modelLayer
 SYNTHETIC_LAYERS = {

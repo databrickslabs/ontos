@@ -120,6 +120,10 @@ class LineageGraph(BaseModel):
     center_entity_id: str
     nodes: List[LineageGraphNode] = Field(default_factory=list)
     edges: List[LineageGraphEdge] = Field(default_factory=list)
+    truncated: bool = Field(
+        False,
+        description="True when the walk stopped at the node budget; the graph is incomplete",
+    )
 
 
 class ReadinessCheck(BaseModel):

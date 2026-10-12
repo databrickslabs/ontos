@@ -130,7 +130,9 @@
         "entities": "Entities",
         "structure": "Structure",
         "fields": "Fields"
-      }
+      },
+      "truncated": "Truncated",
+      "truncatedHint": "Too many entities — showing the first part. Reduce Depth or open a more specific entity."
     },
     "legendPanel": {
       "entityTypes": "Entity Types",

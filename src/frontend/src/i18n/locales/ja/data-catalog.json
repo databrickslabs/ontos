@@ -130,7 +130,9 @@
         "entities": "エンティティ",
         "structure": "構造",
         "fields": "フィールド"
-      }
+      },
+      "truncated": "一部のみ",
+      "truncatedHint": "エンティティが多すぎるため一部のみ表示しています。深さを減らすか、より具体的なエンティティを開いてください。"
     },
     "legendPanel": {
       "entityTypes": "エンティティ種別",

@@ -246,3 +246,84 @@ def test_gap_filled_schema_nests_in_its_contract(manager, db_session, stack):
     schema_key = f"SchemaObject:{stack.schema.id}"
     assert schema_key in _keys(graph)
     assert (f"DataContract:{stack.contract.id}", schema_key, "hasSchemaObject") in edges
+
+
+def test_concept_centered_lineage_resolves_semantic_keys(manager, db_session, stack):
+    db_session.add_all([
+        EntitySemanticLinkDb(entity_type="data_contract_schema", entity_id=f"{stack.contract.id}#customers",
+                             iri=CONCEPT_IRI, label="Customer"),
+        EntitySemanticLinkDb(entity_type="asset", entity_id=str(stack.table.id), iri=CONCEPT_IRI, label="Customer"),
+        EntitySemanticLinkDb(entity_type="uc_table", entity_id="prod.crm.customers", iri=CONCEPT_IRI, label="Customer"),
+    ])
+    db_session.flush()
+
+    graph = manager.get_business_lineage(db_session, "Concept", CONCEPT_IRI, 1, "downstream")
+    keys = _keys(graph)
+    assert f"DataProduct:{stack.product.id}" in keys
+    assert f"SchemaObject:{stack.schema.id}" in keys
+    assert f"SchemaProperty:{stack.prop.id}" in keys
+    assert f"Table:{stack.table.id}" in keys
+    assert not any("prod.crm.customers" in k for k in keys)  # raw uc_* links are not nodes
+
+
+def test_concept_fanout_is_capped(manager, db_session, stack):
+    from src.controller.model_lineage import MAX_CONCEPT_FANOUT
+    iri = "http://demo.ontos.app/concepts#Popular"
+    for i in range(MAX_CONCEPT_FANOUT + 5):
+        dp = _add_product(db_session, f"p{i}")
+        db_session.add(EntitySemanticLinkDb(entity_type="data_product", entity_id=dp.id, iri=iri, label="Popular"))
+    db_session.flush()
+
+    graph = manager.get_business_lineage(db_session, "Concept", iri, 1, "downstream")
+    assert sum(1 for e in graph.edges if e.relationship_type == "describes") <= MAX_CONCEPT_FANOUT
+
+
+def test_port_binds_to_asset_by_identifier(manager, db_session, stack):
+    stack.port.asset_identifier = "prod.crm.customers"
+    db_session.flush()
+
+    down = manager.get_business_lineage(db_session, "DataProduct", stack.product.id, 1, "downstream")
+    assert (f"OutputPort:{stack.port.id}", f"Table:{stack.table.id}", "portHasAsset") in _edges(down)
+
+    up = manager.get_business_lineage(db_session, "Table", str(stack.table.id), 1, "upstream")
+    assert f"OutputPort:{stack.port.id}" in _keys(up)
+
+
+def test_column_lineage_walks_to_property(manager, db_session, stack):
+    graph = manager.get_business_lineage(db_session, "Column", str(stack.column.id), 2, "upstream")
+    prop_key = f"SchemaProperty:{stack.prop.id}"
+    assert prop_key in _keys(graph)
+    assert (prop_key, f"Column:{stack.column.id}", "implementedBy") in _edges(graph)
+
+
+def test_containment_does_not_pull_in_siblings(manager, db_session, stack):
+    """Column → (up) Table must not walk back down to the table's other columns."""
+    col_type_id = stack.column.asset_type_id
+    sibling = AssetDb(id=uuid4(), name="email", asset_type_id=col_type_id)
+    db_session.add(sibling)
+    db_session.flush()
+    db_session.add(EntityRelationshipDb(
+        source_type="Table", source_id=str(stack.table.id),
+        target_type="Column", target_id=str(sibling.id), relationship_type="hasColumn",
+    ))
+    db_session.flush()
+
+    graph = manager.get_business_lineage(db_session, "Column", str(stack.column.id), 3)
+    keys = _keys(graph)
+    assert f"Table:{stack.table.id}" in keys
+    assert f"Column:{sibling.id}" not in keys
+
+    # From the table itself, its columns are contents, not siblings
+    assert f"Column:{sibling.id}" in _keys(manager.get_business_lineage(db_session, "Table", str(stack.table.id), 1))
+
+
+def test_walk_stops_at_node_budget(manager, db_session, stack, monkeypatch):
+    import src.controller.entity_relationships_manager as erm
+    monkeypatch.setattr(erm, "MAX_LINEAGE_NODES", 3)
+
+    graph = manager.get_business_lineage(db_session, "DataContract", stack.contract.id, 3)
+    assert graph.truncated
+    assert len(graph.nodes) <= 3 + 3  # budget, plus containers of gap-fill leaves
+    keys = _keys(graph)
+    for e in graph.edges:
+        assert e.source in keys and e.target in keys

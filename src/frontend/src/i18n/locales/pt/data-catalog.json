@@ -130,7 +130,9 @@
         "entities": "Entidades",
         "structure": "Estrutura",
         "fields": "Campos"
-      }
+      },
+      "truncated": "Truncado",
+      "truncatedHint": "Demasiadas entidades — a mostrar apenas uma parte. Reduza a profundidade ou abra uma entidade mais específica."
     },
     "legendPanel": {
       "entityTypes": "Tipos de Entidade",

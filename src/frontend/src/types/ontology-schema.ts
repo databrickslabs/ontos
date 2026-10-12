@@ -177,6 +177,8 @@ export interface LineageGraph {
   center_entity_id: string;
   nodes: LineageGraphNode[];
   edges: LineageGraphEdge[];
+  /** Walk stopped at the backend node budget; the graph is incomplete */
+  truncated?: boolean;
 }
 
 export interface ReadinessCheck {

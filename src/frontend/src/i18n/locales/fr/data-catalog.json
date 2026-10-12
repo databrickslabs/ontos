@@ -130,7 +130,9 @@
         "entities": "Entités",
         "structure": "Structure",
         "fields": "Champs"
-      }
+      },
+      "truncated": "Tronqué",
+      "truncatedHint": "Trop d’entités : seule une partie est affichée. Réduisez la profondeur ou ouvrez une entité plus précise."
     },
     "legendPanel": {
       "entityTypes": "Types d'entités",

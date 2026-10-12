@@ -130,7 +130,9 @@
         "entities": "Entiteiten",
         "structure": "Structuur",
         "fields": "Velden"
-      }
+      },
+      "truncated": "Ingekort",
+      "truncatedHint": "Te veel entiteiten – alleen een deel wordt getoond. Verlaag de diepte of open een specifiekere entiteit."
     },
     "legendPanel": {
       "entityTypes": "Entiteitstypes",

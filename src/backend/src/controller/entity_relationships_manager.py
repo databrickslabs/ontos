@@ -30,6 +30,7 @@ from src.controller.model_lineage import (
     DEFAULT_LAYER,
     HIDDEN_LINEAGE_TYPES,
     LAYER_RANK,
+    MAX_LINEAGE_NODES,
     MODEL_LAYERS,
     REL_LABELS,
     SYNTHETIC_LAYERS,
@@ -685,12 +686,18 @@ class EntityRelationshipsManager:
         edges: Dict[tuple, LineageGraphEdge] = {}
         passes = [direction] if direction in ("upstream", "downstream") else ["upstream", "downstream"]
         leaves: Set[tuple] = set()
+        truncated = False
         for pass_direction in passes:
-            self._walk_lineage(db, entity_type, entity_id, max_depth, pass_direction, nodes, edges, leaves)
+            truncated |= self._walk_lineage(
+                db, entity_type, entity_id, max_depth, pass_direction, nodes, edges, leaves,
+            )
         self._attach_leaf_containers(db, leaves, nodes, edges)
+        if truncated:
+            logger.info(f"Business lineage for {center_key} truncated at {MAX_LINEAGE_NODES} nodes")
 
         graph.nodes = list(nodes.values())
         graph.edges = list(edges.values())
+        graph.truncated = truncated
         return graph
 
     def _walk_lineage(
@@ -703,11 +710,16 @@ class EntityRelationshipsManager:
         nodes: Dict[str, LineageGraphNode],
         edges: Dict[tuple, LineageGraphEdge],
         leaves: Set[tuple],
-    ) -> None:
+    ) -> bool:
         """One directional pass (0-1 BFS); adds to ``nodes`` / ``edges`` in place.
 
         Gap-fill neighbors are not walked further; they are collected in
         ``leaves`` so their containers can be attached afterwards.
+
+        A node reached by going *up* containment (column → table) does not walk
+        back down to its other children — those are siblings, not lineage.
+
+        Returns True when the walk stopped at ``MAX_LINEAGE_NODES``.
 
         Containment links in ``ZERO_COST_RELS`` do not consume breadth and are
         followed in either direction, so a contract always comes with its
@@ -717,10 +729,11 @@ class EntityRelationshipsManager:
         center_rank = LAYER_RANK.get(self._layer_for_type(entity_type))
         best_depth: Dict[str, int] = {f"{entity_type}:{entity_id}": 0}
         unresolvable: Set[str] = set()
-        queue: Deque[tuple] = deque([(entity_type, entity_id, 0)])
+        # (type, id, depth, reached_upward)
+        queue: Deque[tuple] = deque([(entity_type, entity_id, 0, False)])
 
         while queue:
-            cur_type, cur_id, depth = queue.popleft()
+            cur_type, cur_id, depth, reached_upward = queue.popleft()
             cur_key = f"{cur_type}:{cur_id}"
             if depth > best_depth.get(cur_key, depth):
                 continue  # stale entry, reached cheaper since
@@ -734,6 +747,9 @@ class EntityRelationshipsManager:
 
                 forward = is_forward_flow(rel_type, self._layer_for_type(src_type), self._layer_for_type(tgt_type))
                 zero_cost = rel_type in ZERO_COST_RELS
+                # Containment is stored parent → child; outgoing means going down
+                if zero_cost and is_outgoing and reached_upward:
+                    continue
                 gap_fill = False
                 if not zero_cost:
                     neighbor_is_upstream = (forward != is_outgoing)
@@ -753,6 +769,8 @@ class EntityRelationshipsManager:
                 if neighbor_key in unresolvable:
                     continue
                 if neighbor_key not in nodes:
+                    if len(nodes) >= MAX_LINEAGE_NODES:
+                        return True
                     n_info = self._resolve_entity(db, neighbor_type, neighbor_id)
                     if not n_info:
                         # Never emit an edge to a node that is not in the graph
@@ -777,9 +795,10 @@ class EntityRelationshipsManager:
                 if next_depth <= max_depth and next_depth < best_depth.get(neighbor_key, max_depth + 1):
                     best_depth[neighbor_key] = next_depth
                     if zero_cost:
-                        queue.appendleft((neighbor_type, neighbor_id, next_depth))
+                        queue.appendleft((neighbor_type, neighbor_id, next_depth, not is_outgoing))
                     else:
-                        queue.append((neighbor_type, neighbor_id, next_depth))
+                        queue.append((neighbor_type, neighbor_id, next_depth, False))
+        return False
 
     def _attach_leaf_containers(
         self,

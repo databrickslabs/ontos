@@ -420,6 +420,7 @@ function BusinessLineageViewInner({
           onDetailChange={setDetail}
           nodeCount={filteredGraph?.nodes.length ?? graph.nodes.length}
           edgeCount={filteredGraph?.edges.length ?? graph.edges.length}
+          truncated={graph.truncated}
           viewOptions={viewOptions}
           onViewOptionsChange={setViewOptions}
           selection={selectedNode && highlight ? {

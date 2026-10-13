@@ -207,7 +207,8 @@ export default function RequestProductActionDialog({
           icon: <Rocket className="h-5 w-5" />,
           title: t('data-products:requestAction.types.publish.title'),
           description: t('data-products:requestAction.types.publish.description'),
-          enabled: productStatus?.toLowerCase() === 'approved' || productStatus?.toLowerCase() === 'active',
+          // Only active products can be published (same rule as the backend).
+          enabled: productStatus?.toLowerCase() === 'active',
           endpoint: `/api/data-products/${productId}/request-publish`,
         };
       case 'certify':

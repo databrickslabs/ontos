@@ -815,6 +815,14 @@ async def request_publish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
+        # Same rule as set-publication-scope: only active products are published.
+        current_status = (product_db.status or "").lower()
+        if scope != "none" and current_status != "active":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Product must be active to publish. Current status: {product_db.status}"
+            )
+
         change_log_manager.log_change_with_details(
             db,
             entity_type="data_product",
@@ -832,6 +840,8 @@ async def request_publish_product(
                 "requested_scope": scope,
                 "justification": justification,
                 "requester": username,
+                # Same key as the data contract request (data_contracts_manager)
+                "current_status": current_status,
             },
             user_email=username,
             blocking=True,

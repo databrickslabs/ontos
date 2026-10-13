@@ -11,10 +11,10 @@ on:
   # waiting on checks that never report.
   merge_group:
 
+# Least privilege: read-only by default. Each job requests what it needs;
+# only the lockfile job writes (auto-commit + PR comment).
 permissions:
-  id-token: write
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   backend-tests:
@@ -23,6 +23,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
@@ -99,6 +102,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
@@ -146,6 +152,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
     # E2E tests temporarily disabled on all branches
     if: false
 
@@ -267,6 +276,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
@@ -290,6 +302,10 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write # auto-commit regenerated lockfiles
+      pull-requests: write # comment on the PR
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
@@ -341,14 +357,17 @@ jobs:
 
       - name: Auto-commit lockfile updates to PR branch
         if: github.event_name == 'pull_request' && steps.drift.outputs.drifted == 'true' && steps.fork.outputs.is_fork == 'false'
+        env:
+          # Branch names are user-controlled: pass them via env, not inline.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt
           git commit -m "chore: regenerate requirements lockfiles"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          echo "Pushed regenerated lockfiles to ${{ github.event.pull_request.head.ref }}."
+          git push origin "HEAD:${HEAD_REF}"
+          echo "Pushed regenerated lockfiles to ${HEAD_REF}."
           echo "CI will re-run on the new SHA (requires LOCKFILE_BOT_TOKEN secret to be a PAT)."
 
       - name: Comment on PR
@@ -376,6 +395,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
     # Skip on PRs that intentionally carry a divergent migration branch.
     # The label is the documented escape hatch for the rare case where two
     # heads are deliberate and a merge revision is planned in the PR itself.
@@ -415,6 +437,9 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code

@@ -20,6 +20,7 @@ class EntityFilter:
     """Filter criteria for entities."""
     entity_types: List[str]  # Types to include (e.g., ['table', 'view'])
     where_clause_ast: Optional[Any] = None  # Parsed WHERE condition AST
+    match_type: Optional[str] = None  # MATCH type as written in the rule, for messages
 
 
 class EntityLoader(ABC):
@@ -202,7 +203,8 @@ class AppEntityLoader(EntityLoader):
             'data_product',
             'data_contract',
             'domain',
-            'glossary_term',
+            # 'glossary_term' is not loaded yet (see load_entities), so it is
+            # not listed: rules on it must be reported as matching nothing.
             'review',
         ]
 
@@ -328,7 +330,8 @@ class EntityIterator:
         self,
         entity_filter: EntityFilter,
         limit: Optional[int] = None,
-        batch_size: int = 100
+        batch_size: int = 100,
+        source: Optional[str] = None,
     ) -> Iterator[Dict[str, Any]]:
         """Iterate over filtered entities.
 
@@ -336,11 +339,13 @@ class EntityIterator:
             entity_filter: Filter criteria
             limit: Maximum number of entities to return
             batch_size: Batch size for loading
+            source: Where the rule comes from (e.g. the policy), for log messages
 
         Yields:
             Filtered entity dictionaries
         """
         count = 0
+        matched = False
 
         for loader in self.loaders:
             # Check if loader supports any of the requested types
@@ -349,6 +354,7 @@ class EntityIterator:
 
             if not requested:
                 continue
+            matched = True
 
             # Load entities
             for entity in loader.load_entities(requested, batch_size):
@@ -367,6 +373,24 @@ class EntityIterator:
 
                 if limit and count >= limit:
                     return
+
+        # Rules without MATCH (maturity gates, workflow policy checks) are
+        # evaluated against one given entity elsewhere; matching nothing here
+        # is expected for them.
+        if not matched and entity_filter.entity_types:
+            # Otherwise the run ends with no results and nothing explains why.
+            self._report_unmatched(entity_filter, source)
+
+    def _report_unmatched(self, entity_filter: EntityFilter, source: Optional[str]) -> None:
+        where = f" of {source}" if source else ""
+        available = sorted({t for loader in self.loaders for t in loader.get_supported_types()})
+        logger.warning(
+            "Compliance rule%s matches no entities: no available entity loader handles "
+            "MATCH type '%s' (available types: %s)",
+            where,
+            entity_filter.match_type or ", ".join(entity_filter.entity_types),
+            ", ".join(available) or "none",
+        )
 
 
 def create_entity_iterator(
@@ -431,5 +455,6 @@ def parse_entity_filter(rule: str) -> EntityFilter:
 
     return EntityFilter(
         entity_types=entity_types,
-        where_clause_ast=where_clause
+        where_clause_ast=where_clause,
+        match_type=match_type,
     )

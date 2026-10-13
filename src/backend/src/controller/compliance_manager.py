@@ -513,7 +513,9 @@ class ComplianceManager:
             entity_filter = parse_entity_filter(policy.rule)
 
             # Iterate over entities
-            for obj in entity_iterator.iterate(entity_filter, limit=limit):
+            for obj in entity_iterator.iterate(
+                entity_filter, limit=limit, source=f"policy '{policy.name}' ({policy.id})",
+            ):
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None

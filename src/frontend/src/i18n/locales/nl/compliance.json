@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",
+    "policySavedWithWarnings": "Beleid '{{name}}' opgeslagen, maar de regel werkt mogelijk niet",
     "policyDeleted": "Beleid succesvol verwijderd"
   },
   "score": {

@@ -55,8 +55,10 @@ class UnityCatalogLoader(EntityLoader):
     def __init__(self, workspace_client):
         self.ws = workspace_client
 
+    SUPPORTED_TYPES = ('catalog', 'schema', 'table', 'view', 'function', 'volume')
+
     def get_supported_types(self) -> List[str]:
-        return ['catalog', 'schema', 'table', 'view', 'function', 'volume']
+        return list(self.SUPPORTED_TYPES)
 
     def load_entities(
         self,
@@ -198,15 +200,12 @@ class AppEntityLoader(EntityLoader):
     def __init__(self, db: Session):
         self.db = db
 
+    # 'glossary_term' is not loaded yet (see load_entities), so it is not
+    # listed: rules on it must be reported as matching nothing.
+    SUPPORTED_TYPES = ('data_product', 'data_contract', 'domain', 'review')
+
     def get_supported_types(self) -> List[str]:
-        return [
-            'data_product',
-            'data_contract',
-            'domain',
-            # 'glossary_term' is not loaded yet (see load_entities), so it is
-            # not listed: rules on it must be reported as matching nothing.
-            'review',
-        ]
+        return list(self.SUPPORTED_TYPES)
 
     def load_entities(
         self,
@@ -458,3 +457,31 @@ def parse_entity_filter(rule: str) -> EntityFilter:
         where_clause_ast=where_clause,
         match_type=match_type,
     )
+
+
+def validate_rule(rule: str) -> List[str]:
+    """Check a policy rule before it is saved.
+
+    Raises:
+        ValueError: The rule does not parse.
+
+    Returns:
+        Warnings for rules that parse but cannot work as written.
+    """
+    from src.common.compliance_dsl import parse_rule
+
+    parsed = parse_rule(rule)
+    warnings = []
+    entity_filter = parse_entity_filter(rule)
+    known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
+    # A rule without MATCH is valid: maturity gates and workflow policy checks
+    # evaluate it against one given entity.
+    if entity_filter.entity_types and not any(t in known for t in entity_filter.entity_types):
+        warnings.append(
+            f"MATCH type '{entity_filter.match_type}' is not supported, so the rule matches "
+            f"no entities. Supported types: {', '.join(known)}, or Object for all of them."
+        )
+    if parsed.get('assert_clause') is None:
+        warnings.append("The rule has no ASSERT clause, so every entity passes.")
+    return warnings
+

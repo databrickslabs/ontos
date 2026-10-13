@@ -32,6 +32,7 @@ type Policy = {
   created_at?: string;
   updated_at?: string;
   examples?: { pass?: any[]; fail?: any[] } | null;
+  warnings?: string[]; // returned by update when the rule cannot work as written
 };
 
 type Run = {
@@ -189,10 +190,16 @@ export default function CompliancePolicyDetails() {
       
       setPolicy(response.data);
       setDynamicTitle(response.data.name);
-      toast({
-        title: t('common:toast.success'),
-        description: t('compliance:toast.policySaved', { name: response.data.name })
-      });
+      const warnings = response.data.warnings ?? [];
+      toast(warnings.length
+        ? {
+            title: t('compliance:toast.policySavedWithWarnings', { name: response.data.name }),
+            description: warnings.join(' '),
+          }
+        : {
+            title: t('common:toast.success'),
+            description: t('compliance:toast.policySaved', { name: response.data.name })
+          });
       
       setIsEditDialogOpen(false);
     } catch (err) {

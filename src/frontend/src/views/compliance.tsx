@@ -45,6 +45,7 @@ interface CompliancePolicy {
   is_active: boolean;
   severity: 'low' | 'medium' | 'high' | 'critical';
   category: string;
+  warnings?: string[]; // returned by create/update when the rule cannot work as written
 }
 
 interface ComplianceStats {
@@ -158,10 +159,16 @@ export default function Compliance() {
         throw new Error(response.error || t('compliance:errors.saveNoDataReturned'));
       }
       
-      toast({
-        title: t('common:toast.success'),
-        description: t('compliance:toast.policySaved', { name: response.data.name })
-      });
+      const warnings = response.data.warnings ?? [];
+      toast(warnings.length
+        ? {
+            title: t('compliance:toast.policySavedWithWarnings', { name: response.data.name }),
+            description: warnings.join(' '),
+          }
+        : {
+            title: t('common:toast.success'),
+            description: t('compliance:toast.policySaved', { name: response.data.name })
+          });
       
       setIsDialogOpen(false);
       loadPolicies();

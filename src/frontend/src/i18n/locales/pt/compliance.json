@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Política '{{name}}' salva com sucesso",
+    "policySavedWithWarnings": "Política '{{name}}' salva, mas a regra pode não funcionar",
     "policyDeleted": "Política excluída com sucesso"
   },
   "score": {

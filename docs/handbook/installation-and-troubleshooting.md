@@ -299,12 +299,15 @@ agreement they're listed on. Two causes recur:
   workflow definition filters approvers by role, and the user's
   current Ontos role doesn't match. Fix: check the workflow's
   approver-role spec and the user's role assignment.
-- **Outer permission gate.** The approval-handling endpoint may
-  require a feature access level the reviewer doesn't have at the
-  configured level (historically `notifications:READ_WRITE` or
-  `data-contracts:READ_WRITE`). Fix: align the user's role with the
-  endpoint's gate, or relax the gate in the deployment's role
-  config.
+- **Not a recipient of this approval.** `POST /api/workflows/handle-approval`
+  has no feature-level permission gate. It only checks that the caller
+  is a recipient, or a member of the recipient role, of that
+  execution's approval notification (Admins can act on any approval).
+  A `403 You are not an authorized approver for this execution` means
+  the notification went to someone else. Fix: check the step's
+  `approvers` spec and how it resolved. Older versions also required
+  `notifications:READ_ONLY`, which non-admin users could not be granted
+  (#971).
 
 ##### "grant_permissions step failed" {#grant-permissions-failed}
 

@@ -4,9 +4,9 @@
 Two halves:
 
 1. **Dispatch pin** — the `for_approval_response` entry in
-   ``WIZARD_PERMISSION_DISPATCH`` must be
-   ``("notifications", READ_WRITE)``. Locks down PR K's outer-gate
-   relaxation. (The catch-all `test_dispatch_expected_features` in
+   ``WIZARD_PERMISSION_DISPATCH`` must be ``None`` (authenticated only,
+   #971), and ``POST /handle-approval`` has no feature-level gate.
+   (The catch-all `test_dispatch_expected_features` in
    ``test_wizard_permission_dispatch.py`` already pins this; we repeat
    the assertion here so the file documents PR K end to end.)
 
@@ -38,7 +38,6 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from src.common.features import FeatureAccessLevel
 from src.models.notifications import Notification
 from src.models.process_workflows import TriggerType
 from src.models.users import UserInfo
@@ -54,20 +53,30 @@ from src.routes.workflows_routes import (
 # ---------------------------------------------------------------------------
 
 
-def test_dispatch_for_approval_response_is_notifications_read_only() -> None:
-    """PR L — relaxed further from PR K's ``("notifications", READ_WRITE)``
-    to ``("notifications", READ_ONLY)``. The outer gate's only job is to
-    confirm the caller is part of the notification system at all
-    (defense-in-depth alongside the per-execution check). Requiring
-    READ_WRITE was too tight: typical Business Owners hold a business
-    role on the entity but only have notifications:Read-only at the
-    app-role level. The real authorization remains the per-execution
-    check (``_assert_caller_authorized_for_execution``) — see tests
-    below."""
-    assert WIZARD_PERMISSION_DISPATCH[TriggerType.FOR_APPROVAL_RESPONSE.value] == (
-        "notifications",
-        FeatureAccessLevel.READ_ONLY,
-    )
+def test_dispatch_for_approval_response_is_authenticated_only() -> None:
+    """#971 — the former ``("notifications", READ_ONLY)`` gate could not be
+    granted to non-admin roles (``notifications`` is admin-only), so it
+    rejected every non-admin approver. The real authorization is the
+    per-execution check (``_assert_caller_authorized_for_execution``)."""
+    assert WIZARD_PERMISSION_DISPATCH[TriggerType.FOR_APPROVAL_RESPONSE.value] is None
+
+
+def test_handle_approval_has_no_feature_permission_gate() -> None:
+    """#971 — ``POST /handle-approval`` must not depend on a
+    ``PermissionChecker``: approvers holding only a business role have no
+    app role, so any feature-level gate would reject them."""
+    from src.common.authorization import PermissionChecker
+    from src.routes.workflows_routes import router
+
+    [route] = [
+        r for r in router.routes
+        if getattr(r, 'path', '') == '/api/workflows/handle-approval'
+    ]
+    checkers = [
+        d.call for d in route.dependant.dependencies
+        if isinstance(d.call, PermissionChecker)
+    ]
+    assert checkers == []
 
 
 # ---------------------------------------------------------------------------
@@ -276,3 +285,51 @@ def test_assert_short_circuits_on_first_match() -> None:
     assert len(matches) == 2  # _find_ returns both; auth returns both for downstream
     # Only one access check needed before returning success
     assert manager.can_user_access_notification.call_count == 1
+
+
+def test_assert_ignores_approval_notifications_without_recipient() -> None:
+    """An approval notification with neither recipient nor role is a
+    broadcast for ``can_user_access_notification`` (everyone may see it).
+    It must not let anyone approve the execution."""
+    rows = [_make_notif_row(notif_id='n1', execution_id='exec-A')]
+    db = _mock_db_with_rows(rows)
+    manager = MagicMock()
+    manager.can_user_access_notification.return_value = True  # broadcast: visible to all
+
+    with pytest.raises(HTTPException) as exc:
+        _assert_caller_authorized_for_execution(
+            db=db,
+            notifications_manager=manager,
+            execution_id='exec-A',
+            user_info=_user('mallory@example.com'),
+        )
+
+    assert exc.value.status_code == 403
+    manager.can_user_access_notification.assert_not_called()
+
+
+def test_assert_uses_only_addressed_approval_notifications() -> None:
+    """With a broadcast and an addressed notification for the same
+    execution, only the addressed one can authorize."""
+    rows = [
+        _make_notif_row(notif_id='broadcast', execution_id='exec-A'),
+        _make_notif_row(notif_id='n1', execution_id='exec-A', recipient='alice@example.com'),
+    ]
+    db = _mock_db_with_rows(rows)
+    manager = MagicMock()
+
+    def access(*, db, notification: Notification, user_info: UserInfo) -> bool:
+        return not notification.recipient or notification.recipient == user_info.email
+    manager.can_user_access_notification.side_effect = access
+
+    with pytest.raises(HTTPException):
+        _assert_caller_authorized_for_execution(
+            db=db, notifications_manager=manager, execution_id='exec-A',
+            user_info=_user('mallory@example.com'),
+        )
+    matches = _assert_caller_authorized_for_execution(
+        db=db, notifications_manager=manager, execution_id='exec-A',
+        user_info=_user('alice@example.com'),
+    )
+    assert [m.id for m in matches] == ['n1']
+

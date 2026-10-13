@@ -571,19 +571,15 @@ WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
     TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
     TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
     TriggerType.ON_FIRST_ACCESS.value:           None,  # authenticated only — first-login welcome screen
-    # `for_approval_response` — relaxed from `notifications:READ_WRITE`
-    # (PR K) down to `notifications:READ_ONLY` (PR L). The outer gate
-    # only needs to confirm the user is part of the notification system
-    # at all; the real authorization is the per-execution check inside
+    # `for_approval_response` — authenticated only (#971). The real
+    # authorization is the per-execution check inside
     # `POST /api/workflows/handle-approval`
-    # (`_assert_caller_authorized_for_execution`), which verifies the
-    # caller is the recipient (or role-member) of the actual approval
-    # notification — preventing horizontal privilege escalation.
-    # READ_WRITE is too tight: typical Business Owners hold a business
-    # role on the entity but only have notifications:Read-only at the
-    # app-role level (they read + respond to notifications routed to
-    # them; they don't author or modify notifications).
-    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_ONLY),
+    # (`_assert_caller_authorized_for_execution`): the caller must be the
+    # recipient (or role member) of the actual approval notification.
+    # It used to require `notifications:READ_ONLY` (PR L), which can no
+    # longer be granted since `notifications` became admin-only, and which
+    # approvers holding only a business role never have anyway.
+    TriggerType.FOR_APPROVAL_RESPONSE.value:     None,
 }
 
 
@@ -1199,14 +1195,16 @@ def _assert_caller_authorized_for_execution(
     ``workflow_approval`` notification for ``execution_id`` that the caller
     can access under
     ``NotificationsManager.can_user_access_notification`` (direct
-    recipient, role membership via ``recipient_role_id``, or admin
-    fallback for role-with-no-groups).
+    recipient, role membership via ``recipient_role_id``, or admin).
 
-    This is the per-execution check that backs the relaxed outer gate on
-    ``POST /handle-approval`` (notifications:READ_WRITE instead of
-    settings:READ_WRITE). It prevents horizontal privilege escalation —
-    a Business Owner with notifications RW cannot approve an execution
-    they were never notified about.
+    This is the only authorization on ``POST /handle-approval`` and the
+    ``for_approval_response`` wizard (no feature-level gate, see #971). It
+    prevents horizontal privilege escalation: a caller cannot approve an
+    execution they were never notified about.
+
+    Approval notifications without a recipient and without a role are
+    ignored: ``can_user_access_notification`` treats them as broadcast
+    (visible to everyone), which must never mean "anyone may approve".
 
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.
@@ -1214,7 +1212,10 @@ def _assert_caller_authorized_for_execution(
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
     """
-    candidates = _find_approval_notifications_for_execution(db, execution_id)
+    candidates = [
+        n for n in _find_approval_notifications_for_execution(db, execution_id)
+        if n.recipient or n.recipient_role_id
+    ]
     if not candidates:
         raise HTTPException(
             status_code=403,
@@ -1239,29 +1240,18 @@ async def handle_workflow_approval(
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager),
-    # Outer gate is `notifications:READ_ONLY` (PR L). The real
-    # authorization is the per-execution check below
-    # (`_assert_caller_authorized_for_execution`), which confirms the
-    # caller was an actual recipient/role-member of the approval
-    # notification. The outer gate exists for defense-in-depth — it
-    # ensures the caller is part of the notification system at all
-    # (rejects users with `notifications:None`), but doesn't require
-    # write-level notification permissions which most non-admin
-    # Business Owners legitimately don't have. Approving a notification
-    # routed to you is *reading* + responding; not a separate "write"
-    # action on the notification feature itself.
+    # No feature-level gate: authenticated callers only. Authorization is
+    # the per-execution check below (`_assert_caller_authorized_for_execution`):
+    # the caller must be a recipient / role member of this execution's
+    # approval notification (admins may act on any approval).
     #
-    # Two-layer defense satisfied (per OWASP API1+API5):
-    #   * Function-level (outer): you can see notifications → can be a
-    #     workflow recipient. Excludes users with no notification access.
-    #   * Object-level (inner): you must be the specific recipient of
-    #     this execution's approval notification (or have admin bypass).
-    #
-    # History: was `settings:READ_WRITE` (pre-PR-K, semantically wrong),
-    # then `notifications:READ_WRITE` (PR K, too tight for non-admin
-    # BOs), now `notifications:READ_ONLY` (PR L, the minimum that
-    # preserves defense-in-depth without blocking legitimate approvers).
-    _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.READ_ONLY)),
+    # History: `settings:READ_WRITE` (pre-PR-K), `notifications:READ_WRITE`
+    # (PR K), `notifications:READ_ONLY` (PR L). Since the RBAC refactor
+    # (55af9736) `notifications` is admin-only ("end users see their own
+    # notifications without this permission"), so READ_ONLY can no longer be
+    # granted and the outer gate rejected every non-admin approver (#971).
+    # Approvers who hold only a business role have no app role at all, so
+    # any feature-level gate would still reject them.
 ) -> Dict[str, Any]:
     """Handle a workflow approval from a notification action.
 

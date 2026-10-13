@@ -1945,6 +1945,12 @@ class EntityActionStepHandler(StepHandler):
         fixed_scope: str  (when scope_source == fixed)
     """
 
+    # Same rules as the set-publication-scope routes.
+    PUBLISHABLE_STATUSES = {
+        'data_product': {'active'},
+        'data_contract': {'approved', 'active'},
+    }
+
     def execute(self, context: StepContext) -> StepResult:
         from datetime import datetime, timezone
 
@@ -2046,6 +2052,16 @@ class EntityActionStepHandler(StepHandler):
             return StepResult(passed=False, error=f"{entity_type} {entity_id} not found")
 
         scope = self._resolve_scope(context)
+        # Approval can come days after the request: re-check the live status
+        # with the same rules as the set-publication-scope routes.
+        allowed = self.PUBLISHABLE_STATUSES.get(resolved_type)
+        status = (getattr(db_entity, 'status', None) or '').lower()
+        if scope != 'none' and allowed and status not in allowed:
+            return StepResult(
+                passed=False,
+                error=f"Cannot publish {resolved_type} in status '{status}' "
+                      f"(allowed: {', '.join(sorted(allowed))})",
+            )
         db_entity.publication_scope = scope
         db_entity.published_at = datetime.now(timezone.utc)
         db_entity.published_by = context.user_email

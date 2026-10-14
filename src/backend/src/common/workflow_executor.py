@@ -249,6 +249,56 @@ def _entity_owner_emails(db: Session, context: 'StepContext') -> List[str]:
     return resolve_owner_emails(db, *_underlying_entity(context))
 
 
+# Approver tokens used by the default workflows that have no app role in a
+# default install (normalized: lowercase, no spaces or underscores).
+_OWNER_APPROVER_TOKENS = {
+    'domainowner': 'DomainOwner',
+    'domainowners': 'DomainOwner',
+    'contractapprover': 'ContractApprover',
+}
+
+
+def _owner_approvers(db: Session, role_name: str, context: 'StepContext') -> List[tuple]:
+    """Approvers for the 'DomainOwner' / 'ContractApprover' tokens.
+
+    An app role with that name wins (an admin may have created one).
+    Otherwise 'DomainOwner' resolves to the owners of the entity's domain and
+    'ContractApprover' to the owners of the entity itself (the data
+    contract), leaving out the requester. When nobody is left, the request
+    goes to the Data Steward role instead of a recipient no user matches.
+    """
+    from src.db_models.settings import AppRoleDb
+    from src.repositories.entity_owners_repository import (
+        resolve_domain_owner_emails,
+        resolve_owner_emails,
+    )
+
+    role = db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
+    if role:
+        return [(role.name, role.id)]
+    for r in db.query(AppRoleDb).all():
+        if r.name.lower().replace(' ', '').replace('_', '') == role_name.lower():
+            return [(r.name, r.id)]
+
+    entity_type, entity_id = _underlying_entity(context)
+    if role_name == 'DomainOwner':
+        emails = resolve_domain_owner_emails(db, entity_type, entity_id)
+    else:
+        emails = resolve_owner_emails(db, entity_type, entity_id)
+    # The requester is often an owner; they must not approve their own request.
+    requester = (context.user_email or '').lower()
+    emails = [email for email in emails if email.lower() != requester]
+    if emails:
+        return [(email, None) for email in emails]
+
+    logger.warning(
+        "No %s other than the requester found for %s %s; "
+        "requesting approval from Data Stewards",
+        role_name, entity_type, entity_id,
+    )
+    return _resolve_role_to_users(db, 'data_stewards', context)
+
+
 def _resolve_role_to_users(
     db: Session,
     role_spec: str,
@@ -260,10 +310,11 @@ def _resolve_role_to_users(
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
+    - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
     - '<uuid>' → app role UUID
     - 'user@email.com' → direct email
-    - Legacy aliases like 'domain_owners', 'admins', etc.
+    - Legacy aliases like 'data_stewards', 'admins', etc.
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -294,7 +345,6 @@ def _resolve_role_to_users(
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
-        'domain_owners': 'DomainOwner',
         'project_owners': 'ProjectOwner',
         'data_stewards': 'DataSteward',
         'data_steward': 'DataSteward',
@@ -315,6 +365,10 @@ def _resolve_role_to_users(
         if owner:
             return [(owner, None)]
         return [(email, None) for email in _entity_owner_emails(db, context)]
+
+    owner_approver = _OWNER_APPROVER_TOKENS.get(role_spec.lower().replace(' ', '').replace('_', ''))
+    if owner_approver:
+        return _owner_approvers(db, owner_approver, context)
 
     if role_spec in role_aliases:
         role_name = role_aliases[role_spec]

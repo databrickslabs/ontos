@@ -1446,9 +1446,10 @@ workflows:
           # The trigger entity is the request payload, which carries the
           # entity status as `current_status`. Contracts can only be
           # requested from `approved`, products only from `active`.
+          # Unpublishing (requested scope `none`) is allowed in any status.
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.current_status IN ['approved', 'active']
+            ASSERT obj.requested_scope = 'none' OR obj.current_status IN ['approved', 'active']
             ON_FAIL FAIL 'Only approved data contracts and active data products can be published'
         on_pass: "notify-owner"
         on_fail: "notify-invalid"

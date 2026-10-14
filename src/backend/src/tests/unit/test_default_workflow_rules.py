@@ -51,7 +51,18 @@ def test_publication_request_review_accepts_publishable_statuses(status):
     assert passed is True, message
 
 
-@pytest.mark.parametrize('payload', [{'current_status': 'draft'}, {}])
+def test_publication_request_review_lets_any_status_unpublish():
+    passed, message = evaluate_rule_on_object(
+        _publication_review_rule(), {'current_status': 'deprecated', 'requested_scope': 'none'}
+    )
+
+    assert passed is True, message
+
+
+@pytest.mark.parametrize('payload', [
+    {'current_status': 'draft'}, {},
+    {'current_status': 'deprecated', 'requested_scope': 'organization'},
+])
 def test_publication_request_review_rejects_other_statuses(payload):
     passed, _ = evaluate_rule_on_object(_publication_review_rule(), payload)
 

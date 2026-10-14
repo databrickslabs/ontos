@@ -749,5 +749,14 @@
     "tabMemberships": "Appartenenze",
     "detailsFailed": "Impossibile recuperare i dettagli dell'utente",
     "loadFailed": "Impossibile caricare i dati del profilo"
+  },
+  "deprecation": {
+    "reason": "Motivo della deprecazione",
+    "reasonPlaceholder": "Perché viene deprecato? I consumatori vedranno questo testo.",
+    "sunsetDate": "Data di dismissione",
+    "replacement": "Sostituto",
+    "noReplacement": "Nessun sostituto",
+    "reasonRequired": "Per deprecare è necessario un motivo.",
+    "requestHint": "La giustificazione diventa il motivo della deprecazione."
   }
 }

@@ -749,5 +749,14 @@
     "tabMemberships": "メンバーシップ",
     "detailsFailed": "ユーザー詳細の取得に失敗しました",
     "loadFailed": "プロフィールデータの読み込みに失敗しました"
+  },
+  "deprecation": {
+    "reason": "非推奨の理由",
+    "reasonPlaceholder": "非推奨にする理由。利用者に表示されます。",
+    "sunsetDate": "提供終了日",
+    "replacement": "後継",
+    "noReplacement": "後継なし",
+    "reasonRequired": "非推奨にするには理由が必要です。",
+    "requestHint": "申請理由が非推奨の理由になります。"
   }
 }

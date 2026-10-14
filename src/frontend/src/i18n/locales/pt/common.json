@@ -749,5 +749,14 @@
     "tabMemberships": "Associações",
     "detailsFailed": "Falha ao buscar detalhes do usuário",
     "loadFailed": "Falha ao carregar dados do perfil"
+  },
+  "deprecation": {
+    "reason": "Motivo da descontinuação",
+    "reasonPlaceholder": "Por que está sendo descontinuado? Os consumidores verão este texto.",
+    "sunsetDate": "Data de desativação",
+    "replacement": "Substituto",
+    "noReplacement": "Sem substituto",
+    "reasonRequired": "É preciso informar um motivo para descontinuar.",
+    "requestHint": "A justificativa vira o motivo da descontinuação."
   }
 }

@@ -749,5 +749,14 @@
     "tabMemberships": "Memberships",
     "detailsFailed": "Failed to fetch user details",
     "loadFailed": "Failed to load profile data"
+  },
+  "deprecation": {
+    "reason": "Deprecation reason",
+    "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",
+    "sunsetDate": "Sunset date",
+    "replacement": "Replacement",
+    "noReplacement": "No replacement",
+    "reasonRequired": "A deprecation reason is required to deprecate.",
+    "requestHint": "The justification becomes the deprecation reason."
   }
 }

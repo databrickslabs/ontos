@@ -749,5 +749,14 @@
     "tabMemberships": "Appartenances",
     "detailsFailed": "Échec de la récupération des détails de l'utilisateur",
     "loadFailed": "Échec du chargement des données de profil"
+  },
+  "deprecation": {
+    "reason": "Motif de dépréciation",
+    "reasonPlaceholder": "Pourquoi est-il déprécié ? Les consommateurs verront ce texte.",
+    "sunsetDate": "Date de fin",
+    "replacement": "Remplacement",
+    "noReplacement": "Aucun remplacement",
+    "reasonRequired": "Un motif est requis pour déprécier.",
+    "requestHint": "La justification devient le motif de dépréciation."
   }
 }

@@ -87,6 +87,12 @@ class DataProductDb(Base):
     certification_expires_at = Column(DateTime(timezone=True), nullable=True)
     certification_notes = Column(Text, nullable=True)
 
+    # ==================== Deprecation lifecycle ====================
+    deprecation_reason = Column(Text, nullable=True)
+    sunset_date = Column(Date, nullable=True)
+    replacement_product_id = Column(String, nullable=True)
+    deprecated_at = Column(DateTime(timezone=True), nullable=True)
+
     # ==================== Maturity ====================
     maturity_level_order = Column(Integer, nullable=True)
     maturity_evaluated_at = Column(DateTime(timezone=True), nullable=True)

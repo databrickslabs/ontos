@@ -610,6 +610,12 @@ class DataContractRead(BaseModel):
     published_at: Optional[str] = None
     published_by: Optional[str] = None
 
+    # Deprecation lifecycle fields (set when the contract moves to `deprecated`)
+    deprecation_reason: Optional[str] = None
+    sunset_date: Optional[str] = None
+    replacement_contract_id: Optional[str] = None
+    deprecated_at: Optional[str] = None
+
     class Config:
         populate_by_name = True
         # Allow validating directly from ORM rows. Pre-existing endpoints

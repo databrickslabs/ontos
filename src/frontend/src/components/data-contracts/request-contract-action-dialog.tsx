@@ -14,6 +14,11 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
 import AccessRequestFields from '@/components/access/access-request-fields';
+import DeprecationFields, {
+  DeprecationValues,
+  EMPTY_DEPRECATION,
+  deprecationPayload,
+} from '@/components/common/deprecation-fields';
 import {
   getAllowedTransitions,
   getStatusConfig,
@@ -64,6 +69,7 @@ export default function RequestContractActionDialog({
   const [catalog, setCatalog] = useState('');
   const [schema, setSchema] = useState('');
   const [targetStatus, setTargetStatus] = useState('');
+  const [deprecation, setDeprecation] = useState<DeprecationValues>(EMPTY_DEPRECATION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number>(30);
@@ -178,6 +184,14 @@ export default function RequestContractActionDialog({
         setError(t('data-contracts:requests.validation.targetStatusRequired', 'Please select a target status'));
         return false;
       }
+      if (
+        canDirectStatusChange &&
+        targetStatus === 'deprecated' &&
+        !deprecation.deprecationReason.trim()
+      ) {
+        setError(t('common:deprecation.reasonRequired'));
+        return false;
+      }
       // Justification is only required for approval requests, not direct changes
       if (!canDirectStatusChange) {
         if (!justification.trim()) {
@@ -257,6 +271,7 @@ export default function RequestContractActionDialog({
           // Direct status change - different payload format
           payload = {
             new_status: targetStatus,
+            ...(targetStatus === 'deprecated' ? deprecationPayload(deprecation) : {}),
           };
         } else {
           // Request for approval
@@ -322,6 +337,7 @@ export default function RequestContractActionDialog({
       setCatalog('');
       setSchema('');
       setTargetStatus('');
+      setDeprecation(EMPTY_DEPRECATION);
       setCertificationLevel(null);
       setPublicationScope('organization');
       onOpenChange(false);
@@ -344,6 +360,7 @@ export default function RequestContractActionDialog({
     setCatalog('');
     setSchema('');
     setTargetStatus('');
+    setDeprecation(EMPTY_DEPRECATION);
     setError(null);
     onOpenChange(false);
   };
@@ -388,7 +405,7 @@ export default function RequestContractActionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {t('data-contracts:requests.dialogTitle', 'Request Action')}
@@ -792,6 +809,16 @@ export default function RequestContractActionDialog({
                 </Alert>
               )}
 
+              {canDirectStatusChange && targetStatus === 'deprecated' && (
+                <DeprecationFields
+                  entityType="data_contract"
+                  entityId={contractId}
+                  value={deprecation}
+                  onChange={setDeprecation}
+                  disabled={submitting}
+                />
+              )}
+
               {/* Justification - required for approval requests, optional for direct changes */}
               {!canDirectStatusChange && (
                 <div className="space-y-2">
@@ -808,6 +835,7 @@ export default function RequestContractActionDialog({
                   />
                   <div className="text-xs text-muted-foreground">
                     {t('data-contracts:requests.statusChange.justificationHint', 'Minimum 20 characters required. This will be reviewed by an admin.')}
+                    {targetStatus === 'deprecated' && ` ${t('common:deprecation.requestHint')}`}
                   </div>
                 </div>
               )}

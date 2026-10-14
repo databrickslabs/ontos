@@ -755,5 +755,39 @@
     "createdSkipped": "Créés : {{created}}, ignorés : {{skipped}}.",
     "createdFailed": "Créés : {{created}}, en échec : {{failed}}.",
     "createdSkippedFailed": "Créés : {{created}}, ignorés : {{skipped}}, en échec : {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Motif de dépréciation",
+    "reasonPlaceholder": "Pourquoi est-il déprécié ? Les consommateurs verront ce texte.",
+    "sunsetDate": "Date de fin",
+    "replacement": "Remplacement",
+    "noReplacement": "Aucun remplacement",
+    "reasonRequired": "Un motif est requis pour déprécier.",
+    "requestHint": "La justification devient le motif de dépréciation.",
+    "errors": {
+      "deprecation_reason_required": "Un motif est requis pour déprécier.",
+      "sunset_date_in_past": "La date de fin {{sunsetDate}} est passée.",
+      "replacement_is_self": "Une entité ne peut pas être son propre remplacement.",
+      "replacement_not_found": "Le remplacement {{replacementId}} est introuvable.",
+      "replacement_retired": "Le remplacement {{replacementId}} est retiré.",
+      "replacement_deprecated": "Le remplacement {{replacementId}} est obsolète.",
+      "replacement_deprecated_replaced": "Le remplacement {{replacementId}} est obsolète ; il est remplacé par {{replacedBy}}.",
+      "replacement_leads_back": "Le remplacement {{replacementId}} ramène à cette entité : {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} non valide « {{value}} » : une date ISO est attendue.",
+      "replacement_is_self": "Le remplaçant (ontosReplacedBy) ne peut pas être l'entité elle-même.",
+      "replacement_leads_back": "Le remplaçant {{replacementId}} ramène à cette entité : {{chain}}.",
+      "imported_replacement_dropped": "Le remplaçant {{replacementId}} n'est pas ici, il n'a donc pas été lié.",
+      "imported_replacement_leads_back": "Le remplaçant {{replacementId}} ramène à cette entité ({{chain}}), il n'a donc pas été lié.",
+      "imported_status_mapped": "'{{status}}' n'est pas un statut du cycle de vie, il a donc été importé comme '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' est un ancien nom de statut, il a donc été importé comme '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' n'est plus un statut, il a donc été importé comme '{{mappedTo}}'. La certification n'est pas importée : certifiez l'entité dans Ontos."
+    },
+    "notice": {
+      "deprecated": "Obsolète",
+      "retired": "Retiré",
+      "noReason": "Aucune raison enregistrée"
+    }
   }
 }

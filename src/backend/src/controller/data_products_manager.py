@@ -140,6 +140,12 @@ from src.controller.domain_export_adapter import (
     ONTOS_ORIGINAL_DOMAIN_PROPERTY,
     original_domain_strings_from_props,
 )
+from src.controller.lifecycle_fields import (
+    DeprecationDetails,
+    apply_lifecycle_fields,
+    check_lifecycle_fields,
+    requested_status_change_justification,
+)
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -982,6 +988,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         product_id: str,
         new_status: str,
         current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
         fire_status_change_trigger: bool = True,
     ) -> DataProductApi:
         """
@@ -996,6 +1003,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_id: ID of the product
             new_status: Target status
             current_user: Username for audit trail
+            deprecation: Reason, sunset date and replacement, required when
+                moving to ``deprecated`` (see ``lifecycle_fields``)
             fire_status_change_trigger: Fire on_status_change for this step.
                 A caller that makes one change in several lifecycle steps (a
                 product review going under_review -> approved -> active)
@@ -1030,6 +1039,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
                     fromStatus=current_status, toStatus=new_status_lower, allowed=list(allowed),
                 )
+
+            check_lifecycle_fields(
+                self._db, 'data_product', product_id, new_status_lower, deprecation
+            )
             
             # Run before_status_change workflows (gating)
             # (a gate that errors refuses the transition when it is fail_closed, #1103)
@@ -1048,6 +1061,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             
             # Update status
             old_status = product_db.status
+            lifecycle_changes = apply_lifecycle_fields(
+                product_db, 'data_product', current_status, new_status_lower, deprecation
+            )
             product_db.status = new_status_lower
             self._db.add(product_db)
             self._db.commit()
@@ -1075,6 +1091,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         "from_status": old_status,
                         "to_status": new_status_lower,
                         "summary": f"Status changed from '{old_status}' to '{new_status_lower}'" + (f" by {current_user}" if current_user else ""),
+                        **lifecycle_changes,
                     },
                 )
             except Exception as log_err:
@@ -1092,6 +1109,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if fire_status_change_trigger:
                 self.fire_status_change_trigger(
                     product_id, product_db.name, current_status, new_status_lower, current_user,
+                    extra_data=lifecycle_changes,
                 )
 
             result = self._load_product_with_tags(product_db)
@@ -1112,8 +1130,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         from_status: str,
         to_status: str,
         current_user: Optional[str] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Fire the on_status_change workflow trigger for a product."""
+        """Fire the on_status_change workflow trigger for a product.
+
+        ``extra_data`` goes into the trigger's entity data (e.g. the
+        deprecation fields set with the change).
+        """
         from src.common.workflow_triggers import fire_trigger_safe
         from src.models.process_workflows import EntityType
         fire_trigger_safe(
@@ -1123,7 +1146,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             from_status=from_status,
             to_status=to_status,
             entity_name=product_name,
-            entity_data={"name": product_name, "status": to_status},
+            entity_data={"name": product_name, "status": to_status, **(extra_data or {})},
             user_email=current_user,
         )
 
@@ -1363,7 +1386,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "Use POST /api/data-products/{id}/certify with a certification_level instead."
         )
 
-    def deprecate_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+    def deprecate_product(self, product_id: str, current_user: Optional[str] = None,
+                          deprecation: Optional[DeprecationDetails] = None) -> DataProductApi:
         """
         Deprecate an active product (active → deprecated).
 
@@ -1381,7 +1405,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(product_id, 'deprecated', current_user)
+        return self.transition_status(
+            product_id, 'deprecated', current_user, deprecation=deprecation
+        )
 
     # ==================== Status Change Request/Approval Methods ====================
 
@@ -1575,8 +1601,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             pass
         
         if decision == 'approve':
-            # Apply the status change directly
-            self.transition_status(product_id, target_status, current_user)
+            # Apply the status change directly; a requested deprecation uses
+            # the request's justification as its reason
+            justification = requested_status_change_justification(db, 'data_product', product_id)
+            self.transition_status(
+                product_id, target_status, current_user,
+                deprecation=DeprecationDetails(reason=justification),
+            )
             notification_title = "Product Status Change Approved"
             notification_desc = f"Your request to change the status of '{product.name}' to '{target_status}' has been approved by '{approver_email}'."
         elif decision == 'deny':

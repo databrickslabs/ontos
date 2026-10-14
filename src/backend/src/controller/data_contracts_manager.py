@@ -38,6 +38,11 @@ def _canonical_uuid(value: str) -> Optional[str]:
         return None
 
 
+def _isoformat(value) -> Optional[str]:
+    """ISO 8601 string for a date / datetime column, or None."""
+    return value.isoformat() if value else None
+
+
 def _upsert_custom_property(data: dict, prop: str, value) -> None:
     """Set a customProperties entry on an ODCS payload dict, tolerating the
     list-of-{property,value} form and the legacy {key: value} dict form."""
@@ -126,6 +131,12 @@ from src.controller.domain_export_adapter import (
     domain_export_adapter,
     ONTOS_ORIGINAL_DOMAIN_PROPERTY,
     original_domain_strings_from_props,
+)
+from src.controller.lifecycle_fields import (
+    DeprecationDetails,
+    apply_lifecycle_fields,
+    check_lifecycle_fields,
+    requested_status_change_justification,
 )
 
 from src.common.logging import get_logger
@@ -4162,6 +4173,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract_id: str,
         new_status: str,
         current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
         also_set: Optional[Dict[str, Any]] = None,
     ) -> DataContractDb:
         """
@@ -4173,6 +4185,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_id: Contract UUID
             new_status: New status value
             current_user: Username of current user
+            deprecation: Reason, sunset date and replacement, required when
+                moving to ``deprecated`` (see ``lifecycle_fields``)
             also_set: Other fields written in the same commit as the status,
                 only once the gates passed (e.g. a review request clears
                 ``draft_owner_id`` with its draft -> proposed change)
@@ -4196,6 +4210,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Allow any transition if current status not in map (backward compatibility)
             if current_status in valid_transitions:
                 raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
+
+        check_lifecycle_fields(db, 'data_contract', contract_id, new_status, deprecation)
         
         # Run before_status_change workflows (gating)
         # (a gate that errors refuses the transition when it is fail_closed, #1103)
@@ -4213,6 +4229,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         
         try:
+            lifecycle_changes = apply_lifecycle_fields(
+                contract, 'data_contract', current_status, new_status, deprecation
+            )
             updated = data_contract_repo.update(
                 db=db,
                 db_obj=contract,
@@ -4242,7 +4261,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from_status=current_status,
                 to_status=new_status,
                 entity_name=contract.name,
-                entity_data={"name": contract.name, "status": new_status},
+                entity_data={"name": contract.name, "status": new_status, **lifecycle_changes},
                 user_email=current_user,
             )
         except Exception as e:
@@ -6392,12 +6411,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Invalid transition from '{from_status}' to '{target_status}'")
 
             # Through transition_status, like a product's approved request, so
-            # the before_status_change gates run and on_status_change fires.
+            # the before_status_change gates run and on_status_change fires; a
+            # requested deprecation uses the request's justification as its reason.
             contract = self.transition_status(
                 db=db,
                 contract_id=contract_id,
                 new_status=target_status_lower,
                 current_user=current_user,
+                deprecation=DeprecationDetails(
+                    reason=requested_status_change_justification(db, 'data_contract', contract_id)
+                ),
             )
             
             notification_title = "Status Change Approved"
@@ -7181,6 +7204,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             publication_scope=getattr(db_contract, "publication_scope", None) or "none",
             published_at=db_contract.published_at.isoformat() if getattr(db_contract, "published_at", None) else None,
             published_by=db_contract.published_by,
+            deprecation_reason=getattr(db_contract, "deprecation_reason", None),
+            sunset_date=_isoformat(getattr(db_contract, "sunset_date", None)),
+            replacement_contract_id=getattr(db_contract, "replacement_contract_id", None),
+            deprecated_at=_isoformat(getattr(db_contract, "deprecated_at", None)),
         )
 
     def compare_contracts(self, old_contract: Dict, new_contract: Dict) -> Dict:

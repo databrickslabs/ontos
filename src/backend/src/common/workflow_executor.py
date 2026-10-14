@@ -2886,19 +2886,69 @@ class WorkflowExecutor:
                     trigger_context.entity_data or {}
                 ).get('target_status')
                 if approved_request and target_status:
-                    from src.controller.data_products_manager import DataProductsManager
-                    DataProductsManager(db=self._db).transition_status(
-                        entity_id, target_status, responded_by
-                    )
-                    logger.info(
-                        "Data product %s moved to '%s' after its status change request "
-                        "was approved", entity_id, target_status,
+                    self._apply_requested_status_change(
+                        trigger_context, entity_id, target_status, responded_by
                     )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    def _apply_requested_status_change(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        target_status: str,
+        responded_by: Optional[str],
+    ) -> None:
+        """Apply an approved status change request to a data product.
+
+        Uses the app's notifications and search managers, so subscribers are
+        notified and the search index is updated as for a direct status
+        change. If the transition is refused (e.g. the product's status changed
+        meanwhile, or a before_status_change gate blocks), the requester is told,
+        since the workflow has already reported the request as approved.
+        """
+        from src.common.app_state import get_app_state_manager
+        from src.controller.data_products_manager import DataProductsManager
+
+        manager = DataProductsManager(
+            db=self._db, notifications_manager=get_app_state_manager('notifications_manager'),
+        )
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager:
+            manager.set_search_manager(search_manager)
+        try:
+            manager.transition_status(product_id, target_status, responded_by)
+        except ValueError as e:
+            logger.warning(
+                "Approved status change of data product %s to '%s' could not be applied: %s",
+                product_id, target_status, e,
+            )
+            if trigger_context.user_email:
+                from uuid import uuid4
+                from src.models.notifications import Notification, NotificationType
+                from src.repositories.notification_repository import notification_repo
+                notification_repo.create(db=self._db, obj_in=Notification(
+                    id=str(uuid4()),
+                    created_at=datetime.utcnow(),
+                    type=NotificationType.WARNING,
+                    title="Status change not applied",
+                    subtitle=trigger_context.entity_name or product_id,
+                    description=(
+                        f"Your request to change the status to '{target_status}' was approved, "
+                        f"but the change could not be applied: {e}"
+                    ),
+                    recipient=trigger_context.user_email,
+                    can_delete=True,
+                ))
+                self._db.commit()
+            return
+        logger.info(
+            "Data product %s moved to '%s' after its status change request was approved",
+            product_id, target_status,
+        )
+
     def _execute_step(self, step: WorkflowStep, context: StepContext) -> StepResult:
         """Execute a single step."""
         step_type = step.step_type.value if hasattr(step.step_type, 'value') else step.step_type

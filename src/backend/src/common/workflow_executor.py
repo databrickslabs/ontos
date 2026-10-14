@@ -2743,6 +2743,8 @@ class WorkflowExecutor:
                 trigger_context=trigger_context,
                 workflow=workflow,
                 succeeded=(final_status == ExecutionStatus.SUCCEEDED),
+                responded_by=user_email,
+                approved=step_result,
             )
         
         # Return updated execution
@@ -2754,6 +2756,8 @@ class WorkflowExecutor:
         trigger_context: Optional[TriggerContext],
         workflow: ProcessWorkflow,
         succeeded: bool,
+        responded_by: Optional[str] = None,
+        approved: Optional[bool] = None,
     ) -> None:
         """Handle entity status updates when a workflow completes.
         
@@ -2784,23 +2788,33 @@ class WorkflowExecutor:
                         logger.info(f"Asset {entity_id} status reverted to 'draft' after review rejection")
                     self._db.commit()
                     
-            # Handle data contract deploy completion
-            elif entity_type == 'data_contract' and trigger_type in ('on_request_publish', 'ON_REQUEST_PUBLISH'):
-                from src.repositories.data_contracts_repository import data_contract_repo
-                from src.controller.data_contracts_manager import reindex_contract_in_search_index
-                db_contract = data_contract_repo.get(db=self._db, id=entity_id)
-                if db_contract:
-                    if succeeded:
-                        db_contract.status = 'deployed'
-                        logger.info(f"Data contract {entity_id} status updated to 'deployed' after approval")
-                    else:
-                        db_contract.status = 'draft'
-                        logger.info(f"Data contract {entity_id} status reverted to 'draft' after rejection")
-                    self._db.commit()
-                    # Keep the search index in lockstep with the status write so
-                    # list_data_contracts / search_data_contracts can't return
-                    # the stale pre-workflow status (#954 review).
-                    reindex_contract_in_search_index(db_contract, self._db)
+            # Data contract deploy request decided: record it in the change
+            # log, as the legacy handle-deploy flow does. The contract status
+            # is left alone: the lifecycle has no "deployed" status, and an
+            # approval doesn't deploy anything by itself.
+            elif (entity_type == 'data_contract'
+                  and trigger_type in ('on_request_deploy', 'ON_REQUEST_DEPLOY')):
+                from src.controller.change_log_manager import change_log_manager
+                # The approver's choice, not the run's outcome: a later step
+                # (e.g. a notification) can fail after an approval.
+                approved_request = succeeded if approved is None else approved
+                decision = 'approve' if approved_request else 'deny'
+                change_log_manager.log_change_with_details(
+                    self._db,
+                    entity_type='data_contract',
+                    entity_id=entity_id,
+                    action=f'deploy_{decision}',
+                    username=responded_by,
+                    details={
+                        'approver_email': responded_by,
+                        'decision': decision,
+                        'workflow': workflow.name,
+                        'requester_email': trigger_context.user_email,
+                        'summary': f"Deploy request {'approved' if approved_request else 'denied'} "
+                                   f"via workflow '{workflow.name}'",
+                    },
+                )
+                self._db.commit()
                     
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):

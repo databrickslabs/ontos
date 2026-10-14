@@ -317,6 +317,7 @@
       "on_request_review": "Beoordelingsverzoek",
       "on_request_access": "Toegangsverzoek",
       "on_request_publish": "Publicatieverzoek",
+      "on_request_deploy": "Implementatieverzoek",
       "on_request_status_change": "Status Wijzigingsverzoek",
       "on_request_certify": "Certificeringsverzoek",
       "on_certify": "Bij Certificeren",

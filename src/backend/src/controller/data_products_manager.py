@@ -144,7 +144,10 @@ from src.controller.lifecycle_fields import (
     DeprecationDetails,
     apply_lifecycle_fields,
     check_lifecycle_fields,
+    lifecycle_custom_properties,
+    pop_lifecycle_custom_properties,
     requested_status_change_justification,
+    set_lifecycle_columns,
 )
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
@@ -387,6 +390,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ):
                 product_data['draft_owner_id'] = user
 
+            # Lifecycle fields exported as ontos* customProperties map back to columns
+            lifecycle_props = pop_lifecycle_custom_properties(product_data.get('customProperties'))
+
             # Validate
             try:
                 product_api_model = DataProductCreate(**product_data)
@@ -399,6 +405,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
+            if lifecycle_props:
+                set_lifecycle_columns(created_db_obj, 'data_product', lifecycle_props)
+                db_session.flush()
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -3737,6 +3746,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
+        for prop, value in lifecycle_custom_properties(product, 'data_product').items():
+            _upsert_custom_property(odps, prop, value)
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [

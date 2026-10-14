@@ -136,7 +136,10 @@ from src.controller.lifecycle_fields import (
     DeprecationDetails,
     apply_lifecycle_fields,
     check_lifecycle_fields,
+    lifecycle_custom_properties,
+    pop_lifecycle_custom_properties,
     requested_status_change_justification,
+    set_lifecycle_columns,
 )
 
 from src.common.logging import get_logger
@@ -1472,6 +1475,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
+        for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
+            _upsert_custom_property(odcs, prop, value)
 
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
@@ -2129,7 +2134,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         ODCS uses array format: [{"property": "key", "value": "val"}, ...]
         Legacy format uses dict: {"key": "val", ...}
+        The ontos* lifecycle properties set the contract's lifecycle columns instead.
         """
+        lifecycle_props = pop_lifecycle_custom_properties(custom_props)
+        if lifecycle_props:
+            contract = db.get(DataContractDb, contract_id)
+            if contract is not None:
+                set_lifecycle_columns(contract, 'data_contract', lifecycle_props)
         if isinstance(custom_props, list):
             # ODCS array format
             for prop_data in custom_props:

@@ -213,6 +213,42 @@ class ValidationStepHandler(StepHandler):
             )
 
 
+# Trigger entities that stand in for the real entity owners are assigned to.
+# on_request_access fires on entity_type=access_grant, where context.entity_id
+# is the request's UUID; the trigger firer puts the underlying entity under
+# context.entity['entity_type'] / ['entity_id']. on_subscribe already fires on
+# the data product itself, so the list is intentionally narrow.
+_PROXY_ENTITY_TYPES = {'access_grant'}
+
+
+def _underlying_entity(context: 'StepContext') -> Tuple[str, str]:
+    """(entity_type, entity_id) that owners and Business Owners are assigned to."""
+    entity = context.entity if isinstance(context.entity, dict) else {}
+    if (context.entity_type or '').lower() not in _PROXY_ENTITY_TYPES or not entity:
+        return context.entity_type, context.entity_id
+    underlying_id = entity.get('entity_id')
+    underlying_type = entity.get('entity_type')
+    if not (underlying_id and underlying_type):
+        logger.warning(
+            "Proxy entity_type=%s has no entity.entity_type/entity_id to traverse to; "
+            "falling back to context.entity_id=%s (owner lookups will likely be empty)",
+            context.entity_type, context.entity_id,
+        )
+        return context.entity_type, context.entity_id
+    logger.info(
+        "Traversing proxy entity_type=%s entity_id=%s -> underlying %s=%s",
+        context.entity_type, context.entity_id, underlying_type, underlying_id,
+    )
+    return underlying_type, underlying_id
+
+
+def _entity_owner_emails(db: Session, context: 'StepContext') -> List[str]:
+    """Owners of the trigger entity (see ``resolve_owner_emails``)."""
+    from src.repositories.entity_owners_repository import resolve_owner_emails
+
+    return resolve_owner_emails(db, *_underlying_entity(context))
+
+
 def _resolve_role_to_users(
     db: Session,
     role_spec: str,
@@ -221,8 +257,9 @@ def _resolve_role_to_users(
     """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
 
     Handles:
-    - 'requester' → original user email
-    - 'owner' → entity owner
+    - 'requester' / 'trigger_user' → original user email
+    - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
+    - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
     - '<uuid>' → app role UUID
     - 'user@email.com' → direct email
@@ -260,15 +297,24 @@ def _resolve_role_to_users(
         'domain_owners': 'DomainOwner',
         'project_owners': 'ProjectOwner',
         'data_stewards': 'DataSteward',
+        'data_steward': 'DataSteward',
         'admins': 'Admin',
     }
 
-    if role_spec == 'requester':
+    # 'trigger_user' is the name the default workflows use for the requester.
+    if role_spec in ('requester', 'trigger_user'):
         return [(context.user_email, None)] if context.user_email else []
 
+    if role_spec == 'entity_owner':
+        return [(email, None) for email in _entity_owner_emails(db, context)]
+
     if role_spec == 'owner':
+        # Most trigger payloads (e.g. on_publish / on_unpublish) carry no
+        # `owner`; fall back to the entity's owners.
         owner = context.entity.get('owner') if context.entity else None
-        return [(owner, None)] if owner else []
+        if owner:
+            return [(owner, None)]
+        return [(email, None) for email in _entity_owner_emails(db, context)]
 
     if role_spec in role_aliases:
         role_name = role_aliases[role_spec]
@@ -297,37 +343,7 @@ def _resolve_role_to_users(
             logger.warning(f"Business role {br_id} not found")
             return []
 
-        # Some trigger contexts carry a "proxy" entity that stands in for the
-        # real entity that Business Owners are assigned to. For example:
-        #   - on_request_access fires on entity_type=access_grant, where
-        #     context.entity_id is the access-grant request's UUID, NOT the
-        #     underlying data product. Business Owners are assigned to data
-        #     products, so a naive lookup by context.entity_id returns [].
-        # For these proxy entity types, the trigger firer puts the underlying
-        # entity's id under context.entity['entity_id']. We traverse to that
-        # so the BusinessOwnerDb lookup hits the right object.
-        # NOTE: on_subscribe already fires with entity_type=data_product +
-        # entity_id=<product_id> directly (see data_products_manager
-        # ._fire_on_subscribe_trigger), so subscription proxying is not needed
-        # here. The traversal list is intentionally narrow.
-        PROXY_ENTITY_TYPES = {'access_grant'}
-        lookup_object_id = context.entity_id
-        if context.entity_type in PROXY_ENTITY_TYPES and context.entity:
-            underlying_id = context.entity.get('entity_id')
-            if underlying_id:
-                logger.info(
-                    f"Business role resolver: traversing proxy "
-                    f"entity_type={context.entity_type} entity_id={context.entity_id} "
-                    f"-> underlying {context.entity.get('entity_type', '?')}={underlying_id} "
-                    f"for Business Owner lookup"
-                )
-                lookup_object_id = underlying_id
-            else:
-                logger.warning(
-                    f"Business role resolver: proxy entity_type={context.entity_type} "
-                    f"has no entity.entity_id to traverse to; falling back to "
-                    f"context.entity_id={context.entity_id} (lookup will likely return [])"
-                )
+        _, lookup_object_id = _underlying_entity(context)
 
         # Runtime resolution: look up who holds this business role for this entity
         owners = (

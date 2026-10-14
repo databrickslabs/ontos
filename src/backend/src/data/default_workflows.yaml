@@ -106,7 +106,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.contract_id != '' OR obj.contracts != []
+            ASSERT obj.output_port_contract_count > 0
             ON_FAIL FAIL 'Data product must have at least one data contract'
         on_pass: "request-approval"
         on_fail: "notify-no-contract"
@@ -183,7 +183,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.schema != '' AND obj.schema != '{}' AND obj.schema != '[]'
+            ASSERT obj.schema_object_count > 0
             ON_FAIL FAIL 'Data contract must have a schema defined'
         on_pass: "check-owner"
         on_fail: "notify-no-schema"
@@ -194,7 +194,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.owner != '' OR HAS_TAG('owner')
+            ASSERT obj.has_owner = true OR HAS_TAG('owner')
             ON_FAIL FAIL 'Data contract must have an owner'
         on_pass: "success"
         on_fail: "auto-fix-owner"

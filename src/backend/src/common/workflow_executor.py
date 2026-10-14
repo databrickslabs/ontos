@@ -188,6 +188,47 @@ class StepHandler(ABC):
         pass
 
 
+def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """What workflow rules see as ``obj``: the stored entity plus the trigger payload.
+
+    Trigger payloads are small (often just name and status), so a rule on any
+    other field passed vacuously. For data products and data contracts the
+    entity is loaded with ``entity_dict_builder`` (the fields maturity gates
+    use); payload keys win, so request fields such as ``current_status`` keep
+    their meaning. Other entity types get the payload unchanged, and so do
+    ``before_update`` gates: their payload is the proposed change, and values
+    derived from the stored row (``has_owner``, counts) would describe the
+    entity before it.
+    """
+    from src.controller.entity_dict_builder import (
+        build_data_contract_dict,
+        build_data_product_dict,
+    )
+
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    if getattr(trigger_type, 'value', trigger_type) == 'before_update':
+        return payload
+    builder = {
+        'data_product': build_data_product_dict,
+        'data_contract': build_data_contract_dict,
+    }.get((context.entity_type or '').lower())
+    if not builder or not context.entity_id:
+        return payload
+    try:
+        # Savepoint: a failed query must not leave the session that the
+        # workflow and its caller keep using in an aborted transaction.
+        with db.begin_nested():
+            stored = builder(db, context.entity_id)
+    except Exception as e:
+        logger.warning(
+            "Could not load %s %s for rule evaluation, using the trigger payload only: %s",
+            context.entity_type, context.entity_id, e,
+        )
+        return payload
+    return {**stored, **payload} if stored else payload
+
+
 class ValidationStepHandler(StepHandler):
     """Handler for validation steps using compliance DSL."""
 
@@ -199,7 +240,7 @@ class ValidationStepHandler(StepHandler):
             return StepResult(passed=False, error="No rule configured")
         
         try:
-            passed, message = evaluate_rule_on_object(rule, context.entity)
+            passed, message = evaluate_rule_on_object(rule, _rule_object(self._db, context))
             return StepResult(
                 passed=passed,
                 message=message,
@@ -1008,7 +1049,7 @@ class ConditionalStepHandler(StepHandler):
             tokens = lexer.tokenize()
             parser = Parser(tokens)
             ast = parser.parse_expression()
-            evaluator = Evaluator(context.entity)
+            evaluator = Evaluator(_rule_object(self._db, context))
             result = evaluator.evaluate(ast)
             
             return StepResult(
@@ -1278,7 +1319,9 @@ class PolicyCheckStepHandler(StepHandler):
                 )
             
             # Evaluate the policy's rule against the entity
-            passed, technical_message = evaluate_rule_on_object(policy.rule, context.entity)
+            passed, technical_message = evaluate_rule_on_object(
+                policy.rule, _rule_object(self._db, context)
+            )
             
             # Combine human-readable failure message with technical details
             if passed:

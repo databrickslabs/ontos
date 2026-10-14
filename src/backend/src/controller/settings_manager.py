@@ -8,7 +8,7 @@ import yaml
 from databricks.sdk import WorkspaceClient
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy import func
 
 from src.common.config import Settings
@@ -1882,8 +1882,15 @@ class SettingsManager:
             for feature_id, config in features_config.items()
         }
 
-    def list_app_roles(self) -> List[AppRole]:
-        """Lists all configured application roles from the database."""
+    def list_app_roles(self, _retry: bool = True) -> List[AppRole]:
+        """Lists all configured application roles from the database.
+
+        The manager's session lives as long as the app. When the database has
+        closed its connection (e.g. Lakebase dropping idle connections), the
+        first query fails: roll back, which releases the dead connection, and
+        retry once. Other database errors propagate, because an empty role list
+        would make every permission check answer 403.
+        """
         try:
             roles_db = self.app_role_repo.get_all_roles(db=self._db)
 
@@ -1939,9 +1946,12 @@ class SettingsManager:
 
             return [self._map_db_to_api(role_db) for role_db in roles_db]
         except SQLAlchemyError as e:
-            logger.error(f"Database error listing roles: {e}", exc_info=True)
             self._db.rollback()
-            return [] # Return empty list on error
+            if _retry and isinstance(e, DBAPIError) and e.connection_invalidated:
+                logger.warning("Database connection was closed; retrying role lookup: %s", e)
+                return self.list_app_roles(_retry=False)
+            logger.error("Database error listing roles: %s", e, exc_info=True)
+            raise
 
     def list_app_roles_for_approval(self, approval_entity: Optional[str] = None) -> List[AppRole]:
         """Lists app roles filtered by approval privilege for a given entity type.

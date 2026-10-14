@@ -180,3 +180,14 @@ def test_a_requester_who_is_the_only_owner_goes_to_data_stewards(db_session, dat
     )
 
     assert resolved == [('Data Steward', data_steward.id)]
+
+
+def test_an_app_role_named_like_the_token_is_found(db_session, data_steward):
+    # e.g. approvers='Domain Owners' with an app role of that name
+    role = AppRoleDb(id=str(uuid.uuid4()), name='Domain Owners')
+    db_session.add(role)
+    db_session.flush()
+
+    assert _resolve_role_to_users(db_session, 'Domain Owners', _context()) == [
+        ('Domain Owners', role.id),
+    ]

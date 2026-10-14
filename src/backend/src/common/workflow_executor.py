@@ -261,7 +261,9 @@ _OWNER_APPROVER_TOKENS = {
 }
 
 
-def _owner_approvers(db: Session, role_name: str, context: 'StepContext') -> List[tuple]:
+def _owner_approvers(
+    db: Session, role_name: str, context: 'StepContext', token: Optional[str] = None,
+) -> List[tuple]:
     """Approvers for the 'DomainOwner' / 'ContractApprover' tokens.
 
     An app role with that name wins (an admin may have created one).
@@ -279,8 +281,10 @@ def _owner_approvers(db: Session, role_name: str, context: 'StepContext') -> Lis
     role = db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
     if role:
         return [(role.name, role.id)]
+    # Also the token as written (e.g. an app role named 'Domain Owners')
+    names = {role_name.lower(), (token or '').lower().replace(' ', '').replace('_', '')}
     for r in db.query(AppRoleDb).all():
-        if r.name.lower().replace(' ', '').replace('_', '') == role_name.lower():
+        if r.name.lower().replace(' ', '').replace('_', '') in names:
             return [(r.name, r.id)]
 
     entity_type, entity_id = _underlying_entity(context)
@@ -371,7 +375,7 @@ def _resolve_role_to_users(
 
     owner_approver = _OWNER_APPROVER_TOKENS.get(role_spec.lower().replace(' ', '').replace('_', ''))
     if owner_approver:
-        return _owner_approvers(db, owner_approver, context)
+        return _owner_approvers(db, owner_approver, context, token=role_spec)
 
     if role_spec in role_aliases:
         role_name = role_aliases[role_spec]

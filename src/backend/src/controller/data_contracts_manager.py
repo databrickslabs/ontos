@@ -5657,7 +5657,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "message": message,
             }
             
-            executions = trigger_registry.on_request_publish(
+            executions = trigger_registry.on_request_deploy(
                 entity_type=EntityType.DATA_CONTRACT,
                 entity_id=contract_id,
                 entity_name=contract.name,

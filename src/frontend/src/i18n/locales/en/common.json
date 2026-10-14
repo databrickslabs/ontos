@@ -317,6 +317,7 @@
       "on_request_review": "Review Request",
       "on_request_access": "Access Request",
       "on_request_publish": "Publish Request",
+      "on_request_deploy": "Deploy Request",
       "on_request_status_change": "Status Change Request",
       "on_request_certify": "Certification Request",
       "on_certify": "On Certify",

@@ -185,6 +185,7 @@ describe('getTriggerLabel', () => {
     ['on_request_review', 'After a review request is submitted'],
     ['for_request_publish', 'When a user requests publish'],
     ['on_request_publish', 'After a publish request is submitted'],
+    ['on_request_deploy', 'After a deploy request is submitted'],
     ['for_request_certify', 'When a user requests certification'],
     ['on_request_certify', 'After a certification request is submitted'],
     ['for_request_status_change', 'When a user requests status change'],

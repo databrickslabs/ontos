@@ -650,13 +650,13 @@ class TriggerRegistry:
         *,
         blocking: bool = True,
     ) -> List[WorkflowExecution]:
-        """Fire when publish or deployment is requested.
+        """Fire when publication to the marketplace is requested.
         
-        Used for data contracts when requesting to publish to marketplace
-        or deploy to a catalog.
+        Used for data contracts and data products. Deployment requests fire
+        ``on_request_deploy`` instead.
         
         Args:
-            entity_type: Type of entity (data_contract)
+            entity_type: Type of entity (data_contract, data_product)
             entity_id: ID of the entity
             entity_name: Name of the entity
             entity_data: Request details (target catalog, justification, etc.)
@@ -679,6 +679,48 @@ class TriggerRegistry:
             scope_id=scope_id,
         )
         logger.info(f"on_request_publish fired for {entity_type.value} '{entity_id}' by {user_email}")
+        return self.fire_trigger(event, blocking=blocking)
+
+    def on_request_deploy(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        entity_name: Optional[str] = None,
+        entity_data: Optional[Dict[str, Any]] = None,
+        user_email: Optional[str] = None,
+        scope_type: Optional[str] = None,
+        scope_id: Optional[str] = None,
+        *,
+        blocking: bool = True,
+    ) -> List[WorkflowExecution]:
+        """Fire when deployment of a data contract to Unity Catalog is requested.
+        
+        Args:
+            entity_type: Type of entity (data_contract)
+            entity_id: ID of the entity
+            entity_name: Name of the entity
+            entity_data: Request details (target catalog and schema, message)
+            user_email: User requesting the deployment
+            scope_type: Scope type
+            scope_id: Scope ID
+            blocking: Execute synchronously
+            
+        Returns:
+            List of workflow executions
+        """
+        event = TriggerEvent(
+            trigger_type=TriggerType.ON_REQUEST_DEPLOY,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=entity_data,
+            user_email=user_email,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        logger.info(
+            f"on_request_deploy fired for {entity_type.value} '{entity_id}' by {user_email}"
+        )
         return self.fire_trigger(event, blocking=blocking)
 
     def on_request_status_change(

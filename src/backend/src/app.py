@@ -161,6 +161,20 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
 
+    # Create the default workflows that don't exist yet; existing ones are left
+    # untouched. Without them, publish / review / access / certification /
+    # status change requests start no workflow. Only request workflows are
+    # created active, so an upgrade doesn't turn on automatic workflows or UI
+    # wizards; admins enable those in the Workflows page.
+    try:
+        from src.common.database import get_session_factory
+        from src.controller.workflows_manager import WorkflowsManager
+        with get_session_factory()() as _db:
+            counts = WorkflowsManager(_db).load_from_yaml(requests_only_active=True)
+        logger.info(f"Default workflows seeded: {counts}")
+    except Exception as e:
+        logger.warning(f"Failed seeding default workflows: {e}", exc_info=True)
+
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
     
     # Initialize Git service for indirect delivery mode

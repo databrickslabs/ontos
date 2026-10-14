@@ -44,12 +44,22 @@ class WorkflowsManager:
         self._db = db
         self._default_workflows_path = Path(__file__).parent.parent / "data" / "default_workflows.yaml"
 
-    def load_from_yaml(self, yaml_path: Optional[str] = None, update_existing: bool = False) -> dict:
+    def load_from_yaml(
+        self,
+        yaml_path: Optional[str] = None,
+        update_existing: bool = False,
+        requests_only_active: bool = False,
+    ) -> dict:
         """Load default workflows from YAML file.
         
         Args:
             yaml_path: Path to YAML file, or None to use default
             update_existing: If True, updates existing default workflows instead of skipping
+            requests_only_active: If True, workflows created now keep the YAML's
+                ``is_active`` only when a request starts them (``on_request_*``);
+                all others (event-driven automation, ``for_*`` UI wizards) are
+                created inactive. Used at startup, so an upgrade doesn't turn
+                on new automatic behavior. Existing workflows are not changed.
             
         Returns:
             Dict with counts: {'created': int, 'updated': int, 'skipped': int}
@@ -137,13 +147,16 @@ class WorkflowsManager:
                 
                 # Create new workflow
                 wf_type = wf_data.get('workflow_type', 'process')
+                is_active = wf_data.get('is_active', True)
+                if requests_only_active and not trigger.type.value.startswith('on_request_'):
+                    is_active = False
                 workflow = ProcessWorkflowCreate(
                     name=name,
                     description=wf_data.get('description'),
                     trigger=trigger,
                     scope=scope,
                     workflow_type=WorkflowType(wf_type) if isinstance(wf_type, str) else wf_type,
-                    is_active=wf_data.get('is_active', True),
+                    is_active=is_active,
                     steps=steps,
                 )
                 

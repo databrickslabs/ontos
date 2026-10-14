@@ -949,15 +949,17 @@ Each step type has a corresponding visual node:
 
 ### Loading Defaults
 
-Default workflows are loaded from `src/backend/src/data/default_workflows.yaml` on application startup.
-
-**Startup Task:** `src/backend/src/utils/startup_tasks.py`
+Default workflows are loaded from `src/backend/src/data/default_workflows.yaml` on application startup (`startup_event` in `src/backend/src/app.py`):
 
 ```python
 # During app initialization
 workflows_manager = WorkflowsManager(db_session)
-workflows_manager.load_from_yaml()  # Loads defaults if not already present
+workflows_manager.load_from_yaml(requests_only_active=True)
 ```
+
+- Only workflows that don't exist yet (by name) are created; existing ones, including local edits and their active state, are left untouched.
+- Request workflows (`on_request_*`) are created with the `is_active` value from the YAML. All others (event-driven workflows such as naming validation or publish notifications, and the `for_*` UI wizards) are created **inactive**, so an upgrade doesn't turn on new automatic behavior. Enable them on the Workflows page.
+- **Load Defaults** (`POST /api/workflows/load-defaults`) creates missing workflows with the YAML's `is_active`; with `update_existing=true` it also resets existing default workflows to the YAML.
 
 ### Pre-Defined Workflows
 

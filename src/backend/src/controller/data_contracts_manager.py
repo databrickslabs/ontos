@@ -6822,6 +6822,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     'role': member.role or 'member',
                 }
                 # Add optional fields if present
+                if getattr(member, 'name', None):
+                    entry['name'] = member.name
                 if getattr(member, 'description', None):
                     entry['description'] = member.description
                 if getattr(member, 'date_in', None):

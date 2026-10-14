@@ -9,7 +9,7 @@ Concretely:
 - **A published product is mutable.** Nothing prevents a description, a contract property, or an output port from changing after `publish_product`. Consumers who subscribed to "version 1.2.0" have no way to tell whether what they see today is what was approved and published.
 - **Exports are not verifiable.** `GET /api/data-products/{id}/odps/export` and `GET /api/data-contracts/{id}/odcs/export` return YAML that is not canonical (list order follows the database, keys are not sorted) and carries no integrity information. Two exports of the same product can differ byte-for-byte, and a tampered export is indistinguishable from a genuine one.
 - **The link to physical data is implicit.** An output port references `catalog.schema.table`, but nothing records *which* table (Unity Catalog `table_id`), *which* snapshot (Delta version), or *which* schema was in place when the product was approved. A table can be dropped and recreated under the same name, or rewritten, with no trace in the product.
-- **Audit and change logs are internal.** `audit_log` and `entity_change_log` record that Ontos saw a change, but they live in the app database and cannot be handed to an auditor, a partner organization, or another Ontos instance as independent evidence.
+- **Audit and change logs are internal.** `audit_logs` and `entity_change_log` record that Ontos saw a change, but they live in the app database and cannot be handed to an auditor, a partner organization, or another Ontos instance as independent evidence.
 - **Upcoming work needs a trust anchor.** Estate Manager federation (#143) imports remote entities, Marketplace publication (#165, #168) exposes products to external consumers, and the post-v1 RFC (#574) proposes a portable semantic package. All three need a way to say "this is exactly the product version that was approved", and none of them defines one.
 
 The gap is not storage or transport — Unity Catalog, Delta and Delta Sharing already cover those — but a **portable, verifiable statement of what a product version is**.
@@ -24,7 +24,7 @@ Introduce a **Signed Data Product Manifest**: a canonical, content-addressed, si
 - Lifecycle facts that do not change content — published, unpublished, certified, decertified — are recorded as small signed **attestations** that reference a manifest hash, instead of creating new manifests.
 - A standalone **offline verifier** (stdlib + `cryptography`) validates signature, hashes and chain from the exported artifacts alone. The Ontos verify endpoint additionally re-reads live state and reports *content modified since seal* and *data changed since seal*.
 
-The feature is **opt-in and alpha**: disabled by default (`MANIFEST_SIGNING_ENABLED=false`) and surfaced in the UI only behind **Show Alpha**, following `docs/decisions/feature-maturity-policy.md`.
+The feature is **opt-in and alpha**: disabled by default (`MANIFEST_SIGNING_ENABLED=false`) and surfaced in the UI only behind **Show Alpha Features**, following `docs/decisions/feature-maturity-policy.md`.
 
 The manifest is deliberately transport-neutral. It is the envelope that Estate Manager imports (#143), Marketplace listings (#165) and the portability package (#574) can reference by `manifest_hash`; it does not replace any of them.
 
@@ -85,7 +85,9 @@ Sealing and attesting are wired into every code path that changes publication or
 | Workflow step `_handle_publication` / `_handle_unpublish` | same as the matching route |
 | Workflow step `_handle_certification` | `certified` / `decertified` |
 
-A single helper is called from each site after its final commit — and therefore after any publish gate on the same path, such as the Compliance Templates completeness gate proposed in #731 for `publish_product` and `set-publication-scope`. A blocked publication is never sealed. Hooks are **fail-open**: an error is logged and audited (`MANIFEST_SEAL_FAILED`) but never fails the user action. The manual seal endpoint is **fail-closed** and returns the error.
+With #991, `set-publication-scope` and `handle-publish` both call `DataProductsManager.set_publication_scope` (which also runs the output-port contract checks of `publish_product`), so the publication paths reduce to four sites: `publish_product`, `set_publication_scope`, the `/unpublish` route and the workflow `entity_action` step. Approved publication requests (Publication Request Review) publish through that workflow step.
+
+A single helper is called from each site after its final commit — and therefore after any publish gate on the same path: the output-port contract checks, the `before_status_change` gates that `publish_product` runs through `transition_status` (which block since #985), and the Compliance Templates completeness gate proposed in #731. A blocked publication is never sealed. Hooks are **fail-open**: an error is logged and audited (`MANIFEST_SEAL_FAILED`) but never fails the user action. The manual seal endpoint is **fail-closed** and returns the error.
 
 ### Storage
 
@@ -187,6 +189,10 @@ Prior art: `entity-tags-panel.test.tsx`, `certification-badge` usage.
 - **#165 / #168 (Marketplace provider)** — a listing can reference the `manifest_hash` of the exact version that was approved for publication.
 - **#421 (Governance Event Stream)** — attestations are designed so that event subscribers can produce them once the stream exists.
 - **#442 (Unified version family)** — `version_family_id` is the anchor of the manifest chain.
-- **#735 / #736 (contract drift detection)** — the manifest reuses the drift result as evidence rather than computing its own contract-vs-catalog diff.
+- **#736 (contract drift detection)** — the manifest reuses the drift result as evidence rather than computing its own contract-vs-catalog diff.
 - **#731 (Compliance Templates)** — its publish completeness gate runs before sealing on the same paths; filled template values could be added to the sealed definition in a later version.
 - **Lifecycle tag automation and deprecation PRD** — adds `deprecated` / `retired` attestation types.
+
+### Approval before publication
+
+The demo data ships four "pre-publish" approval gates (BCBS 239 Pre-Publish Attestation, IRB Approval Gate, HIPAA PHI Pre-Publish Check, OTA / Connected Services Release Gate) on a `before_publish` trigger that doesn't exist, so they load as `manual` and never run. A real gate needs to remember that a version was approved: re-running an approval workflow on every publish attempt pauses again. A sealed manifest gives that approval a fixed target: an approval can be recorded against a `manifest_hash`, and publication can check that the content about to be published still has that hash. The gate itself (trigger, workflow semantics) is tracked separately; this PRD only keeps the manifest usable for it.

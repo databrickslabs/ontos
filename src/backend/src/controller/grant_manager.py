@@ -219,9 +219,10 @@ class GrantManager:
                 )
             ]
             
-            # Apply the grant using the grants API
+            # Apply the grant using the grants API. The SDK interpolates
+            # securable_type into the URL path, so pass the string value.
             self._ws.grants.update(
-                securable_type=sdk_securable_type,
+                securable_type=sdk_securable_type.value,
                 full_name=securable_name,
                 changes=changes,
             )
@@ -304,7 +305,7 @@ class GrantManager:
             if not privileges:
                 try:
                     current = self._ws.grants.get(
-                        securable_type=sdk_securable_type,
+                        securable_type=sdk_securable_type.value,
                         full_name=securable_name,
                     )
                     for assignment in current.privilege_assignments or []:
@@ -332,7 +333,7 @@ class GrantManager:
             
             # Apply the revoke using the grants API
             self._ws.grants.update(
-                securable_type=sdk_securable_type,
+                securable_type=sdk_securable_type.value,
                 full_name=securable_name,
                 changes=changes,
             )
@@ -381,7 +382,7 @@ class GrantManager:
             sdk_securable_type = self._get_securable_type(securable_type)
             
             result = self._ws.grants.get(
-                securable_type=sdk_securable_type,
+                securable_type=sdk_securable_type.value,
                 full_name=securable_name,
             )
             

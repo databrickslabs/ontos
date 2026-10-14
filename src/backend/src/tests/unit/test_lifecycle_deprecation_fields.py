@@ -22,7 +22,10 @@ from src.controller.lifecycle_fields import (
     DeprecationDetails,
     apply_lifecycle_fields,
     check_lifecycle_fields,
+    lifecycle_custom_properties,
+    pop_lifecycle_custom_properties,
     requested_status_change_justification,
+    set_lifecycle_columns,
 )
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
@@ -158,3 +161,60 @@ def test_the_latest_status_change_request_gives_the_reason(db_session):
 
 def test_no_request_gives_no_reason(db_session):
     assert requested_status_change_justification(db_session, 'data_product', 'none') is None
+
+
+# --- ODPS / ODCS round-trip ------------------------------------------------
+
+
+def test_export_lists_only_the_set_fields(db_session):
+    product = _product(db_session)
+    product.deprecation_reason = 'Replaced by v2'
+    product.sunset_date = date(2027, 1, 31)
+
+    assert lifecycle_custom_properties(product, 'data_product') == {
+        'ontosDeprecationReason': 'Replaced by v2',
+        'ontosSunsetDate': '2027-01-31',
+    }
+
+
+@pytest.mark.parametrize('custom_props', [
+    [{'property': 'owner', 'value': 'x'},
+     {'property': 'ontosSunsetDate', 'value': '2027-01-31'},
+     {'property': 'ontosReplacedBy', 'value': 'c2'}],
+    {'owner': 'x', 'ontosSunsetDate': '2027-01-31', 'ontosReplacedBy': 'c2'},
+])
+def test_import_moves_the_lifecycle_properties_out_of_custom_properties(custom_props):
+    found = pop_lifecycle_custom_properties(custom_props)
+
+    assert found == {'ontosSunsetDate': '2027-01-31', 'ontosReplacedBy': 'c2'}
+    remaining = custom_props if isinstance(custom_props, dict) else {
+        c['property']: c['value'] for c in custom_props
+    }
+    assert remaining == {'owner': 'x'}
+
+
+def test_imported_properties_set_the_columns(db_session):
+    contract = _contract(db_session)
+
+    set_lifecycle_columns(contract, 'data_contract', {
+        'ontosDeprecationReason': 'Superseded',
+        'ontosSunsetDate': '2027-03-31',
+        'ontosReplacedBy': 'c2',
+        'ontosDeprecatedAt': '2026-10-14T06:07:43Z',
+    })
+
+    assert contract.deprecation_reason == 'Superseded'
+    assert contract.sunset_date == date(2027, 3, 31)
+    assert contract.replacement_contract_id == 'c2'
+    assert contract.deprecated_at == datetime(2026, 10, 14, 6, 7, 43, tzinfo=timezone.utc)
+
+
+def test_an_invalid_imported_date_is_skipped(db_session):
+    product = _product(db_session)
+
+    set_lifecycle_columns(product, 'data_product', {
+        'ontosSunsetDate': 'soon', 'ontosDeprecationReason': 'Replaced',
+    })
+
+    assert product.sunset_date is None
+    assert product.deprecation_reason == 'Replaced'

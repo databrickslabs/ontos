@@ -127,3 +127,58 @@ def apply_lifecycle_fields(
         entity_db.deprecated_at = None
         return previous
     return {}
+
+
+# ODPS / ODCS round-trip: the fields travel as reserved customProperties, like
+# ontosEntityId / ontosOriginalId.
+_PROPERTY_COLUMNS = {
+    'ontosDeprecationReason': 'deprecation_reason',
+    'ontosSunsetDate': 'sunset_date',
+    'ontosReplacedBy': None,  # replacement_product_id / replacement_contract_id
+    'ontosDeprecatedAt': 'deprecated_at',
+}
+
+
+def lifecycle_custom_properties(entity, entity_type: str) -> Dict[str, str]:
+    """The entity's lifecycle fields as ``{property: value}`` for an export (set ones only)."""
+    props = {}
+    for prop, column in _PROPERTY_COLUMNS.items():
+        value = getattr(entity, column or _REPLACEMENT_COLUMN[entity_type], None)
+        if value:
+            props[prop] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+    return props
+
+
+def pop_lifecycle_custom_properties(custom_props) -> Dict[str, Any]:
+    """Remove the lifecycle properties from an imported ``customProperties``
+    (ODCS / ODPS list form or legacy dict form) and return them."""
+    found: Dict[str, Any] = {}
+    if isinstance(custom_props, list):
+        for item in list(custom_props):
+            if isinstance(item, dict) and item.get('property') in _PROPERTY_COLUMNS:
+                found[item['property']] = item.get('value')
+                custom_props.remove(item)
+    elif isinstance(custom_props, dict):
+        for prop in list(custom_props):
+            if prop in _PROPERTY_COLUMNS:
+                found[prop] = custom_props.pop(prop)
+    return found
+
+
+def set_lifecycle_columns(entity_db, entity_type: str, props: Dict[str, Any]) -> None:
+    """Set the lifecycle columns from imported properties; unparseable dates are skipped."""
+    for prop, value in props.items():
+        if value in (None, ''):
+            continue
+        column = _PROPERTY_COLUMNS[prop] or _REPLACEMENT_COLUMN[entity_type]
+        try:
+            if column == 'sunset_date':
+                value = date.fromisoformat(str(value)[:10])
+            elif column == 'deprecated_at':
+                value = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+            else:
+                value = str(value)
+        except ValueError:
+            logger.warning("Skipping invalid %s %r on import", prop, value)
+            continue
+        setattr(entity_db, column, value)

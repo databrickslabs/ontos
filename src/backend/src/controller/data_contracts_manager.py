@@ -2152,15 +2152,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         db.add(pricing_db)
     
-    def _create_custom_properties(self, db, contract_id: str, custom_props):
+    def _create_custom_properties(self, db, contract_id: str, custom_props,
+                                  apply_lifecycle: bool = False):
         """Create custom properties from ODCS customProperties (handles both array and dict formats).
         
         ODCS uses array format: [{"property": "key", "value": "val"}, ...]
         Legacy format uses dict: {"key": "val", ...}
-        The ontos* lifecycle properties set the contract's lifecycle columns instead.
+        The ontos* lifecycle properties are never stored as custom properties:
+        on import (``apply_lifecycle``) they set the lifecycle columns; on a
+        regular update they're ignored, since those columns only change
+        through a status transition.
         """
         lifecycle_props = pop_lifecycle_custom_properties(custom_props)
-        if lifecycle_props:
+        if lifecycle_props and apply_lifecycle:
             contract = db.get(DataContractDb, contract_id)
             if contract is not None:
                 set_lifecycle_columns(contract, 'data_contract', lifecycle_props)
@@ -3159,7 +3163,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Create custom properties if present (handles both ODCS array and legacy dict formats)
             custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties')
             if custom_props:
-                self._create_custom_properties(db, created.id, custom_props)
+                self._create_custom_properties(db, created.id, custom_props, apply_lifecycle=True)
             
             # Create SLA properties if present
             sla_properties_data = parsed_odcs.get('slaProperties', [])
@@ -6343,7 +6347,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
             # A requested deprecation uses the request's justification as its reason
             deprecation = DeprecationDetails(
-                reason=requested_status_change_justification(db, 'data_contract', contract_id)
+                reason=requested_status_change_justification(
+                    db, 'data_contract', contract_id, target_status_lower
+                )
             )
             check_lifecycle_fields(
                 db, 'data_contract', contract_id, target_status_lower, deprecation

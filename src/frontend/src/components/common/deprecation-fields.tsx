@@ -83,7 +83,13 @@ export default function DeprecationFields({
     };
   }, [entityType, entityId, get]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Local date (toISOString would give the UTC date, a day off in the evening)
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
 
   return (
     <div className="space-y-4">

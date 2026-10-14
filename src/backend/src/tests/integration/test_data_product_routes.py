@@ -419,11 +419,24 @@ class TestDataProductRoutes:
         product_id = create_response.json()["id"]
 
         # Act
-        response = client.post(f"/api/data-products/{product_id}/deprecate")
+        response = client.post(
+            f"/api/data-products/{product_id}/deprecate",
+            json={"deprecation_reason": "Replaced by v2"},
+        )
 
         # Assert
         assert response.status_code == 200
         assert response.json()["status"] == "deprecated"
+
+    def test_deprecate_product_requires_a_reason(self, client, sample_product_data):
+        """POST /deprecate without a reason is rejected."""
+        sample_product_data["status"] = "active"
+        create_response = client.post("/api/data-products", json=sample_product_data)
+        product_id = create_response.json()["id"]
+
+        response = client.post(f"/api/data-products/{product_id}/deprecate")
+
+        assert response.status_code == 409
 
     # =================================================================
     # Utility Endpoints

@@ -167,7 +167,7 @@ def test_no_request_gives_no_reason(db_session):
 
 
 def test_export_lists_only_the_set_fields(db_session):
-    product = _product(db_session)
+    product = _product(db_session, status='deprecated')
     product.deprecation_reason = 'Replaced by v2'
     product.sunset_date = date(2027, 1, 31)
 
@@ -218,3 +218,64 @@ def test_an_invalid_imported_date_is_skipped(db_session):
 
     assert product.sunset_date is None
     assert product.deprecation_reason == 'Replaced'
+
+
+def test_an_active_entity_exports_no_lifecycle_fields(db_session):
+    # Reactivation keeps the reason and replacement for the record.
+    product = _product(db_session)
+    product.deprecation_reason = 'Replaced by v2'
+    product.replacement_product_id = 'p2'
+
+    assert lifecycle_custom_properties(product, 'data_product') == {}
+
+
+def test_the_reason_comes_from_the_latest_request_to_that_status(db_session):
+    product = _product(db_session)
+    for days_ago, target, justification in (
+        (2, 'deprecated', 'Superseded by v2'), (1, 'draft', 'Back to editing'),
+    ):
+        entry = change_log_manager.log_change_with_details(
+            db_session, entity_type='data_product', entity_id=product.id,
+            action='status_change_requested', username='alice',
+            details={'target_status': target, 'justification': justification},
+        )
+        entry.timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    db_session.flush()
+
+    assert requested_status_change_justification(
+        db_session, 'data_product', product.id, 'deprecated'
+    ) == 'Superseded by v2'
+
+
+def test_a_contract_update_does_not_write_lifecycle_columns(db_session):
+    contract = _contract(db_session)
+    props = [{'property': 'owner', 'value': 'x'},
+             {'property': 'ontosSunsetDate', 'value': '2001-01-01'},
+             {'property': 'ontosReplacedBy', 'value': contract.id}]
+
+    DataContractsManager(data_dir=Path('/tmp'))._create_custom_properties(
+        db_session, contract.id, props
+    )
+    db_session.flush()
+
+    db_session.refresh(contract)
+    assert (contract.sunset_date, contract.replacement_contract_id) == (None, None)
+    stored = {cp.property for cp in contract.custom_properties}
+    assert stored == {'owner'}
+
+
+def test_contract_read_accepts_orm_dates():
+    from src.models.data_contracts_api import DataContractRead
+
+    row = DataContractDb(
+        id='c1', name='c', version='1.0.0', status='deprecated', kind='DataContract',
+        publication_scope='organization', sunset_date=date(2027, 1, 31),
+        deprecated_at=datetime(2026, 10, 14, tzinfo=timezone.utc),
+        published_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+    )
+
+    read = DataContractRead.model_validate(row, from_attributes=True)
+
+    assert read.sunset_date == '2027-01-31'
+    assert read.deprecated_at.startswith('2026-10-14')
+    assert read.published_at.startswith('2026-10-01')

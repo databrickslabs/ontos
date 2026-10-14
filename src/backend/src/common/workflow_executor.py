@@ -242,6 +242,16 @@ def _underlying_entity(context: 'StepContext') -> Tuple[str, str]:
     return underlying_type, underlying_id
 
 
+def _requester_email(context: 'StepContext') -> Optional[str]:
+    """The user who made the request the workflow handles.
+
+    After an approval, ``resume_workflow`` sets ``context.user_email`` to the
+    approver (the user acting now); the requester stays in the trigger context.
+    """
+    trigger_context = getattr(context, 'trigger_context', None)
+    return getattr(trigger_context, 'user_email', None) or context.user_email
+
+
 def _entity_owner_emails(db: Session, context: 'StepContext') -> List[str]:
     """Owners of the trigger entity (see ``resolve_owner_emails``)."""
     from src.repositories.entity_owners_repository import resolve_owner_emails
@@ -286,7 +296,7 @@ def _owner_approvers(db: Session, role_name: str, context: 'StepContext') -> Lis
     else:
         emails = resolve_owner_emails(db, entity_type, entity_id)
     # The requester is often an owner; they must not approve their own request.
-    requester = (context.user_email or '').lower()
+    requester = (_requester_email(context) or '').lower()
     emails = [email for email in emails if email.lower() != requester]
     if emails:
         return [(email, None) for email in emails]
@@ -353,7 +363,8 @@ def _resolve_role_to_users(
 
     # 'trigger_user' is the name the default workflows use for the requester.
     if role_spec in ('requester', 'trigger_user'):
-        return [(context.user_email, None)] if context.user_email else []
+        requester = _requester_email(context)
+        return [(requester, None)] if requester else []
 
     if role_spec == 'entity_owner':
         return [(email, None) for email in _entity_owner_emails(db, context)]
@@ -557,7 +568,7 @@ def _build_approval_subtitle(
             )
         # Fallback: no underlying entity resolved — at least avoid showing
         # the raw access_grant UUID.
-        return f"Access request from {context.user_email or 'unknown user'}"
+        return f"Access request from {_requester_email(context) or 'unknown user'}"
 
     return f"{_humanize_entity_type(context.entity_type)}: {entity_display}"
 
@@ -575,7 +586,7 @@ def _build_approval_description(
     """
     lines: List[str] = []
 
-    requester = context.user_email or "Unknown"
+    requester = _requester_email(context) or "Unknown"
     lines.append(f"Requester: {requester}")
 
     underlying_type = facets.get("underlying_entity_type")
@@ -689,7 +700,7 @@ class ApprovalStepHandler(StepHandler):
                             "entity_type": context.entity_type,
                             "entity_id": context.entity_id,
                             "entity_name": context.entity_name,
-                            "requester_email": context.user_email,
+                            "requester_email": _requester_email(context),
                             "timeout_days": timeout_days,
                             # Structured request context for the approval
                             # dialog. All optional; only access-grant
@@ -2203,7 +2214,7 @@ class GrantPermissionsStepHandler(StepHandler):
         principal: Optional[str] = None
 
         if config.principal_source == 'requester':
-            principal = context.user_email
+            principal = _requester_email(context)
         elif config.principal_source == 'from_variable':
             if not config.principal_variable:
                 return StepResult(passed=False, error="principal_variable is required when principal_source=from_variable")

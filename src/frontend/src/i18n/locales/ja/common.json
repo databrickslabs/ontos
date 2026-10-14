@@ -755,5 +755,39 @@
     "createdSkipped": "作成: {{created}} 件、スキップ: {{skipped}} 件。",
     "createdFailed": "作成: {{created}} 件、失敗: {{failed}} 件。",
     "createdSkippedFailed": "作成: {{created}} 件、スキップ: {{skipped}} 件、失敗: {{failed}} 件。"
+  },
+  "deprecation": {
+    "reason": "非推奨の理由",
+    "reasonPlaceholder": "非推奨にする理由。利用者に表示されます。",
+    "sunsetDate": "提供終了日",
+    "replacement": "後継",
+    "noReplacement": "後継なし",
+    "reasonRequired": "非推奨にするには理由が必要です。",
+    "requestHint": "申請理由が非推奨の理由になります。",
+    "errors": {
+      "deprecation_reason_required": "非推奨にするには理由が必要です。",
+      "sunset_date_in_past": "提供終了日 {{sunsetDate}} は過去の日付です。",
+      "replacement_is_self": "エンティティを自身の後継にすることはできません。",
+      "replacement_not_found": "後継 {{replacementId}} が見つかりません。",
+      "replacement_retired": "後継 {{replacementId}} は廃止済みです。",
+      "replacement_deprecated": "後継 {{replacementId}} は非推奨です。",
+      "replacement_deprecated_replaced": "後継 {{replacementId}} は非推奨です。その後継は {{replacedBy}} です。",
+      "replacement_leads_back": "後継 {{replacementId}} をたどるとこのエンティティに戻ります: {{chain}}"
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} の値 \"{{value}}\" が無効です。ISO 形式の日付が必要です。",
+      "replacement_is_self": "後継 (ontosReplacedBy) にエンティティ自身は指定できません。",
+      "replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻ります: {{chain}}。",
+      "imported_replacement_dropped": "後継 {{replacementId}} がここに存在しないため、リンクされませんでした。",
+      "imported_replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻るため ({{chain}})、リンクされませんでした。",
+      "imported_status_mapped": "「{{status}}」はライフサイクルのステータスではないため、「{{mappedTo}}」としてインポートしました。",
+      "imported_legacy_status": "「{{status}}」は古いステータス名のため、「{{mappedTo}}」としてインポートしました。",
+      "imported_certified_as_active": "「{{status}}」はもうステータスではないため、「{{mappedTo}}」としてインポートしました。認証はインポートされません。Ontos でエンティティを認証してください。"
+    },
+    "notice": {
+      "deprecated": "非推奨",
+      "retired": "廃止",
+      "noReason": "理由は記録されていません"
+    }
   }
 }

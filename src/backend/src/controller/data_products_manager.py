@@ -1612,7 +1612,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if decision == 'approve':
             # Apply the status change directly; a requested deprecation uses
             # the request's justification as its reason
-            justification = requested_status_change_justification(db, 'data_product', product_id)
+            justification = requested_status_change_justification(
+                db, 'data_product', product_id, target_status
+            )
             self.transition_status(
                 product_id, target_status, current_user,
                 deprecation=DeprecationDetails(reason=justification),

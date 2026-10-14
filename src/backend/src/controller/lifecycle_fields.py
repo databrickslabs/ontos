@@ -40,10 +40,10 @@ def _entity_model(entity_type: str):
 
 
 def requested_status_change_justification(
-    db: Session, entity_type: str, entity_id: str
+    db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
 ) -> Optional[str]:
-    """Justification of the latest status change request, used as the
-    deprecation reason when that request is approved."""
+    """Justification of the latest status change request (to ``target_status``,
+    when given), used as the deprecation reason when that request is approved."""
     from src.controller.change_log_manager import change_log_manager
 
     try:
@@ -55,11 +55,16 @@ def requested_status_change_justification(
                        entity_type, entity_id, e)
         return None
     for change in changes:  # newest first
-        if change.action == 'status_change_requested':
-            try:
-                return (json.loads(change.details_json or '{}') or {}).get('justification')
-            except ValueError:
-                return None
+        if change.action != 'status_change_requested':
+            continue
+        try:
+            details = json.loads(change.details_json or '{}') or {}
+        except ValueError:
+            continue
+        requested = (details.get('target_status') or '').lower()
+        if target_status and requested and requested != target_status.lower():
+            continue
+        return details.get('justification')
     return None
 
 
@@ -140,7 +145,13 @@ _PROPERTY_COLUMNS = {
 
 
 def lifecycle_custom_properties(entity, entity_type: str) -> Dict[str, str]:
-    """The entity's lifecycle fields as ``{property: value}`` for an export (set ones only)."""
+    """The entity's lifecycle fields as ``{property: value}`` for an export.
+
+    Only set fields, and only while the entity is deprecated or retired: after
+    a reactivation the kept reason / replacement describe a past deprecation.
+    """
+    if (getattr(entity, 'status', None) or '').lower() not in ('deprecated', 'retired'):
+        return {}
     props = {}
     for prop, column in _PROPERTY_COLUMNS.items():
         value = getattr(entity, column or _REPLACEMENT_COLUMN[entity_type], None)

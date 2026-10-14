@@ -467,6 +467,12 @@ class DataProduct(BaseModel):
     certification_expires_at: Optional[datetime] = Field(None, description="When certification expires")
     certification_notes: Optional[str] = Field(None, description="Certification notes")
 
+    # Deprecation lifecycle fields (set when the product moves to `deprecated`)
+    deprecation_reason: Optional[str] = Field(None, description="Why the product was deprecated")
+    sunset_date: Optional[date] = Field(None, description="Date after which it shouldn't be used")
+    replacement_product_id: Optional[str] = Field(None, description="Product replacing this one")
+    deprecated_at: Optional[datetime] = Field(None, description="When the product was deprecated")
+
     # consumer_principals is stored as JSON-encoded TEXT in DB. Decode to a
     # list of dicts at read time so Pydantic can build ConsumerPrincipal
     # entries. Accepts:
@@ -768,8 +774,26 @@ class SubscribersListResponse(BaseModel):
 # Status Change Request/Response Models
 # ============================================================================
 
-class ChangeStatusPayload(BaseModel):
-    """Payload for direct status change (admin/owner)."""
+class DeprecationPayload(BaseModel):
+    """Deprecation details (deprecation_reason is required to deprecate)."""
+    deprecation_reason: Optional[str] = Field(None, description="Why the entity is deprecated")
+    sunset_date: Optional[date] = Field(None, description="Date after which it should not be used")
+    replacement_id: Optional[str] = Field(None, description="Entity of the same type replacing it")
+
+    def deprecation_details(self):
+        from src.controller.lifecycle_fields import DeprecationDetails
+        return DeprecationDetails(
+            reason=self.deprecation_reason,
+            sunset_date=self.sunset_date,
+            replacement_id=self.replacement_id,
+        )
+
+
+class ChangeStatusPayload(DeprecationPayload):
+    """Payload for direct status change (admin/owner).
+
+    The deprecation fields are used when new_status is ``deprecated``.
+    """
     new_status: str = Field(..., description="Target status")
 
 

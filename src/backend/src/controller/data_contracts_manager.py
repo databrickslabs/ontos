@@ -5460,6 +5460,71 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         return result
     
+    def set_publication_scope(self, db, contract_id: str, scope: str,
+                              current_user: Optional[str] = None):
+        """Set a contract's marketplace publication scope and return the contract row.
+
+        Publishing (any scope but ``none``) needs an ``approved`` or ``active``
+        contract and fires ``on_publish`` when it wasn't published yet; ``none``
+        unpublishes it and fires ``on_unpublish`` when it was published.
+
+        Raises:
+            ValueError: If the contract is not found or can't be published
+        """
+        from datetime import datetime, timezone
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        contract_db = data_contract_repo.get(db, id=contract_id)
+        if not contract_db:
+            raise ValueError("Contract not found")
+        was_published = (contract_db.publication_scope or "none").lower() != "none"
+
+        if scope != "none":
+            status = (contract_db.status or "").lower()
+            if status not in ("active", "approved"):
+                raise ValueError(
+                    "Contract must be active or approved to publish. "
+                    f"Current status: {contract_db.status}"
+                )
+            contract_db.publication_scope = scope
+            contract_db.published_at = datetime.now(timezone.utc)
+            contract_db.published_by = current_user
+        else:
+            contract_db.publication_scope = "none"
+            contract_db.published_at = None
+            contract_db.published_by = None
+        db.add(contract_db)
+        db.commit()
+        db.refresh(contract_db)
+
+        try:
+            registry = get_trigger_registry(db)
+            if scope != "none" and not was_published:
+                registry.on_publish(
+                    entity_type=WFEntityType.DATA_CONTRACT,
+                    entity_id=contract_id,
+                    entity_name=contract_db.name,
+                    entity_data={
+                        "name": contract_db.name,
+                        "status": contract_db.status,
+                        "publication_scope": scope,
+                        "published_by": current_user,
+                    },
+                    user_email=current_user,
+                )
+            elif scope == "none" and was_published:
+                registry.on_unpublish(
+                    WFEntityType.DATA_CONTRACT,
+                    contract_id,
+                    entity_name=contract_db.name,
+                    user_email=current_user,
+                )
+        except Exception as e:
+            logger.warning("Publication trigger error (non-fatal): %s", e)
+
+        return contract_db
+
     def request_publish(
         self,
         db,

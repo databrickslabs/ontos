@@ -2876,6 +2876,24 @@ class WorkflowExecutor:
                         db_product.status = 'draft'
                         logger.info(f"Data product {entity_id} status reverted to 'draft' after rejection")
                     self._db.commit()
+
+            # Approved status change request: apply the requested transition,
+            # with the same validation and gates as a direct status change
+            elif (entity_type == 'data_product'
+                  and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')):
+                approved_request = succeeded if approved is None else approved
+                target_status = trigger_context.to_status or (
+                    trigger_context.entity_data or {}
+                ).get('target_status')
+                if approved_request and target_status:
+                    from src.controller.data_products_manager import DataProductsManager
+                    DataProductsManager(db=self._db).transition_status(
+                        entity_id, target_status, responded_by
+                    )
+                    logger.info(
+                        "Data product %s moved to '%s' after its status change request "
+                        "was approved", entity_id, target_status,
+                    )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)

@@ -971,7 +971,10 @@ class AgreementWizardManager:
         """
         from src.repositories.entity_owners_repository import resolve_owner_emails
         try:
-            return resolve_owner_emails(self._db, entity_type, entity_id)
+            # Savepoint: a failed query must not leave the session the
+            # delivery notifications use in an aborted transaction.
+            with self._db.begin_nested():
+                return resolve_owner_emails(self._db, entity_type, entity_id)
         except Exception as e:
             logger.warning("Could not resolve owners of %s %s: %s", entity_type, entity_id, e)
             return []

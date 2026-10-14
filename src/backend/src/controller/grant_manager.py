@@ -126,6 +126,9 @@ class GrantManager:
     
     def _get_securable_type(self, type_str: str) -> SecurableType:
         """Convert string type to SDK SecurableType enum."""
+        model_securable_type = (
+            getattr(SecurableType, "REGISTERED_MODEL", None) or SecurableType.MODEL
+        )
         type_map = {
             "catalog": SecurableType.CATALOG,
             "schema": SecurableType.SCHEMA,
@@ -133,7 +136,7 @@ class GrantManager:
             "view": SecurableType.TABLE,  # Views use TABLE type
             "function": SecurableType.FUNCTION,
             "volume": SecurableType.VOLUME,
-            "model": SecurableType.REGISTERED_MODEL,
+            "model": model_securable_type,
             "share": SecurableType.SHARE,
             "recipient": SecurableType.RECIPIENT,
             "provider": SecurableType.PROVIDER,
@@ -423,4 +426,3 @@ def get_grant_manager() -> GrantManager:
     if not _grant_manager:
         raise RuntimeError("Grant manager not initialized")
     return _grant_manager
-

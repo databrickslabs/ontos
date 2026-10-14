@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import json
+import re
 
 import yaml
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -310,6 +311,41 @@ class ConfigManager:
 # Global configuration instances
 _settings: Optional[Settings] = None
 _config_manager: Optional[ConfigManager] = None
+
+def resolve_volume(settings: Settings) -> Optional[Tuple[str, str, str]]:
+    """(catalog, schema, volume) for ``DATABRICKS_VOLUME``, or None when it isn't set.
+
+    Accepts the path Databricks Apps injects for a volume resource
+    (``/Volumes/<catalog>/<schema>/<volume>``), a three-part name
+    (``<catalog>.<schema>.<volume>``), or a volume name, which lives in
+    ``DATABRICKS_CATALOG`` / ``DATABRICKS_SCHEMA`` (what the bundle passes).
+
+    Raises:
+        ValueError: If the value has none of these forms
+    """
+    raw = (settings.DATABRICKS_VOLUME or '').strip()
+    if not raw:
+        return None
+
+    def valid(*names: str) -> bool:
+        # UC names can't contain periods, slashes or whitespace
+        return all(name and not re.search(r'[\s./]', name) for name in names)
+
+    if raw.startswith('/'):
+        parts = [part for part in raw.split('/') if part]
+        if len(parts) == 4 and parts[0] == 'Volumes' and valid(*parts[1:]):
+            return parts[1], parts[2], parts[3]
+    else:
+        parts = raw.split('.')
+        if len(parts) == 3 and valid(*parts):
+            return parts[0], parts[1], parts[2]
+        if len(parts) == 1 and valid(raw):
+            return settings.DATABRICKS_CATALOG, settings.DATABRICKS_SCHEMA, raw
+    raise ValueError(
+        "DATABRICKS_VOLUME must be /Volumes/<catalog>/<schema>/<volume>, "
+        f"<catalog>.<schema>.<volume> or a volume name, got {raw!r}"
+    )
+
 
 def init_config() -> None:
     """Initialize the global configuration instances."""

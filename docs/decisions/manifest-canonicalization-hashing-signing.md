@@ -112,7 +112,7 @@ Attestations follow the same pattern with their own envelope, `attestation_hash`
 | Tags | rendered as `namespace/name[=value]`, sorted |
 | Evidence `assets` | (`port`, `asset_identifier`) |
 
-Sealing calls the ODPS export in a **strict** mode that raises instead of silently omitting sections, so a partial export can never produce a different but valid-looking hash.
+Sealing needs a **strict** mode of the ODPS export that raises instead of silently omitting sections. Today `DataProductsManager.build_odps_export` logs a warning and drops `datasets` when the dataset hierarchy fails to load; a sealed manifest must never be built from such a partial export, which would produce a different but valid-looking hash.
 
 ## Decision 7 — Keys
 

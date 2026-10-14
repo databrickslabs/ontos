@@ -356,10 +356,11 @@ def _resolve_role_to_users(
     if role_by_id:
         return [(role_by_id.name, role_by_id.id)]
 
-    # Fallback: role name (legacy)
-    normalized = role_spec.lower().replace(' ', '')
+    # Fallback: role name (legacy), ignoring case, spaces and underscores so
+    # 'data_steward' matches 'Data Steward'
+    normalized = role_spec.lower().replace(' ', '').replace('_', '')
     for r in db.query(AppRoleDb).all():
-        if r.name.lower().replace(' ', '') == normalized:
+        if r.name.lower().replace(' ', '').replace('_', '') == normalized:
             return [(r.name, r.id)]
 
     return [(role_spec, None)]
@@ -561,7 +562,10 @@ class ApprovalStepHandler(StepHandler):
         from src.models.notifications import Notification, NotificationType
         from src.repositories.notification_repository import notification_repo
         
-        approvers = self._config.get('approvers', '')
+        # Default workflows loaded before 'approvers' was used in the YAML
+        # store the approver under 'approver_role'; accept it so existing
+        # databases keep working without reloading the defaults.
+        approvers = self._config.get('approvers') or self._config.get('approver_role', '')
         timeout_days = self._config.get('timeout_days', 7)
         require_all = self._config.get('require_all', False)
         approval_message = self._config.get('message', '')

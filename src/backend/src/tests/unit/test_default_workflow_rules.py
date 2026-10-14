@@ -69,8 +69,8 @@ def _approval_steps():
 
 @pytest.mark.parametrize('step', _approval_steps())
 def test_default_approval_steps_configure_approvers(step):
-    # ApprovalStepHandler reads `approvers`; any other key means
-    # "No approvers configured" and the request is denied.
+    # Defaults must use `approvers`. ApprovalStepHandler only falls back to
+    # `approver_role` for databases that loaded older defaults.
     config = step.get('config') or {}
 
     assert config.get('approvers'), f"approval step without `approvers`: {sorted(config)}"

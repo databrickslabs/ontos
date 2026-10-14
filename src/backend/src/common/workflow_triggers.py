@@ -957,6 +957,33 @@ class TriggerRegistry:
         return self.fire_trigger(event, blocking=blocking)
 
 
+def describe_failed_executions(executions: List[WorkflowExecution]) -> str:
+    """Why blocking (``before_*``) workflows did not let an operation through.
+
+    One reason per execution that did not succeed: "waiting for approval"
+    for paused executions; otherwise the execution's error (the message of
+    the step it ended on, e.g. a Fail step), else the error or message of
+    its last failed step, else its status.
+    """
+    reasons = []
+    for exe in executions:
+        if exe.status == ExecutionStatus.SUCCEEDED:
+            continue
+        if exe.status == ExecutionStatus.PAUSED:
+            reason = f"waiting for approval ({exe.current_step_name or exe.current_step_id})"
+        else:
+            reason = exe.error_message
+            for step in reversed(exe.step_executions or []):
+                if reason:
+                    break
+                if step.passed is False or step.error_message:
+                    reason = step.error_message or (step.result_data or {}).get('message')
+            reason = reason or exe.status.value
+        reason = str(reason)
+        reasons.append(f"{exe.workflow_name}: {reason}" if exe.workflow_name else reason)
+    return "; ".join(reasons) or "Workflow validation failed"
+
+
 def get_trigger_registry(db: Session) -> TriggerRegistry:
     """Get a trigger registry instance.
 

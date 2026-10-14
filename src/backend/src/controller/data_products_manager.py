@@ -968,12 +968,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     user_email=current_user,
                 )
                 if not gate_passed:
-                    failed = [e for e in gate_executions if e.status.value != 'succeeded']
-                    reasons = "; ".join(
-                        e.step_results.get(e.current_step_id or '', {}).get('error', e.status.value)
-                        for e in failed
-                        if e.step_results
-                    ) or "Workflow validation failed"
+                    from src.common.workflow_triggers import describe_failed_executions
+                    reasons = describe_failed_executions(gate_executions)
                     raise ValueError(
                         f"Status transition from '{current_status}' to '{new_status_lower}' "
                         f"blocked by workflow: {reasons}"

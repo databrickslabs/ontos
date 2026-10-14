@@ -719,7 +719,7 @@ class TriggerRegistry:
             scope_id=scope_id,
         )
         logger.info(
-            f"on_request_deploy fired for {entity_type.value} '{entity_id}' by {user_email}"
+            "on_request_deploy fired for %s '%s' by %s", entity_type.value, entity_id, user_email
         )
         return self.fire_trigger(event, blocking=blocking)
 

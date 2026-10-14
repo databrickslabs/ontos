@@ -568,7 +568,11 @@ class ApprovalStepHandler(StepHandler):
         
         if not approvers:
             return StepResult(passed=False, error="No approvers configured")
-        
+
+        # Render ${entity_name} etc., as notification steps do.
+        if approval_message:
+            approval_message = substitute_template(approval_message, context)
+
         try:
             # Resolve approvers - returns list of (identifier, role_id or None)
             resolved_approvers = self._resolve_approvers(approvers, context)

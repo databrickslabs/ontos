@@ -1406,7 +1406,10 @@ class CreateAssetReviewStepHandler(StepHandler):
     useful when workflows need to integrate with the data asset review system.
     
     Config options:
-        reviewer_role: Role name or UUID of the reviewer (default: 'DataSteward')
+        reviewer_role: Who reviews (default: 'DataSteward'): any approver
+            spec ``_resolve_role_to_users`` accepts (e.g. 'DomainOwner', an
+            email), or a role name / UUID whose group members are looked up.
+            A ``reviewer_email`` in the request wins.
         review_type: Type of review (default: 'standard')  
         notes: Additional notes for the review
         use_entity_as_asset: If true, uses the trigger entity as the asset to review
@@ -1427,8 +1430,7 @@ class CreateAssetReviewStepHandler(StepHandler):
             if not requester_email:
                 requester_email = 'system@app.local'
             
-            # Resolve reviewer email from role
-            reviewer_email = self._resolve_reviewer_from_role(reviewer_role)
+            reviewer_email = self._resolve_reviewer(reviewer_role, context, requester_email)
             used_fallback = False
             if not reviewer_email:
                 # Fallback: use the requester as the reviewer (self-review placeholder)
@@ -1552,6 +1554,30 @@ class CreateAssetReviewStepHandler(StepHandler):
             logger.exception(f"Failed to create asset review: {e}")
             return StepResult(passed=False, error=str(e))
     
+    def _resolve_reviewer(
+        self, reviewer_role: str, context: StepContext, requester_email: str,
+    ) -> Optional[str]:
+        """The reviewer's email: the one named in the request, else the first
+        person ``reviewer_role`` resolves to other than the requester (as the
+        approval steps resolve it), else a member of the groups of the role it
+        resolves to (or of ``reviewer_role`` itself)."""
+        tc = context.trigger_context
+        requested = (tc.entity_data or {}).get('reviewer_email') if tc else None
+        if requested:
+            return requested
+        roles = []
+        for recipient, role_id in _resolve_role_to_users(self._db, reviewer_role, context):
+            if role_id is not None:
+                roles.append(recipient)
+            elif '@' in recipient and recipient.lower() != requester_email.lower():
+                return recipient
+        # A role (e.g. Data Stewards when a domain has no owner): one of its members
+        for role_name in roles or [reviewer_role]:
+            reviewer = self._resolve_reviewer_from_role(role_name)
+            if reviewer:
+                return reviewer
+        return None
+
     def _resolve_reviewer_from_role(self, role_identifier: str) -> Optional[str]:
         """Resolve a reviewer email from a role name or UUID.
         

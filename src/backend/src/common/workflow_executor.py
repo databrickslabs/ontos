@@ -2067,8 +2067,13 @@ class EntityActionStepHandler(StepHandler):
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
         db_entity.publication_scope = scope
-        db_entity.published_at = datetime.now(timezone.utc)
-        db_entity.published_by = context.user_email
+        if scope == 'none':
+            # Unpublishing: clear the publication metadata, as unpublish does
+            db_entity.published_at = None
+            db_entity.published_by = None
+        else:
+            db_entity.published_at = datetime.now(timezone.utc)
+            db_entity.published_by = context.user_email
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: published {entity_type} {entity_id} with scope={scope}")

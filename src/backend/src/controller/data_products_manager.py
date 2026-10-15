@@ -1208,8 +1208,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     entity_name=product_db.name,
                     user_email=current_user,
                 )
-        except Exception as e:
-            logger.warning("Publication trigger error (non-fatal): %s", e)
+        except Exception:
+            # The publication is committed; its on_publish / on_unpublish
+            # workflows didn't run, so log it as an error
+            logger.exception("Publication trigger failed for data product %s", product_id)
 
         return product_db
 
@@ -1261,8 +1263,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     entity_data={"name": product_db.name, "status": "active"},
                     user_email=current_user,
                 )
-            except Exception as e:
-                logger.warning(f"on_publish trigger error (non-fatal): {e}")
+            except Exception:
+                logger.exception("on_publish trigger failed for data product %s", product_id)
 
             return result
 

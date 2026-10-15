@@ -154,3 +154,23 @@ def test_the_request_session_is_used_when_given(db_session, registry):
 
     db_session.refresh(product)
     assert product.publication_scope == 'organization'
+
+
+def test_a_trigger_error_keeps_the_publication_and_is_logged_as_an_error(
+    db_session, registry, caplog
+):
+    registry.on_publish.side_effect = RuntimeError('workflow engine down')
+    product = _product(db_session, contract_id=_contract(db_session).id)
+    contract = _contract(db_session)
+
+    with caplog.at_level('ERROR'):
+        DataProductsManager(db=db_session).set_publication_scope(product.id, 'organization')
+        _contracts_manager().set_publication_scope(db_session, contract.id, 'organization')
+
+    db_session.refresh(product)
+    db_session.refresh(contract)
+    assert product.publication_scope == 'organization'
+    assert contract.publication_scope == 'organization'
+    errors = [r.getMessage() for r in caplog.records if r.levelname == 'ERROR']
+    assert f'Publication trigger failed for data product {product.id}' in errors
+    assert f'Publication trigger failed for data contract {contract.id}' in errors

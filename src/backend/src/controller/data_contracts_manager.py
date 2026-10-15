@@ -5520,8 +5520,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     entity_name=contract_db.name,
                     user_email=current_user,
                 )
-        except Exception as e:
-            logger.warning("Publication trigger error (non-fatal): %s", e)
+        except Exception:
+            # The publication is committed; its on_publish / on_unpublish
+            # workflows didn't run, so log it as an error
+            logger.exception("Publication trigger failed for data contract %s", contract_id)
 
         return contract_db
 
@@ -6004,8 +6006,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     },
                     user_email=approver_email,
                 )
-            except Exception as e:
-                logger.warning(f"on_publish trigger error (non-fatal): {e}")
+            except Exception:
+                logger.exception("on_publish trigger failed for data contract %s", contract_id)
         
         # Mark actionable notification as handled
         try:

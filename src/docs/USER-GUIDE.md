@@ -2432,6 +2432,7 @@ Create a copy of any workflow:
 
 - **Blocking Workflows** (before_create, before_update): Prevent the action if workflow fails
 - **Non-Blocking Workflows**: Run asynchronously; failures don't prevent the triggering action
+- **Publish / Unpublish** (`on_publish`, `on_unpublish`): non-blocking. They fire after the new publication scope is saved, so a product or contract stays published (or unpublished) even if its publish workflows fail to start; the failure is logged at error level in the app logs.
 
 #### Approval Pausing
 

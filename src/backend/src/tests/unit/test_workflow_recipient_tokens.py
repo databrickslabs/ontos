@@ -308,20 +308,6 @@ def test_owner_token_falls_back_to_the_entity_owners(db_session):
     assert _resolve_role_to_users(db_session, 'owner', context) == [('owner@example.com', None)]
 
 
-def test_business_owner_without_role_counts_as_owner(db_session):
-    from src.db_models.business_owners import BusinessOwnerDb
-
-    product = _product(db_session)
-    db_session.add(BusinessOwnerDb(
-        id=uuid.uuid4(), object_type='data_product', object_id=product.id,
-        user_email='roleless@example.com', role_id=uuid.uuid4(), is_active=True,
-    ))
-    db_session.flush()
-
-    assert resolve_owner_emails(db_session, 'data_product', product.id) == ['roleless@example.com']
-
-
-
 def test_product_owner_with_a_space_is_an_owner(db_session):
     product = _product(db_session, odps_members=[('po@example.com', 'Product Owner')])
 
@@ -360,3 +346,18 @@ def test_no_warning_for_entity_types_without_owners(db_session, caplog):
         assert resolve_owner_emails(db_session, 'project', 'proj-1') == []
 
     assert not any('No owner users' in r.getMessage() for r in caplog.records)
+
+
+def test_business_owner_with_a_dangling_role_is_not_an_owner(db_session):
+    # role_id is a required foreign key, so this can't happen on Postgres;
+    # without the role there is no owner role to match.
+    from src.db_models.business_owners import BusinessOwnerDb
+
+    product = _product(db_session)
+    db_session.add(BusinessOwnerDb(
+        id=uuid.uuid4(), object_type='data_product', object_id=product.id,
+        user_email='dangling@example.com', role_id=uuid.uuid4(), is_active=True,
+    ))
+    db_session.flush()
+
+    assert resolve_owner_emails(db_session, 'data_product', product.id) == []

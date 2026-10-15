@@ -1,7 +1,7 @@
 """Who owns a data product or data contract, as notification recipients."""
 from datetime import date
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
@@ -95,16 +95,15 @@ def resolve_owner_emails(db: Session, entity_type: str, entity_id: str) -> list[
             )
         inline = inline_query.filter(func.lower(member.role).in_(_OWNER_TEAM_ROLES)).all()
 
-    # A Business Owner without a role counts as owner, as in the ODPS export
-    # (DataProductsManager._merge_business_owners_into_team).
+    # Business Owners count when their role is an owner role (every Business
+    # Owner has a role: role_id is required and a foreign key)
     business = (
         db.query(BusinessOwnerDb.user_email)
-        .outerjoin(BusinessRoleDb, BusinessRoleDb.id == BusinessOwnerDb.role_id)
+        .join(BusinessRoleDb, BusinessRoleDb.id == BusinessOwnerDb.role_id)
         .filter(BusinessOwnerDb.object_type == kind)
         .filter(BusinessOwnerDb.object_id == entity_id)
         .filter(BusinessOwnerDb.is_active.is_(True))
-        .filter(or_(BusinessRoleDb.id.is_(None),
-                    func.lower(BusinessRoleDb.name).in_(_OWNER_BUSINESS_ROLES)))
+        .filter(func.lower(BusinessRoleDb.name).in_(_OWNER_BUSINESS_ROLES))
         .all()
     )
 

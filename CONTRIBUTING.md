@@ -766,11 +766,17 @@ Ontos repo is needed.
          schema_name: "app_ontos_dev"
          volume_name: "app_files_dev"
    ```
+4. Validate/Deploy and Run your bundle
+   ```bash
+   databricks bundle validate -t dev          # validate your deployment for the dev target
+   databricks bundle deploy -t dev            # deploy the bundle
+   databricks bundle run ontos -t dev         # run the Ontos app with the configuration passed in the app_config variable in databricks.yaml, which will take precedent over the app.yaml file.
+   ```
 
    > ⚠️ **Security:** Make sure to not keep this feature enabled in 
    > the production environment!
    
-4. Enable the UI picker in your browser. The deployed frontend is a static
+5. Enable the UI picker in your browser. The deployed frontend is a static
    build, so `VITE_TEST_USER_TOKEN` is not available there. Open the app, 
    then run this in the browser devtools console and reload:
 
@@ -780,7 +786,7 @@ Ontos repo is needed.
 
    Run `localStorage.removeItem("ucapp.testToken")` to turn it off again.
 
-5. To customize the personas without a repo change, upload a YAML file (same
+6. To customize the personas without a repo change, upload a YAML file (same
    schema as `src/backend/src/data/test_personas.yaml`) to the app's volume:
 
    ```bash

@@ -26,6 +26,21 @@ from src.common.compliance_entities import (
 logger = get_logger(__name__)
 
 
+TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+def rule_changes_tags(rule: Optional[str]) -> bool:
+    """Whether a rule has ASSIGN_TAG / REMOVE_TAG actions (False if it doesn't parse)."""
+    if not rule:
+        return False
+    try:
+        parsed = parse_rule(rule)
+    except Exception:
+        return False
+    actions = (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+    return any(action.get('type') in TAG_ACTIONS for action in actions)
+
+
 class TagsManagerTagAdapter:
     """EntityTagManager for compliance policy actions (ASSIGN_TAG / REMOVE_TAG).
 

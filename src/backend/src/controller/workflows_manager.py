@@ -5,9 +5,11 @@ Manages CRUD operations and loading of default workflows from YAML.
 """
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import yaml
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
@@ -35,6 +37,9 @@ from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Advisory lock key for loading the default workflows (any constant, unique in the app)
+_DEFAULTS_LOCK_KEY = 7_340_001_016
 
 
 class WorkflowsManager:
@@ -80,7 +85,40 @@ class WorkflowsManager:
             return result
         
         workflows_data = data.get('workflows', [])
-        
+
+        # Several processes (replicas, a rolling deploy) can seed at startup
+        # at the same time; serialize them so the name check below sees the
+        # rows another process created.
+        with self._defaults_lock():
+            return self._load_workflows(
+                workflows_data, result, update_existing, requests_only_active
+            )
+
+    @contextmanager
+    def _defaults_lock(self):
+        """Hold a Postgres advisory lock while the defaults are loaded.
+
+        Taken on a dedicated connection, since the repository commits after
+        each workflow. A no-op on other databases (tests use SQLite).
+        """
+        engine = self._db.get_bind()
+        if engine.dialect.name != 'postgresql':
+            yield
+            return
+        with engine.connect() as conn:
+            conn.execute(text("SELECT pg_advisory_lock(:key)"), {'key': _DEFAULTS_LOCK_KEY})
+            try:
+                yield
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(:key)"), {'key': _DEFAULTS_LOCK_KEY})
+
+    def _load_workflows(
+        self,
+        workflows_data: List[Dict[str, Any]],
+        result: dict,
+        update_existing: bool,
+        requests_only_active: bool,
+    ) -> dict:
         for wf_data in workflows_data:
             try:
                 name = wf_data.get('name')

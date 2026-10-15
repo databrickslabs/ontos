@@ -10,6 +10,7 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import pytest
 import yaml
 
 from src.controller.workflows_manager import WorkflowsManager
@@ -72,3 +73,32 @@ def test_load_defaults_keeps_the_yaml_state(db_session, tmp_path):
     WorkflowsManager(db_session).load_from_yaml(path)
 
     assert _active(db_session) == {'Naming check': True}
+
+
+def test_seeding_twice_creates_each_default_once(db_session, tmp_path):
+    path = _write(tmp_path, [_workflow('Review request', 'on_request_review')])
+
+    WorkflowsManager(db_session).load_from_yaml(path, requests_only_active=True)
+    WorkflowsManager(db_session).load_from_yaml(path, requests_only_active=True)
+
+    assert db_session.query(ProcessWorkflowDb).filter_by(name='Review request').count() == 1
+
+
+def test_postgres_seeding_holds_an_advisory_lock(tmp_path):
+    # Concurrent startups (replicas, rolling deploys) are serialized by a
+    # Postgres advisory lock held on its own connection, released on errors.
+    from unittest.mock import MagicMock
+
+    db = MagicMock()
+    engine = db.get_bind.return_value
+    engine.dialect.name = 'postgresql'
+    conn = engine.connect.return_value.__enter__.return_value
+    manager = WorkflowsManager(db)
+    manager._load_workflows = MagicMock(side_effect=RuntimeError('boom'))
+    path = _write(tmp_path, [_workflow('Review request', 'on_request_review')])
+
+    with pytest.raises(RuntimeError):
+        manager.load_from_yaml(path, requests_only_active=True)
+
+    statements = [str(call.args[0]) for call in conn.execute.call_args_list]
+    assert statements == ['SELECT pg_advisory_lock(:key)', 'SELECT pg_advisory_unlock(:key)']

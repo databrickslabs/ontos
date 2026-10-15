@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Compliance-Richtlinien konnten nicht geladen werden",
     "loadRunResultsFailed": "Ausführungsergebnisse konnten nicht geladen werden",
     "policyNotFound": "Compliance-Richtlinie nicht gefunden.",
-    "runNotFound": "Ausführung nicht gefunden."
+    "runNotFound": "Ausführung nicht gefunden.",
+    "runningPolicy": "Fehler beim Ausführen der Richtlinie"
   },
   "results": {
     "passed": "Bestanden",

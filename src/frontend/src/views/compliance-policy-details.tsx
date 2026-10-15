@@ -157,6 +157,15 @@ export default function CompliancePolicyDetails() {
     setLoading(true);
     try {
       const res = await post<Run>(`/api/compliance/policies/${policyId}/runs`, { mode: 'inline' });
+      if (res.error) {
+        // e.g. 403 when the rule changes tags and the user can't write tags
+        toast({
+          variant: 'destructive',
+          title: t('compliance:errors.runningPolicy'),
+          description: res.error,
+        });
+        return;
+      }
       if (res.data) {
         await fetchRuns(policyId);
       }

@@ -27,20 +27,28 @@ def _no_admin():
     )
 
 
-def test_the_permissions_endpoint_answers():
-    manager = MagicMock()
-    manager.can_user_modify_comment.return_value = True
+def _stored_comment(db_session, author='alice@example.com'):
+    from src.controller.comments_manager import CommentsManager
+
+    manager = CommentsManager()
+    comment = manager.create_comment(
+        db_session, user_email=author, is_admin=True,
+        data=CommentCreate(entity_type='data_product', entity_id='p-1', comment='Final?'),
+    )
+    return manager, str(comment.id)
+
+
+def test_the_permissions_endpoint_answers(db_session):
+    manager, comment_id = _stored_comment(db_session)
     groups, admin = _no_admin()
 
     with groups, admin:
         result = asyncio.run(comments_routes.check_comment_permissions(
-            comment_id='c-1', request=MagicMock(), db=MagicMock(), current_user=USER,
+            comment_id=comment_id, request=MagicMock(), db=db_session, current_user=USER,
             manager=manager, _=True,
         ))
 
     assert result == {'can_modify': True, 'is_admin': False}
-    kwargs = manager.can_user_modify_comment.call_args.kwargs
-    assert (kwargs['comment_id'], kwargs['user_email']) == ('c-1', 'alice@example.com')
 
 
 def test_creating_a_comment_writes_a_serializable_audit_entry():
@@ -62,3 +70,44 @@ def test_creating_a_comment_writes_a_serializable_audit_entry():
     details = audit_manager.log_action.call_args.kwargs['details']
     # The audit log stores the details as JSON
     assert json.loads(json.dumps(details))['comment_id'] == str(comment_id)
+
+
+# --- The manager finds comments by the id the routes pass (a string) --------
+
+
+def test_a_comment_is_found_and_checked_by_its_string_id(db_session):
+    manager, comment_id = _stored_comment(db_session)
+
+    assert str(manager.get_comment(db_session, comment_id=comment_id).id) == comment_id
+    assert manager.can_user_modify_comment(
+        db_session, comment_id=comment_id, user_email='alice@example.com',
+    ) is True
+    assert manager.can_user_modify_comment(
+        db_session, comment_id=comment_id, user_email='bob@example.com',
+    ) is False
+
+
+def test_a_comment_is_updated_and_deleted_by_its_string_id(db_session):
+    from src.models.comments import CommentUpdate
+
+    manager, comment_id = _stored_comment(db_session)
+
+    updated = manager.update_comment(
+        db_session, comment_id=comment_id, user_email='alice@example.com',
+        data=CommentUpdate(comment='Final, yes.'),
+    )
+    assert updated.comment == 'Final, yes.'
+    assert manager.delete_comment(
+        db_session, comment_id=comment_id, user_email='alice@example.com',
+    ) is True
+
+
+def test_an_id_that_is_not_a_uuid_is_not_found(db_session):
+    from src.controller.comments_manager import CommentsManager
+
+    manager = CommentsManager()
+
+    assert manager.get_comment(db_session, comment_id='c-1') is None
+    assert manager.can_user_modify_comment(
+        db_session, comment_id='c-1', user_email='alice@example.com',
+    ) is False

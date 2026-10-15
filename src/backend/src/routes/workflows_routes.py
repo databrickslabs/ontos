@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -1193,7 +1193,9 @@ def _pending_step_id(db: Session, execution_id: str) -> Optional[str]:
     return step_id if isinstance(step_id, str) else None
 
 
-def _is_for_step(notification: Notification, step_id: Optional[str]) -> bool:
+def _is_for_step(
+    notification: Union[Notification, NotificationDb], step_id: Optional[str]
+) -> bool:
     """Whether an approval notification belongs to ``step_id``.
 
     Notifications created before approvals recorded their step have no
@@ -1261,6 +1263,45 @@ def _assert_caller_authorized_for_execution(
     )
 
 
+def _mark_step_notifications_handled(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    approved: bool,
+    user_email: Optional[str],
+) -> None:
+    """Mark the unread approval notifications of ``step_id`` as handled.
+
+    Notifications of later steps, created while the workflow resumed, stay
+    open for their approvers.
+    """
+    notifications = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval',
+        NotificationDb.read == False
+    ).all()
+
+    for notif in notifications:
+        try:
+            payload = notif.action_payload
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if (
+                payload
+                and payload.get('execution_id') == execution_id
+                and _is_for_step(notif, step_id)
+            ):
+                notif.read = True
+                # Mark the action as handled with decision info
+                payload['handled'] = True
+                payload['decision'] = 'approved' if approved else 'rejected'
+                payload['handled_by'] = user_email
+                payload['handled_at'] = datetime.utcnow().isoformat()
+                notif.action_payload = json.dumps(payload)
+                db.add(notif)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+
 @router.post("/handle-approval")
 async def handle_workflow_approval(
     request: Request,
@@ -1314,6 +1355,9 @@ async def handle_workflow_approval(
         )
 
         user_email = current_user.email if current_user else None
+        # Resuming may pause at the next approval step and notify its
+        # approvers; only the notifications of the step decided now are marked.
+        decided_step = _pending_step_id(db, execution_id)
 
         # Resume the workflow
         result = executor.resume_workflow(
@@ -1333,31 +1377,8 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
         
-        # Mark the notification as handled
-        from src.repositories.notification_repository import notification_repo
-        from src.db_models.notifications import NotificationDb
-        
-        # Find and mark notifications for this execution as read
-        notifications = db.query(NotificationDb).filter(
-            NotificationDb.action_type == 'workflow_approval',
-            NotificationDb.read == False
-        ).all()
-        
-        for notif in notifications:
-            try:
-                payload = json.loads(notif.action_payload) if isinstance(notif.action_payload, str) else notif.action_payload
-                if payload and payload.get('execution_id') == execution_id:
-                    notif.read = True
-                    # Mark the action as handled with decision info
-                    payload['handled'] = True
-                    payload['decision'] = 'approved' if approved else 'rejected'
-                    payload['handled_by'] = user_email
-                    payload['handled_at'] = datetime.utcnow().isoformat()
-                    notif.action_payload = json.dumps(payload)
-                    db.add(notif)
-            except (json.JSONDecodeError, TypeError):
-                continue
-        
+        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',

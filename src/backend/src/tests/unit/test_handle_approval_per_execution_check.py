@@ -30,10 +30,11 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import asyncio
 import json
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -45,6 +46,8 @@ from src.routes.workflows_routes import (
     WIZARD_PERMISSION_DISPATCH,
     _assert_caller_authorized_for_execution,
     _find_approval_notifications_for_execution,
+    _mark_step_notifications_handled,
+    handle_workflow_approval,
 )
 
 
@@ -426,3 +429,54 @@ def test_the_executor_passes_the_step_id_to_its_handler() -> None:
     executor._execute_step(step, context)
 
     assert seen['step_id'] == 'approve-b'
+
+
+# --- Deciding a step leaves the next step's approval open ---------------------
+
+
+def test_marking_handled_skips_other_steps() -> None:
+    rows = [
+        _step_row('n-a', 'alice@example.com', 'approve-a'),
+        _step_row('n-b', 'bob@example.com', 'approve-b'),
+        _step_row('n-old', 'carol@example.com', None),
+    ]
+
+    _mark_step_notifications_handled(
+        _mock_db_with_rows(rows), 'exec-A', 'approve-a', True, 'alice@example.com',
+    )
+
+    marked = {r.id: (r.read, json.loads(r.action_payload).get('handled_by')) for r in rows}
+    assert marked == {
+        'n-a': (True, 'alice@example.com'),
+        'n-b': (False, None),
+        'n-old': (True, 'alice@example.com'),  # no step recorded: as before
+    }
+
+
+def test_approving_a_step_leaves_the_next_steps_notification_open() -> None:
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    rows = [_step_row('n-a', 'alice@example.com', 'approve-a')]
+    db = _db_with(rows, pending_step='approve-a')
+
+    def resume_workflow(**kwargs):
+        # The workflow pauses at the next approval step and notifies Bob
+        rows.append(_step_row('n-b', 'bob@example.com', 'approve-b'))
+        db.query(WorkflowExecutionDb).filter.return_value.first.return_value = ('approve-b',)
+        return SimpleNamespace(id='exec-A', status=SimpleNamespace(value='paused'))
+
+    executor = MagicMock()
+    executor.resume_workflow.side_effect = resume_workflow
+    request = MagicMock()
+    request.json = AsyncMock(
+        return_value={'execution_id': 'exec-A', 'approved': True, 'message': 'ok'}
+    )
+
+    asyncio.run(handle_workflow_approval(
+        request=request, db=db, audit_manager=MagicMock(),
+        current_user=_user('alice@example.com'), executor=executor,
+        notifications_manager=_by_recipient(),
+    ))
+
+    assert [(r.id, r.read) for r in rows] == [('n-a', True), ('n-b', False)]
+    assert 'handled' not in json.loads(rows[1].action_payload)

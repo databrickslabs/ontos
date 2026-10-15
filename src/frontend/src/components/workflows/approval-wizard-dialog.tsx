@@ -292,6 +292,20 @@ export interface ApprovalWizardDialogProps {
     pdfStoragePath: string | null,
     wizardFields?: Record<string, unknown>,
   ) => void;
+  /**
+   * Fired as soon as the session completes, before the user closes the wizard
+   * (same arguments as ``onComplete``). Use it when the caller must act on
+   * completion, e.g. submit the request the wizard collected input for:
+   * ``onComplete`` only fires on close, so leaving the page on the completion
+   * screen (reload, browser back) would lose the request. When set, the
+   * wizard doesn't show its own "completed" toast; the caller reports the
+   * outcome. Never fired in preview mode.
+   */
+  onSessionComplete?: (
+    agreementId: string | null,
+    pdfStoragePath: string | null,
+    wizardFields?: Record<string, unknown>,
+  ) => void;
   /** Called when no workflow is available so the caller can proceed directly. */
   onNoWorkflow?: () => void;
   /**
@@ -316,6 +330,7 @@ export default function ApprovalWizardDialog({
   onBehalfOf,
   autoStartWithPreselected,
   onComplete,
+  onSessionComplete,
   onNoWorkflow,
   previewMode = false,
 }: ApprovalWizardDialogProps) {
@@ -699,9 +714,14 @@ export default function ApprovalWizardDialog({
       if (data.complete) {
         setCompleteResult({ agreement_id: data.agreement_id ?? null, pdf_storage_path: data.pdf_storage_path ?? null, pdf_url: data.pdf_url ?? null });
         setCurrentStep(null);
-        toast({ title: t('workflows:approvalWizard.messages.completed'), description: t('workflows:approvalWizard.messages.completedDesc') });
+        if (onSessionComplete && !previewMode) {
+          // The caller acts now (e.g. submits the request) and reports the outcome
+          onSessionComplete(data.agreement_id ?? null, data.pdf_storage_path ?? null, { ...collectedFieldsRef.current });
+        } else {
+          toast({ title: t('workflows:approvalWizard.messages.completed'), description: t('workflows:approvalWizard.messages.completedDesc') });
+        }
         // Defer onComplete — let user see the completion screen and download PDF first.
-        // onComplete fires when they click Close (see handleCloseAfterComplete below).
+        // onComplete fires when they close the wizard (see handleDialogOpenChange below).
       } else {
         const nextStep = data.current_step ?? null;
         setCurrentStep(nextStep);
@@ -727,7 +747,7 @@ export default function ApprovalWizardDialog({
     } finally {
       setLoading(false);
     }
-  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onOpenChange, previewMode, workflows, t]);
+  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onSessionComplete, onOpenChange, previewMode, workflows, t]);
 
   /** Auto-advance non-visual steps (persist_agreement, generate_pdf, deliver). */
   useEffect(() => {

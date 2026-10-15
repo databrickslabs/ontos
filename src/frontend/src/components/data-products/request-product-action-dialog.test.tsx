@@ -41,23 +41,32 @@ vi.mock('@/hooks/use-approval-wizard-trigger', async () => {
 });
 
 // ApprovalWizardDialog is mocked to a controllable harness so we can synthesize
-// onComplete with arbitrary wizardFields without driving the real wizard.
+// its callbacks with arbitrary wizardFields without driving the real wizard.
+// Like the real wizard, "Complete" fires onSessionComplete (the session
+// completed) and "Close" fires onComplete, then closes.
 // ``mockWizardFields`` is mutable so individual tests can exercise the
 // hoist-to-top-level behavior with different shapes (reason, duration, etc.).
 let mockWizardFields: Record<string, unknown> = { custom_field: 'foo', urgency: 'high' };
 
 vi.mock('@/components/workflows/approval-wizard-dialog', () => {
   return {
-    default: ({ isOpen, preselectedWorkflowId, onComplete }: any) =>
+    default: ({ isOpen, preselectedWorkflowId, onSessionComplete, onComplete, onOpenChange }: any) =>
       isOpen ? (
         <div data-testid="wizard-mock" data-workflow-id={preselectedWorkflowId}>
           <button
             data-testid="wizard-complete-btn"
-            onClick={() =>
-              onComplete?.('agr-123', null, mockWizardFields)
-            }
+            onClick={() => onSessionComplete?.('agr-123', null, mockWizardFields)}
           >
             Complete
+          </button>
+          <button
+            data-testid="wizard-close-btn"
+            onClick={() => {
+              onComplete?.('agr-123', null, mockWizardFields);
+              onOpenChange?.(false);
+            }}
+          >
+            Close
           </button>
         </div>
       ) : null,
@@ -238,6 +247,44 @@ describe('RequestProductActionDialog approval-wizard launch (Path B)', () => {
     // user never typed it (wizard was supposed to collect it). That's fine:
     // the wizard's user_action step writes its own reason into wizard_data.
     expect(typed.reason).toBe('');
+  });
+
+  it('submits as soon as the wizard completes, keeps the wizard open, and does not resubmit on close', async () => {
+    mockLookupWorkflowId.mockResolvedValue('wf-portable-1');
+    const onOpenChange = vi.fn();
+    const onSuccess = vi.fn();
+
+    renderWithProviders(
+      <RequestProductActionDialog
+        isOpen={true}
+        onOpenChange={onOpenChange}
+        onSuccess={onSuccess}
+        productId="prod-1"
+        productName="Test Product"
+        productStatus="active"
+      />,
+    );
+    await waitFor(() => expect(mockLookupWorkflowId).toHaveBeenCalledWith('for_request_access'));
+    fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+    await waitFor(() => expect(screen.getByTestId('wizard-mock')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('wizard-complete-btn'));
+
+    // Sent on completion: leaving the page on the completion screen no
+    // longer loses the request
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    // The wizard stays on its completion screen until the user closes it;
+    // onSuccess (reloads the page data) and closing the dialog wait for that
+    expect(screen.getByTestId('wizard-mock')).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByTestId('wizard-close-btn'));
+
+    await waitFor(() => expect(screen.queryByTestId('wizard-mock')).toBeNull());
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('shows wizard-configured notice and skips dialog-side validation when wizard is configured', async () => {

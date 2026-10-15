@@ -483,6 +483,27 @@ class ComplianceManager:
                 })
         return objs
 
+    def _workspace_client_for(self, match_type: Optional[str], policy: CompliancePolicyDb):
+        """Workspace client for a run, or None when it can't be created and the
+        rule doesn't need it.
+
+        Rules on Unity Catalog types fail as before; rules on app entities run
+        without it, and ``Object`` rules then skip the Unity Catalog entities.
+        """
+        from src.common.compliance_entities import UnityCatalogLoader
+        from src.common.workspace_client import get_workspace_client
+
+        try:
+            return get_workspace_client()
+        except Exception as e:
+            if (match_type or '').lower() in UnityCatalogLoader(None).get_supported_types():
+                raise
+            logger.warning(
+                "Workspace client unavailable, policy '%s' (%s) runs without Unity "
+                "Catalog entities: %s", policy.name, policy.id, e,
+            )
+            return None
+
     def run_policy_inline(
         self, 
         db: Session, 
@@ -505,8 +526,7 @@ class ComplianceManager:
             parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
 
             # Create entity iterator
-            from src.common.workspace_client import get_workspace_client
-            ws = get_workspace_client()
+            ws = self._workspace_client_for(parsed_rule.get('match_type'), policy)
             entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Parse entity filter

@@ -397,6 +397,11 @@
         "title": "Beheerdersrol",
         "description": "Markeer deze rol als de beheerdersrol. Slechts één rol mag als beheerder worden gemarkeerd.",
         "label": "Dit is de beheerdersrol"
+      },
+      "importPrivileges": {
+        "title": "Importrechten",
+        "description": "Verleent deze rol mogelijkheden buiten de standaard import-schakelaars om.",
+        "adoptEntityIds": "Entiteit-ID's overnemen bij import"
       }
     },
     "permissions": {

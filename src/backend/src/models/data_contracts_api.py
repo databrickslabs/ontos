@@ -525,6 +525,8 @@ class DataContractRead(BaseModel):
     domainIds: List[str] = Field(default_factory=list)  # All assigned domain IDs (primary first)
     primaryDomainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
+    dataProductName: Optional[str] = None  # Resolved product name at query time (#854)
+    dataProductId: Optional[str] = None  # Resolved product id at query time, for linking (#854)
     description: Optional[ContractDescription] = None
 
     # ODCS top-level fields

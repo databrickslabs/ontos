@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List, Set, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from src.controller.data_contracts_manager import DataContractsManager
@@ -51,7 +51,9 @@ from src.models.data_contracts_api import (
     DataContractCommentRead,
 )
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
@@ -1538,7 +1540,11 @@ async def upload_contract(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     files: List[UploadFile] = File(...),
+    create_missing_domains: bool = Form(False),
+    adopt_ids: bool = Form(False),
+    on_duplicate: str = Form("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Upload one or more contract files (each single-entity or an ODCS array).
@@ -1547,6 +1553,9 @@ async def upload_contract(
     entities across all files are imported in one operation and reported via a
     truthful `BatchImportResult` summary. A single bad entity is recorded as a
     failed item and never aborts the batch.
+
+    `create_missing_domains` is the opt-in "Create missing domains" toggle (#851),
+    applied per-upload to every entity in the batch (default off).
     """
     success = False
     details_for_audit = {
@@ -1554,6 +1563,37 @@ async def upload_contract(
     }
 
     try:
+        # The "create missing domains" toggle creates top-level domains, so it
+        # requires data-domains write on top of the contract-write permission —
+        # otherwise a contract-writer could create domains they cannot manage (#851 review).
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+        # Validate on_duplicate at the route (#853 review item 3): a typo in a bare
+        # form string must not silently fall through to the "new" branch.
+        if on_duplicate not in ("skip", "new"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"on_duplicate must be 'skip' or 'new' (got {on_duplicate!r}).",
+            )
+        # ID adoption is gated on the new 'Adopt entity IDs on import' app-role
+        # privilege (OR feature-Admin). Non-privileged callers silently fall back to
+        # a generated UUID + ontosOriginalId provenance (#853 review item 1).
+        effective_adopt_ids = adopt_ids and user_can_adopt_entity_ids_for(
+            auth_manager, current_user, 'data-contracts'
+        )
+        details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
+        # Feature-admins may see the existing row's id/name on a skipped duplicate;
+        # others get a generic skip so the response isn't an existence oracle.
+        reveal_dup_detail = user_has_feature_level(
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+        )
+
         capped = await read_uploads_capped(
             files,
             sanitize=lambda n: sanitize_filename(n or "uploaded_contract", default="uploaded_contract"),
@@ -1574,6 +1614,10 @@ async def upload_contract(
             db=db,
             files=file_inputs,
             current_user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
+            adopt_ids=effective_adopt_ids,
+            on_duplicate=on_duplicate,
+            reveal_dup_detail=reveal_dup_detail,
         )
         for safe_filename in decode_failures:
             result.add(ImportItemResult(
@@ -1633,7 +1677,11 @@ async def import_odcs_json(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     body: Any = Body(...),
+    create_missing_domains: bool = Query(False),
+    adopt_ids: bool = Query(False),
+    on_duplicate: str = Query("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Import ODCS contract(s) from a pasted JSON object or array."""
@@ -1641,11 +1689,35 @@ async def import_odcs_json(
     details_for_audit: dict = {"params": {"source": "paste"}}
 
     try:
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+        if on_duplicate not in ("skip", "new"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"on_duplicate must be 'skip' or 'new' (got {on_duplicate!r}).",
+            )
+        effective_adopt_ids = adopt_ids and user_can_adopt_entity_ids_for(
+            auth_manager, current_user, 'data-contracts'
+        )
+        details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
+        reveal_dup_detail = user_has_feature_level(
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+        )
         contract_text = json.dumps(body)
         result = manager.create_contracts_from_files(
             db=db,
             files=[("paste.json", contract_text, "application/json")],
             current_user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
+            adopt_ids=effective_adopt_ids,
+            on_duplicate=on_duplicate,
+            reveal_dup_detail=reveal_dup_detail,
         )
 
         success = result.created > 0

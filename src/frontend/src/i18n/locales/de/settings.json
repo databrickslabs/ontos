@@ -397,6 +397,11 @@
         "title": "Administratorrolle",
         "description": "Markieren Sie diese Rolle als Administratorrolle. Nur eine Rolle sollte als Administrator markiert sein.",
         "label": "Dies ist die Administratorrolle"
+      },
+      "importPrivileges": {
+        "title": "Importberechtigungen",
+        "description": "Gewähren Sie dieser Rolle Fähigkeiten über die Standard-Import-Umschalter hinaus.",
+        "adoptEntityIds": "Entitäts-IDs beim Import übernehmen"
       }
     },
     "permissions": {

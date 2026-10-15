@@ -132,7 +132,10 @@ def _where(
     return where, params, has_query
 
 
-def _row_to_result(row: Any, with_score: bool) -> Dict[str, Any]:
+def _row_to_result(row: Any, with_score: bool, fields: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Postgres backend row → MCP result dict (mirror of ``_to_result`` in
+    ``search_scoring.py``). ``feature_id`` is intentionally omitted; it
+    duplicates ``type`` for MCP consumers."""
     m = row._mapping
     tags = m["tags"]
     if isinstance(tags, str):
@@ -149,13 +152,15 @@ def _row_to_result(row: Any, with_score: bool) -> Dict[str, Any]:
         "description": (desc[:200] if desc else None),
         "link": m["link"],
         "tags": (tags or [])[:5],
-        "feature_id": m["feature_id"],
     }
     for f in _RESULT_FIELDS:
         if extra.get(f):
             result[f] = extra[f]
     if with_score:
         result["relevance_score"] = round(float(m["rank"]), 4)
+    if fields:
+        allowed = set(fields) | {"id"}
+        result = {k: v for k, v in result.items() if k in allowed}
     return result
 
 
@@ -213,6 +218,7 @@ def search(
     limit: int = 25,
     offset: int = 0,
     include_facets: bool = True,
+    fields: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Full-text search over search_documents; result shape matches search_scoring.search_index."""
     limit = max(1, min(limit, 100))
@@ -236,7 +242,7 @@ def search(
         )
     rows = list(db.execute(text(sql), {**params, "limit": limit, "offset": offset}))
     total = int(rows[0]._mapping["total_count"]) if rows else 0
-    results = [_row_to_result(r, with_score=has_query) for r in rows]
+    results = [_row_to_result(r, with_score=has_query, fields=fields) for r in rows]
 
     return {
         "results": results,

@@ -14,6 +14,109 @@ from src.tools.base import BaseTool, ToolContext, ToolResult
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
+
+def _iso_or_none(dt) -> Optional[str]:
+    """ISO-serialize a datetime/date; None stays None."""
+    return dt.isoformat() if dt is not None else None
+
+
+def _original_id_from_props(custom_properties) -> Optional[str]:
+    """Return the preserved YAML id (``ontosOriginalId``) from a product's
+    customProperties, if present. Lets an agent reconcile the Ontos UUID with
+    an upstream reference without a second call."""
+    if not custom_properties:
+        return None
+    for prop in custom_properties:
+        name = getattr(prop, 'property', None) if not isinstance(prop, dict) else prop.get('property')
+        if name == 'ontosOriginalId':
+            value = getattr(prop, 'value', None) if not isinstance(prop, dict) else prop.get('value')
+            return value if value is not None else None
+    return None
+
+
+def _serialize_product(product) -> Dict[str, Any]:
+    """Full-detail dict for a single data product.
+
+    Shared by get_data_product and the bulk get_data_products so both return the
+    identical shape (including output ports with physical table locations).
+    """
+    # Extract description purpose (handles Description model, dict, or str)
+    desc_purpose = None
+    if product.description:
+        if hasattr(product.description, 'purpose'):
+            desc_purpose = product.description.purpose
+        elif isinstance(product.description, dict):
+            desc_purpose = product.description.get('purpose')
+        elif isinstance(product.description, str):
+            try:
+                desc_dict = json.loads(product.description)
+                if isinstance(desc_dict, dict):
+                    desc_purpose = desc_dict.get('purpose')
+            except Exception:
+                desc_purpose = product.description
+
+    # Surface output ports so agents can find the physical tables
+    output_ports = []
+    for port in (product.outputPorts or []):
+        server = getattr(port, 'server', None)
+        location = getattr(port, 'assetIdentifier', None)
+        if not location and server is not None:
+            host = getattr(server, 'host', '') or ''
+            schema = getattr(server, 'schema_name', '') or ''
+            location = f"{host}.{schema}" if host and schema else (host or None)
+        output_ports.append({
+            "name": port.name,
+            "description": getattr(port, 'description', None),
+            "contract_id": getattr(port, 'contractId', None),
+            "contract_name": getattr(port, 'contractName', None),
+            "location": location,
+        })
+
+    # Imported ODPS team: name + members with their role, so an agent can answer
+    # "who is the owner / data steward" questions. dateIn/dateOut/replacedByUsername
+    # omitted — not useful for ownership answers and inflates the payload.
+    team = None
+    product_team = getattr(product, 'team', None)
+    if product_team is not None:
+        members = []
+        for member in (getattr(product_team, 'members', None) or []):
+            if member is None:
+                continue
+            members.append({
+                "username": getattr(member, 'username', None),
+                "name": getattr(member, 'name', None),
+                "role": getattr(member, 'role', None),
+            })
+        team = {
+            "name": getattr(product_team, 'name', None),
+            "description": getattr(product_team, 'description', None),
+            "members": members,
+        }
+
+    return {
+        "id": product.id,
+        "name": product.name,
+        "domain": product.domain,
+        "description": desc_purpose,
+        "status": product.status,
+        "version": product.version,
+        "owner_team_id": getattr(product, 'owner_team_id', None),
+        "owner_team_name": getattr(product, 'owner_team_name', None),
+        "team": team,
+        "output_ports": output_ports,
+        "tenant": getattr(product, 'tenant', None),
+        # Preserved original id when adopt_ids=false (or the YAML id was invalid /
+        # colliding) — enables upstream-reference reconciliation.
+        "original_id": _original_id_from_props(getattr(product, 'customProperties', None)),
+        # Lifecycle timestamps — agents frequently want "when was this registered /
+        # last updated / published" alongside the ownership info.
+        "created_at": _iso_or_none(getattr(product, 'created_at', None)),
+        "updated_at": _iso_or_none(getattr(product, 'updated_at', None)),
+        "published_at": _iso_or_none(getattr(product, 'published_at', None)),
+        "product_created_ts": _iso_or_none(getattr(product, 'productCreatedTs', None)),
+        "url": f"/data-products/{product.id}",
+    }
+
 logger = get_logger(__name__)
 
 
@@ -28,8 +131,10 @@ class SearchDataProductsTool(BaseTool):
         "independently and results are ranked by relevance. Narrow with the 'domain'/"
         "'status' filters and page with 'offset' instead of broadening the query. Leave "
         "'query' empty (or '*') to list products; the response is always paginated and "
-        "includes 'total_count', 'has_more' and 'facets' so you can refine rather than "
-        "fetch everything. Call get_data_product for full details (output tables, ports)."
+        "includes 'total_count', 'has_more' and (by default) 'facets' so you can refine "
+        "rather than fetch everything. Set include_facets=false to skip the facet block "
+        "on cheap list calls, or fields=['title','status'] to narrow each row. Call "
+        "get_data_product for full details (output tables, ports)."
     )
     parameters = {
         "query": {
@@ -52,7 +157,18 @@ class SearchDataProductsTool(BaseTool):
         "offset": {
             "type": "integer",
             "description": "Number of results to skip for pagination (default: 0)."
-        }
+        },
+        "include_facets": {
+            "type": "boolean",
+            "description": "Include the global facets block (domain/status/owner/tags counts). "
+                           "Default true. Set false on cheap list calls to save tokens.",
+        },
+        "fields": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Optional allowlist of result-row keys to keep (e.g. ['title','status']). "
+                           "'id' is always included. Shrinks payload for 'then fetch details' flows.",
+        },
     }
     required_params = ["query"]
     required_scope = "data-products:read"
@@ -65,16 +181,35 @@ class SearchDataProductsTool(BaseTool):
         status: Optional[str] = None,
         limit: int = 25,
         offset: int = 0,
+        include_facets: bool = True,
+        fields: Optional[List[str]] = None,
     ) -> ToolResult:
         """Search data products over the shared in-memory index."""
         logger.info(
             f"[search_data_products] Starting - query='{query}', domain={domain}, "
-            f"status={status}, limit={limit}, offset={offset}"
+            f"status={status}, limit={limit}, offset={offset}, "
+            f"include_facets={include_facets}, fields={fields}"
         )
 
         if not ctx.search_manager:
             logger.warning("[search_data_products] FAILED: search_manager is None")
             return ToolResult(success=False, error="Search not available", data={"products": []})
+
+        # Reject unknown `fields` names loudly instead of silently dropping them
+        # (otherwise `fields=['name']` returns just `{id}` without hint — #954
+        # reviewer note). The row key is `title`, not `name`.
+        from src.controller.search_scoring import KNOWN_RESULT_FIELDS
+        if fields:
+            unknown = [f for f in fields if f not in KNOWN_RESULT_FIELDS]
+            if unknown:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        f"unknown fields: {sorted(unknown)}. "
+                        f"known: {sorted(KNOWN_RESULT_FIELDS)}"
+                    ),
+                    data={"products": []},
+                )
 
         try:
             data = ctx.search_manager.query_index(
@@ -85,7 +220,14 @@ class SearchDataProductsTool(BaseTool):
                 filters={"domains": domain, "status": status},
                 limit=limit,
                 offset=offset,
+                include_facets=include_facets,
+                fields=fields,
             )
+            # Tool name already carries the type; `link` is a UI-only route path.
+            # Neither helps an MCP agent, so drop them from every record.
+            for r in data["results"]:
+                r.pop("type", None)
+                r.pop("link", None)
             # Present under the historical 'products'/'total_found' keys for compatibility.
             logger.info(
                 f"[search_data_products] SUCCESS: returned {data['returned']} of "
@@ -315,7 +457,13 @@ class GetDataProductTool(BaseTool):
     
     name = "get_data_product"
     category = "data_products"
-    description = "Get detailed information about a specific data product by its ID."
+    description = (
+        "Get detailed information about a specific data product by its ID. "
+        "Includes the imported ODPS team metadata (members with roles) so you "
+        "can answer ownership questions, lifecycle timestamps (created / "
+        "updated / published / product_created_ts), and the preserved original "
+        "id from the source YAML when adoption was off."
+    )
     parameters = {
         "product_id": {
             "type": "string",
@@ -335,150 +483,154 @@ class GetDataProductTool(BaseTool):
         
         try:
             product = ctx.data_products_manager.get_product(product_id)
-            
+
             if not product:
                 return ToolResult(
                     success=False,
                     error=f"Data product '{product_id}' not found"
                 )
-            
-            # Extract description purpose (handles Description model, dict, or str)
-            desc_purpose = None
-            if product.description:
-                if hasattr(product.description, 'purpose'):
-                    desc_purpose = product.description.purpose
-                elif isinstance(product.description, dict):
-                    desc_purpose = product.description.get('purpose')
-                elif isinstance(product.description, str):
-                    try:
-                        desc_dict = json.loads(product.description)
-                        if isinstance(desc_dict, dict):
-                            desc_purpose = desc_dict.get('purpose')
-                    except Exception:
-                        desc_purpose = product.description
-            
-            # Surface output ports so agents can find the physical tables
-            output_ports = []
-            for port in (product.outputPorts or []):
-                server = getattr(port, 'server', None)
-                location = getattr(port, 'assetIdentifier', None)
-                if not location and server is not None:
-                    host = getattr(server, 'host', '') or ''
-                    schema = getattr(server, 'schema_name', '') or ''
-                    location = f"{host}.{schema}" if host and schema else (host or None)
-                output_ports.append({
-                    "name": port.name,
-                    "description": getattr(port, 'description', None),
-                    "contract_id": getattr(port, 'contractId', None),
-                    "contract_name": getattr(port, 'contractName', None),
-                    "location": location,
-                })
-            
+
             logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
-            return ToolResult(
-                success=True,
-                data={
-                    "id": product.id,
-                    "name": product.name,
-                    "domain": product.domain,
-                    "description": desc_purpose,
-                    "status": product.status,
-                    "version": product.version,
-                    "owner_team_id": getattr(product, 'owner_team_id', None),
-                    "owner_team_name": getattr(product, 'owner_team_name', None),
-                    "output_ports": output_ports,
-                    "tenant": getattr(product, 'tenant', None),
-                    "url": f"/data-products/{product.id}"
-                }
-            )
-            
+            return ToolResult(success=True, data=_serialize_product(product))
+
         except Exception as e:
             logger.error(f"[get_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
 
+class GetDataProductsBulkTool(BaseTool):
+    """Fetch full details for several data products by ID in one call."""
+
+    name = "get_data_products"
+    category = "data_products"
+    description = (
+        "Fetch full details for MULTIPLE data products by ID in a single call "
+        "(including output ports / physical table locations, imported ODPS team "
+        "members with roles, lifecycle timestamps, and the preserved original "
+        "id from the source YAML). Prefer this over repeated get_data_product "
+        "when you already hold a set of ids. Returns up to 20 by default; raise "
+        "'limit' up to 100. Ids beyond the limit are not fetched and reported "
+        "via 'truncated'/'requested' so you can page."
+    )
+    parameters = {
+        "product_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs of the data products to retrieve.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max products to return (default: 20, server max: 100).",
+        },
+    }
+    required_params = ["product_ids"]
+    required_scope = "data-products:read"
+
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 100
+
+    async def execute(
+        self,
+        ctx: ToolContext,
+        product_ids: List[str],
+        limit: int = DEFAULT_LIMIT,
+    ) -> ToolResult:
+        """Bulk-get data products by id, capped by a server-enforced maximum."""
+        if not ctx.data_products_manager:
+            return ToolResult(success=False, error="Data products manager not available")
+
+        # Server safeguard: clamp the batch size regardless of what the caller asks.
+        effective_limit = max(1, min(int(limit or self.DEFAULT_LIMIT), self.MAX_LIMIT))
+        # De-duplicate while preserving order.
+        unique_ids = list(dict.fromkeys(product_ids or []))
+        requested = len(unique_ids)
+        ids = unique_ids[:effective_limit]
+        logger.info(
+            f"[get_data_products] Starting - requested={requested}, "
+            f"limit={effective_limit}, fetching={len(ids)}"
+        )
+
+        products: List[Dict[str, Any]] = []
+        not_found: List[str] = []
+        try:
+            for pid in ids:
+                product = ctx.data_products_manager.get_product(pid)
+                if product:
+                    products.append(_serialize_product(product))
+                else:
+                    not_found.append(pid)
+
+            logger.info(
+                f"[get_data_products] SUCCESS: {len(products)} found, "
+                f"{len(not_found)} not found"
+            )
+            return ToolResult(
+                success=True,
+                data={
+                    "products": products,
+                    "not_found": not_found,
+                    "returned": len(products),
+                    "requested": requested,
+                    "limit": effective_limit,
+                    "truncated": requested > effective_limit,
+                },
+            )
+        except Exception as e:
+            logger.error(f"[get_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+
+
 class ListDataProductsTool(BaseTool):
-    """List all data products with optional filters."""
-    
+    """List all data products — thin wrapper over search_data_products."""
+
     name = "list_data_products"
     category = "data_products"
-    description = "List all data products with optional filtering by domain, status, or limit."
+    description = (
+        "List all data products, optionally filtered by domain or status. This is a "
+        "thin wrapper over search_data_products with query='*'; prefer search_data_products "
+        "directly when you need relevance ranking, pagination offsets, facets, or a free-text "
+        "query. The response shape matches search_data_products (products / total_found / "
+        "has_more / offset / limit / facets)."
+    )
     parameters = {
         "domain": {
             "type": "string",
-            "description": "Optional filter by domain"
+            "description": "Optional filter by domain",
         },
         "status": {
             "type": "string",
             "enum": ["active", "draft", "deprecated", "retired"],
-            "description": "Optional filter by status"
+            "description": "Optional filter by status",
         },
         "limit": {
             "type": "integer",
-            "description": "Maximum number of products to return (default: 50)"
-        }
+            "description": "Maximum number of products to return (default: 50, max: 100)",
+        },
     }
     required_params = []
     required_scope = "data-products:read"
-    
+
     async def execute(
         self,
         ctx: ToolContext,
         domain: Optional[str] = None,
         status: Optional[str] = None,
-        limit: int = 50
+        limit: int = 50,
     ) -> ToolResult:
-        """List all data products."""
-        logger.info(f"[list_data_products] Starting - domain={domain}, status={status}, limit={limit}")
-        
-        if not ctx.data_products_manager:
-            logger.error(f"[list_data_products] FAILED: Data products manager not available")
-            return ToolResult(success=False, error="Data products manager not available")
-        
-        try:
-            # Use list_products method with filters
-            products = ctx.data_products_manager.list_products(
-                skip=0,
-                limit=limit,
-                domain=domain,
-                status=status
-            )
-            
-            result_list = []
-            for p in products:
-                desc_purpose = None
-                if p.description:
-                    if isinstance(p.description, dict):
-                        desc_purpose = p.description.get('purpose')
-                    elif isinstance(p.description, str):
-                        try:
-                            desc_dict = json.loads(p.description)
-                            if isinstance(desc_dict, dict):
-                                desc_purpose = desc_dict.get('purpose')
-                        except Exception:
-                            pass
-                
-                result_list.append({
-                    "id": p.id,
-                    "name": p.name,
-                    "domain": p.domain,
-                    "description": desc_purpose,
-                    "status": p.status,
-                    "version": p.version
-                })
-            
-            logger.info(f"[list_data_products] SUCCESS: Found {len(result_list)} products")
-            return ToolResult(
-                success=True,
-                data={
-                    "products": result_list,
-                    "total_found": len(result_list)
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[list_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+        """Delegate to search_data_products with query='*' so the three overlapping
+        entry points (search / list / get) collapse to a single implementation.
+        Previously this called `data_products_manager.list_products(domain=..., status=...)`
+        with kwargs the manager didn't accept — every call raised TypeError and
+        returned a generic error. Now it inherits search_data_products' response
+        shape (paginated, faceted, consistent)."""
+        return await SearchDataProductsTool().execute(
+            ctx,
+            query="*",
+            domain=domain,
+            status=status,
+            limit=limit,
+            offset=0,
+        )
 
 
 class DeleteDataProductTool(BaseTool):

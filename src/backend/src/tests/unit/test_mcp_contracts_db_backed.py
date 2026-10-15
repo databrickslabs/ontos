@@ -60,12 +60,62 @@ class TestContractToolsAreDbBacked:
         assert res.success is False and "not found" in (res.error or "").lower()
 
     def test_list_includes_db_written_contract(self, db_session: Session):
+        """list_data_contracts is a thin wrapper over search_data_contracts, which
+        reads from the search index built at startup from each manager's
+        get_search_index_items(). This test proves "a contract written via the DB
+        path is findable through the MCP list tool" (#918 invariant) — the index
+        is built after the DB write so the contract is included."""
+        from src.controller.search_manager import SearchManager
+
         mgr = _contract_manager()
+        mgr._db = db_session
         created = mgr.create_from_upload(db=db_session, parsed_odcs=_odcs("Listed DB Contract"), current_user="a@b.com")
-        ctx = ToolContext(db=db_session, settings=MagicMock(), data_contracts_manager=mgr)
+
+        # SearchManager.__init__ builds the index immediately, so construction here
+        # (after the write) is what populates it.
+        search_manager = SearchManager(searchable_managers=[mgr])
+
+        ctx = ToolContext(
+            db=db_session, settings=MagicMock(),
+            data_contracts_manager=mgr, search_manager=search_manager,
+        )
         res = _run(ListDataContractsTool().execute(ctx))
         assert res.success is True
         assert created.id in {c["id"] for c in res.data["contracts"]}
+
+    def test_transition_status_refreshes_search_index(self, db_session: Session):
+        """`transition_status` must call `_update_search_index` after committing
+        so list_data_contracts / search_data_contracts can't return the stale
+        pre-transition status (#954 reviewer blocker). Spy-based assertion:
+        pins the contract (reindex happens, with the fresh row) without
+        depending on the full index/list roundtrip, which is fragile under
+        the test fixture's SAVEPOINT-based session isolation."""
+        mgr = _contract_manager()
+        mgr._db = db_session
+        created = mgr.create_from_upload(
+            db=db_session,
+            parsed_odcs=_odcs("Transitioning Contract"),
+            current_user="a@b.com",
+        )
+
+        # Replace the stub with a spy that records every reindex call.
+        reindex_calls = []
+        def _spy(contract_db_obj, db):
+            reindex_calls.append({
+                "id": getattr(contract_db_obj, "id", None),
+                "status": getattr(contract_db_obj, "status", None),
+            })
+        mgr._update_search_index = _spy
+
+        mgr.transition_status(db_session, created.id, "proposed", current_user="a@b.com")
+
+        # The reindex was called exactly once, on the freshly-committed row with
+        # the new status visible.
+        assert len(reindex_calls) == 1, f"expected 1 reindex call, got {reindex_calls}"
+        assert reindex_calls[0]["id"] == created.id
+        assert reindex_calls[0]["status"] == "proposed", (
+            f"reindex received stale status: {reindex_calls[0]['status']}"
+        )
 
     def test_delete_removes_from_db(self, db_session: Session):
         mgr = _contract_manager()
@@ -94,7 +144,7 @@ class TestProductToolsStillWork:
     def test_get_and_delete_product_db_backed(self, product_manager, db_session):
         created = product_manager.create_product(
             {"apiVersion": "v1.0.0", "kind": "DataProduct", "id": str(uuid.uuid4()),
-             "name": "DB Product", "version": "1.0.0", "status": "active"},
+             "name": "DB Product", "version": "1.0.0", "status": "proposed"},
             db=db_session, user="a@b.com",
         )
         ctx = ToolContext(db=db_session, settings=MagicMock(), data_products_manager=product_manager)

@@ -43,6 +43,16 @@ _FACET_FIELDS = ("domain", "status", "owner")
 # Extra_data keys surfaced on every result dict (superset of facet fields).
 _RESULT_FIELDS = ("domain", "status", "owner", "version")
 
+# Allowlist for the MCP tool `fields=[...]` projection. Keys an MCP agent may
+# legitimately ask for on a per-type search/list row (post `type`/`link` strip
+# in the per-type tools). Exposed so each tool can reject unknown names with a
+# clear error instead of returning a silently-empty row (#954 reviewer note).
+KNOWN_RESULT_FIELDS = frozenset({
+    "id", "title", "description", "tags",
+    "domain", "status", "owner", "version",
+    "relevance_score",
+})
+
 
 def tokenize(query: str) -> List[str]:
     """Lower-case and split a query into non-empty search terms."""
@@ -307,7 +317,12 @@ def _entity_id(item: SearchIndexItem) -> str:
 
 
 def _to_result(item: SearchIndexItem, score: Optional[float]) -> Dict[str, Any]:
-    """Render an item as a compact MCP result dict."""
+    """Render an item as a compact MCP result dict.
+
+    ``feature_id`` is intentionally omitted — it duplicates ``type`` for an MCP
+    consumer and the UI's permission model doesn't apply agent-side. ``link``
+    stays because an agent that renders cards or references the UI needs it.
+    """
     result: Dict[str, Any] = {
         "id": _entity_id(item),
         "type": item.type,
@@ -315,7 +330,6 @@ def _to_result(item: SearchIndexItem, score: Optional[float]) -> Dict[str, Any]:
         "description": (item.description[:200] if item.description else None),
         "link": item.link,
         "tags": (item.tags[:5] if item.tags else []),
-        "feature_id": item.feature_id,
     }
     for f in _RESULT_FIELDS:
         value = get_field_value(item, f)
@@ -324,6 +338,18 @@ def _to_result(item: SearchIndexItem, score: Optional[float]) -> Dict[str, Any]:
     if score is not None:
         result["relevance_score"] = round(score, 4)
     return result
+
+
+def _project_fields(result: Dict[str, Any], fields: Optional[List[str]]) -> Dict[str, Any]:
+    """Narrow a result dict to the caller-requested fields.
+
+    ``id`` is always kept so the caller can still correlate / fetch details.
+    An empty or missing ``fields`` list returns the full result unchanged.
+    """
+    if not fields:
+        return result
+    allowed = set(fields) | {"id"}
+    return {k: v for k, v in result.items() if k in allowed}
 
 
 def search_index(
@@ -336,12 +362,18 @@ def search_index(
     limit: int = 20,
     offset: int = 0,
     include_facets: bool = True,
+    fields: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Search/list index items for MCP tools: paginated, faceted, filtered.
 
     - A real query is tokenized, scored and ranked.
     - An empty/``*`` query is "list mode": all filtered items, ranked by title,
       still paginated with a total_count (never an unbounded dump).
+    - ``include_facets=False`` skips the per-call facet computation when the
+      caller only wants the records (saves tokens on list / paginated calls).
+    - ``fields=[...]`` narrows each result row to the requested keys plus
+      ``id``, so an agent in a "then fetch details" flow doesn't pay for
+      description/tags/owner on every call.
 
     Returns a dict with ``results``, ``total_count``, ``returned``, ``offset``,
     ``limit``, ``has_more``, ``facets`` and ``query``.
@@ -355,12 +387,12 @@ def search_index(
         ranked = sorted(candidates, key=lambda it: (it.title or "").lower())
         total = len(ranked)
         page = ranked[offset : offset + limit]
-        results = [_to_result(it, None) for it in page]
+        results = [_project_fields(_to_result(it, None), fields) for it in page]
     else:
         scored = score_and_rank(candidates, query, config)
         total = len(scored)
         page = scored[offset : offset + limit]
-        results = [_to_result(s.item, s.total_score) for s in page]
+        results = [_project_fields(_to_result(s.item, s.total_score), fields) for s in page]
 
     return {
         "results": results,

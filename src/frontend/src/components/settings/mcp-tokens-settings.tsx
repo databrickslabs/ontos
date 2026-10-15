@@ -540,7 +540,8 @@ export default function MCPTokensSettings() {
           </p>
           <div className="text-sm text-muted-foreground">
             <strong>{t('settings:mcpTokens.info.endpoint')}</strong>{' '}
-            <code className="bg-background px-1 rounded">/api/mcp</code>
+            <code className="bg-background px-1 rounded">/mcp</code>{' '}
+            <span className="text-xs">{t('settings:mcpTokens.info.endpointAlias', '(legacy alias: /api/mcp)')}</span>
           </div>
           <div className="text-sm text-muted-foreground">
             <strong>{t('settings:mcpTokens.info.header')}</strong>{' '}

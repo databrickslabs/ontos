@@ -85,6 +85,10 @@ class AppRoleBase(BaseModel):
     approval_privileges: Dict[ApprovalEntity, bool] = Field(default_factory=dict, description="Entity-level approval capabilities")
     deployment_policy: Optional[DeploymentPolicy] = Field(None, description="Policy for catalog/schema deployment restrictions")
     is_admin: bool = Field(default=False, description="Whether this role is the admin role")
+    can_adopt_entity_ids: bool = Field(
+        default=False,
+        description="Import privilege (#853 review): may this role adopt an entity's UUID from an imported file as the primary key?",
+    )
     # Role hierarchy fields
     requestable_by_roles: List[str] = Field(
         default_factory=list,
@@ -132,6 +136,7 @@ class AppRoleUpdate(AppRoleBase):
     approval_privileges: Optional[Dict[ApprovalEntity, bool]] = None
     deployment_policy: Optional[DeploymentPolicy] = None
     is_admin: Optional[bool] = None
+    can_adopt_entity_ids: Optional[bool] = None
     requestable_by_roles: Optional[List[str]] = None
     approver_roles: Optional[List[str]] = None
 

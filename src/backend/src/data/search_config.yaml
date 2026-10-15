@@ -98,6 +98,12 @@ asset_types:
         match_type: substring
         priority: 4
         boost: 1.0
+      team_members:
+        indexed: true
+        source: "team_members"
+        match_type: substring
+        priority: 4
+        boost: 1.2
 
   glossary-term:
     enabled: true
@@ -189,6 +195,28 @@ asset_types:
         match_type: exact
         priority: 6
         boost: 0.7
+
+  team:
+    enabled: true
+    inherit_defaults: true
+    extra_fields:
+      title:
+        indexed: true
+        source: "title"
+        match_type: substring
+        priority: 4
+        boost: 1.0
+
+  project:
+    enabled: true
+    inherit_defaults: true
+    extra_fields:
+      name:
+        indexed: true
+        source: "name"
+        match_type: substring
+        priority: 4
+        boost: 1.0
 
 # Result ranking behavior
 ranking:

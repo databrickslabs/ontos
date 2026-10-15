@@ -13,7 +13,7 @@ from src.models.projects import (
     ProjectAccessRequest,
     ProjectAccessRequestResponse
 )
-from src.controller.projects_manager import projects_manager
+from src.controller.projects_manager import ProjectsManager, projects_manager
 from src.common.database import get_db
 from sqlalchemy.orm import Session
 from src.common.authorization import PermissionChecker, is_user_admin
@@ -38,8 +38,18 @@ router = APIRouter(prefix="/api", tags=["Projects"])
 # Feature ID constant
 PROJECTS_FEATURE_ID = "projects"
 
-# Project dependency
-def get_projects_manager():
+# Project dependency — resolve from app.state so index-upsert/remove hooks fire.
+# Startup builds the ProjectsManager instance that `set_search_manager(...)` wires
+# up (``app.state.projects_manager``). The module-level ``projects_manager``
+# singleton is a separate instance whose ``_search_manager`` stays None, so a
+# route that reaches it would silently skip the search index notification.
+# Falls back to the singleton for the handful of unit tests that call the
+# getter without a request context.
+def get_projects_manager(request: Request = None) -> ProjectsManager:
+    if request is not None:
+        state_mgr = getattr(request.app.state, "projects_manager", None)
+        if isinstance(state_mgr, ProjectsManager):
+            return state_mgr
     return projects_manager
 
 

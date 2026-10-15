@@ -228,6 +228,14 @@ async def startup_event():
         app.state.search_manager.build_index()
         for mgr in searchable_managers_instances:
             mgr.set_search_manager(app.state.search_manager)
+            # Expose the wired DataContractsManager to non-manager contexts
+            # (e.g. workflow_executor) that need to reindex after direct status
+            # writes without re-plumbing the SearchManager wiring.
+            from src.controller.data_contracts_manager import (
+                DataContractsManager, register_live_contracts_manager,
+            )
+            if isinstance(mgr, DataContractsManager):
+                register_live_contracts_manager(mgr)
         logger.info("Search index initialized and built from DB-backed managers (app.py).")
     except Exception as e:
         logger.error(f"Failed initializing or building search index in app.py: {e}", exc_info=True)
@@ -487,13 +495,29 @@ async def retry_startup():
 
     return {"status": "ok", "health": app.state.health}
 
+def _is_spa_fallback_path(full_path: str) -> bool:
+    """True if an unmatched GET for ``full_path`` should fall through to the SPA.
+
+    Pulled out so the exclusion logic can be unit-tested independently of the
+    actual catch-all registration (which is skipped under ``TESTING=true``).
+    "mcp" / "mcp/*" is excluded so unmatched MCP paths 404 instead of returning
+    SPA HTML — strict equality + slash prefix so ``mcpfoo`` isn't swept into
+    the exclusion.
+    """
+    if full_path.startswith("api/") or full_path.startswith("static/"):
+        return False
+    if full_path == "mcp" or full_path.startswith("mcp/"):
+        return False
+    if full_path in ("docs", "redoc", "openapi.json"):
+        return False
+    return True
+
+
 # Define the SPA catch-all route LAST (skip in test mode)
 if not settings.TESTING:
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        # Only catch routes that aren't API routes, static files, or API docs
-        # This check might be redundant now due to ordering, but safe to keep
-        if not full_path.startswith("api/") and not full_path.startswith("static/") and full_path not in ["docs", "redoc", "openapi.json"]:
+        if _is_spa_fallback_path(full_path):
             # Ensure the path exists before serving
             spa_index = STATIC_ASSETS_PATH / "index.html"
             if spa_index.is_file():

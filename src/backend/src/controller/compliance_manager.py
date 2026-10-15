@@ -502,7 +502,7 @@ class ComplianceManager:
 
         try:
             # Parse the rule using enhanced DSL
-            parsed_rule = parse_rule(policy.rule)
+            parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
 
             # Create entity iterator
             from src.common.workspace_client import get_workspace_client
@@ -510,10 +510,12 @@ class ComplianceManager:
             entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Parse entity filter
-            entity_filter = parse_entity_filter(policy.rule)
+            entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
 
             # Iterate over entities
-            for obj in entity_iterator.iterate(entity_filter, limit=limit):
+            for obj in entity_iterator.iterate(
+                entity_filter, limit=limit, source=f"policy '{policy.name}' ({policy.id})",
+            ):
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
@@ -543,10 +545,13 @@ class ComplianceManager:
                     )
                     action_results = self.action_executor.execute_actions(actions, action_context)
 
-                    # Update message from FAIL action if present
-                    for ar in action_results:
-                        if ar.action_type == 'FAIL' and ar.message:
-                            msg = ar.message
+                    # Use the FAIL action messages, in order, if present
+                    fail_messages = [
+                        ar.message for ar in action_results
+                        if ar.action_type == 'FAIL' and ar.message
+                    ]
+                    if fail_messages:
+                        msg = "; ".join(fail_messages)
 
                 # Store result
                 res = ComplianceResultDb(

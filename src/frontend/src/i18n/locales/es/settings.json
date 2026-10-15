@@ -397,6 +397,11 @@
         "title": "Rol de administrador",
         "description": "Marca este rol como el rol de administrador. Solo un rol debe marcarse como administrador.",
         "label": "Este es el rol de administrador"
+      },
+      "importPrivileges": {
+        "title": "Privilegios de importación",
+        "description": "Otorga a este rol capacidades más allá de los interruptores de importación predeterminados.",
+        "adoptEntityIds": "Adoptar los IDs de entidad al importar"
       }
     },
     "permissions": {

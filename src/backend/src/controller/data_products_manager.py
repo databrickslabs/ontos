@@ -13,6 +13,11 @@ from uuid import UUID
 from pathlib import Path
 
 SOURCE_ID_PROPERTY = "sourceId"
+# Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
+# convention (both written during the transition; either read); ontosEntityId is the
+# current Ontos primary key, re-derived on export so a re-import can detect/rebind.
+ONTOS_ORIGINAL_ID_PROPERTY = "ontosOriginalId"
+ONTOS_ENTITY_ID_PROPERTY = "ontosEntityId"
 
 
 def _is_valid_uuid(value: str) -> bool:
@@ -21,6 +26,35 @@ def _is_valid_uuid(value: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    Mirrors `data_contracts_manager._canonical_uuid` (#853 review item 2):
+    guards the import duplicate check against case/braced/urn/hyphenless
+    spellings that would otherwise create a second identity for the same UUID.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None:
+    """Set a customProperties entry on a product/contract payload dict, tolerating the
+    list-of-{property,value} form and the legacy {key: value} dict form."""
+    cprops = data.get('customProperties')
+    if isinstance(cprops, dict):
+        cprops[prop] = value
+        return
+    if not isinstance(cprops, list):
+        cprops = []
+    cprops = [c for c in cprops if not (isinstance(c, dict) and c.get('property') == prop)]
+    cprops.append({"property": prop, "value": value})
+    data['customProperties'] = cprops
 
 import yaml
 from pydantic import ValidationError
@@ -59,7 +93,11 @@ from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.controller.domain_export_adapter import domain_export_adapter
+from src.controller.domain_export_adapter import (
+    domain_export_adapter,
+    ONTOS_ORIGINAL_DOMAIN_PROPERTY,
+    original_domain_strings_from_props,
+)
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -144,13 +182,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning(f"Failed to attach domains for product {getattr(api_obj, 'id', '?')}: {e}")
         return api_obj
 
-    def _resolve_product_domain_assignment(self, data: dict, db: Optional[Session] = None) -> tuple:
+    def _resolve_product_domain_assignment(
+        self,
+        data: dict,
+        db: Optional[Session] = None,
+        create_missing: bool = False,
+        created_by: Optional[str] = None,
+    ) -> tuple:
         """Resolve a product payload to (domain_ids, primary_domain_id).
 
         Prefers domain_ids + primary_domain_id; falls back to the legacy single ``domain``
         (which may be a domain ID or name). Names are resolved via the data domain repo.
         Uses the caller's ``db`` session when provided so resolution sees rows written in
-        the same request transaction.
+        the same request transaction. When ``create_missing`` is set, unresolved names in
+        the round-trip/ODCS-standard path are auto-created (the opt-in import toggle, #851).
         """
         from src.repositories.data_domain_repository import data_domain_repo
         session = db if db is not None else self._db
@@ -185,7 +230,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         #    ODCS-standard primary ``domain`` name + ``customProperties.additionalDomains``
         #    are all honoured. Reading only the single ``domain`` name here previously
         #    dropped additional domains on re-import (round-trip loss).
-        return domain_export_adapter.parse_odcs(data, session)
+        return domain_export_adapter.parse_odcs(
+            data, session, create_missing=create_missing, created_by=created_by,
+        )
 
     def get_statuses(self) -> List[str]:
         """Get all ODPS v1.0.0 status values."""
@@ -198,6 +245,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
         preserve_source_id: bool = False,
+        create_missing_domains: bool = False,
+        adopt_ids: bool = True,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
 
@@ -208,6 +257,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
             preserve_source_id: If True, preserve the original non-UUID id as a
                 sourceId custom property (used during batch upload/import)
+            create_missing_domains: When True, auto-create by name any domain that doesn't
+                resolve (the opt-in "Create missing domains" import toggle, #851).
+            adopt_ids: When True (the "Adopt IDs from file" toggle, #853), a valid,
+                non-colliding UUID in the payload is adopted as the primary key so
+                YAML-expressed cross-entity links survive import. Otherwise (or on a
+                non-UUID / colliding id) a fresh UUID is generated as before.
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -217,20 +272,47 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             # Preserve original external ID (e.g. URN) as a custom property
             # Only when explicitly requested (e.g. during batch upload/import)
-            if preserve_source_id:
-                original_id = product_data.get('id')
-                if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
-                    custom_props = product_data.get('customProperties', [])
-                    if isinstance(custom_props, list):
-                        custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
-                    elif isinstance(custom_props, dict):
-                        custom_props[SOURCE_ID_PROPERTY] = original_id
-                    product_data['customProperties'] = custom_props
-                    logger.info(f"Preserved original ID '{original_id}' as {SOURCE_ID_PROPERTY} custom property")
+            incoming_id = product_data.get('id')
+            if preserve_source_id and incoming_id and isinstance(incoming_id, str):
+                # ontosOriginalId (#853) records the source id verbatim regardless of form;
+                # the legacy sourceId is also written for non-UUID ids during the transition.
+                _upsert_custom_property(product_data, ONTOS_ORIGINAL_ID_PROPERTY, incoming_id)
+                if not _is_valid_uuid(incoming_id):
+                    _upsert_custom_property(product_data, SOURCE_ID_PROPERTY, incoming_id)
+                    logger.info(f"Preserved original ID '{incoming_id}' as {SOURCE_ID_PROPERTY} custom property")
 
-            # Always generate a UUID for the product ID
-            product_data['id'] = str(uuid.uuid4())
-            logger.info(f"Generated ID {product_data['id']} for new product.")
+            # Always preserve the raw incoming domain string(s) as provenance (#851), so the
+            # original is never lost and a later export can surface it via ontosOriginalDomain.
+            original_domains = domain_export_adapter.extract_original_domain_strings(product_data)
+            if original_domains:
+                cprops = product_data.get('customProperties')
+                if isinstance(cprops, list):
+                    cprops = [
+                        c for c in cprops
+                        if not (isinstance(c, dict) and c.get('property') == ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+                    ]
+                    cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
+                    product_data['customProperties'] = cprops
+                elif not cprops:
+                    product_data['customProperties'] = [
+                        {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains}
+                    ]
+
+            # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
+            # so YAML-expressed links survive import; otherwise generate a fresh UUID.
+            # Canonicalize before lookup/storage so spelling variants cannot create
+            # a second identity for the same logical UUID (#853 review item 2).
+            canon_incoming = _canonical_uuid(incoming_id)
+            if (
+                adopt_ids
+                and canon_incoming is not None
+                and self._repo.get(db=db_session, id=canon_incoming) is None
+            ):
+                product_data['id'] = canon_incoming
+                logger.info(f"Adopted id {canon_incoming} from payload for new product.")
+            else:
+                product_data['id'] = str(uuid.uuid4())
+                logger.info(f"Generated ID {product_data['id']} for new product.")
 
             # Ensure ODPS required fields have defaults
             product_data.setdefault('apiVersion', 'v1.0.0')
@@ -267,7 +349,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
-            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(product_data, db=db_session)
+            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(
+                product_data, db=db_session, create_missing=create_missing_domains, created_by=user,
+            )
             if prod_domain_ids:
                 entity_domain_repo.set_domains_for_entity(
                     db_session, entity_type="data_product", entity_id=created_db_obj.id,
@@ -467,10 +551,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
             ) if products_db else {}
 
+            # Batch-load referenced contracts once per page (#854 review): otherwise
+            # resolving port.contractId → port.contractName does N products × M ports
+            # single-row lookups per list request.
+            port_contract_ids: Set[str] = set()
+            for p in products_db:
+                for port in list(getattr(p, 'output_ports', []) or []) + list(getattr(p, 'input_ports', []) or []):
+                    cid = getattr(port, 'contract_id', None)
+                    if cid:
+                        port_contract_ids.add(cid)
+            from src.repositories.data_contracts_repository import data_contract_repo
+            contracts_map = (
+                data_contract_repo.get_by_ids(db=self._db, ids=port_contract_ids)
+                if port_contract_ids else {}
+            )
+
             products_with_tags = []
             for product_db in products_db:
                 product_with_tags = self._load_product_with_tags(
-                    product_db, preloaded_domains=domains_map.get(str(product_db.id), [])
+                    product_db,
+                    preloaded_domains=domains_map.get(str(product_db.id), []),
+                    preloaded_contracts=contracts_map,
                 )
                 fid = getattr(product_db, "version_family_id", None) or product_db.id
                 # Only emit a count on the collapsed view; on the expanded
@@ -1633,6 +1734,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         files: List[tuple],
         user: Optional[str] = None,
+        create_missing_domains: bool = False,
+        adopt_ids: bool = True,
+        on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1640,6 +1745,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             files: List of ``(filename, content_bytes)`` tuples. Each file may
                 contain a single product object or an array of them.
             user: Username of the uploader (stamped as personal-draft owner).
+            create_missing_domains: opt-in "Create missing domains" import toggle (#851),
+                applied per-upload to every entity in the batch.
+            adopt_ids: "Adopt IDs from file" toggle (#853, default on). A valid, non-colliding
+                UUID is adopted as the primary key; otherwise a fresh UUID is generated.
+            on_duplicate: what to do when the payload id is a valid UUID that already exists
+                in the table — "skip" (default, recorded as skipped) or "new" (import as a new
+                copy with a fresh UUID). Import stays create-only either way.
 
         Returns:
             A :class:`BatchImportResult`. A file that cannot be parsed at all is
@@ -1679,7 +1791,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     continue
                 # Only import a recognizable ODPS Data Product. An ODCS contract is
                 # routed to the right page; anything unrecognizable is skipped rather
-                # than imported as a junk product.
+                # than imported as a junk product. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the products table.
                 entity_kind = classify_import_entity(product_data)
                 if entity_kind != "product":
                     if entity_kind == "contract":
@@ -1699,9 +1812,43 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     ))
                     index += 1
                     continue
+                # Duplicate-id handling (#853): a valid UUID already present is either
+                # skipped (default) or imported as a new copy with a fresh UUID.
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and self._repo.get(db=self._db, id=canon_source) is not None)
+                if dup and on_duplicate == "skip":
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            entity_id=canon_source, name=product_data.get('name'), status="skipped",
+                            message="already present (same id)",
+                        ))
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
+                    index += 1
+                    continue
+                # on_duplicate == "new" with dup: fall through with adoption disabled;
+                # the row gets a fresh UUID. Intra-batch reference remap is not needed
+                # here because ODPS carries no product-to-product reference field (the
+                # only cross-ref is inputPorts[].contractId, which points at contracts
+                # imported through a separate endpoint, not at other products in this
+                # batch). If a cross-entity batch flow is introduced later, build an
+                # old→new map keyed on canon_source and rewrite port.contractId before
+                # calling create_product (#853 review item 4).
                 try:
                     created = self.create_product(
                         product_data, user=user, preserve_source_id=True,
+                        create_missing_domains=create_missing_domains,
+                        adopt_ids=adopt_ids and not dup,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -2615,10 +2762,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         team_member_names: List[str] = []
         if product.team and product.team.members:
             for member in product.team.members:
+                # Deliberately exclude `member.username` — ODPS usernames are often
+                # email addresses and this index is readable by anyone with
+                # data-products:read; the UI already shows the username on the
+                # detail page without needing search to match on it (#921 review).
                 if member.name:
                     team_member_names.append(member.name)
-                if member.username and member.username != member.name:
-                    team_member_names.append(member.username)
 
         # Index every assigned domain NAME so domain-keyed search matches by any of the
         # product's domains (primary or additional) — issue #520 story 14.
@@ -2636,6 +2785,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             tag_strings = tag_strings + assigned_domain_names
         except Exception as dom_err:
             logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
+
+        # Fallback: index the original ODPS-supplied domain string(s) preserved as the
+        # ontosOriginalDomain custom property, so a product imported with an unmatched domain
+        # (create_missing off → no native assignment) is still findable by that domain name.
+        # De-duped against native names so a resolved domain is not indexed twice.
+        try:
+            original_domains = [
+                d for d in original_domain_strings_from_props(product.customProperties)
+                if d and d not in assigned_domain_names
+            ]
+            if original_domains:
+                tag_strings = tag_strings + original_domains
+                assigned_domain_names = assigned_domain_names + original_domains
+                if not primary_domain_name:
+                    primary_domain_name = original_domains[0]
+        except Exception as od_err:
+            logger.debug("Could not load original domains for product %s search index: %s", product.id, od_err)
 
         # Index linked ontology concept labels / IRI tails so semantic queries match.
         try:
@@ -2666,6 +2832,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "product_team": product_team_name,
             "team_members": ", ".join(team_member_names),
         }
+
+        # Dedupe tag_strings while preserving insertion order. The list accumulates
+        # from multiple sources (unified tags, assigned domains, ontosOriginalDomain,
+        # concept labels) and the same string often lands twice — e.g. a tag that is
+        # also a domain name, or a native-matched domain whose name also appears in
+        # the preserved YAML string. Duplicates waste the result's tags[:5] slice.
+        tag_strings = list(dict.fromkeys(t for t in tag_strings if t))
 
         return SearchIndexItem(
             id=f"product::{product.id}",
@@ -2767,7 +2940,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
-    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None) -> DataProductApi:
+    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None, preloaded_contracts: Optional[Dict[str, Any]] = None) -> DataProductApi:
         """Helper to load an ODPS data product with its associated tags.
 
         ``db`` must be the caller's request session on write paths (create/update) so the
@@ -2814,23 +2987,38 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 except Exception as e:
                     logger.debug(f"Could not resolve project: {e}")
 
-            # Resolve contract names and delivery method names for output ports
+            # Resolve contract names and delivery method names for output + input ports.
+            # Prefer the batch-preloaded contracts map (list path) to avoid N+1; fall
+            # back to a per-port repo.get() for the single-entity callers (#854 review).
+            # A None contractName tells the frontend the id is dangling so it doesn't
+            # render a navigable link that leads to a 404.
+            def _resolve_port_contract(port):
+                if not port.contractId:
+                    return
+                try:
+                    if preloaded_contracts is not None:
+                        contract = preloaded_contracts.get(port.contractId)
+                    else:
+                        from src.repositories.data_contracts_repository import data_contract_repo
+                        contract = data_contract_repo.get(self._db, id=port.contractId)
+                    port.contractName = contract.name if contract else None
+                except Exception as e:
+                    logger.debug(f"Could not resolve port contract {port.contractId}: {e}")
+
             if product_api.outputPorts:
-                from src.repositories.data_contracts_repository import data_contract_repo
                 from src.repositories.delivery_methods_repository import delivery_method_repo
                 for port in product_api.outputPorts:
-                    if port.contractId:
-                        try:
-                            contract = data_contract_repo.get(self._db, id=port.contractId)
-                            port.contractName = contract.name if contract else None
-                        except Exception as e:
-                            logger.debug(f"Could not resolve contract: {e}")
+                    _resolve_port_contract(port)
                     if port.deliveryMethodId:
                         try:
                             dm = delivery_method_repo.get(self._db, port.deliveryMethodId)
                             port.deliveryMethodName = dm.name if dm else None
                         except Exception as e:
                             logger.debug(f"Could not resolve delivery method: {e}")
+
+            if product_api.inputPorts:
+                for port in product_api.inputPorts:
+                    _resolve_port_contract(port)
 
             return product_api
 
@@ -3284,7 +3472,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         odps: Dict[str, Any] = {
             "kind": product.kind or "DataProduct",
-            "apiVersion": product.api_version or "v1.0.0",
+            "apiVersion": product.apiVersion or "v1.0.0",
             "id": product.id,
             "status": product.status,
         }
@@ -3309,32 +3497,32 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if desc:
                 odps["description"] = desc
 
-        if product.input_ports:
+        if product.inputPorts:
             odps["inputPorts"] = [
                 {k: v for k, v in {
                     "name": p.name, "version": p.version,
-                    "contractId": p.contract_id,
+                    "contractId": p.contractId,
                 }.items() if v}
-                for p in product.input_ports
+                for p in product.inputPorts
             ]
 
-        if product.output_ports:
+        if product.outputPorts:
             odps["outputPorts"] = [
                 {k: v for k, v in {
                     "name": p.name, "version": p.version,
-                    "contractId": p.contract_id,
+                    "contractId": p.contractId,
                     "status": p.status,
                 }.items() if v}
-                for p in product.output_ports
+                for p in product.outputPorts
             ]
 
-        if product.support_channels:
+        if product.support:
             odps["support"] = [
                 {k: v for k, v in {
                     "channel": s.channel, "url": s.url,
                     "tool": s.tool, "scope": s.scope,
                 }.items() if v}
-                for s in product.support_channels
+                for s in product.support
             ]
 
         # Build team members from ODPS data, then merge active Business Owners
@@ -3356,10 +3544,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if team_name:
                 odps["team"]["name"] = team_name
 
-        if product.custom_properties:
+        if product.customProperties:
             rebuilt_props = [
                 {"property": cp.property, "value": cp.value}
-                for cp in product.custom_properties
+                for cp in product.customProperties
             ]
             # Preserve the additionalDomains entry apply_odcs injected above; a plain
             # overwrite here drops additional domains on export/round-trip.
@@ -3367,10 +3555,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 rebuilt_props, odps.get("customProperties")
             )
 
-        if product.authoritative_definitions:
+        # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
+        # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
+        _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
+
+        if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [
                 {"url": ad.url, "type": ad.type}
-                for ad in product.authoritative_definitions
+                for ad in product.authoritativeDefinitions
             ]
 
         # Extension: include entity relationship-based dataset hierarchy

@@ -182,6 +182,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         approval_privileges: normalizeApprovalPrivileges(initialRole?.approval_privileges),
         deployment_policy: normalizeDeploymentPolicy(initialRole?.deployment_policy),
         is_admin: initialRole?.is_admin || false,
+        can_adopt_entity_ids: initialRole?.can_adopt_entity_ids || false,
         requestable_by_roles: initialRole?.requestable_by_roles || [],
         approver_roles: initialRole?.approver_roles || [],
     } as AppRole;
@@ -208,9 +209,10 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 approval_privileges: normalizeApprovalPrivileges(initialRole.approval_privileges),
                 deployment_policy: normalizeDeploymentPolicy(initialRole.deployment_policy),
                 is_admin: initialRole.is_admin || false,
+                can_adopt_entity_ids: initialRole.can_adopt_entity_ids || false,
                 requestable_by_roles: initialRole.requestable_by_roles || [],
                 approver_roles: initialRole.approver_roles || [],
-            } : { 
+            } : {
                 id: '', 
                 name: '', 
                 description: '',
@@ -221,6 +223,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 approval_privileges: {},
                 deployment_policy: null,
                 is_admin: false,
+                can_adopt_entity_ids: false,
                 requestable_by_roles: [],
                 approver_roles: [],
             };
@@ -257,6 +260,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 approval_privileges: {},
                 deployment_policy: null,
                 is_admin: false,
+                can_adopt_entity_ids: false,
                 requestable_by_roles: [],
                 approver_roles: [],
             } as AppRole);
@@ -494,6 +498,22 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                 </label>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    {/* Import Privileges */}
+                                    <div className="space-y-3 pt-4 border-t">
+                                        <h4 className="font-medium">{t('roles.privileges.importPrivileges.title', 'Import Privileges')}</h4>
+                                        <p className="text-xs text-muted-foreground">
+                                            {t('roles.privileges.importPrivileges.description', 'Grant this role abilities beyond the default import toggles.')}
+                                        </p>
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                {...register('can_adopt_entity_ids')}
+                                                defaultChecked={Boolean(defaultValues.can_adopt_entity_ids)}
+                                            />
+                                            <span>{t('roles.privileges.importPrivileges.adoptEntityIds', 'Adopt entity IDs on import')}</span>
+                                        </label>
                                     </div>
 
                                     {/* Admin Role Flag */}

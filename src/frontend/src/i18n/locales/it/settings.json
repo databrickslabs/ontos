@@ -397,6 +397,11 @@
         "title": "Ruolo amministratore",
         "description": "Contrassegna questo ruolo come ruolo amministratore. Un solo ruolo dovrebbe essere contrassegnato come amministratore.",
         "label": "Questo è il ruolo amministratore"
+      },
+      "importPrivileges": {
+        "title": "Privilegi di importazione",
+        "description": "Concede a questo ruolo capacità oltre gli interruttori di importazione predefiniti.",
+        "adoptEntityIds": "Adotta gli ID entità all'importazione"
       }
     },
     "permissions": {

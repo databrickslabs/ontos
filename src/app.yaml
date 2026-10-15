@@ -37,14 +37,6 @@ env:
     value: "audit_logs"
     #value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
 
-  # --- Per-request user impersonation (test personas) — OPT-IN, OFF by default ---
-  # SECURITY: TEST_USER_TOKEN lets any holder act as any user/groups (incl.
-  # admin) via X-Test-* headers. Never enable it on a production deployment.
-  # To opt in on a dev/test deployment, add a `secret` app resource named
-  # `test-user-token` (see CONTRIBUTING.md) and uncomment:
-  # - name: "TEST_USER_TOKEN"
-  #   valueFrom: "test-user-token"
-
   - name: "LLM_ENABLED"
     value: "True"
   - name: "LLM_ENDPOINT"

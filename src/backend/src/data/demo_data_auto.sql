@@ -340,21 +340,21 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0004-4000-8000-000000000001', 'UNECE R155 Cybersecurity', 'Verify vehicle data pipelines meet UNECE WP.29 R155 cybersecurity management system requirements',
-'Vehicle data pipeline lacks cybersecurity controls. UNECE R155 requires documented threat analysis and risk assessment (TARA) for all vehicle data interfaces.',
-'MATCH (d:DataPipeline) WHERE d.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT d.has_tara = true AND d.encryption_in_transit = true', 'Security', 'critical', true, NOW(), NOW()),
+('01100001-0004-4000-8000-000000000001', 'UNECE R155 Cybersecurity', 'Verify connected and autonomous vehicle data products are in UNECE R155 CSMS scope',
+'Connected or autonomous vehicle data product is not in R155 scope. UNECE R155 requires threat analysis and risk assessment (TARA) for all vehicle data interfaces.',
+'MATCH (p:data_product) WHERE p.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT HAS_TAG(''r155-in-scope'')', 'Security', 'critical', true, NOW(), NOW()),
 
-('01100002-0004-4000-8000-000000000002', 'IATF 16949 PPAP Compliance', 'Ensure all production parts have approved PPAP submissions at the required level',
-'Part is in production without approved PPAP. IATF 16949 Section 8.3.4.4 requires PPAP approval before production shipment. Interim approval requires documented containment plan.',
-'MATCH (p:Part) WHERE p.production_status = ''active'' ASSERT p.ppap_status IN [''approved'', ''interim_approved'']', 'Data Quality', 'critical', true, NOW(), NOW()),
+('01100002-0004-4000-8000-000000000002', 'IATF 16949 PPAP Compliance', 'Ensure supplier and BOM data contracts are approved and active before series production',
+'Supplier or BOM data contract is not active. IATF 16949 Section 8.3.4.4 requires approved PPAP data before production shipment.',
+'MATCH (c:data_contract) WHERE c.name CONTAINS ''Supplier'' OR c.name CONTAINS ''BOM'' ASSERT c.status = ''active''', 'Data Quality', 'critical', true, NOW(), NOW()),
 
-('01100003-0004-4000-8000-000000000003', 'GDPR Vehicle Data Privacy', 'Verify that vehicle telematics data containing PII is processed in compliance with GDPR/CCPA',
-'Telematics dataset contains PII without proper consent tracking or anonymization. Vehicle location traces, driving behavior, and diagnostic data linked to VIN require explicit consent or pseudonymization.',
-'MATCH (d:Dataset) WHERE d.contains_vehicle_pii = true ASSERT d.consent_mechanism IS NOT NULL AND d.retention_days <= 730', 'Governance', 'high', true, NOW(), NOW()),
+('01100003-0004-4000-8000-000000000003', 'GDPR Vehicle Data Privacy', 'Verify connected-services data products are covered by the cybersecurity and privacy controls (R155 scope)',
+'Connected-services data product is not in R155 scope. Vehicle location traces and driving behavior linked to a VIN are personal data and need documented controls under GDPR/CCPA.',
+'MATCH (p:data_product) WHERE HAS_TAG(''connected-services'') ASSERT HAS_TAG(''r155-in-scope'')', 'Governance', 'high', true, NOW(), NOW()),
 
-('01100004-0004-4000-8000-000000000004', 'ISO 26262 Data Integrity', 'Ensure ADAS training and validation datasets meet ISO 26262 functional safety data integrity requirements',
-'ADAS dataset lacks functional safety traceability. ISO 26262 Part 8 requires documented data management plans, integrity checks, and traceability for safety-relevant data used in ASIL-rated systems.',
-'MATCH (d:Dataset) WHERE d.domain = ''Autonomous Driving'' AND d.safety_relevant = true ASSERT d.asil_rating IS NOT NULL AND d.integrity_checksum IS NOT NULL', 'Governance', 'critical', true, NOW(), NOW())
+('01100004-0004-4000-8000-000000000004', 'ISO 26262 Data Integrity', 'Ensure autonomous driving data products carry an ISO 26262 ASIL classification',
+'Autonomous driving data product has no ASIL classification. ISO 26262 Part 8 requires functional safety classification and traceability for ADAS training and validation data.',
+'MATCH (p:data_product) WHERE p.domain = ''Autonomous Driving'' ASSERT HAS_TAG(''asil-d'') OR HAS_TAG(''asil-b'')', 'Governance', 'critical', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

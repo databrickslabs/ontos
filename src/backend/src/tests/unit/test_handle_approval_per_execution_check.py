@@ -333,3 +333,96 @@ def test_assert_uses_only_addressed_approval_notifications() -> None:
     )
     assert [m.id for m in matches] == ['n1']
 
+
+
+# --- Only the approvers of the pending step may answer -----------------------
+
+
+def _db_with(rows: list, pending_step: str | None) -> MagicMock:
+    """``db.query(NotificationDb)`` returns ``rows``; the execution query
+    returns ``pending_step`` as its current step."""
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    notifications = _mock_db_with_rows(rows).query.return_value
+    execution = MagicMock()
+    execution.filter.return_value.first.return_value = (pending_step,)
+    db = MagicMock()
+    db.query.side_effect = lambda what: (
+        execution if getattr(what, 'class_', None) is WorkflowExecutionDb else notifications
+    )
+    return db
+
+
+def _step_row(notif_id: str, recipient: str, step_id: str | None) -> SimpleNamespace:
+    row = _make_notif_row(notif_id=notif_id, execution_id='exec-A', recipient=recipient)
+    payload = {'execution_id': 'exec-A'}
+    if step_id:
+        payload['step_id'] = step_id
+    row.action_payload = json.dumps(payload)
+    return row
+
+
+def _by_recipient() -> MagicMock:
+    manager = MagicMock()
+    manager.can_user_access_notification.side_effect = (
+        lambda *, db, notification, user_info: notification.recipient == user_info.email
+    )
+    return manager
+
+
+def test_an_earlier_steps_approver_cannot_answer_a_later_step() -> None:
+    db = _db_with([
+        _step_row('n-a', 'alice@example.com', 'approve-a'),
+        _step_row('n-b', 'bob@example.com', 'approve-b'),
+    ], pending_step='approve-b')
+
+    with pytest.raises(HTTPException) as err:
+        _assert_caller_authorized_for_execution(
+            db=db, notifications_manager=_by_recipient(), execution_id='exec-A',
+            user_info=_user('alice@example.com'),
+        )
+    assert err.value.status_code == 403
+
+    matches = _assert_caller_authorized_for_execution(
+        db=db, notifications_manager=_by_recipient(), execution_id='exec-A',
+        user_info=_user('bob@example.com'),
+    )
+    assert [m.id for m in matches] == ['n-b']
+
+
+def test_notifications_without_a_step_still_count() -> None:
+    # Created before approvals recorded their step (pending at upgrade time)
+    db = _db_with([_step_row('n-old', 'alice@example.com', None)], pending_step='approve-b')
+
+    matches = _assert_caller_authorized_for_execution(
+        db=db, notifications_manager=_by_recipient(), execution_id='exec-A',
+        user_info=_user('alice@example.com'),
+    )
+    assert [m.id for m in matches] == ['n-old']
+
+
+def test_the_executor_passes_the_step_id_to_its_handler() -> None:
+    from src.common.workflow_executor import StepContext, StepResult, WorkflowExecutor
+
+    seen = {}
+
+    class Handler:
+        def __init__(self, db, config):
+            pass
+
+        def execute(self, context):
+            seen['step_id'] = context.step_id
+            return StepResult(passed=True)
+
+    executor = WorkflowExecutor(MagicMock())
+    executor.HANDLERS = {'approval': Handler}
+    step = SimpleNamespace(step_id='approve-b', step_type='approval', config={})
+    context = StepContext(
+        entity={}, entity_type='data_product', entity_id='p-1', entity_name='P',
+        user_email='requester@example.com', trigger_context=None, execution_id='exec-A',
+        workflow_id='wf-1', workflow_name='W', step_results={},
+    )
+
+    executor._execute_step(step, context)
+
+    assert seen['step_id'] == 'approve-b'

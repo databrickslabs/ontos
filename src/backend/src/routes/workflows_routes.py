@@ -1183,6 +1183,33 @@ def _find_approval_notifications_for_execution(
     return matches
 
 
+def _pending_step_id(db: Session, execution_id: str) -> Optional[str]:
+    """Step the execution is paused at (``current_step_id``), if any."""
+    from src.db_models.process_workflows import WorkflowExecutionDb
+    row = db.query(WorkflowExecutionDb.current_step_id).filter(
+        WorkflowExecutionDb.id == execution_id
+    ).first()
+    step_id = row[0] if row else None
+    return step_id if isinstance(step_id, str) else None
+
+
+def _is_for_step(notification: Notification, step_id: Optional[str]) -> bool:
+    """Whether an approval notification belongs to ``step_id``.
+
+    Notifications created before approvals recorded their step have no
+    ``step_id`` and still count, so approvals pending at upgrade time can
+    be answered.
+    """
+    payload = notification.action_payload
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            payload = None
+    notified_step = (payload or {}).get('step_id') if isinstance(payload, dict) else None
+    return step_id is None or notified_step is None or notified_step == step_id
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -1192,7 +1219,8 @@ def _assert_caller_authorized_for_execution(
     """Authorize ``user_info`` to act on the paused workflow execution.
 
     A caller is authorized iff there exists at least one
-    ``workflow_approval`` notification for ``execution_id`` that the caller
+    ``workflow_approval`` notification for ``execution_id`` and for the step
+    it is paused at (see ``_is_for_step``) that the caller
     can access under
     ``NotificationsManager.can_user_access_notification`` (direct
     recipient, role membership via ``recipient_role_id``, or admin).
@@ -1212,9 +1240,10 @@ def _assert_caller_authorized_for_execution(
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
     """
+    pending_step = _pending_step_id(db, execution_id)
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
-        if n.recipient or n.recipient_role_id
+        if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
     ]
     if not candidates:
         raise HTTPException(

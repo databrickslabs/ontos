@@ -156,6 +156,9 @@ class StepContext:
     # ${context.on_behalf_of.value|.type|.display} in webhook bodies +
     # grant_permissions principal_variable. None when subscribing for self.
     on_behalf_of: Optional[Dict[str, str]] = None
+    # Id of the step being executed (WorkflowStep.step_id), set by the
+    # executor before each step
+    step_id: Optional[str] = None
 
 
 @dataclass
@@ -618,6 +621,9 @@ class ApprovalStepHandler(StepHandler):
                         action_type="workflow_approval",
                         action_payload={
                             "execution_id": context.execution_id,
+                            # The approval step this notification is for, so
+                            # only its approvers can answer it
+                            "step_id": context.step_id,
                             "workflow_id": context.workflow_id,
                             "workflow_name": context.workflow_name,
                             "entity_type": context.entity_type,
@@ -2837,6 +2843,7 @@ class WorkflowExecutor:
                     config = {}
             
             handler = handler_class(self._db, config)
+            context.step_id = step.step_id
             return handler.execute(context)
         except Exception as e:
             logger.exception(f"Step execution failed: {e}")

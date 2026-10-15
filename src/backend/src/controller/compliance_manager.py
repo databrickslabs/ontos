@@ -438,6 +438,26 @@ class ComplianceManager:
         db.refresh(run)
         return run
 
+    def delete_runs(self, db: Session, *, policy_ids: List[str]) -> Dict[str, int]:
+        """Delete every run of the given policies and the runs' results.
+
+        Returns the number of deleted rows per table. The caller commits.
+        """
+        if not policy_ids:
+            return {}
+        run_ids = db.query(ComplianceRunDb.id).filter(ComplianceRunDb.policy_id.in_(policy_ids))
+        results = (
+            db.query(ComplianceResultDb)
+            .filter(ComplianceResultDb.run_id.in_(run_ids.scalar_subquery()))
+            .delete(synchronize_session=False)
+        )
+        runs = (
+            db.query(ComplianceRunDb)
+            .filter(ComplianceRunDb.policy_id.in_(policy_ids))
+            .delete(synchronize_session=False)
+        )
+        return {'compliance_results': results, 'compliance_runs': runs}
+
     def list_runs(self, db: Session, *, policy_id: str, limit: int = 50) -> List[ComplianceRunDb]:
         return compliance_run_repo.list_for_policy(db, policy_id=policy_id, limit=limit)
 

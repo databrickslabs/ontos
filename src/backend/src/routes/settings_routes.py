@@ -700,6 +700,24 @@ async def clear_demo_data(
         # surrounding transaction and silently abort all subsequent deletes.
         deleted_counts: Dict[str, int] = {}
         skipped: List[Dict[str, str]] = []
+
+        # Compliance runs started after the demo was loaded have their own ids,
+        # so the packs don't list them, and their FK would block deleting the
+        # demo policies (and a later load would keep the old ones). Delete every
+        # run of a demo policy first.
+        demo_policy_ids = list(dict.fromkeys(agg.get(("compliance_policies", "id"), [])))
+        try:
+            from src.controller.compliance_manager import ComplianceManager
+            with db.begin_nested():
+                counts = ComplianceManager().delete_runs(db, policy_ids=demo_policy_ids)
+            for table_name, rowcount in counts.items():
+                if rowcount > 0:
+                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
+        except Exception as e:
+            err_short = str(e).splitlines()[0][:200]
+            logger.warning(f"Deleting runs of demo compliance policies FAILED: {err_short}")
+            skipped.append({"table": "compliance_runs", "error": err_short})
+
         for table_name, pk_column in order:
             ids = list(dict.fromkeys(agg[(table_name, pk_column)]))  # dedup, keep order
             stmt = text(

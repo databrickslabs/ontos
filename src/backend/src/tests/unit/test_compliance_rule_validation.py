@@ -37,17 +37,21 @@ class TestValidateRule:
     def test_unsupported_match_type_is_a_warning(self, match_type):
         [warning] = validate_rule(f"MATCH (x:{match_type}) ASSERT x.name != ''")
 
-        assert f"MATCH type '{match_type}' is not supported" in warning
-        assert 'data_product' in warning
+        assert warning['code'] == 'unsupported_match_type'
+        assert warning['params']['type'] == match_type
+        assert 'data_product' in warning['params']['supported']
+        assert f"MATCH type '{match_type}' is not supported" in warning['message']
 
     def test_rule_without_match_is_valid(self):
         # Maturity gates and workflow policy checks evaluate such rules per entity.
         assert validate_rule("ASSERT obj.has_owner = True") == []
 
     def test_missing_assert_is_a_warning(self):
-        assert validate_rule("asset.tags['pii'] == 'true'") == [
-            "The rule has no ASSERT clause, so every entity passes.",
-        ]
+        assert validate_rule("asset.tags['pii'] == 'true'") == [{
+            'code': 'missing_assert',
+            'params': {},
+            'message': "The rule has no ASSERT clause, so every entity passes.",
+        }]
 
 
 def _create(db, rule):
@@ -78,8 +82,8 @@ async def test_create_saves_rule_with_warnings(db_session):
     body = await _create(db_session, rule)
 
     assert db_session.get(CompliancePolicyDb, body['id']).rule == rule
-    assert len(body['warnings']) == 1
-    assert "MATCH type 'Dataset'" in body['warnings'][0]
+    assert [w['code'] for w in body['warnings']] == ['unsupported_match_type']
+    assert body['warnings'][0]['params']['type'] == 'Dataset'
 
 
 @pytest.mark.asyncio
@@ -109,3 +113,40 @@ async def test_update_rejects_unparseable_rule_and_keeps_the_old_one(db_session)
     assert exc.value.status_code == 422
     db_session.refresh(policy)
     assert policy.rule == VALID
+
+
+async def _update(db, policy, rule, name='P'):
+    return await compliance_routes.update_policy(
+        policy_id=policy.id,
+        request=MagicMock(client=None),
+        db=db,
+        audit_manager=MagicMock(),
+        current_user=None,
+        policy=CompliancePolicy(id=policy.id, name=name, description='d', rule=rule),
+        _=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_without_rule_change_keeps_an_old_invalid_rule_editable(db_session):
+    # A policy saved before rules were checked can still be renamed
+    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='Old', description='d', rule=BROKEN)
+    db_session.add(policy)
+    db_session.flush()
+
+    body = await _update(db_session, policy, BROKEN, name='Renamed')
+
+    assert body['warnings'] == []
+    db_session.refresh(policy)
+    assert policy.name == 'Renamed'
+
+
+@pytest.mark.asyncio
+async def test_update_checks_a_changed_rule(db_session):
+    policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='P', description='d', rule=VALID)
+    db_session.add(policy)
+    db_session.flush()
+
+    body = await _update(db_session, policy, "MATCH (d:Dataset) ASSERT d.owner != ''")
+
+    assert [w['code'] for w in body['warnings']] == ['unsupported_match_type']

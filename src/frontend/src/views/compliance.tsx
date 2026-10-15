@@ -31,6 +31,7 @@ import {
   ListViewSkeleton,
   StatCardsSkeleton,
 } from '@/components/common/list-view-skeleton';
+import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -45,7 +46,7 @@ interface CompliancePolicy {
   is_active: boolean;
   severity: 'low' | 'medium' | 'high' | 'critical';
   category: string;
-  warnings?: string[]; // returned by create/update when the rule cannot work as written
+  warnings?: RuleWarning[]; // returned by create/update when the rule cannot work as written
 }
 
 interface ComplianceStats {
@@ -163,7 +164,7 @@ export default function Compliance() {
       toast(warnings.length
         ? {
             title: t('compliance:toast.policySavedWithWarnings', { name: response.data.name }),
-            description: warnings.join(' '),
+            description: warnings.map((w) => formatRuleWarning(t, w)).join(' '),
           }
         : {
             title: t('common:toast.success'),

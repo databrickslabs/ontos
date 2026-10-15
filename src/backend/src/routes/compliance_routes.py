@@ -114,7 +114,12 @@ async def update_policy(
     policy: CompliancePolicy = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    warnings = _check_rule(policy.rule)
+    # Only a changed rule is checked: an older policy with an invalid rule
+    # can still be renamed, disabled or recategorised
+    existing = manager.get_policy(db, policy_id)
+    warnings = (
+        _check_rule(policy.rule) if existing is None or existing.rule != policy.rule else []
+    )
     updated = manager.update_policy(
         db, 
         policy_id, 

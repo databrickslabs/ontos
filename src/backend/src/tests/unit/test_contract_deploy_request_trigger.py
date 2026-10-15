@@ -37,7 +37,7 @@ def _contract(db, status='approved'):
     return contract
 
 
-def _complete(db, contract, trigger_type, succeeded):
+def _complete(db, contract, trigger_type, succeeded, approved=None):
     workflow = SimpleNamespace(name='Gate', trigger=SimpleNamespace(type=trigger_type))
     context = TriggerContext(
         entity_type='data_contract', entity_id=contract.id, entity_name=contract.name,
@@ -45,7 +45,7 @@ def _complete(db, contract, trigger_type, succeeded):
     )
     WorkflowExecutor(db)._handle_workflow_completion(
         trigger_context=context, workflow=workflow, succeeded=succeeded,
-        responded_by='approver@example.com',
+        responded_by='approver@example.com', approved=approved,
     )
 
 
@@ -70,11 +70,11 @@ def test_request_deploy_fires_on_request_deploy():
     assert 'Workflow triggered' in result['message']
 
 
-@pytest.mark.parametrize('succeeded, decision', [(True, 'approve'), (False, 'deny')])
-def test_deploy_decision_is_logged_and_status_kept(db_session, succeeded, decision):
+@pytest.mark.parametrize('approved, decision', [(True, 'approve'), (False, 'deny')])
+def test_deploy_decision_is_logged_and_status_kept(db_session, approved, decision):
     contract = _contract(db_session)
 
-    _complete(db_session, contract, TriggerType.ON_REQUEST_DEPLOY, succeeded)
+    _complete(db_session, contract, TriggerType.ON_REQUEST_DEPLOY, approved, approved=approved)
 
     db_session.refresh(contract)
     assert contract.status == 'approved'
@@ -84,6 +84,17 @@ def test_deploy_decision_is_logged_and_status_kept(db_session, succeeded, decisi
     details = json.loads(entry.details_json)
     assert details['requester_email'] == 'requester@example.com'
     assert details['workflow'] == 'Gate'
+
+
+@pytest.mark.parametrize('succeeded', [True, False])
+def test_a_deploy_workflow_without_approval_logs_no_decision(db_session, succeeded):
+    contract = _contract(db_session)
+
+    _complete(db_session, contract, TriggerType.ON_REQUEST_DEPLOY, succeeded)
+
+    db_session.refresh(contract)
+    assert contract.status == 'approved'
+    assert db_session.query(ChangeLogDb).filter(ChangeLogDb.entity_id == contract.id).count() == 0
 
 
 @pytest.mark.parametrize('succeeded', [True, False])

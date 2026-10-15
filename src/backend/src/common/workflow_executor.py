@@ -2788,17 +2788,18 @@ class WorkflowExecutor:
                         logger.info(f"Asset {entity_id} status reverted to 'draft' after review rejection")
                     self._db.commit()
                     
-            # Data contract deploy request decided: record it in the change
-            # log, as the legacy handle-deploy flow does. The contract status
-            # is left alone: the lifecycle has no "deployed" status, and an
-            # approval doesn't deploy anything by itself.
+            # Data contract deploy request decided by an approver: record it in
+            # the change log, as the legacy handle-deploy flow does. A
+            # workflow without an approval step decides nothing, so nothing is
+            # recorded. The contract status is left alone: the lifecycle has no
+            # "deployed" status, and an approval doesn't deploy anything.
             elif (entity_type == 'data_contract'
-                  and trigger_type in ('on_request_deploy', 'ON_REQUEST_DEPLOY')):
+                  and trigger_type in ('on_request_deploy', 'ON_REQUEST_DEPLOY')
+                  and approved is not None):
                 from src.controller.change_log_manager import change_log_manager
                 # The approver's choice, not the run's outcome: a later step
                 # (e.g. a notification) can fail after an approval.
-                approved_request = succeeded if approved is None else approved
-                decision = 'approve' if approved_request else 'deny'
+                decision = 'approve' if approved else 'deny'
                 change_log_manager.log_change_with_details(
                     self._db,
                     entity_type='data_contract',
@@ -2810,7 +2811,7 @@ class WorkflowExecutor:
                         'decision': decision,
                         'workflow': workflow.name,
                         'requester_email': trigger_context.user_email,
-                        'summary': f"Deploy request {'approved' if approved_request else 'denied'} "
+                        'summary': f"Deploy request {'approved' if approved else 'denied'} "
                                    f"via workflow '{workflow.name}'",
                     },
                 )

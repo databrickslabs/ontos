@@ -664,6 +664,7 @@ async def clear_demo_data(
         from pathlib import Path
         from sqlalchemy import bindparam, text
         from src.utils.demo_data_sql import parse_demo_inserts
+        from src.utils.demo_data_cleanup import clear_references
 
         # Derive the teardown directly from the demo packs instead of maintaining a
         # hand-written prefix list. The prefix list silently drifted from the packs
@@ -699,24 +700,8 @@ async def clear_demo_data(
         # against a table dropped by a later migration) does not poison the
         # surrounding transaction and silently abort all subsequent deletes.
         deleted_counts: Dict[str, int] = {}
+        detached_counts: Dict[str, int] = {}
         skipped: List[Dict[str, str]] = []
-
-        # Compliance runs started after the demo was loaded have their own ids,
-        # so the packs don't list them, and their FK would block deleting the
-        # demo policies (and a later load would keep the old ones). Delete every
-        # run of a demo policy first.
-        demo_policy_ids = list(dict.fromkeys(agg.get(("compliance_policies", "id"), [])))
-        try:
-            from src.controller.compliance_manager import ComplianceManager
-            with db.begin_nested():
-                counts = ComplianceManager().delete_runs(db, policy_ids=demo_policy_ids)
-            for table_name, rowcount in counts.items():
-                if rowcount > 0:
-                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
-        except Exception as e:
-            err_short = str(e).splitlines()[0][:200]
-            logger.warning(f"Deleting runs of demo compliance policies FAILED: {err_short}")
-            skipped.append({"table": "compliance_runs", "error": err_short})
 
         for table_name, pk_column in order:
             ids = list(dict.fromkeys(agg[(table_name, pk_column)]))  # dedup, keep order
@@ -725,7 +710,15 @@ async def clear_demo_data(
             ).bindparams(bindparam("ids", expanding=True))
             try:
                 with db.begin_nested():
+                    # Rows created after the demo was loaded (with ids not in
+                    # the packs) that reference these rows would block the
+                    # DELETE; delete or detach them first.
+                    ref_deleted, ref_nulled = clear_references(db, table_name, pk_column, ids)
                     result = db.execute(stmt, {"ids": ids})
+                for name, count in ref_deleted.items():
+                    deleted_counts[name] = deleted_counts.get(name, 0) + count
+                for name, count in ref_nulled.items():
+                    detached_counts[name] = detached_counts.get(name, 0) + count
                 rowcount = result.rowcount or 0
                 if rowcount > 0:
                     deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
@@ -743,6 +736,7 @@ async def clear_demo_data(
 
         success = True
         details["deleted_counts"] = deleted_counts
+        details["detached_counts"] = detached_counts
         details["skipped"] = skipped
 
         total_deleted = sum(deleted_counts.values())
@@ -753,6 +747,7 @@ async def clear_demo_data(
             "status": "success" if not skipped else "partial",
             "message": f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.",
             "deleted_counts": deleted_counts,
+            "detached_counts": detached_counts,
             "skipped": skipped,
         }
         

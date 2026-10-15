@@ -19,6 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from databricks.sdk.errors import NotFound, PermissionDenied
+
 from src.routes import test_personas_routes as tpr
 
 VOLUME_YAML = """
@@ -82,10 +84,13 @@ class TestVolumeOverride:
         assert [p.id for p in personas] == ["custom"]
         assert personas[0].email == "custom@volume.local"
 
-    def test_volume_download_failure_falls_back_to_bundled(self):
+    @pytest.mark.parametrize(
+        "error", [NotFound("missing"), PermissionDenied("denied"), Exception("boom")]
+    )
+    def test_volume_download_failure_falls_back_to_bundled(self, error):
         """If the SDK download raises, we fall back to the repo-bundled list."""
         mock_ws = MagicMock()
-        mock_ws.files.download = MagicMock(side_effect=Exception("not found"))
+        mock_ws.files.download = MagicMock(side_effect=error)
 
         with patch(
             "src.common.workspace_client.get_workspace_client",
@@ -95,6 +100,21 @@ class TestVolumeOverride:
 
         # Bundled file ships the seeded personas, including the admin persona.
         assert any(p.id == "admin" for p in personas)
+
+    def test_missing_override_logs_debug_but_denied_read_logs_warning(self):
+        """Operators can tell a missing override from a denied read in the logs."""
+        mock_ws = MagicMock()
+        with patch(
+            "src.common.workspace_client.get_workspace_client",
+            return_value=mock_ws,
+        ), patch.object(tpr, "logger") as mock_logger:
+            mock_ws.files.download = MagicMock(side_effect=NotFound("missing"))
+            tpr._read_volume_override(_settings("/Volumes/cat/sch/vol"))
+            mock_logger.warning.assert_not_called()
+
+            mock_ws.files.download = MagicMock(side_effect=PermissionDenied("denied"))
+            tpr._read_volume_override(_settings("/Volumes/cat/sch/vol"))
+            mock_logger.warning.assert_called_once()
 
     def test_local_volume_override_file(self, tmp_path):
         """A local filesystem DATABRICKS_VOLUME is read as a filesystem path."""
@@ -179,6 +199,17 @@ class TestParsing:
 
     def test_empty_text_returns_empty(self):
         assert tpr._parse_personas(None, "test") == []
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "- id: a\n  label: A\n  email: a@x.local\n",  # top-level list
+            "just a string",  # top-level scalar
+            "personas: not-a-list",  # 'personas' is not a list
+        ],
+    )
+    def test_non_mapping_or_non_list_returns_empty(self, text):
+        assert tpr._parse_personas(text, "test") == []
 
 
 class TestCaching:

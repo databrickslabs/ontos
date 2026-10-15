@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import yaml
+from databricks.sdk.errors import NotFound
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -177,11 +178,15 @@ def _read_volume_override(settings: Settings) -> Optional[str]:
             text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
             logger.info("Loaded test personas from volume override: %s", volume_path)
             return text
+        except NotFound:
+            # Absence of an override is the common case → bundled list.
+            logger.debug("No test-persona override on volume at %s", volume_path)
+            return None
         except Exception as e:
-            # Missing file / permission / SDK error → fall back to the bundled
-            # list. Debug-level: absence of an override is the common case.
-            logger.debug(
-                "No usable test-persona override on volume at %s (%s)",
+            # Permission / SDK errors also fall back to the bundled list, but at
+            # warning level so operators can tell a denied read from a missing file.
+            logger.warning(
+                "Failed reading test-persona override on volume at %s; using bundled list (%s)",
                 volume_path,
                 e,
             )
@@ -224,7 +229,19 @@ def _parse_personas(raw_text: Optional[str], source: str) -> List[TestPersona]:
         logger.error("Failed to parse test personas from %s: %s", source, e)
         return []
 
+    if not isinstance(raw, dict):
+        logger.error(
+            "Test personas from %s must be a mapping with a 'personas' key, got %s",
+            source,
+            type(raw).__name__,
+        )
+        return []
+
     items = raw.get("personas") or []
+    if not isinstance(items, list):
+        logger.error("'personas' in %s must be a list, got %s", source, type(items).__name__)
+        return []
+
     personas: List[TestPersona] = []
     for item in items:
         try:

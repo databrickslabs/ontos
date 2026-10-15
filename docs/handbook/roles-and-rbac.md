@@ -302,7 +302,9 @@ on the app's Unity Catalog Volume. When present it fully replaces the bundled
 list; when absent the bundled list is used. Edits are picked up at runtime
 (within a short cache TTL) — no rebuild or restart. Note this only controls
 *which* personas appear; enabling impersonation still requires
-`TEST_USER_TOKEN` to be set (e.g. via `src/app.yaml`).
+`TEST_USER_TOKEN`, which is opt-in and off by default for deployed apps (see
+CONTRIBUTING.md for wiring it through a secret resource on a dev/test
+deployment).
 
 #### Role override (impersonation) {#role-override}
 

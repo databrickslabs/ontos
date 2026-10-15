@@ -2088,6 +2088,7 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = scope
         if scope == 'none':
             # Unpublishing: clear the publication metadata, as unpublish does
@@ -2099,8 +2100,57 @@ class EntityActionStepHandler(StepHandler):
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: published {entity_type} {entity_id} with scope={scope}")
+        self._fire_publication_trigger(resolved_type, entity_id, db_entity, scope, was_published,
+                                       context)
         return StepResult(passed=True, message=f"Published with scope {scope}",
                           data={'publication_scope': scope})
+
+    def _fire_publication_trigger(
+        self, entity_type: str, entity_id: str, db_entity: Any, scope: str,
+        was_published: bool, context: StepContext,
+    ) -> None:
+        """Fire ``on_publish`` / ``on_unpublish`` when the publication changed.
+
+        Same rule as the set-publication-scope routes: ``on_publish`` only when
+        the entity wasn't published yet, ``on_unpublish`` only when it was.
+        The publication is already committed, so a trigger error doesn't undo
+        it; it is logged as an error because those workflows didn't run.
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        wf_type = {
+            'data_product': WFEntityType.DATA_PRODUCT,
+            'data_contract': WFEntityType.DATA_CONTRACT,
+        }.get(entity_type)
+        publishing = scope != 'none'
+        if not wf_type or publishing == was_published:
+            return
+        name = getattr(db_entity, 'name', None) or context.entity_name
+        try:
+            registry = get_trigger_registry(self._db)
+            if publishing:
+                registry.on_publish(
+                    entity_type=wf_type,
+                    entity_id=entity_id,
+                    entity_name=name,
+                    entity_data={
+                        'name': name,
+                        'status': getattr(db_entity, 'status', None),
+                        'publication_scope': scope,
+                        'published_by': context.user_email,
+                    },
+                    user_email=context.user_email,
+                )
+            else:
+                registry.on_unpublish(
+                    wf_type, entity_id, entity_name=name, user_email=context.user_email,
+                )
+        except Exception:
+            logger.exception(
+                "Publication trigger failed for %s %s; its on_%s workflows did not run",
+                entity_type, entity_id, 'publish' if publishing else 'unpublish',
+            )
 
     def _handle_unpublish(self, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
         db_entity, resolved_type = self._get_db_entity(entity_type, entity_id)

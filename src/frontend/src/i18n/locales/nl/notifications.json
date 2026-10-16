@@ -35,5 +35,140 @@
     "unknownId": "Onbekende ID",
     "badge": "Melding",
     "markRead": "Markeren als gelezen"
+  },
+  "workflowDefaults": {
+    "templates": {
+      "validation_failed": {
+        "title": "Validatie mislukt",
+        "message": "Validatie mislukt voor {{entity_type}} '{{entity_name}}'"
+      },
+      "validation_passed": {
+        "title": "Validatie geslaagd",
+        "message": "Validatie geslaagd voor {{entity_type}} '{{entity_name}}'"
+      },
+      "product_approved": {
+        "title": "Dataproduct goedgekeurd",
+        "message": "Dataproduct '{{entity_name}}' is goedgekeurd"
+      },
+      "product_rejected": {
+        "title": "Dataproduct afgewezen",
+        "message": "Dataproduct '{{entity_name}}' is afgewezen"
+      },
+      "approval_requested": {
+        "title": "Goedkeuring aangevraagd",
+        "message": "Goedkeuring aangevraagd voor {{entity_type}} '{{entity_name}}'"
+      },
+      "request_submitted": {
+        "title": "Aanvraag ingediend",
+        "message": "Je aanvraag voor {{entity_type}} '{{entity_name}}' is ingediend en wacht op beoordeling."
+      },
+      "request_approved": {
+        "title": "Aanvraag goedgekeurd",
+        "message": "Je aanvraag voor {{entity_type}} '{{entity_name}}' is goedgekeurd."
+      },
+      "request_rejected": {
+        "title": "Aanvraag geweigerd",
+        "message": "Je aanvraag voor {{entity_type}} '{{entity_name}}' is geweigerd."
+      },
+      "dataset_updated": {
+        "title": "Dataset bijgewerkt",
+        "message": "Dataset '{{entity_name}}' is bijgewerkt."
+      },
+      "pii_detected": {
+        "title": "PII gedetecteerd",
+        "message": "Mogelijke PII gedetecteerd in {{entity_type}} '{{entity_name}}'. Controleer dit."
+      },
+      "default": {
+        "title": "Workflowmelding",
+        "message": "Workflowmelding voor {{entity_name}}"
+      }
+    },
+    "messages": {
+      "naming-convention-check": {
+        "notify-naming-failure": "De objectnaam volgt de naamgevingsconventies niet. Namen mogen alleen kleine letters en underscores bevatten.",
+        "notify-tag-failure": "De owner-tag kon niet automatisch worden toegewezen. Voeg de owner-tag handmatig toe."
+      },
+      "data-product-approval": {
+        "notify-no-contract": "Een dataproduct kan niet worden gepubliceerd zonder datacontract. Koppel eerst minstens één contract.",
+        "notify-approved": "Je dataproduct is goedgekeurd en is nu actief.",
+        "notify-rejected": "Je publicatieaanvraag voor het dataproduct is afgewezen. Bekijk de feedback en dien de aanvraag opnieuw in."
+      },
+      "data-contract-validation": {
+        "notify-no-schema": "Het datacontract moet een schemadefinitie hebben. Voeg het schema toe voordat je verdergaat."
+      },
+      "pii-detection": {
+        "notify-pii-detected": "Mogelijke PII gedetecteerd in de tabel. De tabel is getagd voor beoordeling."
+      },
+      "contract-review-request": {
+        "notify-requester": "Je beoordelingsaanvraag voor het datacontract is ingediend. Een data steward beoordeelt deze binnenkort.",
+        "notify-approved": "Je datacontract is goedgekeurd en klaar voor de volgende stap.",
+        "notify-rejected": "Je beoordelingsaanvraag voor het datacontract is geweigerd. Bekijk de feedback."
+      },
+      "contract-deploy-request": {
+        "notify-requester": "Je aanvraag om het datacontract '{{entity_name}}' naar Unity Catalog te deployen is ingediend.",
+        "notify-approved": "Je aanvraag om het datacontract '{{entity_name}}' te deployen is goedgekeurd.",
+        "notify-rejected": "Je aanvraag om het datacontract '{{entity_name}}' te deployen is geweigerd. Bekijk de feedback."
+      },
+      "product-review-request": {
+        "notify-requester": "Je beoordelingsaanvraag voor het dataproduct is ingediend.",
+        "notify-approved": "Je dataproduct is goedgekeurd en klaar voor publicatie.",
+        "notify-rejected": "Je beoordelingsaanvraag voor het dataproduct is geweigerd."
+      },
+      "access-grant-request": {
+        "notify-requester": "Je toegangsaanvraag is ingediend en wacht op goedkeuring.",
+        "notify-approved": "Je toegangsaanvraag is goedgekeurd. Je hebt nu toegang tot de aangevraagde resource.",
+        "notify-rejected": "Je toegangsaanvraag is geweigerd. Neem contact op met een beheerder voor meer informatie."
+      },
+      "status-change-request": {
+        "notify-requester": "Je aanvraag voor een statuswijziging is ter goedkeuring ingediend.",
+        "notify-approved": "Je aanvraag voor een statuswijziging is goedgekeurd.",
+        "notify-rejected": "Je aanvraag voor een statuswijziging is geweigerd."
+      },
+      "data-asset-review-request": {
+        "notify-reviewer": "Er is een nieuwe beoordelingsaanvraag voor een data-asset aan je toegewezen.",
+        "notify-approved": "De beoordeling van je data-asset is afgerond en goedgekeurd.",
+        "notify-rejected": "De beoordeling van je data-asset vraagt om wijzigingen. Bekijk de feedback."
+      },
+      "project-access-request": {
+        "notify-requester": "Je toegangsaanvraag voor het project is naar het projectteam gestuurd.",
+        "notify-team": "Een gebruiker heeft toegang tot je project aangevraagd."
+      },
+      "role-access-request": {
+        "notify-requester": "Je aanvraag voor roltoegang is ter goedkeuring ingediend.",
+        "notify-approved": "Je aanvraag voor roltoegang is goedgekeurd. Neem contact op met een beheerder om aan de juiste groep te worden toegevoegd.",
+        "notify-rejected": "Je aanvraag voor roltoegang is geweigerd."
+      },
+      "job-failure-notification": {
+        "notify-admins": "Een achtergrondjob is mislukt. Bekijk de joblogs voor details."
+      },
+      "job-success-notification": {
+        "notify-requester": "Je achtergrondjob is succesvol voltooid."
+      },
+      "access-expiring-warning": {
+        "notify-grantee": "Je toegang verloopt binnenkort. Neem contact op met de eigenaar van de resource als je deze wilt verlengen."
+      },
+      "access-revoked-notification": {
+        "notify-grantee": "Je toegang is ingetrokken. Neem contact op met een beheerder als je denkt dat dit een vergissing is."
+      },
+      "on-publish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' is gepubliceerd op de marketplace."
+      },
+      "on-unpublish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' is van de marketplace gehaald."
+      },
+      "certification-request-review": {
+        "notify-owner": "{{user_email}} heeft certificering aangevraagd voor {{entity_type}} '{{entity_name}}'.",
+        "notify-approved": "Je certificeringsaanvraag voor '{{entity_name}}' is goedgekeurd.",
+        "notify-denied": "Je certificeringsaanvraag voor '{{entity_name}}' is geweigerd.",
+        "notify-error": "Er is een fout opgetreden bij het verwerken van de certificering van '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "notify-owner": "{{user_email}} heeft publicatie aangevraagd voor {{entity_type}} '{{entity_name}}'.",
+        "notify-approved": "Je publicatieaanvraag voor '{{entity_name}}' is goedgekeurd en gepubliceerd.",
+        "notify-denied": "Je publicatieaanvraag voor '{{entity_name}}' is geweigerd.",
+        "notify-invalid": "De publicatieaanvraag voor '{{entity_name}}' is afgewezen: alleen goedgekeurde datacontracten en actieve dataproducten kunnen worden gepubliceerd.",
+        "notify-error": "Er is een fout opgetreden bij het publiceren van '{{entity_name}}'."
+      }
+    }
   }
 }

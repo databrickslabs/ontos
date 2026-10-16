@@ -35,5 +35,140 @@
     "unknownId": "Unbekannte ID",
     "badge": "Benachrichtigung",
     "markRead": "Als gelesen markieren"
+  },
+  "workflowDefaults": {
+    "templates": {
+      "validation_failed": {
+        "title": "Validierung fehlgeschlagen",
+        "message": "Validierung für {{entity_type}} '{{entity_name}}' fehlgeschlagen"
+      },
+      "validation_passed": {
+        "title": "Validierung bestanden",
+        "message": "Validierung für {{entity_type}} '{{entity_name}}' bestanden"
+      },
+      "product_approved": {
+        "title": "Datenprodukt genehmigt",
+        "message": "Das Datenprodukt '{{entity_name}}' wurde genehmigt"
+      },
+      "product_rejected": {
+        "title": "Datenprodukt abgelehnt",
+        "message": "Das Datenprodukt '{{entity_name}}' wurde abgelehnt"
+      },
+      "approval_requested": {
+        "title": "Genehmigung angefordert",
+        "message": "Genehmigung für {{entity_type}} '{{entity_name}}' angefordert"
+      },
+      "request_submitted": {
+        "title": "Anfrage eingereicht",
+        "message": "Ihre Anfrage für {{entity_type}} '{{entity_name}}' wurde eingereicht und wartet auf Prüfung."
+      },
+      "request_approved": {
+        "title": "Anfrage genehmigt",
+        "message": "Ihre Anfrage für {{entity_type}} '{{entity_name}}' wurde genehmigt."
+      },
+      "request_rejected": {
+        "title": "Anfrage abgelehnt",
+        "message": "Ihre Anfrage für {{entity_type}} '{{entity_name}}' wurde abgelehnt."
+      },
+      "dataset_updated": {
+        "title": "Dataset aktualisiert",
+        "message": "Das Dataset '{{entity_name}}' wurde aktualisiert."
+      },
+      "pii_detected": {
+        "title": "PII erkannt",
+        "message": "Mögliche PII in {{entity_type}} '{{entity_name}}' erkannt. Bitte prüfen."
+      },
+      "default": {
+        "title": "Workflow-Benachrichtigung",
+        "message": "Workflow-Benachrichtigung für {{entity_name}}"
+      }
+    },
+    "messages": {
+      "naming-convention-check": {
+        "notify-naming-failure": "Der Objektname entspricht nicht den Namenskonventionen. Namen dürfen nur Kleinbuchstaben und Unterstriche enthalten.",
+        "notify-tag-failure": "Das Owner-Tag konnte nicht automatisch zugewiesen werden. Bitte fügen Sie das Owner-Tag manuell hinzu."
+      },
+      "data-product-approval": {
+        "notify-no-contract": "Ein Datenprodukt kann ohne Datenvertrag nicht veröffentlicht werden. Bitte hängen Sie zuerst mindestens einen Vertrag an.",
+        "notify-approved": "Ihr Datenprodukt wurde genehmigt und ist jetzt aktiv.",
+        "notify-rejected": "Ihre Veröffentlichungsanfrage für das Datenprodukt wurde abgelehnt. Bitte prüfen Sie das Feedback und reichen Sie sie erneut ein."
+      },
+      "data-contract-validation": {
+        "notify-no-schema": "Der Datenvertrag braucht eine Schema-Definition. Bitte fügen Sie das Schema hinzu, bevor Sie fortfahren."
+      },
+      "pii-detection": {
+        "notify-pii-detected": "Mögliche PII in der Tabelle erkannt. Die Tabelle wurde zur Prüfung markiert."
+      },
+      "contract-review-request": {
+        "notify-requester": "Ihre Prüfanfrage für den Datenvertrag wurde eingereicht. Ein Data Steward wird sie in Kürze prüfen.",
+        "notify-approved": "Ihr Datenvertrag wurde genehmigt und ist bereit für den nächsten Schritt.",
+        "notify-rejected": "Ihre Prüfanfrage für den Datenvertrag wurde abgelehnt. Bitte prüfen Sie das Feedback."
+      },
+      "contract-deploy-request": {
+        "notify-requester": "Ihre Anfrage, den Datenvertrag '{{entity_name}}' in Unity Catalog bereitzustellen, wurde eingereicht.",
+        "notify-approved": "Ihre Anfrage, den Datenvertrag '{{entity_name}}' bereitzustellen, wurde genehmigt.",
+        "notify-rejected": "Ihre Anfrage, den Datenvertrag '{{entity_name}}' bereitzustellen, wurde abgelehnt. Bitte prüfen Sie das Feedback."
+      },
+      "product-review-request": {
+        "notify-requester": "Ihre Prüfanfrage für das Datenprodukt wurde eingereicht.",
+        "notify-approved": "Ihr Datenprodukt wurde genehmigt und ist bereit zur Veröffentlichung.",
+        "notify-rejected": "Ihre Prüfanfrage für das Datenprodukt wurde abgelehnt."
+      },
+      "access-grant-request": {
+        "notify-requester": "Ihre Zugriffsanfrage wurde eingereicht und wartet auf Genehmigung.",
+        "notify-approved": "Ihre Zugriffsanfrage wurde genehmigt. Sie haben jetzt Zugriff auf die angeforderte Ressource.",
+        "notify-rejected": "Ihre Zugriffsanfrage wurde abgelehnt. Bitte wenden Sie sich für weitere Informationen an einen Administrator."
+      },
+      "status-change-request": {
+        "notify-requester": "Ihre Anfrage zur Statusänderung wurde zur Genehmigung eingereicht.",
+        "notify-approved": "Ihre Anfrage zur Statusänderung wurde genehmigt.",
+        "notify-rejected": "Ihre Anfrage zur Statusänderung wurde abgelehnt."
+      },
+      "data-asset-review-request": {
+        "notify-reviewer": "Ihnen wurde eine neue Prüfanfrage für Daten-Assets zugewiesen.",
+        "notify-approved": "Die Prüfung Ihres Daten-Assets ist abgeschlossen und genehmigt.",
+        "notify-rejected": "Die Prüfung Ihres Daten-Assets erfordert Änderungen. Bitte prüfen Sie das Feedback."
+      },
+      "project-access-request": {
+        "notify-requester": "Ihre Zugriffsanfrage für das Projekt wurde an das Projektteam gesendet.",
+        "notify-team": "Ein Benutzer hat Zugriff auf Ihr Projekt angefordert."
+      },
+      "role-access-request": {
+        "notify-requester": "Ihre Anfrage für den Rollenzugriff wurde zur Genehmigung eingereicht.",
+        "notify-approved": "Ihre Anfrage für den Rollenzugriff wurde genehmigt. Bitte wenden Sie sich an einen Administrator, um der passenden Gruppe hinzugefügt zu werden.",
+        "notify-rejected": "Ihre Anfrage für den Rollenzugriff wurde abgelehnt."
+      },
+      "job-failure-notification": {
+        "notify-admins": "Ein Hintergrundjob ist fehlgeschlagen. Details finden Sie in den Job-Logs."
+      },
+      "job-success-notification": {
+        "notify-requester": "Ihr Hintergrundjob wurde erfolgreich abgeschlossen."
+      },
+      "access-expiring-warning": {
+        "notify-grantee": "Ihr Zugriff läuft bald ab. Wenden Sie sich an den Ressourcenverantwortlichen, wenn Sie ihn verlängern müssen."
+      },
+      "access-revoked-notification": {
+        "notify-grantee": "Ihr Zugriff wurde entzogen. Wenden Sie sich an einen Administrator, wenn Sie glauben, dass dies ein Fehler ist."
+      },
+      "on-publish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' wurde im Marketplace veröffentlicht."
+      },
+      "on-unpublish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' wurde aus dem Marketplace entfernt."
+      },
+      "certification-request-review": {
+        "notify-owner": "{{user_email}} hat die Zertifizierung von {{entity_type}} '{{entity_name}}' angefordert.",
+        "notify-approved": "Ihre Zertifizierungsanfrage für '{{entity_name}}' wurde genehmigt.",
+        "notify-denied": "Ihre Zertifizierungsanfrage für '{{entity_name}}' wurde abgelehnt.",
+        "notify-error": "Bei der Verarbeitung der Zertifizierung von '{{entity_name}}' ist ein Fehler aufgetreten."
+      },
+      "publication-request-review": {
+        "notify-owner": "{{user_email}} hat die Veröffentlichung von {{entity_type}} '{{entity_name}}' angefordert.",
+        "notify-approved": "Ihre Veröffentlichungsanfrage für '{{entity_name}}' wurde genehmigt und veröffentlicht.",
+        "notify-denied": "Ihre Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt.",
+        "notify-invalid": "Die Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt: Nur genehmigte Datenverträge und aktive Datenprodukte können veröffentlicht werden.",
+        "notify-error": "Beim Veröffentlichen von '{{entity_name}}' ist ein Fehler aufgetreten."
+      }
+    }
   }
 }

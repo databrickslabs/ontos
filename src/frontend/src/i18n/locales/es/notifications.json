@@ -35,5 +35,140 @@
     "unknownId": "ID desconocido",
     "badge": "Notificación",
     "markRead": "Marcar como leída"
+  },
+  "workflowDefaults": {
+    "templates": {
+      "validation_failed": {
+        "title": "Validación fallida",
+        "message": "La validación falló para {{entity_type}} '{{entity_name}}'"
+      },
+      "validation_passed": {
+        "title": "Validación superada",
+        "message": "La validación se superó para {{entity_type}} '{{entity_name}}'"
+      },
+      "product_approved": {
+        "title": "Producto de datos aprobado",
+        "message": "El producto de datos '{{entity_name}}' ha sido aprobado"
+      },
+      "product_rejected": {
+        "title": "Producto de datos rechazado",
+        "message": "El producto de datos '{{entity_name}}' ha sido rechazado"
+      },
+      "approval_requested": {
+        "title": "Aprobación solicitada",
+        "message": "Aprobación solicitada para {{entity_type}} '{{entity_name}}'"
+      },
+      "request_submitted": {
+        "title": "Solicitud enviada",
+        "message": "Su solicitud para {{entity_type}} '{{entity_name}}' se ha enviado y está pendiente de revisión."
+      },
+      "request_approved": {
+        "title": "Solicitud aprobada",
+        "message": "Su solicitud para {{entity_type}} '{{entity_name}}' ha sido aprobada."
+      },
+      "request_rejected": {
+        "title": "Solicitud denegada",
+        "message": "Su solicitud para {{entity_type}} '{{entity_name}}' ha sido denegada."
+      },
+      "dataset_updated": {
+        "title": "Dataset actualizado",
+        "message": "El dataset '{{entity_name}}' se ha actualizado."
+      },
+      "pii_detected": {
+        "title": "PII detectada",
+        "message": "Posible PII detectada en {{entity_type}} '{{entity_name}}'. Revísela."
+      },
+      "default": {
+        "title": "Notificación de workflow",
+        "message": "Notificación de workflow para {{entity_name}}"
+      }
+    },
+    "messages": {
+      "naming-convention-check": {
+        "notify-naming-failure": "El nombre del objeto no sigue las convenciones de nomenclatura. Los nombres solo pueden tener minúsculas y guiones bajos.",
+        "notify-tag-failure": "No se pudo asignar automáticamente la etiqueta de owner. Añada la etiqueta de owner manualmente."
+      },
+      "data-product-approval": {
+        "notify-no-contract": "No se puede publicar un producto de datos sin un contrato de datos. Adjunte al menos un contrato primero.",
+        "notify-approved": "Su producto de datos ha sido aprobado y ya está activo.",
+        "notify-rejected": "Su solicitud de publicación del producto de datos ha sido rechazada. Revise los comentarios y vuelva a enviarla."
+      },
+      "data-contract-validation": {
+        "notify-no-schema": "El contrato de datos debe tener una definición de schema. Añada el schema antes de continuar."
+      },
+      "pii-detection": {
+        "notify-pii-detected": "Posible PII detectada en la tabla. La tabla se ha etiquetado para revisión."
+      },
+      "contract-review-request": {
+        "notify-requester": "Su solicitud de revisión del contrato de datos se ha enviado. Un data steward la revisará en breve.",
+        "notify-approved": "Su contrato de datos ha sido aprobado y está listo para el siguiente paso.",
+        "notify-rejected": "Su solicitud de revisión del contrato de datos ha sido denegada. Revise los comentarios."
+      },
+      "contract-deploy-request": {
+        "notify-requester": "Su solicitud para desplegar el contrato de datos '{{entity_name}}' en Unity Catalog se ha enviado.",
+        "notify-approved": "Su solicitud para desplegar el contrato de datos '{{entity_name}}' ha sido aprobada.",
+        "notify-rejected": "Su solicitud para desplegar el contrato de datos '{{entity_name}}' ha sido denegada. Revise los comentarios."
+      },
+      "product-review-request": {
+        "notify-requester": "Su solicitud de revisión del producto de datos se ha enviado.",
+        "notify-approved": "Su producto de datos ha sido aprobado y está listo para su publicación.",
+        "notify-rejected": "Su solicitud de revisión del producto de datos ha sido denegada."
+      },
+      "access-grant-request": {
+        "notify-requester": "Su solicitud de acceso se ha enviado y está pendiente de aprobación.",
+        "notify-approved": "Su solicitud de acceso ha sido aprobada. Ya tiene acceso al recurso solicitado.",
+        "notify-rejected": "Su solicitud de acceso ha sido denegada. Póngase en contacto con un administrador para más información."
+      },
+      "status-change-request": {
+        "notify-requester": "Su solicitud de cambio de estado se ha enviado para aprobación.",
+        "notify-approved": "Su solicitud de cambio de estado ha sido aprobada.",
+        "notify-rejected": "Su solicitud de cambio de estado ha sido denegada."
+      },
+      "data-asset-review-request": {
+        "notify-reviewer": "Se le ha asignado una nueva solicitud de revisión de activos de datos.",
+        "notify-approved": "La revisión de su activo de datos se ha completado y aprobado.",
+        "notify-rejected": "La revisión de su activo de datos requiere cambios. Revise los comentarios."
+      },
+      "project-access-request": {
+        "notify-requester": "Su solicitud de acceso al proyecto se ha enviado al equipo del proyecto.",
+        "notify-team": "Un usuario ha solicitado acceso a su proyecto."
+      },
+      "role-access-request": {
+        "notify-requester": "Su solicitud de acceso al rol se ha enviado para aprobación.",
+        "notify-approved": "Su solicitud de acceso al rol ha sido aprobada. Póngase en contacto con un administrador para que le añada al grupo adecuado.",
+        "notify-rejected": "Su solicitud de acceso al rol ha sido denegada."
+      },
+      "job-failure-notification": {
+        "notify-admins": "Un job en segundo plano ha fallado. Consulte los logs del job para ver los detalles."
+      },
+      "job-success-notification": {
+        "notify-requester": "Su job en segundo plano se ha completado correctamente."
+      },
+      "access-expiring-warning": {
+        "notify-grantee": "Su acceso caducará pronto. Póngase en contacto con el responsable del recurso si necesita ampliarlo."
+      },
+      "access-revoked-notification": {
+        "notify-grantee": "Su acceso ha sido revocado. Póngase en contacto con un administrador si cree que se trata de un error."
+      },
+      "on-publish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' se ha publicado en el marketplace."
+      },
+      "on-unpublish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' se ha retirado del marketplace."
+      },
+      "certification-request-review": {
+        "notify-owner": "{{user_email}} ha solicitado la certificación de {{entity_type}} '{{entity_name}}'.",
+        "notify-approved": "Su solicitud de certificación de '{{entity_name}}' ha sido aprobada.",
+        "notify-denied": "Su solicitud de certificación de '{{entity_name}}' ha sido denegada.",
+        "notify-error": "Se produjo un error al procesar la certificación de '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "notify-owner": "{{user_email}} ha solicitado la publicación de {{entity_type}} '{{entity_name}}'.",
+        "notify-approved": "Su solicitud de publicación de '{{entity_name}}' ha sido aprobada y publicada.",
+        "notify-denied": "Su solicitud de publicación de '{{entity_name}}' ha sido denegada.",
+        "notify-invalid": "La solicitud de publicación de '{{entity_name}}' ha sido rechazada: solo se pueden publicar contratos de datos aprobados y productos de datos activos.",
+        "notify-error": "Se produjo un error al publicar '{{entity_name}}'."
+      }
+    }
   }
 }

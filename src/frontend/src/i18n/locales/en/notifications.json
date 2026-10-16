@@ -35,5 +35,140 @@
     "unknownId": "Unknown ID",
     "badge": "Notification",
     "markRead": "Mark Read"
+  },
+  "workflowDefaults": {
+    "templates": {
+      "validation_failed": {
+        "title": "Validation Failed",
+        "message": "Validation failed for {{entity_type}} '{{entity_name}}'"
+      },
+      "validation_passed": {
+        "title": "Validation Passed",
+        "message": "Validation passed for {{entity_type}} '{{entity_name}}'"
+      },
+      "product_approved": {
+        "title": "Data Product Approved",
+        "message": "Data product '{{entity_name}}' has been approved"
+      },
+      "product_rejected": {
+        "title": "Data Product Rejected",
+        "message": "Data product '{{entity_name}}' has been rejected"
+      },
+      "approval_requested": {
+        "title": "Approval Requested",
+        "message": "Approval requested for {{entity_type}} '{{entity_name}}'"
+      },
+      "request_submitted": {
+        "title": "Request Submitted",
+        "message": "Your request for {{entity_type}} '{{entity_name}}' has been submitted and is pending review."
+      },
+      "request_approved": {
+        "title": "Request Approved",
+        "message": "Your request for {{entity_type}} '{{entity_name}}' has been approved."
+      },
+      "request_rejected": {
+        "title": "Request Denied",
+        "message": "Your request for {{entity_type}} '{{entity_name}}' has been denied."
+      },
+      "dataset_updated": {
+        "title": "Dataset Updated",
+        "message": "Dataset '{{entity_name}}' has been updated."
+      },
+      "pii_detected": {
+        "title": "PII Detected",
+        "message": "Potential PII detected in {{entity_type}} '{{entity_name}}'. Please review."
+      },
+      "default": {
+        "title": "Workflow Notification",
+        "message": "Workflow notification for {{entity_name}}"
+      }
+    },
+    "messages": {
+      "naming-convention-check": {
+        "notify-naming-failure": "The object name does not follow naming conventions. Names must be lowercase with underscores only.",
+        "notify-tag-failure": "Could not auto-assign owner tag. Please add the owner tag manually."
+      },
+      "data-product-approval": {
+        "notify-no-contract": "Cannot publish data product without a data contract. Please attach at least one contract first.",
+        "notify-approved": "Your data product has been approved and is now active.",
+        "notify-rejected": "Your data product publish request has been rejected. Please review the feedback and resubmit."
+      },
+      "data-contract-validation": {
+        "notify-no-schema": "Data contract must have a schema definition. Please add the schema before proceeding."
+      },
+      "pii-detection": {
+        "notify-pii-detected": "Potential PII detected in table. The table has been tagged for review."
+      },
+      "contract-review-request": {
+        "notify-requester": "Your data contract review request has been submitted. A data steward will review it shortly.",
+        "notify-approved": "Your data contract has been approved and is ready for the next step.",
+        "notify-rejected": "Your data contract review request has been denied. Please review the feedback."
+      },
+      "contract-deploy-request": {
+        "notify-requester": "Your request to deploy the data contract '{{entity_name}}' to Unity Catalog has been submitted.",
+        "notify-approved": "Your request to deploy the data contract '{{entity_name}}' has been approved.",
+        "notify-rejected": "Your request to deploy the data contract '{{entity_name}}' has been denied. Please review the feedback."
+      },
+      "product-review-request": {
+        "notify-requester": "Your data product review request has been submitted.",
+        "notify-approved": "Your data product has been approved and is ready for publication.",
+        "notify-rejected": "Your data product review request has been denied."
+      },
+      "access-grant-request": {
+        "notify-requester": "Your access request has been submitted and is pending approval.",
+        "notify-approved": "Your access request has been approved. You now have access to the requested resource.",
+        "notify-rejected": "Your access request has been denied. Please contact an administrator for more information."
+      },
+      "status-change-request": {
+        "notify-requester": "Your status change request has been submitted for approval.",
+        "notify-approved": "Your status change request has been approved.",
+        "notify-rejected": "Your status change request has been denied."
+      },
+      "data-asset-review-request": {
+        "notify-reviewer": "A new data asset review request has been assigned to you.",
+        "notify-approved": "Your data asset review has been completed and approved.",
+        "notify-rejected": "Your data asset review requires changes. Please review the feedback."
+      },
+      "project-access-request": {
+        "notify-requester": "Your project access request has been submitted to the project team.",
+        "notify-team": "A user has requested access to your project."
+      },
+      "role-access-request": {
+        "notify-requester": "Your role access request has been submitted for approval.",
+        "notify-approved": "Your role access request has been approved. Please contact an administrator to be added to the appropriate group.",
+        "notify-rejected": "Your role access request has been denied."
+      },
+      "job-failure-notification": {
+        "notify-admins": "A background job has failed. Please check the job logs for details."
+      },
+      "job-success-notification": {
+        "notify-requester": "Your background job has completed successfully."
+      },
+      "access-expiring-warning": {
+        "notify-grantee": "Your access is expiring soon. Contact the resource owner if you need to extend your access."
+      },
+      "access-revoked-notification": {
+        "notify-grantee": "Your access has been revoked. Contact an administrator if you believe this was done in error."
+      },
+      "on-publish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' has been published to the marketplace."
+      },
+      "on-unpublish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' has been unpublished from the marketplace."
+      },
+      "certification-request-review": {
+        "notify-owner": "Certification has been requested for {{entity_type}} '{{entity_name}}' by {{user_email}}.",
+        "notify-approved": "Your certification request for '{{entity_name}}' has been approved.",
+        "notify-denied": "Your certification request for '{{entity_name}}' has been denied.",
+        "notify-error": "An error occurred while processing the certification for '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "notify-owner": "Publication has been requested for {{entity_type}} '{{entity_name}}' by {{user_email}}.",
+        "notify-approved": "Your publication request for '{{entity_name}}' has been approved and published.",
+        "notify-denied": "Your publication request for '{{entity_name}}' has been denied.",
+        "notify-invalid": "Publication request for '{{entity_name}}' was rejected: only approved data contracts and active data products can be published.",
+        "notify-error": "An error occurred while publishing '{{entity_name}}'."
+      }
+    }
   }
 }

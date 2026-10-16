@@ -35,5 +35,140 @@
     "unknownId": "不明な ID",
     "badge": "通知",
     "markRead": "既読にする"
+  },
+  "workflowDefaults": {
+    "templates": {
+      "validation_failed": {
+        "title": "検証に失敗しました",
+        "message": "{{entity_type}} '{{entity_name}}' の検証に失敗しました"
+      },
+      "validation_passed": {
+        "title": "検証に合格しました",
+        "message": "{{entity_type}} '{{entity_name}}' の検証に合格しました"
+      },
+      "product_approved": {
+        "title": "データプロダクトが承認されました",
+        "message": "データプロダクト '{{entity_name}}' が承認されました"
+      },
+      "product_rejected": {
+        "title": "データプロダクトが却下されました",
+        "message": "データプロダクト '{{entity_name}}' が却下されました"
+      },
+      "approval_requested": {
+        "title": "承認がリクエストされました",
+        "message": "{{entity_type}} '{{entity_name}}' の承認がリクエストされました"
+      },
+      "request_submitted": {
+        "title": "リクエストを送信しました",
+        "message": "{{entity_type}} '{{entity_name}}' のリクエストを送信しました。レビュー待ちです。"
+      },
+      "request_approved": {
+        "title": "リクエストが承認されました",
+        "message": "{{entity_type}} '{{entity_name}}' のリクエストが承認されました。"
+      },
+      "request_rejected": {
+        "title": "リクエストが拒否されました",
+        "message": "{{entity_type}} '{{entity_name}}' のリクエストが拒否されました。"
+      },
+      "dataset_updated": {
+        "title": "データセットが更新されました",
+        "message": "データセット '{{entity_name}}' が更新されました。"
+      },
+      "pii_detected": {
+        "title": "PII が検出されました",
+        "message": "{{entity_type}} '{{entity_name}}' で PII の可能性があるデータが検出されました。確認してください。"
+      },
+      "default": {
+        "title": "ワークフロー通知",
+        "message": "{{entity_name}} のワークフロー通知"
+      }
+    },
+    "messages": {
+      "naming-convention-check": {
+        "notify-naming-failure": "オブジェクト名が命名規則に従っていません。名前には小文字とアンダースコアのみ使用できます。",
+        "notify-tag-failure": "owner タグを自動で割り当てられませんでした。owner タグを手動で追加してください。"
+      },
+      "data-product-approval": {
+        "notify-no-contract": "データコントラクトのないデータプロダクトは公開できません。先に少なくとも 1 つのコントラクトを関連付けてください。",
+        "notify-approved": "データプロダクトが承認され、アクティブになりました。",
+        "notify-rejected": "データプロダクトの公開リクエストが却下されました。フィードバックを確認して再送信してください。"
+      },
+      "data-contract-validation": {
+        "notify-no-schema": "データコントラクトにはスキーマ定義が必要です。続行する前にスキーマを追加してください。"
+      },
+      "pii-detection": {
+        "notify-pii-detected": "テーブルで PII の可能性があるデータが検出されました。レビュー用のタグをテーブルに付けました。"
+      },
+      "contract-review-request": {
+        "notify-requester": "データコントラクトのレビューリクエストを送信しました。まもなくデータスチュワードがレビューします。",
+        "notify-approved": "データコントラクトが承認され、次のステップに進めます。",
+        "notify-rejected": "データコントラクトのレビューリクエストが拒否されました。フィードバックを確認してください。"
+      },
+      "contract-deploy-request": {
+        "notify-requester": "データコントラクト '{{entity_name}}' を Unity Catalog にデプロイするリクエストを送信しました。",
+        "notify-approved": "データコントラクト '{{entity_name}}' をデプロイするリクエストが承認されました。",
+        "notify-rejected": "データコントラクト '{{entity_name}}' をデプロイするリクエストが拒否されました。フィードバックを確認してください。"
+      },
+      "product-review-request": {
+        "notify-requester": "データプロダクトのレビューリクエストを送信しました。",
+        "notify-approved": "データプロダクトが承認され、公開できるようになりました。",
+        "notify-rejected": "データプロダクトのレビューリクエストが拒否されました。"
+      },
+      "access-grant-request": {
+        "notify-requester": "アクセスリクエストを送信しました。承認待ちです。",
+        "notify-approved": "アクセスリクエストが承認されました。リクエストしたリソースにアクセスできるようになりました。",
+        "notify-rejected": "アクセスリクエストが拒否されました。詳しくは管理者にお問い合わせください。"
+      },
+      "status-change-request": {
+        "notify-requester": "ステータス変更リクエストを承認のために送信しました。",
+        "notify-approved": "ステータス変更リクエストが承認されました。",
+        "notify-rejected": "ステータス変更リクエストが拒否されました。"
+      },
+      "data-asset-review-request": {
+        "notify-reviewer": "新しいデータアセットのレビューリクエストが割り当てられました。",
+        "notify-approved": "データアセットのレビューが完了し、承認されました。",
+        "notify-rejected": "データアセットのレビューで変更が求められています。フィードバックを確認してください。"
+      },
+      "project-access-request": {
+        "notify-requester": "プロジェクトへのアクセスリクエストをプロジェクトチームに送信しました。",
+        "notify-team": "ユーザーがあなたのプロジェクトへのアクセスをリクエストしました。"
+      },
+      "role-access-request": {
+        "notify-requester": "ロールへのアクセスリクエストを承認のために送信しました。",
+        "notify-approved": "ロールへのアクセスリクエストが承認されました。適切なグループに追加してもらうよう管理者に連絡してください。",
+        "notify-rejected": "ロールへのアクセスリクエストが拒否されました。"
+      },
+      "job-failure-notification": {
+        "notify-admins": "バックグラウンドジョブが失敗しました。詳細はジョブのログを確認してください。"
+      },
+      "job-success-notification": {
+        "notify-requester": "バックグラウンドジョブが正常に完了しました。"
+      },
+      "access-expiring-warning": {
+        "notify-grantee": "アクセスの有効期限がまもなく切れます。延長が必要な場合はリソースの所有者に連絡してください。"
+      },
+      "access-revoked-notification": {
+        "notify-grantee": "アクセスが取り消されました。誤りだと思われる場合は管理者に連絡してください。"
+      },
+      "on-publish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' がマーケットプレイスに公開されました。"
+      },
+      "on-unpublish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' がマーケットプレイスから公開停止されました。"
+      },
+      "certification-request-review": {
+        "notify-owner": "{{user_email}} が {{entity_type}} '{{entity_name}}' の認定をリクエストしました。",
+        "notify-approved": "'{{entity_name}}' の認定リクエストが承認されました。",
+        "notify-denied": "'{{entity_name}}' の認定リクエストが拒否されました。",
+        "notify-error": "'{{entity_name}}' の認定の処理中にエラーが発生しました。"
+      },
+      "publication-request-review": {
+        "notify-owner": "{{user_email}} が {{entity_type}} '{{entity_name}}' の公開をリクエストしました。",
+        "notify-approved": "'{{entity_name}}' の公開リクエストが承認され、公開されました。",
+        "notify-denied": "'{{entity_name}}' の公開リクエストが拒否されました。",
+        "notify-invalid": "'{{entity_name}}' の公開リクエストは却下されました。公開できるのは承認済みのデータコントラクトとアクティブなデータプロダクトのみです。",
+        "notify-error": "'{{entity_name}}' の公開中にエラーが発生しました。"
+      }
+    }
   }
 }

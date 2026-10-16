@@ -73,7 +73,7 @@ class UnifiedAssetType(str, Enum):
     # -------------------------------------------------------------------------
     # Unity Catalog / Databricks - Semantic Assets (NEW)
     # -------------------------------------------------------------------------
-    UC_METRIC = "uc_metric"  # Unity Catalog metrics (AI/BI)
+    UC_METRIC = "uc_metric"  # Unity Catalog metric views (table_type METRIC_VIEW)
     
     # -------------------------------------------------------------------------
     # Snowflake - Structural Containers

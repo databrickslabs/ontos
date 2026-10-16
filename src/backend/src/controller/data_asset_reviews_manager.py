@@ -133,6 +133,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             # Try fetching as Table first (most common)
             try:
                 table_info = self._ws_client.tables.get(full_name=fqn)
+                if table_info.table_type == TableType.METRIC_VIEW:
+                    return AssetType.METRIC
                 if table_info.table_type == TableType.VIEW or table_info.table_type == TableType.MATERIALIZED_VIEW:
                     return AssetType.VIEW
                 else:
@@ -603,6 +605,20 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return None
 
     # Add methods for getting asset content (text/data preview) using ws_client
+    async def get_metric_view_definition(self, asset_fqn: str) -> Optional[Dict[str, Any]]:
+        """A metric view's definition: its YAML (``definition``) and the parsed
+        spec (``metric_view``: source, filter, joins, dimensions, measures).
+
+        None when the definition can't be fetched; ``metric_view`` is None when
+        the YAML can't be parsed, so the raw text can still be shown.
+        """
+        from src.common.metric_views import parse_metric_view_definition
+
+        definition = await self.get_asset_definition(asset_fqn, AssetType.METRIC)
+        if definition is None:
+            return None
+        return {'definition': definition, 'metric_view': parse_metric_view_definition(definition)}
+
     async def get_asset_definition(self, asset_fqn: str, asset_type: AssetType) -> Optional[str]:
         """Fetches the definition (e.g., SQL) for a view or function."""
         settings: Settings = get_settings()
@@ -650,13 +666,14 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.warning(f"Cannot fetch definition for {asset_fqn}: WorkspaceClient not available.")
             return _try_load_sample_for_demo(asset_type, asset_fqn, "WorkspaceClient not available")
             
-        if asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
-            logger.info(f"Definition fetch only supported for VIEW/FUNCTION/NOTEBOOK, not {asset_type} ({asset_fqn})")
+        if asset_type not in [AssetType.VIEW, AssetType.METRIC, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+            logger.info(f"Definition fetch only supported for VIEW/METRIC/FUNCTION/NOTEBOOK, not {asset_type} ({asset_fqn})")
             return None # No sample data for unsupported types in this context
             
         try:
             definition = None
-            if asset_type == AssetType.VIEW:
+            if asset_type in (AssetType.VIEW, AssetType.METRIC):
+                 # A metric view's view_definition is its YAML spec
                  table_info = self._ws_client.tables.get(full_name=asset_fqn)
                  definition = table_info.view_definition
             elif asset_type == AssetType.FUNCTION:

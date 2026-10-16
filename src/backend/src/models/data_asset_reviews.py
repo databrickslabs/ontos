@@ -36,7 +36,7 @@ class AssetType(str, Enum):
     NOTEBOOK = "notebook"
     JOB = "job"
     PIPELINE = "pipeline"
-    METRIC = "metric"  # UC Metrics (AI/BI)
+    METRIC = "metric"  # Unity Catalog metric views
     
     # Cross-platform streaming
     STREAM = "stream"

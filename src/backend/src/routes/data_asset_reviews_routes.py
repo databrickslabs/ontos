@@ -358,8 +358,8 @@ async def get_asset_definition(
         if not reviewed_asset:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
 
-        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset.asset_type.value}")
+        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.METRIC, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW, METRIC, FUNCTION, or NOTEBOOK types, not {reviewed_asset.asset_type.value}")
 
         definition = await manager.get_asset_definition(
             asset_fqn=reviewed_asset.asset_fqn,
@@ -378,6 +378,36 @@ async def get_asset_definition(
     except Exception as e:
         logger.exception(f"Error getting definition for asset {asset_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting asset definition.")
+
+@router.get("/data-asset-reviews/{request_id}/assets/{asset_id}/metric-view")
+async def get_metric_view_definition(
+    request_id: str,
+    asset_id: str,
+    manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+):
+    """Get a metric view's definition: its YAML and its dimensions and measures."""
+    try:
+        reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
+        if not reviewed_asset:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
+        if reviewed_asset.asset_type != AssetType.METRIC:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Only metric views have a metric view definition, not {reviewed_asset.asset_type.value}",
+            )
+        result = await manager.get_metric_view_definition(reviewed_asset.asset_fqn)
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Metric view definition not found by the workspace client, or access denied.",
+            )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting metric view definition for asset {asset_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting the metric view definition.")
 
 @router.get("/data-asset-reviews/{request_id}/assets/{asset_id}/preview")
 async def get_table_preview(

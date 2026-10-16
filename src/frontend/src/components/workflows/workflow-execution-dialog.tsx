@@ -290,7 +290,7 @@ export function WorkflowExecutionDialog({
             <Card className="p-3">
               <div className="text-xs text-muted-foreground mb-1">{t('common:labels.status')}</div>
               <Badge variant={statusConfig.variant} className={statusConfig.className}>
-                {execution.status}
+                {t(`workflows:execution.executionStates.${execution.status}`, { defaultValue: execution.status })}
               </Badge>
             </Card>
 

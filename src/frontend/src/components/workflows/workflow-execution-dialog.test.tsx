@@ -73,6 +73,21 @@ describe('WorkflowExecutionDialog', () => {
       expect(card).not.toBeNull();
     });
   });
+
+  it("shows the execution's status in the UI language", async () => {
+    const workflow = { id: 'wf-1', name: 'Data Contract Review Request', steps: STEPS } as unknown as ProcessWorkflow;
+    const failed = execution({ status: 'failed', current_step_id: undefined });
+    get.mockImplementation(async (url: string) => (
+      url === '/api/workflows/wf-1' ? { data: workflow } : { data: failed }
+    ));
+    await i18n.changeLanguage('pt');
+    try {
+      render(<WorkflowExecutionDialog execution={failed} open onOpenChange={vi.fn()} />);
+      expect(await screen.findByText('Falhou')).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
 });
 
 describe('step errors', () => {

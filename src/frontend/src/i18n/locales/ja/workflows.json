@@ -374,6 +374,14 @@
       "skipped": "スキップ",
       "waiting": "待機中"
     },
+    "executionStates": {
+      "pending": "保留中",
+      "running": "実行中",
+      "paused": "一時停止",
+      "succeeded": "成功",
+      "failed": "失敗",
+      "cancelled": "キャンセル"
+    },
     "summary": {
       "entity": "エンティティ",
       "started": "開始",

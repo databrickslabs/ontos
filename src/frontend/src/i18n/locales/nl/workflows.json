@@ -374,6 +374,14 @@
       "skipped": "Overgeslagen",
       "waiting": "Wachtend"
     },
+    "executionStates": {
+      "pending": "In afwachting",
+      "running": "Actief",
+      "paused": "Gepauzeerd",
+      "succeeded": "Geslaagd",
+      "failed": "Mislukt",
+      "cancelled": "Geannuleerd"
+    },
     "summary": {
       "entity": "Entiteit",
       "started": "Gestart",

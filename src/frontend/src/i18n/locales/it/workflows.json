@@ -374,6 +374,14 @@
       "skipped": "Saltato",
       "waiting": "In attesa"
     },
+    "executionStates": {
+      "pending": "In attesa",
+      "running": "In esecuzione",
+      "paused": "In pausa",
+      "succeeded": "Riuscita",
+      "failed": "Non riuscita",
+      "cancelled": "Annullata"
+    },
     "summary": {
       "entity": "Entità",
       "started": "Avviato",

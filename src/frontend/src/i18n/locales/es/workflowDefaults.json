@@ -45,5 +45,53 @@
   },
   "stepNames": {
     "provideReason": "Indicar un motivo"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "El nombre del objeto no sigue las convenciones de nomenclatura",
+      "tagging": "No se pudieron aplicar las etiquetas obligatorias"
+    },
+    "dataProductApproval": {
+      "noContract": "El producto de datos requiere un contrato de datos",
+      "rejected": "La solicitud de publicación del producto de datos fue rechazada"
+    },
+    "dataContractValidation": {
+      "noSchema": "El contrato de datos requiere una definición de esquema"
+    },
+    "preCreationCompliance": {
+      "naming": "El nombre del activo no cumple la política de convenciones de nomenclatura",
+      "tagging": "El activo no tiene las etiquetas obligatorias"
+    },
+    "tablePreCreation": {
+      "invalidName": "El nombre de la tabla solo puede contener minúsculas y guiones bajos",
+      "reservedWord": "El nombre de la tabla no puede ser una palabra reservada de SQL"
+    },
+    "contractReviewRequest": {
+      "rejected": "La solicitud de revisión del contrato de datos fue rechazada"
+    },
+    "contractDeployRequest": {
+      "rejected": "La solicitud de despliegue del contrato de datos fue rechazada"
+    },
+    "productReviewRequest": {
+      "rejected": "La solicitud de revisión del producto de datos fue rechazada"
+    },
+    "accessGrantRequest": {
+      "rejected": "La solicitud de acceso fue denegada"
+    },
+    "statusChangeRequest": {
+      "rejected": "La solicitud de cambio de estado fue rechazada"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "La revisión del activo de datos requiere cambios"
+    },
+    "roleAccessRequest": {
+      "rejected": "La solicitud de acceso al rol fue denegada"
+    },
+    "certificationRequestReview": {
+      "end": "El flujo de trabajo de certificación falló"
+    },
+    "publicationRequestReview": {
+      "end": "El flujo de trabajo de publicación falló"
+    }
   }
 }

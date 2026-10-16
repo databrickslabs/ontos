@@ -45,5 +45,53 @@
   },
   "stepNames": {
     "provideReason": "Indiquer un motif"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Le nom de l'objet ne respecte pas les conventions de nommage",
+      "tagging": "Les tags obligatoires n'ont pas pu être appliqués"
+    },
+    "dataProductApproval": {
+      "noContract": "Le produit de données nécessite un contrat de données",
+      "rejected": "La demande de publication du produit de données a été rejetée"
+    },
+    "dataContractValidation": {
+      "noSchema": "Le contrat de données nécessite une définition de schéma"
+    },
+    "preCreationCompliance": {
+      "naming": "Le nom de l'actif n'est pas conforme à la politique de conventions de nommage",
+      "tagging": "L'actif n'a pas les tags obligatoires"
+    },
+    "tablePreCreation": {
+      "invalidName": "Le nom de la table ne doit contenir que des minuscules et des traits de soulignement",
+      "reservedWord": "Le nom de la table ne peut pas être un mot réservé SQL"
+    },
+    "contractReviewRequest": {
+      "rejected": "La demande de revue du contrat de données a été rejetée"
+    },
+    "contractDeployRequest": {
+      "rejected": "La demande de déploiement du contrat de données a été rejetée"
+    },
+    "productReviewRequest": {
+      "rejected": "La demande de revue du produit de données a été rejetée"
+    },
+    "accessGrantRequest": {
+      "rejected": "La demande d'accès a été refusée"
+    },
+    "statusChangeRequest": {
+      "rejected": "La demande de changement de statut a été rejetée"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "La revue de l'actif de données nécessite des modifications"
+    },
+    "roleAccessRequest": {
+      "rejected": "La demande d'accès au rôle a été refusée"
+    },
+    "certificationRequestReview": {
+      "end": "Le workflow de certification a échoué"
+    },
+    "publicationRequestReview": {
+      "end": "Le workflow de publication a échoué"
+    }
   }
 }

@@ -45,5 +45,53 @@
   },
   "stepNames": {
     "provideReason": "Provide a reason"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Object name does not follow naming conventions",
+      "tagging": "Required tags could not be applied"
+    },
+    "dataProductApproval": {
+      "noContract": "Data product requires a data contract",
+      "rejected": "Data product publish request was rejected"
+    },
+    "dataContractValidation": {
+      "noSchema": "Data contract requires a schema definition"
+    },
+    "preCreationCompliance": {
+      "naming": "Asset name does not comply with naming convention policy",
+      "tagging": "Asset does not have required tags"
+    },
+    "tablePreCreation": {
+      "invalidName": "Table name must be lowercase with underscores only",
+      "reservedWord": "Table name cannot be a SQL reserved word"
+    },
+    "contractReviewRequest": {
+      "rejected": "Data contract review request was rejected"
+    },
+    "contractDeployRequest": {
+      "rejected": "Data contract deploy request was rejected"
+    },
+    "productReviewRequest": {
+      "rejected": "Data product review request was rejected"
+    },
+    "accessGrantRequest": {
+      "rejected": "Access request was denied"
+    },
+    "statusChangeRequest": {
+      "rejected": "Status change request was rejected"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "Data asset review requires changes"
+    },
+    "roleAccessRequest": {
+      "rejected": "Role access request was denied"
+    },
+    "certificationRequestReview": {
+      "end": "Certification workflow failed"
+    },
+    "publicationRequestReview": {
+      "end": "Publication workflow failed"
+    }
   }
 }

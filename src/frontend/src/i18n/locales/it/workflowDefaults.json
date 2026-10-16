@@ -45,5 +45,53 @@
   },
   "stepNames": {
     "provideReason": "Indicare un motivo"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Il nome dell'oggetto non segue le convenzioni di denominazione",
+      "tagging": "Non è stato possibile applicare i tag obbligatori"
+    },
+    "dataProductApproval": {
+      "noContract": "Il prodotto dati richiede un contratto dati",
+      "rejected": "La richiesta di pubblicazione del prodotto dati è stata rifiutata"
+    },
+    "dataContractValidation": {
+      "noSchema": "Il contratto dati richiede una definizione dello schema"
+    },
+    "preCreationCompliance": {
+      "naming": "Il nome dell'asset non è conforme alla policy sulle convenzioni di denominazione",
+      "tagging": "L'asset non ha i tag obbligatori"
+    },
+    "tablePreCreation": {
+      "invalidName": "Il nome della tabella deve contenere solo lettere minuscole e trattini bassi",
+      "reservedWord": "Il nome della tabella non può essere una parola riservata SQL"
+    },
+    "contractReviewRequest": {
+      "rejected": "La richiesta di revisione del contratto dati è stata rifiutata"
+    },
+    "contractDeployRequest": {
+      "rejected": "La richiesta di distribuzione del contratto dati è stata rifiutata"
+    },
+    "productReviewRequest": {
+      "rejected": "La richiesta di revisione del prodotto dati è stata rifiutata"
+    },
+    "accessGrantRequest": {
+      "rejected": "La richiesta di accesso è stata negata"
+    },
+    "statusChangeRequest": {
+      "rejected": "La richiesta di modifica dello stato è stata rifiutata"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "La revisione dell'asset di dati richiede modifiche"
+    },
+    "roleAccessRequest": {
+      "rejected": "La richiesta di accesso al ruolo è stata negata"
+    },
+    "certificationRequestReview": {
+      "end": "Il workflow di certificazione non è riuscito"
+    },
+    "publicationRequestReview": {
+      "end": "Il workflow di pubblicazione non è riuscito"
+    }
   }
 }

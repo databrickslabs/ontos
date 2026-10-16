@@ -37,6 +37,7 @@ import {
   getStepColor,
 } from '@/lib/workflow-labels';
 import { useApi } from '@/hooks/use-api';
+import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 
 interface WorkflowExecutionDialogProps {
   execution: WorkflowExecution | null;
@@ -305,7 +306,9 @@ export function WorkflowExecutionDialog({
           {execution.error_message && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
               <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
-              <div className="text-sm text-destructive">{execution.error_message}</div>
+              <div className="text-sm text-destructive">
+                <ExecutionErrorText message={execution.error_message} />
+              </div>
             </div>
           )}
         </div>
@@ -314,3 +317,8 @@ export function WorkflowExecutionDialog({
   );
 }
 
+// The execution's error; a shipped fail step's message in the user's language
+function ExecutionErrorText({ message }: { message: string }) {
+  const defaultWorkflowText = useDefaultWorkflowText();
+  return <>{defaultWorkflowText(message)}</>;
+}

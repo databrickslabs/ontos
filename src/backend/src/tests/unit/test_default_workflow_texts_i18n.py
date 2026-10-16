@@ -1,9 +1,9 @@
-"""The wizard texts of the default workflows have translations.
+"""The user-facing texts of the default workflows have translations.
 
 The UI translates a default workflow's wizard texts (user_action step name,
-title, description and field labels) while they are exactly the shipped English
-text, which it finds in the ``workflowDefaults`` namespace of the English
-locale. A text changed here without its locale entry would silently stay in
+title, description and field labels) and the messages of its fail steps (an
+execution's error) while they are exactly the shipped English text, which it
+finds in the ``workflowDefaults`` namespace of the English locale. A text changed here without its locale entry would silently stay in
 English; a locale missing a key would fall back to English.
 """
 import json
@@ -44,6 +44,28 @@ def _wizard_texts():
             for required in config.get('required_fields') or []:
                 if required.get('label'):
                     yield workflow['id'], required['label']
+
+
+def _fail_messages():
+    for workflow in yaml.safe_load(WORKFLOWS.read_text())['workflows']:
+        for step in workflow.get('steps') or []:
+            if step.get('type') == 'fail' and (step.get('config') or {}).get('message'):
+                yield workflow['id'], step['config']['message']
+
+
+def test_every_fail_message_of_the_default_workflows_has_an_entry():
+    english = set(_locale('en').values())
+    missing = [(wf, text) for wf, text in _fail_messages() if text.strip() not in english]
+
+    assert list(_fail_messages())
+    assert missing == []
+
+
+def test_no_two_entries_have_the_same_english_text():
+    # The UI finds a text's key by its English text: a duplicate would hide one
+    texts = list(_locale('en').values())
+
+    assert len(texts) == len(set(texts))
 
 
 def test_every_wizard_text_of_the_default_workflows_has_an_entry():

@@ -39,6 +39,15 @@ describe('translateDefaultText', () => {
     expect(defaultTextKey(i18n, 'Something else')).toBeUndefined();
   });
 
+  it("translates a shipped fail step's message", () => {
+    expect(translateDefaultText(i18n.t, i18n, 'Access request was denied')).toBe(
+      'A solicitação de acesso foi negada',
+    );
+    expect(defaultTextKey(i18n, 'Table name cannot be a SQL reserved word')).toBe(
+      'failMessages.tablePreCreation.reservedWord',
+    );
+  });
+
   it('falls back to the configured text when a language has no entry', async () => {
     const other = i18next.createInstance();
     await other.init({ lng: 'xx', fallbackLng: false, resources: { en: { workflowDefaults: en } } });

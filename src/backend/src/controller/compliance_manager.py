@@ -427,13 +427,16 @@ class ComplianceManager:
         db.refresh(run)
         return run
 
-    def complete_run(self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int, score: float, error_message: Optional[str] = None) -> ComplianceRunDb:
+    def complete_run(self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int, score: float, error_message: Optional[str] = None, error_code: Optional[str] = None, error_params: Optional[dict] = None) -> ComplianceRunDb:
         run.success_count = success_count
         run.failure_count = failure_count
         run.score = score
         run.finished_at = datetime.utcnow()
         run.status = 'succeeded' if error_message is None else 'failed'
         run.error_message = error_message
+        # A code the UI translates (see common/compliance_errors.py); the message is the fallback
+        run.error_code = error_code if error_message is not None else None
+        run.error_params = json.dumps(error_params) if error_code and error_params else None
         db.commit()
         db.refresh(run)
         return run
@@ -593,7 +596,12 @@ class ComplianceManager:
 
         except Exception as e:
             logger.exception("Compliance inline run failed")
-            self.complete_run(db, run, success_count=success, failure_count=failure, score=0.0, error_message=str(e))
+            from src.common.compliance_errors import run_error_code
+            error_code, error_params = run_error_code(e)
+            self.complete_run(
+                db, run, success_count=success, failure_count=failure, score=0.0,
+                error_message=str(e), error_code=error_code, error_params=error_params,
+            )
             
             # Log failed run to change log
             try:

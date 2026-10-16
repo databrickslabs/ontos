@@ -135,6 +135,22 @@
     "modelLabel": "モデル",
     "generatedLabel": "生成日時",
     "modelReviewNotImplemented": "モデルレビューの詳細はまだ実装されていません。",
+    "metricView": {
+      "source": "ソース",
+      "filter": "フィルター",
+      "joins": "結合",
+      "dimensions": "ディメンション",
+      "measures": "メジャー",
+      "name": "名前",
+      "expression": "式",
+      "noDimensions": "ディメンションは定義されていません。",
+      "noMeasures": "メジャーは定義されていません。",
+      "unparsed": "メトリックビューの定義を読み取れませんでした。YAML を以下に表示します。",
+      "yaml": "YAML 定義",
+      "materialization": "マテリアライズ",
+      "materializationSummary_one": "{{schedule}}、マテリアライズドビュー {{count}} 件",
+      "materializationSummary_other": "{{schedule}}、マテリアライズドビュー {{count}} 件"
+    },
     "noPreviewAvailable": "このアセットタイプにはプレビューまたは定義がないか、コンテンツを読み込み中です。",
     "messages": {
       "reviewSaved": "{{fqn}} のレビューを保存しました。",

@@ -9,6 +9,25 @@ from ..common.config import Settings
 
 logger = get_logger(__name__)
 
+# Unity Catalog table_type -> object type shown in the catalog tree
+_TREE_TYPES = {
+    'VIEW': 'view',
+    'MATERIALIZED_VIEW': 'materialized_view',
+    'STREAMING_TABLE': 'streaming_table',
+    'METRIC_VIEW': 'metric',
+}
+
+
+def _tree_type(table: Any) -> str:
+    """Catalog tree type of a Unity Catalog table; 'table' for managed, external and others.
+
+    ``table_type`` is a ``TableType`` enum from the SDK (``str()`` of it is
+    ``'TableType.VIEW'``), or a plain string in tests.
+    """
+    table_type = getattr(table, 'table_type', None)
+    raw = getattr(table_type, 'value', table_type)
+    return _TREE_TYPES.get(str(raw).upper(), 'table') if raw else 'table'
+
 # Constants for pagination
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 1000
@@ -140,7 +159,8 @@ class CatalogCommanderManager:
         result = [{
             'id': f"{catalog_name}.{schema_name}.{table.name}",
             'name': table.name,
-            'type': 'view' if hasattr(table, 'table_type') and table.table_type == 'VIEW' else 'table',
+            # This listing only tells tables, views and metric views apart
+            'type': tree_type if (tree_type := _tree_type(table)) in ('view', 'metric') else 'table',
             'children': [],  # Empty array for consistency
             'hasChildren': False  # Tables/views are leaf nodes
         } for table in tables]
@@ -162,7 +182,7 @@ class CatalogCommanderManager:
         try:
             # Use tables.list and filter for views
             all_tables = list(self.client.tables.list(catalog_name=catalog_name, schema_name=schema_name))
-            views = [tbl for tbl in all_tables if hasattr(tbl, 'table_type') and tbl.table_type == 'VIEW']
+            views = [tbl for tbl in all_tables if _tree_type(tbl) == 'view']
 
             result = [{
                 'id': f"{catalog_name}.{schema_name}.{view.name}",
@@ -301,21 +321,12 @@ class CatalogCommanderManager:
         
         try:
             # Fetch tables/views (these come from the same API)
-            if types_to_fetch & {'table', 'view', 'materialized_view', 'streaming_table'}:
+            # Metric views come from the Tables API too (table_type METRIC_VIEW)
+            if types_to_fetch & {'table', 'view', 'materialized_view', 'streaming_table', 'metric'}:
                 try:
                     tables = list(self.client.tables.list(catalog_name=catalog_name, schema_name=schema_name))
                     for table in tables:
-                        # Determine the specific type
-                        table_type_raw = str(getattr(table, 'table_type', 'MANAGED')).upper()
-                        
-                        if table_type_raw == 'VIEW':
-                            obj_type = 'view'
-                        elif table_type_raw == 'MATERIALIZED_VIEW':
-                            obj_type = 'materialized_view'
-                        elif table_type_raw == 'STREAMING_TABLE':
-                            obj_type = 'streaming_table'
-                        else:
-                            obj_type = 'table'
+                        obj_type = _tree_type(table)
                         
                         # Check if this type is in the filter
                         if type_filter and obj_type not in type_filter:
@@ -379,11 +390,6 @@ class CatalogCommanderManager:
                         })
                 except Exception as e:
                     logger.debug(f"Error listing volumes for {catalog_name}.{schema_name}: {e!s}")
-            
-            # Metrics are a newer feature - placeholder for future implementation
-            if 'metric' in types_to_fetch:
-                # UC Metrics API may not be available yet
-                logger.debug(f"Metrics listing for {catalog_name}.{schema_name} - feature may not be available")
             
             # Sort by name for consistent ordering
             results.sort(key=lambda x: x['name'].lower())

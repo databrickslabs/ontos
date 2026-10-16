@@ -13,6 +13,7 @@ import {
     ReviewedAssetStatus,
     AssetType,
     AssetDefinition,
+    MetricViewDefinition,
     TablePreview,
     ReviewedAssetUpdate,
     AssetAnalysisResponse
@@ -30,6 +31,7 @@ import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -79,6 +81,7 @@ export default function AssetReviewEditor({
     // Content State
     const [definition, setDefinition] = useState<AssetDefinition | null>(null);
     const [preview, setPreview] = useState<TablePreview | null>(null);
+    const [metricView, setMetricView] = useState<MetricViewDefinition | null>(null);
     const [isLoadingContent, setIsLoadingContent] = useState(false);
     const [contentError, setContentError] = useState<string | null>(null);
 
@@ -120,6 +123,7 @@ export default function AssetReviewEditor({
             setContentError(null);
             setDefinition(null);
             setPreview(null);
+            setMetricView(null);
             setAnalysisResult(null); // Reset analysis when asset changes
             setAnalysisError(null);
 
@@ -132,6 +136,10 @@ export default function AssetReviewEditor({
                     }
                     const textDefinition = await response.text();
                     setDefinition(textDefinition);
+                } else if (asset.asset_type === AssetType.METRIC) {
+                    // A metric view: its source, dimensions and measures
+                    const response = await get<MetricViewDefinition>(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/metric-view`);
+                    setMetricView(checkApiResponse(response, 'Metric View Definition'));
                 } else if (asset.asset_type === AssetType.TABLE) {
                     // Fetch table preview
                     const response = await get<TablePreview>(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/preview?limit=50`);
@@ -218,8 +226,12 @@ export default function AssetReviewEditor({
         if (isLoadingContent) {
             return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
         }
-        if (contentError && !definition && !preview) { 
+        if (contentError && !definition && !preview && !metricView) { 
              return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{contentError}</AlertDescription></Alert>;
+        }
+
+        if (metricView !== null) {
+            return <MetricViewDefinitionPanel definition={metricView} />;
         }
 
         if (definition !== null) {

@@ -62,6 +62,7 @@ _TYPE_MAP: Dict[str, tuple] = {
     UnifiedAssetType.UC_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_VIEW.value: ("View", "hasView"),
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: ("View", "hasView"),
+    UnifiedAssetType.UC_METRIC.value: ("View", "hasView"),  # metric view
     UnifiedAssetType.UC_STREAMING_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_FUNCTION.value: ("System", "hasPart"),
     UnifiedAssetType.UC_MODEL.value: ("ML Model", "hasPart"),
@@ -104,6 +105,7 @@ _LEAF_ASSET_TYPES = {
     UnifiedAssetType.UC_TABLE.value,
     UnifiedAssetType.UC_VIEW.value,
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+    UnifiedAssetType.UC_METRIC.value,
     UnifiedAssetType.UC_STREAMING_TABLE.value,
     UnifiedAssetType.BQ_TABLE.value,
     UnifiedAssetType.BQ_VIEW.value,
@@ -957,6 +959,7 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.UC_TABLE.value: "table",
     UnifiedAssetType.UC_VIEW.value: "view",
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: "view",
+    UnifiedAssetType.UC_METRIC.value: "metric",
     UnifiedAssetType.UC_STREAMING_TABLE.value: "table",
     UnifiedAssetType.UC_FUNCTION.value: "function",
     UnifiedAssetType.UC_MODEL.value: "model",
@@ -1022,6 +1025,7 @@ def _has_children(asset_type: Optional[UnifiedAssetType]) -> bool:
         UnifiedAssetType.UC_TABLE.value,
         UnifiedAssetType.UC_VIEW.value,
         UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+        UnifiedAssetType.UC_METRIC.value,
         UnifiedAssetType.UC_STREAMING_TABLE.value,
         UnifiedAssetType.UC_FUNCTION.value,
         # BigQuery leaves with column-bearing metadata

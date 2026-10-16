@@ -135,6 +135,22 @@
     "modelLabel": "Modèle",
     "generatedLabel": "Généré",
     "modelReviewNotImplemented": "Les détails de révision du modèle ne sont pas encore implémentés.",
+    "metricView": {
+      "source": "Source",
+      "filter": "Filtre",
+      "joins": "Jointures",
+      "dimensions": "Dimensions",
+      "measures": "Mesures",
+      "name": "Nom",
+      "expression": "Expression",
+      "noDimensions": "Aucune dimension définie.",
+      "noMeasures": "Aucune mesure définie.",
+      "unparsed": "Impossible de lire la définition de la metric view ; son YAML est affiché ci-dessous.",
+      "yaml": "Définition YAML",
+      "materialization": "Matérialisation",
+      "materializationSummary_one": "{{schedule}}, {{count}} vue matérialisée",
+      "materializationSummary_other": "{{schedule}}, {{count}} vues matérialisées"
+    },
     "noPreviewAvailable": "Aucun aperçu ni définition disponible pour ce type d'actif, ou le contenu est encore en cours de chargement.",
     "messages": {
       "reviewSaved": "Révision de {{fqn}} enregistrée.",

@@ -135,6 +135,19 @@
     "modelLabel": "Modelo",
     "generatedLabel": "Generado",
     "modelReviewNotImplemented": "Los detalles de la revisión del modelo aún no están implementados.",
+    "metricView": {
+      "source": "Origen",
+      "filter": "Filtro",
+      "joins": "Uniones",
+      "dimensions": "Dimensiones",
+      "measures": "Medidas",
+      "name": "Nombre",
+      "expression": "Expresión",
+      "noDimensions": "No hay dimensiones definidas.",
+      "noMeasures": "No hay medidas definidas.",
+      "unparsed": "No se pudo leer la definición de la metric view; su YAML se muestra a continuación.",
+      "yaml": "Definición YAML"
+    },
     "noPreviewAvailable": "No hay vista previa ni definición disponible para este tipo de activo, o el contenido aún se está cargando.",
     "messages": {
       "reviewSaved": "Revisión de {{fqn}} guardada.",

@@ -135,6 +135,19 @@
     "modelLabel": "Model",
     "generatedLabel": "Generated",
     "modelReviewNotImplemented": "Model review details not yet implemented.",
+    "metricView": {
+      "source": "Source",
+      "filter": "Filter",
+      "joins": "Joins",
+      "dimensions": "Dimensions",
+      "measures": "Measures",
+      "name": "Name",
+      "expression": "Expression",
+      "noDimensions": "No dimensions defined.",
+      "noMeasures": "No measures defined.",
+      "unparsed": "The metric view definition could not be read; its YAML is shown below.",
+      "yaml": "YAML definition"
+    },
     "noPreviewAvailable": "No preview or definition available for this asset type, or content is still loading.",
     "messages": {
       "reviewSaved": "Review for {{fqn}} saved.",

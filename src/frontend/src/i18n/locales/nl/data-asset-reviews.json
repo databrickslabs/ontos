@@ -135,6 +135,19 @@
     "modelLabel": "Model",
     "generatedLabel": "Gegenereerd",
     "modelReviewNotImplemented": "Modelbeoordelingsdetails nog niet geïmplementeerd.",
+    "metricView": {
+      "source": "Bron",
+      "filter": "Filter",
+      "joins": "Joins",
+      "dimensions": "Dimensies",
+      "measures": "Metingen",
+      "name": "Naam",
+      "expression": "Expressie",
+      "noDimensions": "Geen dimensies gedefinieerd.",
+      "noMeasures": "Geen metingen gedefinieerd.",
+      "unparsed": "De definitie van de metric view kon niet worden gelezen; de YAML staat hieronder.",
+      "yaml": "YAML-definitie"
+    },
     "noPreviewAvailable": "Geen voorbeeld of definitie beschikbaar voor dit asset-type, of de inhoud wordt nog geladen.",
     "messages": {
       "reviewSaved": "Beoordeling voor {{fqn}} opgeslagen.",

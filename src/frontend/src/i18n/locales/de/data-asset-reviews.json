@@ -135,6 +135,19 @@
     "modelLabel": "Modell",
     "generatedLabel": "Generiert",
     "modelReviewNotImplemented": "Details zur Modellüberprüfung sind noch nicht implementiert.",
+    "metricView": {
+      "source": "Quelle",
+      "filter": "Filter",
+      "joins": "Joins",
+      "dimensions": "Dimensionen",
+      "measures": "Kennzahlen",
+      "name": "Name",
+      "expression": "Ausdruck",
+      "noDimensions": "Keine Dimensionen definiert.",
+      "noMeasures": "Keine Kennzahlen definiert.",
+      "unparsed": "Die Definition der Metric View konnte nicht gelesen werden; ihr YAML steht unten.",
+      "yaml": "YAML-Definition"
+    },
     "noPreviewAvailable": "Keine Vorschau oder Definition für diesen Asset-Typ verfügbar, oder der Inhalt wird noch geladen.",
     "messages": {
       "reviewSaved": "Überprüfung für {{fqn}} gespeichert.",

@@ -2798,6 +2798,83 @@ class WorkflowExecutor:
         db_execution = workflow_execution_repo.get(self._db, execution_id)
         return self._db_to_model(db_execution, workflow.name)
 
+    def _apply_contract_review_decision(
+        self,
+        trigger_context: TriggerContext,
+        contract_id: str,
+        approved: bool,
+        responded_by: Optional[str],
+    ) -> None:
+        """Set a reviewed contract to ``approved`` or back to ``draft``.
+
+        Goes through ``transition_status``, so the lifecycle rules, the
+        before_status_change gates and the on_status_change trigger apply as on
+        the contract page. A contract that is no longer under review (decided
+        from the contract page meanwhile) is left alone. If the change can't be
+        applied, the approver is told: the workflow has already recorded the
+        decision.
+        """
+        from src.controller.data_contracts_manager import get_live_contracts_manager
+        from src.repositories.data_contracts_repository import data_contract_repo
+
+        target_status = 'approved' if approved else 'draft'
+        contract = data_contract_repo.get(db=self._db, id=contract_id)
+        if not contract:
+            return
+        current_status = (contract.status or '').lower()
+        if current_status == target_status:
+            return
+        if current_status not in ('proposed', 'under_review'):
+            reason = f"the contract is not under review (status '{current_status}')"
+            logger.warning(
+                "Review decision for data contract %s not applied: %s", contract_id, reason,
+            )
+            self._notify_status_not_changed(trigger_context, target_status, reason, responded_by)
+            return
+        try:
+            get_live_contracts_manager().transition_status(
+                db=self._db, contract_id=contract_id, new_status=target_status,
+                current_user=responded_by,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Review decision for data contract %s not applied: %s", contract_id, e,
+            )
+            self._notify_status_not_changed(trigger_context, target_status, str(e), responded_by)
+            return
+        logger.info(
+            "Data contract %s moved to '%s' after its review was decided",
+            contract_id, target_status,
+        )
+
+    def _notify_status_not_changed(
+        self,
+        trigger_context: TriggerContext,
+        target_status: str,
+        reason: str,
+        responded_by: Optional[str],
+    ) -> None:
+        if not responded_by:
+            return
+        from uuid import uuid4
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+
+        notification_repo.create(db=self._db, obj_in=Notification(
+            id=str(uuid4()),
+            created_at=datetime.utcnow(),
+            type=NotificationType.WARNING,
+            title="Contract status not changed",
+            subtitle=trigger_context.entity_name or trigger_context.entity_id,
+            description=(
+                f"Your review decision was recorded, but the contract was not set to "
+                f"'{target_status}': {reason}"
+            ),
+            recipient=responded_by,
+            can_delete=True,
+        ))
+        self._db.commit()
+
     def _handle_workflow_completion(
         self,
         trigger_context: Optional[TriggerContext],
@@ -2863,6 +2940,16 @@ class WorkflowExecutor:
                     },
                 )
                 self._db.commit()
+                    
+            # Data contract review decided by an approver: approve the contract,
+            # or return it to draft, as the contract page's approve / reject
+            # endpoints do. A workflow without an approval step decides nothing.
+            elif (entity_type == 'data_contract'
+                  and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW')
+                  and approved is not None):
+                self._apply_contract_review_decision(
+                    trigger_context, entity_id, approved, responded_by
+                )
                     
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):

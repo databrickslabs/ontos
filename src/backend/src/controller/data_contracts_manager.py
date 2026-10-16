@@ -7237,6 +7237,14 @@ def register_live_contracts_manager(mgr: "DataContractsManager") -> None:
     _live_contracts_manager = mgr
 
 
+def get_live_contracts_manager() -> "DataContractsManager":
+    """The live manager, or a bare one where startup hasn't registered it
+    (tests, early startup): the search index is then not refreshed."""
+    if _live_contracts_manager is not None:
+        return _live_contracts_manager
+    return DataContractsManager(data_dir=Path(__file__).parent.parent / 'data')
+
+
 def reindex_contract_in_search_index(contract_db_obj, db) -> None:
     """Push a single contract row through the search-index upsert pipeline.
     No-op if the manager hasn't been wired yet (test / early-startup paths)."""

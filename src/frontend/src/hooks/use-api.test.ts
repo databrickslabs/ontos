@@ -353,6 +353,45 @@ describe('useApi Hook', () => {
       expect(response.error).toBe('Field is required');
     });
 
+    it('returns the code of a structured POST error next to its message', async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        json: async () => ({
+          detail: { code: 'own_owner_approval', message: "You can't approve your own request." },
+        }),
+      });
+
+      const { result } = renderHook(() => useApi());
+
+      let response: any;
+      await act(async () => {
+        response = await result.current.post('/api/test', {});
+      });
+
+      expect(response.error).toBe("You can't approve your own request.");
+      expect(response.errorCode).toBe('own_owner_approval');
+    });
+
+    it('has no error code for a plain detail string', async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        json: async () => ({ detail: 'Bad request' }),
+      });
+
+      const { result } = renderHook(() => useApi());
+
+      let response: any;
+      await act(async () => {
+        response = await result.current.post('/api/test', {});
+      });
+
+      expect(response.errorCode).toBeNull();
+    });
+
     it('handles POST error with simple detail string', async () => {
       // Arrange
       (global.fetch as any).mockResolvedValueOnce({

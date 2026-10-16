@@ -72,7 +72,8 @@ def test_the_requester_cannot_decide_an_owner_approval(db_session, approvers):
         _authorize(db_session, execution, 'Rita@example.com')
 
     assert e.value.status_code == 403
-    assert 'your own request' in e.value.detail
+    assert e.value.detail['code'] == 'own_owner_approval'
+    assert 'your own request' in e.value.detail['message']
 
 
 def test_another_steward_or_admin_can_decide_it(db_session):

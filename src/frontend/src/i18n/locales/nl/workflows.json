@@ -271,6 +271,9 @@
       "processFailedRetry": "Kon goedkeuring niet verwerken. Probeer het opnieuw.",
       "entityApproved": "{{name}} is goedgekeurd.",
       "entityRejected": "{{name}} is afgewezen."
+    },
+    "errors": {
+      "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren."
     }
   },
   "approvalWizard": {

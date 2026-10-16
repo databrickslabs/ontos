@@ -1295,7 +1295,11 @@ def _assert_caller_authorized_for_execution(
     if _is_own_owner_approval(db, execution_id, pending_step, user_info):
         raise HTTPException(
             status_code=403,
-            detail="This approval is for the owners; you can't approve your own request",
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'own_owner_approval',
+                'message': "This approval is for the owners; you can't approve your own request.",
+            },
         )
     for notification in candidates:
         if notifications_manager.can_user_access_notification(

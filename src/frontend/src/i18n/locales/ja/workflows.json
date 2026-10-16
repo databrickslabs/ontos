@@ -271,6 +271,9 @@
       "processFailedRetry": "承認の処理に失敗しました。もう一度お試しください。",
       "entityApproved": "{{name}} が承認されました。",
       "entityRejected": "{{name}} が却下されました。"
+    },
+    "errors": {
+      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。"
     }
   },
   "approvalWizard": {

@@ -166,6 +166,16 @@ def test_a_trigger_error_keeps_the_publication_and_is_logged_as_an_error(caplog)
     db.commit.assert_called_once()
     assert any('Publication trigger failed' in r.getMessage() and r.levelname == 'ERROR'
                for r in caplog.records)
+    # The step result says the workflows didn't run
+    assert result.data['trigger_failed'] == 'on_publish'
+    assert 'the on_publish workflows did not run' in result.message
+
+
+def test_a_publication_whose_trigger_ran_reports_no_failure():
+    result, _, _ = _publish('data_product', 'active', registry=MagicMock())
+
+    assert 'trigger_failed' not in result.data
+    assert result.message == 'Published with scope organization'
 
 
 def test_assets_have_no_publication_trigger():

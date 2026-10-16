@@ -2397,6 +2397,12 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Access Expiring Warning** | Expiring (access_grant) | Warns users before access expires |
 | **Access Revoked Notification** | Access Revoked (access_grant) | Notifies users of revocation |
 
+#### After an Upgrade
+
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+
+Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
+
 ### Editing a Default Workflow
 
 Default workflows can be customized:

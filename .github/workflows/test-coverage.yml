@@ -93,6 +93,71 @@ jobs:
           # quarantined modules in tests/unit/conftest.py are fixed.
           hatch -e dev run coverage report --fail-under=30
 
+  backend-pg-search-tests:
+    # The main backend suite runs on SQLite, where the Postgres search SQL can't
+    # execute and these tests skip. This job runs them against a real Postgres
+    # with the portable search extensions (pgvector image; pg_trgm is contrib).
+    name: Backend Postgres Search Tests
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: search_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SEARCH_TEST_PG_URL: postgresql+psycopg2://ontos_test:ontos_test_pw@localhost:5432/search_test
+      DATABRICKS_HOST: https://test.databricks.com
+      DATABRICKS_WAREHOUSE_ID: test_warehouse_id
+      DATABRICKS_CATALOG: test_catalog
+      DATABRICKS_SCHEMA: test_schema
+      DATABRICKS_VOLUME: test_volume
+      APP_AUDIT_LOG_DIR: /tmp/audit_logs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        working-directory: ./src
+        run: |
+          python -m pip install --upgrade pip
+          pip install "virtualenv<21" hatch==1.16.3
+          hatch -e dev run pip install --require-hashes -r backend/requirements.txt
+
+      - name: Check Postgres is reachable
+        # The PG tests skip (not fail) when the database is unreachable, so prove
+        # connectivity first; otherwise this job could go green without running them.
+        working-directory: ./src
+        run: |
+          hatch -e dev run python -c "import os, sqlalchemy as sa; e = sa.create_engine(os.environ['SEARCH_TEST_PG_URL']); c = e.connect(); print(c.execute(sa.text('select version()')).scalar()); print(sorted(r[0] for r in c.execute(sa.text(\"select name from pg_available_extensions where name in ('pg_trgm','vector')\"))))"
+
+      - name: Run Postgres search tests
+        working-directory: ./src
+        run: |
+          hatch -e dev run pytest \
+            backend/src/tests/integration/test_search_repository_pg.py \
+            backend/src/tests/integration/test_search_settings_parity_pg.py \
+            backend/src/tests/integration/test_search_engine_pg.py \
+            --no-cov -rs -v
+
   frontend-tests:
     name: Frontend Tests
     runs-on:

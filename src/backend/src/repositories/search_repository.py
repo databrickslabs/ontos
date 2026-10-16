@@ -22,6 +22,7 @@ from src.common.search_interfaces import SearchIndexItem
 from src.controller.search_scoring import is_list_query, tokenize
 from src.models.search_config import SearchConfig
 from src.repositories import search_scoring_sql
+from src.repositories.search_engine import SearchEngine
 
 logger = get_logger(__name__)
 
@@ -243,9 +244,14 @@ def search(
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
     config: Optional[SearchConfig] = None,
+    engine: Optional[SearchEngine] = None,
+    trgm_threshold: float = 0.45,
 ) -> Dict[str, Any]:
     """Settings-driven search over search_documents; result shape matches
-    search_scoring.search_index (list mode for an empty / ``*`` query)."""
+    search_scoring.search_index (list mode for an empty / ``*`` query).
+
+    When ``engine`` has pg_trgm and the query matches nothing, falls back to
+    trigram word similarity on titles (typo tolerance)."""
     config = config or _default_config()
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
@@ -281,6 +287,13 @@ def search(
         total = int(db.execute(text(f"{prefix}SELECT count(*) FROM {rel} AS r"), params).scalar() or 0)
     else:
         total = 0
+
+    if with_score and total == 0 and engine is not None and engine.has_trgm:
+        fb = _trgm_fallback(db, query, where, params, trgm_threshold, limit=limit, offset=offset, engine=engine)
+        if fb is not None:
+            rows, total, rel, params = fb
+            prefix = ""
+
     results = [_row_to_result(r, with_score=with_score, fields=fields) for r in rows]
 
     return {
@@ -293,6 +306,50 @@ def search(
         "facets": _facets(db, prefix, rel, params) if include_facets else {},
         "query": query,
     }
+
+
+def _trgm_rel(where: str, engine: SearchEngine) -> str:
+    """Rows whose title is word-similar to the query (pg_trgm ``<%``), over the
+    same filtered candidates. Uses the GIN trigram index on ``lower(title)``."""
+    cond = f"(:trgm_q {engine.trgm_op('<%')} lower(title))"
+    return (
+        f"(SELECT {_COLS}, CAST({engine.trgm('word_similarity')}(:trgm_q, lower(title)) AS float8) AS score "
+        f"FROM search_documents{where}{' AND ' if where else ' WHERE '}{cond})"
+    )
+
+
+def _trgm_fallback(
+    db: Session, query: str, where: str, params: Dict[str, Any], threshold: float,
+    *, limit: int, offset: int, engine: SearchEngine,
+) -> Optional[tuple[List[Any], int, str, Dict[str, Any]]]:
+    """Typo tolerance: when the Settings-driven match finds nothing, rank titles
+    by trigram word similarity. Returns (rows, total, rel, params) or None if
+    pg_trgm can't be used here (logged; search then returns no results, as the
+    in-memory backend would)."""
+    tq = " ".join(tokenize(query))
+    if not tq:
+        return None
+    fparams = {**params, "trgm_q": tq, "trgm_thr": str(float(threshold))}
+    rel = _trgm_rel(where, engine)
+    try:
+        # Transaction-local threshold for the <% operator.
+        db.execute(text("SELECT set_config('pg_trgm.word_similarity_threshold', :trgm_thr, true)"), fparams)
+        rows = list(db.execute(
+            text(
+                f"SELECT r.*, count(*) OVER() AS total_count FROM {rel} AS r "
+                f"ORDER BY r.score DESC, {search_scoring_sql.list_order_sql()} LIMIT :limit OFFSET :offset"
+            ),
+            {**fparams, "limit": limit, "offset": offset},
+        ))
+        if rows:
+            total = int(rows[0]._mapping["total_count"])
+        else:
+            total = int(db.execute(text(f"SELECT count(*) FROM {rel} AS r"), fparams).scalar() or 0)
+        return rows, total, rel, fparams
+    except Exception as e:  # pg_trgm missing/not on search_path, etc.
+        logger.warning(f"Trigram fallback unavailable, skipping: {e}")
+        db.rollback()
+        return None
 
 
 def _empty(query: str, limit: int, offset: int) -> Dict[str, Any]:
@@ -358,12 +415,14 @@ def search_index_items(
     allowed_features: Optional[Iterable[str]] = None,
     limit: int = 200,
     config: Optional[SearchConfig] = None,
+    engine: Optional[SearchEngine] = None,
+    trgm_threshold: float = 0.45,
 ) -> List[SearchIndexItem]:
     """Ranked SearchIndexItems for the REST path (caller applies permission filtering).
 
-    Same Settings-driven ranking as ``search``; supports the ``tag:`` prefix like
-    the in-memory SearchManager. A query with no searchable terms returns nothing
-    (as ``score_and_rank`` does).
+    Same Settings-driven ranking (and trigram typo fallback) as ``search``;
+    supports the ``tag:`` prefix like the in-memory SearchManager. A query with
+    no searchable terms returns nothing (as ``score_and_rank`` does).
     """
     config = config or _default_config()
     limit = max(1, min(limit, 500))
@@ -380,7 +439,12 @@ def search_index_items(
     prefix, sparams, order_by = _matches_cte(config, tokens, where)
     params.update(sparams)
     sql = f"{prefix}SELECT {_COLS} FROM matches ORDER BY {order_by} LIMIT :limit"
-    return [_row_to_item(r) for r in db.execute(text(sql), {**params, "limit": limit})]
+    items = [_row_to_item(r) for r in db.execute(text(sql), {**params, "limit": limit})]
+    if not items and engine is not None and engine.has_trgm:
+        fb = _trgm_fallback(db, q, where, params, trgm_threshold, limit=limit, offset=0, engine=engine)
+        if fb is not None:
+            items = [_row_to_item(r) for r in fb[0]]
+    return items
 
 
 def replace_all(db: Session, items: Iterable[SearchIndexItem]) -> int:

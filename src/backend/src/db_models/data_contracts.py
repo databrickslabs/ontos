@@ -308,6 +308,7 @@ class SchemaPropertyDb(Base):
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
     authoritative_definitions = relationship("SchemaPropertyAuthoritativeDefinitionDb", back_populates="property", cascade="all, delete-orphan")
+    custom_properties = relationship("SchemaPropertyCustomPropertyDb", back_populates="schema_property", cascade="all, delete-orphan")
     relationships = relationship("SchemaPropertyRelationshipDb", back_populates="property", cascade="all, delete-orphan")
 
 
@@ -459,6 +460,17 @@ class SchemaObjectCustomPropertyDb(Base):
     property = Column(String, nullable=False)
     value = Column(Text, nullable=True)
     schema_object = relationship("SchemaObjectDb", back_populates="custom_properties")
+
+
+class SchemaPropertyCustomPropertyDb(Base):
+    """ODCS property-level (column) custom properties; value stored as JSON"""
+    __tablename__ = "data_contract_schema_property_custom_properties"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)  # ODCS v3.1.0 StableId
+    property = Column(String, nullable=False)
+    value = Column(Text, nullable=True)
+    schema_property = relationship("SchemaPropertyDb", back_populates="custom_properties")
 
 
 class SchemaPropertyAuthoritativeDefinitionDb(Base):

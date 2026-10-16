@@ -16,9 +16,10 @@ import RequestProductActionDialog from './request-product-action-dialog';
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockLookupWorkflowId = vi.fn();
+const mockToast = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() })
+  useToast: () => ({ toast: mockToast })
 }));
 
 vi.mock('@/hooks/use-api', () => ({
@@ -461,5 +462,51 @@ describe('RequestProductActionDialog hoist wizard fields → top-level payload',
     // in BE integration tests.
     expect(typeof body.requested_duration_days).toBe('number');
     expect(body.reason).toBe('meaningful reason text here');
+  });
+});
+
+describe('RequestProductActionDialog when the request workflow fails', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue({ data: [] });
+    mockLookupWorkflowId.mockResolvedValue(null);
+  });
+
+  async function submitAccessRequest() {
+    renderWithProviders(
+      <RequestProductActionDialog
+        isOpen={true}
+        onOpenChange={vi.fn()}
+        productId="prod-1"
+        productName="Test Product"
+        productStatus="active"
+      />,
+    );
+    const reasonField = document.getElementById('access-message') as HTMLTextAreaElement;
+    fireEvent.change(reasonField, { target: { value: 'Need access for the Q3 analytics rollup.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send Request/i }));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    return mockToast.mock.calls[0][0];
+  }
+
+  it('warns instead of promising a decision', async () => {
+    mockPost.mockResolvedValue({
+      data: { workflow_status: 'failed', workflow_error: 'Could not resolve any approvers' },
+    });
+
+    const toast = await submitAccessRequest();
+
+    expect(toast.variant).toBe('destructive');
+    expect(toast.description).toContain('Could not resolve any approvers');
+    expect(toast.description).not.toMatch(/you will be notified/i);
+  });
+
+  it('confirms the request when its workflow is waiting for a decision', async () => {
+    mockPost.mockResolvedValue({ data: { workflow_status: 'paused' } });
+
+    const toast = await submitAccessRequest();
+
+    expect(toast.variant).toBeUndefined();
+    expect(toast.description).toMatch(/you will be notified/i);
   });
 });

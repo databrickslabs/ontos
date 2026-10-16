@@ -5355,7 +5355,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             ValueError: If contract not found or invalid status
         """
         from datetime import datetime
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
 
         contract = data_contract_repo.get(db, id=contract_id)
@@ -5422,6 +5424,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Change log entry
         from src.controller.change_log_manager import change_log_manager
@@ -5438,21 +5441,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "to_status": contract.status,
                 "timestamp": now.isoformat(),
                 "summary": f"Review requested by {requester_email}" + (f": {message}" if message else ""),
-                "workflow_triggered": len(executions) > 0,
+                **outcome,
             },
         )
         
         # Build response
         result = {
             "status": contract.status, 
-            "message": "Review request submitted successfully",
+            "message": request_submitted_message("Review", outcome),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
     
@@ -5554,7 +5553,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             ValueError: If contract not found, invalid status, or already published
         """
         from datetime import datetime
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -5588,6 +5589,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Change log entry
         from src.controller.change_log_manager import change_log_manager
@@ -5603,20 +5605,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "requested_scope": requested_scope,
                 "timestamp": now.isoformat(),
                 "summary": f"Publish requested by {requester_email}" + (f": {justification}" if justification else ""),
-                "workflow_triggered": len(executions) > 0,
+                **outcome,
             },
         )
         
         # Build response
         result = {
-            "message": "Publish request submitted successfully",
+            "message": request_submitted_message("Publish", outcome),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
     

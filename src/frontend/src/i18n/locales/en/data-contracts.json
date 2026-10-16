@@ -1146,7 +1146,9 @@
       "statusChangedTitle": "Status Changed",
       "statusChangedDescription": "Contract status changed from \"{{from}}\" to \"{{to}}\".",
       "submittedTitle": "Request Submitted",
-      "submittedDescription": "Your {{type}} request has been submitted and you will be notified of the decision."
+      "submittedDescription": "Your {{type}} request has been submitted and you will be notified of the decision.",
+      "workflowFailedTitle": "Request sent, but its workflow failed",
+      "workflowFailedDescription": "Nobody was asked to decide on your {{type}} request ({{error}}). Please contact an administrator."
     },
     "errors": {
       "submitFailed": "Failed to submit request",

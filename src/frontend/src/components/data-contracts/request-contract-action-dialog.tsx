@@ -269,8 +269,16 @@ export default function RequestContractActionDialog({
         throw new Error(response.error);
       }
 
-      // Different success messages for direct changes vs requests
-      if (requestType === 'status_change' && canDirectStatusChange) {
+      // The request was recorded; a failed workflow means nobody was asked to decide
+      const outcome = response.data as { workflow_status?: string; workflow_error?: string } | undefined;
+      if (outcome?.workflow_status === 'failed') {
+        toast({
+          title: t('data-contracts:requests.toast.workflowFailedTitle', 'Request sent, but its workflow failed'),
+          description: t('data-contracts:requests.toast.workflowFailedDescription', 'Nobody was asked to decide on your {{type}} request ({{error}}). Please contact an administrator.', { type: requestType, error: outcome.workflow_error }),
+          variant: 'destructive',
+        });
+      } else if (requestType === 'status_change' && canDirectStatusChange) {
+        // Different success messages for direct changes vs requests
         toast({
           title: t('data-contracts:requests.toast.statusChangedTitle', 'Status Changed'),
           description: t('data-contracts:requests.toast.statusChangedDescription', 'Contract status changed from "{{from}}" to "{{to}}".', { from: contractStatus, to: targetStatus })

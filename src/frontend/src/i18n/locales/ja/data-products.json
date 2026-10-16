@@ -665,7 +665,9 @@
       "statusChanged": "ステータスを変更しました",
       "statusChangedDesc": "製品のステータスが \"{{fromStatus}}\" から \"{{toStatus}}\" に変更されました。",
       "requestSubmitted": "リクエストを送信しました",
-      "requestSubmittedDesc": "{{type}} のリクエストが送信されました。決定について通知されます。"
+      "requestSubmittedDesc": "{{type}} のリクエストが送信されました。決定について通知されます。",
+      "workflowFailed": "リクエストは送信されましたが、ワークフローが失敗しました",
+      "workflowFailedDesc": "{{type}} のリクエストの判断を依頼された人はいません（{{error}}）。管理者に連絡してください。"
     },
     "labels": {
       "requestType": "リクエストの種類",

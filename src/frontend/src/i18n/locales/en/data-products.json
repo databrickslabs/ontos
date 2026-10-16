@@ -680,7 +680,9 @@
       "statusChanged": "Status Changed",
       "statusChangedDesc": "Product status changed from \"{{fromStatus}}\" to \"{{toStatus}}\".",
       "requestSubmitted": "Request Submitted",
-      "requestSubmittedDesc": "Your {{type}} request has been submitted and you will be notified of the decision."
+      "requestSubmittedDesc": "Your {{type}} request has been submitted and you will be notified of the decision.",
+      "workflowFailed": "Request sent, but its workflow failed",
+      "workflowFailedDesc": "Nobody was asked to decide on your {{type}} request ({{error}}). Please contact an administrator."
     },
     "labels": {
       "requestType": "Request Type",

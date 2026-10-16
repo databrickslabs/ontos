@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useUserStore } from '@/stores/user-store';
+import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 
 /** Lightweight markdown to HTML — handles headers, bold, lists, paragraphs, and inline links. */
 function simpleMarkdown(text: string): string {
@@ -337,6 +338,8 @@ export default function ApprovalWizardDialog({
   const { get, post } = useApi();
   const { toast } = useToast();
   const { t } = useTranslation(['workflows', 'common']);
+  // Shipped default texts in the user's language (as configured once edited)
+  const defaultText = useDefaultWorkflowText();
   const [workflows, setWorkflows] = useState<ApprovalWorkflowRef[]>([]);
   const [, setSelectedWorkflowId] = useState<string | null>(preselectedWorkflowId ?? null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -839,7 +842,7 @@ export default function ApprovalWizardDialog({
           <DialogDescription>
             {previewMode ? (
               t('workflows:approvalWizard.dryRunDescription')
-            ) : !sessionId ? t('workflows:approvalWizard.chooseWorkflow') : currentStep ? t('workflows:approvalWizard.stepPrefix', { name: currentStep.name }) : completeResult ? t('workflows:approvalWizard.completedShort') : t('workflows:approvalWizard.loadingEllipsis')}
+            ) : !sessionId ? t('workflows:approvalWizard.chooseWorkflow') : currentStep ? t('workflows:approvalWizard.stepPrefix', { name: defaultText(currentStep.name) }) : completeResult ? t('workflows:approvalWizard.completedShort') : t('workflows:approvalWizard.loadingEllipsis')}
           </DialogDescription>
         </DialogHeader>
 
@@ -861,7 +864,7 @@ export default function ApprovalWizardDialog({
               ))}
             </div>
             <span className="text-xs text-muted-foreground ml-1">
-              {t('workflows:approvalWizard.progressStep', { number: currentStepIndex + 1, name: stepNames[currentStepIndex] ?? currentStep?.name ?? '' })}
+              {t('workflows:approvalWizard.progressStep', { number: currentStepIndex + 1, name: defaultText(stepNames[currentStepIndex] ?? currentStep?.name) ?? '' })}
             </span>
           </div>
         )}
@@ -955,11 +958,11 @@ export default function ApprovalWizardDialog({
             {/* Step header (title + description) — shown for all visual step types */}
             {(currentStep.config?.title as string) && (
               <div className="space-y-1">
-                <Label className="text-base">{(currentStep.config.title as string)}</Label>
+                <Label className="text-base">{defaultText(currentStep.config.title as string)}</Label>
                 {(currentStep.config?.description as string) && (
                   <p
                     className="text-sm text-muted-foreground"
-                    dangerouslySetInnerHTML={{ __html: simpleMarkdown((currentStep.config.description as string)) }}
+                    dangerouslySetInnerHTML={{ __html: simpleMarkdown(defaultText(currentStep.config.description as string) ?? '') }}
                   />
                 )}
               </div>
@@ -977,13 +980,13 @@ export default function ApprovalWizardDialog({
               <div className="space-y-2">
                 {(requiredFields as UserActionField[]).map((f) => (
                   <div key={f.id} className="space-y-1">
-                    <Label htmlFor={f.id}>{f.label}{f.required ? ' *' : ''}</Label>
+                    <Label htmlFor={f.id}>{defaultText(f.label)}{f.required ? ' *' : ''}</Label>
                     {f.type === 'text' ? (
                       <Textarea
                         id={f.id}
                         value={payload[f.id] ?? ''}
                         onChange={(e) => setPayload((p) => ({ ...p, [f.id]: e.target.value }))}
-                        placeholder={f.label}
+                        placeholder={defaultText(f.label)}
                         rows={2}
                         disabled={loading}
                       />
@@ -1000,7 +1003,7 @@ export default function ApprovalWizardDialog({
                         id={f.id}
                         value={payload[f.id] ?? ''}
                         onChange={(e) => setPayload((p) => ({ ...p, [f.id]: e.target.value }))}
-                        placeholder={f.label}
+                        placeholder={defaultText(f.label)}
                         disabled={loading}
                       />
                     )}

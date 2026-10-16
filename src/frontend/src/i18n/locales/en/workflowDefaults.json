@@ -1,0 +1,49 @@
+{
+  "approvalResponse": {
+    "title": "Enter a reason",
+    "description": "Provide a reason for your approval or rejection decision.",
+    "fields": {
+      "reason": "Reason for approval or rejection"
+    }
+  },
+  "subscription": {
+    "title": "Subscription Details",
+    "description": "Provide details about your intended use of this data product.",
+    "fields": {
+      "reason": "Reason for subscribing",
+      "useCase": "Intended use case"
+    }
+  },
+  "requestReview": {
+    "title": "Request review",
+    "description": "Provide a reason for your review request.",
+    "fields": {
+      "reason": "Why are you requesting a review?"
+    }
+  },
+  "requestAccess": {
+    "title": "Request access",
+    "description": "Provide a reason for your access request and optionally set a duration.",
+    "fields": {
+      "reason": "Why do you need access?",
+      "expiryDays": "Requested duration (days, leave blank for indefinite)"
+    }
+  },
+  "requestPublish": {
+    "title": "Request publish",
+    "description": "Provide a reason for your publish request.",
+    "fields": {
+      "reason": "Why are you requesting publication?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Request status change",
+    "description": "Provide a reason for your status change request.",
+    "fields": {
+      "reason": "Why are you requesting this status change?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Provide a reason"
+  }
+}

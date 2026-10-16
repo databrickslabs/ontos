@@ -1,0 +1,49 @@
+{
+  "approvalResponse": {
+    "title": "理由を入力",
+    "description": "承認または却下の判断理由を入力してください。",
+    "fields": {
+      "reason": "承認または却下の理由"
+    }
+  },
+  "subscription": {
+    "title": "サブスクリプションの詳細",
+    "description": "このデータプロダクトの利用目的を入力してください。",
+    "fields": {
+      "reason": "サブスクライブする理由",
+      "useCase": "想定するユースケース"
+    }
+  },
+  "requestReview": {
+    "title": "レビューをリクエスト",
+    "description": "レビューをリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "レビューをリクエストする理由は何ですか?"
+    }
+  },
+  "requestAccess": {
+    "title": "アクセスをリクエスト",
+    "description": "アクセスをリクエストする理由を入力し、必要に応じて期間を設定してください。",
+    "fields": {
+      "reason": "アクセスが必要な理由は何ですか?",
+      "expiryDays": "希望する期間(日数。無期限の場合は空欄)"
+    }
+  },
+  "requestPublish": {
+    "title": "公開をリクエスト",
+    "description": "公開をリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "公開をリクエストする理由は何ですか?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "ステータス変更をリクエスト",
+    "description": "ステータス変更をリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "このステータス変更をリクエストする理由は何ですか?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "理由を入力"
+  }
+}

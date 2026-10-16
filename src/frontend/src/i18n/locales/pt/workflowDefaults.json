@@ -1,0 +1,49 @@
+{
+  "approvalResponse": {
+    "title": "Informe um motivo",
+    "description": "Informe o motivo da sua decisão de aprovar ou rejeitar.",
+    "fields": {
+      "reason": "Motivo da aprovação ou rejeição"
+    }
+  },
+  "subscription": {
+    "title": "Detalhes da assinatura",
+    "description": "Descreva como pretende usar este produto de dados.",
+    "fields": {
+      "reason": "Motivo da assinatura",
+      "useCase": "Caso de uso pretendido"
+    }
+  },
+  "requestReview": {
+    "title": "Solicitar revisão",
+    "description": "Informe o motivo da sua solicitação de revisão.",
+    "fields": {
+      "reason": "Por que você está solicitando uma revisão?"
+    }
+  },
+  "requestAccess": {
+    "title": "Solicitar acesso",
+    "description": "Informe o motivo da sua solicitação de acesso e, se quiser, defina uma duração.",
+    "fields": {
+      "reason": "Por que você precisa de acesso?",
+      "expiryDays": "Duração solicitada (dias; deixe em branco para indeterminado)"
+    }
+  },
+  "requestPublish": {
+    "title": "Solicitar publicação",
+    "description": "Informe o motivo da sua solicitação de publicação.",
+    "fields": {
+      "reason": "Por que você está solicitando a publicação?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Solicitar mudança de status",
+    "description": "Informe o motivo da sua solicitação de mudança de status.",
+    "fields": {
+      "reason": "Por que você está solicitando esta mudança de status?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Informar um motivo"
+  }
+}

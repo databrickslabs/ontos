@@ -1,0 +1,49 @@
+{
+  "approvalResponse": {
+    "title": "Begründung angeben",
+    "description": "Begründen Sie Ihre Entscheidung zur Genehmigung oder Ablehnung.",
+    "fields": {
+      "reason": "Begründung der Genehmigung oder Ablehnung"
+    }
+  },
+  "subscription": {
+    "title": "Abonnementdetails",
+    "description": "Beschreiben Sie, wie Sie dieses Datenprodukt nutzen möchten.",
+    "fields": {
+      "reason": "Grund für das Abonnement",
+      "useCase": "Geplanter Anwendungsfall"
+    }
+  },
+  "requestReview": {
+    "title": "Überprüfung anfordern",
+    "description": "Begründen Sie Ihre Anfrage zur Überprüfung.",
+    "fields": {
+      "reason": "Warum fordern Sie eine Überprüfung an?"
+    }
+  },
+  "requestAccess": {
+    "title": "Zugriff anfordern",
+    "description": "Begründen Sie Ihre Zugriffsanfrage und legen Sie optional eine Dauer fest.",
+    "fields": {
+      "reason": "Warum benötigen Sie Zugriff?",
+      "expiryDays": "Gewünschte Dauer (Tage; leer lassen für unbefristet)"
+    }
+  },
+  "requestPublish": {
+    "title": "Veröffentlichung anfordern",
+    "description": "Begründen Sie Ihre Veröffentlichungsanfrage.",
+    "fields": {
+      "reason": "Warum fordern Sie die Veröffentlichung an?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Statusänderung anfordern",
+    "description": "Begründen Sie Ihre Anfrage zur Statusänderung.",
+    "fields": {
+      "reason": "Warum fordern Sie diese Statusänderung an?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Begründung angeben"
+  }
+}

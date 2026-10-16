@@ -1,0 +1,49 @@
+{
+  "approvalResponse": {
+    "title": "Indiquez un motif",
+    "description": "Indiquez le motif de votre décision d'approbation ou de rejet.",
+    "fields": {
+      "reason": "Motif de l'approbation ou du rejet"
+    }
+  },
+  "subscription": {
+    "title": "Détails de l'abonnement",
+    "description": "Décrivez l'usage prévu de ce produit de données.",
+    "fields": {
+      "reason": "Motif de l'abonnement",
+      "useCase": "Cas d'usage prévu"
+    }
+  },
+  "requestReview": {
+    "title": "Demander une revue",
+    "description": "Indiquez le motif de votre demande de revue.",
+    "fields": {
+      "reason": "Pourquoi demandez-vous une revue ?"
+    }
+  },
+  "requestAccess": {
+    "title": "Demander l'accès",
+    "description": "Indiquez le motif de votre demande d'accès et, si vous le souhaitez, une durée.",
+    "fields": {
+      "reason": "Pourquoi avez-vous besoin d'un accès ?",
+      "expiryDays": "Durée demandée (jours ; laissez vide pour une durée indéterminée)"
+    }
+  },
+  "requestPublish": {
+    "title": "Demander la publication",
+    "description": "Indiquez le motif de votre demande de publication.",
+    "fields": {
+      "reason": "Pourquoi demandez-vous la publication ?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Demander un changement de statut",
+    "description": "Indiquez le motif de votre demande de changement de statut.",
+    "fields": {
+      "reason": "Pourquoi demandez-vous ce changement de statut ?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Indiquer un motif"
+  }
+}

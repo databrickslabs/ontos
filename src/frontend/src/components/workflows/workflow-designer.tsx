@@ -129,6 +129,9 @@ import {
 } from '@/lib/workflow-labels';
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
+import {
+  TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
+} from './workflow-entry-step';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
@@ -635,7 +638,7 @@ function DeletableEdge({
               {label}
             </span>
           )}
-          {selected && (
+          {selected && data?.onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -751,13 +754,7 @@ const workflowToElements = (
 
   // Connect trigger to first step
   if (workflow.steps.length > 0) {
-    edges.push({
-      id: 'trigger-to-first',
-      source: 'trigger',
-      target: workflow.steps[0].step_id,
-      type: 'deletable',
-      markerEnd: { type: MarkerType.ArrowClosed },
-    });
+    edges.push(makeTriggerEdge(workflow.steps[0].step_id));
   }
 
   // Add step edges
@@ -939,9 +936,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setEdges(prev => prev.filter(e => e.id !== edgeId));
   }, [edges, setEdges]);
 
-  // Inject onDelete callback into every edge's data so DeletableEdge can call it
+  // Inject onDelete callback into every edge's data so DeletableEdge can call it.
+  // The trigger edge can't be deleted, only moved to another step.
   const edgesWithDelete = useMemo(
-    () => edges.map(e => ({ ...e, data: { ...e.data, onDelete: onDeleteEdge } })),
+    () => edges.map(e => (e.source === TRIGGER_NODE_ID
+      ? e
+      : { ...e, data: { ...e.data, onDelete: onDeleteEdge } })),
     [edges, onDeleteEdge],
   );
 
@@ -1240,6 +1240,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
   const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     if (!newConnection.source || !newConnection.target) return;
+    if (oldEdge.source === TRIGGER_NODE_ID) {
+      // Moving the trigger edge to another step makes that step the first one
+      if (newConnection.source !== TRIGGER_NODE_ID) return;
+      const entryId = newConnection.target;
+      setSteps(prev => withEntryStep(prev, entryId));
+      setEdges(prev => withTriggerEdge(prev, entryId));
+      return;
+    }
     const handleType = oldEdge.sourceHandle || 'pass';
     const isPass = handleType !== 'fail';
 
@@ -1272,6 +1280,13 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // Handle manual edge creation (drag from handle to handle)
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
+    if (connection.source === TRIGGER_NODE_ID) {
+      // Runs start at the first step, so the connected step becomes the first one
+      const entryId = connection.target;
+      setSteps(prev => withEntryStep(prev, entryId));
+      setEdges(prev => withTriggerEdge(prev, entryId));
+      return;
+    }
     const handleType = connection.sourceHandle || 'pass';
     const isPass = handleType !== 'fail';
 
@@ -1324,12 +1339,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setNodes(prev => [...prev, newNode]);
     
     // Connect to previous step or trigger
-    if (nodes.length > 0) {
-      const lastNode = nodes[nodes.length - 1];
-      const newEdge: Edge = {
+    const lastNode = nodes[nodes.length - 1];
+    if (lastNode && linksToNewStep(lastNode.type)) {
+      const newEdge: Edge = lastNode.id === TRIGGER_NODE_ID ? makeTriggerEdge(stepId) : {
         id: `${lastNode.id}-to-${stepId}`,
         source: lastNode.id,
-        sourceHandle: lastNode.id === 'trigger' ? undefined : 'pass',
+        sourceHandle: 'pass',
         target: stepId,
         type: 'deletable',
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -1349,9 +1364,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // Delete step
   const deleteStep = (stepId: string) => {
-    setSteps(prev => prev.filter(s => s.step_id !== stepId));
+    const remaining = steps.filter(s => s.step_id !== stepId);
+    setSteps(remaining);
     setNodes(prev => prev.filter(n => n.id !== stepId));
-    setEdges(prev => prev.filter(e => e.source !== stepId && e.target !== stepId));
+    // The trigger moves on to the step that is now first
+    setEdges(prev => withTriggerEdge(
+      prev.filter(e => e.source !== stepId && e.target !== stepId),
+      remaining[0]?.step_id,
+    ));
     setSelectedNodeId(null);
   };
 

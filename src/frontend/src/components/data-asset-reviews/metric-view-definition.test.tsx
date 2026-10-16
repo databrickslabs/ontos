@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import i18n from '@/i18n/config';
 import { render, screen } from '@testing-library/react';
 import MetricViewDefinitionPanel from './metric-view-definition';
 import { MetricViewDefinition } from '@/types/data-asset-review';
@@ -26,7 +27,8 @@ describe('MetricViewDefinitionPanel', () => {
 
         expect(screen.getByText('main.sales.orders')).toBeInTheDocument();
         expect(screen.getByText("status = 'closed'")).toBeInTheDocument();
-        expect(screen.getByText('customers')).toBeInTheDocument();
+        expect(screen.getByText(/^customers/)).toBeInTheDocument();
+        expect(screen.getByText('ON source.customer_id = customers.id')).toBeInTheDocument();
         expect(screen.getByText('Order Month')).toBeInTheDocument();
         expect(screen.getByText('Month of the order')).toBeInTheDocument();
         expect(screen.getByText("DATE_TRUNC('MONTH', order_date)")).toBeInTheDocument();
@@ -52,5 +54,29 @@ describe('MetricViewDefinitionPanel', () => {
         }} />);
 
         expect(screen.getByText('No dimensions defined.')).toBeInTheDocument();
+    });
+
+    it('shows a USING join and the materialization, translated', async () => {
+        await i18n.changeLanguage('pt');
+        try {
+            render(<MetricViewDefinitionPanel definition={{
+                ...definition,
+                metric_view: {
+                    ...definition.metric_view!,
+                    joins: [{ name: 'store', source: 'main.sales.stores', on: null, using: ['store_id'] }],
+                    materialization: {
+                        schedule: 'EVERY 6 HOURS', mode: 'relaxed',
+                        materialized_views: [{ name: 'by_status', type: 'aggregated' }],
+                    },
+                },
+            }} />);
+
+            expect(screen.getByText('USING (store_id)')).toBeInTheDocument();
+            expect(screen.getByText('Materialização')).toBeInTheDocument();
+            expect(screen.getByText(/EVERY 6 HOURS, 1 view materializada/)).toBeInTheDocument();
+            expect(screen.getByText('(by_status: aggregated)')).toBeInTheDocument();
+        } finally {
+            await i18n.changeLanguage('en');
+        }
     });
 });

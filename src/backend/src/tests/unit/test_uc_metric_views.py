@@ -74,8 +74,9 @@ def test_the_definition_gives_source_dimensions_and_measures():
     assert spec['filter'] == "status = 'closed'"
     assert spec['joins'] == [{
         'name': 'customers', 'source': 'main.sales.customers',
-        'on': 'source.customer_id = customers.id',
+        'on': 'source.customer_id = customers.id', 'using': None,
     }]
+    assert spec['materialization'] is None
     assert spec['dimensions'] == [
         {'name': 'Order Month', 'expr': "DATE_TRUNC('MONTH', order_date)", 'comment': 'Month of the order'},
         {'name': 'Region', 'expr': 'customers.region'},
@@ -84,6 +85,55 @@ def test_the_definition_gives_source_dimensions_and_measures():
     assert spec['measures'] == [
         {'name': 'Total Revenue', 'expr': 'SUM(amount)', 'display_name': 'Revenue'},
     ]
+
+
+# As Unity Catalog stores them (seen on a workspace): a `using` join, and a
+# materialized metric view whose block lists dimensions and measures by name
+USING_AND_MATERIALIZED = """\
+version: 1.1
+source: main.sales.orders
+joins:
+  - name: store
+    source: main.sales.stores
+    using:
+      - store_id
+    joins:
+      - name: region
+        source: main.sales.regions
+        "on": store.region_id = region.id
+fields:
+  - name: Status
+    expr: status
+measures:
+  - name: Revenue
+    expr: SUM(amount)
+materialization:
+  schedule: EVERY 6 HOURS
+  mode: relaxed
+  materialized_views:
+    - name: by_status
+      type: aggregated
+      dimensions:
+        - Status
+      measures:
+        - Revenue
+"""
+
+
+def test_using_joins_nested_joins_fields_and_materialization_are_read():
+    spec = parse_metric_view_definition(USING_AND_MATERIALIZED)
+
+    assert spec['joins'] == [
+        {'name': 'store', 'source': 'main.sales.stores', 'on': None, 'using': ['store_id']},
+        {'name': 'region', 'source': 'main.sales.regions',
+         'on': 'store.region_id = region.id', 'using': None},
+    ]
+    # `fields` is the current docs' name for dimensions
+    assert [d['name'] for d in spec['dimensions']] == ['Status']
+    assert spec['materialization'] == {
+        'schedule': 'EVERY 6 HOURS', 'mode': 'relaxed',
+        'materialized_views': [{'name': 'by_status', 'type': 'aggregated'}],
+    }
 
 
 @pytest.mark.parametrize('definition', [None, '', '   ', 'not: [valid', '- a list'])

@@ -146,7 +146,10 @@
       "noDimensions": "Keine Dimensionen definiert.",
       "noMeasures": "Keine Kennzahlen definiert.",
       "unparsed": "Die Definition der Metric View konnte nicht gelesen werden; ihr YAML steht unten.",
-      "yaml": "YAML-Definition"
+      "yaml": "YAML-Definition",
+      "materialization": "Materialisierung",
+      "materializationSummary_one": "{{schedule}}, {{count}} materialisierte Ansicht",
+      "materializationSummary_other": "{{schedule}}, {{count}} materialisierte Ansichten"
     },
     "noPreviewAvailable": "Keine Vorschau oder Definition für diesen Asset-Typ verfügbar, oder der Inhalt wird noch geladen.",
     "messages": {

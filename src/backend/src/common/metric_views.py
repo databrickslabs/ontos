@@ -40,12 +40,42 @@ def _fields(entries: Any) -> List[Dict[str, Any]]:
     return fields
 
 
+def _joins(entries: Any) -> List[Dict[str, Any]]:
+    """Joins as ``{name, source, on, using}``, nested joins flattened after their parent."""
+    joins: List[Dict[str, Any]] = []
+    for join in entries if isinstance(entries, list) else []:
+        if not isinstance(join, dict):
+            continue
+        using = join.get('using')
+        joins.append({
+            'name': join.get('name'),
+            'source': join.get('source'),
+            # YAML 1.1 reads a bare `on:` key as the boolean True
+            'on': join.get('on', join.get(True)),
+            'using': [str(c) for c in using] if isinstance(using, list) else None,
+        })
+        joins.extend(_joins(join.get('joins')))
+    return joins
+
+
+def _materialization(spec: Any) -> Optional[Dict[str, Any]]:
+    """The materialization block as ``{schedule, mode, materialized_views: [{name, type}]}``."""
+    if not isinstance(spec, dict):
+        return None
+    views = [
+        {'name': v.get('name'), 'type': v.get('type')}
+        for v in spec.get('materialized_views') or [] if isinstance(v, dict)
+    ]
+    return {'schedule': spec.get('schedule'), 'mode': spec.get('mode'), 'materialized_views': views}
+
+
 def parse_metric_view_definition(definition: Optional[str]) -> Optional[Dict[str, Any]]:
     """Parse a metric view's YAML definition.
 
-    Returns ``{version, source, filter, joins, dimensions, measures}`` (joins
-    as ``{name, source, on}``), or None when the definition is missing or isn't
-    a YAML mapping.
+    Returns ``{version, source, filter, joins, dimensions, measures,
+    materialization}`` (joins as ``{name, source, on, using}``), or None when the
+    definition is missing or isn't a YAML mapping. ``fields`` is read as a
+    synonym of ``dimensions`` (the term the current metric view docs use).
     """
     if not definition or not definition.strip():
         return None
@@ -56,16 +86,13 @@ def parse_metric_view_definition(definition: Optional[str]) -> Optional[Dict[str
         return None
     if not isinstance(spec, dict):
         return None
-    # YAML 1.1 reads a bare `on:` key as the boolean True
-    joins = [
-        {'name': j.get('name'), 'source': j.get('source'), 'on': j.get('on', j.get(True))}
-        for j in spec.get('joins') or [] if isinstance(j, dict)
-    ]
+    dimensions = spec.get('dimensions') if spec.get('dimensions') is not None else spec.get('fields')
     return {
         'version': None if spec.get('version') is None else str(spec['version']),
         'source': spec.get('source'),
         'filter': spec.get('filter'),
-        'joins': joins,
-        'dimensions': _fields(spec.get('dimensions')),
+        'joins': _joins(spec.get('joins')),
+        'dimensions': _fields(dimensions),
         'measures': _fields(spec.get('measures')),
+        'materialization': _materialization(spec.get('materialization')),
     }

@@ -142,9 +142,14 @@ export interface MetricViewDefinition {
         version?: string | null;
         source?: string | null;
         filter?: string | null;
-        joins: { name?: string | null; source?: string | null; on?: string | null }[];
+        joins: { name?: string | null; source?: string | null; on?: string | null; using?: string[] | null }[];
         dimensions: MetricViewField[];
         measures: MetricViewField[];
+        materialization?: {
+            schedule?: string | null;
+            mode?: string | null;
+            materialized_views: { name?: string | null; type?: string | null }[];
+        } | null;
     } | null; // null when the YAML could not be parsed
 }
 

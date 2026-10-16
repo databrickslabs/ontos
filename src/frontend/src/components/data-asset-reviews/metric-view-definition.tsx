@@ -58,8 +58,34 @@ export default function MetricViewDefinitionPanel({ definition }: MetricViewDefi
                         {spec.joins.length > 0 && (
                             <>
                                 <dt className="text-muted-foreground">{t('editor.metricView.joins')}</dt>
-                                <dd className="font-mono text-xs break-all">
-                                    {spec.joins.map((join) => join.name || join.source).join(', ')}
+                                <dd className="font-mono text-xs break-all space-y-0.5">
+                                    {spec.joins.map((join, i) => (
+                                        <div key={`${join.name ?? join.source}-${i}`}>
+                                            {join.name || join.source}
+                                            {join.on && <span className="text-muted-foreground"> ON {join.on}</span>}
+                                            {join.using && join.using.length > 0 && (
+                                                <span className="text-muted-foreground"> USING ({join.using.join(', ')})</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </dd>
+                            </>
+                        )}
+                        {spec.materialization && (
+                            <>
+                                <dt className="text-muted-foreground">{t('editor.metricView.materialization')}</dt>
+                                <dd className="text-xs break-all">
+                                    {t('editor.metricView.materializationSummary', {
+                                        schedule: spec.materialization.schedule ?? '—',
+                                        count: spec.materialization.materialized_views.length,
+                                    })}
+                                    {spec.materialization.materialized_views.length > 0 && (
+                                        <span className="font-mono text-muted-foreground">
+                                            {' '}({spec.materialization.materialized_views
+                                                .map((v) => (v.type ? `${v.name}: ${v.type}` : v.name))
+                                                .join(', ')})
+                                        </span>
+                                    )}
                                 </dd>
                             </>
                         )}

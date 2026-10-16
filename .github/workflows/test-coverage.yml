@@ -165,6 +165,7 @@ jobs:
           hatch -e dev run pytest \
             backend/src/tests/integration/test_search_repository_pg.py \
             backend/src/tests/integration/test_search_settings_parity_pg.py \
+            backend/src/tests/integration/test_search_engine_pg.py \
             --no-cov -rs -v
 
   # Vitest runs in 3 shards (one job each, blob reporter + raw V8 coverage), then

@@ -66,3 +66,28 @@ POSTGRES_DB=app_ontos
 POSTGRES_DB_SCHEMA=app_ontos
 ENV=LOCAL
 ```
+
+### Optional: DB-backed search
+
+By default search runs in memory. To run it on Postgres, as a deployed app will, add:
+
+```env
+SEARCH_BACKEND=postgres
+SEARCH_ENGINE=auto          # auto | pg | lakebase
+SEARCH_TRGM_THRESHOLD=0.45  # typo fallback; lower = more permissive
+```
+
+At startup the app checks which extensions the database has and logs the engine it picked. Locally that's the portable `pg` engine. The `lakebase` engine is only selected on a Lakebase project with Lakebase Search enabled.
+
+- **`pg_trgm`** (typo-tolerant fallback when a query has no matches) ships with Postgres. It's a trusted extension, so the app creates it itself when the app user has `CREATE` on the database, which the grants above include.
+- **`pgvector`** (vector search, coming in a later release) needs a separate install: `brew install pgvector`.
+
+To run the Postgres search tests against your local server:
+
+```bash
+cd src
+SEARCH_TEST_PG_URL="postgresql+psycopg2:///postgres?host=/tmp" \
+  hatch -e dev run pytest backend/src/tests/integration/test_search_*_pg.py
+```
+
+The tests create and drop their own throwaway schema.

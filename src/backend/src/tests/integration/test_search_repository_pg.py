@@ -117,7 +117,9 @@ def test_status_filter_exact(seeded):
 def test_permission_filter_by_feature(seeded):
     out = repo.search(seeded, "*", allowed_features=["data-products"])
     assert out["total_count"] == 2
-    assert all(r["feature_id"] == "data-products" for r in out["results"])
+    # feature_id isn't part of the MCP result row (#954); the seeded products
+    # are the only data-products documents.
+    assert all(r["type"] == "data-product" for r in out["results"])
 
 
 def test_facets(seeded):
@@ -138,8 +140,10 @@ def test_search_index_items_reconstructs_full_item(seeded):
 
 
 def test_search_index_items_permission_filter(seeded):
-    items = repo.search_index_items(seeded, "*", allowed_features=["data-contracts"])
+    # REST search needs a real term (like the in-memory SearchManager, "*" lists nothing).
+    items = repo.search_index_items(seeded, "contract", allowed_features=["data-contracts"])
     assert [i.id for i in items] == ["contract::3"]
+    assert repo.search_index_items(seeded, "*", allowed_features=["data-contracts"]) == []
 
 
 def test_replace_all_rebuild_removes_stale(seeded):

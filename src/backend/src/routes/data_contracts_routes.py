@@ -1876,6 +1876,8 @@ async def get_schema_properties(
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
+    from src.utils.property_custom_properties import custom_properties_by_property
+    custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
     for p in props:
@@ -1904,6 +1906,7 @@ async def get_schema_properties(
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
             "encryptedName": p.encrypted_name,
+            "customProperties": custom_props.get(p.id, {}),
         }
         item.update(options)
         items.append(item)

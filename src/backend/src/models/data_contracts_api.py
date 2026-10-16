@@ -63,6 +63,9 @@ class ColumnProperty(BaseModel):
     # Semantic concepts for business glossary integration
     semanticConcepts: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     authoritativeDefinitions: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # ODCS customProperties of the column: the ODCS list form on input, or the
+    # {name: value} form the schema property editor sends; returned as a dict
+    customProperties: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
 
     # ODCS additional property fields
     businessName: Optional[str] = None

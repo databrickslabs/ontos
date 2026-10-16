@@ -97,6 +97,12 @@ from src.db_models.data_contracts import (
     DataContractServerPropertyDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
+from src.utils.property_custom_properties import (
+    custom_properties_by_property,
+    odcs_custom_properties,
+    property_custom_property_rows,
+    stable_ids_by_property,
+)
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import (
@@ -1161,22 +1167,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 }
                             ]
 
-                        # Property-level custom properties (if relationship exists)
-                        if hasattr(prop, 'custom_properties') and prop.custom_properties:
-                            custom_props = []
-                            for custom_prop in prop.custom_properties:
-                                prop_value = custom_prop.value
-                                try:
-                                    # Try to parse JSON if it's a serialized object
-                                    prop_value = json.loads(custom_prop.value)
-                                except (json.JSONDecodeError, TypeError):
-                                    pass  # Keep as string
-
-                                custom_props.append({
-                                    'property': custom_prop.property,
-                                    'value': prop_value
-                                })
-                            prop_dict['customProperties'] = custom_props
+                        # Property-level custom properties
+                        if prop.custom_properties:
+                            prop_dict['customProperties'] = odcs_custom_properties(prop.custom_properties)
                         elif prop.name == 'transaction_reference_date':
                             # Add sample custom properties for ODCS compliance testing
                             prop_dict['customProperties'] = [
@@ -1805,17 +1798,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             single = self._resolve_domain(db, domain_name=data_dict.get('domain'))
         return ([single], single) if single else ([], None)
 
-    def _create_schema_objects(self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None):
+    def _create_schema_objects(
+        self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
+        custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
+    ):
         """
         Create schema objects and properties for a contract using bulk inserts.
         
         Assigns UUIDs in Python to avoid per-row db.flush() round-trips.
+        ``custom_property_ids``: per schema and property name, the ODCS ids of
+        the property-level custom properties before an update recreated them.
         """
         all_schema_objs = []
         all_properties = []
         all_obj_relationships = []
         all_prop_relationships = []
         all_quality_checks = []
+        all_prop_custom_props = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1903,6 +1902,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
                 all_properties.append(prop)
 
+                # Property-level (column) customProperties: list or dict form
+                all_prop_custom_props.extend(property_custom_property_rows(
+                    prop_id, prop_dict.get('customProperties') or prop_dict.get('custom_properties'),
+                    previous_ids=(custom_property_ids or {}).get(
+                        schema_dict.get('name', 'table'), {}
+                    ).get(prop_dict.get('name', 'column')),
+                ))
+
                 # Collect property-level (column) quality rules. These arrive
                 # nested under the column as `properties[].quality`; previously
                 # nothing read them here, so column-level rules silently
@@ -1956,6 +1963,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_prop_relationships)
         if all_quality_checks:
             db.add_all(all_quality_checks)
+        if all_prop_custom_props:
+            db.add_all(all_prop_custom_props)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -2668,6 +2677,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 incoming_names = set()
                 schemas_to_create = []
+                custom_property_ids = {}
 
                 for s in schema_data:
                     s_dict = s.model_dump() if hasattr(s, 'model_dump') else s
@@ -2690,6 +2700,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     else:
                         # New schema or schema with updated properties → recreate
                         if name in existing_schemas:
+                            custom_property_ids[name] = stable_ids_by_property(
+                                db, existing_schemas[name].id
+                            )
                             db.query(SchemaObjectDb).filter(
                                 SchemaObjectDb.id == existing_schemas[name].id
                             ).delete()
@@ -2703,7 +2716,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ).delete()
 
                 if schemas_to_create:
-                    self._create_schema_objects(db, contract_id, schemas_to_create, current_user)
+                    self._create_schema_objects(
+                        db, contract_id, schemas_to_create, current_user,
+                        custom_property_ids=custom_property_ids,
+                    )
             
             # Handle quality rules if provided
             if data_dict.get('qualityRules') is not None:
@@ -4877,10 +4893,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     for prop_data in properties:
                         prop_id = prop_data.pop('id')
                         prop_auth_defs = prop_data.pop('authoritative_defs', [])
+                        prop_custom_props = prop_data.pop('custom_properties', [])
                         
                         prop = SchemaPropertyDb(id=prop_id, **prop_data)
                         db.add(prop)
                         db.flush()
+                        db.add_all(property_custom_property_rows(prop_id, prop_custom_props))
                         
                         # Property-level authoritative definitions
                         for prop_auth_def_data in prop_auth_defs:
@@ -6828,6 +6846,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 .order_by(SchemaPropertyDb.name)
                 .all()
             )
+        prop_custom_props = custom_properties_by_property(db, [p.id for p in all_props])
         # Group properties by object_id
         props_by_object: Dict[str, list] = {}
         for p in all_props:
@@ -6862,6 +6881,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "transformSourceObjects": p.transform_source_objects,
                     "transformDescription": p.transform_description,
                     "encryptedName": p.encrypted_name,
+                    "customProperties": prop_custom_props.get(p.id, {}),
                 }
                 item.update(options)
                 prop_items.append(item)

@@ -171,6 +171,11 @@ class ContractCloner:
                 'transform_description': getattr(prop, 'transform_description', None),
             }
 
+            # Property-level customProperties, in the ODCS list form
+            if getattr(prop, 'custom_properties', None):
+                from src.utils.property_custom_properties import odcs_custom_properties
+                cloned_prop['custom_properties'] = odcs_custom_properties(prop.custom_properties)
+
             # Clone authoritative definitions for this property
             if hasattr(prop, 'authoritative_defs') and prop.authoritative_defs:
                 cloned_prop['authoritative_defs'] = self.clone_authoritative_defs(

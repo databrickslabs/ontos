@@ -371,9 +371,36 @@ app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(MaintenanceMiddleware)
 
+def _mount_frontend_static(target: FastAPI, static_dir: Path, env: str) -> bool:
+    """Mount the built frontend at ``/static`` if it exists.
+
+    Without a frontend build (e.g. a fresh checkout or worktree used for
+    backend work, where Vite serves the UI) ``StaticFiles`` would raise at
+    import and the backend could not start. The mount is skipped instead; the
+    SPA routes then answer 404 "Frontend not built". A deployed app needs the
+    build, so outside LOCAL the warning says so.
+    """
+    if not static_dir.is_dir():
+        if env.upper().startswith("LOCAL"):
+            logger.warning(
+                "Frontend build not found at %s; not serving /static "
+                "(run the frontend with Vite, or build it with `npm run build` in src/)",
+                static_dir,
+            )
+        else:
+            logger.error(
+                "Frontend build not found at %s (ENV=%s); the UI won't be served. "
+                "Build it with `npm run build` in src/ before deploying.",
+                static_dir, env,
+            )
+        return False
+    target.mount("/static", StaticFiles(directory=static_dir, html=True), name="static")
+    return True
+
+
 # Mount static files for the React application (skip in test mode)
 if not settings.TESTING:
-    app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")
+    _mount_frontend_static(app, STATIC_ASSETS_PATH, settings.ENV)
 
 # Data Products - Core data lifecycle
 data_domains_routes.register_routes(app)
@@ -533,22 +560,31 @@ def _is_spa_fallback_path(full_path: str) -> bool:
     return True
 
 
+def _spa_response(full_path: str, static_dir: Path):
+    """Response of the SPA catch-all for ``full_path``.
+
+    Frontend routes get ``index.html`` (404 "Frontend not built" without a
+    build). Paths the SPA must not answer (``api/``, ``static/``, ``mcp``,
+    docs) that no router or mount handled are a plain 404: this route matched
+    them, so FastAPI's own 404 doesn't apply (returning nothing was a 200).
+    """
+    if not _is_spa_fallback_path(full_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    spa_index = static_dir / "index.html"
+    if spa_index.is_file():
+        return FileResponse(spa_index, media_type="text/html")
+    logger.error(f"SPA index.html not found at {spa_index}")
+    return HTMLResponse(
+        content="<html><body>Frontend not built or index.html missing.</body></html>",
+        status_code=404,
+    )
+
+
 # Define the SPA catch-all route LAST (skip in test mode)
 if not settings.TESTING:
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        if _is_spa_fallback_path(full_path):
-            # Ensure the path exists before serving
-            spa_index = STATIC_ASSETS_PATH / "index.html"
-            if spa_index.is_file():
-               return FileResponse(spa_index, media_type="text/html")
-            else:
-               # Optional: Return a 404 or a simple HTML message if index.html is missing
-               logger.error(f"SPA index.html not found at {spa_index}")
-               return HTMLResponse(content="<html><body>Frontend not built or index.html missing.</body></html>", status_code=404)
-        # If it starts with api/ or static/ but wasn't handled by a router/StaticFiles,
-        # FastAPI will return its default 404 Not Found, which is correct.
-        # No explicit return needed here for that case.
+        return _spa_response(full_path, STATIC_ASSETS_PATH)
 
 logger.info("All routes registered.")
 

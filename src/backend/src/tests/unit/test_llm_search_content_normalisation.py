@@ -17,6 +17,7 @@ user only ever saw "I encountered an error ... (TypeError)". These tests lock
 in the content-normalisation helpers that keep the text, drop the reasoning
 block, and leave string/None handling unchanged.
 """
+
 from src.controller.llm_search_manager import (
     _block_text,
     _coerce_message_text,
@@ -35,6 +36,7 @@ class _Block:
 # _block_text
 # ---------------------------------------------------------------------------
 
+
 def test_block_text_keeps_text_block_drops_reasoning():
     assert _block_text({"type": "text", "text": "hello"}) == "hello"
     assert _block_text({"type": "reasoning", "text": "scratchpad"}) == ""
@@ -51,6 +53,7 @@ def test_block_text_handles_objects_and_raw_strings():
 # ---------------------------------------------------------------------------
 # _coerce_message_text
 # ---------------------------------------------------------------------------
+
 
 def test_coerce_passthrough_string_and_none():
     assert _coerce_message_text("already text") == "already text"
@@ -75,6 +78,7 @@ def test_coerce_handles_object_blocks():
 # _strip_internal_citations (the function that used to crash)
 # ---------------------------------------------------------------------------
 
+
 def test_strip_on_list_content_does_not_raise_and_drops_reasoning():
     """Regression: a non-empty list must not raise TypeError."""
     content = [
@@ -91,7 +95,12 @@ def test_strip_on_list_content_does_not_raise_and_drops_reasoning():
 def test_strip_on_list_still_extracts_citations_and_labels():
     content = [
         {"type": "reasoning", "summary": []},
-        {"type": "text", "text": "Ownership is per data product <!-- ref: ownership.md#model --> here. [Confirmed]"},
+        {
+            "type": "text",
+            "text": (
+                "Ownership is per data product <!-- ref: ownership.md#model --> here. [Confirmed]"
+            ),
+        },
     ]
     cleaned, citations, confidence = _strip_internal_citations(content)
     assert citations == ["ownership.md#model"]

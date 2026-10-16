@@ -70,8 +70,8 @@ def _coerce_message_text(content: Any) -> str:
     """Normalise an LLM message's ``content`` to a plain string.
 
     Databricks' OpenAI-compatible serving shim returns ``content`` as a *list*
-    of structured blocks for reasoning-capable models (Claude Sonnet/Opus 4-5,
-    gpt-oss, and similar), e.g.
+    of structured blocks for reasoning-capable models (Claude Sonnet/Opus 5,
+    Claude Haiku 5.5, gpt-oss, and similar), e.g.
     ``[{"type": "reasoning", ...}, {"type": "text", "text": "..."}]``. Older
     models return a plain string. Downstream code (citation stripping, UI
     rendering) assumes a string, so collapse any block list down to its
@@ -724,7 +724,11 @@ class LLMSearchManager:
                     "messages_sent": len(messages),
                     "has_tool_calls": bool(assistant_message.tool_calls),
                     "tool_calls": [],
-                    "response_preview": _coerce_message_text(assistant_message.content)[:200] if not assistant_message.tool_calls else None,
+                    "response_preview": (
+                        _coerce_message_text(assistant_message.content)[:200]
+                        if not assistant_message.tool_calls
+                        else None
+                    ),
                 }
             
             # Check if LLM wants to call tools

@@ -133,6 +133,10 @@ class NotificationsManager:
                     # Role has NO groups assigned - show to admins as fallback
                     if is_admin:
                         is_recipient = True
+            elif not n.recipient_role_id and recipient in user_groups:
+                # Group picked as a recipient / approver (the Workflow
+                # Designer's principal picker stores the group name)
+                is_recipient = True
 
             if is_recipient:
                 # Admins can delete any notification they can see
@@ -225,6 +229,11 @@ class NotificationsManager:
                     return True
             elif is_admin:
                 return True
+
+        # Group picked as a recipient / approver (the Workflow Designer's
+        # principal picker stores the group name)
+        if not notification.recipient_role_id and recipient in user_groups:
+            return True
         
         # Admins can access any notification
         if is_admin:

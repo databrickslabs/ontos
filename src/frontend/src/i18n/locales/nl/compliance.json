@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Kon compliance-beleid niet laden",
     "loadRunResultsFailed": "Kon uitvoeringsresultaten niet laden",
     "policyNotFound": "Compliance-beleid niet gevonden.",
-    "runNotFound": "Uitvoering niet gevonden."
+    "runNotFound": "Uitvoering niet gevonden.",
+    "runningPolicy": "Fout bij het uitvoeren van het beleid"
   },
   "results": {
     "passed": "Geslaagd",

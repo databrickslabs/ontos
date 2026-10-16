@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "コンプライアンスポリシーの読み込みに失敗しました",
     "loadRunResultsFailed": "実行結果の読み込みに失敗しました",
     "policyNotFound": "コンプライアンスポリシーが見つかりません。",
-    "runNotFound": "実行が見つかりません。"
+    "runNotFound": "実行が見つかりません。",
+    "runningPolicy": "ポリシーの実行エラー"
   },
   "results": {
     "passed": "合格",

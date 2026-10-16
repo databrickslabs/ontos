@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Failed to load compliance policies",
     "loadRunResultsFailed": "Failed to load run results",
     "policyNotFound": "Compliance policy not found.",
-    "runNotFound": "Run not found."
+    "runNotFound": "Run not found.",
+    "runningPolicy": "Error Running Policy"
   },
   "results": {
     "passed": "Passed",

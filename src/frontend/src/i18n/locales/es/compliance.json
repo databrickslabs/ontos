@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "No se pudieron cargar las políticas de cumplimiento",
     "loadRunResultsFailed": "No se pudieron cargar los resultados de la ejecución",
     "policyNotFound": "Política de cumplimiento no encontrada.",
-    "runNotFound": "Ejecución no encontrada."
+    "runNotFound": "Ejecución no encontrada.",
+    "runningPolicy": "Error al ejecutar la política"
   },
   "results": {
     "passed": "Aprobado",

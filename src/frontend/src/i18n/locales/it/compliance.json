@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Impossibile caricare i criteri di conformità",
     "loadRunResultsFailed": "Impossibile caricare i risultati dell'esecuzione",
     "policyNotFound": "Criterio di conformità non trovato.",
-    "runNotFound": "Esecuzione non trovata."
+    "runNotFound": "Esecuzione non trovata.",
+    "runningPolicy": "Errore durante l'esecuzione della policy"
   },
   "results": {
     "passed": "Superato",

@@ -620,6 +620,8 @@ class ComplianceManager:
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
+        # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context
+        tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
 
         try:
             # Parse the rule using enhanced DSL
@@ -632,9 +634,6 @@ class ComplianceManager:
 
             # Parse entity filter
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
-
-            # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context
-            tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
 
             # Iterate over entities
             for obj in entity_iterator.iterate(

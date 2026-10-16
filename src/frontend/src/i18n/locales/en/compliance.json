@@ -77,7 +77,8 @@
       "passedExamples": "Passed examples",
       "failedExamples": "Failed examples",
       "noPassedExamples": "No passed examples in this run",
-      "noFailures": "No failures in this run"
+      "noFailures": "No failures in this run",
+      "errorLabel": "Error:"
     },
     "runsList": {
       "title": "Runs",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Passed:",
     "failedLabel": "Failed:",
-    "startedLabel": "Started: {{date}}"
+    "startedLabel": "Started: {{date}}",
+    "errorLabel": "Error:"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' saved successfully",

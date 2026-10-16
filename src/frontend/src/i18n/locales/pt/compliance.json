@@ -77,7 +77,8 @@
       "passedExamples": "Exemplos aprovados",
       "failedExamples": "Exemplos reprovados",
       "noPassedExamples": "Nenhum exemplo aprovado nesta execução",
-      "noFailures": "Nenhuma falha nesta execução"
+      "noFailures": "Nenhuma falha nesta execução",
+      "errorLabel": "Erro:"
     },
     "runsList": {
       "title": "Execuções",
@@ -100,7 +101,8 @@
     "scoreLabel": "Pontuação:",
     "passedLabel": "Aprovados:",
     "failedLabel": "Reprovados:",
-    "startedLabel": "Iniciada: {{date}}"
+    "startedLabel": "Iniciada: {{date}}",
+    "errorLabel": "Erro:"
   },
   "toast": {
     "policySaved": "Política '{{name}}' salva com sucesso",

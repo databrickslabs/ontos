@@ -77,7 +77,8 @@
       "passedExamples": "Geslaagde voorbeelden",
       "failedExamples": "Mislukte voorbeelden",
       "noPassedExamples": "Geen geslaagde voorbeelden in deze uitvoering",
-      "noFailures": "Geen fouten in deze uitvoering"
+      "noFailures": "Geen fouten in deze uitvoering",
+      "errorLabel": "Fout:"
     },
     "runsList": {
       "title": "Uitvoeringen",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Geslaagd:",
     "failedLabel": "Mislukt:",
-    "startedLabel": "Gestart: {{date}}"
+    "startedLabel": "Gestart: {{date}}",
+    "errorLabel": "Fout:"
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",

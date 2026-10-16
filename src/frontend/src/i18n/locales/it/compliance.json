@@ -77,7 +77,8 @@
       "passedExamples": "Esempi superati",
       "failedExamples": "Esempi non superati",
       "noPassedExamples": "Nessun esempio superato in questa esecuzione",
-      "noFailures": "Nessun errore in questa esecuzione"
+      "noFailures": "Nessun errore in questa esecuzione",
+      "errorLabel": "Errore:"
     },
     "runsList": {
       "title": "Esecuzioni",
@@ -100,7 +101,8 @@
     "scoreLabel": "Punteggio:",
     "passedLabel": "Superati:",
     "failedLabel": "Non superati:",
-    "startedLabel": "Avviata il: {{date}}"
+    "startedLabel": "Avviata il: {{date}}",
+    "errorLabel": "Errore:"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' salvata con successo",

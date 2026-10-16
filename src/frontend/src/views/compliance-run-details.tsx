@@ -139,6 +139,9 @@ export default function ComplianceRunDetails() {
             {t('compliance:runDetails.statusLabel')} <span className="font-medium">{run.status}</span> • {t('compliance:runDetails.scoreLabel')} <span className="font-medium">{run.score}%</span> •
             {' '}{t('compliance:runDetails.passedLabel')} <span className="font-medium text-green-600">{run.success_count}</span> / {t('compliance:runDetails.failedLabel')} <span className="font-medium text-red-600">{run.failure_count}</span>
           </CardDescription>
+          {run.status === 'failed' && run.error_message && (
+            <div className="text-sm text-destructive">{t('compliance:runDetails.errorLabel')} {run.error_message}</div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-3">

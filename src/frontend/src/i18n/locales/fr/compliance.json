@@ -77,7 +77,8 @@
       "passedExamples": "Exemples réussis",
       "failedExamples": "Exemples échoués",
       "noPassedExamples": "Aucun exemple réussi dans cette exécution",
-      "noFailures": "Aucun échec dans cette exécution"
+      "noFailures": "Aucun échec dans cette exécution",
+      "errorLabel": "Erreur :"
     },
     "runsList": {
       "title": "Exécutions",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score :",
     "passedLabel": "Réussis :",
     "failedLabel": "Échoués :",
-    "startedLabel": "Démarrée : {{date}}"
+    "startedLabel": "Démarrée : {{date}}",
+    "errorLabel": "Erreur :"
   },
   "toast": {
     "policySaved": "Politique '{{name}}' enregistrée avec succès",

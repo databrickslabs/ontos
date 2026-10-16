@@ -322,6 +322,9 @@ export default function CompliancePolicyDetails() {
             <CardDescription>
               {t('compliance:policyDetails.runSummary.lastRunStarted', { date: new Date(activeRun.started_at).toLocaleString() })} • {t('compliance:policyDetails.runSummary.statusLabel')} <span className="font-medium">{activeRun.status}</span>
             </CardDescription>
+            {activeRun.status === 'failed' && activeRun.error_message && (
+              <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {activeRun.error_message}</div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-3 gap-4 mb-4">

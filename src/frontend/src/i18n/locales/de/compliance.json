@@ -77,7 +77,8 @@
       "passedExamples": "Bestandene Beispiele",
       "failedExamples": "Fehlgeschlagene Beispiele",
       "noPassedExamples": "Keine bestandenen Beispiele in dieser Ausführung",
-      "noFailures": "Keine Fehler in dieser Ausführung"
+      "noFailures": "Keine Fehler in dieser Ausführung",
+      "errorLabel": "Fehler:"
     },
     "runsList": {
       "title": "Ausführungen",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Bestanden:",
     "failedLabel": "Fehlgeschlagen:",
-    "startedLabel": "Gestartet: {{date}}"
+    "startedLabel": "Gestartet: {{date}}",
+    "errorLabel": "Fehler:"
   },
   "toast": {
     "policySaved": "Richtlinie '{{name}}' erfolgreich gespeichert",

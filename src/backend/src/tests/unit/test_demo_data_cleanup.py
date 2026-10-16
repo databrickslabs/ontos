@@ -356,6 +356,8 @@ def test_the_route_refuses_while_user_data_refers_to_demo_data(route_db):
         _call_route(route_db)
 
     assert refused.value.status_code == 409
+    assert refused.value.detail['code'] == 'demo_clear_blocked'
+    assert refused.value.detail['params'] == {'blocking': 1}
     assert 'Nothing was deleted' in refused.value.detail['message']
     assert refused.value.detail['blocking'][0]['ids'] == [str(users_asset.id)]
     assert route_db.get(AssetTypeDb, demo_type.id) is not None
@@ -370,6 +372,8 @@ def test_the_dry_run_lists_without_deleting(route_db):
         result = _call_route(route_db, dry_run=True)
 
     assert result['status'] == 'dry_run'
+    assert result['code'] == 'demo_clear_dry_run'
+    assert result['params'] == {'would_delete': 1, 'blocking': 1}
     assert result['would_delete'] == {'asset_types': [str(demo_type.id)]}
     assert result['blocking'][0]['ids'] == [str(users_asset.id)]
     assert route_db.get(AssetTypeDb, demo_type.id) is not None
@@ -389,7 +393,8 @@ def test_the_clear_is_all_or_nothing(route_db):
         _call_route(route_db)
 
     assert failed.value.status_code == 500
-    assert 'nothing was deleted' in failed.value.detail
+    assert failed.value.detail['code'] == 'demo_clear_failed'
+    assert 'nothing was deleted' in failed.value.detail['message']
     assert route_db.get(AssetTypeDb, demo_type.id) is not None
 
 
@@ -402,7 +407,8 @@ def test_the_route_clears_when_nothing_blocks(route_db):
         result = _call_route(route_db)
 
     assert result == {
-        'status': 'success', 'message': 'Demo data cleared. Deleted 1 records.',
+        'status': 'success', 'code': 'demo_clear_succeeded', 'params': {'deleted': 1},
+        'message': 'Demo data cleared. Deleted 1 records.',
         'deleted_counts': {'asset_types': 1},
     }
     route_db.expire_all()

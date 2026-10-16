@@ -723,11 +723,15 @@ async def clear_demo_data(
             total = sum(len(ids) for ids in would_delete.values())
             success = True
             details["would_delete_counts"] = {t: len(ids) for t, ids in would_delete.items()}
+            blocking_count = sum(b['count'] for b in blocking)
             return {
                 "status": "dry_run",
+                # code + params for clients to translate; message is the English fallback
+                "code": "demo_clear_dry_run",
+                "params": {"would_delete": total, "blocking": blocking_count},
                 "message": (
                     f"Clearing would delete {total} records"
-                    + (f"; {sum(b['count'] for b in blocking)} records of user data refer to "
+                    + (f"; {blocking_count} records of user data refer to "
                        f"demo data and would block it." if blocking else ".")
                 ),
                 "would_delete": would_delete,
@@ -738,6 +742,8 @@ async def clear_demo_data(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
+                    "code": "demo_clear_blocked",
+                    "params": {"blocking": sum(b['count'] for b in blocking)},
                     "message": (
                         "Demo data was not cleared: these records were not created by the demo "
                         "but refer to demo data. Delete them, or move them off the demo data, "
@@ -758,6 +764,8 @@ async def clear_demo_data(
 
         return {
             "status": "success",
+            "code": "demo_clear_succeeded",
+            "params": {"deleted": total_deleted},
             "message": f"Demo data cleared. Deleted {total_deleted} records.",
             "deleted_counts": deleted_counts,
         }
@@ -771,7 +779,11 @@ async def clear_demo_data(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to clear demo data; nothing was deleted: {str(e)}"
+            detail={
+                "code": "demo_clear_failed",
+                "params": {"error": str(e)},
+                "message": f"Failed to clear demo data; nothing was deleted: {str(e)}",
+            },
         )
     finally:
         background_tasks.add_task(

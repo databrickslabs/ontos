@@ -135,14 +135,25 @@ def test_unknown_entity_ids_get_the_payload(db_session):
     assert _rule_object(db_session, _context('data_product', 'missing', payload)) == payload
 
 
-def test_a_failing_entity_load_falls_back_to_the_payload(db_session):
-    payload = {'name': 'p'}
+def test_a_failing_entity_load_raises(db_session):
+    with patch('src.controller.entity_dict_builder.build_data_product_dict',
+               side_effect=RuntimeError('db down')):
+        with pytest.raises(RuntimeError, match='Could not load data_product product-1'):
+            _rule_object(db_session, _context('data_product', 'product-1', {'name': 'p'}))
+
+
+def test_a_rule_step_fails_when_the_entity_cannot_be_loaded(db_session):
+    # On the payload alone ({name, status}) this rule passes vacuously.
+    rule = "MATCH (obj:data_product) ASSERT obj.missing_field != 'x'"
 
     with patch('src.controller.entity_dict_builder.build_data_product_dict',
                side_effect=RuntimeError('db down')):
-        obj = _rule_object(db_session, _context('data_product', 'product-1', payload))
+        result = _validate(db_session, rule, _context(
+            'data_product', 'product-1', {'name': 'p', 'status': 'active'},
+        ))
 
-    assert obj == payload
+    assert result.passed is False
+    assert result.error == 'Could not load data_product product-1 to evaluate the rule'
 
 
 def test_before_update_gates_see_only_the_proposed_change(db_session):

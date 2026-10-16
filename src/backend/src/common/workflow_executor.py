@@ -202,6 +202,10 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     ``before_update`` gates: their payload is the proposed change, and values
     derived from the stored row (``has_owner``, counts) would describe the
     entity before it.
+
+    Raises when the stored entity can't be loaded: evaluating the rule on the
+    payload alone could let it pass on fields the payload doesn't carry, so the
+    step fails instead (its handler turns the error into a failed result).
     """
     from src.controller.entity_dict_builder import (
         build_data_contract_dict,
@@ -224,11 +228,11 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
         with db.begin_nested():
             stored = builder(db, context.entity_id)
     except Exception as e:
-        logger.warning(
-            "Could not load %s %s for rule evaluation, using the trigger payload only: %s",
-            context.entity_type, context.entity_id, e,
-        )
-        return payload
+        # The database error stays in the server log; the step result shows
+        # only what failed.
+        raise RuntimeError(
+            f"Could not load {context.entity_type} {context.entity_id} to evaluate the rule"
+        ) from e
     return {**stored, **payload} if stored else payload
 
 

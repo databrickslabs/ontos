@@ -61,6 +61,11 @@ class AssetType(str, Enum):
     # Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept"
     KNOWLEDGE_COLLECTION = "knowledge_collection"
+
+    # Bulk RDF-upload changeset awaiting ONE aggregate approval (P3).
+    # FQN format: concept-changeset://{preview_token} — the reviewed-asset id is
+    # the held UploadPreviewDb token, which is what apply-on-approval needs.
+    CONCEPT_CHANGESET = "concept_changeset"
     
     # Generic/external
     EXTERNAL = "external"

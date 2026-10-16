@@ -34,16 +34,15 @@ export default function OntologyHomeView() {
   // Glossary preferences from persistent store
   const {
     hiddenSources,
+    groupByDimension,
     groupBySource,
     showProperties,
-    groupByDomain,
     isFilterExpanded,
     toggleSource,
     selectAllSources,
     selectNoneSources,
-    setGroupBySource,
+    setGroupByDimension,
     setShowProperties,
-    setGroupByDomain,
     setFilterExpanded,
   } = useGlossaryPreferencesStore();
 
@@ -211,12 +210,10 @@ export default function OntologyHomeView() {
             onToggleSource={toggleSource}
             onSelectAllSources={selectAllSources}
             onSelectNoneSources={selectNoneSources}
-            groupBySource={groupBySource}
+            groupByDimension={groupByDimension}
+            onSetGroupByDimension={setGroupByDimension}
             showProperties={showProperties}
-            groupByDomain={groupByDomain}
-            onSetGroupBySource={setGroupBySource}
             onSetShowProperties={setShowProperties}
-            onSetGroupByDomain={setGroupByDomain}
             selectedLanguage={selectedLanguage}
             onSetSelectedLanguage={setSelectedLanguage}
             isFilterExpanded={isFilterExpanded}

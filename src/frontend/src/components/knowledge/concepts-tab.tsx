@@ -1,7 +1,20 @@
-import { useEffect, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
+import { useApi } from '@/hooks/use-api';
 import {
   Search,
   ChevronRight,
@@ -11,7 +24,12 @@ import {
   Zap,
   User,
   FolderTree,
+  Pencil,
+  ArrowRight,
+  X,
+  ListFilter,
 } from 'lucide-react';
+import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 import { cn } from '@/lib/utils';
 import type {
   OntologyConcept,
@@ -32,8 +50,38 @@ interface ConceptsTabProps {
   groupBySource: boolean;
   showProperties: boolean;
   groupByDomain: boolean;
+  // Group concepts by their originating FILE (source_file) rather than by
+  // scheme (source_context). Mutually exclusive with groupBySource in practice
+  // (the store's lens enforces that). Additive: when false the tree behaves
+  // exactly as before.
+  groupByFile?: boolean;
   selectedLanguage: string;
+  // Render mode. 'tree' (default) preserves the existing hierarchical engine;
+  // 'list' renders a flat, alphabetically-sorted list of concepts with no
+  // broader/narrower nesting. Additive — the tree path is unchanged.
+  viewMode?: 'list' | 'tree';
+  // Callback to open editor for a concept (list view only)
+  onEditConcept?: (concept: OntologyConcept) => void;
+  // Called after a bulk action mutates concepts, so the parent can refetch.
+  onConceptsChanged?: () => void;
 }
+
+// Bulk "Set status" targets → the real lifecycle transition endpoints. Only
+// the safe, always-available forward transitions are offered here; the backend
+// still enforces VALID_TRANSITIONS and returns an error for invalid ones.
+const BULK_STATUS_ACTIONS: { action: string; labelKey: string; defaultLabel: string }[] = [
+  { action: 'submit-review', labelKey: 'semantic-models:bulk.status.submitReview', defaultLabel: 'Submit for review' },
+  { action: 'approve', labelKey: 'semantic-models:bulk.status.approve', defaultLabel: 'Approve' },
+  { action: 'publish', labelKey: 'semantic-models:bulk.status.publish', defaultLabel: 'Publish' },
+  { action: 'certify', labelKey: 'semantic-models:bulk.status.certify', defaultLabel: 'Certify' },
+  { action: 'deprecate', labelKey: 'semantic-models:bulk.status.deprecate', defaultLabel: 'Deprecate' },
+  { action: 'archive', labelKey: 'semantic-models:bulk.status.archive', defaultLabel: 'Archive' },
+];
+
+// Sentinel group key for concepts that carry no source_file when grouping by
+// file (the 'source' dimension). Concepts without a file collect under one
+// "No source file" group rather than vanishing.
+const NO_FILE_KEY = '__no_file__';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-4 w-4 text-emerald-500 shrink-0" />,
@@ -51,6 +99,14 @@ const typeColors: Record<string, string> = {
   term: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
 };
 
+// Statuses that mean a concept is no longer active clutter — dim them and,
+// when they name successors, offer a "Replaced by" link. Kept broad so both
+// `deprecated` and any `superseded`/`retired`/`archived` values are covered.
+const INACTIVE_STATUSES = new Set(['deprecated', 'superseded', 'retired', 'archived']);
+function isInactiveStatus(status?: string | null): boolean {
+  return !!status && INACTIVE_STATUSES.has(status);
+}
+
 const STATUS_VARIANTS: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground border-muted-foreground/20',
   pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30',
@@ -65,6 +121,36 @@ const STATUS_VARIANTS: Record<string, string> = {
   retired: 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30',
 };
 
+// Per-concept mapping status, from POST /api/semantic-links/mapping-status.
+// Whether a concept links to a physical Asset, a data Product, and/or a data
+// Contract. The three are independent (a concept can link to several), so they
+// do not partition — they drive the single "Mapping" summary column.
+interface MappingStatus {
+  asset?: boolean;
+  product?: boolean;
+  contract?: boolean;
+}
+
+// Reduce a MappingStatus to the one label the wireframe shows in the Mapping
+// column. `undefined` status => not yet loaded (or endpoint unavailable).
+function mappingLabel(
+  status: MappingStatus | undefined,
+  t: (k: string, d?: any) => string,
+): { text: string; none: boolean } | null {
+  if (!status) return null; // not loaded — caller renders a muted dash
+  const product = !!status.product || !!status.contract;
+  if (status.asset && product) {
+    return { text: t('semantic-models:mapping.assetAndProduct', 'Asset + product'), none: false };
+  }
+  if (status.asset) {
+    return { text: t('semantic-models:mapping.asset', 'Asset'), none: false };
+  }
+  if (product) {
+    return { text: t('semantic-models:mapping.product', 'Product'), none: false };
+  }
+  return { text: t('semantic-models:mapping.none', 'Not mapped'), none: true };
+}
+
 export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   collections,
   groupedConcepts: _groupedConcepts,
@@ -72,11 +158,16 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   selectedConcept,
   onSelectConcept,
   groupBySource,
+  groupByFile = false,
   showProperties: _showProperties,
   groupByDomain,
   selectedLanguage,
+  viewMode = 'tree',
+  onEditConcept,
+  onConceptsChanged,
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
+  const { toast } = useToast();
   const expandedGroups = useGlossaryPreferencesStore((s) => s.expandedConceptGroups);
   const toggleConceptGroup = useGlossaryPreferencesStore((s) => s.toggleConceptGroup);
   const setExpandedConceptGroups = useGlossaryPreferencesStore((s) => s.setExpandedConceptGroups);
@@ -86,6 +177,103 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   const setSearchQuery = useGlossaryPreferencesStore((s) => s.setConceptListSearch);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Bulk-select state (list view only). Tracks selected concept IRIs; a light
+  // bulk-action bar appears when any are selected. Selection is component-local
+  // and resets when the view mode changes.
+  //
+  // Pagination note: rows are selected per-row, and any bulk "select all" acts
+  // on the CURRENT PAGE only (the rows actually rendered). We keep this simple —
+  // selections persist across page changes if the user pages back, but a "select
+  // all" gesture never silently selects off-page rows the user can't see.
+  const [selectedIris, setSelectedIris] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelectedIris(new Set());
+  }, [viewMode]);
+
+  const toggleRowSelect = useCallback((iri: string) => {
+    setSelectedIris((prev) => {
+      const next = new Set(prev);
+      if (next.has(iri)) next.delete(iri);
+      else next.add(iri);
+      return next;
+    });
+  }, []);
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // List-scoped Status filter (Item 4). Retired + archived concepts are pure
+  // clutter, so they are HIDDEN by default; deprecated/superseded stay visible
+  // (they read as active-ish and their "Replaced by" link is useful). State is
+  // component-local so it persists across re-render within the view but resets
+  // on remount. List-only — the tree view is never status-filtered here.
+  const DEFAULT_HIDDEN_STATUSES = ['retired', 'archived'];
+  const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(
+    () => new Set(DEFAULT_HIDDEN_STATUSES),
+  );
+  const toggleStatusHidden = useCallback((status: string) => {
+    setHiddenStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
+
+  // Bulk "Set status": POST the chosen lifecycle transition for every selected
+  // concept. The backend enforces VALID_TRANSITIONS, so concepts in a state
+  // that can't take the transition come back as errors — we count and report
+  // successes vs failures rather than assuming all succeed.
+  const runBulkStatus = useCallback(
+    async (action: string, label: string) => {
+      const iris = Array.from(selectedIris);
+      if (iris.length === 0) return;
+      setBulkBusy(true);
+      let ok = 0;
+      let failed = 0;
+      for (const iri of iris) {
+        try {
+          const res = await fetch(
+            `/api/knowledge/concepts/by-iri/${action}?iri=${encodeURIComponent(iri)}`,
+            { method: 'POST' },
+          );
+          if (res.ok) ok += 1;
+          else failed += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      setBulkBusy(false);
+      toast({
+        title:
+          failed === 0
+            ? t('common:toast.success', 'Success')
+            : t('semantic-models:bulk.partial', 'Completed with some errors'),
+        description: t(
+          'semantic-models:bulk.statusResult',
+          '{{label}}: {{ok}} updated, {{failed}} skipped',
+          { label, ok, failed },
+        ),
+        variant: failed > 0 && ok === 0 ? 'destructive' : undefined,
+      });
+      setSelectedIris(new Set());
+      onConceptsChanged?.();
+    },
+    [selectedIris, toast, t, onConceptsChanged],
+  );
+
+  // Per-IRI mapping status, fetched in one batch from the read-model endpoint.
+  // Degrades gracefully: if the endpoint is unavailable (e.g. not yet deployed),
+  // the map stays empty and the Mapping column shows a muted dash.
+  const [mappingStatus, setMappingStatus] = useState<Record<string, MappingStatus>>({});
+
+  // Successor IRIs per concept, from the versioning contract §1
+  // (GET .../version → replaced_by_iris). Only fetched for concepts whose
+  // status is inactive (deprecated/superseded/retired), so we can render a
+  // "Replaced by {successor}" link. Degrades silently if the endpoint is
+  // unavailable. Keyed by concept IRI; [] means "checked, no successor".
+  const { get } = useApi();
+  const [successorsByIri, setSuccessorsByIri] = useState<Record<string, string[]>>({});
 
   // Restore scroll position once after mount, then again whenever the data
   // size changes substantially. Saving happens on scroll.
@@ -97,11 +285,31 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Whether the tree is in a "group by a flat dimension" mode. The two source-
+  // ish dimensions diverge: 'scheme' (groupBySource) keys on source_context,
+  // 'source' (groupByFile) keys on the originating source_file. Both render
+  // through the SAME group-row engine; only the key extractor and the group
+  // label differ.
+  const isGrouping = groupBySource || groupByFile;
+
+  // Group-key extractor. For file grouping, concepts with no source_file fall
+  // under a single sentinel group (NO_FILE_KEY -> "No source file"). For scheme
+  // grouping, a missing source_context yields undefined (never matches a real
+  // group key) — preserving the pre-existing behavior where such concepts are
+  // not placed under any scheme group.
+  const groupKeyOf = useCallback(
+    (concept: OntologyConcept): string | undefined => {
+      if (groupByFile) return concept.source_file?.trim() || NO_FILE_KEY;
+      return concept.source_context || undefined;
+    },
+    [groupByFile],
+  );
+
   // Build tree data structure from concepts
   const treeData = useMemo(() => {
     const conceptMap = new Map<string, OntologyConcept>();
     const hierarchy = new Map<string, string[]>();
-    const sourceContexts = new Set<string>();
+    const groupKeys = new Set<string>();
 
     const baseConcepts = filteredConcepts.filter(concept => {
       const conceptType = concept.concept_type;
@@ -111,8 +319,13 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     baseConcepts.forEach(concept => {
       conceptMap.set(concept.iri, concept);
 
-      if (concept.source_context) {
-        sourceContexts.add(concept.source_context);
+      // Collect the distinct group keys for the active grouping dimension.
+      // 'file' grouping keys on source_file (with a sentinel for none);
+      // 'scheme' grouping keys on source_context (unchanged behavior).
+      if (groupByFile) {
+        groupKeys.add(concept.source_file?.trim() || NO_FILE_KEY);
+      } else if (concept.source_context) {
+        groupKeys.add(concept.source_context);
       }
 
       concept.parent_concepts.forEach(parentIri => {
@@ -130,12 +343,33 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       }
     });
 
-    return { conceptMap, hierarchy, sourceContexts: Array.from(sourceContexts).sort() };
-  }, [filteredConcepts]);
+    return { conceptMap, hierarchy, groupKeys: Array.from(groupKeys).sort() };
+  }, [filteredConcepts, groupByFile]);
+
+  // For each SCHEME group, the file it was derived from — but ONLY when every
+  // concept in the group that has a source_file shares the SAME one (i.e. the
+  // group came from a single upload). Mixed or absent source_file → null, so
+  // the row shows just the scheme name. Memoized so per-row renders stay cheap.
+  // Only relevant when grouping by scheme (source_context); when grouping by
+  // file the group title IS the filename, so this subtitle is never shown.
+  const sourceGroupFile = useMemo(() => {
+    const byContext = new Map<string, string | null>();
+    if (groupByFile) return byContext; // file groups don't use the "from <file>" subtitle
+    for (const context of treeData.groupKeys) {
+      const files = new Set<string>();
+      for (const concept of treeData.conceptMap.values()) {
+        if (concept.source_context !== context) continue;
+        const file = concept.source_file?.trim();
+        if (file) files.add(file);
+      }
+      byContext.set(context, files.size === 1 ? Array.from(files)[0] : null);
+    }
+    return byContext;
+  }, [treeData, groupByFile]);
 
   const rootConcepts = useMemo(() => {
-    if (groupBySource) {
-      return treeData.sourceContexts;
+    if (isGrouping) {
+      return treeData.groupKeys;
     }
 
     return Array.from(treeData.conceptMap.values())
@@ -147,19 +381,19 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                !concept.parent_concepts.some(parentIri => treeData.conceptMap.has(parentIri));
       })
       .map(concept => concept.iri);
-  }, [treeData, groupBySource, groupByDomain]);
+  }, [treeData, isGrouping, groupByDomain]);
 
   const getChildren = useCallback((itemId: string): string[] => {
-    if (groupBySource && treeData.sourceContexts.includes(itemId)) {
+    if (isGrouping && treeData.groupKeys.includes(itemId)) {
       return Array.from(treeData.conceptMap.values())
         .filter(concept => {
-          const matchesSource = concept.source_context === itemId;
+          const matchesGroup = groupKeyOf(concept) === itemId;
           if (groupByDomain && concept.concept_type === 'property' && concept.domain) {
             return false;
           }
           const isRootLevel = concept.parent_concepts.length === 0 ||
                  !concept.parent_concepts.some(parentIri => treeData.conceptMap.has(parentIri));
-          return matchesSource && isRootLevel;
+          return matchesGroup && isRootLevel;
         })
         .map(concept => concept.iri);
     }
@@ -173,10 +407,10 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     }
 
     return treeData.hierarchy.get(itemId) || [];
-  }, [treeData, groupBySource, groupByDomain]);
+  }, [treeData, isGrouping, groupKeyOf, groupByDomain]);
 
   const isFolder = useCallback((itemId: string): boolean => {
-    if (groupBySource && treeData.sourceContexts.includes(itemId)) {
+    if (isGrouping && treeData.groupKeys.includes(itemId)) {
       return true;
     }
 
@@ -192,20 +426,21 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
 
     const children = treeData.hierarchy.get(itemId) || [];
     return children.length > 0 || (concept.child_concepts && concept.child_concepts.length > 0);
-  }, [treeData, groupBySource, groupByDomain]);
+  }, [treeData, isGrouping, groupByDomain]);
 
   // When switching grouping modes, expand the new top-level groups so users
-  // see something meaningful instead of a collapsed flat list.
+  // see something meaningful instead of a collapsed flat list. Applies to both
+  // scheme (source_context) and file (source_file) grouping.
   useEffect(() => {
-    if (groupBySource && treeData.sourceContexts.length > 0) {
+    if (isGrouping && treeData.groupKeys.length > 0) {
       const next = new Set(expandedGroups);
-      treeData.sourceContexts.forEach((s) => next.add(s));
+      treeData.groupKeys.forEach((s) => next.add(s));
       if (next.size !== expandedGroups.length) {
         setExpandedConceptGroups(Array.from(next));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBySource, treeData.sourceContexts.join('|')]);
+  }, [isGrouping, treeData.groupKeys.join('|')]);
 
   const getCollection = useCallback((context?: string) => {
     if (!context) return null;
@@ -227,14 +462,179 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     [selectedLanguage],
   );
 
+  // Flat list (list view-mode only): all concepts from the same filtered/typed
+  // selection the tree is built from, sorted alphabetically by label. No
+  // broader/narrower nesting. groupByDomain still hides domain-owned properties
+  // (mirrors the tree's rootConcepts logic) so the two modes cover the same set.
+  const flatConcepts = useMemo(() => {
+    return Array.from(treeData.conceptMap.values())
+      .filter(concept => {
+        if (groupByDomain && concept.concept_type === 'property' && concept.domain) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) =>
+        conceptLabel(a).localeCompare(conceptLabel(b), undefined, { sensitivity: 'base' }),
+      );
+  }, [treeData, groupByDomain, conceptLabel]);
+
+  // Distinct statuses present in the flat set, for the Status filter dropdown.
+  // Only statuses that actually occur are offered, so the control doesn't list
+  // dead options.
+  const presentStatuses = useMemo(() => {
+    const s = new Set<string>();
+    flatConcepts.forEach((c) => {
+      if (c.status) s.add(c.status);
+    });
+    return Array.from(s).sort();
+  }, [flatConcepts]);
+
+  // Apply the list-scoped Status filter. A concept is shown unless its status is
+  // currently hidden. Concepts without a status are always shown.
+  const visibleFlatConcepts = useMemo(() => {
+    if (hiddenStatuses.size === 0) return flatConcepts;
+    return flatConcepts.filter((c) => !(c.status && hiddenStatuses.has(c.status)));
+  }, [flatConcepts, hiddenStatuses]);
+
+  // Paginate the flat LIST view (25 per page). The TREE view is never
+  // paginated — paginating a hierarchy would orphan parent/child rows.
+  const {
+    pageItems: pagedFlatConcepts,
+    page: listPage,
+    setPage: setListPage,
+    pageCount: listPageCount,
+    pageSize: listPageSize,
+    setPageSize: setListPageSize,
+  } = usePagination(visibleFlatConcepts, 10);
+
+  // Batch-fetch mapping status for the concepts currently on screen (list view).
+  // One request for the whole visible set, not per-row. Only IRIs we don't
+  // already have are requested, so paging/filtering top-ups stay cheap.
+  useEffect(() => {
+    if (viewMode !== 'list') return;
+    // Only the current page is on screen, so only fetch mapping status for it.
+    const iris = pagedFlatConcepts
+      .map((c) => c.iri)
+      .filter((iri) => !(iri in mappingStatus));
+    if (iris.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/semantic-links/mapping-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iris }),
+        });
+        if (!res.ok) return; // endpoint unavailable — leave column as muted dash
+        const data = await res.json();
+        if (cancelled || !data?.statuses) return;
+        setMappingStatus((prev) => ({ ...prev, ...data.statuses }));
+      } catch {
+        // Network/endpoint error — degrade silently to muted dash.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, pagedFlatConcepts]);
+
+  // Fetch successor IRIs for the visible inactive concepts (deprecated /
+  // superseded / retired). One §1 read per such concept; results are cached, so
+  // scrolling/filtering only queries the newly-seen ones. Runs in both list and
+  // tree modes (both surface status badges).
+  useEffect(() => {
+    const targets = filteredConcepts.filter(
+      (c) => isInactiveStatus(c.status) && !(c.iri in successorsByIri),
+    );
+    if (targets.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const updates: Record<string, string[]> = {};
+      for (const c of targets) {
+        try {
+          const res = await get<{ replaced_by_iris?: string[] }>(
+            `/api/semantic-models/concepts/version?iri=${encodeURIComponent(c.iri)}`,
+          );
+          if (cancelled) return;
+          updates[c.iri] = res.data?.replaced_by_iris ?? [];
+        } catch {
+          if (cancelled) return;
+          updates[c.iri] = [];
+        }
+      }
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setSuccessorsByIri((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredConcepts]);
+
+  // Resolve an IRI to a human label from the concepts we already have. Simple
+  // view must never show a raw IRI, so fall back to the last path segment (a
+  // readable-ish token) rather than the full IRI when the concept isn't loaded.
+  const labelForIri = useCallback(
+    (iri: string): string => {
+      const match = treeData.conceptMap.get(iri) || filteredConcepts.find((c) => c.iri === iri);
+      if (match) return conceptLabel(match);
+      return iri.split(/[/#]/).pop() || iri;
+    },
+    [treeData, filteredConcepts, conceptLabel],
+  );
+
+  // The "Replaced by {successor}" link shown on inactive concepts that name a
+  // successor. Navigates to the successor's detail page. Rendered in both the
+  // tree row and the list row.
+  const renderReplacedBy = (concept: OntologyConcept): React.ReactNode => {
+    if (!isInactiveStatus(concept.status)) return null;
+    const successors = successorsByIri[concept.iri];
+    if (!successors || successors.length === 0) return null;
+    const primary = successors[0];
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline shrink-0"
+        title={t('semantic-models:versionHistory.replacedBy', 'Replaced by {{label}}', {
+          label: labelForIri(primary),
+        })}
+        onClick={(e) => {
+          e.stopPropagation();
+          const target = treeData.conceptMap.get(primary) || filteredConcepts.find((c) => c.iri === primary);
+          if (target) onSelectConcept(target);
+        }}
+      >
+        <ArrowRight className="h-3 w-3" />
+        {t('semantic-models:versionHistory.replacedBy', 'Replaced by {{label}}', {
+          label: labelForIri(primary),
+        })}
+      </button>
+    );
+  };
+
   // Render a single tree row with rich content (icon + label + type + collection
   // + status pill + property hints).
-  const renderTreeItem = (itemId: string, level: number = 0): React.ReactNode => {
-    const isSourceGroup = groupBySource && treeData.sourceContexts.includes(itemId);
+  //
+  // `flat` (default false) is used ONLY by the list view-mode: it forces the row
+  // to render as a leaf (no expand chevron, no child recursion) so the SAME row
+  // markup can be reused for a flat list without a divergent copy. The tree path
+  // never passes `flat`, so its rendering output is unchanged.
+  const renderTreeItem = (itemId: string, level: number = 0, flat: boolean = false): React.ReactNode => {
+    // A group header row — either a scheme group (groupBySource, keyed on
+    // source_context) or a file group (groupByFile, keyed on source_file).
+    // `isSourceGroup` keeps its name for minimal churn but now means "is any
+    // group header". `isFileGroup` narrows it to the file dimension.
+    const isSourceGroup = isGrouping && treeData.groupKeys.includes(itemId);
+    const isFileGroup = groupByFile && isSourceGroup;
     const concept = treeData.conceptMap.get(itemId);
-    const isExpanded = expandedGroups.includes(itemId) || (searchQuery.length > 0);
-    const hasChildren = isFolder(itemId);
-    const children = getChildren(itemId);
+    const isExpanded = !flat && (expandedGroups.includes(itemId) || (searchQuery.length > 0));
+    const hasChildren = !flat && isFolder(itemId);
+    const children = flat ? [] : getChildren(itemId);
     const isSelected = selectedConcept?.iri === itemId;
 
     if (isSourceGroup && searchQuery) {
@@ -284,9 +684,16 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       return typeIcons[concept?.concept_type || 'concept'] || <Layers className="h-4 w-4 shrink-0" />;
     };
 
-    const displayName = isSourceGroup
-      ? systemRdfNamespaceDisplayLabel(itemId, t)
-      : (concept ? conceptLabel(concept) : itemId);
+    const displayName = isFileGroup
+      // A file group's title IS the filename verbatim (no namespace
+      // prettifying — it's a literal file). The sentinel renders as a muted
+      // "No source file" label.
+      ? (itemId === NO_FILE_KEY
+          ? t('semantic-models:filters.noSourceFile', 'No source file')
+          : itemId)
+      : isSourceGroup
+        ? systemRdfNamespaceDisplayLabel(itemId, t)
+        : (concept ? conceptLabel(concept) : itemId);
 
     const collection = concept?.source_context ? getCollection(concept.source_context) : null;
     const collectionLabel = collection?.label
@@ -303,6 +710,9 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
             "hover:bg-accent hover:text-accent-foreground transition-colors",
             isSelected && !isSourceGroup && "bg-primary/10 text-primary",
             isSourceGroup && "font-semibold bg-muted/40",
+            // Dim inactive concepts (deprecated/superseded/retired) so they
+            // don't read as active clutter. Hover restores full opacity.
+            !isSourceGroup && isInactiveStatus(concept?.status) && "opacity-60 hover:opacity-100",
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
           onClick={() => {
@@ -345,9 +755,33 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
 
           {getConceptIcon()}
 
-          <span className="truncate text-sm font-medium" title={displayName}>
-            {displayName}
-          </span>
+          {isSourceGroup && sourceGroupFile.get(itemId) ? (
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-sm font-medium" title={displayName}>
+                {displayName}
+              </span>
+              <span
+                className="truncate text-[10px] font-normal text-muted-foreground"
+                title={sourceGroupFile.get(itemId) as string}
+              >
+                {t('semantic-models:columns.fromFile', 'from {{file}}', {
+                  file: sourceGroupFile.get(itemId) as string,
+                })}
+              </span>
+            </span>
+          ) : (
+            <span
+              className={cn(
+                'truncate text-sm font-medium',
+                // The "No source file" sentinel group reads as an absence, so
+                // render it muted/italic to set it apart from real filenames.
+                isFileGroup && itemId === NO_FILE_KEY && 'italic text-muted-foreground',
+              )}
+              title={displayName}
+            >
+              {displayName}
+            </span>
+          )}
 
           {/* Right-side metadata: type, collection, status, property hints */}
           {!isSourceGroup && concept && (
@@ -388,6 +822,22 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                   {t(`semantic-models:status.${concept.status}`, concept.status)}
                 </Badge>
               )}
+              {renderReplacedBy(concept)}
+              {onEditConcept && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  aria-label={t('common:actions.edit')}
+                  title={t('common:actions.edit')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditConcept(concept);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           )}
 
@@ -406,6 +856,239 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       </div>
     );
   };
+
+  // Grid column template shared by the list header and list rows so cells align.
+  // checkbox | name+definition | Kind | Scheme | Mapping | Status | edit
+  // Name is capped (minmax with a max) and Scheme/Mapping get flexible shares so
+  // on wide screens the columns spread out instead of clustering on the right.
+  const LIST_GRID =
+    'grid grid-cols-[28px_minmax(220px,1.6fr)_110px_minmax(120px,1fr)_minmax(120px,0.8fr)_110px_40px] gap-4 items-center';
+
+  // Render one flat LIST row: a real table row with columns, a bulk-select
+  // checkbox, and an inline edit pencil. Distinct from renderTreeItem so the
+  // tree engine stays untouched; only the list gets the columnar layout.
+  const renderListRow = (concept: OntologyConcept): React.ReactNode => {
+    const label = conceptLabel(concept);
+    const definition = concept.comment || '';
+    const collection = concept.source_context ? getCollection(concept.source_context) : null;
+    const collectionLabel = collection?.label
+      || (concept.source_context ? systemRdfNamespaceDisplayLabel(concept.source_context, t) : '');
+    const map = mappingLabel(mappingStatus[concept.iri], t);
+    const checked = selectedIris.has(concept.iri);
+
+    return (
+      <div
+        key={concept.iri}
+        data-testid={`concept-row-${concept.iri}`}
+        className={cn(
+          LIST_GRID,
+          'px-3 py-2 border-b last:border-b-0 cursor-pointer transition-colors',
+          checked ? 'bg-sky-500/[0.08]' : 'hover:bg-accent',
+          // Dim inactive concepts (deprecated/superseded/retired); hover restores.
+          isInactiveStatus(concept.status) && !checked && 'opacity-60 hover:opacity-100',
+        )}
+        onClick={() => handleSelect(concept)}
+      >
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={checked}
+            onCheckedChange={() => toggleRowSelect(concept.iri)}
+            aria-label={t('common:actions.select', 'Select')}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 min-w-0">
+          {typeIcons[concept.concept_type] || typeIcons.concept}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium" title={label}>{label}</div>
+            {definition && (
+              <div className="truncate text-xs text-muted-foreground" title={definition}>
+                {definition}
+              </div>
+            )}
+            {/* Raw IRI is the ontology layer — shown only in Advanced view. */}
+            <div className="adv-only truncate text-[10px] font-mono text-muted-foreground/80" title={concept.iri}>
+              {concept.iri}
+            </div>
+          </div>
+        </div>
+
+        <span className="text-xs text-muted-foreground truncate">
+          {t(`semantic-models:types.${concept.concept_type}`)}
+        </span>
+
+        <span className="text-sm truncate" title={collectionLabel}>{collectionLabel}</span>
+
+        <span
+          className={cn(
+            'text-sm truncate',
+            map?.none && 'text-amber-700 dark:text-amber-400',
+          )}
+        >
+          {map ? map.text : <span className="text-muted-foreground">—</span>}
+        </span>
+
+        <span className="min-w-0 flex flex-col items-start gap-0.5">
+          {concept.concept_type === 'property' ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <>
+              {concept.status && (
+                <Badge
+                  variant="outline"
+                  className={cn('text-[10px] font-medium', STATUS_VARIANTS[concept.status] || '')}
+                >
+                  {t(`semantic-models:status.${concept.status}`, concept.status)}
+                </Badge>
+              )}
+              {renderReplacedBy(concept)}
+            </>
+          )}
+        </span>
+
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          {onEditConcept && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              aria-label={t('common:actions.edit')}
+              title={t('common:actions.edit')}
+              onClick={() => onEditConcept(concept)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Select-all checkbox for the current page (list view only).
+  const allVisibleSelected = pagedFlatConcepts.length > 0 && pagedFlatConcepts.every((c) => selectedIris.has(c.iri));
+
+  // Column header row for the list. Labels live here so cells stay quiet text.
+  const listHeader = (
+    <div
+      className={cn(
+        LIST_GRID,
+        'px-3 py-2 border-b bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sticky top-0 z-10',
+      )}
+    >
+      <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+        <Checkbox
+          checked={allVisibleSelected}
+          onCheckedChange={(checked) => {
+            if (checked) {
+              // Select all visible rows on the current page
+              const newSelected = new Set(selectedIris);
+              pagedFlatConcepts.forEach((c) => newSelected.add(c.iri));
+              setSelectedIris(newSelected);
+            } else {
+              // Deselect all visible rows on the current page
+              const newSelected = new Set(selectedIris);
+              pagedFlatConcepts.forEach((c) => newSelected.delete(c.iri));
+              setSelectedIris(newSelected);
+            }
+          }}
+          aria-label={t('semantic-models:bulk.selectAll', 'Select all')}
+        />
+      </div>
+      <span>{t('semantic-models:columns.name', 'Name')}</span>
+      <span>{t('semantic-models:columns.kind', 'Kind')}</span>
+      <span>{t('semantic-models:columns.scheme', 'Scheme')}</span>
+      <span>{t('semantic-models:columns.mapping', 'Mapping')}</span>
+      <span>{t('semantic-models:columns.status', 'Status')}</span>
+      <span />
+    </div>
+  );
+
+  // Light bulk-action bar, shown when any rows are selected (list view only).
+  const bulkBar = selectedIris.size > 0 && (
+    <div className="flex items-center gap-3 px-3 py-2 mb-2 rounded-md border border-sky-500/30 bg-sky-500/[0.08] text-sm">
+      <b className="font-semibold">
+        {t('semantic-models:bulk.selected', '{{count}} selected', { count: selectedIris.size })}
+      </b>
+      <div className="ml-auto flex items-center gap-2">
+        {/* Set status: real lifecycle transitions across the selection. The
+            backend enforces which transitions are valid per concept. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7" disabled={bulkBusy}>
+              {t('semantic-models:bulk.setStatus', 'Set status')}
+              <ChevronDown className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {BULK_STATUS_ACTIONS.map((a) => {
+              const label = t(a.labelKey, a.defaultLabel);
+              return (
+                <DropdownMenuItem key={a.action} onClick={() => runBulkStatus(a.action, label)}>
+                  {label}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          aria-label={t('common:actions.clear', 'Clear')}
+          onClick={() => setSelectedIris(new Set())}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+
+  // List-scoped Status filter (list view only). A checkbox menu over the
+  // statuses actually present; unchecked = hidden. Retired + archived are
+  // hidden by default (see hiddenStatuses init). Shows a small count badge when
+  // any status is hidden so the filtered-down state is legible.
+  const hiddenPresentCount = presentStatuses.filter((s) => hiddenStatuses.has(s)).length;
+  const statusFilterBar = presentStatuses.length > 0 && (
+    <div className="flex items-center gap-2 px-3 py-2 mb-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-7">
+            <ListFilter className="h-3.5 w-3.5 mr-1.5" />
+            {t('semantic-models:filters.status', 'Status')}
+            {hiddenPresentCount > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+                {presentStatuses.length - hiddenPresentCount}/{presentStatuses.length}
+              </Badge>
+            )}
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuLabel>
+            {t('semantic-models:filters.showStatuses', 'Show statuses')}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {presentStatuses.map((status) => (
+            <DropdownMenuCheckboxItem
+              key={status}
+              checked={!hiddenStatuses.has(status)}
+              onSelect={(e) => e.preventDefault()}
+              onCheckedChange={() => toggleStatusHidden(status)}
+            >
+              {t(`semantic-models:status.${status}`, status)}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {hiddenPresentCount > 0 && (
+        <span className="text-[11px] text-muted-foreground">
+          {t('semantic-models:filters.statusHiddenNote', '{{count}} hidden', {
+            count: hiddenPresentCount,
+          })}
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <div className="border rounded-lg flex flex-col bg-card overflow-hidden max-h-[calc(100vh-260px)]">
@@ -434,14 +1117,79 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           }
         }}
       >
-        <div className="p-2 min-w-max">
-          {rootConcepts.map(id => renderTreeItem(id, 0))}
+        <div className={cn('p-2', viewMode === 'list' ? 'min-w-[760px]' : 'min-w-max')}>
+          {viewMode === 'list' ? (
+            <>
+              {bulkBar}
+              {statusFilterBar}
+              {visibleFlatConcepts.length > 0 && listHeader}
+              {isGrouping
+                ? treeData.groupKeys.map(groupKey => {
+                    // Group only the CURRENT PAGE's rows so headers reflect what
+                    // is actually on screen; pagination is over the flat set.
+                    // The key extractor keys on source_context (scheme) or
+                    // source_file (file) depending on the active dimension.
+                    const rows = pagedFlatConcepts.filter(c => groupKeyOf(c) === groupKey);
+                    if (rows.length === 0) return null;
+                    // File groups show the filename verbatim (sentinel → muted
+                    // "No source file"); scheme groups use the namespace label.
+                    const groupLabel = groupByFile
+                      ? (groupKey === NO_FILE_KEY
+                          ? t('semantic-models:filters.noSourceFile', 'No source file')
+                          : groupKey)
+                      : systemRdfNamespaceDisplayLabel(groupKey, t);
+                    return (
+                      <div key={`flat-group-${groupKey}`}>
+                        <div className="flex items-center gap-2 px-3 py-1.5 font-semibold bg-muted/40 border-b">
+                          <FolderTree className="h-4 w-4 shrink-0 text-orange-500" />
+                          <span
+                            className={cn(
+                              'truncate text-sm',
+                              groupByFile && groupKey === NO_FILE_KEY && 'italic text-muted-foreground',
+                            )}
+                          >
+                            {groupLabel}
+                          </span>
+                          <Badge variant="secondary" className="text-xs ml-auto">
+                            {rows.length}
+                          </Badge>
+                        </div>
+                        {rows.map(c => renderListRow(c))}
+                      </div>
+                    );
+                  })
+                : pagedFlatConcepts.map(c => renderListRow(c))}
 
-          {rootConcepts.length === 0 && (
-            <div className="text-center text-muted-foreground py-12">
-              <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>{t('semantic-models:messages.noConceptsFound')}</p>
-            </div>
+              {visibleFlatConcepts.length === 0 && (
+                <div className="text-center text-muted-foreground py-12">
+                  <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>{t('semantic-models:messages.noConceptsFound')}</p>
+                </div>
+              )}
+
+              {visibleFlatConcepts.length > 0 && (
+                <div className="px-3 py-2">
+                  <PaginationControls
+                    page={listPage}
+                    pageCount={listPageCount}
+                    onPageChange={setListPage}
+                    pageSize={listPageSize}
+                    onPageSizeChange={setListPageSize}
+                  />
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {rootConcepts.map(id => renderTreeItem(id, 0))}
+
+              {rootConcepts.length === 0 && (
+                <div className="text-center text-muted-foreground py-12">
+                  <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>{t('semantic-models:messages.noConceptsFound')}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

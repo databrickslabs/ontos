@@ -483,26 +483,34 @@ class ComplianceManager:
                 })
         return objs
 
-    def _workspace_client_for(self, match_type: Optional[str], policy: CompliancePolicyDb):
-        """Workspace client for a run, or None when it can't be created and the
-        rule doesn't need it.
+    def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
+        """Workspace client for a run, or None when the rule doesn't need one.
 
-        Rules on Unity Catalog types fail as before; rules on app entities run
-        without it, and ``Object`` rules then skip the Unity Catalog entities.
+        Rules whose MATCH covers Unity Catalog types (including ``Object``,
+        which covers every type) need the client: without it the run fails
+        instead of passing after evaluating only part of its scope. Rules on
+        app entities alone run without it.
         """
         from src.common.compliance_entities import UnityCatalogLoader
         from src.common.workspace_client import get_workspace_client
 
+        needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
         try:
-            return get_workspace_client()
+            ws = get_workspace_client()
         except Exception as e:
-            if (match_type or '').lower() in UnityCatalogLoader(None).get_supported_types():
+            if needs_uc:
                 raise
             logger.warning(
-                "Workspace client unavailable, policy '%s' (%s) runs without Unity "
-                "Catalog entities: %s", policy.name, policy.id, e,
+                "Workspace client unavailable, policy '%s' (%s) only matches app entities "
+                "and runs without it: %s", policy.name, policy.id, e,
             )
             return None
+        if ws is None and needs_uc:
+            raise RuntimeError(
+                "Databricks workspace client unavailable; this rule matches Unity Catalog "
+                "objects and cannot be evaluated without it"
+            )
+        return ws
 
     def run_policy_inline(
         self, 
@@ -525,12 +533,12 @@ class ComplianceManager:
             # Parse the rule using enhanced DSL
             parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
 
-            # Create entity iterator
-            ws = self._workspace_client_for(parsed_rule.get('match_type'), policy)
-            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
-
             # Parse entity filter
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
+
+            # Create entity iterator
+            ws = self._workspace_client_for(entity_filter.entity_types, policy)
+            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Iterate over entities
             for obj in entity_iterator.iterate(

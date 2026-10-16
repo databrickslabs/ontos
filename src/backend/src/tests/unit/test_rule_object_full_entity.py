@@ -154,6 +154,48 @@ def test_a_rule_step_fails_when_the_entity_cannot_be_loaded(db_session):
 
     assert result.passed is False
     assert result.error == 'Could not load data_product product-1 to evaluate the rule'
+    # A code and parameters the UI can translate the error from
+    assert result.data == {
+        'error_code': 'rule_entity_load_failed',
+        'error_params': {'entityType': 'data_product', 'entityId': 'product-1'},
+    }
+
+
+def test_conditional_and_policy_steps_carry_the_same_error_code(db_session):
+    from src.common.workflow_executor import ConditionalStepHandler, PolicyCheckStepHandler
+    from src.db_models.compliance import CompliancePolicyDb
+
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name='p', description='d', is_active=True,
+        rule="MATCH (obj:data_product) ASSERT obj.name != ''",
+    )
+    db_session.add(policy)
+    db_session.flush()
+    context = _context('data_product', 'product-1', {'name': 'p'})
+
+    with patch('src.controller.entity_dict_builder.build_data_product_dict',
+               side_effect=RuntimeError('db down')):
+        conditional = ConditionalStepHandler(
+            db_session, {'condition': "obj.name = 'p'"},
+        ).execute(context)
+        policy_check = PolicyCheckStepHandler(
+            db_session, {'policy_id': policy.id},
+        ).execute(context)
+
+    for result in (conditional, policy_check):
+        assert result.passed is False
+        assert result.data['error_code'] == 'rule_entity_load_failed'
+        assert result.data['error_params']['entityId'] == 'product-1'
+    assert policy_check.data['policy_id'] == policy.id
+
+
+def test_other_rule_step_errors_have_no_code(db_session):
+    result = _validate(db_session, 'MATCH (obj:data_product) ASSERT', _context(
+        'data_product', 'product-1', {'name': 'p'},
+    ))
+
+    assert result.passed is False
+    assert not (result.data or {}).get('error_code')
 
 
 def test_before_update_gates_see_only_the_proposed_change(db_session):

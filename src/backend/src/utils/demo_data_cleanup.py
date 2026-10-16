@@ -76,6 +76,8 @@ PART_OF: Set[Tuple[str, str]] = {
     ('data_contract_schema_object_custom_properties', 'schema_object_id'),
     ('data_contract_schema_object_relationships', 'schema_object_id'),
     ('data_contract_schema_property_authoritative_definitions', 'property_id'),
+    # Added by #609; an entry for a table that doesn't exist yet is never matched
+    ('data_contract_schema_property_custom_properties', 'property_id'),
     ('data_contract_schema_property_relationships', 'property_id'),
     # Compliance policies: their runs and results
     ('compliance_runs', 'policy_id'),

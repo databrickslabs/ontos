@@ -299,6 +299,23 @@ def test_demo_rows_are_deleted_children_first_whatever_the_pack_order(db_session
     }
 
 
+@pytest.mark.parametrize('schema_table', [
+    'data_contract_schema_objects', 'data_contract_schema_properties',
+])
+def test_every_table_under_a_contract_schema_is_a_part_of_it(schema_table):
+    # Rows that hang off a contract's schema objects or properties can't exist
+    # without them. A new table there (e.g. #609's property custom properties)
+    # must be listed in PART_OF, or editing a demo contract would block the clear.
+    from src.utils.demo_data_cleanup import PART_OF, _referencing_foreign_keys
+
+    children = {
+        (child.name, column)
+        for child, column, _ in _referencing_foreign_keys().get(schema_table, [])
+    }
+
+    assert children and children <= PART_OF
+
+
 def test_nothing_to_clear(db_session):
     plan, deleted = _clear(db_session, [('data_products', 'id', [_id()])])
     assert plan.blocking == {} and plan.dependents == {}

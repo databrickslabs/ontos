@@ -749,5 +749,14 @@
     "tabMemberships": "Membresías",
     "detailsFailed": "No se pudieron obtener los detalles del usuario",
     "loadFailed": "No se pudieron cargar los datos del perfil"
+  },
+  "deprecation": {
+    "reason": "Motivo de la obsolescencia",
+    "reasonPlaceholder": "¿Por qué queda obsoleto? Los consumidores verán este texto.",
+    "sunsetDate": "Fecha de retirada",
+    "replacement": "Reemplazo",
+    "noReplacement": "Sin reemplazo",
+    "reasonRequired": "Se requiere un motivo para marcarlo como obsoleto.",
+    "requestHint": "La justificación se usará como motivo de la obsolescencia."
   }
 }

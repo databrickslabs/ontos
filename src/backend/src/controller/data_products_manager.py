@@ -98,6 +98,15 @@ from src.controller.domain_export_adapter import (
     ONTOS_ORIGINAL_DOMAIN_PROPERTY,
     original_domain_strings_from_props,
 )
+from src.controller.lifecycle_fields import (
+    DeprecationDetails,
+    apply_lifecycle_fields,
+    check_lifecycle_fields,
+    lifecycle_custom_properties,
+    pop_lifecycle_custom_properties,
+    requested_status_change_justification,
+    set_lifecycle_columns,
+)
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -334,6 +343,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ):
                 product_data['draft_owner_id'] = user
 
+            # Lifecycle fields exported as ontos* customProperties map back to columns
+            lifecycle_props = pop_lifecycle_custom_properties(product_data.get('customProperties'))
+
             # Validate
             try:
                 product_api_model = DataProductCreate(**product_data)
@@ -346,6 +358,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
+            if lifecycle_props:
+                set_lifecycle_columns(created_db_obj, 'data_product', lifecycle_props)
+                db_session.flush()
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -910,7 +925,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         new_status: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
     ) -> DataProductApi:
         """
         Transition product status with validation.
@@ -924,6 +940,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_id: ID of the product
             new_status: Target status
             current_user: Username for audit trail
+            deprecation: Reason, sunset date and replacement, required when
+                moving to ``deprecated`` (see ``lifecycle_fields``)
             
         Returns:
             Updated product
@@ -952,6 +970,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     f"Invalid status transition from '{current_status}' to '{new_status_lower}'. "
                     f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}"
                 )
+
+            check_lifecycle_fields(
+                self._db, 'data_product', product_id, new_status_lower, deprecation
+            )
             
             # Run before_status_change workflows (gating)
             try:
@@ -981,6 +1003,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             
             # Update status
             old_status = product_db.status
+            lifecycle_changes = apply_lifecycle_fields(
+                product_db, 'data_product', current_status, new_status_lower, deprecation
+            )
             product_db.status = new_status_lower
             self._db.add(product_db)
             self._db.commit()
@@ -1004,6 +1029,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         "from_status": old_status,
                         "to_status": new_status_lower,
                         "summary": f"Status changed from '{old_status}' to '{new_status_lower}'" + (f" by {current_user}" if current_user else ""),
+                        **lifecycle_changes,
                     },
                 )
             except Exception as log_err:
@@ -1027,7 +1053,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 from_status=current_status,
                 to_status=new_status_lower,
                 entity_name=product_db.name,
-                entity_data={"name": product_db.name, "status": new_status_lower},
+                entity_data={"name": product_db.name, "status": new_status_lower,
+                             **lifecycle_changes},
                 user_email=current_user,
             )
 
@@ -1278,7 +1305,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "Use POST /api/data-products/{id}/certify with a certification_level instead."
         )
 
-    def deprecate_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+    def deprecate_product(self, product_id: str, current_user: Optional[str] = None,
+                          deprecation: Optional[DeprecationDetails] = None) -> DataProductApi:
         """
         Deprecate an active product (active → deprecated).
 
@@ -1296,7 +1324,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        return self.transition_status(product_id, 'deprecated', current_user)
+        return self.transition_status(
+            product_id, 'deprecated', current_user, deprecation=deprecation
+        )
 
     # ==================== Status Change Request/Approval Methods ====================
 
@@ -1504,8 +1534,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             pass
         
         if decision == 'approve':
-            # Apply the status change directly
-            self.transition_status(product_id, target_status, current_user)
+            # Apply the status change directly; a requested deprecation uses
+            # the request's justification as its reason
+            justification = requested_status_change_justification(
+                db, 'data_product', product_id, target_status
+            )
+            self.transition_status(
+                product_id, target_status, current_user,
+                deprecation=DeprecationDetails(reason=justification),
+            )
             notification_title = "Product Status Change Approved"
             notification_desc = f"Your request to change the status of '{product.name}' to '{target_status}' has been approved by '{approver_email}'."
         elif decision == 'deny':
@@ -3633,6 +3670,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
+        for prop, value in lifecycle_custom_properties(product, 'data_product').items():
+            _upsert_custom_property(odps, prop, value)
 
         if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [

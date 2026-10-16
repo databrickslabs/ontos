@@ -749,5 +749,14 @@
     "tabMemberships": "Lidmaatschappen",
     "detailsFailed": "Ophalen van gebruikersdetails mislukt",
     "loadFailed": "Laden van profielgegevens mislukt"
+  },
+  "deprecation": {
+    "reason": "Reden voor uitfasering",
+    "reasonPlaceholder": "Waarom wordt het uitgefaseerd? Afnemers zien deze tekst.",
+    "sunsetDate": "Einddatum",
+    "replacement": "Vervanging",
+    "noReplacement": "Geen vervanging",
+    "reasonRequired": "Een reden is verplicht om uit te faseren.",
+    "requestHint": "De motivatie wordt de reden voor de uitfasering."
   }
 }

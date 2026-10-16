@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
@@ -63,6 +63,9 @@ class ColumnProperty(BaseModel):
     # Semantic concepts for business glossary integration
     semanticConcepts: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     authoritativeDefinitions: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # ODCS customProperties of the column: the ODCS list form on input, or the
+    # {name: value} form the schema property editor sends; returned as a dict
+    customProperties: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
 
     # ODCS additional property fields
     businessName: Optional[str] = None
@@ -584,6 +587,19 @@ class DataContractRead(BaseModel):
     publication_scope: str = "none"
     published_at: Optional[str] = None
     published_by: Optional[str] = None
+
+    # Deprecation lifecycle fields (set when the contract moves to `deprecated`)
+    deprecation_reason: Optional[str] = None
+    sunset_date: Optional[str] = None
+    replacement_contract_id: Optional[str] = None
+    deprecated_at: Optional[str] = None
+
+    @field_validator('published_at', 'sunset_date', 'deprecated_at', mode='before')
+    @classmethod
+    def _isoformat_dates(cls, value):
+        # Validating ORM rows (from_attributes, e.g. version history) passes
+        # date / datetime columns, not the strings the builder produces.
+        return value.isoformat() if isinstance(value, (date, datetime)) else value
 
     class Config:
         populate_by_name = True

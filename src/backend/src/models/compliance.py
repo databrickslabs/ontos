@@ -41,6 +41,8 @@ class ComplianceRun(BaseModel):
     failure_count: int
     score: float
     error_message: Optional[str] = None
+    error_code: Optional[str] = None  # translated by the UI; error_message is the fallback
+    error_params: Optional[dict] = None
 
 
 class ComplianceResult(BaseModel):

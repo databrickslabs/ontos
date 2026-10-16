@@ -129,11 +129,18 @@ class ContractCloner:
                     schema.properties, new_schema_id
                 )
 
-            # Clone authoritative definitions for this schema
-            if hasattr(schema, 'authoritative_defs') and schema.authoritative_defs:
+            # Clone authoritative definitions for this schema (the relationship
+            # is `authoritative_definitions`; nothing was copied under the old name)
+            schema_defs = getattr(schema, 'authoritative_definitions', None)
+            if schema_defs:
                 cloned_schema['authoritative_defs'] = self.clone_authoritative_defs(
-                    schema.authoritative_defs, new_schema_id, 'schema'
+                    schema_defs, new_schema_id, 'schema'
                 )
+
+            # Schema-level customProperties, in the ODCS list form
+            if getattr(schema, 'custom_properties', None):
+                from src.utils.property_custom_properties import odcs_custom_properties
+                cloned_schema['custom_properties'] = odcs_custom_properties(schema.custom_properties)
 
             cloned_schemas.append(cloned_schema)
 
@@ -171,10 +178,16 @@ class ContractCloner:
                 'transform_description': getattr(prop, 'transform_description', None),
             }
 
+            # Property-level customProperties, in the ODCS list form
+            if getattr(prop, 'custom_properties', None):
+                from src.utils.property_custom_properties import odcs_custom_properties
+                cloned_prop['custom_properties'] = odcs_custom_properties(prop.custom_properties)
+
             # Clone authoritative definitions for this property
-            if hasattr(prop, 'authoritative_defs') and prop.authoritative_defs:
+            prop_defs = getattr(prop, 'authoritative_definitions', None)
+            if prop_defs:
                 cloned_prop['authoritative_defs'] = self.clone_authoritative_defs(
-                    prop.authoritative_defs, new_prop_id, 'property'
+                    prop_defs, new_prop_id, 'property'
                 )
 
             cloned_properties.append(cloned_prop)
@@ -321,7 +334,8 @@ class ContractCloner:
             cloned_def = {
                 'id': str(uuid4()),
                 'url': auth_def.url,
-                'type': auth_def.type
+                'type': auth_def.type,
+                'stable_id': getattr(auth_def, 'stable_id', None),
             }
 
             # Set appropriate parent ID based on level

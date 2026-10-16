@@ -749,5 +749,14 @@
     "tabMemberships": "Mitgliedschaften",
     "detailsFailed": "Benutzerdetails konnten nicht abgerufen werden",
     "loadFailed": "Profildaten konnten nicht geladen werden"
+  },
+  "deprecation": {
+    "reason": "Grund der Abkündigung",
+    "reasonPlaceholder": "Warum wird es abgekündigt? Konsumenten sehen diesen Text.",
+    "sunsetDate": "Auslaufdatum",
+    "replacement": "Ersatz",
+    "noReplacement": "Kein Ersatz",
+    "reasonRequired": "Für die Abkündigung ist ein Grund erforderlich.",
+    "requestHint": "Die Begründung wird zum Grund der Abkündigung."
   }
 }

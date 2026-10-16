@@ -20,13 +20,20 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from src.common.workflow_executor import NotificationStepHandler, StepContext
+from src.common.workflow_executor import (
+    _ENTITY_TYPE_LABELS,
+    ApprovalStepHandler,
+    NotificationStepHandler,
+    StepContext,
+)
 from src.common.workflow_notification_texts import (
+    APPROVAL_TITLE,
     DEFAULT_TEMPLATE_MESSAGE,
     DEFAULT_TEMPLATE_TITLE,
     TEMPLATE_MESSAGES,
     TEMPLATE_TITLES,
     placeholders,
+    shipped_approval_messages,
     shipped_messages,
 )
 
@@ -55,13 +62,21 @@ def _i18next(text):
     return re.sub(r'\$\{([^}]+)\}', lambda m: '{{' + m.group(1).strip() + '}}', text)
 
 
-def _shipped_notification_messages():
+def _shipped(step_type, field):
     workflows = yaml.safe_load(WORKFLOWS.read_text())['workflows']
     return [
-        (wf['id'], step['id'], step['config']['custom_message'])
+        (wf['id'], step['id'], step['config'][field])
         for wf in workflows for step in wf['steps']
-        if step.get('type') == 'notification' and (step.get('config') or {}).get('custom_message')
+        if step.get('type') == step_type and (step.get('config') or {}).get(field)
     ]
+
+
+def _shipped_notification_messages():
+    return _shipped('notification', 'custom_message')
+
+
+def _shipped_approval_messages():
+    return _shipped('approval', 'message')
 
 
 # --- The locales and the shipped texts -------------------------------------
@@ -97,9 +112,21 @@ def test_template_texts_have_their_english_text():
         assert en.get(f'{prefix}.{template}.message') == braces(message)
 
 
+def test_every_shipped_approval_message_has_its_english_text():
+    en = _locale('en')
+    messages = _shipped_approval_messages()
+    assert messages
+    for workflow_id, step_id, text in messages:
+        key = shipped_approval_messages()[text]
+        assert key == f'notifications:workflowDefaults.approvalMessages.{workflow_id}.{step_id}'
+        assert en.get(key) == _i18next(text), key
+        assert all('.' not in name for name in placeholders(text)), text
+
+
 def test_english_has_no_other_texts():
     en = _locale('en')
-    expected = set(shipped_messages().values())
+    expected = set(shipped_messages().values()) | set(shipped_approval_messages().values())
+    expected |= {key for key in en if key.startswith('notifications:workflowDefaults.approval.')}
     expected |= {f'notifications:workflowDefaults.templates.{t}.title' for t in [*TEMPLATE_TITLES, 'default']}
     expected |= {f'notifications:workflowDefaults.templates.{t}.message' for t in [*TEMPLATE_MESSAGES, 'default']}
     assert set(en) == expected
@@ -179,3 +206,134 @@ def test_an_unknown_template_uses_the_default_texts(db_session):
     assert sent.title == 'Workflow Notification'
     assert sent.data['i18n']['title'] == 'notifications:workflowDefaults.templates.default.title'
     assert sent.data['i18n']['description'] == 'notifications:workflowDefaults.templates.default.message'
+
+
+# --- The approval step's notification ----------------------------------------
+
+def _approval(db, config, context):
+    with patch('src.repositories.notification_repository.notification_repo') as repo:
+        result = ApprovalStepHandler(db, {'approvers': 'steward@co.com', **config}).execute(context)
+    assert result.passed, result.error
+    return repo.create.call_args.kwargs['obj_in']
+
+
+def _access_request(**entity):
+    return _context(
+        entity_type='access_grant', entity_id='req-1', entity_name='req-1',
+        entity={
+            'entity_type': 'data_product', 'entity_id': 'p-1', 'entity_name': 'Sales Pipeline',
+            'permission_level': 'READ', 'requested_duration_days': 30,
+            'reason': 'Quarterly report', **entity,
+        },
+    )
+
+
+def _render(text, lang_texts, count=None):
+    """A text as i18next renders it, from the given locale texts."""
+    key = text.get('key')
+    if not key:
+        return text['text']
+    if count is not None:
+        key = f"{key}_{'one' if count == 1 else 'other'}"
+    template = lang_texts[key]
+    params = {
+        name: _render(value, lang_texts) if isinstance(value, dict) else str(value)
+        for name, value in (text.get('params') or {}).items()
+    }
+    return I18N_PLACEHOLDER.sub(lambda m: params[m.group(1)], template)
+
+
+def _rendered(sent, lang):
+    texts = _locale(lang)
+    return '\n'.join(
+        _render(line, texts, (line.get('params') or {}).get('count'))
+        for line in sent.data['i18n']['descriptionLines']
+    )
+
+
+def test_an_approval_is_sent_with_the_keys_of_its_lines(db_session):
+    sent = _approval(db_session, {}, _access_request())
+
+    # The stored English texts are as before
+    assert sent.title == APPROVAL_TITLE == 'Approval Required'
+    assert sent.description == (
+        "Requester: requester@example.com\n"
+        "Resource: Data Product · Sales Pipeline\n"
+        "Permission: READ\n"
+        "Duration: 30 days\n"
+        "Reason: Quarterly report"
+    )
+    i18n = sent.data['i18n']
+    assert i18n['title'] == 'notifications:workflowDefaults.approval.title'
+    assert [line.get('key') for line in i18n['descriptionLines']] == [
+        f'notifications:workflowDefaults.approval.lines.{key}'
+        for key in ['requester', 'resource', 'permission', 'duration', 'reason']
+    ]
+    resource = i18n['descriptionLines'][1]['params']
+    assert resource['resourceType']['key'] == 'notifications:workflowDefaults.approval.entityTypes.data_product'
+    assert resource['resourceName'] == 'Sales Pipeline'
+    assert i18n['descriptionLines'][3]['params'] == {'count': 30}
+
+    # English renders the stored description; Portuguese translates the labels
+    assert _rendered(sent, 'en') == sent.description
+    assert _rendered(sent, 'pt') == (
+        "Solicitante: requester@example.com\n"
+        "Recurso: Produto de dados · Sales Pipeline\n"
+        "Permissão: READ\n"
+        "Duração: 30 dias\n"
+        "Motivo: Quarterly report"
+    )
+
+
+def test_a_shipped_approval_message_is_translated(db_session):
+    workflow_id, step_id, message = _shipped_approval_messages()[0]
+    assert workflow_id == 'certification-request-review'
+    context = _context(entity_type='data_product', entity_id='p-1', entity_name='Sales Pipeline')
+    sent = _approval(db_session, {'message': message}, context)
+
+    line = sent.data['i18n']['descriptionLines'][-1]
+    assert line['text'] == (
+        "Workflow message: Please review the certification request for data_product 'Sales Pipeline'."
+    )
+    assert line['params']['message']['key'] == (
+        f'notifications:workflowDefaults.approvalMessages.{workflow_id}.{step_id}'
+    )
+    assert line['params']['message']['params'] == {'entity_type': 'data_product', 'entity_name': 'Sales Pipeline'}
+    assert _rendered(sent, 'en') == sent.description
+    assert _rendered(sent, 'pt').endswith(
+        "Mensagem do workflow: Revise a solicitação de certificação de data_product 'Sales Pipeline'."
+    )
+
+
+def test_an_edited_approval_message_is_shown_as_written(db_session):
+    context = _context(entity_type='data_product', entity_id='p-1', entity_name='Sales Pipeline')
+    sent = _approval(db_session, {'message': "Check '${entity_name}' against the runbook."}, context)
+
+    line = sent.data['i18n']['descriptionLines'][-1]
+    assert line['params'] == {'message': "Check 'Sales Pipeline' against the runbook."}
+    assert _rendered(sent, 'pt').endswith(
+        "Mensagem do workflow: Check 'Sales Pipeline' against the runbook."
+    )
+
+
+def test_an_unknown_requester_and_unknown_lines(db_session):
+    context = _context(
+        entity_type='data_contract', entity_id='c-1', entity_name='orders', user_email=None,
+        entity={'name': 'orders', 'justification': 'Needed for the audit'},
+    )
+    sent = _approval(db_session, {}, context)
+
+    assert sent.description == (
+        "Requester: Unknown\nResource: Data Contract · orders\nJustification: Needed for the audit"
+    )
+    assert _rendered(sent, 'en') == sent.description
+    assert _rendered(sent, 'pt') == (
+        "Solicitante: Desconhecido\nRecurso: Contrato de dados · orders\n"
+        "Justificativa: Needed for the audit"
+    )
+
+
+def test_every_entity_type_label_has_its_english_text():
+    en = _locale('en')
+    for entity_type, label in {**_ENTITY_TYPE_LABELS, 'entity': 'Entity'}.items():
+        assert en.get(f'notifications:workflowDefaults.approval.entityTypes.{entity_type}') == label

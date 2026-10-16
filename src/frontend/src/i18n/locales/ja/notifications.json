@@ -169,6 +169,39 @@
         "notify-invalid": "'{{entity_name}}' の公開リクエストは却下されました。公開できるのは承認済みのデータコントラクトとアクティブなデータプロダクトのみです。",
         "notify-error": "'{{entity_name}}' の公開中にエラーが発生しました。"
       }
+    },
+    "approval": {
+      "title": "承認が必要です",
+      "lines": {
+        "requester": "申請者: {{requester}}",
+        "unknownRequester": "不明",
+        "resource": "リソース: {{resourceType}} · {{resourceName}}",
+        "resourceType": "リソース: {{resourceType}}",
+        "permission": "権限: {{permission}}",
+        "duration_one": "期間: {{count}} 日",
+        "duration_other": "期間: {{count}} 日",
+        "reason": "理由: {{reason}}",
+        "workflowMessage": "ワークフローのメッセージ: {{message}}",
+        "message": "メッセージ: {{message}}",
+        "justification": "正当な理由: {{justification}}"
+      },
+      "entityTypes": {
+        "data_product": "データプロダクト",
+        "data_contract": "データコントラクト",
+        "data_domain": "データドメイン",
+        "data_asset_review": "データアセットレビュー",
+        "access_grant": "アクセス付与",
+        "asset": "アセット",
+        "entity": "エンティティ"
+      }
+    },
+    "approvalMessages": {
+      "certification-request-review": {
+        "approval-gate": "{{entity_type}} '{{entity_name}}' の認定リクエストを確認してください。"
+      },
+      "publication-request-review": {
+        "approval-gate": "{{entity_type}} '{{entity_name}}' の公開リクエストを確認してください。"
+      }
     }
   }
 }

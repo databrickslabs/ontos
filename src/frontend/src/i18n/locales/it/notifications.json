@@ -169,6 +169,39 @@
         "notify-invalid": "La richiesta di pubblicazione per '{{entity_name}}' è stata rifiutata: si possono pubblicare solo contratti dati approvati e prodotti dati attivi.",
         "notify-error": "Si è verificato un errore durante la pubblicazione di '{{entity_name}}'."
       }
+    },
+    "approval": {
+      "title": "Approvazione necessaria",
+      "lines": {
+        "requester": "Richiedente: {{requester}}",
+        "unknownRequester": "Sconosciuto",
+        "resource": "Risorsa: {{resourceType}} · {{resourceName}}",
+        "resourceType": "Risorsa: {{resourceType}}",
+        "permission": "Autorizzazione: {{permission}}",
+        "duration_one": "Durata: {{count}} giorno",
+        "duration_other": "Durata: {{count}} giorni",
+        "reason": "Motivo: {{reason}}",
+        "workflowMessage": "Messaggio del workflow: {{message}}",
+        "message": "Messaggio: {{message}}",
+        "justification": "Giustificazione: {{justification}}"
+      },
+      "entityTypes": {
+        "data_product": "Prodotto dati",
+        "data_contract": "Contratto dati",
+        "data_domain": "Dominio dati",
+        "data_asset_review": "Revisione asset dati",
+        "access_grant": "Concessione di accesso",
+        "asset": "Asset",
+        "entity": "Entità"
+      }
+    },
+    "approvalMessages": {
+      "certification-request-review": {
+        "approval-gate": "Esamina la richiesta di certificazione per {{entity_type}} '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "approval-gate": "Esamina la richiesta di pubblicazione per {{entity_type}} '{{entity_name}}'."
+      }
     }
   }
 }

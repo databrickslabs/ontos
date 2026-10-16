@@ -169,6 +169,39 @@
         "notify-invalid": "De publicatieaanvraag voor '{{entity_name}}' is afgewezen: alleen goedgekeurde datacontracten en actieve dataproducten kunnen worden gepubliceerd.",
         "notify-error": "Er is een fout opgetreden bij het publiceren van '{{entity_name}}'."
       }
+    },
+    "approval": {
+      "title": "Goedkeuring vereist",
+      "lines": {
+        "requester": "Aanvrager: {{requester}}",
+        "unknownRequester": "Onbekend",
+        "resource": "Bron: {{resourceType}} · {{resourceName}}",
+        "resourceType": "Bron: {{resourceType}}",
+        "permission": "Recht: {{permission}}",
+        "duration_one": "Duur: {{count}} dag",
+        "duration_other": "Duur: {{count}} dagen",
+        "reason": "Reden: {{reason}}",
+        "workflowMessage": "Workflowbericht: {{message}}",
+        "message": "Bericht: {{message}}",
+        "justification": "Motivering: {{justification}}"
+      },
+      "entityTypes": {
+        "data_product": "Dataproduct",
+        "data_contract": "Datacontract",
+        "data_domain": "Datadomein",
+        "data_asset_review": "Data-assetreview",
+        "access_grant": "Toegangsverlening",
+        "asset": "Asset",
+        "entity": "Entiteit"
+      }
+    },
+    "approvalMessages": {
+      "certification-request-review": {
+        "approval-gate": "Beoordeel de certificeringsaanvraag voor {{entity_type}} '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "approval-gate": "Beoordeel de publicatieaanvraag voor {{entity_type}} '{{entity_name}}'."
+      }
     }
   }
 }

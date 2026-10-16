@@ -169,6 +169,39 @@
         "notify-invalid": "Die Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt: Nur genehmigte Datenverträge und aktive Datenprodukte können veröffentlicht werden.",
         "notify-error": "Beim Veröffentlichen von '{{entity_name}}' ist ein Fehler aufgetreten."
       }
+    },
+    "approval": {
+      "title": "Genehmigung erforderlich",
+      "lines": {
+        "requester": "Antragsteller: {{requester}}",
+        "unknownRequester": "Unbekannt",
+        "resource": "Ressource: {{resourceType}} · {{resourceName}}",
+        "resourceType": "Ressource: {{resourceType}}",
+        "permission": "Berechtigung: {{permission}}",
+        "duration_one": "Dauer: {{count}} Tag",
+        "duration_other": "Dauer: {{count}} Tage",
+        "reason": "Grund: {{reason}}",
+        "workflowMessage": "Workflow-Nachricht: {{message}}",
+        "message": "Nachricht: {{message}}",
+        "justification": "Begründung: {{justification}}"
+      },
+      "entityTypes": {
+        "data_product": "Datenprodukt",
+        "data_contract": "Datenvertrag",
+        "data_domain": "Datendomäne",
+        "data_asset_review": "Daten-Asset-Prüfung",
+        "access_grant": "Zugriffsgewährung",
+        "asset": "Asset",
+        "entity": "Entität"
+      }
+    },
+    "approvalMessages": {
+      "certification-request-review": {
+        "approval-gate": "Bitte prüfen Sie die Zertifizierungsanfrage für {{entity_type}} '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "approval-gate": "Bitte prüfen Sie die Veröffentlichungsanfrage für {{entity_type}} '{{entity_name}}'."
+      }
     }
   }
 }

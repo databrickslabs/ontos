@@ -38,6 +38,7 @@ from src.common.workflow_notification_texts import (
     DEFAULT_TEMPLATE_TITLE,
     TEMPLATE_MESSAGES,
     TEMPLATE_TITLES,
+    approval_notification_i18n,
     notification_step_i18n,
 )
 
@@ -635,6 +636,12 @@ class ApprovalStepHandler(StepHandler):
                         facets=facets,
                         approval_message=approval_message,
                     )
+                    # Keys of its texts, so the bell shows them in the user's language
+                    i18n_data = approval_notification_i18n(
+                        description, self._config.get('message'), approval_message,
+                        lambda name: substitute_template('${' + name + '}', context),
+                        _ENTITY_TYPE_LABELS,
+                    )
 
                     notification = Notification(
                         id=str(uuid4()),
@@ -667,6 +674,7 @@ class ApprovalStepHandler(StepHandler):
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,
+                        data=i18n_data,
                     )
                     notification_repo.create(db=self._db, obj_in=notification)
                     created_count += 1

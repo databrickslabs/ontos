@@ -1,6 +1,7 @@
 /**
- * Notifications of the default workflows' notification steps carry the keys
- * of their built-in texts (backend: src/common/workflow_notification_texts.py).
+ * Notifications of the default workflows' notification and approval steps
+ * carry the keys of their built-in texts (backend:
+ * src/common/workflow_notification_texts.py).
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import i18n from '@/i18n/config';
@@ -48,5 +49,75 @@ describe('default workflow notifications', () => {
     await i18n.changeLanguage('pt');
     expect(notificationTitle(edited, t)).toBe('Solicitação aprovada');
     expect(notificationDescription(edited, t)).toBe(edited.description);
+  });
+});
+
+const KEY = 'notifications:workflowDefaults.approval';
+
+// As sent by an approval step for an access request (one line per fact)
+const approval = {
+  title: 'Approval Required',
+  description: [
+    'Requester: requester@example.com',
+    'Resource: Data Product · Sales Pipeline',
+    'Duration: 1 day',
+    "Workflow message: Check 'Sales Pipeline' against the runbook.",
+    'Note: kept as is',
+  ].join('\n'),
+  data: {
+    i18n: {
+      title: `${KEY}.title`,
+      descriptionLines: [
+        { key: `${KEY}.lines.requester`, text: 'Requester: requester@example.com', params: { requester: 'requester@example.com' } },
+        {
+          key: `${KEY}.lines.resource`,
+          text: 'Resource: Data Product · Sales Pipeline',
+          params: {
+            resourceType: { key: `${KEY}.entityTypes.data_product`, text: 'Data Product' },
+            resourceName: 'Sales Pipeline',
+          },
+        },
+        { key: `${KEY}.lines.duration`, text: 'Duration: 1 day', params: { count: 1 } },
+        {
+          key: `${KEY}.lines.workflowMessage`,
+          text: "Workflow message: Check 'Sales Pipeline' against the runbook.",
+          params: { message: "Check 'Sales Pipeline' against the runbook." },
+        },
+        { text: 'Note: kept as is' },
+      ],
+    },
+  },
+};
+
+describe('approval notifications', () => {
+  afterEach(() => {
+    i18n.changeLanguage('en');
+  });
+
+  it('shows each line in the user language', async () => {
+    expect(notificationTitle(approval, t)).toBe('Approval Required');
+    expect(notificationDescription(approval, t)).toBe(approval.description);
+
+    await i18n.changeLanguage('pt');
+    expect(notificationTitle(approval, t)).toBe('Aprovação necessária');
+    expect(notificationDescription(approval, t)).toBe([
+      'Solicitante: requester@example.com',
+      'Recurso: Produto de dados · Sales Pipeline',
+      'Duração: 1 dia',
+      "Mensagem do workflow: Check 'Sales Pipeline' against the runbook.",
+      'Note: kept as is',
+    ].join('\n'));
+
+    await i18n.changeLanguage('de');
+    expect(notificationDescription(approval, t).split('\n')[2]).toBe('Dauer: 1 Tag');
+  });
+
+  it('falls back to the English text of a line without a translation', async () => {
+    await i18n.changeLanguage('pt');
+    const unknownKey = {
+      ...approval,
+      data: { i18n: { descriptionLines: [{ key: `${KEY}.lines.notAKey`, text: 'Requester: x' }] } },
+    };
+    expect(notificationDescription(unknownKey, t)).toBe('Requester: x');
   });
 });

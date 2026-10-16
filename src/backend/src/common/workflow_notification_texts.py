@@ -13,6 +13,11 @@ user's language:
   the one shipped in ``default_workflows.yaml``. A message an admin wrote or
   changed has no key and is shown as written.
 
+``approval_notification_i18n`` does the same for the notification of an
+approval step ("Approval Required"): its description is one line per fact
+(requester, resource, permission ...), each sent with its key, and the step's
+message translated while it is still the shipped one.
+
 The keys are under ``notifications:workflowDefaults`` in the frontend locales
 (``src/frontend/src/i18n/locales/<lang>/notifications.json``), where the
 ``${variable}`` placeholders of the texts are ``{{variable}}``.
@@ -21,7 +26,7 @@ import logging
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 import yaml
 
@@ -78,26 +83,42 @@ def placeholders(text: str) -> list:
 
 
 @lru_cache(maxsize=1)
-def shipped_messages() -> Dict[str, str]:
-    """The i18n key of each notification message shipped in the default workflows.
-
-    By text: ``notifications:workflowDefaults.messages.<workflow id>.<step id>``.
-    """
+def _default_workflows() -> List[Dict[str, Any]]:
     try:
         with open(DEFAULT_WORKFLOWS_PATH) as f:
             data = yaml.safe_load(f) or {}
     except Exception as e:
         logger.warning(f"Could not read the default workflows for notification texts: {e}")
-        return {}
+        return []
+    return data.get('workflows') or []
+
+
+def _shipped_texts(step_type: str, field: str, group: str) -> Dict[str, str]:
     keys: Dict[str, str] = {}
-    for workflow in data.get('workflows') or []:
+    for workflow in _default_workflows():
         for step in workflow.get('steps') or []:
-            message = (step.get('config') or {}).get('custom_message')
-            if step.get('type') == 'notification' and message:
-                keys.setdefault(
-                    message, f"{KEY_PREFIX}.messages.{workflow.get('id')}.{step.get('id')}"
-                )
+            text = (step.get('config') or {}).get(field)
+            if step.get('type') == step_type and text:
+                keys.setdefault(text, f"{KEY_PREFIX}.{group}.{workflow.get('id')}.{step.get('id')}")
     return keys
+
+
+@lru_cache(maxsize=1)
+def shipped_messages() -> Dict[str, str]:
+    """The i18n key of each notification message shipped in the default workflows.
+
+    By text: ``notifications:workflowDefaults.messages.<workflow id>.<step id>``.
+    """
+    return _shipped_texts('notification', 'custom_message', 'messages')
+
+
+@lru_cache(maxsize=1)
+def shipped_approval_messages() -> Dict[str, str]:
+    """The i18n key of each approval step message shipped in the default workflows.
+
+    By text: ``notifications:workflowDefaults.approvalMessages.<workflow id>.<step id>``.
+    """
+    return _shipped_texts('approval', 'message', 'approvalMessages')
 
 
 def template_title_key(template: str) -> str:
@@ -132,3 +153,90 @@ def notification_step_i18n(
         return notification_i18n_data(template_title_key(template))
     params = {name: resolve(name) for name in placeholders(custom_message)}
     return notification_i18n_data(template_title_key(template), message_key, **params)
+
+
+# --- Approval notifications ------------------------------------------------
+
+APPROVAL_TITLE = "Approval Required"
+
+# Labelled lines of an approval notification's description, as
+# ``_build_approval_description`` writes them ("<Label>: <value>"): the label,
+# the line's key and the name of its value in the key's text. Resource and
+# Duration lines are read on their own.
+APPROVAL_LINES: Dict[str, tuple] = {
+    'Requester': ('requester', 'requester'),
+    'Permission': ('permission', 'permission'),
+    'Reason': ('reason', 'reason'),
+    'Workflow message': ('workflowMessage', 'message'),
+    'Message': ('message', 'message'),
+    'Justification': ('justification', 'justification'),
+}
+UNKNOWN_REQUESTER = "Unknown"
+UNKNOWN_ENTITY_TYPE = "Entity"
+DURATION_LINE = re.compile(r'^Duration: (\d+) days?$')
+
+
+def _approval_text(key: str, text: str, **params: Any) -> Dict[str, Any]:
+    entry: Dict[str, Any] = {'key': f"{KEY_PREFIX}.approval.{key}", 'text': text}
+    if params:
+        entry['params'] = params
+    return entry
+
+
+def approval_notification_i18n(
+    description: str,
+    raw_message: Optional[str],
+    message: Optional[str],
+    resolve: Callable[[str], str],
+    entity_type_labels: Mapping[str, str],
+) -> Dict[str, Any]:
+    """The ``data`` of an approval step's notification, with its i18n keys.
+
+    ``description`` is the English description as built for the notification;
+    each of its lines is sent as ``{key, params, text}`` in
+    ``i18n.descriptionLines`` (a param can itself be such a text), and a line
+    it doesn't know as ``{text}``. ``raw_message`` is the step's configured
+    message and ``message`` the same with its ``${variables}`` filled in;
+    ``resolve`` gives a variable's value. ``entity_type_labels`` are the labels
+    of the entity types in the description (type → label).
+    """
+    types = {label: entity_type for entity_type, label in entity_type_labels.items()}
+    types.setdefault(UNKNOWN_ENTITY_TYPE, 'entity')
+
+    def entity_type(label: str) -> Any:
+        if label in types:
+            return _approval_text(f"entityTypes.{types[label]}", label)
+        return label
+
+    def line_text(line: str) -> Dict[str, Any]:
+        duration = DURATION_LINE.match(line)
+        if duration:
+            return _approval_text('lines.duration', line, count=int(duration.group(1)))
+        label, separator, value = line.partition(': ')
+        if not separator:
+            return {'text': line}
+        if label == 'Resource':
+            type_label, dot, name = value.partition(' · ')
+            if dot:
+                return _approval_text('lines.resource', line,
+                                      resourceType=entity_type(type_label), resourceName=name)
+            return _approval_text('lines.resourceType', line, resourceType=entity_type(value))
+        if label not in APPROVAL_LINES:
+            return {'text': line}
+        key, param = APPROVAL_LINES[label]
+        shown: Any = value
+        if label == 'Requester' and value == UNKNOWN_REQUESTER:
+            shown = _approval_text('lines.unknownRequester', value)
+        elif label == 'Workflow message' and value == message:
+            message_key = shipped_approval_messages().get(raw_message or '')
+            if message_key:
+                shown = {'key': message_key, 'text': value}
+                params = {name: resolve(name) for name in placeholders(raw_message)}
+                if params:
+                    shown['params'] = params
+        return _approval_text(f"lines.{key}", line, **{param: shown})
+
+    return {'i18n': {
+        'title': f"{KEY_PREFIX}.approval.title",
+        'descriptionLines': [line_text(line) for line in description.split('\n')],
+    }}

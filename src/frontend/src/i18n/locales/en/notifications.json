@@ -169,6 +169,39 @@
         "notify-invalid": "Publication request for '{{entity_name}}' was rejected: only approved data contracts and active data products can be published.",
         "notify-error": "An error occurred while publishing '{{entity_name}}'."
       }
+    },
+    "approval": {
+      "title": "Approval Required",
+      "lines": {
+        "requester": "Requester: {{requester}}",
+        "unknownRequester": "Unknown",
+        "resource": "Resource: {{resourceType}} · {{resourceName}}",
+        "resourceType": "Resource: {{resourceType}}",
+        "permission": "Permission: {{permission}}",
+        "duration_one": "Duration: {{count}} day",
+        "duration_other": "Duration: {{count}} days",
+        "reason": "Reason: {{reason}}",
+        "workflowMessage": "Workflow message: {{message}}",
+        "message": "Message: {{message}}",
+        "justification": "Justification: {{justification}}"
+      },
+      "entityTypes": {
+        "data_product": "Data Product",
+        "data_contract": "Data Contract",
+        "data_domain": "Data Domain",
+        "data_asset_review": "Data Asset Review",
+        "access_grant": "Access Grant",
+        "asset": "Asset",
+        "entity": "Entity"
+      }
+    },
+    "approvalMessages": {
+      "certification-request-review": {
+        "approval-gate": "Please review the certification request for {{entity_type}} '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "approval-gate": "Please review the publication request for {{entity_type}} '{{entity_name}}'."
+      }
     }
   }
 }

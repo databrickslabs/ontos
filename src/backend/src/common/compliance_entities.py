@@ -15,6 +15,10 @@ from src.common.compliance_dsl import Lexer, Parser, Evaluator
 logger = get_logger(__name__)
 
 
+class EntityLoadError(RuntimeError):
+    """Data a rule needs could not be loaded, so the run must not pass."""
+
+
 @dataclass
 class EntityFilter:
     """Filter criteria for entities."""
@@ -207,6 +211,45 @@ class AppEntityLoader(EntityLoader):
     def get_supported_types(self) -> List[str]:
         return list(self.SUPPORTED_TYPES)
 
+    def _tags_by_entity(self, entity_type: str, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Assigned tags per entity, for HAS_TAG / TAG in rules.
+
+        Each tag is keyed by its fully qualified name (``namespace/name``) and,
+        when no other namespace has a tag of the same name on that entity, by
+        its name; the value is the assigned value, or True when the tag has
+        none. A failed lookup raises EntityLoadError: without the tags, rules
+        on them would pass or match nothing as if the entities were untagged.
+        """
+        if not entity_ids:
+            return {}
+        try:
+            from src.repositories.tags_repository import entity_tag_repo
+            # In a savepoint: on Postgres a failed query aborts the transaction,
+            # and the run could not then be recorded as failed.
+            with self.db.begin_nested():
+                assigned = entity_tag_repo.get_assigned_tags_for_entities(
+                    self.db, entity_ids=entity_ids, entity_type=entity_type
+                )
+        except Exception as e:
+            logger.exception("Failed to load tags of %s entities for compliance", entity_type)
+            error = EntityLoadError(f"Could not load the tags of {entity_type} entities")
+            # A code the UI translates; the message stays the fallback
+            error.error_code, error.error_params = 'tags_load_failed', {'entityType': entity_type}
+            raise error from e
+        tags_by_entity: Dict[str, Dict[str, Any]] = {}
+        for entity_id, tags in assigned.items():
+            namespaces_by_name: Dict[str, set] = {}
+            for tag in tags:
+                namespaces_by_name.setdefault(tag.tag_name, set()).add(tag.fully_qualified_name)
+            values: Dict[str, Any] = {}
+            for tag in tags:
+                value = tag.assigned_value if tag.assigned_value is not None else True
+                values[tag.fully_qualified_name] = value
+                if len(namespaces_by_name[tag.tag_name]) == 1:
+                    values[tag.tag_name] = value
+            tags_by_entity[str(entity_id)] = values
+        return tags_by_entity
+
     def load_entities(
         self,
         entity_types: List[str],
@@ -233,6 +276,7 @@ class AppEntityLoader(EntityLoader):
                 domains_map = entity_domain_repo.get_domains_for_entities(
                     self.db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
                 ) if products else {}
+                tags_map = self._tags_by_entity('data_product', [str(p.id) for p in products])
                 for product in products:
                     assigned = domains_map.get(str(product.id), [])
                     primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
@@ -246,10 +290,12 @@ class AppEntityLoader(EntityLoader):
                         'status': product.status,
                         'version': getattr(product, 'version', None),
                         'owner': getattr(product, 'owner_team_id', None),
-                        'tags': {},
+                        'tags': tags_map.get(str(product.id), {}),
                         'created_at': getattr(product, 'created_at', None),
                         'updated_at': getattr(product, 'updated_at', None),
                     }
+            except EntityLoadError:
+                raise
             except Exception:
                 logger.exception("Failed to load data products for compliance")
 
@@ -257,7 +303,9 @@ class AppEntityLoader(EntityLoader):
         if 'data_contract' in entity_types:
             try:
                 from src.repositories.data_contracts_repository import data_contract_repo
-                for contract in data_contract_repo.get_multi(self.db, limit=1000):
+                contracts = data_contract_repo.get_multi(self.db, limit=1000)
+                tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
+                for contract in contracts:
                     yield {
                         'type': 'data_contract',
                         'id': contract.id,
@@ -267,10 +315,12 @@ class AppEntityLoader(EntityLoader):
                         'version': getattr(contract, 'version', None),
                         'owner': getattr(contract, 'owner_team_id', None),
                         'domain': getattr(contract, 'domain_id', None),
-                        'tags': {},
+                        'tags': tags_map.get(str(contract.id), {}),
                         'created_at': getattr(contract, 'created_at', None),
                         'updated_at': getattr(contract, 'updated_at', None),
                     }
+            except EntityLoadError:
+                raise
             except Exception:
                 logger.exception("Failed to load data contracts for compliance")
 
@@ -278,17 +328,21 @@ class AppEntityLoader(EntityLoader):
         if 'domain' in entity_types:
             try:
                 from src.repositories.data_domain_repository import data_domain_repo
-                for domain in data_domain_repo.get_multi(self.db, limit=1000):
+                domains = data_domain_repo.get_multi(self.db, limit=1000)
+                tags_map = self._tags_by_entity('data_domain', [str(d.id) for d in domains])
+                for domain in domains:
                     yield {
                         'type': 'domain',
                         'id': domain.id,
                         'name': domain.name,
                         'description': getattr(domain, 'description', None),
                         'owner': getattr(domain, 'owner_team_id', None),
-                        'tags': {},
+                        'tags': tags_map.get(str(domain.id), {}),
                         'created_at': getattr(domain, 'created_at', None),
                         'updated_at': getattr(domain, 'updated_at', None),
                     }
+            except EntityLoadError:
+                raise
             except Exception:
                 logger.exception("Failed to load domains for compliance")
 

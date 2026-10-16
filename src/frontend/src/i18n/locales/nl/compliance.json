@@ -168,5 +168,9 @@
   "ruleWarnings": {
     "unsupported_match_type": "Het MATCH-type '{{type}}' wordt niet ondersteund, dus de regel controleert geen entiteiten. Ondersteunde typen: {{supported}}, of Object voor allemaal.",
     "missing_assert": "De regel heeft geen ASSERT-clausule, dus elke entiteit slaagt."
+  },
+  "runErrors": {
+    "rule_parse_failed": "De regel kon niet worden geparseerd: {{detail}}",
+    "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar ({{detail}}) en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd."
   }
 }

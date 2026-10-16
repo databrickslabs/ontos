@@ -89,3 +89,19 @@ def test_app_entity_rules_run_when_the_factory_returns_none(db_session, product)
 
     assert run.status == 'succeeded'
     assert results[product.id] is True
+
+
+@pytest.mark.parametrize('client', ['raises', 'none'])
+def test_the_unavailable_client_error_carries_a_code_for_the_ui(client):
+    # The run stores the code (error_code / error_params) where the backend
+    # supports it, so the UI shows the message in the user's language.
+    policy = CompliancePolicyDb(id='p', name='p', rule="MATCH (o:Object) ASSERT o.name != ''")
+    unavailable = (
+        {'return_value': None} if client == 'none'
+        else {'side_effect': RuntimeError('cannot get access token')}
+    )
+    with patch(NO_CLIENT, **unavailable), pytest.raises(Exception) as e:
+        ComplianceManager()._workspace_client_for(['table'], policy)
+
+    assert e.value.error_code == 'workspace_client_unavailable'
+    assert e.value.error_params['detail']

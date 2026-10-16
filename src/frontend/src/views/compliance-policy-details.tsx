@@ -20,6 +20,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
+import { complianceRunErrorText } from '@/lib/compliance-run-error';
 
 type Policy = {
   id: string; // UUID
@@ -46,6 +47,8 @@ type Run = {
   failure_count: number;
   score: number;
   error_message?: string;
+  error_code?: string | null;
+  error_params?: Record<string, unknown> | null;
 };
 
 type Result = {
@@ -323,7 +326,7 @@ export default function CompliancePolicyDetails() {
               {t('compliance:policyDetails.runSummary.lastRunStarted', { date: new Date(activeRun.started_at).toLocaleString() })} • {t('compliance:policyDetails.runSummary.statusLabel')} <span className="font-medium">{activeRun.status}</span>
             </CardDescription>
             {activeRun.status === 'failed' && activeRun.error_message && (
-              <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {activeRun.error_message}</div>
+              <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {complianceRunErrorText(t, activeRun)}</div>
             )}
           </CardHeader>
           <CardContent>

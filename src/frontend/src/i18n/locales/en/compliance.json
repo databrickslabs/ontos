@@ -168,5 +168,9 @@
   "ruleWarnings": {
     "unsupported_match_type": "MATCH type '{{type}}' is not supported, so the rule matches no entities. Supported types: {{supported}}, or Object for all of them.",
     "missing_assert": "The rule has no ASSERT clause, so every entity passes."
+  },
+  "runErrors": {
+    "rule_parse_failed": "The rule could not be parsed: {{detail}}",
+    "workspace_client_unavailable": "The Databricks workspace isn't available ({{detail}}), and this rule checks Unity Catalog objects, so it could not run."
   }
 }

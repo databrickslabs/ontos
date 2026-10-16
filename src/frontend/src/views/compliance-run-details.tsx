@@ -15,6 +15,7 @@ import {
   DetailHeaderSkeleton,
   TableSkeleton,
 } from '@/components/common/list-view-skeleton';
+import { complianceRunErrorText } from '@/lib/compliance-run-error';
 
 interface Run {
   id: string; // UUID
@@ -26,6 +27,8 @@ interface Run {
   failure_count: number;
   score: number;
   error_message?: string;
+  error_code?: string | null;
+  error_params?: Record<string, unknown> | null;
 }
 
 interface Result {
@@ -140,7 +143,7 @@ export default function ComplianceRunDetails() {
             {' '}{t('compliance:runDetails.passedLabel')} <span className="font-medium text-green-600">{run.success_count}</span> / {t('compliance:runDetails.failedLabel')} <span className="font-medium text-red-600">{run.failure_count}</span>
           </CardDescription>
           {run.status === 'failed' && run.error_message && (
-            <div className="text-sm text-destructive">{t('compliance:runDetails.errorLabel')} {run.error_message}</div>
+            <div className="text-sm text-destructive">{t('compliance:runDetails.errorLabel')} {complianceRunErrorText(t, run)}</div>
           )}
         </CardHeader>
         <CardContent>

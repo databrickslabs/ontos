@@ -168,5 +168,9 @@
   "ruleWarnings": {
     "unsupported_match_type": "MATCH の型 '{{type}}' はサポートされていないため、このルールはどのエンティティも評価しません。サポートされている型: {{supported}}、またはすべてを対象とする Object。",
     "missing_assert": "ルールに ASSERT 句がないため、すべてのエンティティが合格します。"
+  },
+  "runErrors": {
+    "rule_parse_failed": "ルールを解析できませんでした: {{detail}}",
+    "workspace_client_unavailable": "Databricks ワークスペースを利用できません({{detail}})。このルールは Unity Catalog オブジェクトを確認するため、実行できませんでした。"
   }
 }

@@ -168,5 +168,9 @@
   "ruleWarnings": {
     "unsupported_match_type": "Le type '{{type}}' de MATCH n'est pas pris en charge : la règle n'évalue aucune entité. Types pris en charge : {{supported}}, ou Object pour tous.",
     "missing_assert": "La règle n'a pas de clause ASSERT : toutes les entités sont conformes."
+  },
+  "runErrors": {
+    "rule_parse_failed": "La règle n'a pas pu être analysée : {{detail}}",
+    "workspace_client_unavailable": "L'espace de travail Databricks n'est pas disponible ({{detail}}) et cette règle vérifie des objets Unity Catalog ; elle n'a donc pas pu s'exécuter."
   }
 }

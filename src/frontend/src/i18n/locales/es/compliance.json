@@ -171,6 +171,7 @@
   },
   "runErrors": {
     "rule_parse_failed": "No se pudo interpretar la regla: {{detail}}",
-    "workspace_client_unavailable": "El workspace de Databricks no está disponible ({{detail}}) y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar."
+    "workspace_client_unavailable": "El workspace de Databricks no está disponible ({{detail}}) y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar.",
+    "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
   }
 }

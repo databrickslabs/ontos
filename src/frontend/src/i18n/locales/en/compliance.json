@@ -171,6 +171,7 @@
   },
   "runErrors": {
     "rule_parse_failed": "The rule could not be parsed: {{detail}}",
-    "workspace_client_unavailable": "The Databricks workspace isn't available ({{detail}}), and this rule checks Unity Catalog objects, so it could not run."
+    "workspace_client_unavailable": "The Databricks workspace isn't available ({{detail}}), and this rule checks Unity Catalog objects, so it could not run.",
+    "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
   }
 }

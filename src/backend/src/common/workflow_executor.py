@@ -2948,6 +2948,11 @@ class WorkflowExecutor:
                 f"'{current_status}', so the change was not applied. "
                 f"Request it again if it is still needed.",
                 recipients=[trigger_context.user_email, responded_by],
+                description_key='statusChanged',
+                params={
+                    'fromStatus': requested_from, 'toStatus': target_status,
+                    'currentStatus': current_status,
+                },
             )
             return
 
@@ -2969,6 +2974,8 @@ class WorkflowExecutor:
                 f"Your request to change the status to '{target_status}' was approved, "
                 f"but the change could not be applied: {e}",
                 recipients=[trigger_context.user_email],
+                description_key='refused',
+                params={'toStatus': target_status, 'reason': str(e)},
             )
             return
         logger.info(
@@ -2982,8 +2989,15 @@ class WorkflowExecutor:
         product_id: str,
         description: str,
         recipients: List[Optional[str]],
+        description_key: str,
+        params: Dict[str, Any],
     ) -> None:
-        """Tell the given people that an approved status change was not applied."""
+        """Tell the given people that an approved status change was not applied.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        ``notifications`` namespace and their parameters, so the UI can show
+        them in the user's language.
+        """
         from uuid import uuid4
         from src.models.notifications import Notification, NotificationType
         from src.repositories.notification_repository import notification_repo
@@ -3002,6 +3016,11 @@ class WorkflowExecutor:
                 description=description,
                 recipient=recipient,
                 can_delete=True,
+                data={'i18n': {
+                    'title': 'notifications:statusChangeNotApplied.title',
+                    'description': f'notifications:statusChangeNotApplied.{description_key}',
+                    'params': params,
+                }},
             ))
         if sent:
             self._db.commit()

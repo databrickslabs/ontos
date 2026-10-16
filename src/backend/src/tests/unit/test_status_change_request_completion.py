@@ -88,6 +88,10 @@ def test_a_refused_transition_tells_the_requester(db_session):
     ).all()
     assert len(notes) == 1
     assert 'could not be applied' in notes[0].description
+    import json
+    i18n = json.loads(notes[0].data)['i18n']
+    assert i18n['description'] == 'notifications:statusChangeNotApplied.refused'
+    assert i18n['params']['toStatus'] == 'active' and i18n['params']['reason']
 
 
 def test_the_app_notifications_and_search_managers_are_used(db_session):
@@ -147,6 +151,13 @@ def test_a_request_made_from_another_status_is_not_applied(db_session):
     notes = _notes_for(db_session, product)
     assert {n.recipient for n in notes} == {'requester@example.com', 'approver@example.com'}
     assert all("is now 'sandbox'" in n.description for n in notes)
+    # The UI translates it from these keys (notifications namespace)
+    import json
+    assert all(json.loads(n.data)['i18n'] == {
+        'title': 'notifications:statusChangeNotApplied.title',
+        'description': 'notifications:statusChangeNotApplied.statusChanged',
+        'params': {'fromStatus': 'proposed', 'toStatus': 'draft', 'currentStatus': 'sandbox'},
+    } for n in notes)
 
 
 def test_completing_twice_applies_once_and_warns_nobody(db_session):

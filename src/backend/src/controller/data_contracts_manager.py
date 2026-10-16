@@ -1,7 +1,7 @@
 import json
 import uuid
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Set
 import os
 from pathlib import Path
@@ -95,10 +95,14 @@ from src.db_models.data_contracts import (
     DataContractSlaPropertyDb,
     DataContractAuthoritativeDefinitionDb,
     DataContractServerPropertyDb,
+    SchemaObjectAuthoritativeDefinitionDb,
+    SchemaPropertyAuthoritativeDefinitionDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
+from src.utils.odcs_quality_operators import odcs_operators, operator_columns
 from src.utils.property_custom_properties import (
     custom_properties_by_property,
+    object_custom_property_rows,
     odcs_custom_properties,
     property_custom_property_rows,
     stable_ids_by_property,
@@ -972,7 +976,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if getattr(db_obj, 'sla_default_element', None):
             odcs['slaDefaultElement'] = db_obj.sla_default_element
         if getattr(db_obj, 'contract_created_ts', None):
-            odcs['contractCreatedTs'] = db_obj.contract_created_ts.isoformat()
+            created_ts = db_obj.contract_created_ts
+            # In UTC, as ODCS files usually write it, not the DB session's zone
+            # (a value without a zone is UTC: the import stores it that way)
+            if created_ts.tzinfo is None:
+                created_ts = created_ts.replace(tzinfo=timezone.utc)
+            created_ts = created_ts.astimezone(timezone.utc)
+            odcs['contractCreatedTs'] = created_ts.isoformat().replace('+00:00', 'Z')
             
         # Build description object
         description: Dict[str, Any] = {}
@@ -995,14 +1005,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     ad_item['id'] = auth_def.stable_id
                 auth_defs.append(ad_item)
             description['authoritativeDefinitions'] = auth_defs
-        else:
-            # For ODCS compliance testing, add sample authoritativeDefinitions under description
-            description['authoritativeDefinitions'] = [
-                {
-                    'type': 'privacy-statement',
-                    'url': 'https://example.com/gdpr.pdf'
-                }
-            ]
 
         if description:
             odcs['description'] = description
@@ -1099,17 +1101,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if hasattr(prop, 'physical_name') and prop.physical_name:
                             prop_dict['physicalName'] = prop.physical_name
                         else:
-                            # Use a naming convention: logical name with underscores
-                            logical_name = prop.name.replace(' ', '_').lower()
-                            # For common patterns, create a simple mapping
-                            if logical_name == 'transaction_reference_date':
-                                prop_dict['physicalName'] = 'txn_ref_dt'
-                            elif logical_name == 'rcvr_id':
-                                prop_dict['physicalName'] = 'rcvr_id'  # Same as logical
-                            elif logical_name == 'rcvr_cntry_code':
-                                prop_dict['physicalName'] = 'rcvr_cntry_code'  # Same as logical
-                            else:
-                                prop_dict['physicalName'] = logical_name
+                            # Naming convention: the logical name with underscores
+                            prop_dict['physicalName'] = prop.name.replace(' ', '_').lower()
 
                         if getattr(prop, 'business_name', None):
                             prop_dict['businessName'] = prop.business_name
@@ -1122,21 +1115,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if getattr(prop, 'transform_description', None):
                             prop_dict['transformDescription'] = prop.transform_description
 
-                        # Legacy transform description for specific property (can be removed later)
-                        # For ODCS compliance, add transformDescription for properties that have transform logic
-                        if prop.transform_logic and prop.name == 'transaction_reference_date' and not prop_dict.get('transformDescription'):
-                            prop_dict['transformDescription'] = "defines the logic in business terms; logic for dummies"
-
                         # Property-level tags - always include, even if empty for ODCS compliance
                         # Tags are now rich objects managed by TagsManager
                         if hasattr(prop, 'tags') and prop.tags:
                             prop_dict['tags'] = prop.tags
                         else:
-                            # Add specific tags for ODCS compliance testing based on property
-                            if prop.name == 'rcvr_id':
-                                prop_dict['tags'] = ['uid']
-                            else:
-                                prop_dict['tags'] = []
+                            prop_dict['tags'] = []
 
                         # Property-level authoritative definitions (if relationship exists)
                         if hasattr(prop, 'authoritative_definitions') and prop.authoritative_definitions:
@@ -1150,34 +1134,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                     ad_item['id'] = auth_def.stable_id
                                 auth_defs.append(ad_item)
                             prop_dict['authoritativeDefinitions'] = auth_defs
-                        elif prop.name == 'rcvr_cntry_code':
-                            # Add sample authoritative definitions for ODCS compliance testing
-                            prop_dict['authoritativeDefinitions'] = [
-                                {
-                                    'url': 'https://collibra.com/asset/742b358f-71a5-4ab1-bda4-dcdba9418c25',
-                                    'type': 'businessDefinition'
-                                },
-                                {
-                                    'url': 'https://github.com/myorg/myrepo',
-                                    'type': 'transformationImplementation'
-                                },
-                                {
-                                    'url': 'jdbc:postgresql://localhost:5432/adventureworks/tbl_1/rcvr_cntry_code',
-                                    'type': 'implementation'
-                                }
-                            ]
 
                         # Property-level custom properties
                         if prop.custom_properties:
                             prop_dict['customProperties'] = odcs_custom_properties(prop.custom_properties)
-                        elif prop.name == 'transaction_reference_date':
-                            # Add sample custom properties for ODCS compliance testing
-                            prop_dict['customProperties'] = [
-                                {
-                                    'property': 'anonymizationStrategy',
-                                    'value': 'none'
-                                }
-                            ]
 
                         # Property-level quality rules - filter from schema object's quality checks
                         # Quality checks are stored at schema level with property_id linking to specific columns
@@ -1189,10 +1149,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             if property_quality_checks:
                                 quality = []
                                 for check in property_quality_checks:
-                                    quality_dict: Dict[str, Any] = {
-                                        'rule': check.rule or check.name,
-                                        'type': check.type,
-                                    }
+                                    quality_dict: Dict[str, Any] = {'type': check.type}
+                                    if check.rule or check.name:
+                                        quality_dict['rule'] = check.rule or check.name
                                     if getattr(check, 'stable_id', None):
                                         quality_dict['id'] = check.stable_id
                                     if check.description:
@@ -1221,12 +1180,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                         quality_dict['implementation'] = check.implementation
 
                                     # Add comparison fields
-                                    for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
-                                                 'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
-                                        value = getattr(check, field, None)
-                                        if value:
-                                            camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
-                                            quality_dict[camel_case_field] = value
+                                    quality_dict.update(odcs_operators(check))
 
                                     # Add custom properties for quality rules
                                     if hasattr(check, 'custom_properties') and check.custom_properties:
@@ -1240,25 +1194,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
                                     quality.append(quality_dict)
                                 prop_dict['quality'] = quality
-                        elif prop.name == 'rcvr_cntry_code':
-                            # Add sample property-level quality rule for ODCS compliance testing
-                            prop_dict['quality'] = [
-                                {
-                                    'rule': 'nullCheck',
-                                    'description': 'column should not contain null values',
-                                    'dimension': 'completeness',
-                                    'type': 'library',
-                                    'severity': 'error',
-                                    'businessImpact': 'operational',
-                                    'schedule': '0 20 * * *',
-                                    'scheduler': 'cron',
-                                    'customProperties': [
-                                        {'property': 'FIELD_NAME', 'value': None},
-                                        {'property': 'COMPARE_TO', 'value': None},
-                                        {'property': 'COMPARISON_TYPE', 'value': 'Greater than'}
-                                    ]
-                                }
-                            ]
 
                         # Property-level relationships (ODCS v3.1.0)
                         if hasattr(prop, 'relationships') and prop.relationships:
@@ -1287,10 +1222,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         # Property-level checks have property_id set and are exported with their properties
                         if check.property_id is not None:
                             continue
-                        quality_dict: Dict[str, Any] = {
-                            'rule': check.rule or check.name,
-                            'type': check.type,
-                        }
+                        quality_dict: Dict[str, Any] = {'type': check.type}
+                        if check.rule or check.name:
+                            quality_dict['rule'] = check.rule or check.name
                         if getattr(check, 'stable_id', None):
                             quality_dict['id'] = check.stable_id
                         if check.description:
@@ -1319,12 +1253,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             quality_dict['implementation'] = check.implementation
 
                         # Add comparison fields
-                        for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
-                                     'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
-                            value = getattr(check, field, None)
-                            if value:
-                                camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
-                                quality_dict[camel_case_field] = value
+                        quality_dict.update(odcs_operators(check))
 
                         quality.append(quality_dict)
                     schema_dict['quality'] = quality
@@ -1801,6 +1730,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def _create_schema_objects(
         self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
         custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
+        include_object_quality: bool = False,
     ):
         """
         Create schema objects and properties for a contract using bulk inserts.
@@ -1808,6 +1738,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Assigns UUIDs in Python to avoid per-row db.flush() round-trips.
         ``custom_property_ids``: per schema and property name, the ODCS ids of
         the property-level custom properties before an update recreated them.
+        ``include_object_quality``: also store the objects' own ``quality``
+        rules (ODCS files). The create and update routes send object-level
+        rules separately as ``qualityRules``, so they leave it off.
         """
         all_schema_objs = []
         all_properties = []
@@ -1815,6 +1748,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         all_prop_relationships = []
         all_quality_checks = []
         all_prop_custom_props = []
+        all_obj_custom_props = []
+        all_auth_defs = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1840,6 +1775,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 tags=json.dumps(schema_dict.get('tags', [])) if schema_dict.get('tags') else None
             )
             all_schema_objs.append(schema_obj)
+
+            # Schema-level (object) customProperties and authoritativeDefinitions
+            all_obj_custom_props.extend(object_custom_property_rows(
+                schema_obj_id,
+                schema_dict.get('customProperties') or schema_dict.get('custom_properties'),
+            ))
+            all_auth_defs.extend(self._authoritative_definition_rows(
+                SchemaObjectAuthoritativeDefinitionDb, 'schema_object_id', schema_obj_id,
+                schema_dict.get('authoritativeDefinitions'),
+            ))
+            if include_object_quality:
+                for rule_data in (schema_dict.get('quality') or []):
+                    all_quality_checks.append(
+                        self._build_quality_check_db(rule_data, object_id=schema_obj_id)
+                    )
 
             # Collect schema-level semantic link work
             schema_auth_defs = schema_dict.get('authoritativeDefinitions', [])
@@ -1936,6 +1886,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ))
 
                 prop_auth_defs = prop_dict.get('authoritativeDefinitions', [])
+                all_auth_defs.extend(self._authoritative_definition_rows(
+                    SchemaPropertyAuthoritativeDefinitionDb, 'property_id', prop_id, prop_auth_defs,
+                ))
                 if prop_auth_defs and current_user:
                     prop_semantic_work.append((contract_id, schema_dict.get('name', 'table'), prop_dict.get('name', 'column'), prop_auth_defs))
 
@@ -1965,6 +1918,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_quality_checks)
         if all_prop_custom_props:
             db.add_all(all_prop_custom_props)
+        if all_obj_custom_props:
+            db.add_all(all_obj_custom_props)
+        if all_auth_defs:
+            db.add_all(all_auth_defs)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -1989,6 +1946,29 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     authoritative_definitions=auth_defs,
                     created_by=current_user
                 )
+
+    @staticmethod
+    def _authoritative_definition_rows(model, owner_column: str, owner_id: str, auth_defs) -> List:
+        """Rows of ``model`` for the ODCS ``authoritativeDefinitions`` of a schema
+        object or property.
+
+        Semantic assignments (``SEMANTIC_ASSIGNMENT_TYPE``) are left out: they are
+        stored as semantic links, and the export adds those back.
+        """
+        from src.utils.semantic_helpers import SEMANTIC_ASSIGNMENT_TYPE
+
+        rows = []
+        for auth_def in auth_defs or []:
+            item = auth_def.model_dump() if hasattr(auth_def, 'model_dump') else auth_def
+            if not isinstance(item, dict) or not item.get('url') or not item.get('type'):
+                continue
+            if item['type'] == SEMANTIC_ASSIGNMENT_TYPE:
+                continue
+            rows.append(model(**{
+                owner_column: owner_id, 'stable_id': item.get('id'),
+                'url': item['url'], 'type': item['type'],
+            }))
+        return rows
 
     @staticmethod
     def _build_quality_check_db(rule_data, object_id: str, property_id: Optional[str] = None) -> 'DataQualityCheckDb':
@@ -2017,18 +1997,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             type=rule_dict.get('type', 'library'),
             unit=rule_dict.get('unit'),
             tags=rule_dict.get('tags'),
-            rule=rule_dict.get('rule'),
+            # ODCS v3.1.0 library rules name it `metric` (`rule` is the older name)
+            rule=rule_dict.get('rule') or rule_dict.get('metric'),
             query=rule_dict.get('query'),
             engine=rule_dict.get('engine'),
             implementation=rule_dict.get('implementation'),
-            must_be=rule_dict.get('mustBe') or rule_dict.get('must_be'),
-            must_not_be=rule_dict.get('mustNotBe') or rule_dict.get('must_not_be'),
-            must_be_gt=rule_dict.get('mustBeGt') or rule_dict.get('must_be_gt'),
-            must_be_ge=rule_dict.get('mustBeGe') or rule_dict.get('must_be_ge'),
-            must_be_lt=rule_dict.get('mustBeLt') or rule_dict.get('must_be_lt'),
-            must_be_le=rule_dict.get('mustBeLe') or rule_dict.get('must_be_le'),
-            must_be_between_min=rule_dict.get('mustBeBetweenMin') or rule_dict.get('must_be_between_min'),
-            must_be_between_max=rule_dict.get('mustBeBetweenMax') or rule_dict.get('must_be_between_max'),
+            **operator_columns(rule_dict),
         )
 
     def _create_quality_checks(self, db, contract_id: str, quality_rules: List):
@@ -2347,18 +2321,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 scheduler=rule_data.get('scheduler'),
                 unit=rule_data.get('unit'),
                 tags=rule_data.get('tags'),
-                rule=rule_data.get('rule'),
+                rule=rule_data.get('rule') or rule_data.get('metric'),
                 query=rule_data.get('query'),
                 engine=rule_data.get('engine'),
                 implementation=rule_data.get('implementation'),
-                must_be=rule_data.get('must_be') or rule_data.get('mustBe'),
-                must_not_be=rule_data.get('must_not_be') or rule_data.get('mustNotBe'),
-                must_be_gt=rule_data.get('must_be_gt') or rule_data.get('mustBeGt'),
-                must_be_ge=rule_data.get('must_be_ge') or rule_data.get('mustBeGe'),
-                must_be_lt=rule_data.get('must_be_lt') or rule_data.get('mustBeLt'),
-                must_be_le=rule_data.get('must_be_le') or rule_data.get('mustBeLe'),
-                must_be_between_min=rule_data.get('must_be_between_min') or rule_data.get('mustBeBetweenMin'),
-                must_be_between_max=rule_data.get('must_be_between_max') or rule_data.get('mustBeBetweenMax')
+                **operator_columns(rule_data),
             )
             db.add(quality_rule_db)
     
@@ -3146,7 +3113,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Accept both ODCS standard 'schema' and Pydantic field name 'contract_schema'
             schema_data = parsed_odcs.get('schema') or parsed_odcs.get('contract_schema', [])
             if isinstance(schema_data, list) and schema_data:
-                self._create_schema_objects(db, created.id, schema_data, current_user)
+                self._create_schema_objects(
+                    db, created.id, schema_data, current_user, include_object_quality=True,
+                )
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
             team_raw = parsed_odcs.get('team')
@@ -4880,10 +4849,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_id = schema_data.pop('id')
                     properties = schema_data.pop('properties', [])
                     authoritative_defs = schema_data.pop('authoritative_defs', [])
+                    schema_custom_props = schema_data.pop('custom_properties', [])
                     
                     schema = SchemaObjectDb(id=schema_id, **schema_data)
                     db.add(schema)
                     db.flush()
+                    db.add_all(object_custom_property_rows(schema_id, schema_custom_props))
                     
                     # Schema-level authoritative definitions
                     for auth_def_data in authoritative_defs:

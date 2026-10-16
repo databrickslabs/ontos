@@ -1,6 +1,6 @@
-"""Property-level (column) ODCS customProperties.
+"""Property-level (column) and schema-object ODCS customProperties.
 
-ODCS lets every schema property carry ``customProperties``. They arrive in two
+ODCS lets every schema object and property carry ``customProperties``. They arrive in two
 shapes: the ODCS list ``[{"property": ..., "value": ..., "id": ...}]`` (file
 import, ODCS payloads) and the ``{name: value}`` dict the schema property editor
 sends. Values are stored as JSON so they round-trip with their type (an Avro
@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from sqlalchemy.orm import Session
 
-from src.db_models.data_contracts import SchemaPropertyCustomPropertyDb
+from src.db_models.data_contracts import SchemaObjectCustomPropertyDb, SchemaPropertyCustomPropertyDb
 
 
 def property_custom_property_rows(
@@ -41,6 +41,27 @@ def property_custom_property_rows(
             value=json.dumps(entry.get('value')),
         ))
     return rows
+
+
+def object_custom_property_rows(
+    schema_object_id: str, custom_props: Any,
+) -> List[SchemaObjectCustomPropertyDb]:
+    """Rows for the ``customProperties`` (list or dict form) of a schema object."""
+    if isinstance(custom_props, dict):
+        entries = [{'property': k, 'value': v} for k, v in custom_props.items()]
+    elif isinstance(custom_props, list):
+        entries = [e for e in custom_props if isinstance(e, dict)]
+    else:
+        return []
+    return [
+        SchemaObjectCustomPropertyDb(
+            schema_object_id=schema_object_id,
+            stable_id=entry.get('id'),
+            property=entry['property'],
+            value=json.dumps(entry.get('value')),
+        )
+        for entry in entries if entry.get('property')
+    ]
 
 
 def decode_value(raw: Optional[str]) -> Any:

@@ -270,7 +270,8 @@ def _owner_approvers(
     Otherwise 'DomainOwner' resolves to the owners of the entity's domain and
     'ContractApprover' to the owners of the entity itself (the data
     contract), leaving out the requester. When nobody is left, the request
-    goes to the Data Steward role instead of a recipient no user matches.
+    goes to the Data Steward and Admin roles instead of a recipient no user
+    matches; handle-approval refuses the requester's own decision.
     """
     from src.db_models.settings import AppRoleDb
     from src.repositories.entity_owners_repository import (
@@ -298,12 +299,18 @@ def _owner_approvers(
     if emails:
         return [(email, None) for email in emails]
 
+    # Fallback: the Data Stewards, and the admins, who are told that no owner
+    # other than the requester was found. The requester may be a steward or an
+    # admin; handle-approval refuses their own decision on an owner approval.
     logger.warning(
         "No %s other than the requester found for %s %s; "
-        "requesting approval from Data Stewards",
+        "requesting approval from Data Stewards and admins",
         role_name, entity_type, entity_id,
     )
-    return _resolve_role_to_users(db, 'data_stewards', context)
+    return (
+        _resolve_role_to_users(db, 'data_stewards', context)
+        + _resolve_role_to_users(db, 'admins', context)
+    )
 
 
 def _resolve_role_to_users(
@@ -1431,15 +1438,20 @@ class CreateAssetReviewStepHandler(StepHandler):
                 requester_email = 'system@app.local'
             
             reviewer_email = self._resolve_reviewer(reviewer_role, context, requester_email)
-            used_fallback = False
             if not reviewer_email:
-                # Fallback: use the requester as the reviewer (self-review placeholder)
-                # This allows the asset review to be created even if the role has no members
-                reviewer_email = requester_email
-                used_fallback = True
+                # Nobody but the requester: they must not review their own request.
+                # No asset review is created; the approval step that follows decides.
                 logger.warning(
-                    f"Could not resolve reviewer from role: {reviewer_role}. "
-                    f"Using requester ({requester_email}) as fallback reviewer."
+                    "No reviewer other than the requester found for role %s; "
+                    "no asset review created", reviewer_role,
+                )
+                return StepResult(
+                    passed=True,
+                    message=(
+                        f"No reviewer other than the requester found for {reviewer_role}; "
+                        "no asset review created"
+                    ),
+                    data={'review_id': None, 'reviewer_email': None},
                 )
             
             # Determine asset FQN
@@ -1535,18 +1547,16 @@ class CreateAssetReviewStepHandler(StepHandler):
             # Use repository to create
             review = data_asset_review_repo.create_with_assets(db=self._db, obj_in=full_request)
             
-            fallback_note = " (using requester as fallback reviewer)" if used_fallback else ""
-            logger.info(f"Created asset review {review.id} for {asset_fqns} by {reviewer_email}{fallback_note}")
+            logger.info(f"Created asset review {review.id} for {asset_fqns} by {reviewer_email}")
             
             return StepResult(
                 passed=True,
-                message=f"Asset review created: {review.id}{fallback_note}",
+                message=f"Asset review created: {review.id}",
                 data={
                     'review_id': review.id,
                     'reviewer_email': reviewer_email,
                     'asset_fqns': asset_fqns,
                     'review_type': review_type,
-                    'used_fallback': used_fallback,
                 }
             )
             
@@ -1562,27 +1572,32 @@ class CreateAssetReviewStepHandler(StepHandler):
         approval steps resolve it), else a member of the groups of the role it
         resolves to (or of ``reviewer_role`` itself)."""
         tc = context.trigger_context
+        requester = requester_email.lower()
         requested = (tc.entity_data or {}).get('reviewer_email') if tc else None
-        if requested:
+        if requested and requested.lower() != requester:
             return requested
+        if requested:
+            logger.warning("Ignoring reviewer_email: the requester can't review their own request")
         roles = []
         for recipient, role_id in _resolve_role_to_users(self._db, reviewer_role, context):
             if role_id is not None:
                 roles.append(recipient)
-            elif '@' in recipient and recipient.lower() != requester_email.lower():
+            elif '@' in recipient and recipient.lower() != requester:
                 return recipient
         # A role (e.g. Data Stewards when a domain has no owner): one of its members
         for role_name in roles or [reviewer_role]:
-            reviewer = self._resolve_reviewer_from_role(role_name)
+            reviewer = self._resolve_reviewer_from_role(role_name, exclude=requester_email)
             if reviewer:
                 return reviewer
         return None
 
-    def _resolve_reviewer_from_role(self, role_identifier: str) -> Optional[str]:
+    def _resolve_reviewer_from_role(
+        self, role_identifier: str, exclude: Optional[str] = None,
+    ) -> Optional[str]:
         """Resolve a reviewer email from a role name or UUID.
         
-        Returns the email of the first user in the role's assigned groups,
-        or None if no users are found.
+        Returns the email of the first user in the role's assigned groups
+        other than ``exclude`` (the requester), or None if no users are found.
         """
         from src.db_models.settings import AppRoleDb
         from uuid import UUID
@@ -1631,7 +1646,10 @@ class CreateAssetReviewStepHandler(StepHandler):
                                     # Get user by ID
                                     try:
                                         user = ws.users.get(member.value)
-                                        if user and user.user_name:
+                                        if (
+                                            user and user.user_name
+                                            and user.user_name.lower() != (exclude or '').lower()
+                                        ):
                                             return user.user_name
                                     except Exception:
                                         continue

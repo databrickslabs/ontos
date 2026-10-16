@@ -102,13 +102,13 @@ def test_domain_without_owners_falls_back_to_data_stewards(db_session, data_stew
     _domain(db_session)
 
     assert _resolve_role_to_users(db_session, 'domain_owners', _context()) == [
-        ('Data Steward', data_steward.id),
+        ('Data Steward', data_steward.id), ('Admin', None),
     ]
 
 
 def test_entity_without_domain_falls_back_to_data_stewards(db_session, data_steward):
     assert _resolve_role_to_users(db_session, 'DomainOwner', _context()) == [
-        ('Data Steward', data_steward.id),
+        ('Data Steward', data_steward.id), ('Admin', None),
     ]
 
 
@@ -149,7 +149,7 @@ def test_contract_without_owners_falls_back_to_data_stewards(db_session, data_st
         db_session, 'ContractApprover', _context('data_contract', 'contract-1')
     )
 
-    assert resolved == [('Data Steward', data_steward.id)]
+    assert resolved == [('Data Steward', data_steward.id), ('Admin', None)]
 
 
 def test_the_requester_does_not_approve_their_own_request(db_session, data_steward):
@@ -179,7 +179,8 @@ def test_a_requester_who_is_the_only_owner_goes_to_data_stewards(db_session, dat
         db_session, 'ContractApprover', _context('data_contract', contract.id)
     )
 
-    assert resolved == [('Data Steward', data_steward.id)]
+    # Data Stewards and admins; handle-approval refuses the requester's own decision
+    assert resolved == [('Data Steward', data_steward.id), ('Admin', None)]
 
 
 def test_an_app_role_named_like_the_token_is_found(db_session, data_steward):

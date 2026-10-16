@@ -117,4 +117,53 @@ def test_a_role_falls_back_to_one_of_its_members(db_session):
         reviewer = handler._resolve_reviewer('DomainOwner', context, 'rita@example.com')
 
     assert reviewer == 'steward@example.com'
-    from_role.assert_called_once_with('Data Steward')
+    from_role.assert_called_once_with('Data Steward', exclude='rita@example.com')
+
+
+def test_the_requester_named_as_reviewer_is_ignored(db_session):
+    product_id = str(uuid.uuid4())
+    _domain_with_owners(db_session, product_id, 'rita@example.com', 'frank@example.com')
+
+    review = _create_review(
+        db_session, 'DomainOwner',
+        _context(product_id, entity_data={'reviewer_email': 'Rita@example.com'}),
+    )
+
+    assert review.reviewer_email == 'frank@example.com'
+
+
+def test_a_role_member_other_than_the_requester_reviews(db_session):
+    from src.db_models.settings import AppRoleDb
+
+    db_session.add(AppRoleDb(id=str(uuid.uuid4()), name='Data Steward',
+                             assigned_groups='["data-stewards"]'))
+    db_session.flush()
+    users = {'u1': 'rita@example.com', 'u2': 'sam@example.com'}
+    group = SimpleNamespace(members=[SimpleNamespace(value='u1'), SimpleNamespace(value='u2')])
+    ws = SimpleNamespace(
+        groups=SimpleNamespace(list=lambda **_: [group]),
+        users=SimpleNamespace(get=lambda uid: SimpleNamespace(user_name=users[uid])),
+    )
+    handler = CreateAssetReviewStepHandler(db_session, {})
+
+    with patch('src.common.workspace_client.get_workspace_client', return_value=ws):
+        reviewer = handler._resolve_reviewer_from_role('Data Steward', exclude='rita@example.com')
+
+    assert reviewer == 'sam@example.com'
+
+
+def test_no_review_is_created_when_only_the_requester_could_review(db_session):
+    product_id = str(uuid.uuid4())
+    _domain_with_owners(db_session, product_id, 'rita@example.com')  # requester only
+    handler = CreateAssetReviewStepHandler(db_session, {'reviewer_role': 'DomainOwner'})
+
+    with patch.object(CreateAssetReviewStepHandler, '_resolve_reviewer_from_role',
+                      return_value=None):
+        result = handler.execute(_context(product_id))
+
+    # The approval step that follows still decides; nobody reviews their own request
+    assert result.passed
+    assert result.data['review_id'] is None
+    assert db_session.query(DataAssetReviewRequestDb).filter(
+        DataAssetReviewRequestDb.reviewer_email == 'rita@example.com'
+    ).count() == 0

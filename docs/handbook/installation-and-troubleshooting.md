@@ -107,8 +107,10 @@ file under `src/backend/src/data/demo_data_{preset}.sql` and uses a
 per-preset UUID prefix segment (`0000`, `0001`, `0002`, …). Loading is
 through `POST /api/settings/demo-data/load?preset=<name>`. Cleanup is
 through `DELETE /api/settings/demo-data` and removes records across
-all loaded packs by demo UUID prefix. There is no implicit base
-overlay: each preset stands alone.
+all loaded packs by the ids they insert (`?dry_run=true` lists them
+first). User records that refer to demo data block the clear (409,
+listed) instead of being deleted. There is no implicit base overlay:
+each preset stands alone.
 
 ### Updating to a new version {#updates}
 

@@ -646,24 +646,37 @@ async def clear_demo_data(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager),
+    dry_run: bool = Query(
+        default=False,
+        description=(
+            "List what would be deleted, and what blocks the clear, without changing anything."
+        ),
+    ),
     # NOTE: intentionally NOT gated by PermissionChecker — see load_demo_data
     # above. Swagger-driven demo teardown; gate added in a follow-up.
 ):
     """
     Clear all demo data from the database.
-    
-    This endpoint is Admin-only and removes all demo data that was loaded
-    via the /settings/demo-data/load endpoint.
-    
-    WARNING: This will delete all data with IDs matching the demo data patterns.
+
+    Deletes the rows inserted by the demo packs, together with the rows that
+    are part of them and were added later (e.g. runs and results of a demo
+    compliance policy, custom properties of a demo product).
+
+    User data that refers to demo rows (an asset of a demo asset type, a tag in
+    a demo tag namespace, a product owned by a demo team, ...) is never deleted
+    or detached: if there is any, nothing is deleted and the response (409)
+    lists it per table with row ids. The clear is all or nothing.
+
+    With `dry_run=true`, returns the rows that would be deleted per table and
+    the rows that would block the clear, without changing anything.
     """
     success = False
-    details = {"action": "clear_demo_data"}
-    
+    details = {"action": "clear_demo_data", "dry_run": dry_run}
+
     try:
         from pathlib import Path
-        from sqlalchemy import bindparam, text
         from src.utils.demo_data_sql import parse_demo_inserts
+        from src.utils.demo_data_cleanup import plan_demo_clear, run_demo_clear
 
         # Derive the teardown directly from the demo packs instead of maintaining a
         # hand-written prefix list. The prefix list silently drifted from the packs
@@ -694,57 +707,83 @@ async def clear_demo_data(
                 agg[key] = []
                 order.append(key)
             agg[key].extend(ins.pk_values)
+        demo = [
+            (table_name, pk_column, list(dict.fromkeys(agg[(table_name, pk_column)])))
+            for table_name, pk_column in order
+        ]
 
-        # Wrap each statement in a SAVEPOINT so that a single failing DELETE (e.g.
-        # against a table dropped by a later migration) does not poison the
-        # surrounding transaction and silently abort all subsequent deletes.
-        deleted_counts: Dict[str, int] = {}
-        skipped: List[Dict[str, str]] = []
-        for table_name, pk_column in order:
-            ids = list(dict.fromkeys(agg[(table_name, pk_column)]))  # dedup, keep order
-            stmt = text(
-                f"DELETE FROM {table_name} WHERE {pk_column}::text IN :ids"
-            ).bindparams(bindparam("ids", expanding=True))
-            try:
-                with db.begin_nested():
-                    result = db.execute(stmt, {"ids": ids})
-                rowcount = result.rowcount or 0
-                if rowcount > 0:
-                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
-            except Exception as e:
-                err_short = str(e).splitlines()[0][:200]
-                logger.warning(
-                    f"Delete statement FAILED ({table_name}): {err_short}"
-                )
-                skipped.append({
-                    "table": table_name,
-                    "error": err_short,
-                })
+        plan = plan_demo_clear(db, demo)
+        blocking = plan.blocking_report()
+        details["blocking"] = [
+            {k: v for k, v in b.items() if k != "ids"} for b in blocking
+        ]
 
+        if dry_run:
+            would_delete = plan.deletes_report(db)
+            total = sum(len(ids) for ids in would_delete.values())
+            success = True
+            details["would_delete_counts"] = {t: len(ids) for t, ids in would_delete.items()}
+            blocking_count = sum(b['count'] for b in blocking)
+            return {
+                "status": "dry_run",
+                # code + params for clients to translate; message is the English fallback
+                "code": "demo_clear_dry_run",
+                "params": {"would_delete": total, "blocking": blocking_count},
+                "message": (
+                    f"Clearing would delete {total} records"
+                    + (f"; {blocking_count} records of user data refer to "
+                       f"demo data and would block it." if blocking else ".")
+                ),
+                "would_delete": would_delete,
+                "blocking": blocking,
+            }
+
+        if blocking:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "demo_clear_blocked",
+                    "params": {"blocking": sum(b['count'] for b in blocking)},
+                    "message": (
+                        "Demo data was not cleared: these records were not created by the demo "
+                        "but refer to demo data. Delete them, or move them off the demo data, "
+                        "and clear again. Nothing was deleted."
+                    ),
+                    "blocking": blocking,
+                },
+            )
+
+        # One transaction: if any delete fails, nothing is deleted
+        deleted_counts = run_demo_clear(db, plan)
         db.commit()
 
         success = True
         details["deleted_counts"] = deleted_counts
-        details["skipped"] = skipped
-
         total_deleted = sum(deleted_counts.values())
-        skipped_msg = f", {len(skipped)} statements skipped" if skipped else ""
-        logger.info(f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.")
+        logger.info(f"Demo data cleared. Deleted {total_deleted} records.")
 
         return {
-            "status": "success" if not skipped else "partial",
-            "message": f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.",
+            "status": "success",
+            "code": "demo_clear_succeeded",
+            "params": {"deleted": total_deleted},
+            "message": f"Demo data cleared. Deleted {total_deleted} records.",
             "deleted_counts": deleted_counts,
-            "skipped": skipped,
         }
-        
+
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         logger.error("Error clearing demo data", exc_info=True)
         details["exception"] = str(e)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to clear demo data: {str(e)}"
+            detail={
+                "code": "demo_clear_failed",
+                "params": {"error": str(e)},
+                "message": f"Failed to clear demo data; nothing was deleted: {str(e)}",
+            },
         )
     finally:
         background_tasks.add_task(

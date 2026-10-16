@@ -344,8 +344,14 @@ to reflect other industries or individual customers without affecting the
 other packs.
 
 Use the `DELETE demo-data` endpoint shown above to clear all demo records
-across every preset (it deletes by demo UUID prefix, so any combination of
-loaded packs is removed).
+across every preset (it deletes the ids inserted by the packs, so any
+combination of loaded packs is removed), together with the records that are
+part of them and were added later (runs and results of a demo compliance
+policy, custom properties of a demo product, ...). With `dry_run=true` it only
+lists what it would delete. Records created by users that refer to demo data
+(an asset of a demo asset type, a product owned by a demo team, ...) are never
+deleted or changed: if there are any, the call answers 409 with the list and
+deletes nothing. The clear is all or nothing.
 
 ## Troubleshooting
 

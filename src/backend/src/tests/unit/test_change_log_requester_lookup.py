@@ -1,8 +1,11 @@
 """Approval flows find the requester in the change log.
 
-Five request / approval flows call ``change_log_manager.get_changes_for_entity``
-and read ``change.details``; neither existed, the AttributeError was swallowed,
-and the requester was never told about the decision.
+Four request / approval flows (three in DataContractsManager, one in
+DataProductsManager) call ``change_log_manager.get_changes_for_entity`` and
+read ``change.details``; neither existed, the AttributeError was swallowed,
+and the requester was never told about the decision. The behavioural test
+covers the approved contract publication; the other flows share the accessor
+tested first.
 """
 import os
 

@@ -77,7 +77,8 @@
       "passedExamples": "Bestandene Beispiele",
       "failedExamples": "Fehlgeschlagene Beispiele",
       "noPassedExamples": "Keine bestandenen Beispiele in dieser Ausführung",
-      "noFailures": "Keine Fehler in dieser Ausführung"
+      "noFailures": "Keine Fehler in dieser Ausführung",
+      "errorLabel": "Fehler:"
     },
     "runsList": {
       "title": "Ausführungen",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Bestanden:",
     "failedLabel": "Fehlgeschlagen:",
-    "startedLabel": "Gestartet: {{date}}"
+    "startedLabel": "Gestartet: {{date}}",
+    "errorLabel": "Fehler:"
   },
   "toast": {
     "policySaved": "Richtlinie '{{name}}' erfolgreich gespeichert",
@@ -166,5 +168,10 @@
   "ruleWarnings": {
     "unsupported_match_type": "Der MATCH-Typ '{{type}}' wird nicht unterstützt, daher prüft die Regel keine Entitäten. Unterstützte Typen: {{supported}} oder Object für alle.",
     "missing_assert": "Die Regel hat keine ASSERT-Klausel, daher besteht jede Entität."
+  },
+  "runErrors": {
+    "rule_parse_failed": "Die Regel konnte nicht geparst werden: {{detail}}",
+    "workspace_client_unavailable": "Der Databricks-Workspace ist nicht verfügbar ({{detail}}), und diese Regel prüft Unity-Catalog-Objekte; sie konnte daher nicht ausgeführt werden.",
+    "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
   }
 }

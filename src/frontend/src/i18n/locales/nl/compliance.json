@@ -77,7 +77,8 @@
       "passedExamples": "Geslaagde voorbeelden",
       "failedExamples": "Mislukte voorbeelden",
       "noPassedExamples": "Geen geslaagde voorbeelden in deze uitvoering",
-      "noFailures": "Geen fouten in deze uitvoering"
+      "noFailures": "Geen fouten in deze uitvoering",
+      "errorLabel": "Fout:"
     },
     "runsList": {
       "title": "Uitvoeringen",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Geslaagd:",
     "failedLabel": "Mislukt:",
-    "startedLabel": "Gestart: {{date}}"
+    "startedLabel": "Gestart: {{date}}",
+    "errorLabel": "Fout:"
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",
@@ -166,5 +168,10 @@
   "ruleWarnings": {
     "unsupported_match_type": "Het MATCH-type '{{type}}' wordt niet ondersteund, dus de regel controleert geen entiteiten. Ondersteunde typen: {{supported}}, of Object voor allemaal.",
     "missing_assert": "De regel heeft geen ASSERT-clausule, dus elke entiteit slaagt."
+  },
+  "runErrors": {
+    "rule_parse_failed": "De regel kon niet worden geparseerd: {{detail}}",
+    "workspace_client_unavailable": "De Databricks-workspace is niet beschikbaar ({{detail}}) en deze regel controleert Unity Catalog-objecten, dus kon hij niet worden uitgevoerd.",
+    "tags_load_failed": "De tags van de {{entityType}}-entiteiten konden niet worden geladen, dus de regel kon niet worden geëvalueerd."
   }
 }

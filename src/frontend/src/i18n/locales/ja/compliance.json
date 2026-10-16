@@ -77,7 +77,8 @@
       "passedExamples": "合格した例",
       "failedExamples": "不合格の例",
       "noPassedExamples": "この実行で合格した例はありません",
-      "noFailures": "この実行に失敗はありません"
+      "noFailures": "この実行に失敗はありません",
+      "errorLabel": "エラー:"
     },
     "runsList": {
       "title": "実行",
@@ -100,7 +101,8 @@
     "scoreLabel": "スコア:",
     "passedLabel": "合格:",
     "failedLabel": "不合格:",
-    "startedLabel": "開始: {{date}}"
+    "startedLabel": "開始: {{date}}",
+    "errorLabel": "エラー:"
   },
   "toast": {
     "policySaved": "ポリシー '{{name}}' を保存しました",
@@ -166,5 +168,10 @@
   "ruleWarnings": {
     "unsupported_match_type": "MATCH の型 '{{type}}' はサポートされていないため、このルールはどのエンティティも評価しません。サポートされている型: {{supported}}、またはすべてを対象とする Object。",
     "missing_assert": "ルールに ASSERT 句がないため、すべてのエンティティが合格します。"
+  },
+  "runErrors": {
+    "rule_parse_failed": "ルールを解析できませんでした: {{detail}}",
+    "workspace_client_unavailable": "Databricks ワークスペースを利用できません({{detail}})。このルールは Unity Catalog オブジェクトを確認するため、実行できませんでした。",
+    "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   }
 }

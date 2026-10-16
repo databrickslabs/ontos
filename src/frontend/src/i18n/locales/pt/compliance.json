@@ -77,7 +77,8 @@
       "passedExamples": "Exemplos aprovados",
       "failedExamples": "Exemplos reprovados",
       "noPassedExamples": "Nenhum exemplo aprovado nesta execução",
-      "noFailures": "Nenhuma falha nesta execução"
+      "noFailures": "Nenhuma falha nesta execução",
+      "errorLabel": "Erro:"
     },
     "runsList": {
       "title": "Execuções",
@@ -100,7 +101,8 @@
     "scoreLabel": "Pontuação:",
     "passedLabel": "Aprovados:",
     "failedLabel": "Reprovados:",
-    "startedLabel": "Iniciada: {{date}}"
+    "startedLabel": "Iniciada: {{date}}",
+    "errorLabel": "Erro:"
   },
   "toast": {
     "policySaved": "Política '{{name}}' salva com sucesso",
@@ -166,5 +168,10 @@
   "ruleWarnings": {
     "unsupported_match_type": "O tipo '{{type}}' do MATCH não é suportado, então a regra não avalia nenhuma entidade. Tipos suportados: {{supported}}, ou Object para todos eles.",
     "missing_assert": "A regra não tem cláusula ASSERT, então todas as entidades passam."
+  },
+  "runErrors": {
+    "rule_parse_failed": "Não foi possível interpretar a regra: {{detail}}",
+    "workspace_client_unavailable": "O workspace Databricks não está disponível ({{detail}}) e esta regra verifica objetos do Unity Catalog, por isso não pôde ser executada.",
+    "tags_load_failed": "Não foi possível carregar as tags das entidades {{entityType}}, por isso a regra não pôde ser avaliada."
   }
 }

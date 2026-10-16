@@ -77,7 +77,8 @@
       "passedExamples": "Passed examples",
       "failedExamples": "Failed examples",
       "noPassedExamples": "No passed examples in this run",
-      "noFailures": "No failures in this run"
+      "noFailures": "No failures in this run",
+      "errorLabel": "Error:"
     },
     "runsList": {
       "title": "Runs",
@@ -100,7 +101,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Passed:",
     "failedLabel": "Failed:",
-    "startedLabel": "Started: {{date}}"
+    "startedLabel": "Started: {{date}}",
+    "errorLabel": "Error:"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' saved successfully",
@@ -166,5 +168,10 @@
   "ruleWarnings": {
     "unsupported_match_type": "MATCH type '{{type}}' is not supported, so the rule matches no entities. Supported types: {{supported}}, or Object for all of them.",
     "missing_assert": "The rule has no ASSERT clause, so every entity passes."
+  },
+  "runErrors": {
+    "rule_parse_failed": "The rule could not be parsed: {{detail}}",
+    "workspace_client_unavailable": "The Databricks workspace isn't available ({{detail}}), and this rule checks Unity Catalog objects, so it could not run.",
+    "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
   }
 }

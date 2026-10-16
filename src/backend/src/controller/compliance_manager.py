@@ -483,6 +483,39 @@ class ComplianceManager:
                 })
         return objs
 
+    def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
+        """Workspace client for a run, or None when the rule doesn't need one.
+
+        Rules whose MATCH covers Unity Catalog types (including ``Object``,
+        which covers every type) need the client: without it the run fails
+        instead of passing after evaluating only part of its scope. Rules on
+        app entities alone run without it.
+        """
+        from src.common.compliance_entities import UnityCatalogLoader
+        from src.common.workspace_client import get_workspace_client
+
+        needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
+        try:
+            ws = get_workspace_client()
+        except Exception as e:
+            if needs_uc:
+                # A code the UI translates; the message stays the fallback
+                e.error_code, e.error_params = 'workspace_client_unavailable', {'detail': str(e)}
+                raise
+            logger.warning(
+                "Workspace client unavailable, policy '%s' (%s) only matches app entities "
+                "and runs without it: %s", policy.name, policy.id, e,
+            )
+            return None
+        if ws is None and needs_uc:
+            error = RuntimeError(
+                "Databricks workspace client unavailable; this rule matches Unity Catalog "
+                "objects and cannot be evaluated without it"
+            )
+            error.error_code, error.error_params = 'workspace_client_unavailable', {'detail': 'no client'}
+            raise error
+        return ws
+
     def run_policy_inline(
         self, 
         db: Session, 
@@ -504,13 +537,12 @@ class ComplianceManager:
             # Parse the rule using enhanced DSL
             parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
 
-            # Create entity iterator
-            from src.common.workspace_client import get_workspace_client
-            ws = get_workspace_client()
-            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
-
             # Parse entity filter
             entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
+
+            # Create entity iterator
+            ws = self._workspace_client_for(entity_filter.entity_types, policy)
+            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Iterate over entities
             for obj in entity_iterator.iterate(

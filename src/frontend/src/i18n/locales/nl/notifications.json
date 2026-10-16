@@ -1,0 +1,39 @@
+{
+  "statusChangeNotApplied": {
+    "title": "Statuswijziging niet toegepast",
+    "statusChanged": "Het verzoek om de status te wijzigen van '{{fromStatus}}' naar '{{toStatus}}' is goedgekeurd, maar de status is nu '{{currentStatus}}', dus de wijziging is niet toegepast. Dien het verzoek opnieuw in als het nog nodig is.",
+    "refused": "Uw verzoek om de status te wijzigen naar '{{toStatus}}' is goedgekeurd, maar de wijziging kon niet worden toegepast: {{reason}}"
+  },
+  "contractStatusNotChanged": {
+    "title": "Contractstatus niet gewijzigd",
+    "notUnderReview": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: het contract is niet in review (status '{{currentStatus}}')",
+    "notApplied": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Meldingen",
+    "loading": "Meldingen laden...",
+    "error": "Fout: {{error}}",
+    "empty": "Geen meldingen",
+    "open": "Openen",
+    "viewDetails": "Details bekijken",
+    "approveDeny": "Goedkeuren/Afwijzen",
+    "handleAccessGrant": "Toegangsverlening afhandelen",
+    "reviewContract": "Contract beoordelen",
+    "handlePublish": "Publicatie afhandelen",
+    "handleDeploy": "Implementatie afhandelen",
+    "approved": "✓ Goedgekeurd",
+    "rejected": "✗ Afgewezen",
+    "viewRespond": "Bekijken / Reageren",
+    "reviewCertification": "Certificeringsaanvraag beoordelen",
+    "reviewPublication": "Publicatieaanvraag beoordelen",
+    "status": "Status: {{status}}",
+    "runId": "Run-ID: {{runId}}",
+    "delete": "Melding verwijderen",
+    "unknownUser": "Onbekende gebruiker",
+    "unknownRoleId": "Onbekende rol-ID",
+    "unknownRoleName": "Onbekende rolnaam",
+    "unknownId": "Onbekende ID",
+    "badge": "Melding",
+    "markRead": "Markeren als gelezen"
+  }
+}

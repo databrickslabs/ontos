@@ -1,0 +1,39 @@
+{
+  "statusChangeNotApplied": {
+    "title": "Mudança de status não aplicada",
+    "statusChanged": "A solicitação para mudar o status de \"{{fromStatus}}\" para \"{{toStatus}}\" foi aprovada, mas o status agora é \"{{currentStatus}}\", então a mudança não foi aplicada. Solicite novamente se ainda for necessário.",
+    "refused": "Sua solicitação para mudar o status para \"{{toStatus}}\" foi aprovada, mas a mudança não pôde ser aplicada: {{reason}}"
+  },
+  "contractStatusNotChanged": {
+    "title": "Status do contrato não alterado",
+    "notUnderReview": "Sua decisão de revisão foi registrada, mas o contrato não foi alterado para \"{{toStatus}}\": o contrato não está em revisão (status \"{{currentStatus}}\")",
+    "notApplied": "Sua decisão de revisão foi registrada, mas o contrato não foi alterado para \"{{toStatus}}\": {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Notificações",
+    "loading": "Carregando notificações...",
+    "error": "Erro: {{error}}",
+    "empty": "Nenhuma notificação",
+    "open": "Abrir",
+    "viewDetails": "Ver detalhes",
+    "approveDeny": "Aprovar/Negar",
+    "handleAccessGrant": "Tratar concessão de acesso",
+    "reviewContract": "Revisar contrato",
+    "handlePublish": "Tratar publicação",
+    "handleDeploy": "Tratar implantação",
+    "approved": "✓ Aprovado",
+    "rejected": "✗ Rejeitado",
+    "viewRespond": "Ver / Responder",
+    "reviewCertification": "Revisar solicitação de certificação",
+    "reviewPublication": "Revisar solicitação de publicação",
+    "status": "Status: {{status}}",
+    "runId": "ID da execução: {{runId}}",
+    "delete": "Excluir notificação",
+    "unknownUser": "Usuário desconhecido",
+    "unknownRoleId": "ID de papel desconhecido",
+    "unknownRoleName": "Nome de papel desconhecido",
+    "unknownId": "ID desconhecido",
+    "badge": "Notificação",
+    "markRead": "Marcar como lida"
+  }
+}

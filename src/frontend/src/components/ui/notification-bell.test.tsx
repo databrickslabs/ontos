@@ -74,4 +74,21 @@ describe('NotificationBell', () => {
     expect(await screen.findByText('Status change not applied')).toBeInTheDocument();
     expect(screen.getByText(/the status is now 'sandbox'/)).toBeInTheDocument();
   });
+
+  it('labels its own controls in the user language', async () => {
+    await i18n.changeLanguage('pt');
+    await openBell();
+
+    expect(await screen.findAllByRole('button', { name: 'Excluir notificação' })).toHaveLength(2);
+  });
+
+  it('shows the empty state in the user language', async () => {
+    useNotificationsStore.setState({ notifications: [], unreadCount: 0 } as never);
+    await i18n.changeLanguage('pt');
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationBell />);
+    await user.click(screen.getByRole('button'));
+
+    expect(await screen.findByText('Nenhuma notificação')).toBeInTheDocument();
+  });
 });

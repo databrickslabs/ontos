@@ -8,5 +8,32 @@
     "title": "Statut du contrat inchangé",
     "notUnderReview": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : le contrat n'est pas en revue (statut « {{currentStatus}} »)",
     "notApplied": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Notifications",
+    "loading": "Chargement des notifications...",
+    "error": "Erreur : {{error}}",
+    "empty": "Aucune notification",
+    "open": "Ouvrir",
+    "viewDetails": "Voir les détails",
+    "approveDeny": "Approuver/Refuser",
+    "handleAccessGrant": "Traiter l'octroi d'accès",
+    "reviewContract": "Examiner le contrat",
+    "handlePublish": "Traiter la publication",
+    "handleDeploy": "Traiter le déploiement",
+    "approved": "✓ Approuvé",
+    "rejected": "✗ Rejeté",
+    "viewRespond": "Voir / Répondre",
+    "reviewCertification": "Examiner la demande de certification",
+    "reviewPublication": "Examiner la demande de publication",
+    "status": "Statut : {{status}}",
+    "runId": "ID d'exécution : {{runId}}",
+    "delete": "Supprimer la notification",
+    "unknownUser": "Utilisateur inconnu",
+    "unknownRoleId": "ID de rôle inconnu",
+    "unknownRoleName": "Nom de rôle inconnu",
+    "unknownId": "ID inconnu",
+    "badge": "Notification",
+    "markRead": "Marquer comme lue"
   }
 }

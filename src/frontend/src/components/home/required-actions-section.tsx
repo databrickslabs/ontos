@@ -278,7 +278,7 @@ export default function RequiredActionsSection() {
                       <tr key={n.id} className="hover:bg-muted/20 transition-colors">
                         <td className="p-2.5">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
-                            Notification
+                            {t('notifications:ui.badge')}
                           </span>
                         </td>
                         <td className="p-2.5">
@@ -294,12 +294,12 @@ export default function RequiredActionsSection() {
                           <div className="flex items-center justify-end gap-1">
                             {n.link && (
                               <Button asChild size="sm" variant="ghost" className="h-7 px-2">
-                                <Link to={n.link}>Open</Link>
+                                <Link to={n.link}>{t('requiredActionsSection.openButton')}</Link>
                               </Button>
                             )}
                             {!n.read && (
                               <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => markAsRead(n.id)}>
-                                Mark Read
+                                {t('notifications:ui.markRead')}
                               </Button>
                             )}
                           </div>

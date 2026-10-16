@@ -8,5 +8,32 @@
     "title": "Vertragsstatus nicht geändert",
     "notUnderReview": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: Der Vertrag ist nicht in Prüfung (Status „{{currentStatus}}“)",
     "notApplied": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Benachrichtigungen",
+    "loading": "Benachrichtigungen werden geladen...",
+    "error": "Fehler: {{error}}",
+    "empty": "Keine Benachrichtigungen",
+    "open": "Öffnen",
+    "viewDetails": "Details anzeigen",
+    "approveDeny": "Genehmigen/Ablehnen",
+    "handleAccessGrant": "Zugriffsfreigabe bearbeiten",
+    "reviewContract": "Vertrag prüfen",
+    "handlePublish": "Veröffentlichung bearbeiten",
+    "handleDeploy": "Bereitstellung bearbeiten",
+    "approved": "✓ Genehmigt",
+    "rejected": "✗ Abgelehnt",
+    "viewRespond": "Anzeigen / Antworten",
+    "reviewCertification": "Zertifizierungsanfrage prüfen",
+    "reviewPublication": "Veröffentlichungsanfrage prüfen",
+    "status": "Status: {{status}}",
+    "runId": "Lauf-ID: {{runId}}",
+    "delete": "Benachrichtigung löschen",
+    "unknownUser": "Unbekannter Benutzer",
+    "unknownRoleId": "Unbekannte Rollen-ID",
+    "unknownRoleName": "Unbekannter Rollenname",
+    "unknownId": "Unbekannte ID",
+    "badge": "Benachrichtigung",
+    "markRead": "Als gelesen markieren"
   }
 }

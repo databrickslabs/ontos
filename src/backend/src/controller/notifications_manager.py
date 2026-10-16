@@ -23,6 +23,15 @@ logger = get_logger(__name__)
 class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
 
+class NotificationNotDeletableError(Exception):
+    """Raised when a notification is marked ``can_delete=False``.
+
+    Actionable notifications (approval requests, access grants, contract
+    deploy requests, role access requests) are created with
+    ``can_delete=False`` to mean "you must respond to this, you cannot
+    dismiss it". Only an admin may override.
+    """
+
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
         """Initialize the notification manager.
@@ -33,6 +42,43 @@ class NotificationsManager:
         # self.notifications: List[Notification] = [] # REMOVE In-memory list
         self._repo = notification_repo # Use the repository instance
         self._settings_manager = settings_manager # Store the manager
+
+    def _role_maps(self) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """Build (role_by_id, role_by_name) lookups for recipient resolution.
+
+        ``role_by_name`` carries the exact name plus normalized and CamelCase
+        variants so legacy string recipients still resolve. A lookup failure
+        is non-fatal and yields empty maps, which fails closed downstream.
+        """
+        role_by_id: Dict[str, Any] = {}
+        role_by_name: Dict[str, Any] = {}
+        try:
+            for role in self._settings_manager.list_app_roles():
+                role_by_id[role.id] = role
+                role_by_name[role.name] = role
+                role_by_name[role.name.lower().replace(' ', '')] = role
+                role_by_name[''.join(word.capitalize() for word in role.name.split())] = role
+        except Exception as e:
+            logger.error(f"Failed to retrieve roles for notification handling: {e}")
+        return role_by_id, role_by_name
+
+    def is_app_admin(self, user_info: Optional[UserInfo], role_by_name: Optional[Dict[str, Any]] = None) -> bool:
+        """Whether the user holds the 'Admin' app role.
+
+        This is the same notion of admin used by ``get_notifications`` when it
+        overrides ``can_delete`` to True, so what the API reports and what it
+        enforces stay in step. Distinct from ``FeatureAccessLevel.ADMIN`` on
+        the notifications feature, which is a per-feature permission.
+        """
+        if not user_info:
+            return False
+        if role_by_name is None:
+            _, role_by_name = self._role_maps()
+        admin_role = role_by_name.get('Admin')
+        if not admin_role or not admin_role.assigned_groups:
+            return False
+        user_groups = set(user_info.groups or [])
+        return any(group in user_groups for group in admin_role.assigned_groups)
 
     def get_notification_by_id(self, db: Session, notification_id: str) -> Optional[Notification]:
         """Get a single notification by ID."""
@@ -70,32 +116,10 @@ class NotificationsManager:
         user_name = user_info.username  # Also check username for matching
 
         # Pre-fetch all role definitions for efficient lookup
-        # Create multiple mappings: by UUID, by name, and flexible name variants
-        try:
-            all_roles = self._settings_manager.list_app_roles()
-            role_by_id: Dict[str, 'AppRole'] = {}  # UUID -> role
-            role_by_name: Dict[str, 'AppRole'] = {}  # Name variants -> role
-            for role in all_roles:
-                # Map by UUID
-                role_by_id[role.id] = role
-                # Map by exact name
-                role_by_name[role.name] = role
-                # Also map by normalized name (no spaces, lowercase) for flexible matching
-                normalized = role.name.lower().replace(' ', '')
-                role_by_name[normalized] = role
-                # Also try CamelCase variant
-                camel_case = ''.join(word.capitalize() for word in role.name.split())
-                role_by_name[camel_case] = role
-        except Exception as e:
-            logger.error(f"Failed to retrieve roles for notification filtering: {e}")
-            role_by_id = {}
-            role_by_name = {}
+        role_by_id, role_by_name = self._role_maps()
 
         # Check if user is an admin (member of Admin role's groups)
-        is_admin = False
-        admin_role = role_by_name.get('Admin')
-        if admin_role and admin_role.assigned_groups:
-            is_admin = any(group in user_groups for group in admin_role.assigned_groups)
+        is_admin = self.is_app_admin(user_info, role_by_name)
 
         filtered_notifications = []
         for n in all_notifications_api:
@@ -166,29 +190,11 @@ class NotificationsManager:
         user_name = user_info.username
         
         # Pre-fetch all role definitions for efficient lookup
-        try:
-            all_roles = self._settings_manager.list_app_roles()
-            role_by_id: Dict[str, Any] = {}
-            role_by_name: Dict[str, Any] = {}
-            for role in all_roles:
-                role_by_id[role.id] = role
-                role_by_name[role.name] = role
-                # Normalized variants
-                normalized = role.name.lower().replace(' ', '')
-                role_by_name[normalized] = role
-                camel_case = ''.join(word.capitalize() for word in role.name.split())
-                role_by_name[camel_case] = role
-        except Exception as e:
-            logger.error(f"Failed to retrieve roles for notification access check: {e}")
-            role_by_id = {}
-            role_by_name = {}
-        
+        role_by_id, role_by_name = self._role_maps()
+
         # Check if user is an admin
-        is_admin = False
-        admin_role = role_by_name.get('Admin')
-        if admin_role and admin_role.assigned_groups:
-            is_admin = any(group in user_groups for group in admin_role.assigned_groups)
-        
+        is_admin = self.is_app_admin(user_info, role_by_name)
+
         recipient = notification.recipient
         target_role = None
         
@@ -280,11 +286,56 @@ class NotificationsManager:
              logger.error(f"Error creating notification in DB: {e}", exc_info=True)
              raise # Re-raise to be handled by the caller/route
 
-    def delete_notification(self, db: Session, notification_id: str) -> bool:
-        """Delete a notification by ID using the repository."""
+    def delete_notification(
+        self,
+        db: Session,
+        notification_id: str,
+        *,
+        is_admin: bool = False,
+    ) -> bool:
+        """Delete a notification by ID using the repository.
+
+        Enforces ``can_delete`` server-side. The flag was previously honoured
+        by the frontend alone, so a direct API call could dismiss a
+        notification that exists specifically to force a response.
+
+        Admins may override, matching ``get_notifications``, which reports
+        ``can_delete=True`` on every notification an admin can see. Without the
+        override an admin's UI would offer a delete button that always fails,
+        and orphaned notifications from dead workflows would be undeletable.
+
+        Args:
+            db: Database session
+            notification_id: ID of the notification to delete
+            is_admin: Whether the caller holds the 'Admin' app role
+
+        Returns:
+            True if the notification was deleted
+
+        Raises:
+            NotificationNotFoundError: No notification with that ID
+            NotificationNotDeletableError: ``can_delete`` is False and the
+                caller is not an admin
+        """
         try:
-             deleted_obj = self._repo.remove(db=db, id=notification_id)
-             return deleted_obj is not None
+            db_obj = self._repo.get(db=db, id=notification_id)
+            if not db_obj:
+                raise NotificationNotFoundError(f"Notification {notification_id} not found")
+
+            if not db_obj.can_delete and not is_admin:
+                raise NotificationNotDeletableError(
+                    f"Notification {notification_id} is marked as non-deletable"
+                )
+
+            if not db_obj.can_delete:
+                logger.info(
+                    f"Admin override: deleting non-deletable notification {notification_id}"
+                )
+
+            deleted_obj = self._repo.remove(db=db, id=notification_id)
+            return deleted_obj is not None
+        except (NotificationNotFoundError, NotificationNotDeletableError):
+            raise
         except Exception as e:
              logger.error(f"Error deleting notification {notification_id}: {e}", exc_info=True)
              raise

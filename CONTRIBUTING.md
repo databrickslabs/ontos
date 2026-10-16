@@ -685,6 +685,27 @@ permissions:
 
 Only add additional permissions (e.g., `issues: write`) if the workflow genuinely requires them.
 
+When jobs need more (e.g. `id-token: write` for JFrog, `contents: write` to push), grant it on
+those jobs only, not at the workflow level, so the other jobs stay read-only.
+
+### CI for Pull Requests from Forks
+
+CI installs all dependencies through JFrog, authenticated with a GitHub OIDC token. GitHub issues
+no OIDC token to `pull_request` runs from forks, so on a fork PR every job fails in the JFrog
+auth step before running any code. This is expected and is not a test failure.
+
+To run CI for a fork PR, a maintainer with push access:
+
+1. Reviews the PR. The mirrored code runs with this repository's CI credentials.
+2. Runs `scripts/fork-sync-pr.sh <PR_NUMBER> <REVIEWED_SHA>`, passing the head commit that was
+   reviewed. The script pushes that commit to `fork-test/pr-<N>` and opens a `do-not-merge` mirror
+   PR where CI runs normally. It refuses to run if the fork PR has new commits since the review.
+3. Re-runs the script with the new SHA after each update to the fork PR, and closes the mirror PR
+   (deleting its branch) once the original PR is merged or closed.
+
+Contributors from forks: run the backend and frontend checks from
+[Pre-commit Checks](#pre-commit-checks) locally and mention the results in the PR.
+
 ---
 
 ## Questions?

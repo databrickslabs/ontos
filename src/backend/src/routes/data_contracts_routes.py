@@ -201,6 +201,79 @@ async def get_contract(
 
 # --- Lifecycle Transition Endpoints (minimal) ---
 
+def _decide_waiting_review_workflows(
+    db, contract_id: str, approved: bool, user_email: Optional[str],
+) -> int:
+    """Pass a review decided on the contract page on to its review workflows.
+
+    A review request starts the contract's ``on_request_review`` workflows,
+    which pause at an approval step. Approving or rejecting the contract on
+    its page decides the same review, so those executions are resumed with
+    that decision (their remaining steps, e.g. telling the requester, run)
+    and their approval notifications are marked handled. Otherwise they stay
+    paused and keep asking for an approval that was already given (#963).
+
+    Returns the number of executions resumed. A failure is logged and does
+    not undo the status change.
+    """
+    from src.common.workflow_executor import WorkflowExecutor
+    from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
+    from src.models.process_workflows import TriggerType
+    from src.routes.workflows_routes import _mark_step_notifications_handled
+
+    paused = db.query(WorkflowExecutionDb).filter(
+        WorkflowExecutionDb.status == 'paused',
+        WorkflowExecutionDb.trigger_context.contains(contract_id),
+    ).all()
+    waiting = []
+    for execution in paused:
+        try:
+            context = json.loads(execution.trigger_context or '{}')
+        except ValueError:
+            continue
+        if (
+            context.get('entity_type') != 'data_contract'
+            or context.get('entity_id') != contract_id
+            or context.get('trigger_type') != TriggerType.ON_REQUEST_REVIEW.value
+        ):
+            continue
+        step = db.query(WorkflowStepDb).filter(
+            WorkflowStepDb.workflow_id == execution.workflow_id,
+            WorkflowStepDb.step_id == execution.current_step_id,
+        ).first()
+        if step is not None and step.step_type == 'approval':
+            waiting.append((execution.id, execution.current_step_id))
+
+    resumed = 0
+    decision = 'approved' if approved else 'rejected'
+    for execution_id, step_id in waiting:
+        try:
+            WorkflowExecutor(db).resume_workflow(
+                execution_id=execution_id,
+                step_result=approved,
+                # `decided_on` is the stable code; the message is the English
+                # fallback shown where no translation exists.
+                result_data={
+                    'decision': decision,
+                    'decided_on': 'contract_page',
+                    'message': f'Review {decision} on the contract page',
+                    'reason': f'Review {decision} on the contract page',
+                },
+                user_email=user_email,
+            )
+            _mark_step_notifications_handled(db, execution_id, step_id, approved, user_email)
+            db.commit()
+            resumed += 1
+        except Exception:
+            # The status change is already committed; only this resume is undone.
+            db.rollback()
+            logger.exception(
+                "Could not resume review workflow execution %s of contract %s",
+                execution_id, contract_id,
+            )
+    return resumed
+
+
 @router.post('/data-contracts/{contract_id}/approve')
 async def approve_contract(
     contract_id: str,
@@ -227,6 +300,9 @@ async def approve_contract(
             contract_id=contract_id,
             new_status='approved',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, True, current_user.email if current_user else None,
         )
         
         # Audit
@@ -278,6 +354,9 @@ async def reject_contract(
             contract_id=contract_id,
             new_status='draft',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, False, current_user.email if current_user else None,
         )
         
         # Audit

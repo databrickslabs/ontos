@@ -363,6 +363,9 @@
     "triggeredBy": "Triggered by: {{user}}",
     "workflowSteps": "Workflow Steps",
     "loadDefinitionFailed": "Failed to load workflow definition",
+    "stepErrors": {
+      "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule"
+    },
     "states": {
       "pending": "Pending",
       "running": "Running",
@@ -370,6 +373,14 @@
       "failed": "Failed",
       "skipped": "Skipped",
       "waiting": "Waiting"
+    },
+    "executionStates": {
+      "pending": "Pending",
+      "running": "Running",
+      "paused": "Paused",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
     },
     "summary": {
       "entity": "Entity",

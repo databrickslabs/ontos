@@ -363,6 +363,9 @@
     "triggeredBy": "Acionado por: {{user}}",
     "workflowSteps": "Etapas do fluxo de trabalho",
     "loadDefinitionFailed": "Falha ao carregar definição do fluxo de trabalho",
+    "stepErrors": {
+      "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra"
+    },
     "states": {
       "pending": "Pendente",
       "running": "Em execução",
@@ -370,6 +373,14 @@
       "failed": "Falhou",
       "skipped": "Ignorada",
       "waiting": "Aguardando"
+    },
+    "executionStates": {
+      "pending": "Pendente",
+      "running": "Em execução",
+      "paused": "Pausada",
+      "succeeded": "Concluída",
+      "failed": "Falhou",
+      "cancelled": "Cancelada"
     },
     "summary": {
       "entity": "Entidade",

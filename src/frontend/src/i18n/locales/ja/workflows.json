@@ -363,6 +363,9 @@
     "triggeredBy": "トリガー者: {{user}}",
     "workflowSteps": "ワークフローステップ",
     "loadDefinitionFailed": "ワークフロー定義の読み込みに失敗しました",
+    "stepErrors": {
+      "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした"
+    },
     "states": {
       "pending": "保留中",
       "running": "実行中",
@@ -370,6 +373,14 @@
       "failed": "失敗",
       "skipped": "スキップ",
       "waiting": "待機中"
+    },
+    "executionStates": {
+      "pending": "保留中",
+      "running": "実行中",
+      "paused": "一時停止",
+      "succeeded": "成功",
+      "failed": "失敗",
+      "cancelled": "キャンセル"
     },
     "summary": {
       "entity": "エンティティ",

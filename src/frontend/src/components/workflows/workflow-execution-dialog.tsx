@@ -24,10 +24,12 @@ import {
   User,
 } from 'lucide-react';
 
+import type { TFunction } from 'i18next';
 import type {
   WorkflowExecution,
   ProcessWorkflow,
-  // WorkflowStep, // Available for future graph-based visualization
+  WorkflowStep,
+  WorkflowStepExecutionResult,
   ExecutionStatus,
 } from '@/types/process-workflow';
 import { 
@@ -47,10 +49,41 @@ interface WorkflowExecutionDialogProps {
 // Execution step status
 type StepExecutionState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'current';
 
-function getStepExecutionState(
-  stepId: string,
+// Step execution results reference the step's row id; a step that ran twice
+// (an approval: paused, then resumed) counts by its last run.
+export function getLastStepRun(
+  step: Pick<WorkflowStep, 'id' | 'step_id'>,
+  execution: WorkflowExecution
+): WorkflowStepExecutionResult | undefined {
+  const runs = (execution.step_executions || []).filter(
+    se => se.step_id === step.id || se.step_id === step.step_id
+  );
+  return runs[runs.length - 1];
+}
+
+// A failed step's error, translated when the backend sent a code
+// (result_data.error_code / error_params), else as stored.
+export function getStepErrorText(
+  run: Pick<WorkflowStepExecutionResult, 'error_message' | 'result_data'>,
+  t: TFunction
+): string | undefined {
+  const data = run.result_data || {};
+  const code = typeof data.error_code === 'string' ? data.error_code : undefined;
+  if (!code) return run.error_message || undefined;
+  const params = (data.error_params && typeof data.error_params === 'object')
+    ? data.error_params as Record<string, unknown>
+    : {};
+  return t(`workflows:execution.stepErrors.${code}`, {
+    ...params,
+    defaultValue: run.error_message || code,
+  });
+}
+
+export function getStepExecutionState(
+  step: Pick<WorkflowStep, 'id' | 'step_id'>,
   execution: WorkflowExecution
 ): StepExecutionState {
+  const stepId = step.step_id;
   // Check if this is the current (paused) step
   if (execution.current_step_id === stepId && execution.status === 'paused') {
     return 'current';
@@ -61,8 +94,7 @@ function getStepExecutionState(
     return 'running';
   }
   
-  // Check step execution results
-  const stepExecution = execution.step_executions?.find(se => se.step_id === stepId);
+  const stepExecution = getLastStepRun(step, execution);
   if (stepExecution) {
     if (stepExecution.passed) return 'succeeded';
     if (stepExecution.status === 'failed') return 'failed';
@@ -122,7 +154,9 @@ function SimpleWorkflowFlow({
       
       {/* Steps */}
       {workflow.steps.map((step, index) => {
-        const state = getStepExecutionState(step.step_id, execution);
+        const state = getStepExecutionState(step, execution);
+        const run = state === 'failed' ? getLastStepRun(step, execution) : undefined;
+        const errorText = run ? getStepErrorText(run, t) : undefined;
         const Icon = getStepIcon(step.step_type);
         const color = getStepColor(step.step_type);
         
@@ -155,6 +189,9 @@ function SimpleWorkflowFlow({
                 <div className="text-xs text-muted-foreground capitalize">
                   {step.step_type.replace('_', ' ')}
                 </div>
+                {errorText && (
+                  <div className="text-xs text-destructive mt-1 break-words">{errorText}</div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{stateLabels[state].label}</span>
@@ -183,7 +220,24 @@ export function WorkflowExecutionDialog({
   const { t } = useTranslation(['workflows', 'common']);
   const { get } = useApi();
   const [workflow, setWorkflow] = useState<ProcessWorkflow | null>(null);
+  const [stepResults, setStepResults] = useState<WorkflowExecution['step_executions'] | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // The executions list doesn't carry step results; load them for this execution
+  useEffect(() => {
+    setStepResults(null);
+    if (open && execution?.id) {
+      get<WorkflowExecution>(`/api/workflows/executions/${execution.id}`)
+        .then(response => {
+          if (response.data?.step_executions) {
+            setStepResults(response.data.step_executions);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch execution steps:', err);
+        });
+    }
+  }, [open, execution?.id, get]);
   
   // Fetch workflow definition when dialog opens
   useEffect(() => {
@@ -236,7 +290,7 @@ export function WorkflowExecutionDialog({
             <Card className="p-3">
               <div className="text-xs text-muted-foreground mb-1">{t('common:labels.status')}</div>
               <Badge variant={statusConfig.variant} className={statusConfig.className}>
-                {execution.status}
+                {t(`workflows:execution.executionStates.${execution.status}`, { defaultValue: execution.status })}
               </Badge>
             </Card>
 
@@ -292,7 +346,10 @@ export function WorkflowExecutionDialog({
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                 </div>
               ) : workflow ? (
-                <SimpleWorkflowFlow workflow={workflow} execution={execution} />
+                <SimpleWorkflowFlow
+                  workflow={workflow}
+                  execution={stepResults ? { ...execution, step_executions: stepResults } : execution}
+                />
               ) : (
                 <div className="text-center text-muted-foreground py-8">
                   {t('workflows:execution.loadDefinitionFailed')}

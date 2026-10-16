@@ -69,6 +69,11 @@ ontos:uiPersonaVisibility a owl:AnnotationProperty ;
     rdfs:comment "Comma-separated persona IDs that can see this type (e.g. 'producer,steward,consumer,admin')"@en ;
     rdfs:range xsd:string .
 
+ontos:modelLayer a owl:AnnotationProperty ;
+    rdfs:label "model layer"@en ;
+    rdfs:comment "Position in the business-to-physical model stack, used as a lane in business lineage: business (concepts, terms, domains), delivery (products, ports), logical (contracts and their ODCS schema), physical (assets bound to the platform), other (governance and organization)"@en ;
+    rdfs:range xsd:string .
+
 ontos:uiDetailSections a owl:AnnotationProperty ;
     rdfs:label "UI detail sections"@en ;
     rdfs:comment "JSON array of section configs for the entity detail page"@en ;
@@ -167,6 +172,7 @@ ontos:Asset a rdfs:Class ;
 # --- Core business entities ---
 
 ontos:DataDomain a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:OrganizationalUnit ;
     rdfs:label "Data Domain"@en ;
     rdfs:comment "Logical organizational unit for grouping related data products and assets"@en ;
@@ -178,6 +184,7 @@ ontos:DataDomain a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:DataProduct a rdfs:Class ;
+    ontos:modelLayer "delivery" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Data Product"@en ;
     rdfs:comment "Curated, versioned data offering with defined inputs, outputs, and contracts. Follows ODPS v1.0.0."@en ;
@@ -190,6 +197,7 @@ ontos:DataProduct a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:OutputPort a rdfs:Class ;
+    ontos:modelLayer "delivery" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Output Port"@en ;
     rdfs:comment "An output endpoint of a data product that exposes data via a specific delivery method"@en ;
@@ -201,6 +209,7 @@ ontos:OutputPort a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:DataContract a rdfs:Class ;
+    ontos:modelLayer "logical" ;
     rdfs:subClassOf ontos:GovernanceArtifact ;
     rdfs:label "Data Contract"@en ;
     rdfs:comment "Formal agreement specifying schema, quality, SLA, and access rules for data. Follows ODCS v3.1.0."@en ;
@@ -212,6 +221,7 @@ ontos:DataContract a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:Team a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:OrganizationalUnit ;
     rdfs:label "Team"@en ;
     rdfs:comment "Collection of users and groups with specific roles and domain assignments"@en ;
@@ -223,6 +233,7 @@ ontos:Team a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:Project a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:OrganizationalUnit ;
     rdfs:label "Project"@en ;
     rdfs:comment "Workspace container that assigns teams to specific initiatives with isolation boundaries"@en ;
@@ -236,6 +247,7 @@ ontos:Project a rdfs:Class ;
 # --- Technical / system dedicated entities ---
 
 ontos:CompliancePolicy a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:GovernanceArtifact ;
     rdfs:label "Compliance Policy"@en ;
     rdfs:comment "DSL-based compliance rule with automated evaluation, scoring, and per-entity results"@en ;
@@ -246,6 +258,7 @@ ontos:CompliancePolicy a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward" .
 
 ontos:GenieSpace a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Genie Space"@en ;
     rdfs:comment "Databricks AI-powered natural language query space created from data products"@en ;
@@ -256,6 +269,7 @@ ontos:GenieSpace a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,producer,consumer" .
 
 ontos:SemanticModelEntity a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Semantic Model"@en ;
     rdfs:comment "Uploaded ontology or taxonomy file (TTL, RDF, OWL) stored in the knowledge graph"@en ;
@@ -266,6 +280,7 @@ ontos:SemanticModelEntity a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward" .
 
 ontos:BusinessRole a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:GovernanceArtifact ;
     rdfs:label "Business Role"@en ;
     rdfs:comment "Named role users can hold for ownership assignments (Data Owner, Domain Steward, etc.)"@en ;
@@ -276,6 +291,7 @@ ontos:BusinessRole a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward" .
 
 ontos:ProcessWorkflow a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Process Workflow"@en ;
     rdfs:comment "User-designed automation with validation, approval, notification, and scripting steps"@en ;
@@ -286,6 +302,7 @@ ontos:ProcessWorkflow a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward" .
 
 ontos:MdmConfig a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "MDM Configuration"@en ;
     rdfs:comment "Master Data Management configuration with matching rules, source links, and match runs"@en ;
@@ -298,12 +315,14 @@ ontos:MdmConfig a rdfs:Class ;
 # --- Supporting dedicated classes (no direct UI, used in relationships) ---
 
 ontos:TeamMember a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Team Member"@en ;
     rdfs:comment "Individual user or group membership within a team with optional role overrides"@en ;
     ontos:modelTier "dedicated" .
 
 ontos:Ownership a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Ownership"@en ;
     rdfs:comment "Named ownership assignment linking user, role, and entity"@en ;
@@ -323,6 +342,7 @@ ontos:Ownership a rdfs:Class ;
 # --- Data assets ---
 
 ontos:Dataset a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Dataset"@en ;
     rdfs:comment "Business-level grouping of related tables and views representing a coherent data entity"@en ;
@@ -335,6 +355,7 @@ ontos:Dataset a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:Schema a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Schema"@en ;
     rdfs:comment "Platform-level container (UC schema, BQ dataset, Snowflake schema) that organizes tables and views"@en ;
@@ -347,6 +368,7 @@ ontos:Schema a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:Table a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Table"@en ;
     rdfs:comment "Physical table in a data platform (Unity Catalog, Snowflake, BigQuery, etc.)"@en ;
@@ -358,6 +380,7 @@ ontos:Table a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:View a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "View"@en ;
     rdfs:comment "Physical view in a data platform"@en ;
@@ -368,6 +391,7 @@ ontos:View a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:Column a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Column"@en ;
     rdfs:comment "Column within a physical table or view"@en ;
@@ -380,6 +404,7 @@ ontos:Column a rdfs:Class ;
 # --- Governance assets ---
 
 ontos:Policy a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Policy"@en ;
     rdfs:comment "Formal, reusable rule for data access, quality, retention, or usage"@en ;
@@ -391,6 +416,7 @@ ontos:Policy a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:BusinessTerm a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Business Term"@en ;
     rdfs:comment "Business glossary term promoted to a first-class cataloged asset with definitions and linked entities"@en ;
@@ -404,6 +430,7 @@ ontos:BusinessTerm a rdfs:Class ;
 # --- Analytics assets ---
 
 ontos:Dashboard a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Dashboard"@en ;
     rdfs:comment "BI dashboard or report consuming data products or physical assets"@en ;
@@ -415,6 +442,7 @@ ontos:Dashboard a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:Notebook a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Notebook"@en ;
     rdfs:comment "Analytics or data engineering notebook"@en ;
@@ -425,6 +453,7 @@ ontos:Notebook a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:MLModel a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "ML Model"@en ;
     rdfs:comment "Machine learning model registered in a model registry"@en ;
@@ -437,6 +466,7 @@ ontos:MLModel a rdfs:Class ;
 # --- Integration assets ---
 
 ontos:APIEndpoint a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "API Endpoint"@en ;
     rdfs:comment "Data API endpoint exposing data products or services"@en ;
@@ -448,6 +478,7 @@ ontos:APIEndpoint a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:Stream a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Stream"@en ;
     rdfs:comment "Streaming source or sink (Kafka topic, Kinesis stream, Event Hub, etc.)"@en ;
@@ -460,6 +491,7 @@ ontos:Stream a rdfs:Class ;
 # --- Semantic / logical model assets ---
 
 ontos:LogicalEntity a rdfs:Class ;
+    ontos:modelLayer "logical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Logical Entity"@en ;
     rdfs:comment "Business-level entity in the conceptual/logical data model (e.g. Customer, Order, Product)"@en ;
@@ -472,6 +504,7 @@ ontos:LogicalEntity a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
 ontos:LogicalAttribute a rdfs:Class ;
+    ontos:modelLayer "logical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Logical Attribute"@en ;
     rdfs:comment "Named attribute of a logical entity representing a business-meaningful data element"@en ;
@@ -486,6 +519,7 @@ ontos:LogicalAttribute a rdfs:Class ;
 # --- Delivery channel assets ---
 
 ontos:DeliveryChannel a rdfs:Class ;
+    ontos:modelLayer "delivery" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Delivery Channel"@en ;
     rdfs:comment "Mechanism through which data products expose data to consumers (dashboard, API, report, file, stream)"@en ;
@@ -499,6 +533,7 @@ ontos:DeliveryChannel a rdfs:Class ;
 # --- System assets ---
 
 ontos:System a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "System"@en ;
     rdfs:comment "External system, platform, or service that contains or produces data assets"@en ;
@@ -510,6 +545,7 @@ ontos:System a rdfs:Class ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
 ontos:Catalog a rdfs:Class ;
+    ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
     rdfs:label "Catalog"@en ;
     rdfs:comment "Platform-level catalog (UC catalog, BQ project, Snowflake database) that groups schemas"@en ;
@@ -529,6 +565,7 @@ ontos:Catalog a rdfs:Class ;
 # ############################################################################
 
 ontos:BusinessGlossary a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:GovernanceArtifact ;
     rdfs:label "Business Glossary"@en ;
     rdfs:comment "Hierarchical collection of business terms with organizational scope"@en ;
@@ -536,6 +573,7 @@ ontos:BusinessGlossary a rdfs:Class ;
     ontos:modelTier "dedicated" .
 
 ontos:GlossaryTerm a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:GovernanceArtifact ;
     rdfs:label "Glossary Term"@en ;
     rdfs:comment "Business term definition with synonyms, examples, and tagged assets"@en ;
@@ -543,6 +581,7 @@ ontos:GlossaryTerm a rdfs:Class ;
     ontos:modelTier "dedicated" .
 
 ontos:AssetReview a rdfs:Class ;
+    ontos:modelLayer "other" ;
     rdfs:subClassOf ontos:GovernanceArtifact ;
     rdfs:label "Asset Review"@en ;
     rdfs:comment "Approval workflow for Databricks assets including review status and comments"@en ;
@@ -556,12 +595,14 @@ ontos:SemanticLink a rdfs:Class ;
     ontos:modelTier "dedicated" .
 
 ontos:OntologyConcept a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Ontology Concept"@en ;
     rdfs:comment "RDF/RDFS concept from loaded taxonomies with hierarchical relationships"@en ;
     ontos:modelTier "dedicated" .
 
 ontos:KnowledgeCollection a rdfs:Class ;
+    ontos:modelLayer "business" ;
     rdfs:subClassOf ontos:Entity ;
     rdfs:label "Knowledge Collection"@en ;
     rdfs:comment "Generic container for glossaries, taxonomies, or ontologies with hierarchical organization"@en ;

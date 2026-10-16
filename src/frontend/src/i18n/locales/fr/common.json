@@ -528,7 +528,14 @@
     "countBadge": "{{entities}} entités, {{relationships}} relations",
     "failedLoadRelationships": "Échec du chargement des relations : {{status}}",
     "failedLoadLineage": "Échec du chargement de la traçabilité : {{status}}",
-    "failedLoadGraph": "Échec du chargement du graphe"
+    "failedLoadGraph": "Échec du chargement du graphe",
+    "layers": {
+      "business": "Métier",
+      "delivery": "Livraison",
+      "logical": "Logique",
+      "physical": "Physique",
+      "other": "Autres"
+    }
   },
   "lifecycleDialogs": {
     "certifyTitle": "Certifier",

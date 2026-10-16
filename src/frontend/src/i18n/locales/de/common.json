@@ -528,7 +528,14 @@
     "countBadge": "{{entities}} Entitäten, {{relationships}} Beziehungen",
     "failedLoadRelationships": "Beziehungen konnten nicht geladen werden: {{status}}",
     "failedLoadLineage": "Lineage konnte nicht geladen werden: {{status}}",
-    "failedLoadGraph": "Graph konnte nicht geladen werden"
+    "failedLoadGraph": "Graph konnte nicht geladen werden",
+    "layers": {
+      "business": "Fachlich",
+      "delivery": "Bereitstellung",
+      "logical": "Logisch",
+      "physical": "Physisch",
+      "other": "Sonstiges"
+    }
   },
   "lifecycleDialogs": {
     "certifyTitle": "Zertifizieren",

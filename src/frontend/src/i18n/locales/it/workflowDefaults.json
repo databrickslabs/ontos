@@ -1,0 +1,97 @@
+{
+  "approvalResponse": {
+    "title": "Indica un motivo",
+    "description": "Indica il motivo della tua decisione di approvare o rifiutare.",
+    "fields": {
+      "reason": "Motivo dell'approvazione o del rifiuto"
+    }
+  },
+  "subscription": {
+    "title": "Dettagli dell'abbonamento",
+    "description": "Descrivi come intendi usare questo prodotto dati.",
+    "fields": {
+      "reason": "Motivo dell'abbonamento",
+      "useCase": "Caso d'uso previsto"
+    }
+  },
+  "requestReview": {
+    "title": "Richiedi revisione",
+    "description": "Indica il motivo della tua richiesta di revisione.",
+    "fields": {
+      "reason": "Perché richiedi una revisione?"
+    }
+  },
+  "requestAccess": {
+    "title": "Richiedi accesso",
+    "description": "Indica il motivo della tua richiesta di accesso e, se vuoi, imposta una durata.",
+    "fields": {
+      "reason": "Perché hai bisogno dell'accesso?",
+      "expiryDays": "Durata richiesta (giorni; lascia vuoto per una durata indefinita)"
+    }
+  },
+  "requestPublish": {
+    "title": "Richiedi pubblicazione",
+    "description": "Indica il motivo della tua richiesta di pubblicazione.",
+    "fields": {
+      "reason": "Perché richiedi la pubblicazione?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Richiedi cambio di stato",
+    "description": "Indica il motivo della tua richiesta di cambio di stato.",
+    "fields": {
+      "reason": "Perché richiedi questo cambio di stato?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Indicare un motivo"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Il nome dell'oggetto non segue le convenzioni di denominazione",
+      "tagging": "Non è stato possibile applicare i tag obbligatori"
+    },
+    "dataProductApproval": {
+      "noContract": "Il prodotto dati richiede un contratto dati",
+      "rejected": "La richiesta di pubblicazione del prodotto dati è stata rifiutata"
+    },
+    "dataContractValidation": {
+      "noSchema": "Il contratto dati richiede una definizione dello schema"
+    },
+    "preCreationCompliance": {
+      "naming": "Il nome dell'asset non è conforme alla policy sulle convenzioni di denominazione",
+      "tagging": "L'asset non ha i tag obbligatori"
+    },
+    "tablePreCreation": {
+      "invalidName": "Il nome della tabella deve contenere solo lettere minuscole e trattini bassi",
+      "reservedWord": "Il nome della tabella non può essere una parola riservata SQL"
+    },
+    "contractReviewRequest": {
+      "rejected": "La richiesta di revisione del contratto dati è stata rifiutata"
+    },
+    "contractDeployRequest": {
+      "rejected": "La richiesta di distribuzione del contratto dati è stata rifiutata"
+    },
+    "productReviewRequest": {
+      "rejected": "La richiesta di revisione del prodotto dati è stata rifiutata"
+    },
+    "accessGrantRequest": {
+      "rejected": "La richiesta di accesso è stata negata"
+    },
+    "statusChangeRequest": {
+      "rejected": "La richiesta di modifica dello stato è stata rifiutata"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "La revisione dell'asset di dati richiede modifiche"
+    },
+    "roleAccessRequest": {
+      "rejected": "La richiesta di accesso al ruolo è stata negata"
+    },
+    "certificationRequestReview": {
+      "end": "Il workflow di certificazione non è riuscito"
+    },
+    "publicationRequestReview": {
+      "end": "Il workflow di pubblicazione non è riuscito"
+    }
+  }
+}

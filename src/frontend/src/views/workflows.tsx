@@ -60,6 +60,7 @@ import type {
 } from '@/types/process-workflow';
 import { getTriggerDisplay } from '@/lib/workflow-labels';
 import { WorkflowExecutionDialog } from '@/components/workflows/workflow-execution-dialog';
+import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { RelativeDate } from '@/components/common/relative-date';
 
@@ -108,6 +109,7 @@ export default function Workflows() {
   const { pathname } = useLocation();
   const { get: apiGet, post: apiPost, delete: apiDeleteApi } = useApi();
   const { hasPermission } = usePermissions();
+  const defaultWorkflowText = useDefaultWorkflowText();
   
   // Check if user has admin access
   const canEdit = hasPermission('process-workflows', FeatureAccessLevel.ADMIN);
@@ -996,7 +998,8 @@ export default function Workflows() {
       header: t('workflows:view.columns.error'),
       enableSorting: false,
       cell: ({ row }) => {
-        const errorMessage = row.original.error_message;
+        // A shipped fail step's message is shown in the user's language
+        const errorMessage = defaultWorkflowText(row.original.error_message);
         if (!errorMessage) return null;
         // `truncate` is a no-op on inline spans, so a multi-line stack trace
         // used to expand the row vertically; clamp to 2 lines on a block button

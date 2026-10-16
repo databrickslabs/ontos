@@ -1,0 +1,97 @@
+{
+  "approvalResponse": {
+    "title": "Enter a reason",
+    "description": "Provide a reason for your approval or rejection decision.",
+    "fields": {
+      "reason": "Reason for approval or rejection"
+    }
+  },
+  "subscription": {
+    "title": "Subscription Details",
+    "description": "Provide details about your intended use of this data product.",
+    "fields": {
+      "reason": "Reason for subscribing",
+      "useCase": "Intended use case"
+    }
+  },
+  "requestReview": {
+    "title": "Request review",
+    "description": "Provide a reason for your review request.",
+    "fields": {
+      "reason": "Why are you requesting a review?"
+    }
+  },
+  "requestAccess": {
+    "title": "Request access",
+    "description": "Provide a reason for your access request and optionally set a duration.",
+    "fields": {
+      "reason": "Why do you need access?",
+      "expiryDays": "Requested duration (days, leave blank for indefinite)"
+    }
+  },
+  "requestPublish": {
+    "title": "Request publish",
+    "description": "Provide a reason for your publish request.",
+    "fields": {
+      "reason": "Why are you requesting publication?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Request status change",
+    "description": "Provide a reason for your status change request.",
+    "fields": {
+      "reason": "Why are you requesting this status change?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Provide a reason"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Object name does not follow naming conventions",
+      "tagging": "Required tags could not be applied"
+    },
+    "dataProductApproval": {
+      "noContract": "Data product requires a data contract",
+      "rejected": "Data product publish request was rejected"
+    },
+    "dataContractValidation": {
+      "noSchema": "Data contract requires a schema definition"
+    },
+    "preCreationCompliance": {
+      "naming": "Asset name does not comply with naming convention policy",
+      "tagging": "Asset does not have required tags"
+    },
+    "tablePreCreation": {
+      "invalidName": "Table name must be lowercase with underscores only",
+      "reservedWord": "Table name cannot be a SQL reserved word"
+    },
+    "contractReviewRequest": {
+      "rejected": "Data contract review request was rejected"
+    },
+    "contractDeployRequest": {
+      "rejected": "Data contract deploy request was rejected"
+    },
+    "productReviewRequest": {
+      "rejected": "Data product review request was rejected"
+    },
+    "accessGrantRequest": {
+      "rejected": "Access request was denied"
+    },
+    "statusChangeRequest": {
+      "rejected": "Status change request was rejected"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "Data asset review requires changes"
+    },
+    "roleAccessRequest": {
+      "rejected": "Role access request was denied"
+    },
+    "certificationRequestReview": {
+      "end": "Certification workflow failed"
+    },
+    "publicationRequestReview": {
+      "end": "Publication workflow failed"
+    }
+  }
+}

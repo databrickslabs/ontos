@@ -1,0 +1,97 @@
+{
+  "approvalResponse": {
+    "title": "理由を入力",
+    "description": "承認または却下の判断理由を入力してください。",
+    "fields": {
+      "reason": "承認または却下の理由"
+    }
+  },
+  "subscription": {
+    "title": "サブスクリプションの詳細",
+    "description": "このデータプロダクトの利用目的を入力してください。",
+    "fields": {
+      "reason": "サブスクライブする理由",
+      "useCase": "想定するユースケース"
+    }
+  },
+  "requestReview": {
+    "title": "レビューをリクエスト",
+    "description": "レビューをリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "レビューをリクエストする理由は何ですか?"
+    }
+  },
+  "requestAccess": {
+    "title": "アクセスをリクエスト",
+    "description": "アクセスをリクエストする理由を入力し、必要に応じて期間を設定してください。",
+    "fields": {
+      "reason": "アクセスが必要な理由は何ですか?",
+      "expiryDays": "希望する期間(日数。無期限の場合は空欄)"
+    }
+  },
+  "requestPublish": {
+    "title": "公開をリクエスト",
+    "description": "公開をリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "公開をリクエストする理由は何ですか?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "ステータス変更をリクエスト",
+    "description": "ステータス変更をリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "このステータス変更をリクエストする理由は何ですか?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "理由を入力"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "オブジェクト名が命名規則に従っていません",
+      "tagging": "必須タグを適用できませんでした"
+    },
+    "dataProductApproval": {
+      "noContract": "データプロダクトにはデータコントラクトが必要です",
+      "rejected": "データプロダクトの公開リクエストは却下されました"
+    },
+    "dataContractValidation": {
+      "noSchema": "データコントラクトにはスキーマ定義が必要です"
+    },
+    "preCreationCompliance": {
+      "naming": "アセット名が命名規則ポリシーに準拠していません",
+      "tagging": "アセットに必須タグがありません"
+    },
+    "tablePreCreation": {
+      "invalidName": "テーブル名には小文字とアンダースコアのみ使用できます",
+      "reservedWord": "テーブル名に SQL の予約語は使用できません"
+    },
+    "contractReviewRequest": {
+      "rejected": "データコントラクトのレビューリクエストは却下されました"
+    },
+    "contractDeployRequest": {
+      "rejected": "データコントラクトのデプロイリクエストは却下されました"
+    },
+    "productReviewRequest": {
+      "rejected": "データプロダクトのレビューリクエストは却下されました"
+    },
+    "accessGrantRequest": {
+      "rejected": "アクセスリクエストは拒否されました"
+    },
+    "statusChangeRequest": {
+      "rejected": "ステータス変更リクエストは却下されました"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "データアセットのレビューで変更が必要です"
+    },
+    "roleAccessRequest": {
+      "rejected": "ロールへのアクセスリクエストは拒否されました"
+    },
+    "certificationRequestReview": {
+      "end": "認定ワークフローが失敗しました"
+    },
+    "publicationRequestReview": {
+      "end": "公開ワークフローが失敗しました"
+    }
+  }
+}

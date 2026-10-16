@@ -1019,7 +1019,8 @@ def describe_failed_executions(executions: List[WorkflowExecution]) -> str:
                 if reason:
                     break
                 if step.passed is False or step.error_message:
-                    reason = step.error_message or (step.result_data or {}).get('message')
+                    data = step.result_data if isinstance(step.result_data, dict) else {}
+                    reason = step.error_message or data.get('message')
             reason = reason or exe.status.value
         reason = str(reason)
         reasons.append(f"{exe.workflow_name}: {reason}" if exe.workflow_name else reason)

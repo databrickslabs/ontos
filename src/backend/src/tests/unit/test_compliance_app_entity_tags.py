@@ -2,7 +2,8 @@
 
 AppEntityLoader yielded ``tags: {}`` for data products, contracts and
 domains, so ``HAS_TAG`` / ``TAG`` were never true for them, although tags are
-assigned in the UI and in every demo preset.
+assigned in the UI and in every demo preset. A failed tag lookup must fail
+the run instead of looking like untagged entities.
 """
 import os
 
@@ -13,8 +14,9 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import text
 
-from src.common.compliance_entities import AppEntityLoader
+from src.common.compliance_entities import AppEntityLoader, EntityLoadError
 from src.controller.compliance_manager import ComplianceManager
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
 from src.db_models.data_contracts import DataContractDb
@@ -101,16 +103,74 @@ def test_contract_and_domain_tags_are_loaded(db_session, tags):
     assert _loaded(db_session, 'domain', domain.id)['tags'][made['risk-tier'].name] == 'tier-2'
 
 
-def test_a_tag_lookup_failure_keeps_the_entities(db_session, tags):
-    product = _product(db_session, 'kept')
+def test_a_short_name_shared_by_two_namespaces_is_not_a_key(db_session, tags):
+    namespace, made = tags
+    other = TagNamespaceDb(name=f'security-{_suffix()}')
+    db_session.add(other)
+    db_session.flush()
+    shared = made['risk-tier'].name
+    twin = TagDb(name=shared, namespace_id=other.id, status='active')
+    db_session.add(twin)
+    db_session.flush()
+    product = _product(db_session, 'twins')
+    _assign(db_session, made['risk-tier'], product.id, 'data_product', value='tier-1')
+    _assign(db_session, twin, product.id, 'data_product', value='restricted')
+    _assign(db_session, made['bcbs-239'], product.id, 'data_product')
+
+    loaded = _loaded(db_session, 'data_product', product.id)
+
+    bcbs = made['bcbs-239'].name
+    # Which namespace TAG('<name>') would read is undefined, so only the
+    # fully qualified names are keys; a name used once stays a key.
+    assert loaded['tags'] == {
+        f'{namespace.name}/{shared}': 'tier-1', f'{other.name}/{shared}': 'restricted',
+        bcbs: True, f'{namespace.name}/{bcbs}': True,
+    }
+
+
+def test_a_tag_lookup_failure_raises(db_session, tags):
+    _product(db_session, 'unreadable')
 
     with patch(
         'src.repositories.tags_repository.entity_tag_repo.get_assigned_tags_for_entities',
         side_effect=RuntimeError('db down'),
-    ):
-        loaded = _loaded(db_session, 'data_product', product.id)
+    ), pytest.raises(EntityLoadError):
+        list(AppEntityLoader(db_session).load_entities(['data_product']))
 
-    assert loaded['tags'] == {}
+
+def _broken_tag_query(db, **_):
+    db.execute(text('SELECT * FROM no_such_table'))
+
+
+def test_a_tag_lookup_failure_fails_the_run(db_session, tags):
+    _, made = tags
+    product = _product(db_session, 'unreadable')
+    _assign(db_session, made['bcbs-239'], product.id, 'data_product')
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name=f'Tagged {_suffix()}',
+        rule=(
+            f"MATCH (p:data_product) WHERE HAS_TAG('{made['bcbs-239'].name}') "
+            "ASSERT obj.status = 'retired' ON_FAIL FAIL 'Not retired'"
+        ),
+        category='Governance', severity='high', is_active=True,
+    )
+    db_session.add(policy)
+    db_session.flush()
+
+    # A failing query, as when the tags table can't be read: the session must
+    # stay usable so that the run can be recorded as failed
+    with patch('src.common.workspace_client.get_workspace_client', return_value=None), patch(
+        'src.repositories.tags_repository.entity_tag_repo.get_assigned_tags_for_entities',
+        side_effect=_broken_tag_query,
+    ):
+        run = ComplianceManager().run_policy_inline(db_session, policy=policy)
+
+    # Without the tags the WHERE clause would match nothing and the run would
+    # succeed with no violations.
+    assert run.status == 'failed'
+    assert run.error_message == 'Could not load the tags of data_product entities'
+    results = db_session.query(ComplianceResultDb).filter(ComplianceResultDb.run_id == run.id)
+    assert results.count() == 0
 
 
 def test_has_tag_rules_evaluate_app_entity_tags(db_session, tags):

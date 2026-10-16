@@ -15,6 +15,10 @@ from src.common.compliance_dsl import Lexer, Parser, Evaluator
 logger = get_logger(__name__)
 
 
+class EntityLoadError(RuntimeError):
+    """Data a rule needs could not be loaded, so the run must not pass."""
+
+
 @dataclass
 class EntityFilter:
     """Filter criteria for entities."""
@@ -210,27 +214,36 @@ class AppEntityLoader(EntityLoader):
     def _tags_by_entity(self, entity_type: str, entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """Assigned tags per entity, for HAS_TAG / TAG in rules.
 
-        Each tag is keyed by its name and by its fully qualified name
-        (``namespace/name``); the value is the assigned value, or True when
-        the tag has none.
+        Each tag is keyed by its fully qualified name (``namespace/name``) and,
+        when no other namespace has a tag of the same name on that entity, by
+        its name; the value is the assigned value, or True when the tag has
+        none. A failed lookup raises EntityLoadError: without the tags, rules
+        on them would pass or match nothing as if the entities were untagged.
         """
         if not entity_ids:
             return {}
         try:
             from src.repositories.tags_repository import entity_tag_repo
-            assigned = entity_tag_repo.get_assigned_tags_for_entities(
-                self.db, entity_ids=entity_ids, entity_type=entity_type
-            )
-        except Exception:
+            # In a savepoint: on Postgres a failed query aborts the transaction,
+            # and the run could not then be recorded as failed.
+            with self.db.begin_nested():
+                assigned = entity_tag_repo.get_assigned_tags_for_entities(
+                    self.db, entity_ids=entity_ids, entity_type=entity_type
+                )
+        except Exception as e:
             logger.exception("Failed to load tags of %s entities for compliance", entity_type)
-            return {}
+            raise EntityLoadError(f"Could not load the tags of {entity_type} entities") from e
         tags_by_entity: Dict[str, Dict[str, Any]] = {}
         for entity_id, tags in assigned.items():
+            namespaces_by_name: Dict[str, set] = {}
+            for tag in tags:
+                namespaces_by_name.setdefault(tag.tag_name, set()).add(tag.fully_qualified_name)
             values: Dict[str, Any] = {}
             for tag in tags:
                 value = tag.assigned_value if tag.assigned_value is not None else True
-                values[tag.tag_name] = value
                 values[tag.fully_qualified_name] = value
+                if len(namespaces_by_name[tag.tag_name]) == 1:
+                    values[tag.tag_name] = value
             tags_by_entity[str(entity_id)] = values
         return tags_by_entity
 
@@ -278,6 +291,8 @@ class AppEntityLoader(EntityLoader):
                         'created_at': getattr(product, 'created_at', None),
                         'updated_at': getattr(product, 'updated_at', None),
                     }
+            except EntityLoadError:
+                raise
             except Exception:
                 logger.exception("Failed to load data products for compliance")
 
@@ -301,6 +316,8 @@ class AppEntityLoader(EntityLoader):
                         'created_at': getattr(contract, 'created_at', None),
                         'updated_at': getattr(contract, 'updated_at', None),
                     }
+            except EntityLoadError:
+                raise
             except Exception:
                 logger.exception("Failed to load data contracts for compliance")
 
@@ -321,6 +338,8 @@ class AppEntityLoader(EntityLoader):
                         'created_at': getattr(domain, 'created_at', None),
                         'updated_at': getattr(domain, 'updated_at', None),
                     }
+            except EntityLoadError:
+                raise
             except Exception:
                 logger.exception("Failed to load domains for compliance")
 

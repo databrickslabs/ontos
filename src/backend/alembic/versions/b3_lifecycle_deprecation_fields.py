@@ -1,7 +1,7 @@
 """add deprecation lifecycle fields to data products and data contracts
 
-Revision ID: b2_lifecycle_deprecation_fields
-Revises: b1_add_adopt_entity_ids
+Revision ID: b3_lifecycle_deprecation_fields
+Revises: b2_contract_deploy_default
 Create Date: 2026-10-14 03:30:00.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b2_lifecycle_deprecation_fields'
-down_revision: Union[str, None] = 'b1_add_adopt_entity_ids'
+revision: str = 'b3_lifecycle_deprecation_fields'
+down_revision: Union[str, None] = 'b2_contract_deploy_default'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

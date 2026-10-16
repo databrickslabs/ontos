@@ -363,6 +363,9 @@
     "triggeredBy": "Geactiveerd door: {{user}}",
     "workflowSteps": "Workflowstappen",
     "loadDefinitionFailed": "Kon workflowdefinitie niet laden",
+    "stepErrors": {
+      "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren"
+    },
     "states": {
       "pending": "In Afwachting",
       "running": "Wordt Uitgevoerd",

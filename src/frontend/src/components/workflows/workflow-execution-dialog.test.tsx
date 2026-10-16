@@ -12,7 +12,10 @@ import type { ProcessWorkflow, WorkflowExecution } from '@/types/process-workflo
 const get = vi.fn();
 vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get }) }));
 
-import { WorkflowExecutionDialog, getStepExecutionState } from './workflow-execution-dialog';
+import i18n from '@/i18n/config';
+import {
+  WorkflowExecutionDialog, getStepErrorText, getStepExecutionState,
+} from './workflow-execution-dialog';
 
 const STEPS = [
   { id: 'row-1', step_id: 'notify-requester', name: 'Confirm Request Received', step_type: 'notification' },
@@ -69,5 +72,55 @@ describe('WorkflowExecutionDialog', () => {
       const card = first.closest('[class*="border-emerald-500"]');
       expect(card).not.toBeNull();
     });
+  });
+});
+
+describe('step errors', () => {
+  const LOAD_FAILED = {
+    error_message: 'Could not load data_product p-1 to evaluate the rule',
+    result_data: {
+      error_code: 'rule_entity_load_failed',
+      error_params: { entityType: 'data_product', entityId: 'p-1' },
+    },
+  };
+
+  it('translates an error that has a code, with its parameters', async () => {
+    await i18n.changeLanguage('pt');
+    try {
+      expect(getStepErrorText(LOAD_FAILED, i18n.t)).toBe(
+        'Não foi possível carregar data_product p-1 para avaliar a regra',
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('shows an error without a code as stored', () => {
+    expect(getStepErrorText({ error_message: 'Policy not found: x' }, i18n.t)).toBe(
+      'Policy not found: x',
+    );
+  });
+
+  it('falls back to the stored text for an unknown code', () => {
+    expect(getStepErrorText({
+      error_message: 'Something else', result_data: { error_code: 'not_a_known_code' },
+    }, i18n.t)).toBe('Something else');
+  });
+
+  it('shows the error under the step that failed', async () => {
+    const steps = [{ id: 'row-1', step_id: 'check-contract', name: 'Check Contract', step_type: 'validation' }];
+    const workflow = { id: 'wf-1', name: 'Gate', steps } as unknown as ProcessWorkflow;
+    const failed = execution({
+      status: 'failed', current_step_id: undefined,
+      step_executions: [{ ...RUN('row-1', false), ...LOAD_FAILED }] as any,
+    });
+    get.mockImplementation(async (url: string) => (
+      url === '/api/workflows/wf-1' ? { data: workflow } : { data: failed }
+    ));
+
+    render(<WorkflowExecutionDialog execution={failed} open onOpenChange={vi.fn()} />);
+
+    expect(await screen.findByText('Could not load data_product p-1 to evaluate the rule'))
+      .toBeInTheDocument();
   });
 });

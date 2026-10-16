@@ -363,6 +363,9 @@
     "triggeredBy": "Ausgelöst von: {{user}}",
     "workflowSteps": "Workflow-Schritte",
     "loadDefinitionFailed": "Workflow-Definition konnte nicht geladen werden",
+    "stepErrors": {
+      "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten"
+    },
     "states": {
       "pending": "Ausstehend",
       "running": "Wird ausgeführt",

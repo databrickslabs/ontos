@@ -363,6 +363,9 @@
     "triggeredBy": "Attivato da: {{user}}",
     "workflowSteps": "Passaggi del workflow",
     "loadDefinitionFailed": "Impossibile caricare la definizione del workflow",
+    "stepErrors": {
+      "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola"
+    },
     "states": {
       "pending": "In sospeso",
       "running": "In esecuzione",

@@ -10,8 +10,8 @@ Concretely:
 - **Subscribers get a generic notice.** `DataProductsManager.transition_status` already notifies subscribers when a product becomes `deprecated` or `retired` (`_notify_subscribers_of_status_change`), but with fixed text: no reason, sunset date or replacement, because none of them exist.
 - **Refused subscriptions give no guidance.** `DataProductsManager.subscribe` only accepts `active` (and `certified`) products, so subscribing to a deprecated or retired product fails with a generic status error that doesn't say what to use instead.
 - **Lifecycle reaches Unity Catalog only by accident of configuration.** The `uc_tag_sync` job can already write `{PRODUCT.STATUS}` or `{CONTRACT.STATUS}` as a Unity Catalog tag through `tag_sync_configs`, but no default entry does so, the job runs on a 4-hour schedule, and a deprecation does not trigger a run. Direct Delivery does not apply tag changes at all (only `GRANT`/`REVOKE`). Analysts querying a table directly therefore have no reliable, timely signal that its product is being retired.
-- **The declarative path is broken.** The Compliance DSL advertises `ASSIGN_TAG` / `REMOVE_TAG`, but `ComplianceManager` builds the `ActionContext` without a tag manager, so these actions currently fail with "Tag manager not available" (#948; fix proposed in #975).
-- **Certified products can be deprecated without review.** There is no default gate requiring approval before a certified product is deprecated, and a `before_status_change` gate with an approval step can't provide one: since #985 such a gate blocks the transition while the approval is pending, and nothing applies the transition once it is approved.
+- **The declarative path is broken.** The Compliance DSL advertises `ASSIGN_TAG` / `REMOVE_TAG`, but `ComplianceManager` builds the `ActionContext` without a tag manager, so these actions currently fail with "Tag manager not available" (#948; fix proposed in #1005).
+- **Certified products can be deprecated without review.** There is no default gate requiring approval before a certified product is deprecated, and a `before_status_change` gate with an approval step can't provide one: with #1012 such a gate blocks the transition while the approval is pending, and nothing applies the transition once it is approved (proposed in #1028).
 - **No durable evidence.** Who deprecated a product, why, and with what replacement is only partially visible in the change log and not packaged as evidence (see the Signed Data Product Manifest PRD).
 
 The building blocks exist — `on_status_change` / `before_status_change` / `on_request_status_change` workflow triggers, notification steps, the built-in subscriber notice, the configurable `uc_tag_sync` job and `JobsManager.run_job` — but there is no standard, end-to-end deprecation behavior. (`scheduled` process workflows are stored with a cron expression, but nothing in the app fires them yet.)
@@ -72,10 +72,10 @@ As a prerequisite, the Compliance DSL tag actions are fixed so that policies can
 ### Notices and default workflows
 
 - **Subscriber notice** (no workflow): `_notify_subscribers_of_status_change` adds the reason, sunset date and replacement to the existing `deprecated` / `retired` notices, so subscribers are told in every installation.
-- **Owner deprecation notice** (`on_status_change`, to `deprecated`): notify owners and business owners (`entity_owner`, resolved since #984) with reason, sunset date and replacement. The transition adds the lifecycle fields to the `on_status_change` payload (today `{name, status}`), because notification templates (`${entity.<field>}`) read the payload, not the stored entity.
-- **Certified deprecation approval**: a `before_status_change` validation gate (no approval step) blocks a direct transition to `deprecated` when `certification_level` is set; it needs rules to see the stored entity (#992) and gates that block (#985). Deprecating a certified product then goes through `POST /api/data-products/{id}/request-status-change` and the Status Change Request workflow (`on_request_status_change`), approved by a role with `data-products` Admin (default: Data Governance Officer). Approving that workflow doesn't apply the requested status today: the executor has no completion handling for `on_request_status_change`. This PRD adds it.
+- **Owner deprecation notice** (`on_status_change`, to `deprecated`): notify owners and business owners (`entity_owner`, resolved by #1011) with reason, sunset date and replacement. The transition adds the lifecycle fields to the `on_status_change` payload (today `{name, status}`), because notification templates (`${entity.<field>}`) read the payload, not the stored entity.
+- **Certified deprecation approval**: a `before_status_change` validation gate (no approval step) blocks a direct transition to `deprecated` when `certification_level` is set; it needs rules to see the stored entity (#1019) and gates that block (#1012). Deprecating a certified product then goes through `POST /api/data-products/{id}/request-status-change` and the Status Change Request workflow (`on_request_status_change`), approved by a role with `data-products` Admin (default: Data Governance Officer). Approving that workflow doesn't apply the requested status today: the executor has no completion handling for `on_request_status_change`; #1028 adds it.
 - **Sunset reminder** (daily): notify subscribers of products whose `sunset_date` is within a configurable window (default 14 days). `scheduled` process workflows have no runner yet (`JobsManager` schedules Databricks jobs only, and `AccessGrantsManager.check_and_process_expirations`, which fires `on_expiring`, isn't called), so the reminder needs one: a small in-app scheduler or a Databricks job.
-- Shipped as default workflows (editable, duplicable, not deletable), consistent with the default workflow catalog in `src/docs/USER-GUIDE.md`. With #989 the defaults are created at startup, but only request workflows (`on_request_*`) start active, so the owner notice, the gate and the reminder are created inactive until an admin enables them.
+- Shipped as default workflows (editable, duplicable, not deletable), consistent with the default workflow catalog in `src/docs/USER-GUIDE.md`. With #1016 the defaults are created at startup, but only request workflows (`on_request_*`) start active, so the owner notice, the gate and the reminder are created inactive until an admin enables them.
 
 ### Subscription guidance
 
@@ -96,7 +96,7 @@ As a prerequisite, the Compliance DSL tag actions are fixed so that policies can
 1. **Compliance DSL tag actions fix.**
 2. **Lifecycle fields** — model, migration, API models, validation, ODPS/ODCS mapping, deprecation dialog.
 3. **Lifecycle tag** — default `tag_sync_configs` entry, optional governed tag, on-demand job run after transitions.
-4. **Notices and approvals** — subscriber notice content, owner notice workflow, certified deprecation gate and status change request completion, sunset reminder runner.
+4. **Notices and approvals** — subscriber notice content, owner notice workflow, certified deprecation gate and status change request completion (#1028), sunset reminder runner.
 5. **Subscription guidance** — error content, UI banner.
 6. **Evidence** — audit details and manifest attestations.
 
@@ -139,7 +139,7 @@ Prior art: `test_workflow_triggers_publish.py`, `test_data_product_routes.py`, e
 1. **Compliance DSL tag actions fix** — small, independent bug fix.
 2. **Lifecycle fields** — model, migration, validation, export/import mapping, deprecation dialog.
 3. **Lifecycle tag** — default tag sync entry and on-demand job run.
-4. **Notices, approvals and subscription guidance** — notices, gate and request completion, reminder runner, subscribe errors, banner.
+4. **Notices, approvals and subscription guidance** — notices, gate and request completion (#1028), reminder runner, subscribe errors, banner.
 5. **Evidence** — audit details and manifest attestations (depends on the Signed Data Product Manifest).
 
 ### Open questions
@@ -148,7 +148,7 @@ Prior art: `test_workflow_triggers_publish.py`, `test_data_product_routes.py`, e
 - **Governed tags (#737):** should the lifecycle key use the governed-tag convention by default, and which key name do maintainers prefer (`ontos_lifecycle_status`, `lifecycle`, …)?
 - Should certified deprecation gating also apply to contracts?
 - Should subscribing to a deprecated product be allowed with an explicit acknowledgement (today it is refused)?
-- Should the lifecycle default workflows start active on new installations, unlike other event-driven defaults (#989)?
+- Should the lifecycle default workflows start active on new installations, unlike other event-driven defaults (#1016)?
 - Should retirement automatically unpublish the product (`publication_scope = none`)?
 
 ### Relationship to existing PRDs and issues

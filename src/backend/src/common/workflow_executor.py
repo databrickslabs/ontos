@@ -2829,7 +2829,10 @@ class WorkflowExecutor:
             logger.warning(
                 "Review decision for data contract %s not applied: %s", contract_id, reason,
             )
-            self._notify_status_not_changed(trigger_context, target_status, reason, responded_by)
+            self._notify_status_not_changed(
+                trigger_context, target_status, reason, responded_by,
+                'notUnderReview', {'currentStatus': current_status},
+            )
             return
         try:
             get_live_contracts_manager().transition_status(
@@ -2840,7 +2843,10 @@ class WorkflowExecutor:
             logger.warning(
                 "Review decision for data contract %s not applied: %s", contract_id, e,
             )
-            self._notify_status_not_changed(trigger_context, target_status, str(e), responded_by)
+            self._notify_status_not_changed(
+                trigger_context, target_status, str(e), responded_by,
+                'notApplied', {'reason': str(e)},
+            )
             return
         logger.info(
             "Data contract %s moved to '%s' after its review was decided",
@@ -2853,7 +2859,14 @@ class WorkflowExecutor:
         target_status: str,
         reason: str,
         responded_by: Optional[str],
+        description_key: str,
+        params: Dict[str, str],
     ) -> None:
+        """Warn the approver that their decision didn't change the contract.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        frontend's ``notifications`` namespace so the bell can translate them.
+        """
         if not responded_by:
             return
         from uuid import uuid4
@@ -2872,6 +2885,11 @@ class WorkflowExecutor:
             ),
             recipient=responded_by,
             can_delete=True,
+            data={'i18n': {
+                'title': 'notifications:contractStatusNotChanged.title',
+                'description': f'notifications:contractStatusNotChanged.{description_key}',
+                'params': {'toStatus': target_status, **params},
+            }},
         ))
         self._db.commit()
 

@@ -9,6 +9,7 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import json
 import logging
 import uuid
 from types import SimpleNamespace
@@ -112,6 +113,12 @@ def test_a_contract_that_left_review_is_not_moved(db_session, caplog):
     assert 'not under review' in caplog.text
     [notice] = _notices(db_session)
     assert 'draft' in notice.description
+    # Keys of the frontend's notifications namespace, for the bell to translate
+    assert json.loads(notice.data)['i18n'] == {
+        'title': 'notifications:contractStatusNotChanged.title',
+        'description': 'notifications:contractStatusNotChanged.notUnderReview',
+        'params': {'toStatus': 'approved', 'currentStatus': 'draft'},
+    }
 
 
 def test_a_blocked_transition_is_reported_to_the_approver(db_session):
@@ -126,3 +133,7 @@ def test_a_blocked_transition_is_reported_to_the_approver(db_session):
     [notice] = _notices(db_session)
     assert notice.title == 'Contract status not changed'
     assert 'blocked by workflow' in notice.description
+    i18n = json.loads(notice.data)['i18n']
+    assert i18n['description'] == 'notifications:contractStatusNotChanged.notApplied'
+    assert i18n['params']['toStatus'] == 'approved'
+    assert 'blocked by workflow' in i18n['params']['reason']

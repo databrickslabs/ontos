@@ -27,7 +27,7 @@ import {
 import type {
   WorkflowExecution,
   ProcessWorkflow,
-  // WorkflowStep, // Available for future graph-based visualization
+  WorkflowStep,
   ExecutionStatus,
 } from '@/types/process-workflow';
 import { 
@@ -47,10 +47,11 @@ interface WorkflowExecutionDialogProps {
 // Execution step status
 type StepExecutionState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'current';
 
-function getStepExecutionState(
-  stepId: string,
+export function getStepExecutionState(
+  step: Pick<WorkflowStep, 'id' | 'step_id'>,
   execution: WorkflowExecution
 ): StepExecutionState {
+  const stepId = step.step_id;
   // Check if this is the current (paused) step
   if (execution.current_step_id === stepId && execution.status === 'paused') {
     return 'current';
@@ -61,8 +62,12 @@ function getStepExecutionState(
     return 'running';
   }
   
-  // Check step execution results
-  const stepExecution = execution.step_executions?.find(se => se.step_id === stepId);
+  // Check step execution results. They reference the step's row id; a step
+  // that ran twice (an approval: paused, then resumed) counts by its last run.
+  const runs = (execution.step_executions || []).filter(
+    se => se.step_id === step.id || se.step_id === stepId
+  );
+  const stepExecution = runs[runs.length - 1];
   if (stepExecution) {
     if (stepExecution.passed) return 'succeeded';
     if (stepExecution.status === 'failed') return 'failed';
@@ -122,7 +127,7 @@ function SimpleWorkflowFlow({
       
       {/* Steps */}
       {workflow.steps.map((step, index) => {
-        const state = getStepExecutionState(step.step_id, execution);
+        const state = getStepExecutionState(step, execution);
         const Icon = getStepIcon(step.step_type);
         const color = getStepColor(step.step_type);
         
@@ -183,7 +188,24 @@ export function WorkflowExecutionDialog({
   const { t } = useTranslation(['workflows', 'common']);
   const { get } = useApi();
   const [workflow, setWorkflow] = useState<ProcessWorkflow | null>(null);
+  const [stepResults, setStepResults] = useState<WorkflowExecution['step_executions'] | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  // The executions list doesn't carry step results; load them for this execution
+  useEffect(() => {
+    setStepResults(null);
+    if (open && execution?.id) {
+      get<WorkflowExecution>(`/api/workflows/executions/${execution.id}`)
+        .then(response => {
+          if (response.data?.step_executions) {
+            setStepResults(response.data.step_executions);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch execution steps:', err);
+        });
+    }
+  }, [open, execution?.id, get]);
   
   // Fetch workflow definition when dialog opens
   useEffect(() => {
@@ -292,7 +314,10 @@ export function WorkflowExecutionDialog({
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                 </div>
               ) : workflow ? (
-                <SimpleWorkflowFlow workflow={workflow} execution={execution} />
+                <SimpleWorkflowFlow
+                  workflow={workflow}
+                  execution={stepResults ? { ...execution, step_executions: stepResults } : execution}
+                />
               ) : (
                 <div className="text-center text-muted-foreground py-8">
                   {t('workflows:execution.loadDefinitionFailed')}

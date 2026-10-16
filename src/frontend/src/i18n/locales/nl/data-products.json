@@ -665,7 +665,9 @@
       "statusChanged": "Status Gewijzigd",
       "statusChangedDesc": "Productstatus gewijzigd van \"{{fromStatus}}\" naar \"{{toStatus}}\".",
       "requestSubmitted": "Verzoek Verzonden",
-      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing."
+      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing.",
+      "workflowFailed": "Verzoek verzonden, maar de workflow is mislukt",
+      "workflowFailedDesc": "Niemand is gevraagd te beslissen over je {{type}}-verzoek ({{error}}). Neem contact op met een beheerder."
     },
     "labels": {
       "requestType": "Verzoektype",

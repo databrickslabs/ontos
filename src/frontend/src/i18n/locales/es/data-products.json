@@ -665,7 +665,9 @@
       "statusChanged": "Estado cambiado",
       "statusChangedDesc": "El estado del producto cambió de \"{{fromStatus}}\" a \"{{toStatus}}\".",
       "requestSubmitted": "Solicitud enviada",
-      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión."
+      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión.",
+      "workflowFailed": "Solicitud enviada, pero su flujo de trabajo falló",
+      "workflowFailedDesc": "No se pidió a nadie que decidiera sobre su solicitud de {{type}} ({{error}}). Contacte con un administrador."
     },
     "labels": {
       "requestType": "Tipo de solicitud",

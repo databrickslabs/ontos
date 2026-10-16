@@ -1145,7 +1145,9 @@
       "statusChangedTitle": "Estado cambiado",
       "statusChangedDescription": "El estado del contrato cambió de \"{{from}}\" a \"{{to}}\".",
       "submittedTitle": "Solicitud enviada",
-      "submittedDescription": "Tu solicitud de {{type}} se ha enviado y se te notificará la decisión."
+      "submittedDescription": "Tu solicitud de {{type}} se ha enviado y se te notificará la decisión.",
+      "workflowFailedTitle": "Solicitud enviada, pero su flujo de trabajo falló",
+      "workflowFailedDescription": "No se pidió a nadie que decidiera sobre tu solicitud de {{type}} ({{error}}). Contacta con un administrador."
     },
     "errors": {
       "submitFailed": "Error al enviar la solicitud",

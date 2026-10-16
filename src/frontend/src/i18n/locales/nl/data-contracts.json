@@ -1145,7 +1145,9 @@
       "statusChangedTitle": "Status gewijzigd",
       "statusChangedDescription": "Contractstatus gewijzigd van \"{{from}}\" naar \"{{to}}\".",
       "submittedTitle": "Verzoek ingediend",
-      "submittedDescription": "Uw {{type}}-verzoek is ingediend en u wordt op de hoogte gebracht van de beslissing."
+      "submittedDescription": "Uw {{type}}-verzoek is ingediend en u wordt op de hoogte gebracht van de beslissing.",
+      "workflowFailedTitle": "Verzoek verzonden, maar de workflow is mislukt",
+      "workflowFailedDescription": "Niemand is gevraagd te beslissen over uw {{type}}-verzoek ({{error}}). Neem contact op met een beheerder."
     },
     "errors": {
       "submitFailed": "Indienen van verzoek mislukt",

@@ -41,7 +41,9 @@ from src.common.dependencies import (
     AuditCurrentUserDep,
     ChangeLogManagerDep,
 )
-from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
+from src.common.workflow_triggers import (
+    fire_trigger_safe, get_trigger_registry, request_submitted_message, request_workflow_outcome,
+)
 from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
 from src.models.import_results import BatchImportResult
@@ -791,7 +793,7 @@ async def request_publish_product(
             details={"scope": scope, "justification": justification},
         )
 
-        get_trigger_registry(db).on_request_publish(
+        executions = get_trigger_registry(db).on_request_publish(
             EntityType.DATA_PRODUCT,
             product_id,
             entity_name=product_db.name,
@@ -805,6 +807,7 @@ async def request_publish_product(
             user_email=username,
             blocking=True,
         )
+        outcome = request_workflow_outcome(executions)
 
         audit_manager.log_action(
             db=db,
@@ -816,9 +819,17 @@ async def request_publish_product(
             details={"product_id": product_id, "scope": scope},
         )
 
+        failed = outcome.get("workflow_status") == "failed"
         return JSONResponse(
             status_code=202,
-            content={"status": "requested", "message": "Publication request submitted"},
+            content={
+                "status": "requested",
+                "message": (
+                    request_submitted_message("Publication", outcome) if failed
+                    else "Publication request submitted"
+                ),
+                **{k: v for k, v in outcome.items() if k != "workflow_triggered"},
+            },
         )
     except HTTPException:
         raise

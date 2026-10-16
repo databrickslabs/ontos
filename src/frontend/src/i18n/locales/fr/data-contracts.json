@@ -1145,7 +1145,9 @@
       "statusChangedTitle": "Statut modifié",
       "statusChangedDescription": "Le statut du contrat est passé de « {{from}} » à « {{to}} ».",
       "submittedTitle": "Demande envoyée",
-      "submittedDescription": "Votre demande de {{type}} a été envoyée et vous serez informé de la décision."
+      "submittedDescription": "Votre demande de {{type}} a été envoyée et vous serez informé de la décision.",
+      "workflowFailedTitle": "Demande envoyée, mais son workflow a échoué",
+      "workflowFailedDescription": "Personne n'a été sollicité pour décider de votre demande de {{type}} ({{error}}). Contactez un administrateur."
     },
     "errors": {
       "submitFailed": "Échec de l'envoi de la demande",

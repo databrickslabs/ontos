@@ -1171,3 +1171,44 @@ def enrich_entity_data_with_data_product(
 
     return entity_data
 
+
+
+def request_workflow_outcome(executions: List[WorkflowExecution]) -> Dict[str, Any]:
+    """Outcome of the workflows a request (review, publish, ...) triggered.
+
+    Returns ``workflow_triggered`` (a workflow took the request and didn't
+    fail), and when a workflow ran, ``execution_id`` and ``workflow_status``.
+    A request workflow runs until it pauses for an approval, so an execution
+    that has already failed means nobody was asked to decide (e.g. no
+    approver could be resolved) and the request goes no further; its
+    ``workflow_error`` is the error of the first step that failed.
+    """
+    if not executions:
+        return {"workflow_triggered": False}
+    failed = next((e for e in executions if e.status == ExecutionStatus.FAILED), None)
+    execution = failed or executions[0]
+    outcome: Dict[str, Any] = {
+        "workflow_triggered": failed is None,
+        "execution_id": execution.id,
+        "workflow_status": execution.status.value,
+    }
+    if failed:
+        step_error = next(
+            (s.error_message for s in failed.step_executions
+             if s.passed is False and s.error_message),
+            None,
+        )
+        outcome["workflow_error"] = (
+            step_error or failed.error_message or f"Workflow '{failed.workflow_name}' failed"
+        )
+    return outcome
+
+
+def request_submitted_message(request_kind: str, outcome: Dict[str, Any]) -> str:
+    """API message for a submitted request, given its ``request_workflow_outcome``."""
+    if outcome.get("workflow_status") == ExecutionStatus.FAILED.value:
+        return (
+            f"{request_kind} request submitted, but its workflow failed: "
+            f"{outcome.get('workflow_error')}"
+        )
+    return f"{request_kind} request submitted successfully"

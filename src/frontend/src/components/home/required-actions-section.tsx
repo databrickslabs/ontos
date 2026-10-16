@@ -7,6 +7,7 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 import WorkflowApprovalResponseDialog, { type WorkflowApprovalResponseDialogPayload } from '@/components/workflows/workflow-approval-response-dialog';
+import { notificationTitle } from '@/lib/notification-text';
 
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
@@ -111,7 +112,7 @@ export default function RequiredActionsSection() {
     ...workflowApprovalNotifications.map(n => ({
       id: n.id,
       type: 'workflow_approval' as const,
-      title: n.action_payload?.entity_name || n.title || t('requiredActionsSection.approvalRequest'),
+      title: n.action_payload?.entity_name || notificationTitle(n, t) || t('requiredActionsSection.approvalRequest'),
       subtitle: n.action_payload?.requester_email || n.subtitle,
       date: n.created_at,
       payload: n.action_payload ?? undefined,
@@ -281,7 +282,7 @@ export default function RequiredActionsSection() {
                           </span>
                         </td>
                         <td className="p-2.5">
-                          <div className="font-medium truncate max-w-[250px]">{n.title}</div>
+                          <div className="font-medium truncate max-w-[250px]">{notificationTitle(n, t)}</div>
                         </td>
                         <td className="p-2.5">
                           <div className="text-muted-foreground truncate max-w-[250px]">{n.subtitle || '-'}</div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
 import { Button } from './button';
@@ -18,6 +19,7 @@ import WorkflowApprovalResponseDialog, {
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Notification, NotificationType } from '@/types/notification';
 import { getEntityDetailPathFromPayload } from '@/lib/entity-detail-path';
+import { notificationDescription, notificationTitle } from '@/lib/notification-text';
 
 /** Only actionable rows should keep the dropdown open on select (Radix default). */
 function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
@@ -40,6 +42,7 @@ function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
 }
 
 export default function NotificationBell() {
+  const { t } = useTranslation();
   // Use selective subscriptions to avoid unnecessary re-renders
   const notifications = useNotificationsStore(state => state.notifications);
   const unreadCount = useNotificationsStore(state => state.unreadCount);
@@ -261,7 +264,7 @@ export default function NotificationBell() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     {getIcon(notification.type, notification.data || notification.action_payload)}
-                    <p className="text-sm font-medium">{notification.title}</p>
+                    <p className="text-sm font-medium">{notificationTitle(notification, t)}</p>
                   </div>
                   {notification.subtitle && (
                     <p className="text-xs text-muted-foreground mt-1">
@@ -270,7 +273,7 @@ export default function NotificationBell() {
                   )}
                   {(notification.description || notification.message) && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {notification.description || notification.message}
+                      {notificationDescription(notification, t)}
                     </p>
                   )}
                   {/* Render link button if present */}

@@ -541,7 +541,7 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO notifications (id, type, title, subtitle, description, created_at, read, can_delete, recipient) VALUES
 ('01000001-0000-4000-8000-000000000001', 'success', 'Data Contract Approved', 'Contract: Customer360', 'The data contract for Customer360 has been approved by all stakeholders', NOW() - INTERVAL '1 day', false, true, NULL),
-('01000002-0000-4000-8000-000000000002', 'warning', 'Compliance Policy Alert', 'PII Data Encryption', 'Some datasets containing PII are not properly encrypted. Check Compliance dashboard for details.', NOW() - INTERVAL '1 day 1 hour', false, true, NULL),
+('01000002-0000-4000-8000-000000000002', 'warning', 'Compliance Policy Alert', 'PII Products Under GDPR Controls', 'Some data products tagged pii are not tagged gdpr. Check Compliance dashboard for details.', NOW() - INTERVAL '1 day 1 hour', false, true, NULL),
 ('01000003-0000-4000-8000-000000000003', 'info', 'New Business Term Added', 'Customer Lifetime Value', 'A new business term has been added to the Finance glossary', NOW() - INTERVAL '2 days', true, true, NULL),
 ('01000004-0000-4000-8000-000000000004', 'error', 'Security Feature Disabled', 'Column Encryption', 'Column encryption for customer_data.pii_table has been disabled unexpectedly', NOW() - INTERVAL '2 days 2 hours', false, false, NULL),
 ('01000005-0000-4000-8000-000000000005', 'info', 'System Maintenance', 'Scheduled Downtime', 'System maintenance scheduled for Saturday 20:00 UTC', NOW() - INTERVAL '2 days 4 hours', true, true, NULL)
@@ -557,20 +557,73 @@ INSERT INTO compliance_policies (id, name, description, failure_message, rule, c
 ('01100001-0000-4000-8000-000000000001', 'Naming Conventions', 'Verify that all objects follow corporate naming conventions', 
 'Names must use snake_case format (lowercase letters with underscores). For example: "customer_orders" is valid, but "CustomerOrders" or "customer-orders" are not. Views must be prefixed with "v_".', 
 E'MATCH (obj:Object)\nWHERE obj.type IN [''catalog'', ''schema'', ''table'', ''view'']\nASSERT \n  CASE obj.type\n    WHEN ''catalog'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''schema'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''table'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''view'' THEN obj.name MATCHES ''^v_[a-z][a-z0-9_]*$''\n  END', 'Governance', 'high', true, NOW(), NOW()),
-('01100002-0000-4000-8000-000000000002', 'PII Data Encryption', 'Ensure all PII data is encrypted at rest', 
-'All datasets containing Personally Identifiable Information (PII) must be encrypted using AES-256 encryption. Please enable encryption on the table or contact your security team for assistance.',
-'MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = ''AES256''', 'Security', 'critical', true, NOW(), NOW()),
-('01100003-0000-4000-8000-000000000003', 'Data Quality Thresholds', 'Maintain data quality metrics above defined thresholds', 
-'Data quality must meet minimum standards: completeness > 95% and accuracy > 98%. Review the data pipeline for missing or incorrect values before publishing.',
-'MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98', 'Data Quality', 'high', true, NOW(), NOW()),
-('01100004-0000-4000-8000-000000000004', 'Access Control', 'Verify proper access controls on sensitive data', 
-'High-sensitivity datasets must have restricted access controls configured. Please set access_level to "restricted" and ensure only authorized groups have access.',
-'MATCH (d:Dataset) WHERE d.sensitivity = ''high'' ASSERT d.access_level = ''restricted''', 'Security', 'critical', true, NOW(), NOW()),
-('01100005-0000-4000-8000-000000000005', 'Data Freshness', 'Ensure data is updated within defined timeframes', 
-'Data appears to be stale (not updated within the last 24 hours). Check the data pipeline status and ensure scheduled jobs are running correctly.',
-'MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration(''P1D'')', 'Data Quality', 'medium', true, NOW(), NOW())
+('01100002-0000-4000-8000-000000000002', 'PII Products Under GDPR Controls', 'Ensure data products tagged pii are also tagged gdpr',
+'Data product contains PII but is not tagged gdpr. All products with Personally Identifiable Information must follow GDPR controls, including encryption at rest.',
+'MATCH (p:data_product) WHERE HAS_TAG(''pii'') ASSERT HAS_TAG(''gdpr'')', 'Security', 'critical', true, NOW(), NOW()),
+('01100003-0000-4000-8000-000000000003', 'Contract Purpose Described', 'Ensure active data contracts describe their purpose in at least 70 characters',
+'Active data contract has a short purpose description (under 70 characters). Describe what the data is for and its quality expectations before consumers rely on it.',
+'MATCH (c:data_contract) WHERE c.status = ''active'' ASSERT LENGTH(c.description) >= 70', 'Data Quality', 'high', true, NOW(), NOW()),
+('01100004-0000-4000-8000-000000000004', 'Confidential Contracts Restricted', 'Verify data contracts tagged confidential are also tagged restricted',
+'Confidential data contract is not tagged restricted. Confidential data must have restricted access so only authorized groups can read it.',
+'MATCH (c:data_contract) WHERE HAS_TAG(''confidential'') ASSERT HAS_TAG(''restricted'')', 'Security', 'critical', true, NOW(), NOW()),
+('01100005-0000-4000-8000-000000000005', 'No Deprecated or Retired Contracts', 'Ensure data contracts in use are not deprecated or retired',
+'Data contract is deprecated or retired. Move consumers to the replacement contract and stop publishing data under it.',
+'MATCH (c:data_contract) ASSERT c.status != ''deprecated'' AND c.status != ''retired''', 'Data Quality', 'medium', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'PII Data Encryption'
+    THEN 'PII Products Under GDPR Controls' ELSE name END,
+  description = CASE WHEN description = 'Ensure all PII data is encrypted at rest'
+    THEN 'Ensure data products tagged pii are also tagged gdpr' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'All datasets containing Personally Identifiable Information (PII) must be encrypted using AES-256 encryption. Please enable encryption on the table or contact your security team for assistance.'
+    THEN 'Data product contains PII but is not tagged gdpr. All products with Personally Identifiable Information must follow GDPR controls, including encryption at rest.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''pii'') ASSERT HAS_TAG(''gdpr'')',
+  updated_at = NOW()
+WHERE id = '01100002-0000-4000-8000-000000000002'
+  AND rule = 'MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = ''AES256''';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Data Quality Thresholds'
+    THEN 'Contract Purpose Described' ELSE name END,
+  description = CASE WHEN description = 'Maintain data quality metrics above defined thresholds'
+    THEN 'Ensure active data contracts describe their purpose in at least 70 characters' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Data quality must meet minimum standards: completeness > 95% and accuracy > 98%. Review the data pipeline for missing or incorrect values before publishing.'
+    THEN 'Active data contract has a short purpose description (under 70 characters). Describe what the data is for and its quality expectations before consumers rely on it.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE c.status = ''active'' ASSERT LENGTH(c.description) >= 70',
+  updated_at = NOW()
+WHERE id = '01100003-0000-4000-8000-000000000003'
+  AND rule = 'MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Access Control'
+    THEN 'Confidential Contracts Restricted' ELSE name END,
+  description = CASE WHEN description = 'Verify proper access controls on sensitive data'
+    THEN 'Verify data contracts tagged confidential are also tagged restricted' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'High-sensitivity datasets must have restricted access controls configured. Please set access_level to "restricted" and ensure only authorized groups have access.'
+    THEN 'Confidential data contract is not tagged restricted. Confidential data must have restricted access so only authorized groups can read it.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE HAS_TAG(''confidential'') ASSERT HAS_TAG(''restricted'')',
+  updated_at = NOW()
+WHERE id = '01100004-0000-4000-8000-000000000004'
+  AND rule = 'MATCH (d:Dataset) WHERE d.sensitivity = ''high'' ASSERT d.access_level = ''restricted''';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Data Freshness'
+    THEN 'No Deprecated or Retired Contracts' ELSE name END,
+  description = CASE WHEN description = 'Ensure data is updated within defined timeframes'
+    THEN 'Ensure data contracts in use are not deprecated or retired' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Data appears to be stale (not updated within the last 24 hours). Check the data pipeline status and ensure scheduled jobs are running correctly.'
+    THEN 'Data contract is deprecated or retired. Move consumers to the replacement contract and stop publishing data under it.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) ASSERT c.status != ''deprecated'' AND c.status != ''retired''',
+  updated_at = NOW()
+WHERE id = '01100005-0000-4000-8000-000000000005'
+  AND rule = 'MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration(''P1D'')';
+
 
 
 -- ============================================================================
@@ -1954,7 +2007,7 @@ NULL, NULL, 2, '{"x": 150, "y": 300}', NOW(), NOW()),
 NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 
 -- Data Quality Gate workflow steps (02a00002)
--- Uses policy 01100003 (Data Quality Thresholds)
+-- Uses policy 01100003 (Contract Purpose Described)
 ('02b00004-0000-4000-8000-000000000004', '02a00002-0000-4000-8000-000000000002', 'check-quality', 'Check Data Quality', 'policy_check', 
 '{"policy_id": "01100003-0000-4000-8000-000000000003"}',
 'quality-pass', 'quality-fail', 1, '{"x": 250, "y": 150}', NOW(), NOW()),
@@ -1968,7 +2021,7 @@ NULL, NULL, 2, '{"x": 150, "y": 300}', NOW(), NOW()),
 NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 
 -- PII Data Security Check workflow steps (02a00003)
--- Uses policies 01100002 (PII Encryption) and 01100004 (Access Control)
+-- Uses policies 01100002 (PII Products Under GDPR Controls) and 01100004 (Confidential Contracts Restricted)
 ('02b00007-0000-4000-8000-000000000007', '02a00003-0000-4000-8000-000000000003', 'check-pii', 'Check PII Encryption', 'policy_check', 
 '{"policy_id": "01100002-0000-4000-8000-000000000002"}',
 'check-access', 'notify-pii-fail', 1, '{"x": 250, "y": 100}', NOW(), NOW()),
@@ -1990,7 +2043,7 @@ NULL, NULL, 4, '{"x": 350, "y": 340}', NOW(), NOW()),
 NULL, NULL, 5, '{"x": 450, "y": 340}', NOW(), NOW()),
 
 -- Data Freshness Monitor workflow steps (02a00004)
--- Uses policy 01100005 (Data Freshness)
+-- Uses policy 01100005 (No Deprecated or Retired Contracts)
 ('02b0000c-0000-4000-8000-000000000012', '02a00004-0000-4000-8000-000000000004', 'check-freshness', 'Check Data Freshness', 'policy_check', 
 '{"policy_id": "01100005-0000-4000-8000-000000000005"}',
 'freshness-ok', 'freshness-stale', 1, '{"x": 250, "y": 150}', NOW(), NOW()),

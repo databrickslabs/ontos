@@ -345,23 +345,76 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0003-4000-8000-000000000001', 'ISO 9001 Traceability', 'Verify lot/serial traceability from raw material to finished goods per ISO 9001:2015',
-'Product lot lacks complete material traceability. ISO 9001 Section 8.5.2 requires lot-level traceability for all manufactured products.',
-'MATCH (p:Product) ASSERT p.has_lot_traceability = true AND p.genealogy_complete = true', 'Data Quality', 'critical', true, NOW(), NOW()),
+('01100001-0003-4000-8000-000000000001', 'ISO 9001 Scope Tagging', 'Verify production and quality data products are tagged as under ISO 9001 traceability',
+'Production or quality data product is not under ISO 9001. Section 8.5.2 requires lot-level traceability for all manufactured products.',
+'MATCH (p:data_product) WHERE p.domain IN [''Production'', ''Quality''] ASSERT HAS_TAG(''iso-9001'')', 'Data Quality', 'critical', true, NOW(), NOW()),
 
-('01100002-0003-4000-8000-000000000002', 'SPC Out-of-Control Detection', 'Flag processes where SPC control charts indicate out-of-control conditions',
-'Process characteristic is out of statistical control. Western Electric rules violations detected. Production hold and engineering review required.',
-'MATCH (c:Characteristic) ASSERT c.spc_status = ''in_control''', 'Data Quality', 'high', true, NOW(), NOW()),
+('01100002-0003-4000-8000-000000000002', 'Quality Products Under SPC', 'Ensure quality data products are tagged as under statistical process control',
+'Quality data product is not SPC-controlled. Process characteristics must be monitored with SPC control charts so out-of-control conditions trigger a production hold.',
+'MATCH (p:data_product) WHERE p.domain = ''Quality'' ASSERT HAS_TAG(''spc-controlled'')', 'Data Quality', 'high', true, NOW(), NOW()),
 
-('01100003-0003-4000-8000-000000000003', 'Equipment Calibration Currency', 'Ensure all measurement equipment has current calibration certification',
-'Measurement equipment calibration is overdue. All gages, CMMs, and test equipment must have valid calibration certificates per the calibration schedule.',
-'MATCH (e:Equipment) WHERE e.type = ''measurement'' ASSERT e.calibration_due_date > datetime()', 'Governance', 'critical', true, NOW(), NOW()),
+('01100003-0003-4000-8000-000000000003', 'Maintenance Data from IIoT Equipment', 'Ensure maintenance data products are tagged as coming from instrumented (IIoT) equipment',
+'Maintenance data product is not IIoT-instrumented. Calibration and condition data must come from instrumented equipment with current calibration certificates.',
+'MATCH (p:data_product) WHERE p.domain = ''Maintenance'' ASSERT HAS_TAG(''iiot-instrumented'')', 'Governance', 'critical', true, NOW(), NOW()),
 
-('01100004-0003-4000-8000-000000000004', 'OSHA Recordable Reporting', 'Ensure OSHA recordable incidents are documented within 7 calendar days',
-'OSHA recordable incident not documented within required timeframe. Per 29 CFR 1904, OSHA 300 log must be updated within 7 calendar days of incident.',
-'MATCH (i:Incident) WHERE i.is_osha_recordable = true ASSERT i.days_to_document <= 7', 'Governance', 'high', true, NOW(), NOW())
+('01100004-0003-4000-8000-000000000004', 'OSHA Recordable Tagging', 'Ensure safety data products are tagged as tracking OSHA recordable incidents',
+'Safety data product is not marked OSHA-recordable. Per 29 CFR 1904, the OSHA 300 log must be updated within 7 calendar days of an incident.',
+'MATCH (p:data_product) WHERE p.domain = ''Safety & EHS'' ASSERT HAS_TAG(''osha-recordable'')', 'Governance', 'high', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'ISO 9001 Traceability'
+    THEN 'ISO 9001 Scope Tagging' ELSE name END,
+  description = CASE WHEN description = 'Verify lot/serial traceability from raw material to finished goods per ISO 9001:2015'
+    THEN 'Verify production and quality data products are tagged as under ISO 9001 traceability' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Product lot lacks complete material traceability. ISO 9001 Section 8.5.2 requires lot-level traceability for all manufactured products.'
+    THEN 'Production or quality data product is not under ISO 9001. Section 8.5.2 requires lot-level traceability for all manufactured products.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain IN [''Production'', ''Quality''] ASSERT HAS_TAG(''iso-9001'')',
+  updated_at = NOW()
+WHERE id = '01100001-0003-4000-8000-000000000001'
+  AND rule = 'MATCH (p:Product) ASSERT p.has_lot_traceability = true AND p.genealogy_complete = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'SPC Out-of-Control Detection'
+    THEN 'Quality Products Under SPC' ELSE name END,
+  description = CASE WHEN description = 'Flag processes where SPC control charts indicate out-of-control conditions'
+    THEN 'Ensure quality data products are tagged as under statistical process control' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Process characteristic is out of statistical control. Western Electric rules violations detected. Production hold and engineering review required.'
+    THEN 'Quality data product is not SPC-controlled. Process characteristics must be monitored with SPC control charts so out-of-control conditions trigger a production hold.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain = ''Quality'' ASSERT HAS_TAG(''spc-controlled'')',
+  updated_at = NOW()
+WHERE id = '01100002-0003-4000-8000-000000000002'
+  AND rule = 'MATCH (c:Characteristic) ASSERT c.spc_status = ''in_control''';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Equipment Calibration Currency'
+    THEN 'Maintenance Data from IIoT Equipment' ELSE name END,
+  description = CASE WHEN description = 'Ensure all measurement equipment has current calibration certification'
+    THEN 'Ensure maintenance data products are tagged as coming from instrumented (IIoT) equipment' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Measurement equipment calibration is overdue. All gages, CMMs, and test equipment must have valid calibration certificates per the calibration schedule.'
+    THEN 'Maintenance data product is not IIoT-instrumented. Calibration and condition data must come from instrumented equipment with current calibration certificates.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain = ''Maintenance'' ASSERT HAS_TAG(''iiot-instrumented'')',
+  updated_at = NOW()
+WHERE id = '01100003-0003-4000-8000-000000000003'
+  AND rule = 'MATCH (e:Equipment) WHERE e.type = ''measurement'' ASSERT e.calibration_due_date > datetime()';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'OSHA Recordable Reporting'
+    THEN 'OSHA Recordable Tagging' ELSE name END,
+  description = CASE WHEN description = 'Ensure OSHA recordable incidents are documented within 7 calendar days'
+    THEN 'Ensure safety data products are tagged as tracking OSHA recordable incidents' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'OSHA recordable incident not documented within required timeframe. Per 29 CFR 1904, OSHA 300 log must be updated within 7 calendar days of incident.'
+    THEN 'Safety data product is not marked OSHA-recordable. Per 29 CFR 1904, the OSHA 300 log must be updated within 7 calendar days of an incident.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain = ''Safety & EHS'' ASSERT HAS_TAG(''osha-recordable'')',
+  updated_at = NOW()
+WHERE id = '01100004-0003-4000-8000-000000000004'
+  AND rule = 'MATCH (i:Incident) WHERE i.is_osha_recordable = true ASSERT i.days_to_document <= 7';
+
 
 
 -- ============================================================================

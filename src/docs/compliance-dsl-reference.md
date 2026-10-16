@@ -129,6 +129,14 @@ ASSERT HAS_TAG('data-product')
 ASSERT TAG('domain') = 'finance'
 ```
 
+For data products, data contracts and domains, `key` is the assigned tag's
+fully qualified name (`namespace/name`) or its name. The name alone works only
+while the entity has no tag of the same name in another namespace; when names
+repeat across namespaces, use the fully qualified name
+(`TAG('privacy/classification')`). A tag assigned without a value has the value
+`True`. If the tags can't be loaded, the run fails instead of treating the
+entities as untagged.
+
 ### String Functions
 - `UPPER(str)` - Convert to uppercase
 - `LOWER(str)` - Convert to lowercase

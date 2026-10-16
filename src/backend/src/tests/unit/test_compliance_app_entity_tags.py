@@ -138,6 +138,21 @@ def test_a_tag_lookup_failure_raises(db_session, tags):
         list(AppEntityLoader(db_session).load_entities(['data_product']))
 
 
+def test_a_tag_lookup_failure_carries_a_code_for_the_ui(db_session, tags):
+    # A run stores the code (where the backend supports it) so the UI shows
+    # the message in the user's language
+    _product(db_session, 'unreadable')
+
+    with patch(
+        'src.repositories.tags_repository.entity_tag_repo.get_assigned_tags_for_entities',
+        side_effect=RuntimeError('db down'),
+    ), pytest.raises(EntityLoadError) as e:
+        list(AppEntityLoader(db_session).load_entities(['data_product']))
+
+    assert e.value.error_code == 'tags_load_failed'
+    assert e.value.error_params == {'entityType': 'data_product'}
+
+
 def _broken_tag_query(db, **_):
     db.execute(text('SELECT * FROM no_such_table'))
 

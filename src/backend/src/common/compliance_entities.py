@@ -232,7 +232,10 @@ class AppEntityLoader(EntityLoader):
                 )
         except Exception as e:
             logger.exception("Failed to load tags of %s entities for compliance", entity_type)
-            raise EntityLoadError(f"Could not load the tags of {entity_type} entities") from e
+            error = EntityLoadError(f"Could not load the tags of {entity_type} entities")
+            # A code the UI translates; the message stays the fallback
+            error.error_code, error.error_params = 'tags_load_failed', {'entityType': entity_type}
+            raise error from e
         tags_by_entity: Dict[str, Dict[str, Any]] = {}
         for entity_id, tags in assigned.items():
             namespaces_by_name: Dict[str, set] = {}

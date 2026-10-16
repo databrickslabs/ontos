@@ -1,0 +1,207 @@
+{
+  "statusChangeNotApplied": {
+    "title": "Changement de statut non appliqué",
+    "statusChanged": "La demande de changement du statut de « {{fromStatus}} » à « {{toStatus}} » a été approuvée, mais le statut est maintenant « {{currentStatus}} » : le changement n'a donc pas été appliqué. Refaites la demande si elle est toujours nécessaire.",
+    "refused": "Votre demande de changement du statut en « {{toStatus}} » a été approuvée, mais le changement n'a pas pu être appliqué : {{reason}}"
+  },
+  "contractStatusNotChanged": {
+    "title": "Statut du contrat inchangé",
+    "notUnderReview": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : le contrat n'est pas en revue (statut « {{currentStatus}} »)",
+    "notApplied": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Notifications",
+    "loading": "Chargement des notifications...",
+    "error": "Erreur : {{error}}",
+    "empty": "Aucune notification",
+    "open": "Ouvrir",
+    "viewDetails": "Voir les détails",
+    "approveDeny": "Approuver/Refuser",
+    "handleAccessGrant": "Traiter l'octroi d'accès",
+    "reviewContract": "Examiner le contrat",
+    "handlePublish": "Traiter la publication",
+    "handleDeploy": "Traiter le déploiement",
+    "approved": "✓ Approuvé",
+    "rejected": "✗ Rejeté",
+    "viewRespond": "Voir / Répondre",
+    "reviewCertification": "Examiner la demande de certification",
+    "reviewPublication": "Examiner la demande de publication",
+    "status": "Statut : {{status}}",
+    "runId": "ID d'exécution : {{runId}}",
+    "delete": "Supprimer la notification",
+    "unknownUser": "Utilisateur inconnu",
+    "unknownRoleId": "ID de rôle inconnu",
+    "unknownRoleName": "Nom de rôle inconnu",
+    "unknownId": "ID inconnu",
+    "badge": "Notification",
+    "markRead": "Marquer comme lue"
+  },
+  "workflowDefaults": {
+    "templates": {
+      "validation_failed": {
+        "title": "Échec de la validation",
+        "message": "La validation a échoué pour {{entity_type}} '{{entity_name}}'"
+      },
+      "validation_passed": {
+        "title": "Validation réussie",
+        "message": "La validation a réussi pour {{entity_type}} '{{entity_name}}'"
+      },
+      "product_approved": {
+        "title": "Produit de données approuvé",
+        "message": "Le produit de données '{{entity_name}}' a été approuvé"
+      },
+      "product_rejected": {
+        "title": "Produit de données rejeté",
+        "message": "Le produit de données '{{entity_name}}' a été rejeté"
+      },
+      "approval_requested": {
+        "title": "Approbation demandée",
+        "message": "Approbation demandée pour {{entity_type}} '{{entity_name}}'"
+      },
+      "request_submitted": {
+        "title": "Demande envoyée",
+        "message": "Votre demande pour {{entity_type}} '{{entity_name}}' a été envoyée et attend une revue."
+      },
+      "request_approved": {
+        "title": "Demande approuvée",
+        "message": "Votre demande pour {{entity_type}} '{{entity_name}}' a été approuvée."
+      },
+      "request_rejected": {
+        "title": "Demande refusée",
+        "message": "Votre demande pour {{entity_type}} '{{entity_name}}' a été refusée."
+      },
+      "dataset_updated": {
+        "title": "Dataset mis à jour",
+        "message": "Le dataset '{{entity_name}}' a été mis à jour."
+      },
+      "pii_detected": {
+        "title": "PII détectées",
+        "message": "Des PII potentielles ont été détectées dans {{entity_type}} '{{entity_name}}'. Veuillez vérifier."
+      },
+      "default": {
+        "title": "Notification de workflow",
+        "message": "Notification de workflow pour {{entity_name}}"
+      }
+    },
+    "messages": {
+      "naming-convention-check": {
+        "notify-naming-failure": "Le nom de l'objet ne respecte pas les conventions de nommage. Les noms ne doivent contenir que des minuscules et des underscores.",
+        "notify-tag-failure": "Impossible d'attribuer automatiquement le tag owner. Veuillez ajouter le tag owner manuellement."
+      },
+      "data-product-approval": {
+        "notify-no-contract": "Impossible de publier un produit de données sans contrat de données. Veuillez d'abord joindre au moins un contrat.",
+        "notify-approved": "Votre produit de données a été approuvé et il est maintenant actif.",
+        "notify-rejected": "Votre demande de publication du produit de données a été rejetée. Veuillez consulter les commentaires et la renvoyer."
+      },
+      "data-contract-validation": {
+        "notify-no-schema": "Le contrat de données doit avoir une définition de schema. Veuillez ajouter le schema avant de continuer."
+      },
+      "pii-detection": {
+        "notify-pii-detected": "Des PII potentielles ont été détectées dans la table. La table a été taguée pour revue."
+      },
+      "contract-review-request": {
+        "notify-requester": "Votre demande de revue du contrat de données a été envoyée. Un steward des données l'examinera sous peu.",
+        "notify-approved": "Votre contrat de données a été approuvé et il est prêt pour l'étape suivante.",
+        "notify-rejected": "Votre demande de revue du contrat de données a été refusée. Veuillez consulter les commentaires."
+      },
+      "contract-deploy-request": {
+        "notify-requester": "Votre demande de déploiement du contrat de données '{{entity_name}}' dans Unity Catalog a été envoyée.",
+        "notify-approved": "Votre demande de déploiement du contrat de données '{{entity_name}}' a été approuvée.",
+        "notify-rejected": "Votre demande de déploiement du contrat de données '{{entity_name}}' a été refusée. Veuillez consulter les commentaires."
+      },
+      "product-review-request": {
+        "notify-requester": "Votre demande de revue du produit de données a été envoyée.",
+        "notify-approved": "Votre produit de données a été approuvé et il est prêt à être publié.",
+        "notify-rejected": "Votre demande de revue du produit de données a été refusée."
+      },
+      "access-grant-request": {
+        "notify-requester": "Votre demande d'accès a été envoyée et attend une approbation.",
+        "notify-approved": "Votre demande d'accès a été approuvée. Vous avez maintenant accès à la ressource demandée.",
+        "notify-rejected": "Votre demande d'accès a été refusée. Veuillez contacter un administrateur pour plus d'informations."
+      },
+      "status-change-request": {
+        "notify-requester": "Votre demande de changement de statut a été envoyée pour approbation.",
+        "notify-approved": "Votre demande de changement de statut a été approuvée.",
+        "notify-rejected": "Votre demande de changement de statut a été refusée."
+      },
+      "data-asset-review-request": {
+        "notify-reviewer": "Une nouvelle demande de revue d'actif de données vous a été attribuée.",
+        "notify-approved": "La revue de votre actif de données est terminée et approuvée.",
+        "notify-rejected": "La revue de votre actif de données demande des modifications. Veuillez consulter les commentaires."
+      },
+      "project-access-request": {
+        "notify-requester": "Votre demande d'accès au projet a été envoyée à l'équipe du projet.",
+        "notify-team": "Un utilisateur a demandé l'accès à votre projet."
+      },
+      "role-access-request": {
+        "notify-requester": "Votre demande d'accès au rôle a été envoyée pour approbation.",
+        "notify-approved": "Votre demande d'accès au rôle a été approuvée. Veuillez contacter un administrateur pour être ajouté au groupe approprié.",
+        "notify-rejected": "Votre demande d'accès au rôle a été refusée."
+      },
+      "job-failure-notification": {
+        "notify-admins": "Un job en arrière-plan a échoué. Consultez les logs du job pour plus de détails."
+      },
+      "job-success-notification": {
+        "notify-requester": "Votre job en arrière-plan s'est terminé avec succès."
+      },
+      "access-expiring-warning": {
+        "notify-grantee": "Votre accès expire bientôt. Contactez le responsable de la ressource si vous devez le prolonger."
+      },
+      "access-revoked-notification": {
+        "notify-grantee": "Votre accès a été révoqué. Contactez un administrateur si vous pensez qu'il s'agit d'une erreur."
+      },
+      "on-publish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' a été publié sur le marketplace."
+      },
+      "on-unpublish-notification": {
+        "notify-owner": "{{entity_type}} '{{entity_name}}' a été retiré du marketplace."
+      },
+      "certification-request-review": {
+        "notify-owner": "{{user_email}} a demandé la certification de {{entity_type}} '{{entity_name}}'.",
+        "notify-approved": "Votre demande de certification de '{{entity_name}}' a été approuvée.",
+        "notify-denied": "Votre demande de certification de '{{entity_name}}' a été refusée.",
+        "notify-error": "Une erreur s'est produite lors du traitement de la certification de '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "notify-owner": "{{user_email}} a demandé la publication de {{entity_type}} '{{entity_name}}'.",
+        "notify-approved": "Votre demande de publication de '{{entity_name}}' a été approuvée et publiée.",
+        "notify-denied": "Votre demande de publication de '{{entity_name}}' a été refusée.",
+        "notify-invalid": "La demande de publication de '{{entity_name}}' a été rejetée : seuls les contrats de données approuvés et les produits de données actifs peuvent être publiés.",
+        "notify-error": "Une erreur s'est produite lors de la publication de '{{entity_name}}'."
+      }
+    },
+    "approval": {
+      "title": "Approbation requise",
+      "lines": {
+        "requester": "Demandeur : {{requester}}",
+        "unknownRequester": "Inconnu",
+        "resource": "Ressource : {{resourceType}} · {{resourceName}}",
+        "resourceType": "Ressource : {{resourceType}}",
+        "permission": "Autorisation : {{permission}}",
+        "duration_one": "Durée : {{count}} jour",
+        "duration_other": "Durée : {{count}} jours",
+        "reason": "Motif : {{reason}}",
+        "workflowMessage": "Message du workflow : {{message}}",
+        "message": "Message : {{message}}",
+        "justification": "Justification : {{justification}}"
+      },
+      "entityTypes": {
+        "data_product": "Produit de données",
+        "data_contract": "Contrat de données",
+        "data_domain": "Domaine de données",
+        "data_asset_review": "Revue d'actif de données",
+        "access_grant": "Octroi d'accès",
+        "asset": "Actif",
+        "entity": "Entité"
+      }
+    },
+    "approvalMessages": {
+      "certification-request-review": {
+        "approval-gate": "Veuillez examiner la demande de certification pour {{entity_type}} '{{entity_name}}'."
+      },
+      "publication-request-review": {
+        "approval-gate": "Veuillez examiner la demande de publication pour {{entity_type}} '{{entity_name}}'."
+      }
+    }
+  }
+}

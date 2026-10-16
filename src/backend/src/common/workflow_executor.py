@@ -33,6 +33,14 @@ from src.models.process_workflows import (
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
 from src.common.logging import get_logger
+from src.common.workflow_notification_texts import (
+    DEFAULT_TEMPLATE_MESSAGE,
+    DEFAULT_TEMPLATE_TITLE,
+    TEMPLATE_MESSAGES,
+    TEMPLATE_TITLES,
+    approval_notification_i18n,
+    notification_step_i18n,
+)
 
 logger = get_logger(__name__)
 
@@ -628,6 +636,12 @@ class ApprovalStepHandler(StepHandler):
                         facets=facets,
                         approval_message=approval_message,
                     )
+                    # Keys of its texts, so the bell shows them in the user's language
+                    i18n_data = approval_notification_i18n(
+                        description, self._config.get('message'), approval_message,
+                        lambda name: substitute_template('${' + name + '}', context),
+                        _ENTITY_TYPE_LABELS,
+                    )
 
                     notification = Notification(
                         id=str(uuid4()),
@@ -660,6 +674,7 @@ class ApprovalStepHandler(StepHandler):
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,
+                        data=i18n_data,
                     )
                     notification_repo.create(db=self._db, obj_in=notification)
                     created_count += 1
@@ -719,6 +734,12 @@ class NotificationStepHandler(StepHandler):
             raw_message = custom_message or self._get_template_message(template, context)
             message = substitute_template(raw_message, context)
             title = substitute_template(self._get_template_title(template, context), context)
+            # Keys of the built-in texts, so the bell shows them in the user's language
+            i18n_data = notification_step_i18n(
+                template, custom_message, context.entity_type,
+                context.entity_name or context.entity_id,
+                lambda name: substitute_template('${' + name + '}', context),
+            )
             
             # Determine notification type based on template
             notification_type = self._get_notification_type(template)
@@ -766,6 +787,7 @@ class NotificationStepHandler(StepHandler):
                             action_payload=action_payload,
                             can_delete=can_delete,
                             read=False,
+                            data=i18n_data,
                         )
                         notification_repo.create(db=self._db, obj_in=notification)
                         created_count += 1
@@ -861,37 +883,14 @@ class NotificationStepHandler(StepHandler):
 
     def _get_template_title(self, template: str, context: StepContext) -> str:
         """Get notification title from template."""
-        entity_display = context.entity_name or context.entity_id
-        titles = {
-            'validation_failed': "Validation Failed",
-            'validation_passed': "Validation Passed",
-            'product_approved': "Data Product Approved",
-            'product_rejected': "Data Product Rejected",
-            'approval_requested': "Approval Requested",
-            'request_submitted': "Request Submitted",
-            'request_approved': "Request Approved",
-            'request_rejected': "Request Denied",
-            'dataset_updated': "Dataset Updated",
-            'pii_detected': "PII Detected",
-        }
-        return titles.get(template, "Workflow Notification")
+        return TEMPLATE_TITLES.get(template, DEFAULT_TEMPLATE_TITLE)
 
     def _get_template_message(self, template: str, context: StepContext) -> str:
         """Get message from template."""
         entity_display = context.entity_name or context.entity_id
-        templates = {
-            'validation_failed': f"Validation failed for {context.entity_type} '{entity_display}'",
-            'validation_passed': f"Validation passed for {context.entity_type} '{entity_display}'",
-            'product_approved': f"Data product '{entity_display}' has been approved",
-            'product_rejected': f"Data product '{entity_display}' has been rejected",
-            'approval_requested': f"Approval requested for {context.entity_type} '{entity_display}'",
-            'request_submitted': f"Your request for {context.entity_type} '{entity_display}' has been submitted and is pending review.",
-            'request_approved': f"Your request for {context.entity_type} '{entity_display}' has been approved.",
-            'request_rejected': f"Your request for {context.entity_type} '{entity_display}' has been denied.",
-            'dataset_updated': f"Dataset '{entity_display}' has been updated.",
-            'pii_detected': f"Potential PII detected in {context.entity_type} '{entity_display}'. Please review.",
-        }
-        return templates.get(template, f"Workflow notification for {entity_display}")
+        return TEMPLATE_MESSAGES.get(template, DEFAULT_TEMPLATE_MESSAGE).format(
+            entity_type=context.entity_type, entity_name=entity_display,
+        )
 
     def _get_notification_type(self, template: str) -> 'NotificationType':
         """Get notification type based on template."""

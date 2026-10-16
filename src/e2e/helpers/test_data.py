@@ -141,7 +141,9 @@ def make_data_product(**overrides) -> Dict[str, Any]:
         "status": "draft",
         "name": pid,
         "version": "1.0.0",
-        "domain": "e2e-testing",
+        # No domain: the suite creates none, and an unknown domain name isn't
+        # stored as the domain but kept in an ontosOriginalDomain custom
+        # property (#862), so it wouldn't round-trip.
         "tenant": "e2e-org",
         "description": {
             "purpose": "E2E test product",
@@ -161,7 +163,6 @@ def mutate_data_product(original: Dict[str, Any]) -> Dict[str, Any]:
     m = deepcopy(original)
     m["name"] = f"{E2E_PREFIX}product-{_uid()}"
     m["version"] = "1.1.0"
-    m["domain"] = "e2e-testing-updated"
     m["tenant"] = "e2e-org-updated"
     m["description"] = {
         "purpose": "Updated E2E test product",

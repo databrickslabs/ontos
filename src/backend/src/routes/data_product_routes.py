@@ -1012,11 +1012,12 @@ async def request_product_review(
     """
     Request a data steward review for a product.
     Transitions draft/sandbox → proposed → under_review with notifications.
+    The reviewer is optional: without one, the review workflow resolves it.
     """
     from pydantic import BaseModel
     
     class ReviewRequest(BaseModel):
-        reviewer_email: str
+        reviewer_email: Optional[str] = None
         message: Optional[str] = None
     
     try:
@@ -1026,7 +1027,10 @@ async def request_product_review(
         result = manager.request_review(
             product_id=product_id,
             reviewer_email=review_request.reviewer_email,
-            requester_email=current_user.username if current_user else "unknown",
+            # The review record needs an email; the username isn't always one
+            requester_email=(
+                (current_user.email or current_user.username) if current_user else "unknown"
+            ),
             message=review_request.message,
             current_user=current_user.username if current_user else None
         )

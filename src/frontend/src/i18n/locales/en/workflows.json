@@ -271,6 +271,9 @@
       "processFailedRetry": "Failed to process approval. Please try again.",
       "entityApproved": "{{name}} has been approved.",
       "entityRejected": "{{name}} has been rejected."
+    },
+    "errors": {
+      "own_owner_approval": "This approval is for the owners; you can't approve your own request."
     }
   },
   "approvalWizard": {

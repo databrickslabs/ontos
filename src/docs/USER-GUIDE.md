@@ -2444,6 +2444,8 @@ Approval steps pause workflow execution:
 4. Approver makes decision via notification
 5. Workflow resumes with on_pass or on_fail path
 
+Only the recipients of the step the execution is waiting at can decide it (admins can decide any approval). On an owner approval (`DomainOwner`, `ContractApprover`) the requester can't decide their own request, even when the approval falls back to a role they hold. Approval notifications created before an upgrade to a version with this check don't record their step; any recipient of the execution's approvals can still decide those, as before.
+
 ### Workflow Best Practices
 
 #### Design Principles

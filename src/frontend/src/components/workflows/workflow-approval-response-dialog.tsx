@@ -290,7 +290,9 @@ export default function WorkflowApprovalResponseDialog({
       if (response.error) {
         toast({
           title: t('common:toast.error'),
-          description: response.error || t('workflows:approvalResponse.messages.processFailed'),
+          description: response.errorCode
+            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, { defaultValue: response.error })
+            : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
         return;

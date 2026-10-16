@@ -1214,6 +1214,44 @@ def _is_for_step(
     return step_id is None or notified_step is None or notified_step == step_id
 
 
+def _is_own_owner_approval(
+    db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
+) -> bool:
+    """Whether ``user_info`` requested the execution paused at an owner approval.
+
+    Owner approvals ('DomainOwner' / 'ContractApprover') leave out the
+    requester; when no other owner exists they go to the Data Stewards and
+    admins, roles the requester may hold. Their own decision is refused there.
+    """
+    from src.common.workflow_executor import _OWNER_APPROVER_TOKENS
+    from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None or not step_id or not execution.trigger_context:
+        return False
+    try:
+        requester = (json.loads(execution.trigger_context) or {}).get('user_email')
+    except (TypeError, ValueError):
+        return False
+    caller = {(user_info.email or '').lower(), (user_info.username or '').lower()} - {''}
+    if not requester or requester.lower() not in caller:
+        return False
+    step = db.query(WorkflowStepDb).filter(
+        WorkflowStepDb.workflow_id == execution.workflow_id,
+        WorkflowStepDb.step_id == step_id,
+    ).first()
+    try:
+        config = json.loads(step.config) if step and step.config else {}
+    except (TypeError, ValueError):
+        config = {}
+    approvers = config.get('approvers') if isinstance(config, dict) else None
+    tokens = str(approvers or '').split(',')
+    return any(
+        t.strip().lower().replace(' ', '').replace('_', '') in _OWNER_APPROVER_TOKENS
+        for t in tokens
+    )
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -1253,6 +1291,15 @@ def _assert_caller_authorized_for_execution(
         raise HTTPException(
             status_code=403,
             detail="You are not an authorized approver for this execution",
+        )
+    if _is_own_owner_approval(db, execution_id, pending_step, user_info):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'own_owner_approval',
+                'message': "This approval is for the owners; you can't approve your own request.",
+            },
         )
     for notification in candidates:
         if notifications_manager.can_user_access_notification(

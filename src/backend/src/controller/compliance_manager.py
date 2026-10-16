@@ -53,6 +53,10 @@ class TagsManagerTagAdapter:
     identifiers (``[A-Za-z0-9_]``), so ``namespace/name`` keys cannot be written
     in a rule. Tags must already exist. Only Ontos entities whose tags the app
     displays are supported; Unity Catalog objects are rejected explicitly.
+
+    No permission check happens here: the compliance routes require write
+    access to tags (``require_tag_write_for_tag_actions``) before a policy with
+    tag actions is saved or run. Any other caller must check it first.
     """
 
     # Compliance entity type -> entity_type used by tag associations in the app

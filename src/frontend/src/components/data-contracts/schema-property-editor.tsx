@@ -14,7 +14,11 @@ import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/da
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
 
-const LOGICAL_TYPES = ['string', 'date', 'number', 'integer', 'object', 'array', 'boolean']
+const LOGICAL_TYPES = ['string', 'date', 'number', 'integer', 'object', 'array', 'boolean', 'map', 'vector']
+const SEMANTIC_TYPES = ['column', 'measure', 'dimension']
+const VECTOR_ELEMENT_TYPES = ['float32', 'float64', 'float16', 'bfloat16', 'int8', 'uint8', 'binary']
+const VECTOR_DISTANCE_METRICS = ['cosine', 'dotProduct', 'euclidean', 'hamming', 'manhattan']
+const MAP_ITEM_TYPES = ['string', 'number', 'integer', 'boolean', 'date', 'object']
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
 
 // Helper function to detect which tabs have values for a column property
@@ -193,6 +197,16 @@ function SchemaPropertyEditorInner(
   const [transformSourceObjects, setTransformSourceObjects] = useState('')
   const [transformDescription, setTransformDescription] = useState('')
 
+  // ODCS v3.2.0 semanticType + vector/map logicalTypeOptions
+  const [semanticType, setSemanticType] = useState('column')
+  const [vectorDimensions, setVectorDimensions] = useState('')
+  const [vectorElementType, setVectorElementType] = useState('float32')
+  const [vectorDistanceMetric, setVectorDistanceMetric] = useState('')
+  const [vectorEmbeddingModel, setVectorEmbeddingModel] = useState('')
+  const [vectorNormalized, setVectorNormalized] = useState(false)
+  const [mapKeyType, setMapKeyType] = useState('string')
+  const [mapValueType, setMapValueType] = useState('string')
+
   // Semantics (business properties)
   const SEMANTIC_ASSIGNMENT_TYPE = 'http://databricks.com/ontology/uc/semanticAssignment'
   const [authoritativeDefinitions, setAuthoritativeDefinitions] = useState<{ url: string; type: string }[]>([])
@@ -245,6 +259,14 @@ function SchemaPropertyEditorInner(
     setTransformLogic('')
     setTransformSourceObjects('')
     setTransformDescription('')
+    setSemanticType('column')
+    setVectorDimensions('')
+    setVectorElementType('float32')
+    setVectorDistanceMetric('')
+    setVectorEmbeddingModel('')
+    setVectorNormalized(false)
+    setMapKeyType('string')
+    setMapValueType('string')
     setAuthoritativeDefinitions([])
     setSemanticConcepts([])
     setQualityChecks([])
@@ -289,6 +311,16 @@ function SchemaPropertyEditorInner(
     setTransformLogic(prop.transformLogic || '')
     setTransformSourceObjects(prop.transformSourceObjects || '')
     setTransformDescription(prop.transformDescription || '')
+    // ODCS v3.2.0 semanticType + vector/map options
+    setSemanticType((prop as any).semanticType || 'column')
+    const lto = (prop.logicalTypeOptions || {}) as Record<string, any>
+    setVectorDimensions(lto.dimensions !== undefined ? String(lto.dimensions) : '')
+    setVectorElementType(lto.elementType || 'float32')
+    setVectorDistanceMetric(lto.distanceMetric || '')
+    setVectorEmbeddingModel(lto.embeddingModel || '')
+    setVectorNormalized(!!lto.normalized)
+    setMapKeyType(lto.map?.key?.logicalType || 'string')
+    setMapValueType(lto.map?.value?.logicalType || 'string')
     setAuthoritativeDefinitions(prop.authoritativeDefinitions || [])
     // When loading, derive semanticConcepts from authoritativeDefinitions for display if needed
     const concepts = (prop as any).semanticConcepts as { iri: string; label?: string }[] | undefined
@@ -308,10 +340,29 @@ function SchemaPropertyEditorInner(
     setPropRelationships(prop.relationships || [])
   }
 
+  // Assemble ODCS v3.2.0 logicalTypeOptions for vector/map types.
+  const buildLogicalTypeOptions = (): Record<string, any> | undefined => {
+    if (logicalType === 'vector') {
+      const opts: Record<string, any> = {}
+      if (vectorDimensions) opts.dimensions = parseInt(vectorDimensions)
+      if (vectorElementType) opts.elementType = vectorElementType
+      if (vectorDistanceMetric) opts.distanceMetric = vectorDistanceMetric
+      if (vectorEmbeddingModel.trim()) opts.embeddingModel = vectorEmbeddingModel.trim()
+      if (vectorNormalized) opts.normalized = true
+      return Object.keys(opts).length > 0 ? opts : undefined
+    }
+    if (logicalType === 'map') {
+      return { map: { key: { logicalType: mapKeyType }, value: { logicalType: mapValueType } } }
+    }
+    return undefined
+  }
+
   // Build a ColumnProperty from current form state (shared by handleAddOrUpdate and getPropertiesForSubmit)
   const buildPropertyFromFormState = (): ColumnProperty => ({
     name: name.trim(),
     logicalType,
+    semanticType: semanticType && semanticType !== 'column' ? (semanticType as any) : undefined,
+    logicalTypeOptions: buildLogicalTypeOptions(),
     description: description.trim() || undefined,
     physicalType: physicalType.trim() || undefined,
     physicalName: physicalName.trim() || undefined,
@@ -368,7 +419,7 @@ function SchemaPropertyEditorInner(
       const existing = properties[editingIndex]
       return normalizePropertyForCompare(current) !== normalizePropertyForCompare(existing)
     },
-  }), [editingIndex, properties, name, logicalType, description, physicalType, physicalName, required, unique, primaryKey, primaryKeyPosition, partitioned, partitionKeyPosition, minLength, maxLength, pattern, minimum, maximum, multipleOf, precision, dateFormat, timezone, customFormat, itemType, minItems, maxItems, classification, examples, businessName, encryptedName, criticalDataElement, transformLogic, transformSourceObjects, transformDescription, authoritativeDefinitions, semanticConcepts, qualityChecks, tags, customProps, propRelationships])
+  }), [editingIndex, properties, name, logicalType, description, physicalType, physicalName, required, unique, primaryKey, primaryKeyPosition, partitioned, partitionKeyPosition, minLength, maxLength, pattern, minimum, maximum, multipleOf, precision, dateFormat, timezone, customFormat, itemType, minItems, maxItems, classification, examples, businessName, encryptedName, criticalDataElement, transformLogic, transformSourceObjects, transformDescription, semanticType, vectorDimensions, vectorElementType, vectorDistanceMetric, vectorEmbeddingModel, vectorNormalized, mapKeyType, mapValueType, authoritativeDefinitions, semanticConcepts, qualityChecks, tags, customProps, propRelationships])
 
   const isDirty = editingIndex !== null && (() => {
     const current = buildPropertyFromFormState()
@@ -504,6 +555,23 @@ function SchemaPropertyEditorInner(
                       {LOGICAL_TYPES.map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="prop-semantic-type" className="text-xs">
+                    Semantic Type
+                  </Label>
+                  <Select value={semanticType} onValueChange={setSemanticType}>
+                    <SelectTrigger id="prop-semantic-type" className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SEMANTIC_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -713,6 +781,67 @@ function SchemaPropertyEditorInner(
                       <div className="space-y-1.5">
                         <Label htmlFor="prop-max-items" className="text-xs">{t('data-contracts:property.fields.maxItems', 'Max Items')}</Label>
                         <Input id="prop-max-items" type="number" min="0" value={maxItems} onChange={(e) => setMaxItems(e.target.value)} className="h-9" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ODCS v3.2.0 vector options (RFC-0042) */}
+                  {logicalType === 'vector' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-vec-dims" className="text-xs">Dimensions <span className="text-destructive">*</span></Label>
+                        <Input id="prop-vec-dims" type="number" min="1" value={vectorDimensions} onChange={(e) => setVectorDimensions(e.target.value)} placeholder="e.g. 768" className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-vec-elem" className="text-xs">Element Type</Label>
+                        <Select value={vectorElementType} onValueChange={setVectorElementType}>
+                          <SelectTrigger id="prop-vec-elem" className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {VECTOR_ELEMENT_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-vec-dist" className="text-xs">Distance Metric</Label>
+                        <Select value={vectorDistanceMetric || 'none'} onValueChange={(v) => setVectorDistanceMetric(v === 'none' ? '' : v)}>
+                          <SelectTrigger id="prop-vec-dist" className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">—</SelectItem>
+                            {VECTOR_DISTANCE_METRICS.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-vec-model" className="text-xs">Embedding Model</Label>
+                        <Input id="prop-vec-model" value={vectorEmbeddingModel} onChange={(e) => setVectorEmbeddingModel(e.target.value)} placeholder="e.g. openai/text-embedding-3-small" className="h-9" />
+                      </div>
+                      <div className="flex items-center gap-2 pt-5">
+                        <input id="prop-vec-norm" type="checkbox" checked={vectorNormalized} onChange={(e) => setVectorNormalized(e.target.checked)} className="h-4 w-4" />
+                        <Label htmlFor="prop-vec-norm" className="text-xs cursor-pointer">Normalized</Label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ODCS v3.2.0 map options (RFC-0030) */}
+                  {logicalType === 'map' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-map-key" className="text-xs">Key Type</Label>
+                        <Select value={mapKeyType} onValueChange={setMapKeyType}>
+                          <SelectTrigger id="prop-map-key" className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {MAP_ITEM_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-map-val" className="text-xs">Value Type</Label>
+                        <Select value={mapValueType} onValueChange={setMapValueType}>
+                          <SelectTrigger id="prop-map-val" className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {MAP_ITEM_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   )}

@@ -68,7 +68,7 @@ describe('Data Contracts Store', () => {
       expect(draft.status).toBe('draft');
       expect(draft.owner).toBe('');
       expect(draft.kind).toBe('DataContract');
-      expect(draft.apiVersion).toBe('v3.0.1');
+      expect(draft.apiVersion).toBe('v3.2.0');
       expect(draft.format).toBe('json');
       expect(draft.contract_text).toContain('DataContract');
     });

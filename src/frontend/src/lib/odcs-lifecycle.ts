@@ -20,6 +20,47 @@ export const DataContractStatus = {
 export type DataContractStatusType = typeof DataContractStatus[keyof typeof DataContractStatus];
 
 /**
+ * Supported ODCS apiVersions (newest first). Fallback used when the
+ * `/api/data-contracts/meta/odcs-versions` endpoint is unavailable.
+ */
+export const SUPPORTED_ODCS_VERSIONS = [
+  'v3.2.0', 'v3.1.0', 'v3.0.2', 'v3.0.1', 'v3.0.0',
+] as const;
+
+export const LATEST_ODCS_VERSION = 'v3.2.0';
+
+/** Parse "v3.2.0" -> [3,2,0] for numeric comparison. */
+function parseOdcsVersion(v: string): number[] {
+  const cleaned = (v || '').replace(/^v/i, '');
+  return cleaned.split('.').map((n) => parseInt(n, 10) || 0);
+}
+
+/** True if apiVersion `a` is strictly newer than `b`. */
+export function isNewerOdcsVersion(a: string, b: string): boolean {
+  const pa = parseOdcsVersion(a);
+  const pb = parseOdcsVersion(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0;
+    const y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+/** Supported versions strictly newer than `current` (candidate upgrade targets, newest first). */
+export function odcsUpgradeTargets(
+  current: string,
+  supported: readonly string[] = SUPPORTED_ODCS_VERSIONS,
+): string[] {
+  return supported.filter((v) => isNewerOdcsVersion(v, current));
+}
+
+/** True if the contract's apiVersion is older than the latest supported version. */
+export function canUpgradeOdcsVersion(current: string): boolean {
+  return isNewerOdcsVersion(LATEST_ODCS_VERSION, current || '');
+}
+
+/**
  * Defines allowed status transitions for ODCS lifecycle.
  *
  * Lifecycle flow:

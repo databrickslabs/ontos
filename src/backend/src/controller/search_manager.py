@@ -61,12 +61,19 @@ class SearchManager:
         self._config_loader = config_loader or get_search_config_loader()
 
         # Choose the backend from settings ("memory" default, "postgres" = DB-backed FTS).
+        engine_name, trgm_threshold = "auto", 0.45
         try:
             from src.common.config import get_settings
-            backend_name = get_settings().SEARCH_BACKEND
+            settings = get_settings()
+            backend_name = settings.SEARCH_BACKEND
+            engine_name = settings.SEARCH_ENGINE
+            trgm_threshold = settings.SEARCH_TRGM_THRESHOLD
         except Exception:
             backend_name = "memory"
-        self._backend = create_backend(self, backend_name)
+        self._backend = create_backend(self, backend_name, engine_name, trgm_threshold)
+        if isinstance(self._backend, PostgresBackend):
+            # Engine detection + engine-specific indexes, before the backfill below.
+            self._backend.prepare()
 
         logger.info(
             f"SearchManager initialized with {len(self.searchable_managers)} managers "

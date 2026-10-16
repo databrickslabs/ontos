@@ -2876,11 +2876,155 @@ class WorkflowExecutor:
                         db_product.status = 'draft'
                         logger.info(f"Data product {entity_id} status reverted to 'draft' after rejection")
                     self._db.commit()
+
+            # Approved status change request: apply the requested transition,
+            # with the same validation and gates as a direct status change
+            elif (entity_type == 'data_product'
+                  and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')):
+                approved_request = succeeded if approved is None else approved
+                target_status = trigger_context.to_status or (
+                    trigger_context.entity_data or {}
+                ).get('target_status')
+                if approved_request and target_status:
+                    self._apply_requested_status_change(
+                        trigger_context, entity_id, target_status, responded_by
+                    )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    def _apply_requested_status_change(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        target_status: str,
+        responded_by: Optional[str],
+    ) -> None:
+        """Apply an approved status change request to a data product.
+
+        Uses the app's notifications and search managers, so subscribers are
+        notified and the search index is updated as for a direct status
+        change. The request is applied only while the product still has the
+        status it was made from: if the status changed meanwhile, the approval
+        was about a different situation, so nothing is applied and the
+        requester and approver are told. A product that already has the
+        requested status (e.g. the completion ran twice) is left as is. If the
+        transition is refused (e.g. a before_status_change gate blocks), the
+        requester is told, since the workflow has already reported the request
+        as approved.
+        """
+        from src.common.app_state import get_app_state_manager
+        from src.controller.data_products_manager import DataProductsManager
+        from src.db_models.data_products import DataProductDb
+
+        product = self._db.get(DataProductDb, product_id)
+        if product is None:
+            logger.warning(
+                "Approved status change of data product %s: the product no longer exists",
+                product_id,
+            )
+            return
+        current_status = (product.status or '').lower()
+        if current_status == target_status.lower():
+            logger.info(
+                "Data product %s already has status '%s'; approved status change not reapplied",
+                product_id, target_status,
+            )
+            return
+        requested_from = trigger_context.from_status or (
+            trigger_context.entity_data or {}
+        ).get('from_status')
+        if requested_from and current_status != requested_from.lower():
+            logger.warning(
+                "Approved status change of data product %s from '%s' to '%s' not applied: "
+                "its status is now '%s'",
+                product_id, requested_from, target_status, current_status,
+            )
+            self._notify_status_change_not_applied(
+                trigger_context, product_id,
+                f"The request to change the status from '{requested_from}' to "
+                f"'{target_status}' was approved, but the status is now "
+                f"'{current_status}', so the change was not applied. "
+                f"Request it again if it is still needed.",
+                recipients=[trigger_context.user_email, responded_by],
+                description_key='statusChanged',
+                params={
+                    'fromStatus': requested_from, 'toStatus': target_status,
+                    'currentStatus': current_status,
+                },
+            )
+            return
+
+        manager = DataProductsManager(
+            db=self._db, notifications_manager=get_app_state_manager('notifications_manager'),
+        )
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager:
+            manager.set_search_manager(search_manager)
+        try:
+            manager.transition_status(product_id, target_status, responded_by)
+        except ValueError as e:
+            logger.warning(
+                "Approved status change of data product %s to '%s' could not be applied: %s",
+                product_id, target_status, e,
+            )
+            self._notify_status_change_not_applied(
+                trigger_context, product_id,
+                f"Your request to change the status to '{target_status}' was approved, "
+                f"but the change could not be applied: {e}",
+                recipients=[trigger_context.user_email],
+                description_key='refused',
+                params={'toStatus': target_status, 'reason': str(e)},
+            )
+            return
+        logger.info(
+            "Data product %s moved to '%s' after its status change request was approved",
+            product_id, target_status,
+        )
+
+    def _notify_status_change_not_applied(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        description: str,
+        recipients: List[Optional[str]],
+        description_key: str,
+        params: Dict[str, Any],
+    ) -> None:
+        """Tell the given people that an approved status change was not applied.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        ``notifications`` namespace and their parameters, so the UI can show
+        them in the user's language.
+        """
+        from uuid import uuid4
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+
+        sent = set()
+        for recipient in recipients:
+            if not recipient or recipient in sent:
+                continue
+            sent.add(recipient)
+            notification_repo.create(db=self._db, obj_in=Notification(
+                id=str(uuid4()),
+                created_at=datetime.utcnow(),
+                type=NotificationType.WARNING,
+                title="Status change not applied",
+                subtitle=trigger_context.entity_name or product_id,
+                description=description,
+                recipient=recipient,
+                can_delete=True,
+                data={'i18n': {
+                    'title': 'notifications:statusChangeNotApplied.title',
+                    'description': f'notifications:statusChangeNotApplied.{description_key}',
+                    'params': params,
+                }},
+            ))
+        if sent:
+            self._db.commit()
+
     def _execute_step(self, step: WorkflowStep, context: StepContext) -> StepResult:
         """Execute a single step."""
         step_type = step.step_type.value if hasattr(step.step_type, 'value') else step.step_type

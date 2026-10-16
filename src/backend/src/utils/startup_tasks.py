@@ -247,6 +247,9 @@ def initialize_managers(app: FastAPI):
         app.state.workspace_manager = WorkspaceManager(ws_client=ws_client)
         logger.info("WorkspaceManager initialized.")
         app.state.notifications_manager = NotificationsManager(settings_manager=app.state.settings_manager)
+        # For code without request.app.state (e.g. workflow completion handlers)
+        from src.common.app_state import set_app_state_manager
+        set_app_state_manager('notifications_manager', app.state.notifications_manager)
         # Back-reference for progress notifications
         app.state.settings_manager.set_notifications_manager(app.state.notifications_manager)
         # Make jobs_manager accessible via app.state

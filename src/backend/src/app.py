@@ -244,6 +244,8 @@ async def startup_event():
             except Exception:
                 continue
         app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+        from src.common.app_state import set_app_state_manager
+        set_app_state_manager('search_manager', app.state.search_manager)
         app.state.search_manager.build_index()
         for mgr in searchable_managers_instances:
             mgr.set_search_manager(app.state.search_manager)

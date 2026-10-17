@@ -4799,13 +4799,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         logger.info(f"Retrieved {len(result)} team members from team {team_id} for product {product_id} import")
         return result
 
-    def compare_products(self, old_product: Dict, new_product: Dict) -> Dict:
+    def compare_products(self, old_product: Dict, new_product: Dict, partial: bool = False) -> Dict:
         """
         Compare two product versions and analyze changes.
         
         Args:
             old_product: Previous version (dict representation)
             new_product: New version (dict representation)
+            partial: True when new_product is an update payload (unset sections skipped)
             
         Returns:
             Dict with change analysis results
@@ -4813,7 +4814,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         from src.utils.product_change_analyzer import ProductChangeAnalyzer
         
         analyzer = ProductChangeAnalyzer()
-        result = analyzer.analyze(old_product, new_product)
+        result = analyzer.analyze(old_product, new_product, partial=partial)
         
         return {
             'change_type': result.change_type.value,
@@ -4878,7 +4879,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Run change analysis
         # Fields the caller left out are unchanged, not emptied.
         analysis = self.compare_products(
-            current_product_dict, {**current_product_dict, **proposed_changes}
+            current_product_dict, {**current_product_dict, **proposed_changes}, partial=True
         )
         
         # Classify changes
@@ -4892,10 +4893,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 metadata_changes.append(field)
         
         # Child entity changes (nested structures)
-        child_entity_fields = ['inputPorts', 'outputPorts', 'managementPorts', 'team', 'support', 'description']
-        for field in child_entity_fields:
-            if field in proposed_changes and proposed_changes.get(field) != current_product_dict.get(field):
-                child_entity_changes.append(field)
+        # Keys may arrive aliased (input_ports, support_channels) or as field names.
+        from src.utils.product_change_analyzer import ProductChangeAnalyzer
+        child_entity_fields = [
+            ('inputPorts', 'input_ports'), ('outputPorts', 'output_ports'),
+            ('managementPorts', 'management_ports'), ('team',),
+            ('support', 'support_channels'), ('description',),
+        ]
+        for keys in child_entity_fields:
+            proposed = ProductChangeAnalyzer._get(proposed_changes, *keys)
+            if proposed is not None and proposed != ProductChangeAnalyzer._get(current_product_dict, *keys):
+                child_entity_changes.append(keys[0])
         
         # Determine if versioning is required
         has_breaking_changes = len(analysis['breaking_changes']) > 0

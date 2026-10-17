@@ -40,7 +40,7 @@ def _base() -> Dict:
                               "severity": "error"}]},
                 {"name": "email", "logicalType": "string", "required": False, "unique": False,
                  "logicalTypeOptions": {"maxLength": 255}, "physicalType": "varchar(255)"},
-                {"name": "lifetime_value", "logicalType": "double", "required": False},
+                {"name": "lifetime_value", "logicalType": "integer", "required": False},
             ],
         }],
         "servers": [{"server": "prod", "type": "databricks", "environment": "prod",
@@ -81,8 +81,10 @@ CASES = [
         {"name": "country", "logicalType": "string", "required": True}), Bump.MAJOR, "property-added"),
     ("incompatible-type-change", lambda d: _prop(d, "customer_id").update(logicalType="integer"),
      Bump.MAJOR, "property-logical-type"),
-    ("compatible-type-change", lambda d: _prop(d, "lifetime_value").update(logicalType="float"),
-     Bump.PATCH, "property-logical-type"),
+    ("non-widening-type-change", lambda d: _prop(d, "lifetime_value").update(logicalType="string"),
+     Bump.MAJOR, "property-logical-type"),
+    ("widening-type-change", lambda d: _prop(d, "lifetime_value").update(logicalType="number"),
+     Bump.MINOR, "property-logical-type"),
     ("physical-type-change", lambda d: _prop(d, "email").update(physicalType="varchar(100)"),
      Bump.MAJOR, "property-physical-type"),
     ("physical-rename", lambda d: _prop(d, "customer_id").update(physicalName="cust_id"),
@@ -115,7 +117,7 @@ CASES = [
     ("role-removed", lambda d: d.update(roles=[]), Bump.MAJOR, "role-removed"),
     ("role-added", lambda d: d["roles"].append({"role": "steward", "access": "write"}), Bump.MINOR, "role-added"),
     ("sla-added", lambda d: d.update(slaProperties=[{"property": "latency", "value": 4, "unit": "h"}]),
-     Bump.MINOR, "sla-changed"),
+     Bump.MINOR, "sla-added"),
     ("property-reorder", lambda d: _props(d).reverse(), Bump.NONE, None),
 ]
 
@@ -178,5 +180,105 @@ def test_change_dict_shape_for_api():
         "new": "integer",
         "bump": "major",
         "rule_id": "property-logical-type",
-        "message": "Property logical type changed",
+        "message": "Logical type changed",
     }
+
+
+def _compare(mutate_base, mutate_target):
+    base = _base()
+    mutate_base(base)
+    target = copy.deepcopy(base)
+    mutate_target(target)
+    return compare(base, target, ODCS_PROFILE, ODCS_RULES)
+
+
+def _only(result):
+    assert len(result.changes) == 1, [c.to_dict() for c in result.changes]
+    return result.changes[0]
+
+
+class TestReviewFindings:
+    """Regressions for the slice-2 code review."""
+
+    def test_timestamp_to_date_is_lossy(self):
+        result = _compare(lambda d: _prop(d, "email").update(logicalType="timestamp"),
+                          lambda d: _prop(d, "email").update(logicalType="date"))
+        assert result.suggested_bump == Bump.MAJOR
+
+    def test_array_item_type_change_is_breaking(self):
+        result = _compare(
+            lambda d: _prop(d, "email").update(logicalType="array", items={"logicalType": "string"}),
+            lambda d: _prop(d, "email")["items"].update(logicalType="integer"),
+        )
+        change = _only(result)
+        assert change.path == "schema[customers].properties[email].items.logicalType"
+        assert (change.bump, change.rule_id) == (Bump.MAJOR, "property-logical-type")
+
+    @pytest.mark.parametrize("old,new,expected", [(False, True, Bump.MAJOR), (True, False, Bump.MINOR)])
+    def test_boolean_exclusive_bound(self, old, new, expected):
+        """ODCS v3.0.2 exclusiveMaximum is a boolean; turning it on tightens."""
+        result = _compare(
+            lambda d: _prop(d, "email")["logicalTypeOptions"].update(maximum=10, exclusiveMaximum=old),
+            lambda d: _prop(d, "email")["logicalTypeOptions"].update(exclusiveMaximum=new),
+        )
+        assert _only(result).bump == expected
+
+    def test_naming_a_library_check_is_metadata(self):
+        result = _compare(lambda d: None,
+                          lambda d: _prop(d, "customer_id")["quality"][0].update(name="pk_not_null"))
+        change = _only(result)
+        assert (change.bump, change.rule_id) == (Bump.PATCH, "quality-metadata")
+
+    def test_cosmetic_edit_of_unnamed_sql_check_is_metadata(self):
+        unnamed = {"type": "sql", "query": "SELECT COUNT(*) FROM customers", "mustBeGreaterThan": 0}
+        result = _compare(lambda d: d["schema"][0].update(quality=[dict(unnamed)]),
+                          lambda d: d["schema"][0]["quality"][0].update(description="non-empty table"))
+        change = _only(result)
+        assert (change.bump, change.rule_id) == (Bump.PATCH, "quality-metadata")
+
+    def test_stable_ids_match_items_but_are_not_reported(self):
+        """A check keyed by its ODCS stable id: editing its rule is a definition
+        change on the same item (not remove + add), and id churn is invisible."""
+        result = _compare(
+            lambda d: _prop(d, "customer_id")["quality"][0].update(id="q-1"),
+            lambda d: _prop(d, "customer_id")["quality"][0].update(rule="unique"),
+        )
+        change = _only(result)
+        assert change.path.endswith("quality[q-1].rule")
+        assert (change.bump, change.rule_id) == (Bump.MAJOR, "quality-changed")
+
+        id_only = _compare(lambda d: _prop(d, "email").update(id="p-1"),
+                           lambda d: _prop(d, "email").update(id="p-2"))
+        assert id_only.changes == []
+
+    @pytest.mark.parametrize("old,new,expected", [
+        (4, 48, Bump.MAJOR),   # latency loosened
+        (48, 4, Bump.MINOR),   # latency tightened
+    ])
+    def test_sla_direction(self, old, new, expected):
+        result = _compare(
+            lambda d: d.update(slaProperties=[{"property": "latency", "value": old, "unit": "h"}]),
+            lambda d: d["slaProperties"][0].update(value=new),
+        )
+        assert _only(result).bump == expected
+
+    def test_sla_availability_lowered_is_breaking(self):
+        result = _compare(
+            lambda d: d.update(slaProperties=[{"property": "availability", "value": 99.9}]),
+            lambda d: d["slaProperties"][0].update(value=99.0),
+        )
+        assert _only(result).bump == Bump.MAJOR
+
+    def test_sla_removed_is_breaking(self):
+        result = _compare(
+            lambda d: d.update(slaProperties=[{"property": "latency", "value": 4, "unit": "h"}]),
+            lambda d: d.pop("slaProperties"),
+        )
+        assert _only(result).rule_id == "sla-removed"
+        assert result.suggested_bump == Bump.MAJOR
+
+    def test_float_version_does_not_crash(self):
+        result = _compare(lambda d: d.update(version=1.0),
+                          lambda d: d["description"].update(purpose="x") or d.update(version=1.1))
+        assert result.suggested_version == "1.0.1"
+        assert result.version_consistent is True

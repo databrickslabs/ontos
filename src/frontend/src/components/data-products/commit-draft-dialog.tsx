@@ -9,7 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, GitCompare } from 'lucide-react';
+import EntityDiffDialog from '@/components/common/entity-diff-dialog';
 import type { DiffFromParentResponse } from '@/types/data-product';
 
 interface CommitDraftDialogProps {
@@ -45,6 +46,7 @@ export default function CommitDraftDialog({
   const { get, post } = useApi();
   const { toast } = useToast();
   
+  const [isDiffOpen, setIsDiffOpen] = useState(false);
   const [loadingDiff, setLoadingDiff] = useState(true);
   const [diffAnalysis, setDiffAnalysis] = useState<DiffFromParentResponse | null>(null);
   const [suggestedVersion, setSuggestedVersion] = useState('');
@@ -165,7 +167,19 @@ export default function CommitDraftDialog({
                   <AlertDescription className="text-blue-700 dark:text-blue-300">
                     {t('data-products:commitDraft.changeAnalysisDescription', { bump: diffAnalysis.suggested_bump })}
                     {diffAnalysis.analysis?.summary && (
-                      <p className="mt-1 text-sm">{diffAnalysis.analysis.summary}</p>
+                      <p className="mt-1 text-sm whitespace-pre-line">{diffAnalysis.analysis.summary}</p>
+                    )}
+                    {diffAnalysis.parent_id && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="mt-1 h-auto p-0 text-blue-800 dark:text-blue-200"
+                        onClick={() => setIsDiffOpen(true)}
+                      >
+                        <GitCompare className="mr-1 h-3.5 w-3.5" />
+                        {t('common:entityDiff.viewFullDiff')}
+                      </Button>
                     )}
                   </AlertDescription>
                 </Alert>
@@ -255,6 +269,15 @@ export default function CommitDraftDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {isDiffOpen && diffAnalysis?.parent_id && (
+        <EntityDiffDialog
+          open
+          onOpenChange={setIsDiffOpen}
+          entityKind="product"
+          baseId={diffAnalysis.parent_id}
+          targetId={productId}
+        />
+      )}
     </Dialog>
   );
 }

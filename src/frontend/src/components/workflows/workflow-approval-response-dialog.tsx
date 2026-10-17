@@ -28,6 +28,7 @@ import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from 
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
+import EntityChangesButton from '@/components/common/entity-changes-button';
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
@@ -477,6 +478,12 @@ export default function WorkflowApprovalResponseDialog({
                     </div>
                   ))}
                 </dl>
+                {/* Versioned entities: show what this version changes (PRD #1086). */}
+                <EntityChangesButton
+                  entityType={payload?.underlying_entity_type ?? payload?.entity_type}
+                  entityId={payload?.underlying_entity_id ?? payload?.entity_id}
+                  className="mt-2"
+                />
               </div>
             )}
             {(payload?.requested_duration_days != null || payload?.permission_level) && (

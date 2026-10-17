@@ -726,7 +726,9 @@
     "unknownVersion": "不明",
     "compare": "バージョンを比較",
     "compareWithPrevious": "前のバージョンと比較 (v{{version}})",
-    "compareWithCurrent": "現在のバージョンと比較"
+    "compareWithCurrent": "現在のバージョンと比較",
+    "viewFullDiff": "差分をすべて表示",
+    "viewChanges": "変更を表示"
   },
   "versioning": {
     "recommendedBump": "推奨されるバージョンアップ:",

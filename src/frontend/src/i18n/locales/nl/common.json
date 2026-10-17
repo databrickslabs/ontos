@@ -726,7 +726,9 @@
     "unknownVersion": "Onbekend",
     "compare": "Versies vergelijken",
     "compareWithPrevious": "Vergelijken met vorige (v{{version}})",
-    "compareWithCurrent": "Vergelijken met huidige versie"
+    "compareWithCurrent": "Vergelijken met huidige versie",
+    "viewFullDiff": "Volledige diff bekijken",
+    "viewChanges": "Wijzigingen bekijken"
   },
   "versioning": {
     "recommendedBump": "Aanbevolen versieverhoging:",

@@ -5313,7 +5313,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         target = target or data_contract_repo.get_with_all(db, id=target_id)
         if not base or not target:
             raise LookupError("Contract not found")
-        if base.version_family_id != target.version_family_id:
+        # Same `family or id` key clones use (the column is NOT NULL today).
+        if (base.version_family_id or base.id) != (target.version_family_id or target.id):
             raise VersionFamilyMismatch("Contracts belong to different version families")
 
         def meta(c) -> Dict[str, Any]:

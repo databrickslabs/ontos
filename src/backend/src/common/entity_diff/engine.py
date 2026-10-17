@@ -92,15 +92,18 @@ def _repeated(keys: List[str]) -> set:
     return repeated
 
 
-def _keyed(items: List[Any], base_keys: List[str], qualify: set) -> Dict[str, Any]:
+def _keyed(items: List[Any], base_keys: List[str], qualify: set) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """Map list items to identity keys.
 
     Keys in ``qualify`` (repeated on either side — e.g. two ODPS output ports
     both named ``orders`` at different versions) are qualified with the item's
     ``version`` when it has one; any remaining clash gets a positional suffix.
+    Also returns each final key's base key.
     """
     keyed: Dict[str, Any] = {}
+    bases: Dict[str, str] = {}
     for item, key in zip(items, base_keys, strict=True):
+        base_key = key
         if key in qualify and isinstance(item, dict) and item.get("version") is not None:
             key = f"{key}@{item['version']}"
         base, n = key, 2
@@ -108,7 +111,29 @@ def _keyed(items: List[Any], base_keys: List[str], qualify: set) -> Dict[str, An
             key = f"{base}~{n}"
             n += 1
         keyed[key] = item
-    return keyed
+        bases[key] = base_key
+    return keyed, bases
+
+
+def _pair_lone_leftovers(old_map: Dict[str, Any], old_bases: Dict[str, str],
+                         new_map: Dict[str, Any], new_bases: Dict[str, str]) -> None:
+    """After version-qualifying repeated keys, an item whose version changed no
+    longer matches (orders@2.0.0 vs orders@2.1.0). When exactly one unmatched
+    item per base key is left on each side, pair them (re-key the new one) so
+    the change reads as a modification, not a removal + addition."""
+    def leftovers(mapping, bases, other):
+        grouped: Dict[str, List[str]] = {}
+        for key in mapping:
+            if key not in other:
+                grouped.setdefault(bases[key], []).append(key)
+        return grouped
+
+    old_left = leftovers(old_map, old_bases, new_map)
+    new_left = leftovers(new_map, new_bases, old_map)
+    for base, old_keys in old_left.items():
+        new_keys = new_left.get(base, [])
+        if len(old_keys) == 1 and len(new_keys) == 1:
+            new_map[old_keys[0]] = new_map.pop(new_keys[0])
 
 
 def _is_scalar_list(items: List[Any]) -> bool:
@@ -153,8 +178,10 @@ def _walk(old: Any, new: Any, path: str, shape: str, profile: DiffProfile,
             return
         old_keys, new_keys = _base_keys(old, shape, profile), _base_keys(new, shape, profile)
         qualify = _repeated(old_keys) | _repeated(new_keys)
-        old_map = _keyed(old, old_keys, qualify)
-        new_map = _keyed(new, new_keys, qualify)
+        old_map, old_bases = _keyed(old, old_keys, qualify)
+        new_map, new_bases = _keyed(new, new_keys, qualify)
+        if qualify:
+            _pair_lone_leftovers(old_map, old_bases, new_map, new_bases)
         for key in list(old_map.keys()) + [k for k in new_map.keys() if k not in old_map]:
             item_path = f"{path}[{key}]"
             if key not in new_map:

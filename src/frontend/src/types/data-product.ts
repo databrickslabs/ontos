@@ -339,6 +339,7 @@ export interface CommitDraftResponse {
 }
 
 export interface DiffFromParentResponse {
+  parent_id?: string;
   parent_version: string;
   suggested_bump: string;
   suggested_version: string;

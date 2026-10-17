@@ -702,7 +702,9 @@
     "unknownVersion": "Desconocida",
     "compare": "Comparar versiones",
     "compareWithPrevious": "Comparar con la anterior (v{{version}})",
-    "compareWithCurrent": "Comparar con la versión actual"
+    "compareWithCurrent": "Comparar con la versión actual",
+    "viewFullDiff": "Ver diff completo",
+    "viewChanges": "Ver cambios"
   },
   "versioning": {
     "recommendedBump": "Incremento de versión recomendado:",

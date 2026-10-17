@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import type { EntityKind, EntityVersionRow } from './version-selector'
+import { fetchEntityVersions, type EntityKind, type EntityVersionRow } from './version-selector'
 
 /**
  * Shows how two versions of a versioned entity differ (PRD #1086).
@@ -79,6 +79,20 @@ function formatValue(value: unknown): string {
   return JSON.stringify(value)
 }
 
+/**
+ * The version a given version should be compared against to show "what
+ * changed in it": its lineage parent when visible, else the next older
+ * version in the family. Null for a family-of-one / the oldest version.
+ */
+export function pickBaseVersion(versions: EntityVersionRow[], entityId: string): string | null {
+  const index = versions.findIndex((v) => v.id === entityId)
+  if (index < 0) return null
+  const row = versions[index]
+  const parentId = row.parentContractId || row.parentProductId
+  if (parentId && versions.some((v) => v.id === parentId)) return parentId
+  return versions[index + 1]?.id ?? null
+}
+
 /** Order two versions oldest → newest using the newest-first versions list. */
 export function orderPair(versions: EntityVersionRow[], a: string, b: string): [string, string] {
   const ia = versions.findIndex((v) => v.id === a)
@@ -90,8 +104,11 @@ type EntityDiffDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   entityKind: EntityKind
-  /** Family versions, newest first (as returned by the /versions endpoint). */
-  versions: EntityVersionRow[]
+  /**
+   * Family versions, newest first (as returned by the /versions endpoint).
+   * Fetched from `targetId`'s family when omitted.
+   */
+  versions?: EntityVersionRow[]
   baseId: string
   targetId: string
 }
@@ -100,7 +117,7 @@ export default function EntityDiffDialog({
   open,
   onOpenChange,
   entityKind,
-  versions,
+  versions: providedVersions,
   baseId: initialBaseId,
   targetId: initialTargetId,
 }: EntityDiffDialogProps) {
@@ -110,6 +127,23 @@ export default function EntityDiffDialog({
   const [diff, setDiff] = useState<EntityDiffResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fetchedVersions, setFetchedVersions] = useState<EntityVersionRow[]>([])
+  const versions = providedVersions ?? fetchedVersions
+
+  useEffect(() => {
+    if (!open || providedVersions) return
+    let cancelled = false
+    fetchEntityVersions(entityKind, initialTargetId)
+      .then((rows) => {
+        if (!cancelled) setFetchedVersions(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedVersions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, providedVersions, entityKind, initialTargetId])
 
   // Re-seed the pair whenever the dialog is (re)opened for a new pair.
   useEffect(() => {
@@ -122,11 +156,13 @@ export default function EntityDiffDialog({
   useEffect(() => {
     if (!open || !baseId || !targetId || baseId === targetId) {
       setDiff(null)
+      setError(null)
       return
     }
     let cancelled = false
     setIsLoading(true)
     setError(null)
+    setDiff(null) // don't show the previous pair's bump while the new one loads
     fetch(diffEndpointFor(entityKind, baseId, targetId))
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status))

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GitCommit, AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react'
+import { GitCommit, GitCompare, AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import type { DiffFromParentResponse } from '@/types/data-contract'
+import EntityDiffDialog from '@/components/common/entity-diff-dialog'
 
 type CommitDraftDialogProps = {
   isOpen: boolean
@@ -42,6 +43,7 @@ export default function CommitDraftDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [diffData, setDiffData] = useState<DiffFromParentResponse | null>(null)
   const [error, setError] = useState('')
+  const [isDiffOpen, setIsDiffOpen] = useState(false)
 
   const [versionBumpType, setVersionBumpType] = useState<'major' | 'minor' | 'patch' | 'custom'>('patch')
   const [customVersion, setCustomVersion] = useState('')
@@ -226,6 +228,18 @@ export default function CommitDraftDialog({
                 </AlertTitle>
                 <AlertDescription>
                   {t('data-contracts:commit.suggestedBumpDesc', 'Based on the changes detected, we recommend a {{bump}} version bump.', { bump: diffData.suggested_bump })}
+                  {diffData.parent_id && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="ml-1 h-auto p-0"
+                      onClick={() => setIsDiffOpen(true)}
+                    >
+                      <GitCompare className="mr-1 h-3.5 w-3.5" />
+                      {t('common:entityDiff.viewFullDiff')}
+                    </Button>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
@@ -441,6 +455,15 @@ export default function CommitDraftDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {isDiffOpen && diffData?.parent_id && (
+        <EntityDiffDialog
+          open
+          onOpenChange={setIsDiffOpen}
+          entityKind="contract"
+          baseId={diffData.parent_id}
+          targetId={contractId}
+        />
+      )}
     </Dialog>
   )
 }

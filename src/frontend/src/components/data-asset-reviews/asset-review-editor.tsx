@@ -35,6 +35,19 @@ import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
+import EntityChangesButton from '@/components/common/entity-changes-button';
+
+// Contract/product review assets reference the entity as `contract:{id}` /
+// `product:{id}` (see workflow_executor / DataProductsManager).
+const VERSIONED_ASSET_PREFIX: Record<string, string> = {
+    [AssetType.DATA_CONTRACT]: 'contract:',
+    [AssetType.DATA_PRODUCT]: 'product:',
+};
+
+function versionedEntityId(assetType: string, fqn: string): string | null {
+    const prefix = VERSIONED_ASSET_PREFIX[assetType];
+    return prefix && fqn.startsWith(prefix) ? fqn.slice(prefix.length) : null;
+}
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -381,6 +394,12 @@ export default function AssetReviewEditor({
                  <h4 className="font-medium text-lg mb-2">{t('data-asset-reviews:editor.assetDetails')}</h4>
                  <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.fqnLabel')}</span> <span className="font-mono text-xs">{asset.asset_fqn}</span></p>
                  <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.typeLabel')}</span> <Badge variant="secondary">{asset.asset_type}</Badge></p>
+                 {/* Versioned entities: show what this version changes (PRD #1086). */}
+                 <EntityChangesButton
+                     entityType={asset.asset_type}
+                     entityId={versionedEntityId(asset.asset_type, asset.asset_fqn)}
+                     className="mt-2"
+                 />
              </div>
 
             {/* Content Viewer */}

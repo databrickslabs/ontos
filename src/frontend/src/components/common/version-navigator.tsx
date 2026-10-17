@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, GitCompare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import VersionSelector, {
@@ -8,6 +8,7 @@ import VersionSelector, {
   EntityVersionRow,
   fetchEntityVersions,
 } from './version-selector'
+import EntityDiffDialog, { orderPair } from './entity-diff-dialog'
 
 /**
  * Combines a previous / next chevron pair with the shared `VersionSelector`
@@ -33,6 +34,8 @@ export default function VersionNavigator({
 }: VersionNavigatorProps) {
   const { t } = useTranslation('common')
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
+  // [base, target] of the open diff dialog (oldest → newest), or null.
+  const [comparePair, setComparePair] = useState<[string, string] | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +84,7 @@ export default function VersionNavigator({
           currentEntityId={currentEntityId}
           currentVersion={currentVersion}
           onVersionChange={onVersionChange}
+          onCompare={(row) => setComparePair(orderPair(versions, row.id, currentEntityId))}
         />
 
         <Tooltip>
@@ -101,7 +105,41 @@ export default function VersionNavigator({
               : t('common:versionNavigator.alreadyOldest')}
           </TooltipContent>
         </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Default pair: the previous (older) version → this one; on
+                // the oldest version, compare it with the next newer one.
+                const other = olderVersion ?? newerVersion
+                if (other) setComparePair(orderPair(versions, other.id, currentEntityId))
+              }}
+              aria-label={t('common:entityDiff.compare')}
+            >
+              <GitCompare className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {olderVersion
+              ? t('common:entityDiff.compareWithPrevious', { version: olderVersion.version })
+              : t('common:entityDiff.compare')}
+          </TooltipContent>
+        </Tooltip>
       </div>
+
+      {comparePair && (
+        <EntityDiffDialog
+          open
+          onOpenChange={(open) => !open && setComparePair(null)}
+          entityKind={entityKind}
+          versions={versions}
+          baseId={comparePair[0]}
+          targetId={comparePair[1]}
+        />
+      )}
     </TooltipProvider>
   )
 }

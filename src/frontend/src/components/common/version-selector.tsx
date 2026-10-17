@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, History } from 'lucide-react'
+import { ChevronDown, GitCompare, History } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -55,6 +56,11 @@ type VersionSelectorProps = {
   // Lets parents override the trigger button look — used by the
   // EntityVersionPicker to make its inline sub-picker stretch full-width.
   triggerClassName?: string
+  /**
+   * Optional: when set, every non-current row gets a compare button that
+   * calls this with that row (PRD #1086 version diff).
+   */
+  onCompare?: (row: EntityVersionRow) => void
 }
 
 function endpointFor(kind: EntityKind, id: string): string {
@@ -84,8 +90,11 @@ export default function VersionSelector({
   onVersionChange,
   endpointOverride,
   triggerClassName,
+  onCompare,
 }: VersionSelectorProps) {
+  const { t } = useTranslation('common')
   const { toast } = useToast()
+  const [isOpen, setIsOpen] = useState(false)
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -138,7 +147,7 @@ export default function VersionSelector({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" disabled={isLoading} className={triggerClassName}>
           <History className="h-4 w-4 mr-2" />
@@ -168,6 +177,25 @@ export default function VersionSelector({
                   )}
                 </span>
                 <div className="flex items-center gap-1">
+                  {onCompare && v.id !== currentEntityId && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title={t('entityDiff.compareWithCurrent')}
+                      aria-label={t('entityDiff.compareWithCurrent')}
+                      // Don't let the click also select (navigate to) the row.
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        setIsOpen(false)
+                        onCompare(v)
+                      }}
+                    >
+                      <GitCompare className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   {v.draftOwnerId && (
                     <Badge
                       variant="outline"

@@ -69,7 +69,7 @@ CASES = [
      Bump.NONE, None),
     ("status-only", lambda d: d.update(status="deprecated"), Bump.NONE, "status"),
     ("api-version-only", lambda d: d.update(apiVersion="v3.2.0"), Bump.NONE, "api-version"),
-    ("description-only", lambda d: d["description"].update(purpose="Better words"), Bump.PATCH, "default"),
+    ("description-only", lambda d: d["description"].update(purpose="Better words"), Bump.PATCH, "description"),
     ("schema-removed", lambda d: d.update(schema=[]), Bump.MAJOR, "schema-removed"),
     ("schema-added", lambda d: d["schema"].append({"name": "addresses", "properties": [{"name": "id"}]}),
      Bump.MINOR, "schema-added"),

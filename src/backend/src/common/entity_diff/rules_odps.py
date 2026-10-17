@@ -125,7 +125,20 @@ ODPS_RULES = RuleSet(rules=[
     Rule("input-port-removed", "inputPorts[]", _input_port_removed, "Input port removed", ops=("removed",)),
     Rule("input-port-required", "inputPorts[].required", _became_true, "Input port required flag changed"),
 
+    Rule("input-port-contract", "inputPorts[].contractId", Bump.PATCH, "Input port contract changed"),
+
     # Management ports & support
     Rule("management-port-added", "managementPorts[]", Bump.MINOR, "Management port added", ops=("added",)),
+    Rule("management-port-removed", "managementPorts[]", Bump.PATCH, "Management port removed", ops=("removed",)),
     Rule("support-added", "support[]", Bump.MINOR, "Support channel added", ops=("added",)),
+    Rule("support-removed", "support[]", Bump.PATCH, "Support channel removed", ops=("removed",)),
+
+    # Documentation & governance metadata (PATCH; named for readable messages)
+    Rule("team-member-added", "team.members[]", Bump.PATCH, "Team member added", ops=("added",)),
+    Rule("team-member-removed", "team.members[]", Bump.PATCH, "Team member removed", ops=("removed",)),
+    Rule("team-changed", "team*", Bump.PATCH, "Team changed"),
+    Rule("description", "description*", Bump.PATCH, "Description changed"),
+    Rule("tags", "tags*", Bump.PATCH, "Tags changed"),
+    Rule("custom-properties", "customProperties*", Bump.PATCH, "Custom properties changed"),
+    Rule("authoritative-definitions", "authoritativeDefinitions*", Bump.PATCH, "Authoritative definitions changed"),
 ])

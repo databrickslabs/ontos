@@ -1699,7 +1699,7 @@ async def get_data_products(
             f"Retrieved {len(products)} data products "
             f"(include_history={include_history})"
         )
-        return [p.model_dump() for p in products]
+        return [p.to_wire_dict() for p in products]
     except Exception as e:
         error_msg = f"Error retrieving data products: {e!s}"
         logger.exception(error_msg)
@@ -2350,7 +2350,7 @@ async def get_data_product(
         if not _caller_can_read_product(request, db, current_user, manager, product):
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        return product.model_dump(by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
+        return product.to_wire_dict(exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
     except ValueError as e:
         logger.error("Validation error fetching product %s: %s", product_id, e)
         raise HTTPException(status_code=404, detail="Data product not found")

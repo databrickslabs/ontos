@@ -374,6 +374,16 @@ class Team(BaseModel):
 # ODPS v1.0.0 Data Product (Main Model)
 # ============================================================================
 
+# Versioning fields the frontend reads in camelCase (draftOwnerId,
+# versionFamilyId, ...). Their serialization_alias only applies with
+# by_alias=True, but the GET routes dump by field name so ports etc. keep their
+# camelCase field names — which left these as snake_case on the wire.
+_PRODUCT_WIRE_CAMEL_FIELDS = (
+    "draft_owner_id", "parent_product_id", "version_family_id",
+    "base_name", "change_summary", "version_count",
+)
+
+
 class DataProduct(BaseModel):
     """ODPS v1.0.0 Data Product"""
     # ODPS v1.0.0 required fields
@@ -542,6 +552,15 @@ class DataProduct(BaseModel):
                 pass
             return []
         return value or []
+
+    def to_wire_dict(self, **dump_kwargs: Any) -> Dict[str, Any]:
+        """``model_dump(by_alias=False)`` with the versioning fields renamed to
+        the camelCase keys the frontend types expect."""
+        data = self.model_dump(by_alias=False, **dump_kwargs)
+        for name in _PRODUCT_WIRE_CAMEL_FIELDS:
+            if name in data:
+                data[type(self).model_fields[name].serialization_alias] = data.pop(name)
+        return data
 
     model_config = {
         "from_attributes": True,

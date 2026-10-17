@@ -20,6 +20,10 @@ from .semver import (
 )
 
 
+class VersionFamilyMismatch(ValueError):
+    """The two entities compared belong to different version families."""
+
+
 @dataclass
 class ComparisonResult:
     classification: Classification
@@ -67,6 +71,7 @@ __all__ = [
     "FieldChange",
     "Rule",
     "RuleSet",
+    "VersionFamilyMismatch",
     "classify",
     "compare",
     "diff_documents",

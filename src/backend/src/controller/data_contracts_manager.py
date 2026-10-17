@@ -5955,46 +5955,33 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not parent:
             raise ValueError("Parent contract not found")
         
-        # Convert both to dicts for comparison
-        contract_dict = self._contract_db_to_dict(contract, db)
-        parent_dict = self._contract_db_to_dict(parent, db)
-        
-        # Run change analysis
-        analysis_result = self.compare_contracts(parent_dict, contract_dict)
-        
-        # Calculate suggested version
-        suggested_version = self._calculate_next_version(
-            parent.version,
-            analysis_result.get('version_bump', 'patch')
-        )
-        
-        return {
-            'parent_version': parent.version,
-            'parent_status': parent.status,
-            'suggested_bump': analysis_result.get('version_bump', 'patch'),
-            'suggested_version': suggested_version,
-            'analysis': analysis_result
-        }
+        # Same engine and ODCS rules as the version-compare endpoint, shaped
+        # like the legacy response the commit-draft dialog consumes (#1086).
+        from src.common.entity_diff.render import legacy_parent_diff
+        return legacy_parent_diff(self.diff_versions(db, base_id=parent.id, target_id=contract.id,
+                                                     base=parent, target=contract))
 
-    def diff_versions(self, db, base_id: str, target_id: str) -> Dict[str, Any]:
+    def diff_versions(self, db, base_id: str, target_id: str, *, base=None, target=None) -> Dict[str, Any]:
         """Diff two versions of the same contract family on their ODCS documents.
 
         Classifies every change (major/minor/patch/none) and suggests the next
-        version from ``base``. Callers enforce visibility before calling.
+        version from ``base``. Callers enforce visibility before calling and
+        may pass the rows (``get_with_all``) they already loaded for that.
 
         Raises:
             LookupError: a contract doesn't exist
-            ValueError: the two contracts belong to different families
+            VersionFamilyMismatch: the two contracts belong to different families
         """
+        from src.common.entity_diff import VersionFamilyMismatch
         from src.common.entity_diff.render import build_diff_response
         from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
 
-        base = data_contract_repo.get_with_all(db, id=base_id)
-        target = data_contract_repo.get_with_all(db, id=target_id)
+        base = base or data_contract_repo.get_with_all(db, id=base_id)
+        target = target or data_contract_repo.get_with_all(db, id=target_id)
         if not base or not target:
             raise LookupError("Contract not found")
         if base.version_family_id != target.version_family_id:
-            raise ValueError("Contracts belong to different version families")
+            raise VersionFamilyMismatch("Contracts belong to different version families")
 
         def meta(c) -> Dict[str, Any]:
             return {"id": c.id, "name": c.name, "version": c.version, "status": c.status}

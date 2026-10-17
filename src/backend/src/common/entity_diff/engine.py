@@ -77,12 +77,32 @@ def normalize(doc: Any, profile: DiffProfile, shape: str = "") -> Any:
     return doc
 
 
-def _keyed(items: List[Any], shape: str, profile: DiffProfile) -> Dict[str, Any]:
-    """Map list items to identity keys; duplicate keys get a positional suffix."""
-    keyed: Dict[str, Any] = {}
+def _base_keys(items: List[Any], shape: str, profile: DiffProfile) -> List[str]:
+    keys = []
     for item in items:
         key = profile.identity(item, shape) if isinstance(item, dict) else None
-        key = key if key is not None else _content_key(item)
+        keys.append(key if key is not None else _content_key(item))
+    return keys
+
+
+def _repeated(keys: List[str]) -> set:
+    seen, repeated = set(), set()
+    for key in keys:
+        (repeated if key in seen else seen).add(key)
+    return repeated
+
+
+def _keyed(items: List[Any], base_keys: List[str], qualify: set) -> Dict[str, Any]:
+    """Map list items to identity keys.
+
+    Keys in ``qualify`` (repeated on either side — e.g. two ODPS output ports
+    both named ``orders`` at different versions) are qualified with the item's
+    ``version`` when it has one; any remaining clash gets a positional suffix.
+    """
+    keyed: Dict[str, Any] = {}
+    for item, key in zip(items, base_keys, strict=True):
+        if key in qualify and isinstance(item, dict) and item.get("version") is not None:
+            key = f"{key}@{item['version']}"
         base, n = key, 2
         while key in keyed:
             key = f"{base}~{n}"
@@ -131,8 +151,10 @@ def _walk(old: Any, new: Any, path: str, shape: str, profile: DiffProfile,
                 if value not in old:
                     out.append(FieldChange(f"{path}[{value}]", item_shape, "added", new=value))
             return
-        old_map = _keyed(old, shape, profile)
-        new_map = _keyed(new, shape, profile)
+        old_keys, new_keys = _base_keys(old, shape, profile), _base_keys(new, shape, profile)
+        qualify = _repeated(old_keys) | _repeated(new_keys)
+        old_map = _keyed(old, old_keys, qualify)
+        new_map = _keyed(new, new_keys, qualify)
         for key in list(old_map.keys()) + [k for k in new_map.keys() if k not in old_map]:
             item_path = f"{path}[{key}]"
             if key not in new_map:
@@ -159,3 +181,18 @@ def diff_documents(old: Dict[str, Any], new: Dict[str, Any],
     changes: List[FieldChange] = []
     _walk(old_n, new_n, "", "", profile, changes)
     return changes, old_n, new_n
+
+
+def without_ignored(doc: Any, profile: DiffProfile, shape: str = "") -> Any:
+    """Drop the profile's ignored fields — for display (e.g. the YAML text
+    diff), so it doesn't show changes the structural diff deliberately hides."""
+    if isinstance(doc, dict):
+        out: Dict[str, Any] = {}
+        for key, value in doc.items():
+            child_shape = f"{shape}.{key}" if shape else key
+            if not profile.ignore(child_shape):
+                out[key] = without_ignored(value, profile, child_shape)
+        return out
+    if isinstance(doc, list):
+        return [without_ignored(v, profile, f"{shape}[]") for v in doc]
+    return doc

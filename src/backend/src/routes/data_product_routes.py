@@ -2633,17 +2633,20 @@ async def diff_product_versions(
     the changes, and a unified YAML diff. Both products must be readable by the
     caller (same rule as GET /data-products/{id}); a miss is a 404.
     """
+    from src.common.entity_diff import VersionFamilyMismatch
+
+    products = []
     for product_id in (base_id, target_id):
         product = manager.get_product(product_id)
         if not product or not _caller_can_read_product(request, db, current_user, manager, product):
             raise HTTPException(status_code=404, detail="Data product not found")
+        products.append(product)
 
     try:
-        return manager.diff_versions(db, base_id=base_id, target_id=target_id)
-    except LookupError:
-        raise HTTPException(status_code=404, detail="Data product not found")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return manager.diff_versions(db, base_id=base_id, target_id=target_id,
+                                     base=products[0], target=products[1])
+    except VersionFamilyMismatch:
+        raise HTTPException(status_code=400, detail="Products belong to different version families")
     except Exception:
         logger.error("Error diffing products %s and %s", base_id, target_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to diff product versions")

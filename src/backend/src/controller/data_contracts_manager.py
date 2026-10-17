@@ -6046,65 +6046,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Error discarding personal draft {draft_id}: {e}", exc_info=True)
             raise
     
-    def compare_contracts(
-        self,
-        old_contract: dict,
-        new_contract: dict
-    ) -> dict:
-        """Analyze changes between two contract versions.
-        
-        Uses ContractChangeAnalyzer to compare ODCS-format contracts
-        and identify breaking changes, new features, and version bump recommendations.
-        
-        Args:
-            old_contract: Old contract version (ODCS format dict)
-            new_contract: New contract version (ODCS format dict)
-            
-        Returns:
-            Dict with change analysis including:
-            - change_type: Type of change
-            - version_bump: Recommended version bump
-            - summary: Human-readable summary
-            - breaking_changes, new_features, fixes: Lists of changes
-            - schema_changes: Detailed schema-level changes
-            - quality_rule_changes: Quality rule changes
-            
-        Raises:
-            ValueError: If contracts are invalid
-        """
-        if not old_contract or not new_contract:
-            raise ValueError("Both old_contract and new_contract are required")
-        
-        try:
-            from src.utils.contract_change_analyzer import ContractChangeAnalyzer
-            analyzer = ContractChangeAnalyzer()
-            
-            result = analyzer.analyze(old_contract, new_contract)
-            
-            return {
-                "change_type": result.change_type.value,
-                "version_bump": result.version_bump,
-                "summary": result.summary,
-                "breaking_changes": result.breaking_changes,
-                "new_features": result.new_features,
-                "fixes": result.fixes,
-                "schema_changes": [
-                    {
-                        "change_type": sc.change_type,
-                        "schema_name": sc.schema_name,
-                        "field_name": sc.field_name,
-                        "old_value": sc.old_value,
-                        "new_value": sc.new_value,
-                        "severity": sc.severity.value
-                    }
-                    for sc in result.schema_changes
-                ],
-                "quality_rule_changes": result.quality_rule_changes
-            }
-        except Exception as e:
-            logger.error(f"Error comparing contracts: {e}", exc_info=True)
-            raise
-    
     def get_contract_versions(
         self,
         db,

@@ -660,6 +660,39 @@
     "alreadyNewest": "Al op nieuwste",
     "alreadyOldest": "Al op oudste"
   },
+  "entityDiff": {
+    "title": "Versies vergelijken",
+    "description": "Hoe de twee versies verschillen in hun bestandsmodel, en welke semantische versieverhoging de wijzigingen vereisen.",
+    "baseVersion": "Basisversie",
+    "targetVersion": "Doelversie",
+    "suggestedBump": "Voorgestelde verhoging:",
+    "bump": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "none": "Geen wijziging"
+    },
+    "sameVersion": "Kies twee verschillende versies om te vergelijken.",
+    "versionInconsistent": "Versie {{target}} weerspiegelt deze wijzigingen niet: ze vereisen een {{bump}}-verhoging ({{suggested}}).",
+    "loading": "Versies vergelijken…",
+    "loadError": "De versievergelijking kon niet worden geladen.",
+    "tabs": {
+      "changes": "Wijzigingen ({{count}})",
+      "yaml": "YAML-diff"
+    },
+    "noChanges": "Geen verschillen tussen deze versies.",
+    "op": {
+      "added": "toegevoegd",
+      "removed": "verwijderd",
+      "modified": "gewijzigd"
+    },
+    "unknownVersion": "Onbekend",
+    "compare": "Versies vergelijken",
+    "compareWithPrevious": "Vergelijken met vorige (v{{version}})",
+    "compareWithCurrent": "Vergelijken met huidige versie",
+    "viewFullDiff": "Volledige diff bekijken",
+    "viewChanges": "Wijzigingen bekijken"
+  },
   "versioning": {
     "recommendedBump": "Aanbevolen versieverhoging:",
     "breakingChanges": "Breaking changes gedetecteerd!",

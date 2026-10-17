@@ -660,6 +660,39 @@
     "alreadyNewest": "Já está na mais recente",
     "alreadyOldest": "Já está na mais antiga"
   },
+  "entityDiff": {
+    "title": "Comparar versões",
+    "description": "Como as duas versões diferem no modelo de arquivo e qual incremento de versão semântica as alterações exigem.",
+    "baseVersion": "Versão base",
+    "targetVersion": "Versão de destino",
+    "suggestedBump": "Incremento sugerido:",
+    "bump": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "none": "Sem alteração"
+    },
+    "sameVersion": "Escolha duas versões diferentes para comparar.",
+    "versionInconsistent": "A versão {{target}} não reflete estas alterações: elas exigem um incremento {{bump}} ({{suggested}}).",
+    "loading": "Comparando versões…",
+    "loadError": "Não foi possível carregar a comparação de versões.",
+    "tabs": {
+      "changes": "Alterações ({{count}})",
+      "yaml": "Diff YAML"
+    },
+    "noChanges": "Não há diferenças entre estas versões.",
+    "op": {
+      "added": "adicionado",
+      "removed": "removido",
+      "modified": "modificado"
+    },
+    "unknownVersion": "Desconhecida",
+    "compare": "Comparar versões",
+    "compareWithPrevious": "Comparar com a anterior (v{{version}})",
+    "compareWithCurrent": "Comparar com a versão atual",
+    "viewFullDiff": "Ver diff completo",
+    "viewChanges": "Ver alterações"
+  },
   "versioning": {
     "recommendedBump": "Incremento de versão recomendado:",
     "breakingChanges": "Alterações incompatíveis detectadas!",

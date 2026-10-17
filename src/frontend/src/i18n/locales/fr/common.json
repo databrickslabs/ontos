@@ -660,6 +660,39 @@
     "alreadyNewest": "Déjà sur la plus récente",
     "alreadyOldest": "Déjà sur la plus ancienne"
   },
+  "entityDiff": {
+    "title": "Comparer les versions",
+    "description": "Différences entre les deux versions dans leur modèle de fichier, et l'incrément de version sémantique que ces changements impliquent.",
+    "baseVersion": "Version de base",
+    "targetVersion": "Version cible",
+    "suggestedBump": "Incrément suggéré :",
+    "bump": {
+      "major": "Majeure",
+      "minor": "Mineure",
+      "patch": "Correctif",
+      "none": "Aucun changement"
+    },
+    "sameVersion": "Choisissez deux versions différentes à comparer.",
+    "versionInconsistent": "La version {{target}} ne reflète pas ces changements : ils impliquent un incrément {{bump}} ({{suggested}}).",
+    "loading": "Comparaison des versions…",
+    "loadError": "Impossible de charger la comparaison des versions.",
+    "tabs": {
+      "changes": "Changements ({{count}})",
+      "yaml": "Diff YAML"
+    },
+    "noChanges": "Aucune différence entre ces versions.",
+    "op": {
+      "added": "ajouté",
+      "removed": "supprimé",
+      "modified": "modifié"
+    },
+    "unknownVersion": "Inconnue",
+    "compare": "Comparer les versions",
+    "compareWithPrevious": "Comparer avec la précédente (v{{version}})",
+    "compareWithCurrent": "Comparer avec la version actuelle",
+    "viewFullDiff": "Voir le diff complet",
+    "viewChanges": "Voir les changements"
+  },
   "versioning": {
     "recommendedBump": "Incrément de version recommandé :",
     "breakingChanges": "Modifications incompatibles détectées !",

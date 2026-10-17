@@ -302,6 +302,7 @@ export interface DataContract {
 
 // Response from diff-from-parent endpoint
 export interface DiffFromParentResponse {
+  parent_id?: string
   parent_version: string
   parent_status: string
   suggested_bump: 'major' | 'minor' | 'patch'

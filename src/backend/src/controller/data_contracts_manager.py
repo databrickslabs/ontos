@@ -5001,50 +5001,62 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not parent:
             raise ValueError("Parent contract not found")
         
-        # Convert both to dicts for comparison
-        contract_dict = self._contract_db_to_dict(contract, db)
-        parent_dict = self._contract_db_to_dict(parent, db)
-        
-        # Run change analysis
-        analysis_result = self.compare_contracts(parent_dict, contract_dict)
-        
-        # Calculate suggested version
-        suggested_version = self._calculate_next_version(
-            parent.version,
-            analysis_result.get('version_bump', 'patch')
+        # Same engine and ODCS rules as the version-compare endpoint, shaped
+        # like the legacy response the commit-draft dialog consumes (#1086).
+        from src.common.entity_diff.render import legacy_parent_diff
+        return legacy_parent_diff(self.diff_versions(db, base_id=parent.id, target_id=contract.id,
+                                                     base=parent, target=contract))
+
+    def diff_versions(self, db, base_id: str, target_id: str, *, base=None, target=None) -> Dict[str, Any]:
+        """Diff two versions of the same contract family on their ODCS documents.
+
+        Classifies every change (major/minor/patch/none) and suggests the next
+        version from ``base``. Callers enforce visibility before calling and
+        may pass the rows (``get_with_all``) they already loaded for that.
+
+        Raises:
+            EntityNotFound: a contract doesn't exist
+            VersionFamilyMismatch: the two contracts belong to different families
+        """
+        from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch, family_key
+        from src.common.entity_diff.render import build_diff_response
+        from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
+
+        base = base or data_contract_repo.get_with_all(db, id=base_id)
+        target = target or data_contract_repo.get_with_all(db, id=target_id)
+        if not base or not target:
+            raise EntityNotFound("Contract not found")
+        if family_key(base) != family_key(target):
+            raise VersionFamilyMismatch("Contracts belong to different version families")
+
+        def meta(c) -> Dict[str, Any]:
+            return {"id": c.id, "name": c.name, "version": c.version, "status": c.status}
+
+        return build_diff_response(
+            "data_contract", meta(base), meta(target),
+            self.build_odcs_from_db(base, db), self.build_odcs_from_db(target, db),
+            ODCS_PROFILE, ODCS_RULES,
         )
-        
-        return {
-            'parent_version': parent.version,
-            'parent_status': parent.status,
-            'suggested_bump': analysis_result.get('version_bump', 'patch'),
-            'suggested_version': suggested_version,
-            'analysis': analysis_result
-        }
 
     def _calculate_next_version(self, current_version: str, bump_type: str) -> str:
         """Calculate the next version based on bump type.
         
+        Delegates to ``entity_diff.semver.next_version`` (shared with the
+        version-diff engine) so both suggest the same version for the same input.
+        
         Args:
-            current_version: Current semver (e.g., "1.2.3")
-            bump_type: "major", "minor", or "patch"
+            current_version: Current semver (e.g., "1.2.3"; "v1.2.3", "2.1" and
+                pre-release suffixes like "-draft" are accepted)
+            bump_type: "major", "minor", or "patch" (anything else → patch)
             
         Returns:
-            Next version string
+            Next version string ("1.0.0" if current_version is unparseable)
         """
-        import re
-        match = re.match(r'^(\d+)\.(\d+)\.(\d+)', current_version)
-        if not match:
+        from src.common.entity_diff.semver import Bump, next_version, parse_version
+        if parse_version(current_version) is None:
             return "1.0.0"
-        
-        major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        
-        if bump_type == 'major':
-            return f"{major + 1}.0.0"
-        elif bump_type == 'minor':
-            return f"{major}.{minor + 1}.0"
-        else:  # patch
-            return f"{major}.{minor}.{patch + 1}"
+        bump = {"major": Bump.MAJOR, "minor": Bump.MINOR}.get(bump_type, Bump.PATCH)
+        return next_version(current_version, bump)
 
     def discard_personal_draft(
         self,
@@ -5090,65 +5102,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             db.rollback()
             logger.error(f"Error discarding personal draft {draft_id}: {e}", exc_info=True)
-            raise
-    
-    def compare_contracts(
-        self,
-        old_contract: dict,
-        new_contract: dict
-    ) -> dict:
-        """Analyze changes between two contract versions.
-        
-        Uses ContractChangeAnalyzer to compare ODCS-format contracts
-        and identify breaking changes, new features, and version bump recommendations.
-        
-        Args:
-            old_contract: Old contract version (ODCS format dict)
-            new_contract: New contract version (ODCS format dict)
-            
-        Returns:
-            Dict with change analysis including:
-            - change_type: Type of change
-            - version_bump: Recommended version bump
-            - summary: Human-readable summary
-            - breaking_changes, new_features, fixes: Lists of changes
-            - schema_changes: Detailed schema-level changes
-            - quality_rule_changes: Quality rule changes
-            
-        Raises:
-            ValueError: If contracts are invalid
-        """
-        if not old_contract or not new_contract:
-            raise ValueError("Both old_contract and new_contract are required")
-        
-        try:
-            from src.utils.contract_change_analyzer import ContractChangeAnalyzer
-            analyzer = ContractChangeAnalyzer()
-            
-            result = analyzer.analyze(old_contract, new_contract)
-            
-            return {
-                "change_type": result.change_type.value,
-                "version_bump": result.version_bump,
-                "summary": result.summary,
-                "breaking_changes": result.breaking_changes,
-                "new_features": result.new_features,
-                "fixes": result.fixes,
-                "schema_changes": [
-                    {
-                        "change_type": sc.change_type,
-                        "schema_name": sc.schema_name,
-                        "field_name": sc.field_name,
-                        "old_value": sc.old_value,
-                        "new_value": sc.new_value,
-                        "severity": sc.severity.value
-                    }
-                    for sc in result.schema_changes
-                ],
-                "quality_rule_changes": result.quality_rule_changes
-            }
-        except Exception as e:
-            logger.error(f"Error comparing contracts: {e}", exc_info=True)
             raise
     
     def get_contract_versions(
@@ -7096,6 +7049,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             qualityRules=quality_rules,
             created=db_contract.created_at.isoformat() if db_contract.created_at else None,
             updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
+            parent_contract_id=getattr(db_contract, "parent_contract_id", None),
+            version_family_id=getattr(db_contract, "version_family_id", None),
+            base_name=getattr(db_contract, "base_name", None),
+            change_summary=getattr(db_contract, "change_summary", None),
+            draft_owner_id=getattr(db_contract, "draft_owner_id", None),
             publication_scope=getattr(db_contract, "publication_scope", None) or "none",
             published_at=db_contract.published_at.isoformat() if getattr(db_contract, "published_at", None) else None,
             published_by=db_contract.published_by,

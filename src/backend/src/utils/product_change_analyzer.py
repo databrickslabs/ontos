@@ -78,58 +78,64 @@ class ProductChangeAnalyzer:
         self.team_changes: List[Dict] = []
         self.support_changes: List[Dict] = []
 
-    def analyze(self, old_product: Dict, new_product: Dict) -> ChangeAnalysisResult:
+    def analyze(self, old_product: Dict, new_product: Dict, partial: bool = False) -> ChangeAnalysisResult:
         """
         Analyze changes between two products.
 
         Args:
             old_product: Previous version (dict representation)
             new_product: New version (dict representation)
+            partial: True when new_product is an update payload rather than a
+                full document; sections it doesn't provide are skipped.
 
         Returns:
             ChangeAnalysisResult with detected changes and recommended version bump
         """
         self._reset()
 
+        # In partial mode, sections the NEW side doesn't provide (missing key or
+        # None) are skipped, so update payloads don't read as "everything
+        # removed". An explicit empty list still counts as removal.
+        # NOTE on `(x or default)`: the old side may be None for unpopulated
+        # relationships; the `or` form covers both missing-key and None-value.
+
         # Analyze port changes (most critical for products)
-        # NOTE on `(x.get('k') or default)`: chained `.get('k', default).get(...)`
-        # only falls back to `default` when the key is MISSING. When the key is
-        # present but the value is None (common when the API serializes optional
-        # nullable relationships), the fallback is skipped and `.get(...)` crashes
-        # on NoneType. The `or` form covers both missing-key and None-value.
-        self._analyze_port_changes(
-            old_product.get('inputPorts') or [],
-            new_product.get('inputPorts') or [],
-            'input'
-        )
-        self._analyze_port_changes(
-            old_product.get('outputPorts') or [],
-            new_product.get('outputPorts') or [],
-            'output'
-        )
-        self._analyze_port_changes(
-            old_product.get('managementPorts') or [],
-            new_product.get('managementPorts') or [],
-            'management'
-        )
+        for field, port_type in (
+            ('inputPorts', 'input'),
+            ('outputPorts', 'output'),
+            ('managementPorts', 'management'),
+        ):
+            new_ports = self.get_section(new_product, field)
+            if new_ports is not None or not partial:
+                self._analyze_port_changes(
+                    self.get_section(old_product, field) or [],
+                    new_ports or [],
+                    port_type
+                )
 
         # Analyze team changes
-        self._analyze_team_changes(
-            (old_product.get('team') or {}).get('members') or [],
-            (new_product.get('team') or {}).get('members') or []
-        )
+        new_team = self.get_section(new_product, 'team')
+        if new_team is not None or not partial:
+            self._analyze_team_changes(
+                (self.get_section(old_product, 'team') or {}).get('members') or [],
+                (new_team or {}).get('members') or []
+            )
 
         # Analyze support channel changes
-        self._analyze_support_changes(
-            old_product.get('support') or [],
-            new_product.get('support') or []
-        )
+        new_support = self.get_section(new_product, 'support')
+        if new_support is not None or not partial:
+            self._analyze_support_changes(
+                self.get_section(old_product, 'support') or [],
+                new_support or []
+            )
 
         # Analyze description changes (minor/patch)
-        self._analyze_description_changes(
-            old_product.get('description') or {},
-            new_product.get('description') or {}
-        )
+        new_desc = self.get_section(new_product, 'description')
+        if new_desc is not None or not partial:
+            self._analyze_description_changes(
+                self.get_section(old_product, 'description') or {},
+                new_desc or {}
+            )
 
         # Determine change type and version bump
         change_type, version_bump = self._determine_change_type()
@@ -148,6 +154,27 @@ class ProductChangeAnalyzer:
             new_features=self.new_features,
             fixes=self.fixes
         )
+
+    # The DataProduct API model serializes these with snake_case aliases
+    # (`model_dump(by_alias=True)`), while ODPS / the frontend use the field
+    # names. Accept both so every caller's dict shape is analyzed.
+    _SECTION_ALIASES = {
+        'inputPorts': ('inputPorts', 'input_ports'),
+        'outputPorts': ('outputPorts', 'output_ports'),
+        'managementPorts': ('managementPorts', 'management_ports'),
+        'support': ('support', 'support_channels'),
+        'team': ('team',),
+        'description': ('description',),
+    }
+
+    @classmethod
+    def get_section(cls, product: Dict, field: str):
+        """Return a section's value under any of its accepted keys, else None."""
+        for key in cls._SECTION_ALIASES[field]:
+            value = product.get(key)
+            if value is not None:
+                return value
+        return None
 
     def _reset(self):
         """Reset internal state"""

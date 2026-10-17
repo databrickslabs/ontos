@@ -568,17 +568,18 @@ class DataContractRead(BaseModel):
     created: Optional[str] = None
     updated: Optional[str] = None
 
-    # Semantic versioning fields
-    parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
-    versionFamilyId: Optional[str] = Field(None, alias='version_family_id')
-    baseName: Optional[str] = Field(None, alias='base_name')
-    changeSummary: Optional[str] = Field(None, alias='change_summary')
+    # Semantic versioning fields. ``alias`` keeps ORM/snake input working;
+    # ``serialization_alias`` puts the camelCase key the frontend reads on the wire.
+    parentContractId: Optional[str] = Field(None, alias='parent_contract_id', serialization_alias='parentContractId')
+    versionFamilyId: Optional[str] = Field(None, alias='version_family_id', serialization_alias='versionFamilyId')
+    baseName: Optional[str] = Field(None, alias='base_name', serialization_alias='baseName')
+    changeSummary: Optional[str] = Field(None, alias='change_summary', serialization_alias='changeSummary')
 
     # Personal draft visibility (three-tier model)
     # Tier 1: draft_owner_id set = personal draft, only owner can see
     # Tier 2: draft_owner null, publication_scope none = team/project visible
     # Tier 3: publication_scope not none = marketplace visible to all
-    draftOwnerId: Optional[str] = Field(None, alias='draft_owner_id')
+    draftOwnerId: Optional[str] = Field(None, alias='draft_owner_id', serialization_alias='draftOwnerId')
 
     # Publication (canonical; replaces legacy boolean `published` column)
     publication_scope: str = "none"
@@ -864,11 +865,12 @@ class CommitDraftResponse(BaseModel):
 
 class DiffFromParentResponse(BaseModel):
     """Response from diff-from-parent endpoint"""
+    parent_id: Optional[str] = None  # Parent version's contract id (for the compare dialog)
     parent_version: str
     parent_status: str
     suggested_bump: str  # "major", "minor", "patch"
     suggested_version: str
-    analysis: Dict[str, Any]  # Full analysis from ContractChangeAnalyzer
+    analysis: Dict[str, Any]  # Engine analysis, legacy-shaped (entity_diff.render.legacy_parent_diff)
 
 
 # ===== ODCS v3.1.0 Team Metadata Models =====

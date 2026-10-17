@@ -30,6 +30,22 @@ import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import EntityChangesButton from '@/components/common/entity-changes-button';
+
+// Review assets reference contracts/products as `contract:{ref}` /
+// `product:{ref}` (DataProductsManager, workflow CreateAssetReview step), and
+// the workflow step types them as TABLE — so key off the prefix, not the
+// asset type. Refs that are names rather than ids don't resolve to a version
+// family, and the button then stays hidden.
+const VERSIONED_ASSET_PREFIXES: Array<[string, string]> = [
+    ['contract:', 'data_contract'],
+    ['product:', 'data_product'],
+];
+
+function versionedEntityRef(fqn: string): { entityType: string; entityId: string } | null {
+    const match = VERSIONED_ASSET_PREFIXES.find(([prefix]) => fqn.startsWith(prefix));
+    return match ? { entityType: match[1], entityId: fqn.slice(match[0].length) } : null;
+}
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -328,6 +344,12 @@ export default function AssetReviewEditor({
                  <h4 className="font-medium text-lg mb-2">{t('data-asset-reviews:editor.assetDetails')}</h4>
                  <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.fqnLabel')}</span> <span className="font-mono text-xs">{asset.asset_fqn}</span></p>
                  <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.typeLabel')}</span> <Badge variant="secondary">{asset.asset_type}</Badge></p>
+                 {/* Versioned entities: show what this version changes (PRD #1086). */}
+                 <EntityChangesButton
+                     entityType={versionedEntityRef(asset.asset_fqn)?.entityType}
+                     entityId={versionedEntityRef(asset.asset_fqn)?.entityId}
+                     className="mt-2"
+                 />
              </div>
 
             {/* Content Viewer */}

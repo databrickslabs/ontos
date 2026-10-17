@@ -660,6 +660,39 @@
     "alreadyNewest": "Già alla versione più recente",
     "alreadyOldest": "Già alla versione più vecchia"
   },
+  "entityDiff": {
+    "title": "Confronta versioni",
+    "description": "Come differiscono le due versioni nel loro modello di file e quale incremento di versione semantica richiedono le modifiche.",
+    "baseVersion": "Versione di base",
+    "targetVersion": "Versione di destinazione",
+    "suggestedBump": "Incremento suggerito:",
+    "bump": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "none": "Nessuna modifica"
+    },
+    "sameVersion": "Scegli due versioni diverse da confrontare.",
+    "versionInconsistent": "La versione {{target}} non riflette queste modifiche: richiedono un incremento {{bump}} ({{suggested}}).",
+    "loading": "Confronto delle versioni…",
+    "loadError": "Impossibile caricare il confronto delle versioni.",
+    "tabs": {
+      "changes": "Modifiche ({{count}})",
+      "yaml": "Diff YAML"
+    },
+    "noChanges": "Nessuna differenza tra queste versioni.",
+    "op": {
+      "added": "aggiunto",
+      "removed": "rimosso",
+      "modified": "modificato"
+    },
+    "unknownVersion": "Sconosciuta",
+    "compare": "Confronta versioni",
+    "compareWithPrevious": "Confronta con la precedente (v{{version}})",
+    "compareWithCurrent": "Confronta con la versione corrente",
+    "viewFullDiff": "Vedi diff completo",
+    "viewChanges": "Vedi modifiche"
+  },
   "versioning": {
     "recommendedBump": "Incremento di versione consigliato:",
     "breakingChanges": "Rilevate modifiche incompatibili!",

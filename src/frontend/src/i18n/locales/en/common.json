@@ -660,6 +660,39 @@
     "alreadyNewest": "Already on newest",
     "alreadyOldest": "Already on oldest"
   },
+  "entityDiff": {
+    "title": "Compare versions",
+    "description": "How the two versions differ in their file model, and which semantic version bump the changes call for.",
+    "baseVersion": "Base version",
+    "targetVersion": "Target version",
+    "suggestedBump": "Suggested bump:",
+    "bump": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "none": "No change"
+    },
+    "sameVersion": "Pick two different versions to compare.",
+    "versionInconsistent": "Version {{target}} doesn't reflect these changes: they call for a {{bump}} bump ({{suggested}}).",
+    "loading": "Comparing versions…",
+    "loadError": "Failed to load the version comparison.",
+    "tabs": {
+      "changes": "Changes ({{count}})",
+      "yaml": "YAML diff"
+    },
+    "noChanges": "No differences between these versions.",
+    "op": {
+      "added": "added",
+      "removed": "removed",
+      "modified": "modified"
+    },
+    "unknownVersion": "Unknown",
+    "compare": "Compare versions",
+    "compareWithPrevious": "Compare with previous (v{{version}})",
+    "compareWithCurrent": "Compare with current version",
+    "viewFullDiff": "View full diff",
+    "viewChanges": "View changes"
+  },
   "versioning": {
     "recommendedBump": "Recommended Version Bump:",
     "breakingChanges": "Breaking Changes Detected!",

@@ -146,3 +146,67 @@ class TestProductChangeAnalyzerNullSafety:
         # bob without a critical role → patch-level fix, not breaking.
         assert result.change_type == ChangeType.FIX
         assert any("bob" in entry for entry in result.fixes)
+
+
+class TestProductChangeAnalyzerAliasedKeys:
+    """Regression: the DataProduct API model dumps ports/support under snake_case
+    aliases (`model_dump(by_alias=True)`), which the analyzer used to ignore —
+    every product diff came out as patch/none regardless of port changes."""
+
+    def test_removed_output_port_under_alias_is_breaking(self):
+        old_product = {**_empty_product(), "output_ports": [{"name": "main"}]}
+        new_product = {**_empty_product(), "output_ports": []}
+
+        result = ProductChangeAnalyzer().analyze(old_product, new_product)
+
+        assert result.change_type == ChangeType.BREAKING
+        assert result.version_bump == "major"
+        assert any("main" in c for c in result.breaking_changes)
+
+    def test_mixed_alias_and_field_name_shapes(self):
+        """Old side aliased (DB → API dump), new side field names (frontend/ODPS)."""
+        old_product = {**_empty_product(), "input_ports": [{"name": "src"}]}
+        new_product = {**_empty_product(), "inputPorts": [{"name": "src"}, {"name": "extra"}]}
+
+        result = ProductChangeAnalyzer().analyze(old_product, new_product)
+
+        assert result.change_type != ChangeType.NONE
+        assert any(pc.port_name == "extra" for pc in result.port_changes)
+
+    def test_support_channels_alias(self):
+        old_product = {**_empty_product(), "support_channels": [{"channel": "slack"}]}
+        new_product = {**_empty_product(), "support_channels": [{"channel": "slack"}, {"channel": "email"}]}
+
+        result = ProductChangeAnalyzer().analyze(old_product, new_product)
+
+        assert any("email" in f for f in result.new_features)
+
+
+class TestProductChangeAnalyzerPartialMode:
+    """Update payloads omit (or null) sections they don't touch; in partial mode
+    those must not be read as removals, or every PUT would 409."""
+
+    def test_partial_skips_unprovided_sections(self):
+        old_product = {**_empty_product(), "output_ports": [{"name": "main"}]}
+        payload = {"name": "renamed", "output_ports": None}
+
+        result = ProductChangeAnalyzer().analyze(old_product, payload, partial=True)
+
+        assert result.change_type == ChangeType.NONE
+        assert result.breaking_changes == []
+
+    def test_partial_still_detects_explicit_removal(self):
+        old_product = {**_empty_product(), "output_ports": [{"name": "main"}]}
+        payload = {"output_ports": []}
+
+        result = ProductChangeAnalyzer().analyze(old_product, payload, partial=True)
+
+        assert result.change_type == ChangeType.BREAKING
+
+    def test_full_mode_treats_none_as_removal(self):
+        old_product = {**_empty_product(), "output_ports": [{"name": "main"}]}
+        new_product = _empty_product()
+
+        result = ProductChangeAnalyzer().analyze(old_product, new_product)
+
+        assert result.change_type == ChangeType.BREAKING

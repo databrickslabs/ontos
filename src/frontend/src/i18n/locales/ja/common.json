@@ -660,6 +660,39 @@
     "alreadyNewest": "すでに最新です",
     "alreadyOldest": "すでに最も古いバージョンです"
   },
+  "entityDiff": {
+    "title": "バージョンを比較",
+    "description": "2つのバージョンのファイルモデル上の違いと、変更に必要なセマンティックバージョンの引き上げを表示します。",
+    "baseVersion": "基準バージョン",
+    "targetVersion": "比較対象バージョン",
+    "suggestedBump": "推奨される引き上げ:",
+    "bump": {
+      "major": "メジャー",
+      "minor": "マイナー",
+      "patch": "パッチ",
+      "none": "変更なし"
+    },
+    "sameVersion": "比較する異なる2つのバージョンを選択してください。",
+    "versionInconsistent": "バージョン {{target}} はこれらの変更を反映していません。{{bump}} の引き上げ ({{suggested}}) が必要です。",
+    "loading": "バージョンを比較しています…",
+    "loadError": "バージョン比較を読み込めませんでした。",
+    "tabs": {
+      "changes": "変更 ({{count}})",
+      "yaml": "YAML 差分"
+    },
+    "noChanges": "これらのバージョンに違いはありません。",
+    "op": {
+      "added": "追加",
+      "removed": "削除",
+      "modified": "変更"
+    },
+    "unknownVersion": "不明",
+    "compare": "バージョンを比較",
+    "compareWithPrevious": "前のバージョンと比較 (v{{version}})",
+    "compareWithCurrent": "現在のバージョンと比較",
+    "viewFullDiff": "差分をすべて表示",
+    "viewChanges": "変更を表示"
+  },
   "versioning": {
     "recommendedBump": "推奨されるバージョンアップ:",
     "breakingChanges": "破壊的変更が検出されました！",

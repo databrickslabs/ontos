@@ -660,6 +660,39 @@
     "alreadyNewest": "Bereits auf der neuesten",
     "alreadyOldest": "Bereits auf der ältesten"
   },
+  "entityDiff": {
+    "title": "Versionen vergleichen",
+    "description": "Wie sich die beiden Versionen im Dateimodell unterscheiden und welche semantische Versionserhöhung die Änderungen erfordern.",
+    "baseVersion": "Basisversion",
+    "targetVersion": "Zielversion",
+    "suggestedBump": "Empfohlene Erhöhung:",
+    "bump": {
+      "major": "Major",
+      "minor": "Minor",
+      "patch": "Patch",
+      "none": "Keine Änderung"
+    },
+    "sameVersion": "Wählen Sie zwei verschiedene Versionen zum Vergleichen.",
+    "versionInconsistent": "Version {{target}} spiegelt diese Änderungen nicht wider: Sie erfordern eine {{bump}}-Erhöhung ({{suggested}}).",
+    "loading": "Versionen werden verglichen…",
+    "loadError": "Der Versionsvergleich konnte nicht geladen werden.",
+    "tabs": {
+      "changes": "Änderungen ({{count}})",
+      "yaml": "YAML-Diff"
+    },
+    "noChanges": "Keine Unterschiede zwischen diesen Versionen.",
+    "op": {
+      "added": "hinzugefügt",
+      "removed": "entfernt",
+      "modified": "geändert"
+    },
+    "unknownVersion": "Unbekannt",
+    "compare": "Versionen vergleichen",
+    "compareWithPrevious": "Mit vorheriger Version vergleichen (v{{version}})",
+    "compareWithCurrent": "Mit aktueller Version vergleichen",
+    "viewFullDiff": "Vollständigen Diff anzeigen",
+    "viewChanges": "Änderungen anzeigen"
+  },
   "versioning": {
     "recommendedBump": "Empfohlene Versionsanhebung:",
     "breakingChanges": "Breaking Changes erkannt!",

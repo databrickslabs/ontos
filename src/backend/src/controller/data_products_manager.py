@@ -116,6 +116,11 @@ from src.repositories.assets_repository import asset_repo
 logger = get_logger(__name__)
 
 
+# Names the API port models resolve at read time from the stored ids
+# (contractId, deliveryMethodId); diffing them would double-report an id change.
+_PORT_DISPLAY_ONLY_FIELDS = {"contractName", "deliveryMethodName"}
+
+
 @searchable_asset
 class DataProductsManager(DeliveryMixin, SearchableAsset):
     """Manager for ODPS v1.0.0 Data Products.
@@ -2516,58 +2521,96 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not product.parent_product_id:
             raise ValueError("Product has no parent to compare against")
         
-        parent = data_product_repo.get(db, id=product.parent_product_id)
-        if not parent:
+        # Same engine and ODPS rules as the version-compare endpoint, shaped
+        # like the legacy response the commit-draft dialog consumes (#1086).
+        from src.common.entity_diff import EntityNotFound
+        from src.common.entity_diff.render import legacy_parent_diff
+        try:
+            diff = self.diff_versions(db, base_id=product.parent_product_id, target_id=product.id)
+        except EntityNotFound:
             raise ValueError("Parent product not found")
-        
-        # Convert to dicts for comparison
-        product_dict = self._product_db_to_dict(product)
-        parent_dict = self._product_db_to_dict(parent)
-        
-        # Run comparison analysis
-        analysis_result = self.compare_products(parent_dict, product_dict)
-        
-        # Calculate suggested version
-        suggested_version = self._calculate_next_version(
-            parent.version or "0.0.0",
-            analysis_result.get("version_bump", "patch")
+        return legacy_parent_diff(diff)
+
+    def diff_versions(
+        self,
+        db: Session,
+        base_id: str,
+        target_id: str,
+        *,
+        base: Optional[DataProductApi] = None,
+        target: Optional[DataProductApi] = None,
+    ) -> Dict[str, Any]:
+        """Diff two versions of the same product family on their ODPS documents.
+
+        Classifies every change (major/minor/patch/none) and suggests the next
+        version from ``base``. Callers enforce visibility before calling and
+        may pass the products they already loaded for that.
+
+        Raises:
+            EntityNotFound: a product doesn't exist
+            VersionFamilyMismatch: the two products belong to different families
+        """
+        from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch, family_key
+        from src.common.entity_diff.render import build_diff_response
+        from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
+
+        base = base or self.get_product(base_id)
+        target = target or self.get_product(target_id)
+        if not base or not target:
+            raise EntityNotFound("Product not found")
+        if family_key(base) != family_key(target):
+            raise VersionFamilyMismatch("Products belong to different version families")
+
+        def meta(p: DataProductApi) -> Dict[str, Any]:
+            status = getattr(p.status, "value", p.status)
+            return {"id": p.id, "name": p.name, "version": p.version, "status": status}
+
+        return build_diff_response(
+            "data_product", meta(base), meta(target),
+            self._product_diff_document(base, db), self._product_diff_document(target, db),
+            ODPS_PROFILE, ODPS_RULES,
         )
-        
-        return {
-            "parent_version": parent.version or "0.0.0",
-            "suggested_bump": analysis_result.get("version_bump", "patch"),
-            "suggested_version": suggested_version,
-            "analysis": analysis_result
-        }
+
+    def _product_diff_document(self, product: DataProductApi, db: Session) -> Dict[str, Any]:
+        """The ODPS export of ``product`` with its ports at full fidelity.
+
+        ``build_odps_export`` writes ports as name/version/contractId/status
+        only, which hides exactly what consumers depend on (server/location,
+        type, PII flag, sbom, input contracts) and omits management ports.
+        Overlay the API model's ports (ODPS field names) so the diff sees them.
+        """
+        doc = self.build_odps_export(product.id, db=db)
+        dumped = product.model_dump(by_alias=False, exclude_none=True)
+        for field in ("inputPorts", "outputPorts", "managementPorts"):
+            ports = [
+                {k: v for k, v in port.items() if k not in _PORT_DISPLAY_ONLY_FIELDS}
+                for port in dumped.get(field) or []
+            ]
+            if ports:
+                doc[field] = ports
+            else:
+                doc.pop(field, None)
+        return doc
 
     def _calculate_next_version(self, current_version: str, bump_type: str) -> str:
-        """Calculate the next semantic version based on bump type.
+        """Calculate the next version based on bump type.
+        
+        Delegates to ``entity_diff.semver.next_version`` (shared with the
+        version-diff engine) so both suggest the same version for the same input.
         
         Args:
-            current_version: Current version string (e.g., "1.2.3")
-            bump_type: Type of bump ("major", "minor", or "patch")
+            current_version: Current semver (e.g., "1.2.3"; "v1.2.3", "2.1" and
+                pre-release suffixes like "-draft" are accepted)
+            bump_type: "major", "minor", or "patch" (anything else → patch)
             
         Returns:
-            Next version string
+            Next version string ("0.0.1" if current_version is unparseable)
         """
-        import re
-        
-        # Handle version with -draft suffix
-        version = current_version.replace('-draft', '')
-        
-        # Parse version components
-        match = re.match(r'^(\d+)\.(\d+)\.(\d+)', version)
-        if not match:
+        from src.common.entity_diff.semver import Bump, next_version, parse_version
+        if parse_version(current_version) is None:
             return "0.0.1"
-        
-        major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        
-        if bump_type == "major":
-            return f"{major + 1}.0.0"
-        elif bump_type == "minor":
-            return f"{major}.{minor + 1}.0"
-        else:  # patch
-            return f"{major}.{minor}.{patch + 1}"
+        bump = {"major": Bump.MAJOR, "minor": Bump.MINOR}.get(bump_type, Bump.PATCH)
+        return next_version(current_version, bump)
 
     async def initiate_genie_space_creation(self, request: GenieSpaceRequest, user_info: UserInfo, db: Session):
         """Initiates Genie Space creation for selected ODPS data products."""
@@ -3795,13 +3838,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         logger.info(f"Retrieved {len(result)} team members from team {team_id} for product {product_id} import")
         return result
 
-    def compare_products(self, old_product: Dict, new_product: Dict) -> Dict:
+    def compare_products(self, old_product: Dict, new_product: Dict, partial: bool = False) -> Dict:
         """
         Compare two product versions and analyze changes.
         
         Args:
             old_product: Previous version (dict representation)
             new_product: New version (dict representation)
+            partial: True when new_product is an update payload (unset sections skipped)
             
         Returns:
             Dict with change analysis results
@@ -3809,7 +3853,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         from src.utils.product_change_analyzer import ProductChangeAnalyzer
         
         analyzer = ProductChangeAnalyzer()
-        result = analyzer.analyze(old_product, new_product)
+        result = analyzer.analyze(old_product, new_product, partial=partial)
         
         return {
             'change_type': result.change_type.value,
@@ -3872,7 +3916,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         current_product_dict = self._product_db_to_dict(current_product_db)
         
         # Run change analysis
-        analysis = self.compare_products(current_product_dict, proposed_changes)
+        analysis = self.compare_products(current_product_dict, proposed_changes, partial=True)
         
         # Classify changes
         metadata_changes = []
@@ -3885,9 +3929,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 metadata_changes.append(field)
         
         # Child entity changes (nested structures)
+        # Keys may arrive aliased (input_ports, support_channels) or as field names.
+        from src.utils.product_change_analyzer import ProductChangeAnalyzer
         child_entity_fields = ['inputPorts', 'outputPorts', 'managementPorts', 'team', 'support', 'description']
         for field in child_entity_fields:
-            if field in proposed_changes and proposed_changes.get(field) != current_product_dict.get(field):
+            proposed = ProductChangeAnalyzer.get_section(proposed_changes, field)
+            if proposed is not None and proposed != ProductChangeAnalyzer.get_section(current_product_dict, field):
                 child_entity_changes.append(field)
         
         # Determine if versioning is required

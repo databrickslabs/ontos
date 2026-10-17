@@ -5976,6 +5976,35 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             'analysis': analysis_result
         }
 
+    def diff_versions(self, db, base_id: str, target_id: str) -> Dict[str, Any]:
+        """Diff two versions of the same contract family on their ODCS documents.
+
+        Classifies every change (major/minor/patch/none) and suggests the next
+        version from ``base``. Callers enforce visibility before calling.
+
+        Raises:
+            LookupError: a contract doesn't exist
+            ValueError: the two contracts belong to different families
+        """
+        from src.common.entity_diff.render import build_diff_response
+        from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
+
+        base = data_contract_repo.get_with_all(db, id=base_id)
+        target = data_contract_repo.get_with_all(db, id=target_id)
+        if not base or not target:
+            raise LookupError("Contract not found")
+        if base.version_family_id != target.version_family_id:
+            raise ValueError("Contracts belong to different version families")
+
+        def meta(c) -> Dict[str, Any]:
+            return {"id": c.id, "name": c.name, "version": c.version, "status": c.status}
+
+        return build_diff_response(
+            "data_contract", meta(base), meta(target),
+            self.build_odcs_from_db(base, db), self.build_odcs_from_db(target, db),
+            ODCS_PROFILE, ODCS_RULES,
+        )
+
     def _calculate_next_version(self, current_version: str, bump_type: str) -> str:
         """Calculate the next version based on bump type.
         

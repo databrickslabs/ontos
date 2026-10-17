@@ -3340,6 +3340,35 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "analysis": analysis_result
         }
 
+    def diff_versions(self, db: Session, base_id: str, target_id: str) -> Dict[str, Any]:
+        """Diff two versions of the same product family on their ODPS documents.
+
+        Classifies every change (major/minor/patch/none) and suggests the next
+        version from ``base``. Callers enforce visibility before calling.
+
+        Raises:
+            LookupError: a product doesn't exist
+            ValueError: the two products belong to different families
+        """
+        from src.common.entity_diff.render import build_diff_response
+        from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
+
+        base = data_product_repo.get(db, id=base_id)
+        target = data_product_repo.get(db, id=target_id)
+        if not base or not target:
+            raise LookupError("Product not found")
+        if base.version_family_id != target.version_family_id:
+            raise ValueError("Products belong to different version families")
+
+        def meta(p) -> Dict[str, Any]:
+            return {"id": p.id, "name": p.name, "version": p.version, "status": p.status}
+
+        return build_diff_response(
+            "data_product", meta(base), meta(target),
+            self.build_odps_export(base.id, db=db), self.build_odps_export(target.id, db=db),
+            ODPS_PROFILE, ODPS_RULES,
+        )
+
     def _calculate_next_version(self, current_version: str, bump_type: str) -> str:
         """Calculate the next version based on bump type.
         

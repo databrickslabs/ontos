@@ -4400,6 +4400,8 @@ async def diff_contract_versions(
         return manager.diff_versions(db, base_id=base_id, target_id=target_id, base=rows[0], target=rows[1])
     except VersionFamilyMismatch:
         raise HTTPException(status_code=400, detail="Contracts belong to different version families")
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Contract not found")
     except Exception:
         logger.error("Error diffing contracts %s and %s", base_id, target_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to diff contract versions")

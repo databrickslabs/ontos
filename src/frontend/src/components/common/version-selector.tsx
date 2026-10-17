@@ -184,8 +184,9 @@ export default function VersionSelector({
                       className="h-6 w-6"
                       title={t('entityDiff.compareWithCurrent')}
                       aria-label={t('entityDiff.compareWithCurrent')}
-                      // Don't let the click also select (navigate to) the row.
-                      onPointerDown={(e) => e.stopPropagation()}
+                      // Stop the click so the row's onClick (navigate) doesn't run.
+                      // Don't stop pointerdown: Radix's item then thinks the press
+                      // didn't start on it and synthesizes its own click on pointerup.
                       onClick={(e) => {
                         e.stopPropagation()
                         e.preventDefault()

@@ -320,6 +320,12 @@ def _set_product_type(db: Session, db_obj: Any, value: Any, *, create_missing: b
     db.flush()
 
 
+# Ontos display/delivery fields on the API port models that aren't part of the
+# product's ODPS content (resolved names, delivery wiring, approval toggles);
+# excluded from version diffs so they don't surface as content changes.
+_PORT_DISPLAY_ONLY_FIELDS = {"contractName", "deliveryMethodId", "deliveryMethodName", "autoApprove"}
+
+
 @searchable_asset
 class DataProductsManager(DeliveryMixin, SearchableAsset):
     """Manager for ODPS v1.0.0 Data Products.
@@ -3316,14 +3322,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not product.parent_product_id:
             raise ValueError("Product has no parent to compare against")
         
-        parent = data_product_repo.get(db, id=product.parent_product_id)
-        if not parent:
-            raise ValueError("Parent product not found")
-
         # Same engine and ODPS rules as the version-compare endpoint, shaped
         # like the legacy response the commit-draft dialog consumes (#1086).
         from src.common.entity_diff.render import legacy_parent_diff
-        return legacy_parent_diff(self.diff_versions(db, base_id=parent.id, target_id=product.id))
+        try:
+            diff = self.diff_versions(db, base_id=product.parent_product_id, target_id=product.id)
+        except LookupError:
+            raise ValueError("Parent product not found")
+        return legacy_parent_diff(diff)
 
     def diff_versions(
         self,
@@ -3352,7 +3358,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         target = target or self.get_product(target_id)
         if not base or not target:
             raise LookupError("Product not found")
-        if base.version_family_id != target.version_family_id:
+        # Same `family or id` key clones use (the column is NOT NULL today,
+        # but API models built from partial data may lack it).
+        if (base.version_family_id or base.id) != (target.version_family_id or target.id):
             raise VersionFamilyMismatch("Products belong to different version families")
 
         def meta(p: DataProductApi) -> Dict[str, Any]:
@@ -3376,8 +3384,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         doc = self.build_odps_export(product.id, db=db)
         dumped = product.model_dump(by_alias=False, exclude_none=True)
         for field in ("inputPorts", "outputPorts", "managementPorts"):
-            if dumped.get(field):
-                doc[field] = dumped[field]
+            ports = [
+                {k: v for k, v in port.items() if k not in _PORT_DISPLAY_ONLY_FIELDS}
+                for port in dumped.get(field) or []
+            ]
+            if ports:
+                doc[field] = ports
             else:
                 doc.pop(field, None)
         return doc

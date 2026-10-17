@@ -222,3 +222,27 @@ class TestReviewFindingsSlice4:
         )
         assert response["changes"] == []
         assert response["unified_diff"] == ""
+
+
+class TestReviewFindingsSlice5:
+    def test_version_bump_of_a_same_name_port_is_a_modification(self):
+        from src.common.entity_diff import compare
+        from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
+        v1 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.0.0"}]}
+        v2 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.1.0"}]}
+
+        result = compare(v1, v2, ODPS_PROFILE, ODPS_RULES)
+
+        assert [(c.op, c.rule_id, c.bump) for c in result.changes] == [
+            ("modified", "output-port-version", Bump.MINOR),
+        ]
+
+    def test_display_only_port_fields_are_not_diffed(self, db_session):
+        import copy
+        family = str(uuid.uuid4())
+        v1 = _product(db_session, family, "1.0.0", {**PORT, "autoApprove": False})
+        v2 = _product(db_session, family, "1.0.1", {**copy.deepcopy(PORT), "autoApprove": True}, parent_id=v1.id)
+
+        result = _product_manager(db_session).diff_versions(db_session, base_id=v1.id, target_id=v2.id)
+
+        assert result["changes"] == []

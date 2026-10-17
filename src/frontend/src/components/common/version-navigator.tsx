@@ -111,6 +111,7 @@ export default function VersionNavigator({
             <Button
               variant="outline"
               size="sm"
+              disabled={!(olderVersion ?? newerVersion)}
               onClick={() => {
                 // Default pair: the previous (older) version → this one; on
                 // the oldest version, compare it with the next newer one.

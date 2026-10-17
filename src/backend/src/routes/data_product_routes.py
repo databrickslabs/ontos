@@ -2647,6 +2647,12 @@ async def diff_product_versions(
                                      base=products[0], target=products[1])
     except VersionFamilyMismatch:
         raise HTTPException(status_code=400, detail="Products belong to different version families")
+    except ValidationError:
+        logger.error("Invalid product data diffing %s and %s", base_id, target_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to diff product versions")
+    except (LookupError, ValueError):
+        # Deleted between the visibility check and the export.
+        raise HTTPException(status_code=404, detail="Data product not found")
     except Exception:
         logger.error("Error diffing products %s and %s", base_id, target_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to diff product versions")

@@ -5302,19 +5302,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         may pass the rows (``get_with_all``) they already loaded for that.
 
         Raises:
-            LookupError: a contract doesn't exist
+            EntityNotFound: a contract doesn't exist
             VersionFamilyMismatch: the two contracts belong to different families
         """
-        from src.common.entity_diff import VersionFamilyMismatch
+        from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch, family_key
         from src.common.entity_diff.render import build_diff_response
         from src.common.entity_diff.rules_odcs import ODCS_PROFILE, ODCS_RULES
 
         base = base or data_contract_repo.get_with_all(db, id=base_id)
         target = target or data_contract_repo.get_with_all(db, id=target_id)
         if not base or not target:
-            raise LookupError("Contract not found")
-        # Same `family or id` key clones use (the column is NOT NULL today).
-        if (base.version_family_id or base.id) != (target.version_family_id or target.id):
+            raise EntityNotFound("Contract not found")
+        if family_key(base) != family_key(target):
             raise VersionFamilyMismatch("Contracts belong to different version families")
 
         def meta(c) -> Dict[str, Any]:

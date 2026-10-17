@@ -94,13 +94,14 @@ def legacy_parent_diff(diff: Dict[str, Any]) -> Dict[str, Any]:
         title + ":\n" + "\n".join(f"- {line}" for line in lines) for title, lines in sections if lines
     ) or "No significant changes detected"
     suggested_bump = bump if bump != "none" else "patch"
-    parent_version = diff["base"]["version"] or "0.0.0"
     return {
         "parent_id": diff["base"]["id"],
-        "parent_version": parent_version,
+        "parent_version": diff["base"]["version"] or "0.0.0",
         "parent_status": diff["base"]["status"],
         "suggested_bump": suggested_bump,
-        "suggested_version": next_version(parent_version, Bump[suggested_bump.upper()]),
+        # From the raw version, like the engine's suggested_version (an
+        # unversioned parent → 1.0.0), so both dialogs agree.
+        "suggested_version": next_version(diff["base"]["version"], Bump[suggested_bump.upper()]),
         "analysis": {
             "change_type": _LEGACY_CHANGE_TYPE[bump],
             "version_bump": bump,

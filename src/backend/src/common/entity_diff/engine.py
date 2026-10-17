@@ -119,8 +119,11 @@ def _pair_lone_leftovers(old_map: Dict[str, Any], old_bases: Dict[str, str],
                          new_map: Dict[str, Any], new_bases: Dict[str, str]) -> None:
     """After version-qualifying repeated keys, an item whose version changed no
     longer matches (orders@2.0.0 vs orders@2.1.0). When exactly one unmatched
-    item per base key is left on each side, pair them (re-key the new one) so
-    the change reads as a modification, not a removal + addition."""
+    item per base key is left on each side, and no kept item of that key lies
+    between their versions, pair them (re-key the new one) so the change reads
+    as a modification. Otherwise (e.g. v1 retired while v2.1 added next to a
+    kept v2.0) it stays a removal + addition."""
+    from .semver import parse_version  # local: semver imports this module
     def leftovers(mapping, bases, other):
         grouped: Dict[str, List[str]] = {}
         for key in mapping:
@@ -128,12 +131,20 @@ def _pair_lone_leftovers(old_map: Dict[str, Any], old_bases: Dict[str, str],
                 grouped.setdefault(bases[key], []).append(key)
         return grouped
 
+    def version_of(item):
+        return parse_version(item.get("version")) if isinstance(item, dict) else None
+
     old_left = leftovers(old_map, old_bases, new_map)
     new_left = leftovers(new_map, new_bases, old_map)
     for base, old_keys in old_left.items():
         new_keys = new_left.get(base, [])
-        if len(old_keys) == 1 and len(new_keys) == 1:
-            new_map[old_keys[0]] = new_map.pop(new_keys[0])
+        if len(old_keys) != 1 or len(new_keys) != 1:
+            continue
+        old_v, new_v = version_of(old_map[old_keys[0]]), version_of(new_map[new_keys[0]])
+        kept = [version_of(old_map[k]) for k in old_map if k in new_map and old_bases[k] == base]
+        if old_v and new_v and any(v and min(old_v, new_v) < v < max(old_v, new_v) for v in kept):
+            continue
+        new_map[old_keys[0]] = new_map.pop(new_keys[0])
 
 
 def _is_scalar_list(items: List[Any]) -> bool:

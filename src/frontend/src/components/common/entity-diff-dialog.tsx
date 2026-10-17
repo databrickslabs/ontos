@@ -111,6 +111,12 @@ type EntityDiffDialogProps = {
   versions?: EntityVersionRow[]
   baseId: string
   targetId: string
+  /**
+   * Warn when the target's version doesn't reflect the changes. Off when the
+   * target is an uncommitted draft that hasn't been given its new version yet
+   * (commit-draft dialogs).
+   */
+  showVersionCheck?: boolean
 }
 
 export default function EntityDiffDialog({
@@ -120,6 +126,7 @@ export default function EntityDiffDialog({
   versions: providedVersions,
   baseId: initialBaseId,
   targetId: initialTargetId,
+  showVersionCheck = true,
 }: EntityDiffDialogProps) {
   const { t } = useTranslation('common')
   const [baseId, setBaseId] = useState(initialBaseId)
@@ -241,7 +248,7 @@ export default function EntityDiffDialog({
           <p className="text-sm text-muted-foreground">{t('entityDiff.sameVersion')}</p>
         )}
 
-        {diff?.version_consistent === false && (
+        {showVersionCheck && diff?.version_consistent === false && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>

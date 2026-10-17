@@ -37,16 +37,19 @@ import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-re
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 import EntityChangesButton from '@/components/common/entity-changes-button';
 
-// Contract/product review assets reference the entity as `contract:{id}` /
-// `product:{id}` (see workflow_executor / DataProductsManager).
-const VERSIONED_ASSET_PREFIX: Record<string, string> = {
-    [AssetType.DATA_CONTRACT]: 'contract:',
-    [AssetType.DATA_PRODUCT]: 'product:',
-};
+// Review assets reference contracts/products as `contract:{ref}` /
+// `product:{ref}` (DataProductsManager, workflow CreateAssetReview step), and
+// the workflow step types them as TABLE — so key off the prefix, not the
+// asset type. Refs that are names rather than ids don't resolve to a version
+// family, and the button then stays hidden.
+const VERSIONED_ASSET_PREFIXES: Array<[string, string]> = [
+    ['contract:', 'data_contract'],
+    ['product:', 'data_product'],
+];
 
-function versionedEntityId(assetType: string, fqn: string): string | null {
-    const prefix = VERSIONED_ASSET_PREFIX[assetType];
-    return prefix && fqn.startsWith(prefix) ? fqn.slice(prefix.length) : null;
+function versionedEntityRef(fqn: string): { entityType: string; entityId: string } | null {
+    const match = VERSIONED_ASSET_PREFIXES.find(([prefix]) => fqn.startsWith(prefix));
+    return match ? { entityType: match[1], entityId: fqn.slice(match[0].length) } : null;
 }
 
 // Register languages (using base import which has the static method)
@@ -396,8 +399,8 @@ export default function AssetReviewEditor({
                  <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.typeLabel')}</span> <Badge variant="secondary">{asset.asset_type}</Badge></p>
                  {/* Versioned entities: show what this version changes (PRD #1086). */}
                  <EntityChangesButton
-                     entityType={asset.asset_type}
-                     entityId={versionedEntityId(asset.asset_type, asset.asset_fqn)}
+                     entityType={versionedEntityRef(asset.asset_fqn)?.entityType}
+                     entityId={versionedEntityRef(asset.asset_fqn)?.entityId}
                      className="mt-2"
                  />
              </div>

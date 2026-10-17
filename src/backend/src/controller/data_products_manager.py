@@ -968,12 +968,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     user_email=current_user,
                 )
                 if not gate_passed:
-                    from src.common.workflow_triggers import describe_failed_executions
-                    reasons = describe_failed_executions(gate_executions)
-                    raise ValueError(
-                        f"Status transition from '{current_status}' to '{new_status_lower}' "
-                        f"blocked by workflow: {reasons}"
-                    )
+                    from src.common.workflow_triggers import StatusChangeBlockedError
+                    raise StatusChangeBlockedError(current_status, new_status_lower, gate_executions)
             except ValueError:
                 raise
             except Exception as e:

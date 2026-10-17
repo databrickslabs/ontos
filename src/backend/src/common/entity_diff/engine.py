@@ -25,6 +25,11 @@ IdentityFn = Callable[[Dict[str, Any], str], Optional[str]]
 # (list items are offered with their ``...[]`` shape) before diffing.
 StripFn = Callable[[str, Any], bool]
 
+# Ignore predicate: shape -> True for fields that are never reported as changes
+# but stay in the document, so identity functions can still match on them
+# (e.g. ODCS stable ``id``s: identity metadata, not content).
+IgnoreFn = Callable[[str], bool]
+
 
 @dataclass(frozen=True)
 class FieldChange:
@@ -41,6 +46,7 @@ class DiffProfile:
     """Entity-specific knobs for the generic diff."""
     identity: IdentityFn
     strip: StripFn = field(default=lambda shape, value: False)
+    ignore: IgnoreFn = field(default=lambda shape: False)
 
 
 def _is_empty(value: Any) -> bool:
@@ -95,6 +101,8 @@ def _walk(old: Any, new: Any, path: str, shape: str, profile: DiffProfile,
         for key in list(old.keys()) + [k for k in new.keys() if k not in old]:
             child_path = f"{path}.{key}" if path else key
             child_shape = f"{shape}.{key}" if shape else key
+            if profile.ignore(child_shape):
+                continue
             # A missing side is diffed as an empty container of the other side's
             # type, so emptying a list reports per-item removals (which item
             # rules can classify) rather than one opaque "field removed".

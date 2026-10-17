@@ -124,6 +124,21 @@ class TestClassification:
         assert result.bump == Bump.PATCH
         assert result.changes[0].rule_id == "default"
 
+    def test_glob_brackets_are_literal(self):
+        """`[` must not start a character class (fnmatch would never match this)."""
+        rules = RuleSet(rules=[Rule("two-brackets", "schema[].properties[].logicalType", Bump.MAJOR, "t")])
+        old = {"schema": [{"name": "s", "properties": [{"name": "p", "logicalType": "string"}]}]}
+        new = {"schema": [{"name": "s", "properties": [{"name": "p", "logicalType": "integer"}]}]}
+        changes, _, _ = diff_documents(old, new, BY_NAME)
+        assert classify(changes, rules).changes[0].rule_id == "two-brackets"
+
+    def test_ignored_fields_are_not_reported_but_still_match(self):
+        profile = DiffProfile(identity=lambda item, shape: item.get("id"), ignore=lambda shape: shape.endswith(".id"))
+        old = {"items": [{"id": "a", "name": "old"}]}
+        new = {"items": [{"id": "a", "name": "new"}]}
+        changes, _, _ = diff_documents(old, new, profile)
+        assert _ops(changes) == {("items[a].name", "modified")}
+
     def test_first_matching_rule_wins(self):
         rules = RuleSet(rules=[
             Rule("first", "a", Bump.MINOR, "first"),
@@ -141,6 +156,9 @@ class TestVersionHelpers:
         ("1.2.3", Bump.NONE, "1.2.3"),
         ("v1.2.3", Bump.PATCH, "1.2.4"),
         ("1.0.0-draft", Bump.MINOR, "1.1.0"),
+        ("2.1", Bump.MAJOR, "3.0.0"),
+        ("2", Bump.PATCH, "2.0.1"),
+        (1.0, Bump.MINOR, "1.1.0"),
         ("not-a-version", Bump.PATCH, "1.0.0"),
         (None, Bump.MAJOR, "1.0.0"),
     ])

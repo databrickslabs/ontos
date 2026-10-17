@@ -3341,33 +3341,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         }
 
     def _calculate_next_version(self, current_version: str, bump_type: str) -> str:
-        """Calculate the next semantic version based on bump type.
+        """Calculate the next version based on bump type.
+        
+        Delegates to ``entity_diff.semver.next_version`` (shared with the
+        version-diff engine) so both suggest the same version for the same input.
         
         Args:
-            current_version: Current version string (e.g., "1.2.3")
-            bump_type: Type of bump ("major", "minor", or "patch")
+            current_version: Current semver (e.g., "1.2.3"; "v1.2.3", "2.1" and
+                pre-release suffixes like "-draft" are accepted)
+            bump_type: "major", "minor", or "patch" (anything else → patch)
             
         Returns:
-            Next version string
+            Next version string ("0.0.1" if current_version is unparseable)
         """
-        import re
-        
-        # Handle version with -draft suffix
-        version = current_version.replace('-draft', '')
-        
-        # Parse version components
-        match = re.match(r'^(\d+)\.(\d+)\.(\d+)', version)
-        if not match:
+        from src.common.entity_diff.semver import Bump, next_version, parse_version
+        if parse_version(current_version) is None:
             return "0.0.1"
-        
-        major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        
-        if bump_type == "major":
-            return f"{major + 1}.0.0"
-        elif bump_type == "minor":
-            return f"{major}.{minor + 1}.0"
-        else:  # patch
-            return f"{major}.{minor}.{patch + 1}"
+        bump = {"major": Bump.MAJOR, "minor": Bump.MINOR}.get(bump_type, Bump.PATCH)
+        return next_version(current_version, bump)
 
     async def initiate_genie_space_creation(self, request: GenieSpaceRequest, user_info: UserInfo, db: Session):
         """Initiates Genie Space creation for selected ODPS data products."""

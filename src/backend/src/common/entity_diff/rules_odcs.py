@@ -218,4 +218,14 @@ ODCS_RULES = RuleSet(rules=[
     Rule("sla-added", "slaProperties[]", Bump.MINOR, "Service level added", ops=("added",)),
     Rule("sla-value", "slaProperties[].value", _sla_value_bump, "Service level value changed", ops=("modified",)),
     Rule("sla-changed", "slaProperties[].*", Bump.MAJOR, "Service level definition changed"),
+
+    # Documentation & governance metadata (PATCH; named for readable messages)
+    Rule("description", "*description*", Bump.PATCH, "Description changed"),
+    Rule("team-member-added", "team*[]", Bump.PATCH, "Team member added", ops=("added",)),
+    Rule("team-member-removed", "team*[]", Bump.PATCH, "Team member removed", ops=("removed",)),
+    Rule("team-changed", "team*", Bump.PATCH, "Team changed"),
+    Rule("support", "support*", Bump.PATCH, "Support channel changed"),
+    Rule("tags", "*tags*", Bump.PATCH, "Tags changed"),
+    Rule("custom-properties", "*customProperties*", Bump.PATCH, "Custom properties changed"),
+    Rule("authoritative-definitions", "*authoritativeDefinitions*", Bump.PATCH, "Authoritative definitions changed"),
 ])

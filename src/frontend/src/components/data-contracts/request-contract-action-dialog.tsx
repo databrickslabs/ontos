@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { statusChangeErrorText } from '@/lib/status-change-error';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
@@ -266,7 +267,7 @@ export default function RequestContractActionDialog({
       const response = await post(config.endpoint, payload);
 
       if (response.error) {
-        throw new Error(response.error);
+        throw new Error(statusChangeErrorText(response, t, 'data-contracts'));
       }
 
       // Different success messages for direct changes vs requests

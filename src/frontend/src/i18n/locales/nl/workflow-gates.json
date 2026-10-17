@@ -1,0 +1,14 @@
+{
+  "blocked": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geblokkeerd door een workflow: {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "wacht op goedkeuring ({{step}})",
+    "entityLoadFailed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
+    "validationFailed": "de workflowvalidatie is mislukt",
+    "status": {
+      "failed": "mislukt",
+      "cancelled": "geannuleerd",
+      "pending": "in afwachting",
+      "running": "bezig"
+    }
+  }
+}

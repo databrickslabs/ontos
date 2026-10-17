@@ -27,6 +27,7 @@ from src.models.data_products import (
     DiffFromParentResponse
 )
 from src.models.users import UserInfo
+from src.models.entity_diff import EntityDiffResponse
 from databricks.sdk.errors import PermissionDenied
 
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
@@ -2645,6 +2646,39 @@ async def get_diff_from_parent(
     except Exception as e:
         logger.error(f"Error getting diff for product {product_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get diff from parent")
+
+
+@router.get('/data-products/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
+async def diff_product_versions(
+    base_id: str,
+    target_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """Diff two versions of a product family on their ODPS documents (PRD #1086).
+
+    Returns field-level changes, each classified major/minor/patch/none, the
+    suggested next version from ``base``, whether ``target``'s version reflects
+    the changes, and a unified YAML diff. Both products must be readable by the
+    caller (same rule as GET /data-products/{id}); a miss is a 404.
+    """
+    for product_id in (base_id, target_id):
+        product = manager.get_product(product_id)
+        if not product or not _caller_can_read_product(request, db, current_user, manager, product):
+            raise HTTPException(status_code=404, detail="Data product not found")
+
+    try:
+        return manager.diff_versions(db, base_id=base_id, target_id=target_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Data product not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.error("Error diffing products %s and %s", base_id, target_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to diff product versions")
 
 
 @router.post('/data-products/{product_id}/commit', response_model=CommitDraftResponse)

@@ -63,6 +63,7 @@ from src.controller.lifecycle_fields import contract_status_audit, LifecycleFiel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_products import DeprecationPayload
+from src.models.entity_diff import EntityDiffResponse
 from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
@@ -4233,6 +4234,49 @@ async def get_diff_from_parent(
     except Exception as e:
         logger.error("Error getting diff from parent for contract %s", contract_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get diff from parent")
+
+
+@router.get('/data-contracts/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
+async def diff_contract_versions(
+    base_id: str,
+    target_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Diff two versions of a contract family on their ODCS documents (PRD #1086).
+
+    Returns field-level changes, each classified major/minor/patch/none, the
+    suggested next version from ``base``, whether ``target``'s version reflects
+    the changes, and a unified YAML diff. Another user's personal draft is
+    reported as not found (404) so its existence isn't disclosed.
+    """
+    from src.common.authorization import is_user_feature_admin
+
+    is_admin = await is_user_feature_admin(
+        user_email=current_user.email if current_user else None,
+        user_groups=current_user.groups if current_user else [],
+        feature_id='data-contracts',
+        request=request,
+    )
+    caller_ids = {current_user.username, current_user.email} if current_user else set()
+    for contract_id in (base_id, target_id):
+        contract = data_contract_repo.get(db, id=contract_id)
+        owner = getattr(contract, "draft_owner_id", None) if contract else None
+        if not contract or (owner and owner not in caller_ids and not is_admin):
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        return manager.diff_versions(db, base_id=base_id, target_id=target_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.error("Error diffing contracts %s and %s", base_id, target_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to diff contract versions")
 
 
 @router.post('/data-contracts/{contract_id}/commit', response_model=dict)

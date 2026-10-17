@@ -28,7 +28,11 @@ from .semver import Bump, Rule, RuleSet, version_bump_between
 # ---------------------------------------------------------------------------
 
 _VOLATILE_CUSTOM_PROPERTIES = {"ontosEntityId"}
-_VOLATILE_TOP_LEVEL = {"id", "version", "productCreatedTs"}
+# `datasets` is the export's Ontos extension listing the product's entity
+# relationships. It's derived rather than versioned content: clones don't copy
+# relationships (so every draft-vs-parent diff showed them all removed) and a
+# failed hierarchy load silently omits the section on one side.
+_VOLATILE_TOP_LEVEL = {"id", "version", "productCreatedTs", "datasets"}
 
 
 def _strip(shape: str, value: Any) -> bool:
@@ -56,10 +60,6 @@ def _identity(item: Dict[str, Any], shape: str) -> Optional[str]:
         return item.get("property")
     if leaf == "authoritativeDefinitions":
         return f"{item.get('type')}:{item.get('url')}" if item.get("url") else None
-    if leaf == "datasets":
-        return item.get("contractId") or item.get("name")
-    if leaf == "tables":
-        return item.get("location") or item.get("name")
     if leaf == "inputContracts":
         return item.get("id") or item.get("contractId")
     if leaf == "sbom":

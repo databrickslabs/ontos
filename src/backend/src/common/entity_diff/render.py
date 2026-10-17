@@ -7,6 +7,8 @@ from typing import Any, Dict
 import yaml
 
 from . import ComparisonResult, DiffProfile, RuleSet, compare
+from .engine import without_ignored
+from .semver import Bump, next_version
 
 
 def to_plain(doc: Any) -> Any:
@@ -21,8 +23,9 @@ def to_yaml(doc: Dict[str, Any]) -> str:
 
 def unified_yaml_diff(base_doc: Dict[str, Any], target_doc: Dict[str, Any],
                       base_label: str, target_label: str, context: int = 3) -> str:
-    """Unified diff of the two normalized documents rendered as YAML, so the
-    text view agrees with the structural changes (volatile fields stripped)."""
+    """Unified diff of two documents rendered as YAML. Callers pass the
+    normalized documents with ignored fields removed, so the text view agrees
+    with the structural changes."""
     return "".join(difflib.unified_diff(
         to_yaml(base_doc).splitlines(keepends=True),
         to_yaml(target_doc).splitlines(keepends=True),
@@ -58,8 +61,52 @@ def build_diff_response(entity_type: str, base_meta: Dict[str, Any], target_meta
         "suggested_version": result.suggested_version,
         "version_consistent": result.version_consistent,
         "unified_diff": unified_yaml_diff(
-            result.base_document, result.target_document,
+            without_ignored(result.base_document, profile), without_ignored(result.target_document, profile),
             f"{base_meta.get('name') or 'base'} {base_meta.get('version') or ''}".strip(),
             f"{target_meta.get('name') or 'target'} {target_meta.get('version') or ''}".strip(),
         ),
+    }
+
+
+_LEGACY_CHANGE_TYPE = {"major": "breaking", "minor": "feature", "patch": "fix", "none": "none"}
+
+
+def _legacy_line(change: Dict[str, Any]) -> str:
+    return f"{change['message']}: {change['path']}"
+
+
+def legacy_parent_diff(diff: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape an engine diff (draft vs. parent) like the legacy
+    ``get_diff_from_parent`` response the commit-draft dialogs consume.
+
+    A commit always mints a new version, so "no change" still suggests a
+    patch bump (the dialogs' radio group has no "none").
+    """
+    changes = diff["changes"]
+    by_bump = {b: [_legacy_line(c) for c in changes if c["bump"] == b] for b in ("major", "minor", "patch")}
+    bump = diff["suggested_bump"]
+    sections = [
+        (f"Breaking changes ({len(by_bump['major'])})", by_bump["major"]),
+        (f"New features ({len(by_bump['minor'])})", by_bump["minor"]),
+        (f"Improvements ({len(by_bump['patch'])})", by_bump["patch"]),
+    ]
+    summary = "\n\n".join(
+        title + ":\n" + "\n".join(f"- {line}" for line in lines) for title, lines in sections if lines
+    ) or "No significant changes detected"
+    suggested_bump = bump if bump != "none" else "patch"
+    return {
+        "parent_version": diff["base"]["version"] or "0.0.0",
+        "parent_status": diff["base"]["status"],
+        "suggested_bump": suggested_bump,
+        "suggested_version": next_version(diff["base"]["version"], Bump[suggested_bump.upper()]),
+        "analysis": {
+            "change_type": _LEGACY_CHANGE_TYPE[bump],
+            "version_bump": bump,
+            "summary": summary,
+            "breaking_changes": by_bump["major"],
+            "new_features": by_bump["minor"],
+            "fixes": by_bump["patch"],
+            "changes": changes,
+            "counts": diff["counts"],
+        },
     }

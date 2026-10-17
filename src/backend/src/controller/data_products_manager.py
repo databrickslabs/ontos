@@ -3040,55 +3040,68 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         parent = data_product_repo.get(db, id=product.parent_product_id)
         if not parent:
             raise ValueError("Parent product not found")
-        
-        # Convert to dicts for comparison
-        product_dict = self._product_db_to_dict(product)
-        parent_dict = self._product_db_to_dict(parent)
-        
-        # Run comparison analysis
-        analysis_result = self.compare_products(parent_dict, product_dict)
-        
-        # Calculate suggested version
-        suggested_version = self._calculate_next_version(
-            parent.version or "0.0.0",
-            analysis_result.get("version_bump", "patch")
-        )
-        
-        return {
-            "parent_version": parent.version or "0.0.0",
-            "suggested_bump": analysis_result.get("version_bump", "patch"),
-            "suggested_version": suggested_version,
-            "analysis": analysis_result
-        }
 
-    def diff_versions(self, db: Session, base_id: str, target_id: str) -> Dict[str, Any]:
+        # Same engine and ODPS rules as the version-compare endpoint, shaped
+        # like the legacy response the commit-draft dialog consumes (#1086).
+        from src.common.entity_diff.render import legacy_parent_diff
+        return legacy_parent_diff(self.diff_versions(db, base_id=parent.id, target_id=product.id))
+
+    def diff_versions(
+        self,
+        db: Session,
+        base_id: str,
+        target_id: str,
+        *,
+        base: Optional[DataProductApi] = None,
+        target: Optional[DataProductApi] = None,
+    ) -> Dict[str, Any]:
         """Diff two versions of the same product family on their ODPS documents.
 
         Classifies every change (major/minor/patch/none) and suggests the next
-        version from ``base``. Callers enforce visibility before calling.
+        version from ``base``. Callers enforce visibility before calling and
+        may pass the products they already loaded for that.
 
         Raises:
             LookupError: a product doesn't exist
-            ValueError: the two products belong to different families
+            VersionFamilyMismatch: the two products belong to different families
         """
+        from src.common.entity_diff import VersionFamilyMismatch
         from src.common.entity_diff.render import build_diff_response
         from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
 
-        base = data_product_repo.get(db, id=base_id)
-        target = data_product_repo.get(db, id=target_id)
+        base = base or self.get_product(base_id)
+        target = target or self.get_product(target_id)
         if not base or not target:
             raise LookupError("Product not found")
         if base.version_family_id != target.version_family_id:
-            raise ValueError("Products belong to different version families")
+            raise VersionFamilyMismatch("Products belong to different version families")
 
-        def meta(p) -> Dict[str, Any]:
-            return {"id": p.id, "name": p.name, "version": p.version, "status": p.status}
+        def meta(p: DataProductApi) -> Dict[str, Any]:
+            status = getattr(p.status, "value", p.status)
+            return {"id": p.id, "name": p.name, "version": p.version, "status": status}
 
         return build_diff_response(
             "data_product", meta(base), meta(target),
-            self.build_odps_export(base.id, db=db), self.build_odps_export(target.id, db=db),
+            self._product_diff_document(base, db), self._product_diff_document(target, db),
             ODPS_PROFILE, ODPS_RULES,
         )
+
+    def _product_diff_document(self, product: DataProductApi, db: Session) -> Dict[str, Any]:
+        """The ODPS export of ``product`` with its ports at full fidelity.
+
+        ``build_odps_export`` writes ports as name/version/contractId/status
+        only, which hides exactly what consumers depend on (server/location,
+        type, PII flag, sbom, input contracts) and omits management ports.
+        Overlay the API model's ports (ODPS field names) so the diff sees them.
+        """
+        doc = self.build_odps_export(product.id, db=db)
+        dumped = product.model_dump(by_alias=False, exclude_none=True)
+        for field in ("inputPorts", "outputPorts", "managementPorts"):
+            if dumped.get(field):
+                doc[field] = dumped[field]
+            else:
+                doc.pop(field, None)
+        return doc
 
     def _calculate_next_version(self, current_version: str, bump_type: str) -> str:
         """Calculate the next version based on bump type.

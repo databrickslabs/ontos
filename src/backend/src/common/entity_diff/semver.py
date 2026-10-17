@@ -95,7 +95,7 @@ class RuleSet:
                 return ClassifiedChange(change.path, change.shape, change.op, change.old, change.new,
                                         rule.bump_for(change), rule.rule_id, rule.message)
         return ClassifiedChange(change.path, change.shape, change.op, change.old, change.new,
-                                self.default_bump, self.default_rule_id, f"{change.op.capitalize()} {change.path}")
+                                self.default_bump, self.default_rule_id, change.op.capitalize())
 
 
 @dataclass

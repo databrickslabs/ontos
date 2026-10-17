@@ -4236,6 +4236,18 @@ async def get_diff_from_parent(
         raise HTTPException(status_code=500, detail="Failed to get diff from parent")
 
 
+def _caller_can_read_contract_version(contract, current_user, is_admin: bool) -> bool:
+    """Personal drafts are visible only to their owner and data-contracts admins.
+
+    ``draft_owner_id`` stores the username (clone-for-editing) or the email,
+    so either identity matches.
+    """
+    owner = getattr(contract, "draft_owner_id", None)
+    if not owner or is_admin:
+        return True
+    return bool(current_user) and owner in {current_user.username, current_user.email}
+
+
 @router.get('/data-contracts/{base_id}/diff/{target_id}', response_model=EntityDiffResponse)
 async def diff_contract_versions(
     base_id: str,
@@ -4254,6 +4266,7 @@ async def diff_contract_versions(
     reported as not found (404) so its existence isn't disclosed.
     """
     from src.common.authorization import is_user_feature_admin
+    from src.common.entity_diff import VersionFamilyMismatch
 
     is_admin = await is_user_feature_admin(
         user_email=current_user.email if current_user else None,
@@ -4261,19 +4274,17 @@ async def diff_contract_versions(
         feature_id='data-contracts',
         request=request,
     )
-    caller_ids = {current_user.username, current_user.email} if current_user else set()
+    rows = []
     for contract_id in (base_id, target_id):
-        contract = data_contract_repo.get(db, id=contract_id)
-        owner = getattr(contract, "draft_owner_id", None) if contract else None
-        if not contract or (owner and owner not in caller_ids and not is_admin):
+        contract = data_contract_repo.get_with_all(db, id=contract_id)
+        if not contract or not _caller_can_read_contract_version(contract, current_user, is_admin):
             raise HTTPException(status_code=404, detail="Contract not found")
+        rows.append(contract)
 
     try:
-        return manager.diff_versions(db, base_id=base_id, target_id=target_id)
-    except LookupError:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return manager.diff_versions(db, base_id=base_id, target_id=target_id, base=rows[0], target=rows[1])
+    except VersionFamilyMismatch:
+        raise HTTPException(status_code=400, detail="Contracts belong to different version families")
     except Exception:
         logger.error("Error diffing contracts %s and %s", base_id, target_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to diff contract versions")

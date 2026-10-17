@@ -2633,7 +2633,7 @@ async def diff_product_versions(
     the changes, and a unified YAML diff. Both products must be readable by the
     caller (same rule as GET /data-products/{id}); a miss is a 404.
     """
-    from src.common.entity_diff import VersionFamilyMismatch
+    from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch
 
     products = []
     for product_id in (base_id, target_id):
@@ -2647,11 +2647,7 @@ async def diff_product_versions(
                                      base=products[0], target=products[1])
     except VersionFamilyMismatch:
         raise HTTPException(status_code=400, detail="Products belong to different version families")
-    except ValidationError:
-        logger.error("Invalid product data diffing %s and %s", base_id, target_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to diff product versions")
-    except (LookupError, ValueError):
-        # Deleted between the visibility check and the export.
+    except EntityNotFound:
         raise HTTPException(status_code=404, detail="Data product not found")
     except Exception:
         logger.error("Error diffing products %s and %s", base_id, target_id, exc_info=True)

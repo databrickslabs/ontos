@@ -1022,11 +1022,12 @@ class CommitDraftResponse(BaseModel):
 
 class DiffFromParentResponse(BaseModel):
     """Response from diff-from-parent endpoint"""
+    parent_id: Optional[str] = None  # Parent version's contract id (for the compare dialog)
     parent_version: str
     parent_status: str
     suggested_bump: str  # "major", "minor", "patch"
     suggested_version: str
-    analysis: Dict[str, Any]  # Full analysis from ContractChangeAnalyzer
+    analysis: Dict[str, Any]  # Engine analysis, legacy-shaped (entity_diff.render.legacy_parent_diff)
 
 
 # ===== ODCS v3.1.0 Team Metadata Models =====

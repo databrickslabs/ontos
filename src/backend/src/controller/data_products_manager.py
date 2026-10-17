@@ -320,10 +320,9 @@ def _set_product_type(db: Session, db_obj: Any, value: Any, *, create_missing: b
     db.flush()
 
 
-# Ontos display/delivery fields on the API port models that aren't part of the
-# product's ODPS content (resolved names, delivery wiring, approval toggles);
-# excluded from version diffs so they don't surface as content changes.
-_PORT_DISPLAY_ONLY_FIELDS = {"contractName", "deliveryMethodId", "deliveryMethodName", "autoApprove"}
+# Names the API port models resolve at read time from the stored ids
+# (contractId, deliveryMethodId); diffing them would double-report an id change.
+_PORT_DISPLAY_ONLY_FIELDS = {"contractName", "deliveryMethodName"}
 
 
 @searchable_asset
@@ -3324,10 +3323,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         
         # Same engine and ODPS rules as the version-compare endpoint, shaped
         # like the legacy response the commit-draft dialog consumes (#1086).
+        from src.common.entity_diff import EntityNotFound
         from src.common.entity_diff.render import legacy_parent_diff
         try:
             diff = self.diff_versions(db, base_id=product.parent_product_id, target_id=product.id)
-        except LookupError:
+        except EntityNotFound:
             raise ValueError("Parent product not found")
         return legacy_parent_diff(diff)
 
@@ -3347,20 +3347,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         may pass the products they already loaded for that.
 
         Raises:
-            LookupError: a product doesn't exist
+            EntityNotFound: a product doesn't exist
             VersionFamilyMismatch: the two products belong to different families
         """
-        from src.common.entity_diff import VersionFamilyMismatch
+        from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch, family_key
         from src.common.entity_diff.render import build_diff_response
         from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
 
         base = base or self.get_product(base_id)
         target = target or self.get_product(target_id)
         if not base or not target:
-            raise LookupError("Product not found")
-        # Same `family or id` key clones use (the column is NOT NULL today,
-        # but API models built from partial data may lack it).
-        if (base.version_family_id or base.id) != (target.version_family_id or target.id):
+            raise EntityNotFound("Product not found")
+        if family_key(base) != family_key(target):
             raise VersionFamilyMismatch("Products belong to different version families")
 
         def meta(p: DataProductApi) -> Dict[str, Any]:

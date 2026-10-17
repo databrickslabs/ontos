@@ -4381,7 +4381,7 @@ async def diff_contract_versions(
     reported as not found (404) so its existence isn't disclosed.
     """
     from src.common.authorization import is_user_feature_admin
-    from src.common.entity_diff import VersionFamilyMismatch
+    from src.common.entity_diff import EntityNotFound, VersionFamilyMismatch
 
     is_admin = await is_user_feature_admin(
         user_email=current_user.email if current_user else None,
@@ -4400,7 +4400,7 @@ async def diff_contract_versions(
         return manager.diff_versions(db, base_id=base_id, target_id=target_id, base=rows[0], target=rows[1])
     except VersionFamilyMismatch:
         raise HTTPException(status_code=400, detail="Contracts belong to different version families")
-    except LookupError:
+    except EntityNotFound:
         raise HTTPException(status_code=404, detail="Contract not found")
     except Exception:
         logger.error("Error diffing contracts %s and %s", base_id, target_id, exc_info=True)

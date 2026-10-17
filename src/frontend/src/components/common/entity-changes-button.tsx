@@ -34,11 +34,16 @@ export default function EntityChangesButton({ entityType, entityId, className }:
   const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
+    setVersions([]) // don't offer a stale family while the new one loads
     if (!kind || !entityId) return
     let cancelled = false
-    fetchEntityVersions(kind, entityId).then((rows) => {
-      if (!cancelled) setVersions(rows)
-    })
+    fetchEntityVersions(kind, entityId)
+      .then((rows) => {
+        if (!cancelled) setVersions(rows)
+      })
+      .catch(() => {
+        // Unresolvable ref / network error: no button.
+      })
     return () => {
       cancelled = true
     }

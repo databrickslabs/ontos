@@ -24,6 +24,16 @@ class VersionFamilyMismatch(ValueError):
     """The two entities compared belong to different version families."""
 
 
+class EntityNotFound(LookupError):
+    """An entity to compare doesn't exist. (Dedicated so callers don't catch
+    every LookupError — KeyError/IndexError are LookupErrors too.)"""
+
+
+def family_key(row: Any) -> Optional[str]:
+    """The version-family key, with the same fallback clones use."""
+    return getattr(row, "version_family_id", None) or getattr(row, "id", None)
+
+
 @dataclass
 class ComparisonResult:
     classification: Classification
@@ -68,6 +78,7 @@ __all__ = [
     "ClassifiedChange",
     "ComparisonResult",
     "DiffProfile",
+    "EntityNotFound",
     "FieldChange",
     "Rule",
     "RuleSet",
@@ -75,6 +86,7 @@ __all__ = [
     "classify",
     "compare",
     "diff_documents",
+    "family_key",
     "is_version_consistent",
     "next_version",
 ]

@@ -273,6 +273,7 @@ export default function CommitDraftDialog({
         <EntityDiffDialog
           open
           onOpenChange={setIsDiffOpen}
+          showVersionCheck={false}
           entityKind="product"
           baseId={diffAnalysis.parent_id}
           targetId={productId}

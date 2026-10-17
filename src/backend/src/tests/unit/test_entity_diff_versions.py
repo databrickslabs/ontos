@@ -237,7 +237,22 @@ class TestReviewFindingsSlice5:
             ("modified", "output-port-version", Bump.MINOR),
         ]
 
-    def test_display_only_port_fields_are_not_diffed(self, db_session):
+
+class TestReviewFindingsSlice7:
+    def test_retired_version_next_to_kept_one_is_removal_plus_addition(self):
+        from src.common.entity_diff import compare
+        from src.common.entity_diff.rules_odps import ODPS_PROFILE, ODPS_RULES
+        v1 = {"outputPorts": [{"name": "orders", "version": "1.0.0"}, {"name": "orders", "version": "2.0.0"}]}
+        v2 = {"outputPorts": [{"name": "orders", "version": "2.0.0"}, {"name": "orders", "version": "2.1.0"}]}
+
+        result = compare(v1, v2, ODPS_PROFILE, ODPS_RULES)
+
+        assert sorted((c.op, c.rule_id) for c in result.changes) == [
+            ("added", "output-port-added"), ("removed", "output-port-removed"),
+        ]
+        assert result.suggested_bump == Bump.MAJOR
+
+    def test_auto_approve_toggle_is_reported(self, db_session):
         import copy
         family = str(uuid.uuid4())
         v1 = _product(db_session, family, "1.0.0", {**PORT, "autoApprove": False})
@@ -245,4 +260,19 @@ class TestReviewFindingsSlice5:
 
         result = _product_manager(db_session).diff_versions(db_session, base_id=v1.id, target_id=v2.id)
 
-        assert result["changes"] == []
+        assert [c["path"] for c in result["changes"]] == ["outputPorts[orders_table].autoApprove"]
+
+    def test_unversioned_parent_suggests_from_raw_version(self):
+        from src.common.entity_diff.render import legacy_parent_diff
+        legacy = legacy_parent_diff({
+            "base": {"id": "p", "version": None, "status": "active"},
+            "changes": [], "counts": {}, "suggested_bump": "none",
+        })
+        assert legacy["parent_version"] == "0.0.0"
+        assert legacy["suggested_version"] == "1.0.0"  # same as the engine's next_version(None, …)
+
+    def test_not_found_is_a_dedicated_error(self, db_session):
+        from src.common.entity_diff import EntityNotFound
+        a = _contract(db_session, str(uuid.uuid4()), "1.0.0", [("id", "string", True)])
+        with pytest.raises(EntityNotFound):
+            _manager().diff_versions(db_session, base_id=a.id, target_id="missing")

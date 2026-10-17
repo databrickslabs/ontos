@@ -271,6 +271,9 @@
       "processFailedRetry": "Échec du traitement de l'approbation. Veuillez réessayer.",
       "entityApproved": "{{name}} a été approuvé.",
       "entityRejected": "{{name}} a été rejeté."
+    },
+    "errors": {
+      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande."
     }
   },
   "approvalWizard": {

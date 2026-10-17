@@ -1564,7 +1564,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def request_review(
         self,
         product_id: str,
-        reviewer_email: str,
+        reviewer_email: Optional[str],
         requester_email: str,
         message: Optional[str] = None,
         current_user: Optional[str] = None
@@ -1577,7 +1577,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         
         Args:
             product_id: Product ID to request review for
-            reviewer_email: Email of the reviewer
+            reviewer_email: Email of the reviewer, or None to let the review
+                workflow resolve it (its ``create_asset_review`` step)
             requester_email: Email of user requesting review
             message: Optional message to reviewer
             current_user: Username requesting review

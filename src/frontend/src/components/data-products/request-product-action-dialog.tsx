@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { statusChangeErrorText } from '@/lib/status-change-error';
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
@@ -340,7 +341,7 @@ export default function RequestProductActionDialog({
     try {
       const response = await post(endpoint, payload);
       if (response.error) {
-        throw new Error(response.error);
+        throw new Error(statusChangeErrorText(response, t, 'data-products'));
       }
       // Different success messages for direct changes vs requests
       if (type === 'status_change' && canDirectStatusChange) {

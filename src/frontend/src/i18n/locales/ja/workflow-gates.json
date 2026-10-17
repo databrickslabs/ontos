@@ -1,0 +1,14 @@
+{
+  "blocked": "{{fromStatus}} から {{toStatus}} へのステータス変更はワークフローによってブロックされました: {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "承認待ち ({{step}})",
+    "entityLoadFailed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
+    "validationFailed": "ワークフローの検証に失敗しました",
+    "status": {
+      "failed": "失敗",
+      "cancelled": "キャンセル",
+      "pending": "保留中",
+      "running": "実行中"
+    }
+  }
+}

@@ -271,6 +271,9 @@
       "processFailedRetry": "No se pudo procesar la aprobación. Inténtalo de nuevo.",
       "entityApproved": "{{name}} se ha aprobado.",
       "entityRejected": "{{name}} se ha rechazado."
+    },
+    "errors": {
+      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud."
     }
   },
   "approvalWizard": {

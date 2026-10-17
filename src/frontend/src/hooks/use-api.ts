@@ -3,7 +3,23 @@ import { useState, useCallback } from 'react';
 export interface ApiResponse<T> {
   data: T;
   error?: string | null;
+  /** Stable code of a structured error (`detail: {code, message}`), to translate `error`. */
+  errorCode?: string | null;
+  /** Parameters of a structured error (`detail.params`), for the translated text. */
+  errorParams?: Record<string, unknown> | null;
 }
+
+const errorCodeOf = (errorBody: any): string | null =>
+  errorBody?.detail && typeof errorBody.detail === 'object' && !Array.isArray(errorBody.detail)
+    ? errorBody.detail.code ?? null
+    : null;
+
+const errorParamsOf = (errorBody: any): Record<string, unknown> | null => {
+  const params = errorBody?.detail && typeof errorBody.detail === 'object' && !Array.isArray(errorBody.detail)
+    ? errorBody.detail.params
+    : null;
+  return params && typeof params === 'object' && !Array.isArray(params) ? params : null;
+};
 
 export const useApi = () => {
   const [loading, setLoading] = useState(false);
@@ -49,7 +65,7 @@ export const useApi = () => {
           errorMsg = JSON.stringify(errorBody) || `HTTP error! status: ${response.status}`;
         }
         console.error("[useApi] GET error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorMsg };
+        return { data: {} as T, error: errorMsg, errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
 
       // Handle successful responses (response.ok is true)
@@ -170,7 +186,7 @@ export const useApi = () => {
           }
 
           console.error("[useApi] POST error response from", url, "(", response.status, "):", errorBody);
-          return { data: {} as T, error: errorMsg };
+          return { data: {} as T, error: errorMsg, errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
 
       // --- Handle Successful Response (response.ok is true) --- 
@@ -250,7 +266,7 @@ export const useApi = () => {
         }
 
         console.error("[useApi] PUT error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorMsg };
+        return { data: {} as T, error: errorMsg, errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
       
       // Handle successful response
@@ -309,7 +325,7 @@ export const useApi = () => {
         }
 
         console.error("[useApi] PATCH error response from", url, "(", response.status, "):", errorBody);
-        return { data: {} as T, error: errorMsg };
+        return { data: {} as T, error: errorMsg, errorCode: errorCodeOf(errorBody), errorParams: errorParamsOf(errorBody) };
       }
 
       const data = await response.json();

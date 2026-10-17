@@ -346,6 +346,11 @@ app = FastAPI(
     openapi_tags=openapi_tags
 )
 
+# Errors with a code (CodedValueError) are answered as {code, message, params}
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from src.common.api_errors import coded_http_exception_handler
+app.add_exception_handler(StarletteHTTPException, coded_http_exception_handler)
+
 # Configure CORS
 origins = [
     "http://localhost:3000",

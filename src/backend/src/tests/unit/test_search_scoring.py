@@ -124,3 +124,11 @@ def test_entity_id_stripped_of_prefix(config, items):
 def test_limit_clamped(config, items):
     out = search_scoring.search_index(items, "*", config, limit=9999)
     assert out["limit"] == 100
+
+
+def test_facets_count_matches_not_all_candidates(config, items):
+    """Facets describe the matched results (same as the Postgres backend)."""
+    out = search_scoring.search_index(items, "churn", config)
+    assert sum(out["facets"]["type"].values()) == out["total_count"]
+    listed = search_scoring.search_index(items, "*", config)
+    assert sum(listed["facets"]["type"].values()) == listed["total_count"] == len(items)

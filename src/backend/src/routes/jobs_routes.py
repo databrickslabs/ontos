@@ -671,6 +671,9 @@ async def update_workflow_configuration(
         )
         success = True
         return updated_config
+    except ValueError as e:  # e.g. an invalid schedule_cron
+        details["exception"] = {"type": "ValueError", "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException as e:
         details["exception"] = {
             "type": "HTTPException",

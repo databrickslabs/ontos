@@ -255,6 +255,8 @@ async def startup_event():
             )
             if isinstance(mgr, DataContractsManager):
                 register_live_contracts_manager(mgr)
+        from src.common.search_live_index import register_live_search_managers
+        register_live_search_managers(searchable_managers_instances)
         logger.info("Search index initialized and built from DB-backed managers (app.py).")
     except Exception as e:
         logger.error(f"Failed initializing or building search index in app.py: {e}", exc_info=True)

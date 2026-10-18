@@ -66,3 +66,75 @@ POSTGRES_DB=app_ontos
 POSTGRES_DB_SCHEMA=app_ontos
 ENV=LOCAL
 ```
+
+### Optional: DB-backed search
+
+Locally search runs in memory by default. Deployed apps run it on Postgres (`SEARCH_BACKEND=postgres` in `app.yaml`). To do the same locally, add:
+
+```env
+SEARCH_BACKEND=postgres
+SEARCH_ENGINE=auto                # auto | pg | lakebase
+SEARCH_TRGM_THRESHOLD=0.45        # typo fallback; lower = more permissive
+SEARCH_BACKFILL_WAIT_SECONDS=30   # first boot only: how long startup waits for the backfill
+SEARCH_BACKFILL_BATCH_SIZE=500    # rows per upsert transaction
+```
+
+At startup the app checks which extensions the database has and logs the engine it picked. Locally that's the portable `pg` engine. The `lakebase` engine is only selected on a Lakebase project with Lakebase Search enabled.
+
+With the Postgres backend, search reads from the `search_documents` table; there is no in-memory index. Every boot reconciles that table with the current entities. Entities are read at startup, and the table is written in a background thread:
+
+- It upserts every entity in small batches, writing only rows whose content changed. Then it removes rows for entities that no longer exist.
+  - If any manager fails, the removal step is skipped.
+  - An entity type that no manager returned is never removed.
+  - Either way, a broken manager can't empty its part of the index.
+- Edits and deletions made while the reconcile runs win over its snapshot.
+- Engine detection and index creation run on the same background thread. Until they finish, search answers without the typo fallback.
+- If the table is empty (first boot), startup waits up to `SEARCH_BACKFILL_WAIT_SECONDS`, then serves from the partial index while the backfill finishes. Otherwise search answers from the existing rows straight away.
+- With several replicas, only one reconciles at a time (Postgres advisory lock). All replicas read and write the same table.
+- Progress is logged as `Search reconcile: …`. `POST /api/search/rebuild-index` starts a reconcile on demand.
+
+To roll back, set `SEARCH_BACKEND=memory` and restart: the in-memory index is rebuilt from the entities, nothing is lost.
+
+**Search Index Reindex job** (Settings → Jobs → `search_index_reindex`): maintenance on `search_documents` only; it never re-reads entities. On the `lakebase` engine it rebuilds the BM25 indexes so their corpus statistics catch up with edits. The startup reconcile only rebuilds them when documents were added or removed. `reindex_all` also rebuilds the full-text and trigram indexes. Every run ends with `ANALYZE` and logs a `SEARCH_REINDEX_SUMMARY {…}` line with the engine, row count and per-index seconds. The YAML schedule (daily 02:30 UTC) is installed unpaused, because on the `lakebase` engine the job is what keeps BM25 statistics current after edits.
+  - Setting `schedule_cron` (Quartz, e.g. `0 30 2 * * ?`) in the job's configuration applies that schedule, unpaused, to the installed job immediately. Clearing it restores the default.
+  - Saving the configuration only pushes what changed, so an unrelated change never resets the schedule.
+  - Install, update and every configuration change set the job's parameter defaults to the app's database connection and the saved configuration. Scheduled runs, which only get those defaults, therefore reach the right database and schema.
+
+- **`pg_trgm`** (typo-tolerant fallback when a query has no matches) ships with Postgres. It's a trusted extension, so the app creates it itself when the app user has `CREATE` on the database, which the grants above include.
+- **`pgvector`** (semantic search on the `pg` engine) needs a separate install: `brew install pgvector`.
+- **Lakebase Search** (`lakebase` engine only): the app creates `lakebase_text` and `lakebase_vector` (with `CASCADE`, which pulls in `vector`) once Lakebase Search is enabled on the project. It then builds one `lakebase_bm25` index per field (title, description, tags/domains/owner). Keyword results still come from the Settings-driven ranking; BM25 is an extra ranked list that hybrid fusion will combine with it. BM25 corpus statistics only update on a rebuild or `VACUUM`, so they can lag behind the rows:
+  - A startup reconcile rebuilds the indexes when it added or removed documents.
+  - Autovacuum refreshes them after enough writes. The table is set to vacuum after a fixed number of inserts, as Lakebase recommends for text search.
+  - Edits between those points leave the statistics slightly stale. New and edited rows are still found; only their relative BM25 scores drift.
+
+**Semantic search** (embeddings) is off until `SEARCH_EMBEDDING_ENDPOINT` names a Databricks embedding serving endpoint, for example `databricks-gte-large-en`. It also needs a vector index: `lakebase_ann` on the `lakebase` engine, or pgvector HNSW on the `pg` engine.
+  - **Settings:** `SEARCH_EMBEDDING_DIM` must match the endpoint's output size (1024 for `databricks-gte-large-en`). `SEARCH_EMBEDDING_BATCH_SIZE` sets the documents per request (default 32).
+  - **Permission:** a deployed app's service principal needs `CAN_QUERY` on the endpoint. Add the endpoint as an app resource.
+  - **Background embedding:** documents are embedded off the request path. Writes only mark a row as changed, and a background worker embeds rows whose text changed. A row whose text hash is unchanged is just marked current, with no endpoint call. Backfill of an existing catalog is the same loop, so it resumes after a restart. Replicas share the work.
+  - **Failures:** endpoint errors leave rows pending and back off. Search keeps answering lexically meanwhile.
+  - **Changing the embedding size:** a database whose vector column has a different size turns semantic search off, with a warning, instead of mixing sizes.
+  - **Ranking:** like BM25, the semantic ranking is an extra ranked list for hybrid fusion. It doesn't change keyword results yet.
+
+To run the Postgres search tests against your local server:
+
+```bash
+cd src
+SEARCH_TEST_PG_URL="postgresql+psycopg2:///postgres?host=/tmp" \
+  hatch -e dev run pytest backend/src/tests/integration/test_search_*_pg.py
+```
+
+The tests create and drop their own throwaway schema.
+
+The `lakebase` engine tests also need a Lakebase branch with Lakebase Search enabled. Use a throwaway branch, never the app's `production` branch. The password is a short-lived OAuth token from `databricks postgres generate-database-credential <endpoint>`, URL-encoded together with the user name:
+
+```bash
+SEARCH_TEST_LAKEBASE_URL="postgresql+psycopg2://<user>:<token>@<endpoint-host>/databricks_postgres?sslmode=require" \
+  hatch -e dev run pytest backend/src/tests/integration/test_search_bm25_pg.py backend/src/tests/integration/test_search_engine_pg.py
+```
+
+The semantic-search tests use a deterministic fake embedder and need pgvector (or the Lakebase URL above). To also check the real endpoint, set `SEARCH_TEST_EMBEDDING_PROFILE` to a Databricks CLI profile; `SEARCH_TEST_EMBEDDING_ENDPOINT` defaults to `databricks-gte-large-en`:
+
+```bash
+SEARCH_TEST_PG_URL=... SEARCH_TEST_EMBEDDING_PROFILE=<profile> \
+  hatch -e dev run pytest backend/src/tests/integration/test_search_embeddings_pg.py
+```

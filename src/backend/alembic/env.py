@@ -69,13 +69,22 @@ if ALEMBIC_DB_PASSWORD:
 # --------------------------------
 
 # --- Include Object Hook (To ignore indexes for Databricks SQL) ---
+# search_documents columns the app adds at runtime when semantic search is on
+# (they need pgvector); autogenerate must never propose dropping them.
+_RUNTIME_COLUMNS = {("search_documents", c) for c in (
+    "embedding", "embedding_hash", "embedded_at", "embedding_claimed_at",
+)}
+
+
 def include_object(object, name, type_, reflected, compare_to):
     """Exclude indexes from Alembic's consideration."""
     if type_ == "index":
         # print(f"Ignoring index: {name}") # Optional: for debugging
         return False
-    else:
-        return True
+    if type_ == "column" and reflected and compare_to is None \
+            and (getattr(object.table, "name", None), name) in _RUNTIME_COLUMNS:
+        return False
+    return True
 # -----------------------------------------------------------------
 
 # other values from the config, defined by the needs of env.py,

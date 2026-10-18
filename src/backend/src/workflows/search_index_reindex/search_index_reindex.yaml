@@ -1,0 +1,73 @@
+name: "Search Index Reindex"
+description: "Rebuild the DB-backed search indexes on search_documents (BM25 statistics on Lakebase Search) and refresh planner statistics"
+format: "MULTI_TASK"
+environments:
+  - environment_key: "search-index-reindex-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.81.0"
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "search_index_reindex"
+    spark_python_task:
+      python_file: "search_index_reindex.py"
+      parameters:
+        - "--reindex_all"
+        - "{{job.parameters.reindex_all}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+        - "--product_name"
+        - "{{job.parameters.product_name}}"
+        - "--product_version"
+        - "{{job.parameters.product_version}}"
+    environment_key: "search-index-reindex-env"
+
+# Default schedule; an admin-set schedule_cron (Settings -> Jobs) overrides it.
+# Unpaused: on the lakebase engine this is what keeps BM25 statistics current
+# after edits (the startup reconcile only rebuilds when documents were added or
+# removed). On the pg engine a run is just an ANALYZE.
+schedule:
+  quartz_cron_expression: "0 30 2 * * ?"  # Daily at 02:30
+  timezone_id: "UTC"
+  pause_status: "UNPAUSED"
+
+parameters:
+  reindex_all: "false"
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+  product_name: "ontos"
+  product_version: "0.0.0"
+
+configurable_parameters:
+  - name: "schedule_cron"
+    type: "string"
+    description: "Quartz cron for the job schedule, e.g. '0 30 2 * * ?' (daily 02:30). Empty = the default above."
+    required: false
+    default: null
+
+  - name: "reindex_all"
+    type: "boolean"
+    description: "Also rebuild the full-text and trigram indexes (by default only the BM25 indexes, whose corpus statistics go stale)"
+    required: false
+    default: false
+
+timeout_seconds: 3600
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "search"
+  workflow_type: "maintenance"
+  owner: "ontos"

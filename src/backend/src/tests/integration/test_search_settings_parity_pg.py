@@ -158,6 +158,8 @@ def test_mcp_search_parity(seeded, variant, query):
     mem = search_scoring.search_index(_memory_items(config), query, config, limit=100)
     pg = repo.search(seeded, query, config=config, limit=100)
     assert _shape(pg) == _shape(mem), f"{variant} / {query!r}"
+    # Facets count the matched results on both backends.
+    assert pg["facets"] == mem["facets"], f"{variant} / {query!r}"
 
 
 @pytest.mark.parametrize("variant", list(VARIANTS))
@@ -187,6 +189,7 @@ def test_list_mode_parity(seeded, variant):
     pg = repo.search(seeded, "*", config=config, limit=100)
     assert [r["id"] for r in pg["results"]] == [r["id"] for r in mem["results"]]
     assert pg["total_count"] == mem["total_count"]
+    assert pg["facets"] == mem["facets"]
 
 
 def test_filters_apply_with_settings(seeded):

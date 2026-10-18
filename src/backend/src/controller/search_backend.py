@@ -17,8 +17,9 @@ hooks) don't care which is active:
 """
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
@@ -207,6 +208,78 @@ class PostgresBackend(SearchBackend):
         with self._session_factory() as db:
             search_repository.replace_all(db, rows)
         logger.info(f"PostgresBackend: rebuilt search_documents with {len(rows)} items.")
+
+    def replace_type(self, type_: str, items: Iterable[SearchIndexItem]) -> None:
+        """Atomically replace every row of one type (e.g. all glossary terms)."""
+        from src.repositories import search_repository
+        rows = list(items)
+        try:
+            with self._session_factory() as db:
+                search_repository.delete_by_type(db, type_)
+                search_repository.upsert_documents(db, rows)
+        except Exception as e:
+            logger.warning(f"PostgresBackend.replace_type failed for {type_}: {e}")
+
+    def count(self) -> int:
+        from src.repositories import search_repository
+        with self._session_factory() as db:
+            return search_repository.count_documents(db)
+
+    def reconcile(
+        self,
+        sources: Iterable[Tuple[str, Callable[[], List[SearchIndexItem]]]],
+        *,
+        is_indexable: Callable[[SearchIndexItem], bool],
+        batch_size: int = 500,
+    ) -> Dict[str, Any]:
+        """Bring ``search_documents`` in line with the managers, without a full rewrite.
+
+        Upserts every current item (one source at a time, ``batch_size`` rows per
+        transaction, so memory and lock time stay bounded and search keeps
+        answering from the table meanwhile), then deletes rows the run didn't
+        touch, which are entities whose incremental removal was missed. The
+        sweep is skipped if any source failed, so a broken manager can't empty
+        its part of the index. Only one replica reconciles at a time (advisory
+        lock); the others return ``skipped`` immediately.
+        """
+        from src.repositories import search_repository as repo
+        started = time.monotonic()
+        stats: Dict[str, Any] = {"status": "done", "upserted": 0, "removed": 0, "failed_sources": []}
+        with self._session_factory() as lock_db:
+            if not repo.try_reconcile_lock(lock_db):
+                logger.info("Search reconcile: another replica holds the lock; skipping.")
+                return {**stats, "status": "skipped"}
+            try:
+                t0 = repo.db_clock(lock_db)
+                sources = list(sources)
+                for n, (name, fetch) in enumerate(sources, 1):
+                    try:
+                        items = [it for it in fetch() if is_indexable(it)]
+                        for i in range(0, len(items), batch_size):
+                            with self._session_factory() as db:
+                                repo.upsert_documents(db, items[i:i + batch_size])
+                        stats["upserted"] += len(items)
+                        logger.info(f"Search reconcile: {name} {len(items)} items ({n}/{len(sources)}).")
+                    except Exception as e:
+                        stats["failed_sources"].append(name)
+                        logger.error(f"Search reconcile: {name} failed: {e}", exc_info=True)
+                if stats["failed_sources"]:
+                    stats["status"] = "partial"
+                    logger.warning(
+                        "Search reconcile: skipped the stale-row sweep because "
+                        f"{', '.join(stats['failed_sources'])} failed."
+                    )
+                else:
+                    with self._session_factory() as db:
+                        stats["removed"] = repo.delete_stale(db, t0)
+            finally:
+                repo.release_reconcile_lock(lock_db)
+        stats["seconds"] = round(time.monotonic() - started, 2)
+        logger.info(
+            f"Search reconcile {stats['status']}: {stats['upserted']} upserted, "
+            f"{stats['removed']} stale removed in {stats['seconds']}s."
+        )
+        return stats
 
 
 def create_backend(

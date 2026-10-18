@@ -152,6 +152,12 @@ class Settings(BaseSettings):
     # pg_trgm word-similarity threshold for the typo fallback (used only when a
     # query has no lexical matches). Lower = more permissive.
     SEARCH_TRGM_THRESHOLD: float = Field(0.45, env='SEARCH_TRGM_THRESHOLD')
+    # "postgres" backend: every boot reconciles search_documents with the managers in
+    # a background thread. Startup waits up to this many seconds for it only when the
+    # table is empty (first boot), so early searches aren't blank; 0 = never wait.
+    SEARCH_BACKFILL_WAIT_SECONDS: float = Field(30.0, env='SEARCH_BACKFILL_WAIT_SECONDS')
+    # Rows per upsert transaction during the reconcile.
+    SEARCH_BACKFILL_BATCH_SIZE: int = Field(500, env='SEARCH_BACKFILL_BATCH_SIZE')
 
     @field_validator('SEARCH_TRGM_THRESHOLD')
     @classmethod

@@ -530,3 +530,37 @@ def replace_all(db: Session, items: Iterable[SearchIndexItem]) -> int:
     """Full rebuild: clear the table and re-insert all items (one transaction)."""
     db.execute(text("DELETE FROM search_documents"))
     return upsert_documents(db, items)
+
+
+# --- background reconcile primitives (SearchManager._reconcile_postgres) ------
+
+# Advisory-lock key so only one app replica reconciles at a time (arbitrary,
+# stable 64-bit value; "ontos-search-reconcile").
+RECONCILE_LOCK_KEY = 0x6F6E746F73535243
+
+
+def db_clock(db: Session):
+    """The database's wall clock. Reconcile marks its start with this so the
+    stale sweep compares against the same clock that stamps ``updated_at``."""
+    return db.execute(text("SELECT clock_timestamp()")).scalar()
+
+
+def count_documents(db: Session) -> int:
+    return int(db.execute(text("SELECT count(*) FROM search_documents")).scalar() or 0)
+
+
+def delete_stale(db: Session, before) -> int:
+    """Drop rows not refreshed since ``before`` (entities deleted while their
+    incremental removal was missed). Returns the number of rows removed."""
+    res = db.execute(text("DELETE FROM search_documents WHERE updated_at < :before"), {"before": before})
+    return int(res.rowcount or 0)
+
+
+def try_reconcile_lock(db: Session) -> bool:
+    """Session-level advisory lock; held until ``release_reconcile_lock`` or the
+    connection closes, so a crashed replica never leaves it stuck."""
+    return bool(db.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": RECONCILE_LOCK_KEY}).scalar())
+
+
+def release_reconcile_lock(db: Session) -> None:
+    db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": RECONCILE_LOCK_KEY})

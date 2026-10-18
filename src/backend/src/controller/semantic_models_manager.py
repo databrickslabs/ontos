@@ -1578,6 +1578,27 @@ class SemanticModelsManager(SearchableAsset):
         return results
 
     # Search for classes/concepts with optional text filter
+    def find_concept_iris_by_label(self, label: str, limit: int = 20) -> List[str]:
+        """IRIs whose rdfs:label / skos:prefLabel / skos:altLabel equals ``label``
+        (case variants, untagged or @en). Uses indexed literal lookups rather than
+        SPARQL, so it is safe off the main thread and needs no query escaping."""
+        text = (label or "").strip()
+        if not text:
+            return []
+        variants = {text, text.lower(), text.upper(), text.title()}
+        literals = [Literal(v) for v in variants] + [Literal(v, lang="en") for v in variants]
+        found: List[str] = []
+        for context in self._graph.contexts():
+            for pred in (RDFS.label, SKOS.prefLabel, SKOS.altLabel):
+                for lit in literals:
+                    for subj in context.subjects(pred, lit):
+                        iri = str(subj)
+                        if not isinstance(subj, BNode) and iri not in found:
+                            found.append(iri)
+                            if len(found) >= limit:
+                                return found
+        return found
+
     def search_concepts(self, text_filter: str = "", limit: int = 50) -> List[dict]:
         sparql_query = f"""
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>

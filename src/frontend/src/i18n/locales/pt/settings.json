@@ -1207,12 +1207,15 @@
       "iconLabel": "Ícone",
       "colorLabel": "Cor",
       "previewLabel": "Pré-visualização",
-      "levelNamePreview": "Nome do nível"
+      "levelNamePreview": "Nome do nível",
+      "entityTypeHelp": "O padrão se aplica a qualquer tipo sem escada própria (produtos de dados e contratos). Os tipos que definem seus próprios níveis (p. ex. Relações de Autoridade) ignoram o Padrão."
     },
     "entityTypes": {
       "all": "Todos os tipos de entidade",
       "DataProduct": "Produtos de dados",
-      "DataContract": "Contratos de dados"
+      "DataContract": "Contratos de dados",
+      "AuthorityRelation": "Relações de Autoridade",
+      "default": "Padrão"
     },
     "delete": {
       "title": "Excluir nível de maturidade?",
@@ -1223,7 +1226,15 @@
       "created": "Nível de maturidade \"{{name}}\" criado.",
       "deleted": "Nível de maturidade \"{{name}}\" excluído.",
       "cannotDeleteTitle": "Não é possível excluir"
-    }
+    },
+    "noLevelsForKind": "Nenhum nível de maturidade para este tipo. Altere o filtro ou adicione um.",
+    "filter": {
+      "allKinds": "Todos"
+    },
+    "noPoliciesAvailable": "Nenhuma política disponível",
+    "descriptionPerKind": "Defina a escada de maturidade por tipo de entidade (produtos de dados, contratos, relações de autoridade). Cada nível é controlado por políticas de conformidade; a ordenação é por tipo.",
+    "levelCount_one": "{{count}} nível",
+    "levelCount_other": "{{count}} níveis"
   },
   "directory": {
     "title": "Diretório",

@@ -1,0 +1,540 @@
+{
+  "title": {
+    "main": "Authority Resolution"
+  },
+  "list": {
+    "description": "Erstellen Sie Authority Relations (ARF), die weiche Entscheidungsbefugnis explizit und für Agenten aufrufbar machen. Jede Relation trägt einen DNA-Coefficient — ein Divergenzmaß, bei dem 0,0 der beste Wert ist — berechnet aus gebundener Evidenz. Sie wird erst aktiv, wenn sie innerhalb ihres Schwellenwerts liegt und vollständig bestätigt ist.",
+    "buttonNew": "Neue Authority Relation",
+    "buttonDeleteSelected": "Ausgewählte löschen ({{count}})",
+    "columnDnaco": "DNAco",
+    "columnMaturity": "Reifegrad",
+    "columnAction": "Aktion",
+    "columnUsage": "Nutzung",
+    "confirmDelete": "Authority Relation \"{{name}}\" löschen?",
+    "confirmBulkDelete": "{{count}} ausgewählte Authority Relation(s) löschen?",
+    "bulkDeleteSuccess": "{{count}} Authority Relation(s) gelöscht."
+  },
+  "details": {
+    "defaultTitle": "Authority Relation",
+    "notFound": "Authority Relation nicht gefunden.",
+    "backButton": "Zurück zur Liste",
+    "buttonNewVersion": "Neue Version",
+    "buttonRequest": "Anfragen...",
+    "buttonComputeDnaco": "DNAco berechnen",
+    "buttonActivate": "Aktivieren",
+    "buttonTest": "Testen",
+    "buttonAffirm": "Bestätigen",
+    "buttonReview": "Überprüfen",
+    "dnaComputeFailed": "DNAco-Berechnung fehlgeschlagen",
+    "dnaComputed": "DNAco berechnet",
+    "dnaComputedMsg": "Betrag {{magnitude}} · {{divergent}}/{{total}} divergent",
+    "activateFailed": "Aktivierung nicht möglich",
+    "activated": "Authority Relation aktiviert",
+    "affirmFailed": "Bestätigung fehlgeschlagen",
+    "confirmDelete": "Diese Authority Relation löschen?",
+    "versionCreated": "Neue Version erstellt",
+    "versionCreatedMsg": "v{{version}} (Entwurf)",
+    "familySlugHint": "Agentenseitige @id (Versionsfamilie)",
+    "tileUsage": "Nutzung",
+    "tileApproved": "Genehmigt",
+    "tileDenied": "Abgelehnt",
+    "tileDnaco": "DNA-Coefficient",
+    "tileDnacoHint": "0,0 ist der beste Wert",
+    "tileDnacoHintHover": "0,0 ist der beste Wert — Hover für Dimensionen",
+    "dnacoDimensions": "DNAco-Dimensionen",
+    "dnacoFormula": "Gesamt = 1 − ∏(1 − dₙ) = {{value}}",
+    "dnacoFormulaDescription": "Wahrscheinlichkeit einer Divergenz in ≥1 Dimension",
+    "activationRequires": "Die Aktivierung erfordert, dass der DNA-Coefficient gemessen wurde und innerhalb seiner Obergrenze ({{threshold}}) liegt und dass alle erforderlichen Bestätigungen abgeschlossen sind{{affirmed}}.",
+    "notYetFullyAffirmed": "(noch nicht vollständig bestätigt)",
+    "cardApprovers": "Genehmiger (N-funktionales Gate)",
+    "noApprovers": "Keine Genehmiger definiert.",
+    "alsoReviewer": "auch Prüfer",
+    "affirmed": "bestätigt",
+    "pending": "ausstehend",
+    "cardReviewers": "Prüfer (werden befragt, um zu bestätigen, dass die Relation die Realität abbildet)",
+    "cardReviewProcess": "Überprüfungsprozess",
+    "workflowsSection": "Workflows",
+    "assetReviewsSection": "Asset-Überprüfungen",
+    "noReviewersAssigned": "Keine Prüfer zugewiesen.",
+    "reviewStatus": "Überprüfung: {{status}}",
+    "linkWorkflow": "Workflow",
+    "linkOpenReview": "Überprüfung öffnen",
+    "notStarted": "nicht gestartet",
+    "cardHistory": "Verlauf",
+    "dnaRunsSection": "DNA-Coefficient-Läufe",
+    "dnaRunResult": "{{divergent}}/{{total}} divergent",
+    "decisionsSection": "Letzte Entscheidungen",
+    "cardRelation": "Authority Relation",
+    "labelActorRole": "Akteursrolle",
+    "labelActorIdentity": "Akteursidentität",
+    "labelAction": "Aktion",
+    "labelObject": "Objekt",
+    "labelDomainContext": "Domain-Context",
+    "labelJustificationChain": "Begründungskette",
+    "cardRuntimeEvidence": "Laufzeit & Evidenz",
+    "labelDecisionCriteria": "Entscheidungskriterien",
+    "criterion": "Kriterium",
+    "noCriteria": "Keine Kriterien — das Gate ist unbeschränkt (genehmigt jede Anfrage).",
+    "labelEvidenceSources": "Evidenzquellen",
+    "linkCatalogCommander": "{{ref}} im Catalog Commander öffnen",
+    "labelGovernsConceptsHint": "Steuert Geschäftskonzepte",
+    "labelPrerequisites": "Erfordert (vorausgesetzte ARs)",
+    "required": "erforderlich",
+    "optional": "optional",
+    "noPrerequisites": "Keine — dieses AR entscheidet, ohne ein vorgelagertes Gate zu durchlaufen.",
+    "labelResourceRefs": "Ressourcenreferenzen (typisierte Verweise)",
+    "mcpAuth": "MCP-Authentifizierung: {{auth}}",
+    "noResourceRefs": "Keine — kanonische Felder werden direkt aus der AR-Zeile gelesen.",
+    "labelRecomputeSchedule": "Zeitplan für Neuberechnung",
+    "cronManualOnly": "Nur manuell",
+    "cronCustom": "Benutzerdefiniert ({{cron}})",
+    "cronHourly": "Stündlich (bei :{{min}})",
+    "cronDaily": "Täglich um {{time}}",
+    "cronWeekly": "Wöchentlich am {{day}} um {{time}}",
+    "cronMonthly": "Monatlich (am 1.) um {{time}}",
+    "dialogTitleReview": "Überprüfung der Authority Relation",
+    "dialogTitleVersion": "Neue Version erstellen",
+    "versionDialogDescription": "Erstellt aus dieser Authority Relation einen Snapshot als neue Entwurfsversion. Regel, Kriterien, Teilnehmer, Evidenz und Domänen werden kopiert; gemessenes DNAco und Nutzungszähler werden zurückgesetzt.",
+    "labelNewVersion": "Neue Version",
+    "labelChangeSummary": "Änderungszusammenfassung (optional)",
+    "placeholderChangeSummary": "Was hat sich in dieser Version geändert?",
+    "buttonCreateVersion": "Version erstellen",
+    "dialogTitleTest": "Authority Resolution testen",
+    "testDialogDescription": "Probelauf gegen die Entscheidungslogik dieser Authority Relation — funktioniert in jedem Status und zeichnet weder die Entscheidung auf noch ändert es die Nutzungszähler. Echte Entscheidungen stammen vom MCP-Tool resolve_authority gegen ein aktives AR.",
+    "labelSigner": "Unterzeichner (Akteursidentität)",
+    "labelValue": "Wert",
+    "testCosignLabel": "Mitunterzeichnung vorhanden",
+    "testEscalatedLabel": "eskaliert",
+    "testPrerequisiteChain": "Voraussetzungskette",
+    "testResolvedRefs": "Aufgelöste Ressourcenreferenzen",
+    "buttonTestResolve": "Auflösen"
+  },
+  "conceptLinks": {
+    "failedLink": "Konzept konnte nicht verknüpft werden",
+    "failedUnlink": "Verknüpfung des Konzepts konnte nicht aufgehoben werden",
+    "buttonAddConcept": "Konzept hinzufügen"
+  },
+  "status": {
+    "draft": "Entwurf",
+    "active": "Aktiv",
+    "needs_review": "Überprüfung erforderlich",
+    "retired": "Stillgelegt",
+    "deprecated": "Veraltet"
+  },
+  "verdict": {
+    "approved": "Genehmigt",
+    "denied": "Abgelehnt",
+    "conflict": "Konflikt",
+    "no_authority": "Keine Befugnis",
+    "error": "Fehler"
+  },
+  "refType": {
+    "literal": "Literal",
+    "ontos_entity": "Ontos-Entität",
+    "mcp_tool": "MCP-Tool"
+  },
+  "resolverAuth": {
+    "obo": "Aufrufer (OBO)",
+    "app_sp": "Service Principal der App"
+  },
+  "reviewStatus": {
+    "na": "k. A.",
+    "pending": "Ausstehend",
+    "in_review": "In Überprüfung",
+    "completed": "Abgeschlossen"
+  },
+  "workflowStatus": {
+    "running": "Läuft",
+    "succeeded": "Erfolgreich",
+    "failed": "Fehlgeschlagen",
+    "pending": "Ausstehend",
+    "completed": "Abgeschlossen",
+    "defined": "Definiert",
+    "paused": "Wartet auf Genehmigung",
+    "cancelled": "Abgebrochen"
+  },
+  "dnaRunStatus": {
+    "running": "Läuft",
+    "succeeded": "Erfolgreich",
+    "failed": "Fehlgeschlagen"
+  },
+  "decisionSource": {
+    "mcp": "MCP",
+    "evidence": "Evidenz",
+    "ui": "UI"
+  },
+  "sourceType": {
+    "delta_table": "Delta-Tabelle",
+    "data_product": "Datenprodukt",
+    "asset": "Asset"
+  },
+  "direction": {
+    "actual-exceeds-documented": "Tatsächlich übersteigt dokumentiert",
+    "documented-exceeds-actual": "Dokumentiert übersteigt tatsächlich",
+    "neutral": "Neutral"
+  },
+  "editor": {
+    "title": {
+      "new": "Neue Authority Relation",
+      "edit": "Authority Relation bearbeiten"
+    },
+    "labels": {
+      "name": "Name",
+      "slug": "Slug",
+      "description": "Beschreibung",
+      "actorRole": "Akteursrolle",
+      "actorIdentity": "Akteursidentität",
+      "action": "Aktion",
+      "objectType": "Objekttyp",
+      "objectId": "Objekt-ID",
+      "threshold": "Schwellenwert",
+      "currency": "Währung",
+      "market": "Markt",
+      "time": "Zeit",
+      "dayOfWeek": "Wochentag",
+      "minuteOfHour": "Minute der Stunde",
+      "recomputeFrequency": "Häufigkeit der Neuberechnung",
+      "dnaMaxThreshold": "Maximaler DNA-Coefficient für die Aktivierung"
+    },
+    "hints": {
+      "slug": "Stabiler Schlüssel, mit dem Agenten dieses AR aufrufen. Wird von allen Versionen der Familie geteilt.",
+      "authorityRelation": "Das ARF-Tupel: <strong>Wer</strong> (Akteursrolle + Signaturidentität) darf welche <strong>Aktion</strong> auf welchem <strong>Objekt</strong> ausführen.",
+      "domainContext": "Das auswertbare Prädikat: der Kontext (Schwellenwert, Währung, Markt), in dem diese Befugnis gilt. Kriterien werden dagegen ausgewertet.",
+      "dnaMaxThreshold": "Die Divergenz-Obergrenze. Der DNA-Coefficient misst, wie stark vergangene Entscheidungen von dieser Regel <strong>abweichen</strong> (0,0 = perfekte Übereinstimmung, höher = schlechter). Das AR kann nur aktiviert werden, solange der gemessene Wert höchstens dieser Obergrenze entspricht; ein aktives AR, das später darüber driftet, wird automatisch als <strong>Überprüfung erforderlich</strong> markiert.",
+      "mcpResolverCredentials": "<strong>OBO:</strong> MCP-Tools laufen mit den eigenen Berechtigungen des Aufrufers; ein Aufrufer ohne weitergeleitetes Token erhält no_authority. <strong>Service Principal der App:</strong> Tools laufen für jeden Aufrufer als die Ontos-App, sodass das Ergebnis nicht mehr davon abhängt, wer fragt. Verwenden Sie dies nur, wenn das Tool Daten sehen muss, die Aufrufer nicht sehen können.",
+      "mcpNoCallerToken": "Es wurde kein Aufrufer-Token weitergeleitet, daher wurde diese Liste als Service Principal der Ontos-App abgerufen. Aufrufer eines OBO-authentifizierten AR haben möglicherweise keinen Zugriff auf diese Dienste."
+    },
+    "sections": {
+      "authorityRelation": "Authority Relation",
+      "domainContext": "Domain-Context",
+      "decisionCriteria": "Entscheidungskriterien",
+      "domains": "Domänen",
+      "evidenceSources": "Evidenzquellen",
+      "participants": "Teilnehmer",
+      "requires": "Erfordert",
+      "resourceRefs": "Ressourcenreferenzen",
+      "mcpResolverCredentials": "MCP-Resolver-Zugangsdaten",
+      "dnaSchedule": "DNA-Coefficient-Zeitplan",
+      "tags": "Tags",
+      "ownership": "Verantwortung & Projekt"
+    },
+    "sectionDescriptions": {
+      "decisionCriteria": "Legen Sie die Regeln fest, die das Resolution-Gate durchsetzt (und gegen die der DNA-Coefficient die Divergenz misst). Jedes Kriterium ist eine wiederverwendbare <strong>Compliance-Prüfung</strong>.",
+      "evidenceSources": "Binden Sie die vergangenen Entscheidungen, gegen die der DNA-Coefficient gemessen wird. Fügen Sie eine oder mehrere Quellen hinzu — eine <strong>Delta-Tabelle</strong>, ein <strong>Datenprodukt</strong> oder ein <strong>Asset</strong> (Volume-Datei, Tabelle oder View). Jede ordnet ihre Spalten über die Spaltenzuordnung den kanonischen AR-Elementen zu.",
+      "participants": "Das N-funktionale Gate und die Überprüfung. <strong>Genehmiger</strong> zählen zum Bestätigungs-Gate. <strong>Prüfer</strong> werden im Überprüfungsprozess befragt, um zu bestätigen, dass die Relation die Realität abbildet. Ein Principal kann beides sein.",
+      "requires": "Vorausgesetzte ARs: Jedes muss <strong>genehmigt</strong> aufgelöst werden, bevor dieses entscheidet. Schlüssel ist der Familien-Slug (nicht die Version), damit dieses AR weiterhin funktioniert, wenn eine Voraussetzung eine neue Version erhält. Zum Speichern muss dieses AR einen eigenen Slug haben.",
+      "resourceRefs": "Woher Feldwerte stammen. Statt eines einfachen Literals hinterlegen Sie ein kanonisches Feld (<code>actor_identity</code>, <code>object_id</code>, <code>domain_context.{{keyPlaceholder}}</code>) mit einem typisierten Verweis. Eine <strong>Ontos-Entität</strong>-Referenz wird zur Auswertungszeit erneut gegen den Wissensgraphen aufgelöst, sodass der Wert aktuell bleibt, wenn sich das zugrunde liegende Konzept, Produkt oder die Domäne ändert. <strong>MCP-Tool</strong>-Referenzen rufen zur Entscheidungszeit einen Unity Catalog MCP-Dienst auf; Kriterien können mit dem aufgelösten Wert als <code>obj.ref_{{fieldPlaceholder}}</code> vergleichen (Punkte werden zu Unterstrichen, z. B. <code>obj.ref_actor_identity</code>).",
+      "dnaSchedule": "Wie oft der DNA-Coefficient gegen die Evidenzquellen neu berechnet wird.",
+      "domainContext": "Das auswertbare Prädikat: der Kontext (Schwellenwert, Währung, Markt), in dem diese Befugnis gilt. Kriterien werden dagegen ausgewertet."
+    },
+    "fields": {
+      "name": {
+        "placeholder": "EMEA-North discount approval"
+      },
+      "slug": {
+        "placeholder": "ar-disc-emea-north"
+      },
+      "actorRole": {
+        "placeholder": "Regional Sales Manager – East"
+      },
+      "actorIdentity": {
+        "placeholder": "rsm-east@example.com"
+      },
+      "objectType": {
+        "placeholder": "data_product | data_contract"
+      },
+      "objectId": {
+        "placeholder": "dp-1234"
+      },
+      "threshold": {
+        "placeholder": "0.15"
+      },
+      "currency": {
+        "placeholder": "EUR"
+      },
+      "market": {
+        "placeholder": "emea-north"
+      },
+      "dnaMaxThreshold": {
+        "placeholder": "0.3"
+      },
+      "ownerTeam": "Verantwortliches Team",
+      "project": "Projekt",
+      "noTeam": "Kein Team",
+      "noProject": "Kein Projekt"
+    },
+    "evidenceSources": {
+      "type": {
+        "deltaTable": "Delta-Tabelle",
+        "dataProduct": "Datenprodukt",
+        "asset": "Asset"
+      },
+      "placeholders": {
+        "deltaTable": "catalog.schema.promotion_decisions",
+        "dataProduct": "Datenprodukt-ID",
+        "asset": "Asset-FQN (Tabelle/View/Volume)",
+        "label": "Optionales Label",
+        "columnMap": "Spaltenzuordnung (JSON)"
+      },
+      "messages": {
+        "dataProductNotYetSupported": "Datenprodukt-Quellen werden erfasst, aber für DNAco noch nicht gelesen (v1)."
+      }
+    },
+    "affirmations": {
+      "selectRoleLabel": "Rolle auswählen…",
+      "principalPlaceholder": "Principal (E-Mail oder Gruppe)",
+      "principalTypeUser": "Benutzer",
+      "principalTypeGroup": "Gruppe",
+      "approverLabel": "Genehmiger",
+      "reviewerLabel": "Prüfer",
+      "validation": {
+        "roleRequired": "Teilnehmer {{index}}: Geschäftsrolle auswählen",
+        "roleRequiredDescription": "Jeder Teilnehmer mit einem Principal muss an eine Geschäftsrolle (aus den Einstellungen) gebunden sein.",
+        "principalRequired": "Teilnehmer {{index}}: Principal eingeben",
+        "principalRequiredDescription": "Jeder Teilnehmer mit einer Rolle muss eine E-Mail-Adresse oder Gruppenkennung haben."
+      }
+    },
+    "prerequisites": {
+      "selectPrerequisiteLabel": "Vorausgesetztes AR auswählen…",
+      "requiredLabel": "erforderlich",
+      "notePlaceholder": "Optionale Notiz"
+    },
+    "resourceRefs": {
+      "fieldPathPlaceholder": "actor_identity | object_id | domain_context.market",
+      "literalPlaceholder": "Literalwert (z. B. rsm-east@example.com)",
+      "entityTypePlaceholder": "Typ auswählen…",
+      "entityIdPlaceholder": "Entität auswählen…",
+      "entityIdDisabledPlaceholder": "Zuerst einen Typ auswählen…",
+      "refType": {
+        "literal": "Literal",
+        "ontosEntity": "Ontos-Entität",
+        "mcpTool": "MCP-Tool"
+      },
+      "entityType": {
+        "businessConcept": "Geschäftskonzept",
+        "dataProduct": "Datenprodukt",
+        "dataDomain": "Datendomäne"
+      }
+    },
+    "mcpResolverAuth": {
+      "obo": "Aufrufender Benutzer / Agent (OBO) — Standard",
+      "appServicePrincipal": "Service Principal der Ontos-App"
+    },
+    "buttons": {
+      "addEvidenceSource": "Evidenzquelle hinzufügen",
+      "addParticipant": "Teilnehmer hinzufügen",
+      "addPrerequisite": "Voraussetzung hinzufügen",
+      "addResourceRef": "Ressourcenreferenz hinzufügen",
+      "cancel": "Abbrechen",
+      "create": "Erstellen",
+      "save": "Speichern"
+    },
+    "actions": {
+      "approve": "Genehmigen",
+      "escalate": "Eskalieren",
+      "override": "Überschreiben",
+      "delegate": "Delegieren",
+      "veto": "Veto"
+    },
+    "validation": {
+      "nameRequired": "Name ist erforderlich",
+      "invalidColumnMap": "Ungültige Spaltenzuordnung",
+      "columnMapError": "Die Spaltenzuordnung für \"{{ref}}\" muss gültiges JSON sein."
+    }
+  },
+  "criteria": {
+    "description": "Das Gate genehmigt nur, wenn jedes aktivierte Kriterium erfüllt ist. Ein Kriterium, das für eine vergangene Entscheidung fehlschlägt, zählt als Divergenz im DNA-Coefficient — gewichtet und mit Vorzeichen gemäß seiner Richtung. Eine zusammengesetzte Regel ist in Ordnung; teilen Sie nur dann in separate Kriterien auf, wenn Sie Divergenz pro Grund wünschen.",
+    "mode": {
+      "builder": "Strukturiert",
+      "raw": "Rohes ASSERT",
+      "existing": "Vorhandene Prüfung wiederverwenden"
+    },
+    "predicate": {
+      "allowlist": "Zulassungsliste für Unterzeichner",
+      "ceiling": "Numerische Obergrenze",
+      "requiredFlag": "Erforderliches Flag",
+      "actionMatch": "Aktionsabgleich"
+    },
+    "predicateDefaults": {
+      "allowlistField": "actor_identity",
+      "allowlistName": "Autorisierter Unterzeichner",
+      "allowlistFailure": "Der Unterzeichner ist nicht autorisiert.",
+      "ceilingField": "value",
+      "ceilingName": "Innerhalb des Schwellenwerts",
+      "ceilingFailure": "Der Wert überschreitet den Schwellenwert ohne Eskalation.",
+      "requiredFlagField": "cosign_present",
+      "requiredFlagName": "Erforderliches Flag vorhanden",
+      "requiredFlagFailure": "Eine erforderliche Bedingung fehlt.",
+      "actionMatchField": "action",
+      "actionMatchName": "Aktionsabgleich",
+      "actionMatchFailure": "Die Aktion ist nicht erlaubt."
+    },
+    "fields": {
+      "fieldPlaceholder": "Feld (z. B. actor_identity)",
+      "allowlistPlaceholder": "rsm-east, rsm-west",
+      "actionMatchPlaceholder": "approve",
+      "ceilingPlaceholder": "0.15",
+      "ceilingAllowEscalation": "zulassen, wenn eskaliert",
+      "criterionNamePlaceholder": "Kriteriumsname",
+      "failureMessagePlaceholder": "Ablehnungsmeldung, die bei Fehlschlag angezeigt wird",
+      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+    },
+    "validation": {
+      "validateButton": "Validieren",
+      "ruleValid": "Regel ist gültig",
+      "ruleInvalid": "Ungültig"
+    },
+    "divergence": {
+      "direction": "Richtung",
+      "weight": "Gewicht",
+      "dimension": "Dimension",
+      "dimensionPlaceholder": "people",
+      "reusedCheckBadge": "wiederverwendete Prüfung"
+    },
+    "buttons": {
+      "addCriterion": "Kriterium hinzufügen"
+    },
+    "selections": {
+      "selectComplianceCheck": "Compliance-Prüfung auswählen…"
+    },
+    "assertPrefix": "ASSERT"
+  },
+  "mcp": {
+    "extraSchemas": {
+      "label": "Zusätzliche Schemas",
+      "hint": "catalog.schema, durch Kommas getrennt, in denen nach MCP-Diensten gesucht wird. system.ai ist immer enthalten.",
+      "placeholder": "main.app_ontos"
+    },
+    "services": {
+      "selectLabel": "MCP-Server auswählen…"
+    },
+    "tools": {
+      "selectLabel": "Tool auswählen…",
+      "loadingLabel": "Tools werden geladen…"
+    },
+    "params": {
+      "label": "Parameter (JSON)",
+      "hint": "Zeichenkettenwerte sind Jinja-Templates über die Anfrage plus <code>ar.*</code>, z. B. <code>{{exampleActor}}</code>, <code>{{exampleMarket}}</code>.",
+      "errorInvalid": "Ungültiges JSON.",
+      "errorNotObject": "Parameter müssen ein JSON-Objekt sein."
+    },
+    "resultPointer": {
+      "label": "Ergebniszeiger",
+      "hint": "JSONPath in die Tool-Antwort; <code>$</code> ist die gesamte Antwort.",
+      "placeholder": "$  or  $.user.email  or  $.items[0].name"
+    },
+    "buttons": {
+      "refresh": "Aktualisieren"
+    }
+  },
+  "schedule": {
+    "frequency": {
+      "label": "Häufigkeit der Neuberechnung",
+      "off": "Aus (nur manuell)",
+      "hourly": "Stündlich",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "monthly": "Monatlich (am 1.)",
+      "custom": "Benutzerdefiniert"
+    },
+    "time": {
+      "label": "Zeit"
+    },
+    "minuteOfHour": {
+      "label": "Minute der Stunde"
+    },
+    "dayOfWeek": {
+      "label": "Wochentag",
+      "sunday": "Sonntag",
+      "monday": "Montag",
+      "tuesday": "Dienstag",
+      "wednesday": "Mittwoch",
+      "thursday": "Donnerstag",
+      "friday": "Freitag",
+      "saturday": "Samstag"
+    },
+    "descriptions": {
+      "off": "Keine automatische Neuberechnung. Der DNA-Coefficient wird nur aktualisiert, wenn Sie auf Berechnen klicken oder das AR bearbeiten.",
+      "custom": "Benutzerdefinierter Zeitplan: <code>{{cron}}</code>",
+      "scheduled": "Der geplante Neuberechnungsjob führt sie in diesem Takt aus (gespeichert als <code>{{cron}}</code>)."
+    }
+  },
+  "infoHint": {
+    "ariaLabel": "Weitere Informationen"
+  },
+  "review": {
+    "errors": {
+      "noReviewerIdentity": "Keine Prüferidentität verfügbar.",
+      "noReviewFound": "Für Sie wurde keine Überprüfung zu dieser Authority Relation gefunden."
+    },
+    "toasts": {
+      "submitFailed": "Überprüfung konnte nicht übermittelt werden",
+      "submitSuccess": "Überprüfung übermittelt"
+    },
+    "statuses": {
+      "completed": "abgeschlossen"
+    },
+    "details": {
+      "title": "Details der Authority Relation",
+      "actorIdentity": "Akteursidentität",
+      "action": "Aktion",
+      "domainContext": "Domain-Context",
+      "decisionCriteria": "Entscheidungskriterien",
+      "criterion": "Kriterium",
+      "empty": "—",
+      "evidenceSources": "Evidenzquellen",
+      "evidenceBinding": "Evidenzbindung",
+      "justificationChain": "Begründungskette"
+    },
+    "questionnaire": {
+      "confirmation": "Bestätigung",
+      "elicitation": "Strukturierte Erhebung",
+      "placeholder": "Ihre Antwort…"
+    },
+    "actions": {
+      "submitReview": "Überprüfung übermitteln"
+    }
+  },
+  "request": {
+    "types": {
+      "review": {
+        "title": "Überprüfung anfragen",
+        "description": "Startet die N-funktionale Überprüfung: Jeder zugewiesene Prüfer erhält eine Asset-Überprüfung, um zu bestätigen, dass die Relation die Realität abbildet, und der Überprüfungs-Workflow wird ausgelöst."
+      },
+      "statusChange": {
+        "title": "Status ändern",
+        "description": "Führt diese Authority Relation durch ihren Lebenszyklus. Die Aktivierung erfordert, dass der DNA-Coefficient innerhalb seiner Obergrenze gemessen wurde und alle erforderlichen Bestätigungen abgeschlossen sind."
+      }
+    },
+    "dialog": {
+      "title": "Aktion anfragen",
+      "description": "Wählen Sie die Art der Anfrage, die Sie für diese Authority Relation einreichen möchten."
+    },
+    "relationInfo": {
+      "label": "Authority Relation",
+      "status": "Status"
+    },
+    "form": {
+      "requestType": "Anfragetyp *",
+      "message": "Nachricht (optional)",
+      "messagePlaceholder": "Fügen Sie Hinweise für die Prüfer hinzu…",
+      "targetStatus": "Zielstatus *",
+      "statusPlaceholder": "Zielstatus auswählen…"
+    },
+    "errors": {
+      "selectStatus": "Bitte wählen Sie einen Zielstatus aus.",
+      "submitFailed": "Anfrage konnte nicht übermittelt werden"
+    },
+    "toasts": {
+      "reviewRequested": "Überprüfung angefragt",
+      "reviewersNotified": "{{count}} Prüfer benachrichtigt.",
+      "statusChanged": "Status geändert",
+      "statusSetTo": "Status auf \"{{status}}\" gesetzt."
+    },
+    "actions": {
+      "submitting": "Wird übermittelt…",
+      "changeStatus": "Status ändern",
+      "sendRequest": "Anfrage senden"
+    }
+  }
+}

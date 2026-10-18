@@ -3,6 +3,7 @@ import { semanticModelsTile } from './semantic-models/config';
 import { dataProductsTile } from './data-products/config';
 import { dataContractsTile } from './data-contracts/config';
 import { complianceTile } from './compliance/config';
+import { authorityResolutionTile } from './authority-resolution/config';
 
 /**
  * Registry of all available overview tiles.
@@ -18,6 +19,7 @@ export const tileRegistry: TileRegistry = {
   'data-products': dataProductsTile,
   'data-contracts': dataContractsTile,
   'compliance': complianceTile,
+  'authority-resolution': authorityResolutionTile,
 };
 
 /**
@@ -29,6 +31,7 @@ export const tileOrder = [
   'data-products',
   'data-contracts',
   'compliance',
+  'authority-resolution',
 ];
 
 // Re-export types for convenience

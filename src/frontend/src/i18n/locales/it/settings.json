@@ -1190,12 +1190,15 @@
       "iconLabel": "Icona",
       "colorLabel": "Colore",
       "previewLabel": "Anteprima",
-      "levelNamePreview": "Nome livello"
+      "levelNamePreview": "Nome livello",
+      "entityTypeHelp": "Predefinito si applica a ogni tipo senza una propria scala (prodotti dati e contratti). I tipi che definiscono livelli propri (es. Authority Relation) ignorano Predefinito."
     },
     "entityTypes": {
       "all": "Tutti i tipi di entità",
       "DataProduct": "Prodotti dati",
-      "DataContract": "Contratti dati"
+      "DataContract": "Contratti dati",
+      "AuthorityRelation": "Authority Relation",
+      "default": "Predefinito"
     },
     "delete": {
       "title": "Eliminare il livello di maturità?",
@@ -1206,7 +1209,15 @@
       "created": "Livello di maturità \"{{name}}\" creato.",
       "deleted": "Livello di maturità \"{{name}}\" eliminato.",
       "cannotDeleteTitle": "Impossibile eliminare"
-    }
+    },
+    "noLevelsForKind": "Nessun livello di maturità per questo tipo. Cambia il filtro o aggiungine uno.",
+    "filter": {
+      "allKinds": "Tutti"
+    },
+    "noPoliciesAvailable": "Nessuna policy disponibile",
+    "descriptionPerKind": "Definisci la scala di maturità per tipo di entità (prodotti dati, contratti, authority relation). Ogni livello è controllato da policy di conformità; l'ordinamento è per tipo.",
+    "levelCount_one": "{{count}} livello",
+    "levelCount_other": "{{count}} livelli"
   },
   "directory": {
     "title": "Directory",

@@ -79,6 +79,7 @@ from src.routes import (
     maturity_routes,
     directory_routes,
     term_mapping_routes,
+    authority_resolution_routes,
 )
 
 from src.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -236,6 +237,9 @@ async def startup_event():
         from src.common.search_interfaces import SearchableAsset
         from src.controller.search_manager import SearchManager
         logger.info("Initializing SearchManager after data load (app.py)...")
+        # The AR manager is a module-level singleton in its routes module; expose it on
+        # app.state so it is indexed and receives the SearchManager like the others.
+        app.state.authority_resolution_manager = authority_resolution_routes.manager
         searchable_managers_instances = []
         for attr_name, manager_instance in list(getattr(app.state, '_state', {}).items()):
             try:
@@ -420,6 +424,7 @@ catalog_commander_routes.register_routes(app)
 security_features_routes.register_routes(app)
 entitlements_routes.register_routes(app)
 entitlements_sync_routes.register_routes(app)
+authority_resolution_routes.register_routes(app)
 access_grants_routes.register_routes(app)
 
 # System - Utilities, configuration, auxiliary services

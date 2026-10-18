@@ -7,7 +7,7 @@ the LLM Search feature and MCP server endpoints.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,9 @@ class ToolContext:
     semantic_models_manager: Optional[Any] = None
     costs_manager: Optional[Any] = None
     search_manager: Optional[Any] = None
+    # Lazily builds a WorkspaceClient scoped to the calling user (OBO); None when
+    # the request carried no forwarded user token.
+    obo_workspace_client_factory: Optional[Callable[[], Any]] = None
 
 
 @dataclass

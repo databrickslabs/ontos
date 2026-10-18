@@ -36,6 +36,8 @@ import MasterDataManagement from './views/master-data-management';
 import SecurityFeatures from './views/security-features';
 import Entitlements from './views/entitlements';
 import EntitlementsSync from './views/entitlements-sync';
+import AuthorityResolution from './views/authority-resolution';
+import AuthorityRelationDetails from './views/authority-relation-details';
 import DataAssetReviews from './views/data-asset-reviews';
 import DataAssetReviewDetails from './views/data-asset-review-details';
 import DataCatalog from './views/data-catalog';
@@ -242,6 +244,8 @@ export default function App() {
               <Route path="/security-features" element={<SecurityFeatures />} />
               <Route path="/entitlements" element={<Entitlements />} />
               <Route path="/entitlements-sync" element={<EntitlementsSync />} />
+              <Route path="/authority-resolution" element={<AuthorityResolution />} />
+              <Route path="/authority-resolution/:relationId" element={<AuthorityRelationDetails />} />
 
               {/* Settings - sidebar layout with nested routes */}
               <Route path="/settings" element={<SettingsLayout />}>

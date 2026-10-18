@@ -1190,12 +1190,15 @@
       "iconLabel": "Pictogram",
       "colorLabel": "Kleur",
       "previewLabel": "Voorbeeld",
-      "levelNamePreview": "Niveaunaam"
+      "levelNamePreview": "Niveaunaam",
+      "entityTypeHelp": "Standaard geldt voor elk soort zonder eigen ladder (dataproducten & contracten). Soorten die eigen niveaus definiëren (bijv. Authority Relations) negeren Standaard."
     },
     "entityTypes": {
       "all": "Alle Entiteitstypes",
       "DataProduct": "Dataproducten",
-      "DataContract": "Datacontracten"
+      "DataContract": "Datacontracten",
+      "AuthorityRelation": "Authority Relations",
+      "default": "Standaard"
     },
     "delete": {
       "title": "Volwassenheidsniveau verwijderen?",
@@ -1206,7 +1209,15 @@
       "created": "Volwassenheidsniveau \"{{name}}\" aangemaakt.",
       "deleted": "Volwassenheidsniveau \"{{name}}\" verwijderd.",
       "cannotDeleteTitle": "Kan niet verwijderen"
-    }
+    },
+    "noLevelsForKind": "Geen volwassenheidsniveaus voor dit soort. Wijzig het filter of voeg er een toe.",
+    "filter": {
+      "allKinds": "Alle"
+    },
+    "noPoliciesAvailable": "Geen beleidsregels beschikbaar",
+    "descriptionPerKind": "Definieer de volwassenheidsladder per entiteitssoort (dataproducten, contracten, authority relations). Elk niveau wordt afgeschermd door compliance-beleid; de volgorde geldt per soort.",
+    "levelCount_one": "{{count}} niveau",
+    "levelCount_other": "{{count}} niveaus"
   },
   "directory": {
     "title": "Directory",

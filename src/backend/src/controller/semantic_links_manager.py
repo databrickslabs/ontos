@@ -93,6 +93,16 @@ class SemanticLinksManager:
                     return f"{contract_name}#{schema_name}.{property_name}"
                 return entity_id
 
+            elif entity_type == "authority_relation":
+                result = self._db.execute(
+                    text(
+                        "SELECT name FROM authority_relations WHERE version_family_id = :entity_id "
+                        "ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"entity_id": entity_id}
+                ).fetchone()
+                return result[0] if result else None
+
         except Exception as e:
             logger.warning(f"Failed to resolve entity name for {entity_type}:{entity_id}: {e}")
 

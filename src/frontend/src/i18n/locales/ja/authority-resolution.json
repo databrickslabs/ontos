@@ -1,0 +1,540 @@
+{
+  "title": {
+    "main": "権限解決"
+  },
+  "list": {
+    "description": "意思決定の権限を明示し、エージェントから呼び出せるようにする Authority Relation（ARF）を作成します。各リレーションは、紐付けられたエビデンスから算出される DNA-Coefficient（乖離度を表す指標で、0.0 が最良）を持ち、しきい値内に収まり、かつ完全に承認された場合にのみ有効になります。",
+    "buttonNew": "新規 Authority Relation",
+    "buttonDeleteSelected": "選択したものを削除（{{count}}）",
+    "columnDnaco": "DNAco",
+    "columnMaturity": "成熟度",
+    "columnAction": "アクション",
+    "columnUsage": "使用状況",
+    "confirmDelete": "Authority Relation「{{name}}」を削除しますか？",
+    "confirmBulkDelete": "選択した {{count}} 件の Authority Relation を削除しますか？",
+    "bulkDeleteSuccess": "{{count}} 件の Authority Relation を削除しました。"
+  },
+  "details": {
+    "defaultTitle": "Authority Relation",
+    "notFound": "Authority Relation が見つかりません。",
+    "backButton": "一覧に戻る",
+    "buttonNewVersion": "新しいバージョン",
+    "buttonRequest": "リクエスト...",
+    "buttonComputeDnaco": "DNAco を計算",
+    "buttonActivate": "有効化",
+    "buttonTest": "テスト",
+    "buttonAffirm": "承認する",
+    "buttonReview": "レビュー",
+    "dnaComputeFailed": "DNAco の計算に失敗しました",
+    "dnaComputed": "DNAco を計算しました",
+    "dnaComputedMsg": "大きさ {{magnitude}} · {{divergent}}/{{total}} 件が乖離",
+    "activateFailed": "有効化できません",
+    "activated": "Authority Relation を有効化しました",
+    "affirmFailed": "承認に失敗しました",
+    "confirmDelete": "この Authority Relation を削除しますか？",
+    "versionCreated": "新しいバージョンを作成しました",
+    "versionCreatedMsg": "v{{version}}（ドラフト）",
+    "familySlugHint": "エージェント向け @id（バージョンファミリー）",
+    "tileUsage": "使用状況",
+    "tileApproved": "承認",
+    "tileDenied": "拒否",
+    "tileDnaco": "DNA-Coefficient",
+    "tileDnacoHint": "0.0 が最良",
+    "tileDnacoHintHover": "0.0 が最良 — ホバーでディメンションを表示",
+    "dnacoDimensions": "DNAco ディメンション",
+    "dnacoFormula": "全体 = 1 − ∏(1 − dₙ) = {{value}}",
+    "dnacoFormulaDescription": "1 つ以上のディメンションで乖離が発生する確率",
+    "activationRequires": "有効化するには、DNA-Coefficient が測定済みで上限（{{threshold}}）以内であり、必要なすべての承認が完了している必要があります{{affirmed}}。",
+    "notYetFullyAffirmed": "（まだ完全には承認されていません）",
+    "cardApprovers": "承認者（N 機能ゲート）",
+    "noApprovers": "承認者が定義されていません。",
+    "alsoReviewer": "レビュアー兼任",
+    "affirmed": "承認済み",
+    "pending": "保留中",
+    "cardReviewers": "レビュアー（リレーションが実態を反映していることを確認するためのヒアリング対象）",
+    "cardReviewProcess": "レビュープロセス",
+    "workflowsSection": "ワークフロー",
+    "assetReviewsSection": "アセットレビュー",
+    "noReviewersAssigned": "レビュアーが割り当てられていません。",
+    "reviewStatus": "レビュー: {{status}}",
+    "linkWorkflow": "ワークフロー",
+    "linkOpenReview": "レビューを開く",
+    "notStarted": "未開始",
+    "cardHistory": "履歴",
+    "dnaRunsSection": "DNA-Coefficient の実行",
+    "dnaRunResult": "{{divergent}}/{{total}} 件が乖離",
+    "decisionsSection": "最近の決定",
+    "cardRelation": "Authority Relation",
+    "labelActorRole": "アクターのロール",
+    "labelActorIdentity": "アクターの ID",
+    "labelAction": "アクション",
+    "labelObject": "オブジェクト",
+    "labelDomainContext": "ドメインコンテキスト",
+    "labelJustificationChain": "正当化チェーン",
+    "cardRuntimeEvidence": "ランタイムとエビデンス",
+    "labelDecisionCriteria": "判定基準",
+    "criterion": "基準",
+    "noCriteria": "基準なし — ゲートに制約はありません（すべてのリクエストを承認します）。",
+    "labelEvidenceSources": "エビデンスソース",
+    "linkCatalogCommander": "Catalog Commander で {{ref}} を開く",
+    "labelGovernsConceptsHint": "ビジネスコンセプトを統制",
+    "labelPrerequisites": "前提条件（前提となる AR）",
+    "required": "必須",
+    "optional": "任意",
+    "noPrerequisites": "なし — この AR は上流のゲートを辿らずに判定します。",
+    "labelResourceRefs": "リソース参照（型付きポインタ）",
+    "mcpAuth": "MCP 認証: {{auth}}",
+    "noResourceRefs": "なし — 標準フィールドは AR 行から直接読み取られます。",
+    "labelRecomputeSchedule": "再計算スケジュール",
+    "cronManualOnly": "手動のみ",
+    "cronCustom": "カスタム（{{cron}}）",
+    "cronHourly": "毎時（{{min}} 分）",
+    "cronDaily": "毎日 {{time}}",
+    "cronWeekly": "毎週 {{day}} {{time}}",
+    "cronMonthly": "毎月（1 日）{{time}}",
+    "dialogTitleReview": "Authority Relation のレビュー",
+    "dialogTitleVersion": "新しいバージョンを作成",
+    "versionDialogDescription": "この Authority Relation を新しいドラフトバージョンとしてスナップショットします。ルール、基準、参加者、エビデンス、ドメインはコピーされ、測定済みの DNAco と使用状況カウンターはリセットされます。",
+    "labelNewVersion": "新しいバージョン",
+    "labelChangeSummary": "変更の概要（任意）",
+    "placeholderChangeSummary": "このバージョンでの変更点は？",
+    "buttonCreateVersion": "バージョンを作成",
+    "dialogTitleTest": "権限解決のテスト",
+    "testDialogDescription": "この Authority Relation の判定ロジックに対してドライランを行います。どのステータスでも動作し、決定の記録や使用状況カウンターの変更は行いません。実際の決定は、有効な AR に対する MCP の resolve_authority ツールから行われます。",
+    "labelSigner": "署名者（アクターの ID）",
+    "labelValue": "値",
+    "testCosignLabel": "連署あり",
+    "testEscalatedLabel": "エスカレーション済み",
+    "testPrerequisiteChain": "前提条件チェーン",
+    "testResolvedRefs": "解決済みリソース参照",
+    "buttonTestResolve": "解決"
+  },
+  "conceptLinks": {
+    "failedLink": "コンセプトのリンクに失敗しました",
+    "failedUnlink": "コンセプトのリンク解除に失敗しました",
+    "buttonAddConcept": "コンセプトを追加"
+  },
+  "status": {
+    "draft": "ドラフト",
+    "active": "有効",
+    "needs_review": "要レビュー",
+    "retired": "廃止",
+    "deprecated": "非推奨"
+  },
+  "verdict": {
+    "approved": "承認",
+    "denied": "拒否",
+    "conflict": "競合",
+    "no_authority": "権限なし",
+    "error": "エラー"
+  },
+  "refType": {
+    "literal": "リテラル",
+    "ontos_entity": "Ontos エンティティ",
+    "mcp_tool": "MCP ツール"
+  },
+  "resolverAuth": {
+    "obo": "呼び出し元（OBO）",
+    "app_sp": "アプリのサービスプリンシパル"
+  },
+  "reviewStatus": {
+    "na": "該当なし",
+    "pending": "保留中",
+    "in_review": "レビュー中",
+    "completed": "完了"
+  },
+  "workflowStatus": {
+    "running": "実行中",
+    "succeeded": "成功",
+    "failed": "失敗",
+    "pending": "保留中",
+    "completed": "完了",
+    "defined": "定義済み",
+    "paused": "承認待ち",
+    "cancelled": "キャンセル済み"
+  },
+  "dnaRunStatus": {
+    "running": "実行中",
+    "succeeded": "成功",
+    "failed": "失敗"
+  },
+  "decisionSource": {
+    "mcp": "MCP",
+    "evidence": "エビデンス",
+    "ui": "UI"
+  },
+  "sourceType": {
+    "delta_table": "Delta テーブル",
+    "data_product": "データプロダクト",
+    "asset": "アセット"
+  },
+  "direction": {
+    "actual-exceeds-documented": "実態が文書化内容を上回る",
+    "documented-exceeds-actual": "文書化内容が実態を上回る",
+    "neutral": "中立"
+  },
+  "editor": {
+    "title": {
+      "new": "新規 Authority Relation",
+      "edit": "Authority Relation を編集"
+    },
+    "labels": {
+      "name": "名前",
+      "slug": "スラッグ",
+      "description": "説明",
+      "actorRole": "アクターのロール",
+      "actorIdentity": "アクターの ID",
+      "action": "アクション",
+      "objectType": "オブジェクトタイプ",
+      "objectId": "オブジェクト ID",
+      "threshold": "しきい値",
+      "currency": "通貨",
+      "market": "市場",
+      "time": "時刻",
+      "dayOfWeek": "曜日",
+      "minuteOfHour": "分",
+      "recomputeFrequency": "再計算の頻度",
+      "dnaMaxThreshold": "有効化に必要な DNA-Coefficient の上限"
+    },
+    "hints": {
+      "slug": "エージェントがこの AR を呼び出すための固定キー。ファミリー内のすべてのバージョンで共通です。",
+      "authorityRelation": "ARF タプル: <strong>誰が</strong>（アクターのロール + 署名 ID）、どの<strong>オブジェクト</strong>に対して、どの<strong>アクション</strong>を実行できるか。",
+      "domainContext": "評価可能な述語: この権限が成立するコンテキスト（しきい値、通貨、市場）。基準はこれに対して評価されます。",
+      "dnaMaxThreshold": "乖離の上限。DNA-Coefficient は、過去の決定がこのルールからどれだけ<strong>乖離</strong>しているかを測定します（0.0 = 完全一致、値が大きいほど悪い）。AR は、測定値がこの上限以下の間のみ有効化できます。有効な AR の値が後から上限を超えた場合は、自動的に<strong>要レビュー</strong>としてフラグが付きます。",
+      "mcpResolverCredentials": "<strong>OBO:</strong> MCP ツールは呼び出し元自身の権限で実行されます。トークンが転送されない呼び出し元には no_authority が返されます。<strong>アプリのサービスプリンシパル:</strong> ツールはすべての呼び出し元に対して Ontos アプリとして実行されるため、結果は問い合わせ元に依存しなくなります。呼び出し元が参照できないデータをツールが参照する必要がある場合にのみ使用してください。",
+      "mcpNoCallerToken": "呼び出し元のトークンが転送されなかったため、この一覧は Ontos アプリのサービスプリンシパルとして取得されました。OBO 認証の AR の呼び出し元は、これらのサービスにアクセスできない可能性があります。"
+    },
+    "sections": {
+      "authorityRelation": "Authority Relation",
+      "domainContext": "ドメインコンテキスト",
+      "decisionCriteria": "判定基準",
+      "domains": "ドメイン",
+      "evidenceSources": "エビデンスソース",
+      "participants": "参加者",
+      "requires": "前提条件",
+      "resourceRefs": "リソース参照",
+      "mcpResolverCredentials": "MCP リゾルバーの認証情報",
+      "dnaSchedule": "DNA-Coefficient のスケジュール",
+      "tags": "タグ",
+      "ownership": "所有者とプロジェクト"
+    },
+    "sectionDescriptions": {
+      "decisionCriteria": "解決ゲートが適用するルール（および DNA-Coefficient が乖離を測定する基準）を定義します。各基準は再利用可能な<strong>コンプライアンスチェック</strong>です。",
+      "evidenceSources": "DNA-Coefficient の測定対象となる過去の決定を紐付けます。<strong>Delta テーブル</strong>、<strong>データプロダクト</strong>、<strong>アセット</strong>（ボリュームファイル、テーブル、ビュー）を 1 つ以上追加します。各ソースは、カラムマップを使ってそのカラムを標準の AR 要素にマッピングします。",
+      "participants": "N 機能ゲートとレビュー。<strong>承認者</strong>は承認ゲートの集計対象になります。<strong> レビュアー</strong>は、リレーションが実態を反映していることを確認するため、レビュープロセス中にヒアリングされます。1 人のプリンシパルが両方を兼ねることもできます。",
+      "requires": "前提となる AR: この AR が判定する前に、それぞれが<strong>承認</strong>に解決される必要があります。バージョンではなくファミリーのスラッグで指定するため、前提条件のバージョンが更新されてもこの AR は引き続き機能します。保存するには、この AR 自身のスラッグが必要です。",
+      "resourceRefs": "フィールド値の取得元。単純なリテラルの代わりに、標準フィールド（<code>actor_identity</code>、<code>object_id</code>、<code>domain_context.{{keyPlaceholder}}</code>）を型付きポインタで裏付けます。<strong> Ontos エンティティ</strong>参照は評価時にナレッジグラフに対して再解決されるため、基になるコンセプト、プロダクト、ドメインが変更されても値は最新に保たれます。<strong> MCP ツール</strong>参照は決定時に Unity Catalog の MCP サービスを呼び出します。基準では解決された値を <code>obj.ref_{{fieldPlaceholder}}</code>（ドットはアンダースコアになります。例: <code>obj.ref_actor_identity</code>）として比較できます。",
+      "dnaSchedule": "エビデンスソースに対して DNA-Coefficient を再計算する頻度。",
+      "domainContext": "評価可能な述語: この権限が成立するコンテキスト（しきい値、通貨、市場）。基準はこれに対して評価されます。"
+    },
+    "fields": {
+      "name": {
+        "placeholder": "EMEA-North 割引承認"
+      },
+      "slug": {
+        "placeholder": "ar-disc-emea-north"
+      },
+      "actorRole": {
+        "placeholder": "地域営業マネージャー – 東部"
+      },
+      "actorIdentity": {
+        "placeholder": "rsm-east@example.com"
+      },
+      "objectType": {
+        "placeholder": "data_product | data_contract"
+      },
+      "objectId": {
+        "placeholder": "dp-1234"
+      },
+      "threshold": {
+        "placeholder": "0.15"
+      },
+      "currency": {
+        "placeholder": "EUR"
+      },
+      "market": {
+        "placeholder": "emea-north"
+      },
+      "dnaMaxThreshold": {
+        "placeholder": "0.3"
+      },
+      "ownerTeam": "オーナーチーム",
+      "project": "プロジェクト",
+      "noTeam": "チームなし",
+      "noProject": "プロジェクトなし"
+    },
+    "evidenceSources": {
+      "type": {
+        "deltaTable": "Delta テーブル",
+        "dataProduct": "データプロダクト",
+        "asset": "アセット"
+      },
+      "placeholders": {
+        "deltaTable": "catalog.schema.promotion_decisions",
+        "dataProduct": "データプロダクト ID",
+        "asset": "アセットの FQN（テーブル/ビュー/ボリューム）",
+        "label": "ラベル（任意）",
+        "columnMap": "カラムマップ（JSON）"
+      },
+      "messages": {
+        "dataProductNotYetSupported": "データプロダクトのソースは記録されますが、DNAco ではまだ読み取られません（v1）。"
+      }
+    },
+    "affirmations": {
+      "selectRoleLabel": "ロールを選択…",
+      "principalPlaceholder": "プリンシパル（メールまたはグループ）",
+      "principalTypeUser": "ユーザー",
+      "principalTypeGroup": "グループ",
+      "approverLabel": "承認者",
+      "reviewerLabel": "レビュアー",
+      "validation": {
+        "roleRequired": "参加者 {{index}}: ビジネスロールを選択してください",
+        "roleRequiredDescription": "プリンシパルを持つすべての参加者は、（設定の）ビジネスロールに紐付ける必要があります。",
+        "principalRequired": "参加者 {{index}}: プリンシパルを入力してください",
+        "principalRequiredDescription": "ロールを持つすべての参加者には、メールまたはグループの識別子が必要です。"
+      }
+    },
+    "prerequisites": {
+      "selectPrerequisiteLabel": "前提となる AR を選択…",
+      "requiredLabel": "必須",
+      "notePlaceholder": "メモ（任意）"
+    },
+    "resourceRefs": {
+      "fieldPathPlaceholder": "actor_identity | object_id | domain_context.market",
+      "literalPlaceholder": "リテラル値（例: rsm-east@example.com）",
+      "entityTypePlaceholder": "タイプを選択…",
+      "entityIdPlaceholder": "エンティティを選択…",
+      "entityIdDisabledPlaceholder": "先にタイプを選択してください…",
+      "refType": {
+        "literal": "リテラル",
+        "ontosEntity": "Ontos エンティティ",
+        "mcpTool": "MCP ツール"
+      },
+      "entityType": {
+        "businessConcept": "ビジネスコンセプト",
+        "dataProduct": "データプロダクト",
+        "dataDomain": "データドメイン"
+      }
+    },
+    "mcpResolverAuth": {
+      "obo": "呼び出しユーザー/エージェント（OBO）— デフォルト",
+      "appServicePrincipal": "Ontos アプリのサービスプリンシパル"
+    },
+    "buttons": {
+      "addEvidenceSource": "エビデンスソースを追加",
+      "addParticipant": "参加者を追加",
+      "addPrerequisite": "前提条件を追加",
+      "addResourceRef": "リソース参照を追加",
+      "cancel": "キャンセル",
+      "create": "作成",
+      "save": "保存"
+    },
+    "actions": {
+      "approve": "承認",
+      "escalate": "エスカレーション",
+      "override": "上書き",
+      "delegate": "委任",
+      "veto": "拒否権"
+    },
+    "validation": {
+      "nameRequired": "名前は必須です",
+      "invalidColumnMap": "カラムマップが無効です",
+      "columnMapError": "「{{ref}}」のカラムマップは有効な JSON である必要があります。"
+    }
+  },
+  "criteria": {
+    "description": "ゲートは、有効なすべての基準を満たした場合にのみ承認します。過去の決定で満たされなかった基準は、方向に応じて重み付けと符号付けがされ、DNA-Coefficient における乖離としてカウントされます。複合ルールを 1 つにまとめても構いません。理由ごとの乖離が必要な場合にのみ、基準を分割してください。",
+    "mode": {
+      "builder": "構造化",
+      "raw": "Raw ASSERT",
+      "existing": "既存のチェックを再利用"
+    },
+    "predicate": {
+      "allowlist": "署名者の許可リスト",
+      "ceiling": "数値の上限",
+      "requiredFlag": "必須フラグ",
+      "actionMatch": "アクション一致"
+    },
+    "predicateDefaults": {
+      "allowlistField": "actor_identity",
+      "allowlistName": "承認された署名者",
+      "allowlistFailure": "署名者は承認されていません。",
+      "ceilingField": "value",
+      "ceilingName": "しきい値以内",
+      "ceilingFailure": "エスカレーションなしで値がしきい値を超えています。",
+      "requiredFlagField": "cosign_present",
+      "requiredFlagName": "必須フラグあり",
+      "requiredFlagFailure": "必要な条件が満たされていません。",
+      "actionMatchField": "action",
+      "actionMatchName": "アクション一致",
+      "actionMatchFailure": "このアクションは許可されていません。"
+    },
+    "fields": {
+      "fieldPlaceholder": "フィールド（例: actor_identity）",
+      "allowlistPlaceholder": "rsm-east, rsm-west",
+      "actionMatchPlaceholder": "approve",
+      "ceilingPlaceholder": "0.15",
+      "ceilingAllowEscalation": "エスカレーション時は許可",
+      "criterionNamePlaceholder": "基準名",
+      "failureMessagePlaceholder": "失敗時に表示する拒否メッセージ",
+      "rawRulePlaceholder": "obj.actor_identity IN ['rsm-east'] AND (obj.value <= 0.15 OR obj.escalated = True)"
+    },
+    "validation": {
+      "validateButton": "検証",
+      "ruleValid": "ルールは有効です",
+      "ruleInvalid": "無効"
+    },
+    "divergence": {
+      "direction": "方向",
+      "weight": "重み",
+      "dimension": "ディメンション",
+      "dimensionPlaceholder": "people",
+      "reusedCheckBadge": "再利用チェック"
+    },
+    "buttons": {
+      "addCriterion": "基準を追加"
+    },
+    "selections": {
+      "selectComplianceCheck": "コンプライアンスチェックを選択…"
+    },
+    "assertPrefix": "ASSERT"
+  },
+  "mcp": {
+    "extraSchemas": {
+      "label": "追加スキーマ",
+      "hint": "MCP サービスを検索する catalog.schema（カンマ区切り）。system.ai は常に含まれます。",
+      "placeholder": "main.app_ontos"
+    },
+    "services": {
+      "selectLabel": "MCP サーバーを選択…"
+    },
+    "tools": {
+      "selectLabel": "ツールを選択…",
+      "loadingLabel": "ツールを読み込み中…"
+    },
+    "params": {
+      "label": "パラメータ（JSON）",
+      "hint": "文字列値は、リクエストと <code>ar.*</code> に対する Jinja テンプレートです。例: <code>{{exampleActor}}</code>、<code>{{exampleMarket}}</code>。",
+      "errorInvalid": "JSON が無効です。",
+      "errorNotObject": "パラメータは JSON オブジェクトである必要があります。"
+    },
+    "resultPointer": {
+      "label": "結果ポインタ",
+      "hint": "ツールのレスポンスに対する JSONPath。<code>$</code> はレスポンス全体を表します。",
+      "placeholder": "$  or  $.user.email  or  $.items[0].name"
+    },
+    "buttons": {
+      "refresh": "更新"
+    }
+  },
+  "schedule": {
+    "frequency": {
+      "label": "再計算の頻度",
+      "off": "オフ（手動のみ）",
+      "hourly": "毎時",
+      "daily": "毎日",
+      "weekly": "毎週",
+      "monthly": "毎月（1 日）",
+      "custom": "カスタム"
+    },
+    "time": {
+      "label": "時刻"
+    },
+    "minuteOfHour": {
+      "label": "分"
+    },
+    "dayOfWeek": {
+      "label": "曜日",
+      "sunday": "日曜日",
+      "monday": "月曜日",
+      "tuesday": "火曜日",
+      "wednesday": "水曜日",
+      "thursday": "木曜日",
+      "friday": "金曜日",
+      "saturday": "土曜日"
+    },
+    "descriptions": {
+      "off": "自動再計算は行われません。DNA-Coefficient は、計算をクリックするか AR を編集した場合にのみ更新されます。",
+      "custom": "カスタムスケジュール: <code>{{cron}}</code>",
+      "scheduled": "スケジュールされた再計算ジョブがこの間隔で実行されます（<code>{{cron}}</code> として保存）。"
+    }
+  },
+  "infoHint": {
+    "ariaLabel": "詳細情報"
+  },
+  "review": {
+    "errors": {
+      "noReviewerIdentity": "利用可能なレビュアー ID がありません。",
+      "noReviewFound": "この Authority Relation にあなた宛てのレビューが見つかりません。"
+    },
+    "toasts": {
+      "submitFailed": "レビューの送信に失敗しました",
+      "submitSuccess": "レビューを送信しました"
+    },
+    "statuses": {
+      "completed": "完了"
+    },
+    "details": {
+      "title": "Authority Relation の詳細",
+      "actorIdentity": "アクターの ID",
+      "action": "アクション",
+      "domainContext": "ドメインコンテキスト",
+      "decisionCriteria": "判定基準",
+      "criterion": "基準",
+      "empty": "—",
+      "evidenceSources": "エビデンスソース",
+      "evidenceBinding": "エビデンスの紐付け",
+      "justificationChain": "正当化チェーン"
+    },
+    "questionnaire": {
+      "confirmation": "確認",
+      "elicitation": "構造化ヒアリング",
+      "placeholder": "回答を入力…"
+    },
+    "actions": {
+      "submitReview": "レビューを送信"
+    }
+  },
+  "request": {
+    "types": {
+      "review": {
+        "title": "レビューをリクエスト",
+        "description": "N 機能レビューを開始します。割り当てられた各レビュアーに、リレーションが実態を反映していることを確認するアセットレビューが送られ、レビューワークフローが起動します。"
+      },
+      "statusChange": {
+        "title": "ステータスを変更",
+        "description": "この Authority Relation をライフサイクルに沿って移行します。有効化するには、DNA-Coefficient が測定済みで上限以内であり、必要なすべての承認が完了している必要があります。"
+      }
+    },
+    "dialog": {
+      "title": "アクションをリクエスト",
+      "description": "この Authority Relation に対して送信するリクエストの種類を選択してください。"
+    },
+    "relationInfo": {
+      "label": "Authority Relation",
+      "status": "ステータス"
+    },
+    "form": {
+      "requestType": "リクエストの種類 *",
+      "message": "メッセージ（任意）",
+      "messagePlaceholder": "レビュアーへのメモを追加…",
+      "targetStatus": "対象ステータス *",
+      "statusPlaceholder": "対象ステータスを選択…"
+    },
+    "errors": {
+      "selectStatus": "対象ステータスを選択してください。",
+      "submitFailed": "リクエストの送信に失敗しました"
+    },
+    "toasts": {
+      "reviewRequested": "レビューをリクエストしました",
+      "reviewersNotified": "{{count}} 人のレビュアーに通知しました。",
+      "statusChanged": "ステータスを変更しました",
+      "statusSetTo": "ステータスを「{{status}}」に設定しました。"
+    },
+    "actions": {
+      "submitting": "送信中…",
+      "changeStatus": "ステータスを変更",
+      "sendRequest": "リクエストを送信"
+    }
+  }
+}

@@ -181,6 +181,16 @@ import {
       showInLanding: true,
     },
     {
+      id: 'authority-resolution',
+      name: 'Authority Resolution',
+      path: '/authority-resolution',
+      description: 'Author Authority Relations (ARF) and resolve agent decisions against them.',
+      icon: ClipboardCheck,
+      group: 'Govern',
+      maturity: 'alpha',
+      showInLanding: true,
+    },
+    {
       id: 'entitlements-sync',
       name: 'Entitlements Sync',
       path: '/entitlements-sync',

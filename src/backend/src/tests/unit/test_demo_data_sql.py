@@ -71,6 +71,29 @@ def test_interleaved_line_comments_in_values():
     assert out[0].pk_values == ["a1", "a2"]
 
 
+def test_semicolon_inside_line_comment_does_not_terminate():
+    # A ';' sitting inside a '--' comment within the VALUES body must not end the
+    # statement — the arf pack hit this with a separator like
+    # "-- AR 3: Ontos Role Request (meta-authority over Ontos itself; …)"
+    # and the parser silently dropped every row after the comment, so teardown
+    # left those orphaned.
+    sql = (
+        "INSERT INTO authority_relations (id, name) VALUES\n"
+        "-- AR 1: Trade Promotion\n"
+        "('r1', 'Trade Promotion'),\n"
+        "-- AR 2: Platform Access\n"
+        "('r2', 'Platform Access'),\n"
+        "-- AR 3: Ontos Role (meta-authority over Ontos itself; still draft)\n"
+        "('r3', 'Ontos Role'),\n"
+        "-- AR 4: DP Decommissioning\n"
+        "('r4', 'DP Decommissioning')\n"
+        "ON CONFLICT (id) DO NOTHING;"
+    )
+    out = parse_demo_inserts(sql)
+    assert len(out) == 1
+    assert out[0].pk_values == ["r1", "r2", "r3", "r4"]
+
+
 def test_non_id_primary_key():
     sql = (
         "INSERT INTO project_teams (project_id, team_id, assigned_by) VALUES\n"
@@ -94,7 +117,7 @@ def test_on_conflict_paren_list_not_parsed_as_row():
     assert out[0].pk_values == ["t1"]
 
 
-@pytest.mark.parametrize("preset", ["retail", "hls", "fsi", "mfg", "auto"])
+@pytest.mark.parametrize("preset", ["retail", "hls", "fsi", "mfg", "auto", "arf"])
 def test_real_packs_parse_cleanly(preset):
     from pathlib import Path
     import src.utils.demo_data_sql as mod
@@ -109,7 +132,42 @@ def test_real_packs_parse_cleanly(preset):
     for d in out:
         for v in d.pk_values:
             assert len(v) == 36 and v.count("-") == 4, (d.table, v)
-    # data_contracts (which carries ';'-laden descriptions) must be captured.
+    # Every pack ships domain assignments (shared polymorphic table).
     tables = {d.table for d in out}
-    assert "data_contracts" in tables
-    assert "entity_domain_associations" in tables  # post-fix association rows
+    assert "entity_domain_associations" in tables
+
+
+@pytest.mark.parametrize("preset", ["retail", "hls", "fsi", "mfg", "auto"])
+def test_vertical_packs_capture_data_contracts(preset):
+    """Vertical packs ship data_contracts (which carry ';'-laden descriptions);
+    the arf pack is governance-only and doesn't."""
+    from pathlib import Path
+    import src.utils.demo_data_sql as mod
+
+    data_dir = Path(mod.__file__).parent.parent / "data"
+    pack = data_dir / f"demo_data_{preset}.sql"
+    if not pack.exists():
+        pytest.skip(f"{pack.name} not present")
+    out = parse_demo_inserts(pack.read_text(encoding="utf-8"))
+    assert "data_contracts" in {d.table for d in out}
+
+
+def test_arf_pack_recovers_all_ar_rows():
+    """Regression for the ';'-in-comment parser bug: the arf pack has four
+    AR rows separated by '-- AR N: … itself; …' comment lines, and the parser
+    must recover every row (not just the first two)."""
+    from pathlib import Path
+    import src.utils.demo_data_sql as mod
+
+    data_dir = Path(mod.__file__).parent.parent / "data"
+    pack = data_dir / "demo_data_arf.sql"
+    if not pack.exists():
+        pytest.skip("demo_data_arf.sql not present")
+    out = parse_demo_inserts(pack.read_text(encoding="utf-8"))
+    by_table = {d.table: d for d in out}
+    assert len(by_table["authority_relations"].pk_values) == 6
+    assert len(by_table["authority_affirmations"].pk_values) == 12
+    assert len(by_table["authority_criteria"].pk_values) == 10
+    assert len(by_table["authority_prerequisites"].pk_values) == 2
+    assert len(by_table["authority_resource_refs"].pk_values) == 2
+    assert len(by_table["entity_semantic_links"].pk_values) == 1

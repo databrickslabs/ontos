@@ -1190,12 +1190,15 @@
       "iconLabel": "Icône",
       "colorLabel": "Couleur",
       "previewLabel": "Aperçu",
-      "levelNamePreview": "Nom du niveau"
+      "levelNamePreview": "Nom du niveau",
+      "entityTypeHelp": "Par défaut s'applique à tout type sans échelle propre (produits de données et contrats). Les types qui définissent leurs propres niveaux (p. ex. les relations d'autorité) ignorent Par défaut."
     },
     "entityTypes": {
       "all": "Tous les types d'entités",
       "DataProduct": "Produits de données",
-      "DataContract": "Contrats de données"
+      "DataContract": "Contrats de données",
+      "AuthorityRelation": "Relations d'autorité",
+      "default": "Par défaut"
     },
     "delete": {
       "title": "Supprimer le niveau de maturité ?",
@@ -1206,7 +1209,15 @@
       "created": "Niveau de maturité « {{name}} » créé.",
       "deleted": "Niveau de maturité « {{name}} » supprimé.",
       "cannotDeleteTitle": "Suppression impossible"
-    }
+    },
+    "noLevelsForKind": "Aucun niveau de maturité pour ce type. Modifiez le filtre ou ajoutez-en un.",
+    "filter": {
+      "allKinds": "Tous"
+    },
+    "noPoliciesAvailable": "Aucune politique disponible",
+    "descriptionPerKind": "Définissez l'échelle de maturité par type d'entité (produits de données, contrats, relations d'autorité). Chaque niveau est conditionné par des politiques de conformité ; l'ordre est propre à chaque type.",
+    "levelCount_one": "{{count}} niveau",
+    "levelCount_other": "{{count}} niveaux"
   },
   "directory": {
     "title": "Annuaire",

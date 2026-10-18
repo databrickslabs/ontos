@@ -110,6 +110,50 @@ def build_data_contract_dict(db: Session, contract_id: str) -> Optional[Dict[str
     return base
 
 
+def build_authority_relation_dict(db: Session, relation_id: str) -> Optional[Dict[str, Any]]:
+    """Build an enriched dict for an Authority Relation (ARF).
+
+    Exposes the fields the ARF maturity gates assert on: object resolution,
+    evidence binding, DNA-Coefficient measurement + ceiling, and N-functional
+    affirmation completeness.
+    """
+    from src.db_models.authority_resolution import AuthorityRelationDb, AuthorityAffirmationDb
+    relation = db.get(AuthorityRelationDb, relation_id)
+    if not relation:
+        return None
+
+    base = _extract_base_fields(relation)
+    base["entity_type"] = "AuthorityRelation"
+
+    # Object resolution
+    base["has_object"] = bool(relation.object_id)
+
+    # Evidence binding (either a legacy single binding or the multi-source list)
+    sources = relation.evidence_sources or []
+    legacy = relation.evidence_binding or {}
+    base["evidence_source_count"] = len(sources)
+    base["has_evidence"] = bool(sources) or bool(legacy.get("source_table_fqn"))
+
+    # DNA-Coefficient (divergence; 0.0 = best). Measured = a run has landed.
+    base["dna_measured"] = relation.dna_magnitude is not None
+    ceiling = relation.dna_max_threshold if relation.dna_max_threshold is not None else 0.3
+    base["dna_within_ceiling"] = relation.dna_magnitude is not None and relation.dna_magnitude <= ceiling
+
+    # N-functional affirmation: every required approver has affirmed.
+    affs = (
+        db.query(AuthorityAffirmationDb)
+        .filter(AuthorityAffirmationDb.relation_id == relation_id)
+        .all()
+    )
+    required_approvers = [a for a in affs if a.required and getattr(a, "is_approver", True)]
+    base["affirmer_count"] = sum(1 for a in affs if getattr(a, "is_approver", True))
+    base["reviewer_count"] = sum(1 for a in affs if getattr(a, "is_reviewer", False))
+    base["fully_affirmed"] = len(required_approvers) > 0 and all(a.affirmed for a in required_approvers)
+    base["is_active"] = relation.status == "active"
+
+    return base
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

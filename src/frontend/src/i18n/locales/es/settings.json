@@ -1190,12 +1190,15 @@
       "iconLabel": "Icono",
       "colorLabel": "Color",
       "previewLabel": "Vista previa",
-      "levelNamePreview": "Nombre del nivel"
+      "levelNamePreview": "Nombre del nivel",
+      "entityTypeHelp": "Predeterminado se aplica a cualquier tipo sin escala propia (productos de datos y contratos). Los tipos que definen sus propios niveles (p. ej. Relaciones de autoridad) ignoran Predeterminado."
     },
     "entityTypes": {
       "all": "Todos los tipos de entidad",
       "DataProduct": "Productos de datos",
-      "DataContract": "Contratos de datos"
+      "DataContract": "Contratos de datos",
+      "AuthorityRelation": "Relaciones de autoridad",
+      "default": "Predeterminado"
     },
     "delete": {
       "title": "¿Eliminar el nivel de madurez?",
@@ -1206,7 +1209,15 @@
       "created": "Nivel de madurez \"{{name}}\" creado.",
       "deleted": "Nivel de madurez \"{{name}}\" eliminado.",
       "cannotDeleteTitle": "No se puede eliminar"
-    }
+    },
+    "noLevelsForKind": "No hay niveles de madurez para este tipo. Cambie el filtro o agregue uno.",
+    "filter": {
+      "allKinds": "Todos"
+    },
+    "noPoliciesAvailable": "No hay políticas disponibles",
+    "descriptionPerKind": "Defina la escala de madurez por tipo de entidad (productos de datos, contratos, relaciones de autoridad). Cada nivel está controlado por políticas de cumplimiento; el orden es por tipo.",
+    "levelCount_one": "{{count}} nivel",
+    "levelCount_other": "{{count}} niveles"
   },
   "directory": {
     "title": "Directorio",

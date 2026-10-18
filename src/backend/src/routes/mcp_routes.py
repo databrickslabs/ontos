@@ -456,8 +456,16 @@ class MCPHandler:
             data_contracts_manager=getattr(app.state, "data_contracts_manager", None),
             semantic_models_manager=getattr(app.state, "semantic_models_manager", None),
             costs_manager=None,  # Add if needed
-            search_manager=getattr(app.state, "search_manager", None)
+            search_manager=getattr(app.state, "search_manager", None),
+            obo_workspace_client_factory=self._obo_factory(),
         )
+
+    def _obo_factory(self):
+        if not self._request.headers.get("x-forwarded-access-token"):
+            return None
+        from src.common.workspace_client import get_obo_workspace_client
+        request = self._request
+        return lambda: get_obo_workspace_client(request)
 
 
 class MCPError(Exception):

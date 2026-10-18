@@ -1,4 +1,4 @@
-export type EntityType = 'data_domain' | 'data_product' | 'data_contract';
+export type EntityType = 'data_domain' | 'data_product' | 'data_contract' | 'authority_relation';
 
 export interface EntitySemanticLink {
   id: string;

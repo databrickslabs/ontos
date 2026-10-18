@@ -462,7 +462,24 @@ async def handle_role_request_decision(
 # --- Demo Data Loading ---
 
 # Allowed presets — one self-contained SQL file per preset.
-DEMO_DATA_PRESETS = ("retail", "hls", "fsi", "mfg", "auto")
+DEMO_DATA_PRESETS = ("retail", "hls", "fsi", "mfg", "auto", "arf")
+
+
+def _rebuild_search_index(request: Request) -> None:
+    """Rebuild the global search index after a demo load/clear.
+
+    The index is built once at startup; demo SQL writes bypass the managers'
+    incremental index updates, so without this the loaded (or cleared) entities
+    stay invisible to (or linger in) search until the next restart. Best-effort:
+    a failed rebuild must not fail the demo operation.
+    """
+    search_manager = getattr(request.app.state, "search_manager", None)
+    if search_manager is None:
+        return
+    try:
+        search_manager.build_index()
+    except Exception:
+        logger.warning("Search index rebuild after demo data change failed", exc_info=True)
 
 
 @router.post("/settings/demo-data/load", status_code=status.HTTP_200_OK)
@@ -572,6 +589,7 @@ async def load_demo_data(
                     failures.append({"statement": head, "error": err_short})
 
         db.commit()
+        _rebuild_search_index(request)
 
         # A "success" that silently dropped half the statements is a lie that
         # hides schema drift (the packs falling out of sync with migrations).
@@ -722,6 +740,7 @@ async def clear_demo_data(
                 })
 
         db.commit()
+        _rebuild_search_index(request)
 
         success = True
         details["deleted_counts"] = deleted_counts

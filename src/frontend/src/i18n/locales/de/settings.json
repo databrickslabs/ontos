@@ -1190,12 +1190,15 @@
       "iconLabel": "Symbol",
       "colorLabel": "Farbe",
       "previewLabel": "Vorschau",
-      "levelNamePreview": "Stufenname"
+      "levelNamePreview": "Stufenname",
+      "entityTypeHelp": "Standard gilt für jede Art ohne eigene Stufenfolge (Datenprodukte & Verträge). Arten mit eigenen Stufen (z. B. Authority Relations) ignorieren Standard."
     },
     "entityTypes": {
       "all": "Alle Entity-Typen",
       "DataProduct": "Datenprodukte",
-      "DataContract": "Datenverträge"
+      "DataContract": "Datenverträge",
+      "AuthorityRelation": "Authority Relations",
+      "default": "Standard"
     },
     "delete": {
       "title": "Reifegradstufe löschen?",
@@ -1206,7 +1209,15 @@
       "created": "Reifegradstufe \"{{name}}\" erstellt.",
       "deleted": "Reifegradstufe \"{{name}}\" gelöscht.",
       "cannotDeleteTitle": "Löschen nicht möglich"
-    }
+    },
+    "noLevelsForKind": "Keine Reifegradstufen für diese Art. Ändern Sie den Filter oder fügen Sie eine hinzu.",
+    "filter": {
+      "allKinds": "Alle"
+    },
+    "noPoliciesAvailable": "Keine Richtlinien verfügbar",
+    "descriptionPerKind": "Definieren Sie die Reifegradstufenfolge pro Entitätsart (Datenprodukte, Verträge, Authority Relations). Jede Stufe wird durch Compliance-Richtlinien abgesichert; die Reihenfolge gilt pro Art.",
+    "levelCount_one": "{{count}} Stufe",
+    "levelCount_other": "{{count}} Stufen"
   },
   "directory": {
     "title": "Verzeichnis",

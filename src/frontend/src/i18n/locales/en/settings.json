@@ -1208,12 +1208,15 @@
       "iconLabel": "Icon",
       "colorLabel": "Color",
       "previewLabel": "Preview",
-      "levelNamePreview": "Level Name"
+      "levelNamePreview": "Level Name",
+      "entityTypeHelp": "Default applies to any kind without its own ladder (data products & contracts). Kinds that define their own levels (e.g. Authority Relations) ignore Default."
     },
     "entityTypes": {
       "all": "All Entity Types",
       "DataProduct": "Data Products",
-      "DataContract": "Data Contracts"
+      "DataContract": "Data Contracts",
+      "AuthorityRelation": "Authority Relations",
+      "default": "Default"
     },
     "delete": {
       "title": "Delete maturity level?",
@@ -1224,7 +1227,15 @@
       "created": "Maturity level \"{{name}}\" created.",
       "deleted": "Maturity level \"{{name}}\" deleted.",
       "cannotDeleteTitle": "Cannot delete"
-    }
+    },
+    "noLevelsForKind": "No maturity levels for this kind. Change the filter or add one.",
+    "filter": {
+      "allKinds": "All"
+    },
+    "noPoliciesAvailable": "No policies available",
+    "descriptionPerKind": "Define the maturity ladder per entity kind (data products, contracts, authority relations). Each level is gated by compliance policies; ordering is per kind.",
+    "levelCount_one": "{{count}} level",
+    "levelCount_other": "{{count}} levels"
   },
   "directory": {
     "title": "Directory",

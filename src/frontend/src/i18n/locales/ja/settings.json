@@ -1190,12 +1190,15 @@
       "iconLabel": "アイコン",
       "colorLabel": "色",
       "previewLabel": "プレビュー",
-      "levelNamePreview": "レベル名"
+      "levelNamePreview": "レベル名",
+      "entityTypeHelp": "デフォルトは、独自の段階を持たないすべての種類（データプロダクトとコントラクト）に適用されます。独自のレベルを定義する種類（例: Authority Relation）では、デフォルトは無視されます。"
     },
     "entityTypes": {
       "all": "すべてのエンティティタイプ",
       "DataProduct": "データプロダクト",
-      "DataContract": "データ契約"
+      "DataContract": "データ契約",
+      "AuthorityRelation": "Authority Relation",
+      "default": "デフォルト"
     },
     "delete": {
       "title": "成熟度レベルを削除しますか？",
@@ -1206,7 +1209,15 @@
       "created": "成熟度レベル「{{name}}」を作成しました。",
       "deleted": "成熟度レベル「{{name}}」を削除しました。",
       "cannotDeleteTitle": "削除できません"
-    }
+    },
+    "noLevelsForKind": "この種類の成熟度レベルはありません。フィルターを変更するか、追加してください。",
+    "filter": {
+      "allKinds": "すべて"
+    },
+    "noPoliciesAvailable": "利用可能なポリシーがありません",
+    "descriptionPerKind": "エンティティの種類（データプロダクト、コントラクト、Authority Relation）ごとに成熟度の段階を定義します。各レベルはコンプライアンスポリシーによって制御され、順序は種類ごとに設定されます。",
+    "levelCount_one": "{{count}} レベル",
+    "levelCount_other": "{{count}} レベル"
   },
   "directory": {
     "title": "ディレクトリ",

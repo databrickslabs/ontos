@@ -116,6 +116,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
             return AssetType.CONCEPT_MAPPING_SUGGESTION
+        if fqn.startswith('authority-relation://'):
+            return AssetType.AUTHORITY_RELATION
 
         if not self._ws_client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")

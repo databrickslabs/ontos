@@ -37,6 +37,10 @@
           "in_progress": "bezig",
           "unknown": "onbekend"
         }
+      },
+      "authorityResolution": {
+        "title": "Autoriteitsresolutie",
+        "description": "Actieve authority relations"
       }
     }
   },

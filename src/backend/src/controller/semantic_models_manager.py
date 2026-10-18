@@ -2229,16 +2229,27 @@ class SemanticModelsManager(SearchableAsset):
 
     def _run_glossary_reindex(self, debounce: Optional[float] = None) -> None:
         time.sleep(self._GLOSSARY_REINDEX_DEBOUNCE_SECONDS if debounce is None else debounce)
-        with self.__dict__.setdefault("_glossary_reindex_lock", threading.Lock()):
-            self._glossary_reindex_pending = False
-        try:
-            items = self.get_search_index_items()
-            search_manager = getattr(self, "_search_manager", None)
-            if search_manager is not None:
+        # One refresh at a time: a refresh scheduled after this one clears the
+        # pending flag reads the graph after this one wrote, so the newest
+        # state always lands last.
+        with self.__dict__.setdefault("_glossary_refresh_lock", threading.Lock()):
+            with self.__dict__.setdefault("_glossary_reindex_lock", threading.Lock()):
+                self._glossary_reindex_pending = False
+            try:
+                items = self.get_search_index_items()
+                search_manager = getattr(self, "_search_manager", None)
+                if search_manager is None:
+                    return
+                if not items:
+                    # get_search_index_items() returns [] on errors too; don't let a
+                    # failed read empty the glossary (an emptied graph is rare, and
+                    # its leftover entries only cost a stale hit).
+                    logger.warning("Glossary search refresh returned no terms; keeping the current entries.")
+                    return
                 search_manager.replace_type("glossary-term", items)
                 logger.info(f"Glossary search entries refreshed ({len(items)} terms).")
-        except Exception as e:
-            logger.warning(f"Glossary search refresh failed: {e}")
+            except Exception as e:
+                logger.warning(f"Glossary search refresh failed: {e}")
 
     def graph_freshness(self) -> Dict[str, Any]:
         """Explicit graph-freshness surface for the UI (P0-8, API contract §6).

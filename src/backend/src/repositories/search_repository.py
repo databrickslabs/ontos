@@ -57,45 +57,62 @@ def _aux_text(item: SearchIndexItem) -> str:
     return " ".join(p for p in parts if p)
 
 
+_UPSERT_COLS = ("id", "entity_id", "type", "feature_id", "title", "description", "aux_text", "tags", "extra_data", "link")
+_CONTENT_COLS = _UPSERT_COLS[1:]
+
+
 def upsert_documents(db: Session, items: Iterable[SearchIndexItem]) -> int:
-    """Insert or update search_documents rows for the given items. Returns the count."""
-    rows = list(items)
-    if not rows:
+    """Insert or update search_documents rows for the given items, in one
+    statement. Rows whose content is unchanged are left alone (no write, and
+    ``updated_at`` keeps meaning "content last changed"), so a reconcile that
+    re-sends the whole catalog only writes what actually differs. Returns the
+    number of distinct items sent."""
+    by_id: Dict[str, SearchIndexItem] = {}
+    for item in items:
+        by_id[item.id] = item  # last one wins; ON CONFLICT can't touch a row twice
+    if not by_id:
         return 0
+    rows = list(by_id.values())
+    cols = ", ".join(_UPSERT_COLS)
     stmt = text(
-        """
-        INSERT INTO search_documents
-            (id, entity_id, type, feature_id, title, description, aux_text, tags, extra_data, link, updated_at)
-        VALUES
-            (:id, :entity_id, :type, :feature_id, :title, :description, :aux_text,
-             CAST(:tags AS jsonb), CAST(:extra_data AS jsonb), :link, now())
+        f"""
+        INSERT INTO search_documents ({cols}, updated_at)
+        SELECT u.id, u.entity_id, u.type, u.feature_id, u.title, u.description, u.aux_text,
+               CAST(u.tags AS jsonb), CAST(u.extra_data AS jsonb), u.link, now()
+        FROM unnest(
+            CAST(:id AS text[]), CAST(:entity_id AS text[]), CAST(:type AS text[]),
+            CAST(:feature_id AS text[]), CAST(:title AS text[]), CAST(:description AS text[]),
+            CAST(:aux_text AS text[]), CAST(:tags AS text[]), CAST(:extra_data AS text[]),
+            CAST(:link AS text[])
+        ) AS u({cols})
         ON CONFLICT (id) DO UPDATE SET
-            entity_id = EXCLUDED.entity_id,
-            type = EXCLUDED.type,
-            feature_id = EXCLUDED.feature_id,
-            title = EXCLUDED.title,
-            description = EXCLUDED.description,
-            aux_text = EXCLUDED.aux_text,
-            tags = EXCLUDED.tags,
-            extra_data = EXCLUDED.extra_data,
-            link = EXCLUDED.link,
+            {", ".join(f"{c} = EXCLUDED.{c}" for c in _CONTENT_COLS)},
             updated_at = now()
+        WHERE ({", ".join(f"search_documents.{c}" for c in _CONTENT_COLS)})
+              IS DISTINCT FROM ({", ".join(f"EXCLUDED.{c}" for c in _CONTENT_COLS)})
         """
     )
-    for item in rows:
-        db.execute(stmt, {
-            "id": item.id,
-            "entity_id": _entity_id(item.id),
-            "type": item.type,
-            "feature_id": item.feature_id,
-            "title": item.title,
-            "description": item.description,
-            "aux_text": _aux_text(item),
-            "tags": json.dumps([str(t) for t in (item.tags or [])]),
-            "extra_data": json.dumps(item.extra_data or {}),
-            "link": item.link,
-        })
+    db.execute(stmt, {
+        "id": [it.id for it in rows],
+        "entity_id": [_entity_id(it.id) for it in rows],
+        "type": [it.type for it in rows],
+        "feature_id": [it.feature_id for it in rows],
+        "title": [it.title for it in rows],
+        "description": [it.description for it in rows],
+        "aux_text": [_aux_text(it) for it in rows],
+        "tags": [json.dumps([str(t) for t in (it.tags or [])]) for it in rows],
+        "extra_data": [json.dumps(it.extra_data or {}) for it in rows],
+        "link": [it.link for it in rows],
+    })
     return len(rows)
+
+
+def delete_documents(db: Session, item_ids: Iterable[str]) -> int:
+    ids = list(item_ids)
+    if not ids:
+        return 0
+    res = db.execute(text("DELETE FROM search_documents WHERE id = ANY(:ids)"), {"ids": ids})
+    return int(res.rowcount or 0)
 
 
 def delete_document(db: Session, item_id: str) -> None:
@@ -526,20 +543,23 @@ def replace_all(db: Session, items: Iterable[SearchIndexItem]) -> int:
 RECONCILE_LOCK_KEY = 0x6F6E746F73535243
 
 
-def db_clock(db: Session):
-    """The database's wall clock. Reconcile marks its start with this so the
-    stale sweep compares against the same clock that stamps ``updated_at``."""
-    return db.execute(text("SELECT clock_timestamp()")).scalar()
-
-
 def count_documents(db: Session) -> int:
     return int(db.execute(text("SELECT count(*) FROM search_documents")).scalar() or 0)
 
 
-def delete_stale(db: Session, before) -> int:
-    """Drop rows not refreshed since ``before`` (entities deleted while their
-    incremental removal was missed). Returns the number of rows removed."""
-    res = db.execute(text("DELETE FROM search_documents WHERE updated_at < :before"), {"before": before})
+def delete_missing(db: Session, types: Iterable[str], keep_ids: Iterable[str]) -> int:
+    """Drop rows of ``types`` whose id isn't in ``keep_ids`` (entities deleted
+    while their incremental removal was missed). Types absent from ``types``
+    are never touched, so a manager that returned nothing (for instance because
+    it swallowed an error) can't empty its part of the index. Returns the
+    number of rows removed."""
+    types = sorted(set(types))
+    if not types:
+        return 0
+    res = db.execute(
+        text("DELETE FROM search_documents WHERE type = ANY(:types) AND NOT (id = ANY(:ids))"),
+        {"types": types, "ids": list(set(keep_ids))},
+    )
     return int(res.rowcount or 0)
 
 

@@ -141,6 +141,56 @@ def test_failed_source_skips_the_sweep(pg):
     assert _ids(pg) == {i.id for i in ITEMS}  # nothing wiped because of the broken source
 
 
+def _updated_at(factory):
+    with factory() as db:
+        return dict(db.execute(text("SELECT id, updated_at FROM search_documents")).all())
+
+
+def test_reconcile_does_not_rewrite_unchanged_rows(pg):
+    backend = _backend(pg)
+    backend.reconcile([("All", lambda: ITEMS)], is_indexable=_indexable)
+    before = _updated_at(pg)
+    edited = [i.model_copy(update={"description": "edited"}) if i.id == "product::2" else i for i in ITEMS]
+    backend.reconcile([("All", lambda: edited)], is_indexable=_indexable)
+    after = _updated_at(pg)
+    assert {i for i in after if after[i] != before[i]} == {"product::2"}
+
+
+def test_a_source_returning_nothing_keeps_its_rows(pg):
+    """Managers swallow their errors and return []; that must not empty their type."""
+    backend = _backend(pg)
+    with pg() as db:
+        repo.upsert_documents(db, ITEMS)
+    stats = backend.reconcile(
+        [("Products", lambda: PRODUCTS), ("Others", lambda: [])], is_indexable=_indexable,
+    )
+    assert stats["status"] == "done" and stats["removed"] == 0
+    assert _ids(pg) == {i.id for i in ITEMS}
+
+
+def test_changes_made_during_a_reconcile_win_over_its_snapshot(pg):
+    backend = _backend(pg)
+    gone, edited = ITEMS[0], ITEMS[1].model_copy(update={"title": "Edited Meanwhile"})
+    term = SearchIndexItem(id="glossary-term::live", type="glossary-term", feature_id="semantic-models",
+                           title="Live Term", description="", link="/c", tags=[], extra_data={})
+
+    def snapshot_then_concurrent_writes():
+        # The snapshot was taken before these incremental writes landed.
+        backend.remove(gone.id)
+        backend.upsert([edited])
+        backend.replace_type("glossary-term", [term])
+        return ITEMS
+
+    backend.reconcile([("All", snapshot_then_concurrent_writes)], is_indexable=_indexable)
+    ids = _ids(pg)
+    assert gone.id not in ids                                  # not resurrected
+    with pg() as db:
+        title = db.execute(text("SELECT title FROM search_documents WHERE id = :i"), {"i": edited.id}).scalar()
+    assert title == "Edited Meanwhile"                         # not rolled back
+    assert {i for i in ids if i.startswith("glossary")} == {"glossary-term::live"}
+    assert PostgresBackend._dirty is None                      # tracking ends with the run
+
+
 def test_only_one_replica_reconciles_at_a_time(pg):
     with pg() as holder:
         assert repo.try_reconcile_lock(holder)
@@ -213,6 +263,13 @@ def test_postgres_manager_backfills_without_an_in_memory_index(pg, pg_manager_fa
     assert mgr.index == []
     assert mgr.last_reconcile["status"] == "done"
     assert _ids(pg) == {i.id for i in ITEMS}
+
+
+def test_engine_is_prepared_on_the_reconcile_thread(pg, pg_manager_factory):
+    mgr = pg_manager_factory("postgres", [_Source(ITEMS)], wait_seconds=0)
+    mgr.wait_for_reconcile(timeout=30)
+    assert mgr.backend._prepared and mgr.backend.engine is not None
+    assert mgr.backend.engine.name == "pg"
 
 
 def test_rebuild_reconciles_in_the_background_and_rollback_to_memory_works(pg, pg_manager_factory):

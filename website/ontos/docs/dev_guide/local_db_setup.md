@@ -81,9 +81,14 @@ SEARCH_BACKFILL_BATCH_SIZE=500    # rows per upsert transaction
 
 At startup the app checks which extensions the database has and logs the engine it picked. Locally that's the portable `pg` engine. The `lakebase` engine is only selected on a Lakebase project with Lakebase Search enabled.
 
-With the Postgres backend, search reads from the `search_documents` table; there is no in-memory index. Every boot reconciles that table with the current entities in a background thread:
+With the Postgres backend, search reads from the `search_documents` table; there is no in-memory index. Every boot reconciles that table with the current entities. Entities are read at startup, and the table is written in a background thread:
 
-- It upserts every entity in small batches, then removes rows for entities that no longer exist. If any manager fails, the removal step is skipped, so a broken manager can't empty its part of the index.
+- It upserts every entity in small batches, writing only rows whose content changed. Then it removes rows for entities that no longer exist.
+  - If any manager fails, the removal step is skipped.
+  - An entity type that no manager returned is never removed.
+  - Either way, a broken manager can't empty its part of the index.
+- Edits and deletions made while the reconcile runs win over its snapshot.
+- Engine detection and index creation run on the same background thread. Until they finish, search answers without the typo fallback.
 - If the table is empty (first boot), startup waits up to `SEARCH_BACKFILL_WAIT_SECONDS`, then serves from the partial index while the backfill finishes. Otherwise search answers from the existing rows straight away.
 - With several replicas, only one reconciles at a time (Postgres advisory lock). All replicas read and write the same table.
 - Progress is logged as `Search reconcile: …`. `POST /api/search/rebuild-index` starts a reconcile on demand.

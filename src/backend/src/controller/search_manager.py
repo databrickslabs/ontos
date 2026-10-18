@@ -1,6 +1,6 @@
 from __future__ import annotations # Ensure forward references work
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Iterable, TYPE_CHECKING
 import re
 import threading
 
@@ -76,10 +76,9 @@ class SearchManager:
             backend_name = "memory"
         self._reconcile_thread: Optional[threading.Thread] = None
         self.last_reconcile: Optional[Dict[str, Any]] = None
+        # On Postgres, engine detection + index DDL run on the reconcile thread
+        # (PostgresBackend.reconcile), off the startup path.
         self._backend = create_backend(self, backend_name, engine_name, trgm_threshold)
-        if isinstance(self._backend, PostgresBackend):
-            # Engine detection + engine-specific indexes, before the backfill below.
-            self._backend.prepare()
 
         logger.info(
             f"SearchManager initialized with {len(self.searchable_managers)} managers "
@@ -136,14 +135,13 @@ class SearchManager:
             return
         logger.info(f"Building search index from {len(self.searchable_managers)} managers...")
         new_index: List[SearchIndexItem] = []
-        uses_postgres = False
 
         for manager in self.searchable_managers:
             manager_name = manager.__class__.__name__
             try:
                 items = manager.get_search_index_items()
                 for item in items:
-                    if not self._is_item_indexable(item, uses_postgres):
+                    if not self._is_item_indexable(item, False):
                         logger.debug(f"Skipping item {item.id} from {manager_name} (disabled or missing feature_id)")
                         continue
                     new_index.append(item)
@@ -155,19 +153,22 @@ class SearchManager:
 
     # --- Postgres backend: background reconcile ---------------------------
     def _start_reconcile(self) -> None:
-        """Reconcile in a daemon thread. Wait (bounded) only on an empty table, so
-        the first searches after a fresh deploy aren't blank; otherwise search
+        """Fetch every manager's items here, on the caller's thread (managers
+        hold sessions that aren't safe to use from another thread), then write
+        them in a daemon thread. Wait (bounded) only on an empty table, so the
+        first searches after a fresh deploy aren't blank; otherwise search
         answers from the existing rows while the reconcile catches up."""
         if self._reconcile_thread is not None and self._reconcile_thread.is_alive():
             logger.info("Search reconcile already running; not starting another.")
             return
+        sources = [(m.__class__.__name__, self._prefetch(m)) for m in self.searchable_managers]
         try:
             empty = self._backend.count() == 0
         except Exception as e:
             logger.error(f"Could not read search_documents: {e}", exc_info=True)
             empty = False
         self._reconcile_thread = threading.Thread(
-            target=self._reconcile_postgres, name="search-reconcile", daemon=True,
+            target=self._reconcile_postgres, args=(sources,), name="search-reconcile", daemon=True,
         )
         self._reconcile_thread.start()
         if empty and self._backfill_wait_seconds > 0:
@@ -178,10 +179,20 @@ class SearchManager:
                     "serving from the partial index meanwhile."
                 )
 
-    def _reconcile_postgres(self) -> None:
-        sources = [
-            (m.__class__.__name__, m.get_search_index_items) for m in self.searchable_managers
-        ]
+    @staticmethod
+    def _prefetch(manager: SearchableAsset) -> Callable[[], List[SearchIndexItem]]:
+        """Fetch now; the reconcile thread replays the result (or the error)."""
+        try:
+            items = list(manager.get_search_index_items())
+        except Exception as e:
+            error = e
+
+            def fetch() -> List[SearchIndexItem]:
+                raise error
+            return fetch
+        return lambda: items
+
+    def _reconcile_postgres(self, sources) -> None:
         try:
             self.last_reconcile = self._backend.reconcile(
                 sources,

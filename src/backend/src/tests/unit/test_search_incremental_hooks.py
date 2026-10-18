@@ -101,6 +101,14 @@ def test_glossary_refresh_is_debounced_and_replaces_the_type(monkeypatch):
     assert len(started) == 2
 
 
+def test_glossary_refresh_with_no_terms_keeps_the_current_entries():
+    mgr = _bare_semantic_manager([])  # get_search_index_items() swallowed an error
+    search = MagicMock()
+    mgr._search_manager = search
+    mgr._run_glossary_reindex(debounce=0)
+    search.replace_type.assert_not_called()
+
+
 def test_memory_replace_type_swaps_only_that_type(monkeypatch):
     from src.controller.search_manager import SearchManager
     monkeypatch.setattr(

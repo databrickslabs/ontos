@@ -121,9 +121,22 @@ class Settings(BaseSettings):
     APP_DB_DROP_ON_START: bool = Field(False, env='APP_DB_DROP_ON_START')
 
     # Search backend: "memory" (in-process index, default) or "postgres" (DB-backed
-    # full-text search over the search_documents table). Postgres-native search
-    # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
+    # search over the search_documents table).
     SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
+    # Search engine for the "postgres" backend, picked from the database's installed
+    # extensions: "pg" (portable: pg_trgm, pgvector) or "lakebase" (Lakebase Search:
+    # lakebase_text + lakebase_vector). "auto" picks "lakebase" only when both
+    # lakebase_* extensions are installed; an explicit "lakebase" without them is an error.
+    SEARCH_ENGINE: str = Field("auto", env='SEARCH_ENGINE')
+    # pg_trgm word-similarity threshold for the typo fallback (used only when a
+    # query has no lexical matches). Lower = more permissive.
+    SEARCH_TRGM_THRESHOLD: float = Field(0.45, env='SEARCH_TRGM_THRESHOLD')
+    # "postgres" backend: every boot reconciles search_documents with the managers in
+    # a background thread. Startup waits up to this many seconds for it only when the
+    # table is empty (first boot), so early searches aren't blank; 0 = never wait.
+    SEARCH_BACKFILL_WAIT_SECONDS: float = Field(30.0, env='SEARCH_BACKFILL_WAIT_SECONDS')
+    # Rows per upsert transaction during the reconcile.
+    SEARCH_BACKFILL_BATCH_SIZE: int = Field(500, env='SEARCH_BACKFILL_BATCH_SIZE')
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')

@@ -284,9 +284,11 @@ def _passes_filters(
 
 
 def _compute_facets(items: List[SearchIndexItem], top_tags: int = 10) -> Dict[str, Dict[str, int]]:
-    """Count candidates by type and by common extra_data fields, plus top tags.
+    """Count the result set by type and by common extra_data fields, plus top tags.
 
     Gives the agent concrete values to narrow on instead of broadening to ``*``.
+    Callers pass the items the query matched (all filtered items in list mode),
+    so the counts describe the results, as on the Postgres backend.
     """
     facets: Dict[str, Dict[str, int]] = {"type": {}}
     for f in _FACET_FIELDS:
@@ -306,7 +308,8 @@ def _compute_facets(items: List[SearchIndexItem], top_tags: int = 10) -> Dict[st
     facets = {k: v for k, v in facets.items() if v}
     if tag_counts:
         facets["tags"] = dict(
-            sorted(tag_counts.items(), key=lambda kv: kv[1], reverse=True)[:top_tags]
+            # count desc, then tag asc: deterministic, and the same order as Postgres.
+            sorted(tag_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top_tags]
         )
     return facets
 
@@ -388,11 +391,13 @@ def search_index(
         total = len(ranked)
         page = ranked[offset : offset + limit]
         results = [_project_fields(_to_result(it, None), fields) for it in page]
+        matched = ranked
     else:
         scored = score_and_rank(candidates, query, config)
         total = len(scored)
         page = scored[offset : offset + limit]
         results = [_project_fields(_to_result(s.item, s.total_score), fields) for s in page]
+        matched = [s.item for s in scored]
 
     return {
         "results": results,
@@ -401,6 +406,6 @@ def search_index(
         "offset": offset,
         "limit": limit,
         "has_more": (offset + len(results)) < total,
-        "facets": _compute_facets(candidates) if include_facets else {},
+        "facets": _compute_facets(matched) if include_facets else {},
         "query": query,
     }

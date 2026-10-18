@@ -12,6 +12,8 @@ ONTOS = Namespace("http://ontos.app/ontology#")
 from rdflib.namespace import XSD
 from sqlalchemy.orm import Session
 import signal
+import threading
+import time
 from contextlib import contextmanager
 import json
 import shutil
@@ -1432,6 +1434,7 @@ class SemanticModelsManager(SearchableAsset):
             self.rebuild_graph_from_enabled()
         except Exception as e:
             logger.error(f"Failed to rebuild RDF graph: {e}")
+        self._schedule_glossary_reindex()
 
     def _invalidate_cache(self) -> None:
         """Clear all cache entries (in-memory + persistent file cache).
@@ -1458,6 +1461,48 @@ class SemanticModelsManager(SearchableAsset):
                         logger.warning(f"Failed to delete cache file {cache_file}: {e}")
 
         logger.info("Semantic models cache invalidated (in-memory and persistent)")
+        self._schedule_glossary_reindex()
+
+    # --- search index: glossary terms -------------------------------------
+    # Concepts come out of the RDF graph via the concept cache, so they are
+    # re-indexed as a set: every mutation path ends in _invalidate_cache() or
+    # on_models_changed(), which schedule one debounced background refresh of
+    # all glossary-term entries (a burst of edits costs one refresh).
+    _GLOSSARY_REINDEX_DEBOUNCE_SECONDS = 1.0
+
+    def _schedule_glossary_reindex(self) -> None:
+        if getattr(self, "_search_manager", None) is None:
+            return  # startup / tests: the initial index build covers it
+        lock = self.__dict__.setdefault("_glossary_reindex_lock", threading.Lock())
+        with lock:
+            if self.__dict__.get("_glossary_reindex_pending"):
+                return
+            self._glossary_reindex_pending = True
+        threading.Thread(target=self._run_glossary_reindex, name="glossary-reindex", daemon=True).start()
+
+    def _run_glossary_reindex(self, debounce: Optional[float] = None) -> None:
+        time.sleep(self._GLOSSARY_REINDEX_DEBOUNCE_SECONDS if debounce is None else debounce)
+        # One refresh at a time: a refresh scheduled after this one clears the
+        # pending flag reads the graph after this one wrote, so the newest
+        # state always lands last.
+        with self.__dict__.setdefault("_glossary_refresh_lock", threading.Lock()):
+            with self.__dict__.setdefault("_glossary_reindex_lock", threading.Lock()):
+                self._glossary_reindex_pending = False
+            try:
+                items = self.get_search_index_items()
+                search_manager = getattr(self, "_search_manager", None)
+                if search_manager is None:
+                    return
+                if not items:
+                    # get_search_index_items() returns [] on errors too; don't let a
+                    # failed read empty the glossary (an emptied graph is rare, and
+                    # its leftover entries only cost a stale hit).
+                    logger.warning("Glossary search refresh returned no terms; keeping the current entries.")
+                    return
+                search_manager.replace_type("glossary-term", items)
+                logger.info(f"Glossary search entries refreshed ({len(items)} terms).")
+            except Exception as e:
+                logger.warning(f"Glossary search refresh failed: {e}")
 
     @staticmethod
     def _extract_source_context(context_name: str) -> Optional[str]:

@@ -3129,7 +3129,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             return False
 
         try:
-            return self._entity_tag_repo.remove_tag_from_entity(
+            removed = self._entity_tag_repo.remove_tag_from_entity(
                 db=self._db,
                 tag_id=tag_id,
                 entity_id=product_id,
@@ -3138,6 +3138,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to remove tag {tag_id} from ODPS product {product_id}: {e}")
             return False
+        if removed:
+            # Tags are indexed, so drop the removed one from search too.
+            try:
+                product = self.get_product(product_id)
+                if product:
+                    self._update_search_index(product)
+            except Exception as e:  # the tag is gone either way; the next reconcile catches up
+                logger.warning(f"Search reindex after removing tag {tag_id} from {product_id} failed: {e}")
+        return removed
 
     def get_product_tags(self, product_id: str) -> List[Dict[str, Any]]:
         """Public method to get all tags assigned to an ODPS data product."""

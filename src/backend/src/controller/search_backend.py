@@ -17,8 +17,10 @@ hooks) don't care which is active:
 """
 from __future__ import annotations
 
+import threading
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
@@ -89,11 +91,59 @@ class InMemoryBackend(SearchBackend):
 
 
 class PostgresBackend(SearchBackend):
-    """DB-backed full-text search over the search_documents table."""
+    """DB-backed search over the search_documents table, ranked by the
+    advanced-search Settings exactly like the in-memory scorer."""
 
-    def __init__(self, session_factory):
+    def __init__(
+        self,
+        session_factory,
+        config_provider: Optional[Callable[[], Any]] = None,
+        engine_name: str = "auto",
+        trgm_threshold: float = 0.45,
+    ):
         # session_factory() -> context manager yielding a Session (get_db_session).
+        # config_provider() -> the current SearchConfig (hot-reloaded per call), so
+        # Settings changes apply on the next query without a reindex.
         self._session_factory = session_factory
+        self._config_provider = config_provider
+        self._engine_name = engine_name
+        self._trgm_threshold = trgm_threshold
+        self.engine = None  # SearchEngine, set by prepare()
+        self._prepared = False
+
+    # Engine detection + index DDL runs once per process and database: startup
+    # builds more than one SearchManager, and each needs the same engine.
+    _prepare_lock = threading.Lock()
+    _prepared_engines: Dict[Tuple[Callable, str], Any] = {}
+
+    def prepare(self) -> None:
+        """Detect the engine from installed extensions and ensure its indexes.
+
+        Runs on the reconcile thread before the backfill (never on the startup
+        path); until it finishes, search answers without the engine extras. A
+        misconfigured explicit ``SEARCH_ENGINE=lakebase`` raises; anything else
+        degrades to plain Settings-driven search (no typo fallback) with a
+        logged warning.
+        """
+        from src.repositories.search_engine import SearchEngineUnavailable, prepare_engine
+        key = (self._session_factory, self._engine_name)
+        with PostgresBackend._prepare_lock:
+            if key in PostgresBackend._prepared_engines:
+                self.engine = PostgresBackend._prepared_engines[key]
+                self._prepared = True
+                return
+            try:
+                self.engine = prepare_engine(self._session_factory, self._engine_name)
+            except SearchEngineUnavailable:
+                raise
+            except Exception as e:
+                logger.warning(f"Search engine detection failed; continuing without engine extras: {e}")
+                self.engine = None
+            PostgresBackend._prepared_engines[key] = self.engine
+            self._prepared = True
+
+    def _config(self):
+        return self._config_provider() if self._config_provider else None
 
     def search(self, query, *, type_filter=None, filters=None, allowed_features=None,
                limit=25, offset=0, include_facets=True, fields=None) -> Dict[str, Any]:
@@ -102,19 +152,65 @@ class PostgresBackend(SearchBackend):
             return search_repository.search(
                 db, query, type_filter=type_filter, filters=filters,
                 allowed_features=allowed_features, limit=limit, offset=offset,
-                include_facets=include_facets, fields=fields,
+                include_facets=include_facets, fields=fields, config=self._config(),
+                engine=self.engine, trgm_threshold=self._trgm_threshold,
             )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:
         from src.repositories import search_repository
         with self._session_factory() as db:
-            return search_repository.search_index_items(db, query, limit=limit)
+            return search_repository.search_index_items(
+                db, query, limit=limit, config=self._config(),
+                engine=self.engine, trgm_threshold=self._trgm_threshold,
+            )
+
+    def bm25_rank(self, query, *, type_filter=None, filters=None, allowed_features=None,
+                  limit=100) -> List[Tuple[str, float]]:
+        """BM25 ranked list (lakebase engine only, else ``[]``); input for hybrid fusion (#1061)."""
+        from src.repositories import search_repository
+        try:
+            with self._session_factory() as db:
+                return search_repository.bm25_rank(
+                    db, query, config=self._config(), engine=self.engine, type_filter=type_filter,
+                    filters=filters, allowed_features=allowed_features, limit=limit,
+                )
+        except Exception as e:
+            # e.g. a BM25 index whose startup build failed: degrade to "no BM25
+            # signal" so hybrid fusion still answers from the other lists.
+            logger.warning(f"BM25 ranking unavailable: {e}")
+            return []
+
+    def refresh_bm25_statistics(self) -> Dict[str, Any]:
+        from src.repositories.search_engine import refresh_bm25_statistics
+        return refresh_bm25_statistics(self._session_factory, self.engine)
+
+    # --- writes during a reconcile ------------------------------------------
+    # The reconcile writes a snapshot fetched before it started. Incremental
+    # writes that land meanwhile are newer, so they're recorded here (process
+    # wide; one reconcile per process at a time) and win: the reconcile skips
+    # those ids and re-applies them once it's done, so an entity deleted or
+    # edited mid-reconcile isn't resurrected or rolled back.
+    _reconcile_lock = threading.Lock()
+    _dirty_lock = threading.Lock()
+    _dirty: Optional[Dict[str, Optional[SearchIndexItem]]] = None   # id -> item, None = removed
+    _dirty_types: Optional[Dict[str, List[SearchIndexItem]]] = None  # replace_type calls
+
+    @classmethod
+    def _track(cls, items: Iterable[SearchIndexItem] = (), removed: Iterable[str] = ()) -> None:
+        with cls._dirty_lock:
+            if cls._dirty is None:
+                return
+            for it in items:
+                cls._dirty[it.id] = it
+            for item_id in removed:
+                cls._dirty[item_id] = None
 
     def upsert(self, items: Iterable[SearchIndexItem]) -> None:
         from src.repositories import search_repository
         rows = list(items)
         if not rows:
             return
+        self._track(items=rows)
         try:
             with self._session_factory() as db:
                 search_repository.upsert_documents(db, rows)
@@ -123,6 +219,7 @@ class PostgresBackend(SearchBackend):
 
     def remove(self, item_id: str) -> None:
         from src.repositories import search_repository
+        self._track(removed=[item_id])
         try:
             with self._session_factory() as db:
                 search_repository.delete_document(db, item_id)
@@ -136,12 +233,142 @@ class PostgresBackend(SearchBackend):
             search_repository.replace_all(db, rows)
         logger.info(f"PostgresBackend: rebuilt search_documents with {len(rows)} items.")
 
+    def replace_type(self, type_: str, items: Iterable[SearchIndexItem]) -> None:
+        """Make the rows of one type exactly ``items`` (e.g. all glossary terms),
+        in one transaction; unchanged rows aren't rewritten."""
+        rows = [it for it in items if it.type == type_]
+        with PostgresBackend._dirty_lock:
+            if PostgresBackend._dirty_types is not None:
+                PostgresBackend._dirty_types[type_] = rows
+        try:
+            self._replace_type(type_, rows)
+        except Exception as e:
+            logger.warning(f"PostgresBackend.replace_type failed for {type_}: {e}")
 
-def create_backend(manager: Any, backend_name: str) -> SearchBackend:
+    def _replace_type(self, type_: str, rows: List[SearchIndexItem]) -> None:
+        from src.repositories import search_repository
+        with self._session_factory() as db:
+            search_repository.delete_missing(db, [type_], [it.id for it in rows])
+            search_repository.upsert_documents(db, rows)
+
+    def count(self) -> int:
+        from src.repositories import search_repository
+        with self._session_factory() as db:
+            return search_repository.count_documents(db)
+
+    def reconcile(
+        self,
+        sources: Iterable[Tuple[str, Callable[[], List[SearchIndexItem]]]],
+        *,
+        is_indexable: Callable[[SearchIndexItem], bool],
+        batch_size: int = 500,
+    ) -> Dict[str, Any]:
+        """Bring ``search_documents`` in line with the managers.
+
+        Sends every current item (``batch_size`` rows per statement and
+        transaction, so lock time stays bounded and search keeps answering
+        from the table meanwhile); rows whose content didn't change aren't
+        rewritten. Then deletes rows of the types this run saw whose ids it
+        didn't see, which are entities whose incremental removal was missed.
+        The sweep is skipped if any source failed, and a type no source
+        returned is never swept, so a broken manager can't empty its part of
+        the index. One reconcile per process at a time (later ones wait), and
+        one replica at a time (advisory lock; the others return ``skipped``).
+        """
+        from src.repositories import search_repository as repo
+        started = time.monotonic()
+        stats: Dict[str, Any] = {"status": "done", "upserted": 0, "inserted": 0, "removed": 0, "failed_sources": []}
+        with PostgresBackend._reconcile_lock:
+            if not self._prepared:
+                self.prepare()
+            with self._session_factory() as lock_db:
+                if not repo.try_reconcile_lock(lock_db):
+                    logger.info("Search reconcile: another replica holds the lock; skipping.")
+                    return {**stats, "status": "skipped"}
+                with PostgresBackend._dirty_lock:
+                    PostgresBackend._dirty, PostgresBackend._dirty_types = {}, {}
+                try:
+                    self._reconcile_sources(repo, list(sources), is_indexable, batch_size, stats)
+                finally:
+                    self._apply_dirty()
+                    repo.release_reconcile_lock(lock_db)
+            # BM25 corpus statistics are fixed at index build time; refresh them
+            # when the corpus gained or lost documents (no-op off the lakebase
+            # engine). Edits of existing rows are left to the scheduled reindex
+            # job, so a plain restart doesn't rebuild.
+            if stats["inserted"] or stats["removed"]:
+                try:
+                    stats["bm25_refresh"] = self.refresh_bm25_statistics()
+                except Exception as e:
+                    logger.warning(f"Search reconcile: BM25 refresh failed: {e}")
+        stats["seconds"] = round(time.monotonic() - started, 2)
+        logger.info(
+            f"Search reconcile {stats['status']}: {stats['upserted']} upserted, "
+            f"{stats['removed']} stale removed in {stats['seconds']}s."
+        )
+        return stats
+
+    def _reconcile_sources(self, repo, sources, is_indexable, batch_size, stats) -> None:
+        seen_types, seen_ids = set(), set()
+        for n, (name, fetch) in enumerate(sources, 1):
+            try:
+                items = [it for it in fetch() if is_indexable(it)]
+                seen_types.update(it.type for it in items)
+                seen_ids.update(it.id for it in items)
+                for i in range(0, len(items), batch_size):
+                    with PostgresBackend._dirty_lock:
+                        dirty, dirty_types = set(self._dirty or ()), set(self._dirty_types or ())
+                    batch = [it for it in items[i:i + batch_size]
+                             if it.id not in dirty and it.type not in dirty_types]
+                    with self._session_factory() as db:
+                        stats["inserted"] += repo.upsert_documents(db, batch, count_inserted=True)
+                stats["upserted"] += len(items)
+                logger.info(f"Search reconcile: {name} {len(items)} items ({n}/{len(sources)}).")
+            except Exception as e:
+                stats["failed_sources"].append(name)
+                logger.error(f"Search reconcile: {name} failed: {e}", exc_info=True)
+        if stats["failed_sources"]:
+            stats["status"] = "partial"
+            logger.warning(
+                "Search reconcile: skipped the stale-row sweep because "
+                f"{', '.join(stats['failed_sources'])} failed."
+            )
+            return
+        with PostgresBackend._dirty_lock:
+            dirty_types = set(self._dirty_types or ())
+            keep = seen_ids | {i for i, it in (self._dirty or {}).items() if it is not None}
+        with self._session_factory() as db:
+            stats["removed"] = repo.delete_missing(db, seen_types - dirty_types, keep)
+
+    def _apply_dirty(self) -> None:
+        """Re-apply the incremental writes made during the reconcile (they're
+        newer than its snapshot), then stop tracking."""
+        from src.repositories import search_repository as repo
+        with PostgresBackend._dirty_lock:
+            dirty, dirty_types = PostgresBackend._dirty or {}, PostgresBackend._dirty_types or {}
+            PostgresBackend._dirty = PostgresBackend._dirty_types = None
+        if not (dirty or dirty_types):
+            return
+        try:
+            for type_, rows in dirty_types.items():
+                self._replace_type(type_, rows)
+            with self._session_factory() as db:
+                repo.delete_documents(db, [i for i, it in dirty.items() if it is None])
+                repo.upsert_documents(db, [it for it in dirty.values() if it is not None])
+        except Exception as e:
+            logger.warning(f"Search reconcile: re-applying {len(dirty)} concurrent change(s) failed: {e}")
+
+
+def create_backend(
+    manager: Any, backend_name: str, engine_name: str = "auto", trgm_threshold: float = 0.45,
+) -> SearchBackend:
     """Factory: 'postgres' -> PostgresBackend, anything else -> InMemoryBackend."""
     if (backend_name or "memory").lower() == "postgres":
         from src.common.database import get_db_session
-        logger.info("SearchManager using PostgresBackend (DB-backed full-text search).")
-        return PostgresBackend(get_db_session)
+        logger.info("SearchManager using PostgresBackend (DB-backed, Settings-driven ranking).")
+        return PostgresBackend(
+            get_db_session, config_provider=lambda: manager.config,
+            engine_name=engine_name, trgm_threshold=trgm_threshold,
+        )
     logger.info("SearchManager using InMemoryBackend (in-process index).")
     return InMemoryBackend(manager)

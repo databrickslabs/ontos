@@ -17,6 +17,8 @@ export interface ImportItemResult {
   /** Code of the message, translated by the UI when known. */
   code?: string | null;
   params?: Record<string, unknown> | null;
+  /** Further coded notes when an item has more than one. */
+  notes?: { code?: string | null; params?: Record<string, unknown> | null; message?: string | null }[] | null;
 }
 
 export interface BatchImportResult {

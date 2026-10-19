@@ -470,7 +470,16 @@ def add_import_notes(result, notes: Dict[str, ImportNote]) -> None:
     """Put the notes of ``ImportLinks.finish`` on the created items of an import."""
     for item in result.items:
         note = notes.get(item.entity_id) if item.entity_id else None
-        if note:
+        if not note:
+            continue
+        if item.code:
+            # The item already has a note (e.g. its status was mapped): keep it
+            # and add this one, so neither is lost.
+            item.notes = (item.notes or []) + [
+                {'code': note.code, 'params': note.params, 'message': note.message}
+            ]
+            item.message = f"{item.message} {note.message}" if item.message else note.message
+        else:
             item.message, item.code, item.params = note.message, note.code, note.params
 
 

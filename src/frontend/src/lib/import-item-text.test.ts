@@ -37,6 +37,27 @@ describe('import report lines', () => {
       '• Broken: ontosSunsetDate inválido "soon": esperada uma data ISO.');
   });
 
+  it('translates a status the import mapped to draft', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(importItemLine({ index: 5, name: 'Legacy', entity_id: 'p-5', status: 'created',
+      message: "'production' is not a lifecycle status, so it was imported as 'draft'.",
+      code: 'imported_status_mapped', params: { status: 'production', mappedTo: 'draft' } }, i18n.t))
+      .toBe("• Legacy: 'production' não é um status do ciclo de vida, então foi importado como 'draft'.");
+  });
+
+  it('lists every note of an item that has more than one', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(importItemLine({ index: 6, name: 'Legacy', entity_id: 'p-6', status: 'created',
+      message: 'status note. replacement note.',
+      code: 'imported_status_mapped', params: { status: 'production', mappedTo: 'draft' },
+      notes: [{ code: 'imported_replacement_dropped', params: { replacementId: '1111' },
+        message: 'replacement note.' }] }, i18n.t))
+      .toBe("• Legacy: 'production' não é um status do ciclo de vida, então foi importado como 'draft'. "
+        + 'O substituto 1111 não existe aqui, então não foi vinculado.');
+  });
+
   it('keeps the message of an unknown code or an uncoded item', () => {
     expect(importItemLine({ index: 3, name: 'X', status: 'failed', message: 'Could not import',
       code: 'something_else' }, i18n.t)).toBe('• X: Could not import');

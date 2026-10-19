@@ -456,6 +456,22 @@ def test_a_batch_import_refuses_a_product_replacing_itself(db_session):
     assert result.items[0].code == 'replacement_is_self'
 
 
+def test_an_item_keeps_both_its_status_note_and_its_replacement_note(db_session):
+    """The status PR's note (status mapped to draft) and a dropped replacement both stay."""
+    doc = _odps(str(uuid.uuid4()), ontosReplacedBy='no-such-product')
+    doc['status'] = 'production'
+
+    result = DataProductsManager(db=db_session).create_products_from_files(_product_files(doc))
+
+    assert (result.created, result.failed) == (1, 0)
+    item = result.items[0]
+    assert (item.code, item.params) == (
+        'imported_status_mapped', {'status': 'production', 'mappedTo': 'draft'})
+    assert [n['code'] for n in item.notes] == ['imported_replacement_dropped']
+    assert item.notes[0]['params'] == {'replacementId': 'no-such-product'}
+    assert 'production' in item.message and 'no-such-product' in item.message
+
+
 def test_a_replacement_missing_from_the_target_is_not_linked(db_session):
     files = _product_files(_odps(str(uuid.uuid4()), ontosDeprecationReason='Old',
                                  ontosReplacedBy='no-such-product'))

@@ -773,7 +773,8 @@
       "replacement_is_self": "後継 (ontosReplacedBy) にエンティティ自身は指定できません。",
       "replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻ります: {{chain}}。",
       "imported_replacement_dropped": "後継 {{replacementId}} がここに存在しないため、リンクされませんでした。",
-      "imported_replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻るため ({{chain}})、リンクされませんでした。"
+      "imported_replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻るため ({{chain}})、リンクされませんでした。",
+      "imported_status_mapped": "「{{status}}」はライフサイクルのステータスではないため、「{{mappedTo}}」としてインポートしました。"
     }
   }
 }

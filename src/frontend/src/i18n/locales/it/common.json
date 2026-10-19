@@ -773,7 +773,8 @@
       "replacement_is_self": "Il sostituto (ontosReplacedBy) non può essere l'entità stessa.",
       "replacement_leads_back": "Il sostituto {{replacementId}} riporta a questa entità: {{chain}}.",
       "imported_replacement_dropped": "Il sostituto {{replacementId}} non è presente qui, quindi non è stato collegato.",
-      "imported_replacement_leads_back": "Il sostituto {{replacementId}} riporta a questa entità ({{chain}}), quindi non è stato collegato."
+      "imported_replacement_leads_back": "Il sostituto {{replacementId}} riporta a questa entità ({{chain}}), quindi non è stato collegato.",
+      "imported_status_mapped": "'{{status}}' non è uno stato del ciclo di vita, quindi è stato importato come '{{mappedTo}}'."
     }
   }
 }

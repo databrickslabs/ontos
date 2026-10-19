@@ -773,7 +773,8 @@
       "replacement_is_self": "The replacement (ontosReplacedBy) can't be the entity itself.",
       "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}.",
       "imported_replacement_dropped": "The replacement {{replacementId}} isn't here, so it was not linked.",
-      "imported_replacement_leads_back": "The replacement {{replacementId}} leads back to this entity ({{chain}}), so it was not linked."
+      "imported_replacement_leads_back": "The replacement {{replacementId}} leads back to this entity ({{chain}}), so it was not linked.",
+      "imported_status_mapped": "'{{status}}' isn't a lifecycle status, so it was imported as '{{mappedTo}}'."
     }
   }
 }

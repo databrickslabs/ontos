@@ -406,6 +406,39 @@ def test_an_odps_import_records_its_lifecycle_fields_in_the_change_log(db_sessio
     assert details['deprecation_reason'] == 'Old'
 
 
+def test_a_batch_import_names_the_invalid_lifecycle_property(db_session):
+    import json as _json
+
+    replacement = _product(db_session)
+    files = [('products.json', _json.dumps([
+        _odps(str(uuid.uuid4()), ontosReplacedBy='missing'),
+        _odps(str(uuid.uuid4()), ontosReplacedBy=replacement.id, ontosSunsetDate='2020-01-31'),
+    ]).encode())]
+
+    result = DataProductsManager(db=db_session).create_products_from_files(files)
+
+    assert (result.created, result.failed) == (1, 1)
+    failed = next(i for i in result.items if i.status == 'failed')
+    assert failed.message == 'Invalid ontosReplacedBy: Replacement missing not found'
+
+
+def test_a_contract_batch_import_names_the_invalid_lifecycle_property(db_session):
+    import json as _json
+
+    files = [('contracts.json', _json.dumps({
+        'id': str(uuid.uuid4()), 'name': 'Imported', 'version': '1.0.0', 'status': 'deprecated',
+        'apiVersion': 'v3.1.0', 'kind': 'DataContract',
+        'customProperties': [{'property': 'ontosSunsetDate', 'value': 'soon'}],
+    }), 'application/json')]
+
+    result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+        db_session, files,
+    )
+
+    assert result.failed == 1
+    assert result.items[0].message == "Invalid ontosSunsetDate 'soon': expected an ISO date"
+
+
 def test_an_odcs_upload_with_an_invalid_replacement_creates_nothing(db_session):
     from src.db_models.data_contracts import DataContractDb as Contract
 

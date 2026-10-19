@@ -4,6 +4,7 @@ import { renderWithProviders } from '@/test/utils';
 import DeprecationFields, {
   EMPTY_DEPRECATION,
   deprecationPayload,
+  utcToday,
 } from './deprecation-fields';
 
 const get = vi.fn();
@@ -16,6 +17,7 @@ const PRODUCTS = [
   { id: 'self', name: 'Orders v1', version: '1.0.0', status: 'active' },
   { id: 'next', name: 'Orders v2', version: '2.0.0', status: 'active' },
   { id: 'gone', name: 'Orders v0', version: '0.1.0', status: 'retired' },
+  { id: 'old', name: 'Orders v1.5', version: '1.5.0', status: 'deprecated' },
 ];
 
 describe('DeprecationFields', () => {
@@ -46,7 +48,7 @@ describe('DeprecationFields', () => {
     await waitFor(() => expect(get).toHaveBeenCalledWith('/api/data-products'));
   });
 
-  it('offers other non-retired entities of the same type as replacements', async () => {
+  it('offers other entities of the same type that are not deprecated or retired', async () => {
     renderWithProviders(
       <DeprecationFields
         entityType="data_product"
@@ -64,6 +66,23 @@ describe('DeprecationFields', () => {
     await waitFor(() => expect(screen.getByText('Orders v2 (2.0.0)')).toBeInTheDocument());
     expect(screen.queryByText('Orders v1 (1.0.0)')).not.toBeInTheDocument();
     expect(screen.queryByText('Orders v0 (0.1.0)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Orders v1.5 (1.5.0)')).not.toBeInTheDocument();
+  });
+
+  it('uses the UTC date as the earliest sunset date, as the backend does', () => {
+    // 23:30 in Sao Paulo (UTC-3) is already the next day in UTC
+    expect(utcToday(new Date('2026-10-19T23:30:00-03:00'))).toBe('2026-10-20');
+    expect(utcToday(new Date('2026-10-20T00:30:00+02:00'))).toBe('2026-10-19');
+
+    renderWithProviders(
+      <DeprecationFields
+        entityType="data_product"
+        entityId="self"
+        value={EMPTY_DEPRECATION}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(document.getElementById('deprecation-sunset-date')).toHaveAttribute('min', utcToday());
   });
 
   it('loads contracts for a data contract', async () => {

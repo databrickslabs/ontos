@@ -34,6 +34,14 @@ class LifecycleFieldError(CodedValueError):
         self.code = code
 
 
+class ImportedLifecycleError(ValueError):
+    """Lifecycle properties of an imported entity that can't be stored.
+
+    The message is written by the app (no SQL or internal text), so a batch
+    import shows it for the entity that failed.
+    """
+
+
 @dataclass
 class DeprecationDetails:
     """What the caller provides when deprecating an entity."""
@@ -254,7 +262,7 @@ def imported_lifecycle_columns(
 ) -> Dict[str, Any]:
     """Column values for the lifecycle properties of an imported entity.
 
-    Raises ValueError (naming the property) for a date that doesn't parse and
+    Raises ImportedLifecycleError (naming the property) for a date that doesn't parse and
     for a replacement that is the entity itself, doesn't exist, or leads back
     to the entity. An import describes the entity as it was exported, so a
     past sunset date, a deprecated or retired replacement and a deprecated
@@ -273,14 +281,14 @@ def imported_lifecycle_columns(
             else:
                 value = str(value)
         except ValueError:
-            raise ValueError(f"Invalid {prop} {value!r}: expected an ISO date") from None
+            raise ImportedLifecycleError(f"Invalid {prop} {value!r}: expected an ISO date") from None
         columns[column] = value
     replacement_id = columns.get(_REPLACEMENT_COLUMN[entity_type])
     if replacement_id:
         try:
             _check_replacement(db, entity_type, entity_id, replacement_id, imported=True)
         except ValueError as e:
-            raise ValueError(f"Invalid ontosReplacedBy: {e}") from None
+            raise ImportedLifecycleError(f"Invalid ontosReplacedBy: {e}") from None
     return columns
 
 

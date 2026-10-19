@@ -134,6 +134,7 @@ from src.controller.domain_export_adapter import (
 )
 from src.controller.lifecycle_fields import (
     DeprecationDetails,
+    ImportedLifecycleError,
     apply_lifecycle_fields,
     check_lifecycle_fields,
     imported_lifecycle_columns,
@@ -3425,6 +3426,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
                         **(status_note or {}),
+                    ))
+                except ImportedLifecycleError as e:
+                    # The app's own message, naming the lifecycle property
+                    logger.warning(
+                        "Failed to import contract at batch index %d (file %s): %s",
+                        index, filename, e,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="failed", message=str(e),
                     ))
                 except CodedValueError as e:
                     # The app's own refusal (e.g. ``certified`` as a status):

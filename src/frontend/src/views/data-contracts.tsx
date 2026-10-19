@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DataContractListItem, DataContractCreate } from '@/types/data-contract';
 import { BatchImportResult, summarizeImport } from '@/types/import-results';
+import { importItemLine, reportedImportItems } from '@/lib/import-item-text';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import DomainBadgeList from '@/components/ui/domain-badge-list'
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,6 @@ import type { CertificationLevel } from '@/types/lifecycle';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { internalErrorText } from '@/lib/server-error-text';
 
 export default function DataContracts() {
   const { t } = useTranslation(['data-contracts', 'common']);
@@ -160,9 +160,7 @@ export default function DataContracts() {
       });
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(t('data-contracts:messages.createErrorDetail', 'Failed to create contract: {{error}}', {
-          error: internalErrorText(errorText) ?? errorText,
-        }));
+        throw new Error(t('data-contracts:messages.createErrorDetail', 'Failed to create contract: {{error}}', { error: errorText }));
       }
       await fetchContracts();
       toast({ 
@@ -309,31 +307,30 @@ export default function DataContracts() {
       const result: BatchImportResult = await response.json();
       await fetchContracts();
 
-      // Surface anything that was not created — failed entities AND files
-      // skipped as the wrong type (e.g. an ODPS product dropped here).
+      // Surface anything that was not created (failed entities AND files
+      // skipped as the wrong type, e.g. an ODPS product dropped here) and the
+      // notes on created ones (e.g. a replacement that isn't here).
+      const detail = reportedImportItems(result).slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
       if (result.failed > 0 || result.skipped > 0) {
-        const detail = result.items
-          .filter((i) => i.status !== 'created')
-          .slice(0, 5)
-          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
-          .join('\n');
         // Keep the dialog open so the user sees which entities were skipped/failed.
-        setUploadError({ message: summarizeImport(result, t), detail });
+        setUploadError({ message: summarizeImport(result), detail });
         if (result.created > 0) {
-          toast({ title: t('data-contracts:messages.success', 'Success'), description: summarizeImport(result, t) });
+          toast({ title: t('data-contracts:messages.success', 'Success'), description: summarizeImport(result) });
         }
         return;
       }
 
       setOpenUploadDialog(false);
+      const success = result.skipped > 0
+        ? summarizeImport(result)
+        : t('data-contracts:messages.uploadSuccessCount', {
+            count: result.created,
+            defaultValue: '{{count}} contract(s) imported successfully',
+          });
       toast({
         title: t('data-contracts:messages.success', 'Success'),
-        description: result.skipped > 0
-          ? summarizeImport(result, t)
-          : t('data-contracts:messages.uploadSuccessCount', {
-              count: result.created,
-              defaultValue: '{{count}} contract(s) imported successfully',
-            }),
+        description: detail ? `${success}\n${detail}` : success,
+        ...(detail ? { duration: 10000 } : {}),
       });
     } catch (err) {
       setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:messages.uploadError', 'Failed to upload contract') });
@@ -360,19 +357,19 @@ export default function DataContracts() {
       }
       const result: BatchImportResult = await res.json();
       await fetchContracts();
+      const detail = reportedImportItems(result).slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
       if (result.failed > 0 || result.skipped > 0) {
-        const detail = result.items
-          .filter((i) => i.status !== 'created')
-          .slice(0, 5)
-          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
-          .join('\n');
-        setUploadError({ message: summarizeImport(result, t), detail });
+        setUploadError({ message: summarizeImport(result), detail });
         // Partial success: keep the pasted content so the user can fix the
         // failing/skipped entries and retry (#930 review item 4).
       } else {
         setOpenUploadDialog(false);
         setOdcsPaste('');
-        toast({ title: t('data-contracts:import.importedTitle', 'Imported'), description: summarizeImport(result, t) });
+        toast({
+          title: t('data-contracts:import.importedTitle', 'Imported'),
+          description: detail ? `${summarizeImport(result)}\n${detail}` : summarizeImport(result),
+          ...(detail ? { duration: 10000 } : {}),
+        });
       }
     } catch (err) {
       setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON') });

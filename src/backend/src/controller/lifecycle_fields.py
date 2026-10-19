@@ -38,8 +38,14 @@ class ImportedLifecycleError(ValueError):
     """Lifecycle properties of an imported entity that can't be stored.
 
     The message is written by the app (no SQL or internal text), so a batch
-    import shows it for the entity that failed.
+    import shows it for the entity that failed; the UI translates ``code``
+    (``common:deprecation.import.<code>``) with ``params``.
     """
+
+    def __init__(self, message: str, code: str, **params: Any):
+        super().__init__(message)
+        self.code = code
+        self.params = params
 
 
 @dataclass
@@ -257,16 +263,108 @@ def pop_lifecycle_custom_properties(custom_props) -> Dict[str, Any]:
     return found
 
 
+def _source_key(entity_id: Any) -> str:
+    return str(entity_id).strip().lower()
+
+
+@dataclass
+class ImportNote:
+    """What an import tells about an entity it created (a dropped link)."""
+    message: str
+    code: str
+    params: Dict[str, Any]
+
+
+class ImportLinks:
+    """Replacement links between the entities of one import.
+
+    Ids are regenerated unless adopted, so a replacement is looked up first
+    among the entities this import created, by the id the file gives them. A
+    replacement imported later in the same import is linked once the whole
+    import exists (``finish``); one that isn't in the target at all is not
+    linked, and the entity gets a note instead of failing.
+    """
+
+    def __init__(self, entity_type: str):
+        self.entity_type = entity_type
+        self._created: Dict[str, str] = {}
+        self._pending: Dict[str, str] = {}
+
+    def record(self, source_id: Optional[str], created_id: str) -> None:
+        """Remember that the entity the file calls ``source_id`` is ``created_id``."""
+        if source_id:
+            self._created[_source_key(source_id)] = created_id
+
+    def resolve(self, replacement_id: str) -> str:
+        return self._created.get(_source_key(replacement_id), replacement_id)
+
+    def defer(self, entity_id: str, replacement_id: str) -> None:
+        self._pending[entity_id] = replacement_id
+
+    def finish(self, db: Session, username: Optional[str] = None) -> Dict[str, ImportNote]:
+        """Link the replacements imported after the entity naming them, with a
+        change log entry for each.
+
+        Returns a note for each entity whose replacement isn't linked.
+        """
+        from src.controller.change_log_manager import change_log_manager
+
+        notes: Dict[str, ImportNote] = {}
+        model = _entity_model(self.entity_type)
+        column = _REPLACEMENT_COLUMN[self.entity_type]
+        for entity_id, replacement_id in self._pending.items():
+            target = self._created.get(_source_key(replacement_id))
+            entity = db.get(model, entity_id)
+            if entity is None:
+                continue
+            if target:
+                try:
+                    _check_replacement(db, self.entity_type, entity_id, target, imported=True)
+                except LifecycleFieldError as e:
+                    code = ('imported_replacement_leads_back' if e.code == 'replacement_leads_back'
+                            else 'imported_replacement_dropped')
+                    notes[entity_id] = ImportNote(
+                        f"ontosReplacedBy {replacement_id} not linked: {e}", code,
+                        {**e.params, 'replacementId': replacement_id},
+                    )
+                    continue
+                setattr(entity, column, target)
+                db.flush()
+                change_log_manager.log_change_with_details(
+                    db, entity_type=self.entity_type, entity_id=entity_id, action='UPDATE',
+                    username=username,
+                    details={column: target, 'summary': 'Replacement linked by the import'},
+                )
+                continue
+            notes[entity_id] = ImportNote(
+                f"ontosReplacedBy {replacement_id} not linked: no such entity here",
+                'imported_replacement_dropped', {'replacementId': replacement_id},
+            )
+        db.flush()
+        return notes
+
+
+def add_import_notes(result, notes: Dict[str, ImportNote]) -> None:
+    """Put the notes of ``ImportLinks.finish`` on the created items of an import."""
+    for item in result.items:
+        note = notes.get(item.entity_id) if item.entity_id else None
+        if note:
+            item.message, item.code, item.params = note.message, note.code, note.params
+
+
 def imported_lifecycle_columns(
     db: Session, entity_type: str, entity_id: str, props: Dict[str, Any],
+    links: Optional[ImportLinks] = None, source_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Column values for the lifecycle properties of an imported entity.
 
-    Raises ImportedLifecycleError (naming the property) for a date that doesn't parse and
-    for a replacement that is the entity itself, doesn't exist, or leads back
-    to the entity. An import describes the entity as it was exported, so a
-    past sunset date, a deprecated or retired replacement and a deprecated
-    entity without a reason (exported before these fields existed) are kept.
+    Raises ImportedLifecycleError (naming the property) for a date that doesn't
+    parse and for a replacement that is the entity itself or leads back to it.
+    An import describes the entity as it was exported, so a past sunset date,
+    a deprecated or retired replacement and a deprecated entity without a
+    reason (exported before these fields existed) are kept. With ``links``, a
+    replacement is looked up among the entities of the same import first, and
+    one that isn't there yet is left to ``links.finish``.
     """
     columns: Dict[str, Any] = {}
     for prop, value in props.items():
@@ -281,14 +379,29 @@ def imported_lifecycle_columns(
             else:
                 value = str(value)
         except ValueError:
-            raise ImportedLifecycleError(f"Invalid {prop} {value!r}: expected an ISO date") from None
+            raise ImportedLifecycleError(
+                f"Invalid {prop} {value!r}: expected an ISO date", 'imported_date_invalid',
+                property=prop, value=str(value),
+            ) from None
         columns[column] = value
-    replacement_id = columns.get(_REPLACEMENT_COLUMN[entity_type])
+    replacement_column = _REPLACEMENT_COLUMN[entity_type]
+    replacement_id = columns.get(replacement_column)
     if replacement_id:
+        if source_id and _source_key(replacement_id) == _source_key(source_id):
+            replacement_id = entity_id
+        elif links is not None:
+            replacement_id = links.resolve(replacement_id)
         try:
             _check_replacement(db, entity_type, entity_id, replacement_id, imported=True)
-        except ValueError as e:
-            raise ImportedLifecycleError(f"Invalid ontosReplacedBy: {e}") from None
+            columns[replacement_column] = replacement_id
+        except LifecycleFieldError as e:
+            if e.code == 'replacement_not_found' and links is not None:
+                del columns[replacement_column]
+                links.defer(entity_id, str(props['ontosReplacedBy']).strip())
+            else:
+                raise ImportedLifecycleError(
+                    f"Invalid ontosReplacedBy: {e}", e.code, **e.params,
+                ) from None
     return columns
 
 

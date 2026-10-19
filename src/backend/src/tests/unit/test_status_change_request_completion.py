@@ -19,6 +19,14 @@ from src.db_models.data_products import DataProductDb
 from src.models.process_workflows import TriggerContext, TriggerType
 
 
+@pytest.fixture(autouse=True)
+def _no_audit_session(monkeypatch):
+    # An approved deprecation is audited in its own session; in tests that
+    # session would commit outside the per-test transaction
+    from src.controller import audit_manager
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
+
+
 def _product(db, status='active'):
     product = DataProductDb(
         id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
@@ -214,3 +222,62 @@ def test_a_deprecation_without_any_justification_is_not_applied(db_session):
     ).all()
     assert len(notes) == 1
     assert 'deprecation reason is required' in notes[0].description
+
+
+def test_an_approved_deprecation_is_audited_as_deprecate_with_the_request(db_session, monkeypatch):
+    from src.controller import audit_manager
+    from src.controller.change_log_manager import change_log_manager
+    entries = []
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: entries.append(kw))
+    product = _product(db_session)
+    request = change_log_manager.log_change_with_details(
+        db_session, entity_type='data_product', entity_id=product.id,
+        action='status_change_requested', username='requester',
+        details={'target_status': 'deprecated', 'justification': 'Moving to v2'},
+    )
+    db_session.flush()
+
+    _complete(db_session, product, True)
+
+    assert [e['action'] for e in entries] == ['DEPRECATE']
+    details = entries[0]['details']
+    assert entries[0]['username'] == 'approver@example.com'
+    assert details['product_id'] == product.id
+    assert (details['from'], details['to']) == ('active', 'deprecated')
+    assert details['request_id'] == str(request.id)
+    assert details['deprecation_reason'] == 'Moving to v2'
+
+
+def test_the_audit_carries_the_request_id_of_the_trigger(db_session, monkeypatch):
+    from src.controller import audit_manager
+    entries = []
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: entries.append(kw))
+    product = _product(db_session)
+    context = TriggerContext(
+        entity_type='data_product', entity_id=product.id, entity_name=product.name,
+        trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
+        from_status='active', to_status='deprecated',
+        entity_data={'target_status': 'deprecated', 'justification': 'v2',
+                     'request_id': 'req-123'},
+    )
+    workflow = SimpleNamespace(
+        name='Status Change Request',
+        trigger=SimpleNamespace(type=TriggerType.ON_REQUEST_STATUS_CHANGE),
+    )
+    WorkflowExecutor(db_session)._handle_workflow_completion(
+        trigger_context=context, workflow=workflow, succeeded=True,
+        responded_by='approver@example.com', approved=True,
+    )
+
+    assert entries[0]['details']['request_id'] == 'req-123'
+
+
+def test_a_refused_approval_writes_no_lifecycle_audit(db_session, monkeypatch):
+    from src.controller import audit_manager
+    entries = []
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: entries.append(kw))
+    product = _product(db_session)
+
+    _complete(db_session, product, True, justification=None)  # no reason: refused
+
+    assert entries == []

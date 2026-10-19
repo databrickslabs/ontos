@@ -507,19 +507,39 @@ def test_a_link_made_after_the_batch_is_in_the_change_log(db_session):
     assert linked.username == 'alice@example.com'
 
 
-def test_two_products_replacing_each_other_in_one_import_link_only_one(db_session):
+@pytest.mark.parametrize('a_first', [True, False])
+def test_two_products_replacing_each_other_in_one_import_are_both_refused(db_session, a_first):
     a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
-    files = _product_files(_odps(a_id, ontosReplacedBy=b_id), _odps(b_id, ontosReplacedBy=a_id))
+    docs = [_odps(a_id, ontosReplacedBy=b_id), _odps(b_id, ontosReplacedBy=a_id)]
+    files = _product_files(*(docs if a_first else docs[::-1]))
 
     result = DataProductsManager(db=db_session).create_products_from_files(
         files, adopt_ids=False)
 
-    assert (result.created, result.failed) == (2, 0)
+    assert (result.created, result.failed) == (0, 2)
     by_source = {i.source_id: i for i in result.items}
-    a, b = (db_session.get(DataProductDb, by_source[x].entity_id) for x in (a_id, b_id))
-    assert (a.replacement_product_id, b.replacement_product_id) == (None, a.id)
-    assert by_source[a_id].code == 'imported_replacement_leads_back'
-    assert by_source[a_id].params['replacementId'] == b_id
+    for source, other in ((a_id, b_id), (b_id, a_id)):
+        assert by_source[source].code == 'replacement_leads_back'
+        assert by_source[source].params['replacementId'] == other
+        assert by_source[source].params['chain'] == f'{source} -> {other} -> {source}'
+    assert db_session.query(DataProductDb).filter(DataProductDb.name == 'Imported').count() == 0
+
+
+def test_a_longer_cycle_in_one_import_refuses_its_members_only(db_session):
+    a_id, b_id, c_id, d_id = (str(uuid.uuid4()) for _ in range(4))
+    files = _product_files(
+        _odps(a_id, ontosReplacedBy=b_id), _odps(b_id, ontosReplacedBy=c_id),
+        _odps(c_id, ontosReplacedBy=a_id), _odps(d_id, ontosReplacedBy=a_id),
+    )
+
+    result = DataProductsManager(db=db_session).create_products_from_files(
+        files, adopt_ids=False)
+
+    by_source = {i.source_id: i for i in result.items}
+    assert {s for s in (a_id, b_id, c_id) if by_source[s].status == 'failed'} == {a_id, b_id, c_id}
+    # D points into the cycle without being part of it: created, its link dropped
+    assert by_source[d_id].status == 'created'
+    assert by_source[d_id].code == 'imported_replacement_dropped'
 
 
 def _odcs(contract_id, **custom):
@@ -576,6 +596,23 @@ def test_a_contract_replacement_in_the_same_import_is_linked(db_session):
     by_source = {i.source_id: i.entity_id for i in result.items}
     created_a = db_session.get(DataContractDb, by_source[a_id])
     assert created_a.replacement_contract_id == by_source[b_id]
+
+
+@pytest.mark.parametrize('a_first', [True, False])
+def test_two_contracts_replacing_each_other_in_one_import_are_both_refused(db_session, a_first):
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    docs = [_odcs(a_id, ontosReplacedBy=b_id), _odcs(b_id, ontosReplacedBy=a_id)]
+    files = _contract_files(*(docs if a_first else docs[::-1]))
+
+    result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+        db_session, files, adopt_ids=False,
+    )
+
+    assert (result.created, result.failed) == (0, 2)
+    by_source = {i.source_id: i for i in result.items}
+    for source, other in ((a_id, b_id), (b_id, a_id)):
+        assert by_source[source].code == 'replacement_leads_back'
+        assert by_source[source].params['chain'] == f'{source} -> {other} -> {source}'
 
 
 def test_a_contract_replacement_missing_from_the_target_is_not_linked(db_session):
@@ -668,3 +705,157 @@ def test_contract_read_accepts_orm_dates():
     assert read.sunset_date == '2027-01-31'
     assert read.deprecated_at.startswith('2026-10-14')
     assert read.published_at.startswith('2026-10-01')
+
+
+# --- Approved status change requests are audited as the direct routes are ---
+
+def _request(db, entity_type, entity_id, target, justification, **extra):
+    return change_log_manager.log_change_with_details(
+        db, entity_type=entity_type, entity_id=entity_id,
+        action='status_change_requested', username='alice',
+        details={'target_status': target, 'justification': justification,
+                 'requester_email': 'alice@example.com', **extra},
+    )
+
+
+@pytest.fixture
+def audited(monkeypatch):
+    entries = []
+    from src.controller import audit_manager
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: entries.append(kw))
+    return entries
+
+
+def test_an_approved_product_deprecation_request_is_audited_as_deprecate(db_session, audited):
+    from unittest.mock import MagicMock
+    product = _product(db_session)
+    _request(db_session, 'data_product', product.id, 'deprecated', 'Superseded by v2',
+             request_id='req-1')
+    db_session.commit()
+
+    DataProductsManager(db=db_session).handle_status_change_response(
+        db=db_session, notifications_manager=MagicMock(), product_id=product.id,
+        approver_email='steward@example.com', decision='approve',
+        target_status='deprecated', current_user='steward',
+    )
+
+    assert [e['action'] for e in audited] == ['DEPRECATE']
+    entry = audited[0]
+    assert entry['feature'] == 'data-products'
+    assert entry['username'] == 'steward'
+    assert entry['details'] == {
+        'product_id': product.id, 'from': 'active', 'to': 'deprecated',
+        'request_id': 'req-1', 'approved_by': 'steward',
+        'deprecation_reason': 'Superseded by v2', 'sunset_date': None, 'replacement_id': None,
+    }
+
+
+def test_an_approved_contract_deprecation_request_is_audited_as_deprecate(db_session, audited):
+    from unittest.mock import MagicMock
+    contract = _contract(db_session)
+    request = _request(db_session, 'data_contract', contract.id, 'deprecated', 'Use v2')
+    db_session.commit()
+
+    DataContractsManager(data_dir=Path('/tmp')).handle_status_change_response(
+        db=db_session, notifications_manager=MagicMock(), contract_id=contract.id,
+        approver_email='steward@example.com', decision='approve', target_status='deprecated',
+        requester_email='alice@example.com', current_user='steward',
+    )
+
+    assert [e['action'] for e in audited] == ['DEPRECATE']
+    details = audited[0]['details']
+    assert audited[0]['feature'] == 'data-contracts'
+    assert details['contract_id'] == contract.id
+    assert details['request_id'] == str(request.id)
+    assert details['deprecation_reason'] == 'Use v2'
+    assert details['replacement_contract_id'] is None
+
+
+def test_an_approved_request_to_another_status_writes_no_lifecycle_audit(db_session, audited):
+    from unittest.mock import MagicMock
+    product = _product(db_session, status='draft')
+    _request(db_session, 'data_product', product.id, 'proposed', 'Ready')
+    db_session.commit()
+
+    DataProductsManager(db=db_session).handle_status_change_response(
+        db=db_session, notifications_manager=MagicMock(), product_id=product.id,
+        approver_email='steward@example.com', decision='approve',
+        target_status='proposed', current_user='steward',
+    )
+
+    assert audited == []
+
+
+# --- MCP update tools can deprecate ---
+
+def _tool_context(db_session, **managers):
+    from types import SimpleNamespace
+    return SimpleNamespace(db=db_session, **managers)
+
+
+@pytest.mark.asyncio
+async def test_the_mcp_product_tool_deprecates_with_its_details(db_session):
+    from src.tools.data_products import UpdateDataProductTool
+    product, replacement = _product(db_session), _product(db_session)
+    db_session.commit()
+    ctx = _tool_context(db_session, data_products_manager=DataProductsManager(db=db_session))
+
+    result = await UpdateDataProductTool().execute(
+        ctx, product_id=product.id, status='deprecated', deprecation_reason='Moved to v2',
+        sunset_date=_TOMORROW.isoformat(), replacement_id=replacement.id,
+    )
+
+    assert result.success, result.error
+    db_session.refresh(product)
+    assert (product.status, product.deprecation_reason, product.sunset_date,
+            product.replacement_product_id) == ('deprecated', 'Moved to v2', _TOMORROW, replacement.id)
+
+
+@pytest.mark.asyncio
+async def test_the_mcp_product_tool_says_a_reason_is_needed(db_session):
+    from src.tools.data_products import UpdateDataProductTool
+    product = _product(db_session)
+    db_session.commit()
+    ctx = _tool_context(db_session, data_products_manager=DataProductsManager(db=db_session))
+
+    result = await UpdateDataProductTool().execute(ctx, product_id=product.id, status='deprecated')
+
+    assert not result.success
+    assert 'reason' in result.error.lower()
+    db_session.refresh(product)
+    assert product.status == 'active'
+
+
+@pytest.mark.asyncio
+async def test_the_mcp_contract_tool_deprecates_with_its_details(db_session):
+    from src.tools.data_contracts import UpdateDataContractTool
+    contract = _contract(db_session)
+    db_session.commit()
+    ctx = _tool_context(
+        db_session, data_contracts_manager=DataContractsManager(data_dir=Path('/tmp')))
+
+    result = await UpdateDataContractTool().execute(
+        ctx, contract_id=contract.id, status='deprecated', deprecation_reason='Use v2',
+        sunset_date=_TOMORROW.isoformat(),
+    )
+
+    assert result.success, result.error
+    db_session.refresh(contract)
+    assert (contract.status, contract.deprecation_reason, contract.sunset_date) == (
+        'deprecated', 'Use v2', _TOMORROW)
+
+
+@pytest.mark.asyncio
+async def test_the_mcp_tools_refuse_a_malformed_sunset_date(db_session):
+    from src.tools.data_products import UpdateDataProductTool
+    product = _product(db_session)
+    db_session.commit()
+    ctx = _tool_context(db_session, data_products_manager=DataProductsManager(db=db_session))
+
+    result = await UpdateDataProductTool().execute(
+        ctx, product_id=product.id, status='deprecated', deprecation_reason='x',
+        sunset_date='next week',
+    )
+
+    assert not result.success
+    assert 'YYYY-MM-DD' in result.error

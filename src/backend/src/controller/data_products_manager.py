@@ -149,8 +149,10 @@ from src.controller.lifecycle_fields import (
     check_lifecycle_fields,
     imported_lifecycle_columns,
     lifecycle_custom_properties,
+    peek_lifecycle_replacement,
     pop_lifecycle_custom_properties,
-    requested_status_change_justification,
+    requested_status_change,
+    audit_approved_lifecycle_change,
     set_lifecycle_columns,
 )
 from src.repositories.genie_spaces_repository import genie_space_repo
@@ -1560,6 +1562,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "from_status": from_status,
                 "target_status": target_status,
                 "justification": justification,
+                "request_id": request_id,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change requested from {from_status} to {target_status} by {current_user}",
                 **outcome,
@@ -1635,12 +1638,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if decision == 'approve':
             # Apply the status change directly; a requested deprecation uses
             # the request's justification as its reason
-            justification = requested_status_change_justification(
+            from_status = (product.status or '').lower()
+            request_id, justification = requested_status_change(
                 db, 'data_product', product_id, target_status
             )
             self.transition_status(
                 product_id, target_status, current_user,
                 deprecation=DeprecationDetails(reason=justification),
+            )
+            audit_approved_lifecycle_change(
+                db, 'data_product', product_id, from_status, target_status,
+                request_id, current_user or approver_email,
             )
             notification_title = "Product Status Change Approved"
             notification_desc = f"Your request to change the status of '{product.name}' to '{target_status}' has been approved by '{approver_email}'."
@@ -1921,6 +1929,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             return data
         raise ValueError("File must contain a JSON object/array or YAML mapping/list of data products")
 
+    def _import_replacement_entries(self, files):
+        """``(id, ontosReplacedBy)`` of every product in the import files, for
+        ``ImportLinks.plan``; files that don't parse are skipped here and
+        reported by the import itself."""
+        entries = []
+        for filename, content in files:
+            try:
+                data_list = self._parse_products_content(content, filename)
+            except ValueError:
+                continue
+            for product_data in data_list or []:
+                if isinstance(product_data, dict):
+                    entries.append((
+                        product_data.get('id'),
+                        peek_lifecycle_replacement(product_data.get('customProperties')),
+                    ))
+        return entries
+
     def create_products_from_files(
         self,
         files: List[tuple],
@@ -1951,6 +1977,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         result = BatchImportResult()
         links = ImportLinks('data_product')
+        links.plan(self._import_replacement_entries(files))
         index = 0
         for filename, content in files:
             try:

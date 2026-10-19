@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from src.common.logging import get_logger
 from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.controller.lifecycle_fields import deprecation_details_from_strings
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -385,6 +386,18 @@ class UpdateDataProductTool(BaseTool):
                 "only an allowed transition, and status change workflows can block it."
             ),
             "enum": ["draft", "active", "deprecated"]
+        },
+        "deprecation_reason": {
+            "type": "string",
+            "description": "Why the product is deprecated (required with status deprecated)"
+        },
+        "sunset_date": {
+            "type": "string",
+            "description": "Date the product stops being supported, YYYY-MM-DD (with status deprecated; not in the past)"
+        },
+        "replacement_id": {
+            "type": "string",
+            "description": "ID of the product that replaces it (with status deprecated)"
         }
     }
     required_params = ["product_id"]
@@ -396,7 +409,10 @@ class UpdateDataProductTool(BaseTool):
         product_id: str,
         domain: Optional[str] = None,
         description: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        deprecation_reason: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> ToolResult:
         """Update an existing data product."""
         logger.info(f"[update_data_product] Starting - product_id={product_id}, domain={domain}, status={status}")
@@ -431,7 +447,12 @@ class UpdateDataProductTool(BaseTool):
                     )
                 current_status = getattr(current.status, 'value', current.status) or 'draft'
                 if str(current_status).lower() != status.lower():
-                    ctx.data_products_manager.transition_status(product_id, status)
+                    ctx.data_products_manager.transition_status(
+                        product_id, status,
+                        deprecation=deprecation_details_from_strings(
+                            deprecation_reason, sunset_date, replacement_id
+                        ),
+                    )
 
             # Update the product
             if update_data:

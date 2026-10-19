@@ -141,8 +141,10 @@ from src.controller.lifecycle_fields import (
     check_lifecycle_fields,
     imported_lifecycle_columns,
     lifecycle_custom_properties,
+    peek_lifecycle_replacement,
     pop_lifecycle_custom_properties,
-    requested_status_change_justification,
+    requested_status_change,
+    audit_approved_lifecycle_change,
     set_lifecycle_columns,
 )
 
@@ -3353,6 +3355,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return [parsed]
         raise ValueError("File must contain an ODCS object or an array of ODCS objects.")
 
+    def _import_replacement_entries(self, files):
+        """``(id, ontosReplacedBy)`` of every contract in the import files, for
+        ``ImportLinks.plan``; files that don't parse are skipped here and
+        reported by the import itself."""
+        entries = []
+        for filename, content_text, content_type in files:
+            try:
+                entities = self.parse_uploaded_entities(content_text, filename, content_type)
+            except Exception:
+                continue
+            for entity in entities or []:
+                if isinstance(entity, dict):
+                    entries.append((
+                        entity.get('id'),
+                        peek_lifecycle_replacement(
+                            entity.get('customProperties') or entity.get('custom_properties')
+                        ),
+                    ))
+        return entries
+
     def create_contracts_from_files(
         self,
         db,
@@ -3385,6 +3407,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         """
         result = BatchImportResult()
         links = ImportLinks('data_contract')
+        links.plan(self._import_replacement_entries(files))
         index = 0
         for filename, content_text, content_type in files:
             try:
@@ -6495,16 +6518,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Through transition_status, like a product's approved request, so
             # the before_status_change gates run and on_status_change fires; a
             # requested deprecation uses the request's justification as its reason.
+            request_id, justification = requested_status_change(
+                db, 'data_contract', contract_id, target_status_lower
+            )
             contract = self.transition_status(
                 db=db,
                 contract_id=contract_id,
                 new_status=target_status_lower,
                 current_user=current_user,
-                deprecation=DeprecationDetails(
-                    reason=requested_status_change_justification(
-                        db, 'data_contract', contract_id, target_status_lower
-                    )
-                ),
+                deprecation=DeprecationDetails(reason=justification),
+            )
+            audit_approved_lifecycle_change(
+                db, 'data_contract', contract_id, from_status, target_status_lower,
+                request_id, current_user or approver_email,
             )
             
             notification_title = "Status Change Approved"

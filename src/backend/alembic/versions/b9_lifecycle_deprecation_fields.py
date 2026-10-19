@@ -1,7 +1,7 @@
 """add deprecation lifecycle fields to data products and data contracts
 
-Revision ID: b5_lifecycle_deprecation_fields
-Revises: b4_compliance_run_error_code
+Revision ID: b9_lifecycle_deprecation_fields
+Revises: b8_estates_tables
 Create Date: 2026-10-14 03:30:00.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b5_lifecycle_deprecation_fields'
-down_revision: Union[str, None] = 'b4_compliance_run_error_code'
+revision: str = 'b9_lifecycle_deprecation_fields'
+down_revision: Union[str, None] = 'b8_estates_tables'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

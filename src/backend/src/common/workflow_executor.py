@@ -3587,20 +3587,30 @@ class WorkflowExecutor:
             manager.set_search_manager(search_manager)
         # A requested deprecation uses the request's justification as its
         # reason, as handle-status-change does
+        # (and its sunset date and replacement, when the requester gave them)
         from src.controller.lifecycle_fields import (
-            DeprecationDetails, audit_approved_lifecycle_change, requested_status_change,
+            audit_approved_lifecycle_change, deprecation_details_from_strings,
+            requested_deprecation,
         )
-        logged_request_id, logged_justification = requested_status_change(
+        logged_request_id, deprecation = requested_deprecation(
             self._db, 'data_product', product_id, target_status
         )
-        request_id = (trigger_context.entity_data or {}).get('request_id') or logged_request_id
-        justification = (trigger_context.entity_data or {}).get('justification') or (
-            logged_justification
-        )
+        entity_data = trigger_context.entity_data or {}
+        request_id = entity_data.get('request_id') or logged_request_id
+        if entity_data.get('justification'):
+            try:
+                deprecation = deprecation_details_from_strings(
+                    entity_data.get('justification'),
+                    entity_data.get('sunset_date') or (
+                        deprecation.sunset_date.isoformat() if deprecation.sunset_date else None
+                    ),
+                    entity_data.get('replacement_id') or deprecation.replacement_id,
+                )
+            except ValueError:
+                deprecation.reason = entity_data.get('justification')
         try:
             manager.transition_status(
-                product_id, target_status, responded_by,
-                deprecation=DeprecationDetails(reason=justification),
+                product_id, target_status, responded_by, deprecation=deprecation,
             )
         except ValueError as e:
             logger.warning(

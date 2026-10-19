@@ -775,6 +775,11 @@
       "imported_replacement_dropped": "後継 {{replacementId}} がここに存在しないため、リンクされませんでした。",
       "imported_replacement_leads_back": "後継 {{replacementId}} はこのエンティティに戻るため ({{chain}})、リンクされませんでした。",
       "imported_status_mapped": "「{{status}}」はライフサイクルのステータスではないため、「{{mappedTo}}」としてインポートしました。"
+    },
+    "notice": {
+      "deprecated": "非推奨",
+      "retired": "廃止",
+      "noReason": "理由は記録されていません"
     }
   }
 }

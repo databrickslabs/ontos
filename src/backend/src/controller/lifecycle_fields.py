@@ -115,6 +115,58 @@ def requested_status_change(
     return None, None
 
 
+def requested_deprecation(
+    db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
+) -> Tuple[Optional[str], 'DeprecationDetails']:
+    """Id of the latest status change request and the deprecation it asked for.
+
+    The request's justification is the reason; its sunset date and
+    replacement, when the requester gave them, come with it.
+    """
+    from src.controller.change_log_manager import change_log_manager
+
+    request_id, justification = requested_status_change(db, entity_type, entity_id, target_status)
+    sunset_date = replacement_id = None
+    try:
+        for change in change_log_manager.list_changes_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id
+        ):
+            if change.action != 'status_change_requested':
+                continue
+            details = json.loads(change.details_json or '{}') or {}
+            requested = (details.get('target_status') or '').lower()
+            if target_status and requested and requested != target_status.lower():
+                continue
+            sunset_date = details.get('sunset_date')
+            replacement_id = details.get('replacement_id')
+            break
+    except Exception as e:  # the justification alone still deprecates
+        logger.warning("Could not read the requested deprecation of %s %s: %s",
+                       entity_type, entity_id, e)
+    details = DeprecationDetails(reason=justification)
+    try:
+        details = deprecation_details_from_strings(justification, sunset_date, replacement_id)
+    except ValueError:
+        logger.warning("Ignoring the invalid requested sunset date %r of %s %s",
+                       sunset_date, entity_type, entity_id)
+    return request_id, details
+
+
+def check_requested_deprecation(
+    db: Session, entity_type: str, entity_id: str,
+    justification: Optional[str], sunset_date: Optional[str], replacement_id: Optional[str],
+) -> DeprecationDetails:
+    """Check the deprecation a status change request asks for, when it is made.
+
+    The same checks as a direct deprecation (sunset date in UTC, the
+    replacement rules), so the requester learns at once; they run again when
+    the request is approved, since things may have changed meanwhile.
+    """
+    details = deprecation_details_from_strings(justification, sunset_date, replacement_id)
+    check_lifecycle_fields(db, entity_type, entity_id, 'deprecated', details)
+    return details
+
+
 def requested_status_change_justification(
     db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
 ) -> Optional[str]:

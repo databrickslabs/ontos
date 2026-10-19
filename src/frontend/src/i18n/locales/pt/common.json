@@ -775,6 +775,11 @@
       "imported_replacement_dropped": "O substituto {{replacementId}} não existe aqui, então não foi vinculado.",
       "imported_replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade ({{chain}}), então não foi vinculado.",
       "imported_status_mapped": "'{{status}}' não é um status do ciclo de vida, então foi importado como '{{mappedTo}}'."
+    },
+    "notice": {
+      "deprecated": "Obsoleto",
+      "retired": "Aposentado",
+      "noReason": "Nenhum motivo registrado"
     }
   }
 }

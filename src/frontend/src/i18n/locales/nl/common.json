@@ -775,6 +775,11 @@
       "imported_replacement_dropped": "De vervanging {{replacementId}} is hier niet aanwezig en is daarom niet gekoppeld.",
       "imported_replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit ({{chain}}) en is daarom niet gekoppeld.",
       "imported_status_mapped": "'{{status}}' is geen levenscyclusstatus en is daarom geïmporteerd als '{{mappedTo}}'."
+    },
+    "notice": {
+      "deprecated": "Verouderd",
+      "retired": "Buiten Gebruik",
+      "noReason": "Geen reden vastgelegd"
     }
   }
 }

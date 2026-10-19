@@ -773,7 +773,8 @@
       "replacement_is_self": "El reemplazo (ontosReplacedBy) no puede ser la propia entidad.",
       "replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad: {{chain}}.",
       "imported_replacement_dropped": "El reemplazo {{replacementId}} no está aquí, así que no se vinculó.",
-      "imported_replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad ({{chain}}), así que no se vinculó."
+      "imported_replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad ({{chain}}), así que no se vinculó.",
+      "imported_status_mapped": "'{{status}}' no es un estado del ciclo de vida, así que se importó como '{{mappedTo}}'."
     }
   }
 }

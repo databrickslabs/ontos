@@ -773,7 +773,8 @@
       "replacement_is_self": "O substituto (ontosReplacedBy) não pode ser a própria entidade.",
       "replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade: {{chain}}.",
       "imported_replacement_dropped": "O substituto {{replacementId}} não existe aqui, então não foi vinculado.",
-      "imported_replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade ({{chain}}), então não foi vinculado."
+      "imported_replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade ({{chain}}), então não foi vinculado.",
+      "imported_status_mapped": "'{{status}}' não é um status do ciclo de vida, então foi importado como '{{mappedTo}}'."
     }
   }
 }

@@ -774,7 +774,9 @@
       "replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad: {{chain}}.",
       "imported_replacement_dropped": "El reemplazo {{replacementId}} no está aquí, así que no se vinculó.",
       "imported_replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad ({{chain}}), así que no se vinculó.",
-      "imported_status_mapped": "'{{status}}' no es un estado del ciclo de vida, así que se importó como '{{mappedTo}}'."
+      "imported_status_mapped": "'{{status}}' no es un estado del ciclo de vida, así que se importó como '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' es un nombre de estado antiguo, así que se importó como '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' ya no es un estado, así que se importó como '{{mappedTo}}'. La certificación no se importa: certifica la entidad en Ontos."
     },
     "notice": {
       "deprecated": "Obsoleto",

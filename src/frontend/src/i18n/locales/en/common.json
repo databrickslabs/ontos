@@ -774,7 +774,9 @@
       "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}.",
       "imported_replacement_dropped": "The replacement {{replacementId}} isn't here, so it was not linked.",
       "imported_replacement_leads_back": "The replacement {{replacementId}} leads back to this entity ({{chain}}), so it was not linked.",
-      "imported_status_mapped": "'{{status}}' isn't a lifecycle status, so it was imported as '{{mappedTo}}'."
+      "imported_status_mapped": "'{{status}}' isn't a lifecycle status, so it was imported as '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' is an older status name, so it was imported as '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' is no longer a status, so it was imported as '{{mappedTo}}'. Certification isn't imported: certify the entity in Ontos."
     },
     "notice": {
       "deprecated": "Deprecated",

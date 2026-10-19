@@ -9,6 +9,8 @@ const IMPORT_CODES = new Set([
   'imported_replacement_dropped',
   'imported_replacement_leads_back',
   'imported_status_mapped',
+  'imported_legacy_status',
+  'imported_certified_as_active',
 ]);
 
 /** Codes of status checks an import can fail, with the keys the status change dialogs use. */

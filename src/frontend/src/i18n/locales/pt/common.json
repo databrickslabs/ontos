@@ -774,7 +774,9 @@
       "replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade: {{chain}}.",
       "imported_replacement_dropped": "O substituto {{replacementId}} não existe aqui, então não foi vinculado.",
       "imported_replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade ({{chain}}), então não foi vinculado.",
-      "imported_status_mapped": "'{{status}}' não é um status do ciclo de vida, então foi importado como '{{mappedTo}}'."
+      "imported_status_mapped": "'{{status}}' não é um status do ciclo de vida, então foi importado como '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' é um nome de status antigo, então foi importado como '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' não é mais um status, então foi importado como '{{mappedTo}}'. A certificação não é importada: certifique a entidade no Ontos."
     },
     "notice": {
       "deprecated": "Obsoleto",

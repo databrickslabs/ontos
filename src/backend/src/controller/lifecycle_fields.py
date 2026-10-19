@@ -1,9 +1,10 @@
 """Deprecation lifecycle fields on data products and data contracts.
 
 Moving to ``deprecated`` requires a reason; the sunset date can't be in the
-past, and the replacement must be another existing, non-retired entity of the
-same type. Moving from ``deprecated`` back to ``active`` clears
-``deprecated_at`` and ``sunset_date``; the change log keeps the previous
+past (in UTC), and the replacement must be another existing entity of the same
+type that is neither deprecated nor retired, and whose replacement chain
+doesn't lead back to the entity. Moving from ``deprecated`` back to ``active``
+clears ``deprecated_at`` and ``sunset_date``; the change log keeps the previous
 values. See the lifecycle tag automation and deprecation PRD.
 """
 import json
@@ -68,6 +69,58 @@ def requested_status_change_justification(
     return None
 
 
+def utc_today() -> date:
+    """Today in UTC, the date sunset dates are checked against (the UI uses it too)."""
+    return datetime.now(timezone.utc).date()
+
+
+def _check_replacement(
+    db: Session, entity_type: str, entity_id: str, replacement_id: str, *, imported: bool = False,
+) -> None:
+    """Raise ValueError if ``replacement_id`` can't replace ``entity_id``.
+
+    The replacement must exist and must not lead back to the entity through the
+    replacement links of deprecated or retired entities (a cycle). A deprecated
+    or retired replacement is refused too, except for an ``imported`` entity: an
+    export can hold one legitimately (A deprecated toward B, then B deprecated).
+    """
+    if replacement_id == entity_id:
+        raise ValueError("An entity can't be its own replacement")
+    model = _entity_model(entity_type)
+    replacement = db.get(model, replacement_id)
+    if not replacement:
+        raise ValueError(f"Replacement {replacement_id} not found")
+    column = _REPLACEMENT_COLUMN[entity_type]
+    # Follow the links in effect: those of deprecated or retired entities
+    chain = [entity_id, replacement_id]
+    current = replacement
+    while current is not None and (current.status or '').lower() in ('deprecated', 'retired'):
+        next_id = getattr(current, column, None)
+        if not next_id:
+            break
+        if next_id == entity_id:
+            raise ValueError(
+                f"Replacement {replacement_id} leads back to this entity: "
+                + ' -> '.join(chain + [entity_id])
+            )
+        if next_id in chain:
+            break  # a cycle among other entities, not through this one
+        chain.append(next_id)
+        current = db.get(model, next_id)
+    if imported:
+        return
+    status = (replacement.status or '').lower()
+    if status == 'retired':
+        raise ValueError(f"Replacement {replacement_id} is retired")
+    if status == 'deprecated':
+        message = f"Replacement {replacement_id} is deprecated"
+        if current is not None and current is not replacement and (
+            (current.status or '').lower() not in ('deprecated', 'retired')
+        ):
+            message += f"; it is replaced by {' -> '.join(chain[2:])}"
+        raise ValueError(message)
+
+
 def check_lifecycle_fields(
     db: Session,
     entity_type: str,
@@ -84,16 +137,10 @@ def check_lifecycle_fields(
     details = details or DeprecationDetails()
     if not (details.reason or '').strip():
         raise ValueError("A deprecation reason is required to deprecate")
-    if details.sunset_date and details.sunset_date < date.today():
+    if details.sunset_date and details.sunset_date < utc_today():
         raise ValueError(f"The sunset date {details.sunset_date} is in the past")
     if details.replacement_id:
-        if details.replacement_id == entity_id:
-            raise ValueError("An entity can't be its own replacement")
-        replacement = db.get(_entity_model(entity_type), details.replacement_id)
-        if not replacement:
-            raise ValueError(f"Replacement {details.replacement_id} not found")
-        if (replacement.status or '').lower() == 'retired':
-            raise ValueError(f"Replacement {details.replacement_id} is retired")
+        _check_replacement(db, entity_type, entity_id, details.replacement_id)
 
 
 def apply_lifecycle_fields(
@@ -176,8 +223,18 @@ def pop_lifecycle_custom_properties(custom_props) -> Dict[str, Any]:
     return found
 
 
-def set_lifecycle_columns(entity_db, entity_type: str, props: Dict[str, Any]) -> None:
-    """Set the lifecycle columns from imported properties; unparseable dates are skipped."""
+def imported_lifecycle_columns(
+    db: Session, entity_type: str, entity_id: str, props: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Column values for the lifecycle properties of an imported entity.
+
+    Raises ValueError (naming the property) for a date that doesn't parse and
+    for a replacement that is the entity itself, doesn't exist, or leads back
+    to the entity. An import describes the entity as it was exported, so a
+    past sunset date, a deprecated or retired replacement and a deprecated
+    entity without a reason (exported before these fields existed) are kept.
+    """
+    columns: Dict[str, Any] = {}
     for prop, value in props.items():
         if value in (None, ''):
             continue
@@ -190,6 +247,18 @@ def set_lifecycle_columns(entity_db, entity_type: str, props: Dict[str, Any]) ->
             else:
                 value = str(value)
         except ValueError:
-            logger.warning("Skipping invalid %s %r on import", prop, value)
-            continue
+            raise ValueError(f"Invalid {prop} {value!r}: expected an ISO date") from None
+        columns[column] = value
+    replacement_id = columns.get(_REPLACEMENT_COLUMN[entity_type])
+    if replacement_id:
+        try:
+            _check_replacement(db, entity_type, entity_id, replacement_id, imported=True)
+        except ValueError as e:
+            raise ValueError(f"Invalid ontosReplacedBy: {e}") from None
+    return columns
+
+
+def set_lifecycle_columns(entity_db, columns: Dict[str, Any]) -> None:
+    """Set the lifecycle columns checked by ``imported_lifecycle_columns``."""
+    for column, value in columns.items():
         setattr(entity_db, column, value)

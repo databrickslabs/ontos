@@ -1,7 +1,8 @@
 /**
  * Deprecation details asked for when a data product or data contract is
  * moved to `deprecated`: a required reason, an optional sunset date and an
- * optional replacement of the same type (not retired, not the entity itself).
+ * optional replacement of the same type (not deprecated or retired, not the
+ * entity itself).
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +30,11 @@ export const EMPTY_DEPRECATION: DeprecationValues = {
   sunsetDate: '',
   replacementId: '',
 };
+
+/** Today in UTC (YYYY-MM-DD), the date the backend checks sunset dates against. */
+export function utcToday(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
 
 /** Request body fields for the change-status endpoints. */
 export function deprecationPayload(values: DeprecationValues): Record<string, string | undefined> {
@@ -74,7 +80,9 @@ export default function DeprecationFields({
       if (cancelled || !Array.isArray(res.data)) return;
       setCandidates(
         res.data.filter(
-          (c) => c.id !== entityId && (c.status || '').toLowerCase() !== 'retired',
+          (c) =>
+            c.id !== entityId &&
+            !['deprecated', 'retired'].includes((c.status || '').toLowerCase()),
         ),
       );
     });
@@ -83,13 +91,9 @@ export default function DeprecationFields({
     };
   }, [entityType, entityId, get]);
 
-  // Local date (toISOString would give the UTC date, a day off in the evening)
-  const now = new Date();
-  const today = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('-');
+  // The UTC date, as the backend checks it: near midnight it can differ from
+  // the local date, and both sides must agree on which dates are in the past
+  const today = utcToday();
 
   return (
     <div className="space-y-4">

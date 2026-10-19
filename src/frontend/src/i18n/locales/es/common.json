@@ -775,6 +775,11 @@
       "imported_replacement_dropped": "El reemplazo {{replacementId}} no está aquí, así que no se vinculó.",
       "imported_replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad ({{chain}}), así que no se vinculó.",
       "imported_status_mapped": "'{{status}}' no es un estado del ciclo de vida, así que se importó como '{{mappedTo}}'."
+    },
+    "notice": {
+      "deprecated": "Obsoleto",
+      "retired": "Retirado",
+      "noReason": "No se registró un motivo"
     }
   }
 }

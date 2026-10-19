@@ -151,7 +151,7 @@ from src.controller.lifecycle_fields import (
     lifecycle_custom_properties,
     peek_lifecycle_replacement,
     pop_lifecycle_custom_properties,
-    requested_status_change,
+    requested_deprecation,
     audit_approved_lifecycle_change,
     set_lifecycle_columns,
 )
@@ -1485,7 +1485,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         target_status: str,
         justification: str,
         requester_email: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> Dict[str, str]:
         """Request a status change for a product via workflow.
         
@@ -1526,7 +1528,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         allowed_transitions = self._get_allowed_status_transitions(from_status)
         if target_status_lower not in [t['target'] for t in allowed_transitions]:
             raise ValueError(f"Invalid status transition from '{from_status}' to '{target_status}'.")
-        
+
+        # A requested deprecation may carry a sunset date and a replacement,
+        # checked now and applied with the justification as the reason
+        requested_deprecation: Dict[str, Optional[str]] = {}
+        if target_status_lower == 'deprecated' and (sunset_date or replacement_id):
+            from src.controller.lifecycle_fields import check_requested_deprecation
+            details = check_requested_deprecation(
+                db, 'data_product', product_id, justification, sunset_date, replacement_id,
+            )
+            requested_deprecation = {
+                'sunset_date': details.sunset_date.isoformat() if details.sunset_date else None,
+                'replacement_id': details.replacement_id,
+            }
+
         now = datetime.utcnow()
         request_id = str(uuid4())
         
@@ -1545,6 +1560,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "target_status": target_status_lower,
                 "justification": justification,
                 "request_id": request_id,
+                **requested_deprecation,
             },
             user_email=requester_email,
         )
@@ -1563,6 +1579,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "target_status": target_status,
                 "justification": justification,
                 "request_id": request_id,
+                **requested_deprecation,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change requested from {from_status} to {target_status} by {current_user}",
                 **outcome,
@@ -1639,12 +1656,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Apply the status change directly; a requested deprecation uses
             # the request's justification as its reason
             from_status = (product.status or '').lower()
-            request_id, justification = requested_status_change(
+            request_id, deprecation = requested_deprecation(
                 db, 'data_product', product_id, target_status
             )
             self.transition_status(
-                product_id, target_status, current_user,
-                deprecation=DeprecationDetails(reason=justification),
+                product_id, target_status, current_user, deprecation=deprecation,
             )
             audit_approved_lifecycle_change(
                 db, 'data_product', product_id, from_status, target_status,

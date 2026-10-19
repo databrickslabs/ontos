@@ -18,6 +18,7 @@ import DeprecationFields, {
   DeprecationValues,
   EMPTY_DEPRECATION,
   deprecationPayload,
+  requestedDeprecationPayload,
 } from '@/components/common/deprecation-fields';
 import {
   getAllowedTransitions,
@@ -279,6 +280,7 @@ export default function RequestContractActionDialog({
             target_status: targetStatus,
             justification: justification.trim(),
             current_status: contractStatus,
+            ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
           };
         }
       }
@@ -809,13 +811,14 @@ export default function RequestContractActionDialog({
                 </Alert>
               )}
 
-              {canDirectStatusChange && targetStatus === 'deprecated' && (
+              {targetStatus === 'deprecated' && (
                 <DeprecationFields
                   entityType="data_contract"
                   entityId={contractId}
                   value={deprecation}
                   onChange={setDeprecation}
                   disabled={submitting}
+                  hideReason={!canDirectStatusChange}
                 />
               )}
 

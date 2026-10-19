@@ -802,6 +802,10 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str = Field(..., description="Requested target status")
     justification: str = Field(..., description="Justification for the status change")
     current_status: Optional[str] = Field(None, description="Current status (for reference)")
+    sunset_date: Optional[str] = Field(
+        None, description="Requested deprecation: sunset date (YYYY-MM-DD, UTC)")
+    replacement_id: Optional[str] = Field(
+        None, description="Requested deprecation: the product replacing this one")
 
 
 class HandleStatusChangePayload(BaseModel):

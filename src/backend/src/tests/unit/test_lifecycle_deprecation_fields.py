@@ -25,11 +25,13 @@ from src.controller.data_products_manager import DataProductsManager
 from src.controller.lifecycle_fields import (
     DeprecationDetails,
     ImportLinks,
+    LifecycleFieldError,
     apply_lifecycle_fields,
     check_lifecycle_fields,
     imported_lifecycle_columns,
     lifecycle_custom_properties,
     pop_lifecycle_custom_properties,
+    requested_deprecation,
     requested_status_change_justification,
     set_lifecycle_columns,
     utc_today,
@@ -875,3 +877,95 @@ async def test_the_mcp_tools_refuse_a_malformed_sunset_date(db_session):
 
     assert not result.success
     assert 'YYYY-MM-DD' in result.error
+
+
+# --- A status change request to deprecated can carry a sunset date and a replacement ---
+
+def test_an_approved_request_applies_its_sunset_date_and_replacement(db_session, audited):
+    from unittest.mock import MagicMock
+    product, replacement = _product(db_session), _product(db_session)
+    sunset = (utc_today() + timedelta(days=30)).isoformat()
+    _request(db_session, 'data_product', product.id, 'deprecated', 'Superseded by v2',
+             request_id='req-2', sunset_date=sunset, replacement_id=replacement.id)
+    db_session.commit()
+
+    DataProductsManager(db=db_session).handle_status_change_response(
+        db=db_session, notifications_manager=MagicMock(), product_id=product.id,
+        approver_email='steward@example.com', decision='approve',
+        target_status='deprecated', current_user='steward',
+    )
+
+    db_session.refresh(product)
+    assert product.status == 'deprecated'
+    assert product.deprecation_reason == 'Superseded by v2'
+    assert product.sunset_date.isoformat() == sunset
+    assert product.replacement_product_id == replacement.id
+    assert audited[0]['details']['sunset_date'] == sunset
+
+
+def test_an_approved_contract_request_applies_its_sunset_date_and_replacement(db_session, audited):
+    from unittest.mock import MagicMock
+    contract, replacement = _contract(db_session), _contract(db_session)
+    sunset = (utc_today() + timedelta(days=10)).isoformat()
+    _request(db_session, 'data_contract', contract.id, 'deprecated', 'Use v2',
+             sunset_date=sunset, replacement_id=replacement.id)
+    db_session.commit()
+
+    DataContractsManager(data_dir=Path('/tmp')).handle_status_change_response(
+        db=db_session, notifications_manager=MagicMock(), contract_id=contract.id,
+        approver_email='steward@example.com', decision='approve', target_status='deprecated',
+        requester_email='alice@example.com', current_user='steward',
+    )
+
+    db_session.refresh(contract)
+    assert contract.deprecation_reason == 'Use v2'
+    assert contract.sunset_date.isoformat() == sunset
+    assert contract.replacement_contract_id == replacement.id
+
+
+def test_a_request_with_a_past_sunset_date_is_refused_when_made(db_session):
+    from unittest.mock import MagicMock
+    product = _product(db_session)
+    yesterday = (utc_today() - timedelta(days=1)).isoformat()
+
+    with pytest.raises(LifecycleFieldError) as err:
+        DataProductsManager(db=db_session).request_status_change(
+            db=db_session, notifications_manager=MagicMock(), product_id=product.id,
+            target_status='deprecated', justification='Superseded by v2',
+            requester_email='alice@example.com', current_user='alice',
+            sunset_date=yesterday,
+        )
+    assert err.value.code == 'sunset_date_in_past'
+
+
+def test_a_request_with_a_retired_replacement_is_refused_when_made(db_session):
+    from unittest.mock import MagicMock
+    contract, replacement = _contract(db_session), _contract(db_session, status='retired')
+
+    with pytest.raises(LifecycleFieldError) as err:
+        DataContractsManager(data_dir=Path('/tmp')).request_status_change(
+            db=db_session, notifications_manager=MagicMock(), contract_id=contract.id,
+            target_status='deprecated', justification='Use v2',
+            requester_email='alice@example.com', current_user='alice',
+            replacement_id=replacement.id,
+        )
+    assert err.value.code == 'replacement_retired'
+
+
+def test_the_requested_sunset_date_and_replacement_are_stored_with_the_request(db_session):
+    from unittest.mock import MagicMock
+    product, replacement = _product(db_session), _product(db_session)
+    sunset = (utc_today() + timedelta(days=5)).isoformat()
+
+    DataProductsManager(db=db_session).request_status_change(
+        db=db_session, notifications_manager=MagicMock(), product_id=product.id,
+        target_status='deprecated', justification='Superseded by v2',
+        requester_email='alice@example.com', current_user='alice',
+        sunset_date=sunset, replacement_id=replacement.id,
+    )
+
+    request_id, details = requested_deprecation(db_session, 'data_product', product.id, 'deprecated')
+    assert request_id
+    assert (details.reason, details.sunset_date.isoformat(), details.replacement_id) == (
+        'Superseded by v2', sunset, replacement.id,
+    )

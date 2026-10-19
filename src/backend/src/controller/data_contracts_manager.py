@@ -143,7 +143,7 @@ from src.controller.lifecycle_fields import (
     lifecycle_custom_properties,
     peek_lifecycle_replacement,
     pop_lifecycle_custom_properties,
-    requested_status_change,
+    requested_deprecation,
     audit_approved_lifecycle_change,
     set_lifecycle_columns,
 )
@@ -6377,7 +6377,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         target_status: str,
         justification: str,
         requester_email: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> dict:
         """Request approval to change the status of a contract.
         
@@ -6412,7 +6414,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         allowed_transitions = self._get_allowed_status_transitions(current_status)
         if target_status_lower not in allowed_transitions:
             raise ValueError(f"Invalid transition from '{current_status}' to '{target_status}'")
-        
+
+        # A requested deprecation may carry a sunset date and a replacement,
+        # checked now and applied with the justification as the reason
+        requested = {}
+        if target_status_lower == 'deprecated' and (sunset_date or replacement_id):
+            from src.controller.lifecycle_fields import check_requested_deprecation
+            details = check_requested_deprecation(
+                db, 'data_contract', contract_id, justification, sunset_date, replacement_id,
+            )
+            requested = {
+                'sunset_date': details.sunset_date.isoformat() if details.sunset_date else None,
+                'replacement_id': details.replacement_id,
+            }
+
         now = datetime.utcnow()
         
         # Create notification for the requester
@@ -6454,6 +6469,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "current_status": current_status,
                 "target_status": target_status,
                 "justification": justification,
+                **requested,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change from '{current_status}' to '{target_status}' requested by {requester_email}",
             },
@@ -6518,7 +6534,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Through transition_status, like a product's approved request, so
             # the before_status_change gates run and on_status_change fires; a
             # requested deprecation uses the request's justification as its reason.
-            request_id, justification = requested_status_change(
+            request_id, deprecation = requested_deprecation(
                 db, 'data_contract', contract_id, target_status_lower
             )
             contract = self.transition_status(
@@ -6526,7 +6542,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 contract_id=contract_id,
                 new_status=target_status_lower,
                 current_user=current_user,
-                deprecation=DeprecationDetails(reason=justification),
+                deprecation=deprecation,
             )
             audit_approved_lifecycle_change(
                 db, 'data_contract', contract_id, from_status, target_status_lower,

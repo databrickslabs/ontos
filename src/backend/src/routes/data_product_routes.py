@@ -2925,7 +2925,9 @@ async def request_status_change(
             target_status=payload.target_status,
             justification=payload.justification,
             requester_email=current_user.username,
-            current_user=current_user.username
+            current_user=current_user.username,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         audit_manager.log_action(

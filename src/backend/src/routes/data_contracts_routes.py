@@ -494,6 +494,9 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str
     justification: str
     current_status: Optional[str] = None
+    # Requested deprecation: sunset date (YYYY-MM-DD, UTC) and replacement contract
+    sunset_date: Optional[str] = None
+    replacement_id: Optional[str] = None
 
 
 class HandleStatusChangePayload(BaseModel):
@@ -677,7 +680,9 @@ async def request_status_change(
             target_status=payload.target_status,
             justification=payload.justification,
             requester_email=current_user.email if current_user else None,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         # Audit

@@ -64,4 +64,22 @@ describe('import report lines', () => {
     expect(importItemLine({ index: 4, status: 'skipped', source_id: 's-4' }, i18n.t))
       .toBe('• s-4: skipped');
   });
+
+  it('translates a refused `certified` status', async () => {
+    await i18n.changeLanguage('pt');
+    const line = importItemLine(
+      {
+        index: 0,
+        name: 'Cert Product',
+        status: 'failed',
+        message: "'certified' is not a status: certification is set with the certify action, on an active entity.",
+        code: 'certified_is_not_a_status',
+        params: null,
+      },
+      i18n.t,
+    );
+    expect(line).toContain('Cert Product');
+    expect(line).not.toContain("'certified' is not a status");
+    expect(line).toBe(`• Cert Product: ${i18n.t('workflow-gates:certifiedIsNotAStatus')}`);
+  });
 });

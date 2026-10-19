@@ -775,6 +775,11 @@
       "imported_replacement_dropped": "Der Ersatz {{replacementId}} ist hier nicht vorhanden und wurde daher nicht verknüpft.",
       "imported_replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück ({{chain}}) und wurde daher nicht verknüpft.",
       "imported_status_mapped": "'{{status}}' ist kein Lebenszyklus-Status und wurde daher als '{{mappedTo}}' importiert."
+    },
+    "notice": {
+      "deprecated": "Veraltet",
+      "retired": "Stillgelegt",
+      "noReason": "Kein Grund angegeben"
     }
   }
 }

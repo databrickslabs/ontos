@@ -18,6 +18,7 @@ import DeprecationFields, {
   DeprecationValues,
   EMPTY_DEPRECATION,
   deprecationPayload,
+  requestedDeprecationPayload,
 } from '@/components/common/deprecation-fields';
 
 type RequestType = 'access' | 'review' | 'publish' | 'certify' | 'status_change';
@@ -341,6 +342,7 @@ export default function RequestProductActionDialog({
         target_status: targetStatus,
         justification: justification.trim(),
         current_status: productStatus,
+        ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
       };
     }
     return null;
@@ -695,13 +697,14 @@ export default function RequestProductActionDialog({
                 )}
               </div>
 
-              {canDirectStatusChange && targetStatus === 'deprecated' && (
+              {targetStatus === 'deprecated' && (
                 <DeprecationFields
                   entityType="data_product"
                   entityId={productId}
                   value={deprecation}
                   onChange={setDeprecation}
                   disabled={submitting}
+                  hideReason={!canDirectStatusChange}
                 />
               )}
 

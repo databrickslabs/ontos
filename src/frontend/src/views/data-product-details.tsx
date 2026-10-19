@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { deleteOrThrow } from '@/lib/delete-or-throw';
 import { subscribeResponseErrorText } from '@/lib/subscribe-error';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import DeprecationNotice from '@/components/common/deprecation-notice';
 import { useTranslation } from 'react-i18next';
 import { DataProduct, InputPort, OutputPort, ManagementPort, TeamMember, Support, SubscriptionResponse, SubscribersListResponse } from '@/types/data-product';
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
@@ -1612,6 +1613,13 @@ export default function DataProductDetails() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            <DeprecationNotice
+              entityType="data_product"
+              status={product.status}
+              reason={product.deprecation_reason}
+              sunsetDate={product.sunset_date}
+              replacementId={product.replacement_product_id}
+            />
             <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.version')}:</Label>

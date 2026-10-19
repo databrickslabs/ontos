@@ -36,6 +36,17 @@ export function utcToday(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+/**
+ * Request body fields of a status change *request* to `deprecated`: the
+ * justification is the reason, so only the sunset date and the replacement.
+ */
+export function requestedDeprecationPayload(values: DeprecationValues): Record<string, string | undefined> {
+  return {
+    sunset_date: values.sunsetDate || undefined,
+    replacement_id: values.replacementId || undefined,
+  };
+}
+
 /** Request body fields for the change-status endpoints. */
 export function deprecationPayload(values: DeprecationValues): Record<string, string | undefined> {
   return {
@@ -58,6 +69,8 @@ interface DeprecationFieldsProps {
   value: DeprecationValues;
   onChange: (value: DeprecationValues) => void;
   disabled?: boolean;
+  /** Hide the reason (a status change request's justification is the reason). */
+  hideReason?: boolean;
 }
 
 const NO_REPLACEMENT = '__none__';
@@ -68,6 +81,7 @@ export default function DeprecationFields({
   value,
   onChange,
   disabled = false,
+  hideReason = false,
 }: DeprecationFieldsProps) {
   const { t } = useTranslation(['common']);
   const { get } = useApi();
@@ -97,17 +111,19 @@ export default function DeprecationFields({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="deprecation-reason">{t('common:deprecation.reason')} *</Label>
-        <Textarea
-          id="deprecation-reason"
-          value={value.deprecationReason}
-          onChange={(e) => onChange({ ...value, deprecationReason: e.target.value })}
-          placeholder={t('common:deprecation.reasonPlaceholder')}
-          className="min-h-[80px] resize-none"
-          disabled={disabled}
-        />
-      </div>
+      {!hideReason && (
+        <div className="space-y-2">
+          <Label htmlFor="deprecation-reason">{t('common:deprecation.reason')} *</Label>
+          <Textarea
+            id="deprecation-reason"
+            value={value.deprecationReason}
+            onChange={(e) => onChange({ ...value, deprecationReason: e.target.value })}
+            placeholder={t('common:deprecation.reasonPlaceholder')}
+            className="min-h-[80px] resize-none"
+            disabled={disabled}
+          />
+        </div>
+      )}
       <div className="space-y-2">
         <Label htmlFor="deprecation-sunset-date">{t('common:deprecation.sunsetDate')}</Label>
         <Input

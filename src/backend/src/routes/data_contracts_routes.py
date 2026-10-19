@@ -1028,49 +1028,26 @@ async def set_contract_publication_scope(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker("data-contracts", FeatureAccessLevel.READ_WRITE)),
 ):
-    """Set publication scope. Contract must be active or approved."""
+    """Set publication scope. Contract must be active or approved to publish.
+
+    Fires on_publish when the contract gets published and on_unpublish when it
+    is unpublished.
+    """
     scope = body.get("scope", "none")
     valid_scopes = ["none", "domain", "organization", "external"]
     if scope not in valid_scopes:
         raise HTTPException(status_code=422, detail=f"Invalid scope. Must be one of: {valid_scopes}")
 
     try:
-        contract_db = data_contract_repo.get(db, id=contract_id)
-        if not contract_db:
+        if not data_contract_repo.get(db, id=contract_id):
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        st = (contract_db.status or "").lower()
-        if scope != "none" and st not in ("active", "approved"):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Contract must be active or approved to publish. Current status: {contract_db.status}",
+        try:
+            contract_db = manager.set_publication_scope(
+                db, contract_id, scope, current_user.username if current_user else None
             )
-
-        was_published = (contract_db.publication_scope or "none").lower() != "none"
-
-        if scope != "none":
-            contract_db.publication_scope = scope
-            contract_db.published_at = datetime.now(timezone.utc)
-            contract_db.published_by = current_user.username if current_user else None
-        else:
-            contract_db.publication_scope = "none"
-            contract_db.published_at = None
-            contract_db.published_by = None
-        db.add(contract_db)
-        db.commit()
-        db.refresh(contract_db)
-
-        # Fire on_unpublish trigger when transitioning from published to unpublished
-        if scope == "none" and was_published:
-            from src.common.workflow_triggers import fire_trigger_safe
-            from src.models.process_workflows import EntityType
-            fire_trigger_safe(
-                db, "on_unpublish",
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_name=contract_db.name,
-                user_email=current_user.username if current_user else None,
-            )
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         audit_manager.log_action(
             db=db,

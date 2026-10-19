@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",
+    "policySavedWithWarnings": "Beleid '{{name}}' opgeslagen, maar de regel werkt mogelijk niet",
     "policyDeleted": "Beleid succesvol verwijderd"
   },
   "score": {
@@ -161,5 +162,9 @@
       "score": "Score",
       "issues": "Problemen"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "Het MATCH-type '{{type}}' wordt niet ondersteund, dus de regel controleert geen entiteiten. Ondersteunde typen: {{supported}}, of Object voor allemaal.",
+    "missing_assert": "De regel heeft geen ASSERT-clausule, dus elke entiteit slaagt."
   }
 }

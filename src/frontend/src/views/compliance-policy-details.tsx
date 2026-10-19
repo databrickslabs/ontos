@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 
 type Policy = {
   id: string; // UUID
@@ -32,6 +33,7 @@ type Policy = {
   created_at?: string;
   updated_at?: string;
   examples?: { pass?: any[]; fail?: any[] } | null;
+  warnings?: RuleWarning[]; // returned by update when the rule cannot work as written
 };
 
 type Run = {
@@ -189,10 +191,16 @@ export default function CompliancePolicyDetails() {
       
       setPolicy(response.data);
       setDynamicTitle(response.data.name);
-      toast({
-        title: t('common:toast.success'),
-        description: t('compliance:toast.policySaved', { name: response.data.name })
-      });
+      const warnings = response.data.warnings ?? [];
+      toast(warnings.length
+        ? {
+            title: t('compliance:toast.policySavedWithWarnings', { name: response.data.name }),
+            description: warnings.map((w) => formatRuleWarning(t, w)).join(' '),
+          }
+        : {
+            title: t('common:toast.success'),
+            description: t('compliance:toast.policySaved', { name: response.data.name })
+          });
       
       setIsEditDialogOpen(false);
     } catch (err) {

@@ -143,6 +143,16 @@ async def create_approval_session(
     ``for_request_access`` session even without ``data-contracts:READ_WRITE``.
     """
     trigger_type = _resolve_trigger_type_for_workflow(db, body.workflow_id)
+    # 'subscribe' subscribes the caller to the entity when the session
+    # completes. Only the subscription wizard, whose gate is data-products
+    # access, may do that: other wizards (e.g. for_approval_response, which
+    # any authenticated user may open) would otherwise subscribe users who
+    # can't subscribe.
+    if body.completion_action == 'subscribe' and trigger_type != 'for_subscribe':
+        raise HTTPException(
+            status_code=400,
+            detail="completion_action 'subscribe' is only allowed for subscription workflows",
+        )
     if trigger_type:
         # Skip the unknown-trigger 400: missing workflow falls through to the
         # manager call below, which surfaces a better 400/404 from the

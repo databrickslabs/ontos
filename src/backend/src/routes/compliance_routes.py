@@ -16,6 +16,7 @@ from src.models.compliance import (
 )
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
+from src.common.compliance_entities import validate_rule
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -24,6 +25,14 @@ router = APIRouter(prefix="/api", tags=["Compliance"])
 manager = ComplianceManager()
 
 FEATURE_ID = 'compliance'
+
+
+def _check_rule(rule: str) -> list:
+    """Reject rules that do not parse; return warnings for rules that cannot work as written."""
+    try:
+        return validate_rule(rule)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 # DEPRECATED: Demo data loading has been moved to SQL-based approach.
@@ -62,6 +71,7 @@ async def create_policy(
     policy: CompliancePolicyCreate = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
+    warnings = _check_rule(policy.rule)
     created = manager.create_policy(
         db, 
         policy, 
@@ -90,6 +100,7 @@ async def create_policy(
         'category': created.category,
         'compliance': 0.0,
         'history': [],
+        'warnings': warnings,
     }
 
 
@@ -103,6 +114,12 @@ async def update_policy(
     policy: CompliancePolicy = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
+    # Only a changed rule is checked: an older policy with an invalid rule
+    # can still be renamed, disabled or recategorised
+    existing = manager.get_policy(db, policy_id)
+    warnings = (
+        _check_rule(policy.rule) if existing is None or existing.rule != policy.rule else []
+    )
     updated = manager.update_policy(
         db, 
         policy_id, 
@@ -132,6 +149,7 @@ async def update_policy(
         'is_active': updated.is_active,
         'severity': updated.severity,
         'category': updated.category,
+        'warnings': warnings,
     }
 
 

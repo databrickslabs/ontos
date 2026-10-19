@@ -11,18 +11,29 @@ from src.models.process_workflows import (
     TriggerType,
     EntityType,
     ExecutionStatus,
+    StepExecutionStatus,
     WorkflowExecution,
+    WorkflowStepExecutionResult,
 )
 from src.common.workflow_executor import StepContext
 
 
-def _make_execution(status: ExecutionStatus, step_results=None) -> MagicMock:
-    """Create a mock WorkflowExecution."""
-    exe = MagicMock(spec=WorkflowExecution)
-    exe.status = status
-    exe.step_results = step_results or {}
-    exe.current_step_id = 'step-1'
-    return exe
+def _make_execution(status: ExecutionStatus, step_error=None) -> WorkflowExecution:
+    """A real WorkflowExecution, so tests only rely on attributes it has.
+
+    (A MagicMock used to carry a ``step_results`` attribute that the model
+    doesn't have, which hid the gate failing open in production.)
+    """
+    steps = []
+    if step_error:
+        steps.append(WorkflowStepExecutionResult(
+            step_id='step-1', status=StepExecutionStatus.FAILED, passed=False,
+            error_message=step_error,
+        ))
+    return WorkflowExecution(
+        workflow_id='wf-1', workflow_name='Gate', status=status,
+        current_step_id='step-1', step_executions=steps,
+    )
 
 
 # =========================================================================
@@ -149,7 +160,7 @@ class TestDataProductsManagerGating:
         # Mock the trigger registry to block the transition
         failed_exec = _make_execution(
             ExecutionStatus.FAILED,
-            step_results={'step-1': {'error': 'Missing required approval'}},
+            step_error='Missing required approval',
         )
 
         with patch('src.common.workflow_triggers.get_trigger_registry') as mock_get_reg:
@@ -157,7 +168,9 @@ class TestDataProductsManagerGating:
             mock_get_reg.return_value = mock_registry
             mock_registry.before_status_change.return_value = (False, [failed_exec])
 
-            with pytest.raises(ValueError, match="blocked by workflow"):
+            with pytest.raises(
+                ValueError, match="blocked by workflow: Gate: Missing required approval"
+            ):
                 mgr.transition_status(product.id, 'active', 'test@example.com')
 
     def test_transition_allowed_when_workflow_passes(self, db_session):
@@ -218,7 +231,7 @@ class TestDataContractsManagerGating:
 
         failed_exec = _make_execution(
             ExecutionStatus.FAILED,
-            step_results={'step-1': {'error': 'Schema validation failed'}},
+            step_error='Schema validation failed',
         )
 
         with patch('src.common.workflow_triggers.get_trigger_registry') as mock_get_reg:
@@ -226,7 +239,9 @@ class TestDataContractsManagerGating:
             mock_get_reg.return_value = mock_registry
             mock_registry.before_status_change.return_value = (False, [failed_exec])
 
-            with pytest.raises(ValueError, match="blocked by workflow"):
+            with pytest.raises(
+                ValueError, match="blocked by workflow: Gate: Schema validation failed"
+            ):
                 mgr.transition_status(
                     db=db_session,
                     contract_id=contract.id,
@@ -386,7 +401,7 @@ class TestBlockedTransitionErrorMessage:
 
         failed_exec = _make_execution(
             ExecutionStatus.FAILED,
-            step_results={'step-1': {'error': 'Compliance check failed'}},
+            step_error='Compliance check failed',
         )
 
         with patch('src.common.workflow_triggers.get_trigger_registry') as mock_get_reg:
@@ -401,3 +416,67 @@ class TestBlockedTransitionErrorMessage:
         assert 'approved' in error_msg
         assert 'active' in error_msg
         assert 'Compliance check failed' in error_msg
+
+
+class TestDescribeFailedExecutions:
+    """Reasons shown when a blocking workflow stops an operation."""
+
+    def test_uses_the_failed_step_error(self):
+        from src.common.workflow_triggers import describe_failed_executions
+
+        assert describe_failed_executions([
+            _make_execution(ExecutionStatus.SUCCEEDED),
+            _make_execution(ExecutionStatus.FAILED, step_error='Owner missing'),
+        ]) == 'Gate: Owner missing'
+
+    def test_prefers_the_execution_error_over_earlier_steps(self):
+        # The execution error holds the message of the step it ended on
+        # (e.g. an authored Fail step), which beats an earlier diagnostic.
+        from src.common.workflow_triggers import describe_failed_executions
+
+        exe = _make_execution(ExecutionStatus.FAILED, step_error='policy p1: column missing')
+        exe.error_message = 'Add an owner before activating'
+
+        assert describe_failed_executions([exe]) == 'Gate: Add an owner before activating'
+
+    def test_falls_back_to_the_step_message_then_status(self):
+        from src.common.workflow_triggers import describe_failed_executions
+
+        with_message = _make_execution(ExecutionStatus.FAILED)
+        with_message.step_executions = [WorkflowStepExecutionResult(
+            step_id='s', status=StepExecutionStatus.FAILED, passed=False,
+            result_data={'message': 'Assertion failed'},
+        )]
+        bare = _make_execution(ExecutionStatus.FAILED)
+
+        assert describe_failed_executions([with_message, bare]) == (
+            'Gate: Assertion failed; Gate: failed'
+        )
+
+    def test_paused_execution_reports_the_pending_approval(self):
+        from src.common.workflow_triggers import describe_failed_executions
+
+        paused = _make_execution(ExecutionStatus.PAUSED, step_error='earlier check failed')
+        paused.current_step_name = 'Steward approval'
+
+        assert describe_failed_executions([paused]) == (
+            'Gate: waiting for approval (Steward approval)'
+        )
+
+    def test_non_string_messages_are_stringified(self):
+        from src.common.workflow_triggers import describe_failed_executions
+
+        exe = _make_execution(ExecutionStatus.FAILED)
+        exe.workflow_name = None
+        exe.step_executions = [WorkflowStepExecutionResult(
+            step_id='s', status=StepExecutionStatus.FAILED, passed=False,
+            result_data={'message': {'code': 'X'}},
+        )]
+
+        assert describe_failed_executions([exe]) == "{'code': 'X'}"
+
+    def test_default_when_nothing_failed(self):
+        from src.common.workflow_triggers import describe_failed_executions
+
+        assert describe_failed_executions([]) == 'Workflow validation failed'
+

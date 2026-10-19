@@ -6,7 +6,7 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
@@ -129,6 +129,7 @@ _TRIGGER_LABELS: Dict[str, str] = {
     "on_request_review": "After a review request is submitted",
     "for_request_publish": "When a user requests publish",
     "on_request_publish": "After a publish request is submitted",
+    "on_request_deploy": "After a deploy request is submitted",
     "for_request_certify": "When a user requests certification",
     "on_request_certify": "After a certification request is submitted",
     "for_request_status_change": "When a user requests status change",
@@ -164,7 +165,7 @@ _TRIGGER_GROUPS_REQUEST_FLOW = {
     "for_request_publish", "for_request_certify",
     "for_request_status_change", "for_approval_response",
     "on_subscribe", "on_unsubscribe",
-    "on_request_access", "on_request_review", "on_request_publish",
+    "on_request_access", "on_request_review", "on_request_publish", "on_request_deploy",
     "on_request_certify", "on_request_status_change",
     "on_revoke", "on_expiring", "on_first_access",
 }
@@ -203,6 +204,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_review": ["data_contract", "data_product", "data_asset_review"],
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
+    "on_request_deploy": ["data_contract"],
     "on_request_certify": ["data_contract", "data_product"],
     "on_request_status_change": ["data_product"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
@@ -571,19 +573,15 @@ WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
     TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
     TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
     TriggerType.ON_FIRST_ACCESS.value:           None,  # authenticated only — first-login welcome screen
-    # `for_approval_response` — relaxed from `notifications:READ_WRITE`
-    # (PR K) down to `notifications:READ_ONLY` (PR L). The outer gate
-    # only needs to confirm the user is part of the notification system
-    # at all; the real authorization is the per-execution check inside
+    # `for_approval_response` — authenticated only (#971). The real
+    # authorization is the per-execution check inside
     # `POST /api/workflows/handle-approval`
-    # (`_assert_caller_authorized_for_execution`), which verifies the
-    # caller is the recipient (or role-member) of the actual approval
-    # notification — preventing horizontal privilege escalation.
-    # READ_WRITE is too tight: typical Business Owners hold a business
-    # role on the entity but only have notifications:Read-only at the
-    # app-role level (they read + respond to notifications routed to
-    # them; they don't author or modify notifications).
-    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_ONLY),
+    # (`_assert_caller_authorized_for_execution`): the caller must be the
+    # recipient (or role member) of the actual approval notification.
+    # It used to require `notifications:READ_ONLY` (PR L), which can no
+    # longer be granted since `notifications` became admin-only, and which
+    # approvers holding only a business role never have anyway.
+    TriggerType.FOR_APPROVAL_RESPONSE.value:     None,
 }
 
 
@@ -1187,6 +1185,35 @@ def _find_approval_notifications_for_execution(
     return matches
 
 
+def _pending_step_id(db: Session, execution_id: str) -> Optional[str]:
+    """Step the execution is paused at (``current_step_id``), if any."""
+    from src.db_models.process_workflows import WorkflowExecutionDb
+    row = db.query(WorkflowExecutionDb.current_step_id).filter(
+        WorkflowExecutionDb.id == execution_id
+    ).first()
+    step_id = row[0] if row else None
+    return step_id if isinstance(step_id, str) else None
+
+
+def _is_for_step(
+    notification: Union[Notification, NotificationDb], step_id: Optional[str]
+) -> bool:
+    """Whether an approval notification belongs to ``step_id``.
+
+    Notifications created before approvals recorded their step have no
+    ``step_id`` and still count, so approvals pending at upgrade time can
+    be answered.
+    """
+    payload = notification.action_payload
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            payload = None
+    notified_step = (payload or {}).get('step_id') if isinstance(payload, dict) else None
+    return step_id is None or notified_step is None or notified_step == step_id
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -1196,17 +1223,20 @@ def _assert_caller_authorized_for_execution(
     """Authorize ``user_info`` to act on the paused workflow execution.
 
     A caller is authorized iff there exists at least one
-    ``workflow_approval`` notification for ``execution_id`` that the caller
+    ``workflow_approval`` notification for ``execution_id`` and for the step
+    it is paused at (see ``_is_for_step``) that the caller
     can access under
     ``NotificationsManager.can_user_access_notification`` (direct
-    recipient, role membership via ``recipient_role_id``, or admin
-    fallback for role-with-no-groups).
+    recipient, role membership via ``recipient_role_id``, or admin).
 
-    This is the per-execution check that backs the relaxed outer gate on
-    ``POST /handle-approval`` (notifications:READ_WRITE instead of
-    settings:READ_WRITE). It prevents horizontal privilege escalation —
-    a Business Owner with notifications RW cannot approve an execution
-    they were never notified about.
+    This is the only authorization on ``POST /handle-approval`` and the
+    ``for_approval_response`` wizard (no feature-level gate, see #971). It
+    prevents horizontal privilege escalation: a caller cannot approve an
+    execution they were never notified about.
+
+    Approval notifications without a recipient and without a role are
+    ignored: ``can_user_access_notification`` treats them as broadcast
+    (visible to everyone), which must never mean "anyone may approve".
 
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.
@@ -1214,7 +1244,11 @@ def _assert_caller_authorized_for_execution(
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
     """
-    candidates = _find_approval_notifications_for_execution(db, execution_id)
+    pending_step = _pending_step_id(db, execution_id)
+    candidates = [
+        n for n in _find_approval_notifications_for_execution(db, execution_id)
+        if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
+    ]
     if not candidates:
         raise HTTPException(
             status_code=403,
@@ -1231,6 +1265,45 @@ def _assert_caller_authorized_for_execution(
     )
 
 
+def _mark_step_notifications_handled(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    approved: bool,
+    user_email: Optional[str],
+) -> None:
+    """Mark the unread approval notifications of ``step_id`` as handled.
+
+    Notifications of later steps, created while the workflow resumed, stay
+    open for their approvers.
+    """
+    notifications = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval',
+        NotificationDb.read == False
+    ).all()
+
+    for notif in notifications:
+        try:
+            payload = notif.action_payload
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if (
+                payload
+                and payload.get('execution_id') == execution_id
+                and _is_for_step(notif, step_id)
+            ):
+                notif.read = True
+                # Mark the action as handled with decision info
+                payload['handled'] = True
+                payload['decision'] = 'approved' if approved else 'rejected'
+                payload['handled_by'] = user_email
+                payload['handled_at'] = datetime.utcnow().isoformat()
+                notif.action_payload = json.dumps(payload)
+                db.add(notif)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+
 @router.post("/handle-approval")
 async def handle_workflow_approval(
     request: Request,
@@ -1239,29 +1312,18 @@ async def handle_workflow_approval(
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager),
-    # Outer gate is `notifications:READ_ONLY` (PR L). The real
-    # authorization is the per-execution check below
-    # (`_assert_caller_authorized_for_execution`), which confirms the
-    # caller was an actual recipient/role-member of the approval
-    # notification. The outer gate exists for defense-in-depth — it
-    # ensures the caller is part of the notification system at all
-    # (rejects users with `notifications:None`), but doesn't require
-    # write-level notification permissions which most non-admin
-    # Business Owners legitimately don't have. Approving a notification
-    # routed to you is *reading* + responding; not a separate "write"
-    # action on the notification feature itself.
+    # No feature-level gate: authenticated callers only. Authorization is
+    # the per-execution check below (`_assert_caller_authorized_for_execution`):
+    # the caller must be a recipient / role member of this execution's
+    # approval notification (admins may act on any approval).
     #
-    # Two-layer defense satisfied (per OWASP API1+API5):
-    #   * Function-level (outer): you can see notifications → can be a
-    #     workflow recipient. Excludes users with no notification access.
-    #   * Object-level (inner): you must be the specific recipient of
-    #     this execution's approval notification (or have admin bypass).
-    #
-    # History: was `settings:READ_WRITE` (pre-PR-K, semantically wrong),
-    # then `notifications:READ_WRITE` (PR K, too tight for non-admin
-    # BOs), now `notifications:READ_ONLY` (PR L, the minimum that
-    # preserves defense-in-depth without blocking legitimate approvers).
-    _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.READ_ONLY)),
+    # History: `settings:READ_WRITE` (pre-PR-K), `notifications:READ_WRITE`
+    # (PR K), `notifications:READ_ONLY` (PR L). Since the RBAC refactor
+    # (55af9736) `notifications` is admin-only ("end users see their own
+    # notifications without this permission"), so READ_ONLY can no longer be
+    # granted and the outer gate rejected every non-admin approver (#971).
+    # Approvers who hold only a business role have no app role at all, so
+    # any feature-level gate would still reject them.
 ) -> Dict[str, Any]:
     """Handle a workflow approval from a notification action.
 
@@ -1295,6 +1357,9 @@ async def handle_workflow_approval(
         )
 
         user_email = current_user.email if current_user else None
+        # Resuming may pause at the next approval step and notify its
+        # approvers; only the notifications of the step decided now are marked.
+        decided_step = _pending_step_id(db, execution_id)
 
         # Resume the workflow
         result = executor.resume_workflow(
@@ -1314,31 +1379,8 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
         
-        # Mark the notification as handled
-        from src.repositories.notification_repository import notification_repo
-        from src.db_models.notifications import NotificationDb
-        
-        # Find and mark notifications for this execution as read
-        notifications = db.query(NotificationDb).filter(
-            NotificationDb.action_type == 'workflow_approval',
-            NotificationDb.read == False
-        ).all()
-        
-        for notif in notifications:
-            try:
-                payload = json.loads(notif.action_payload) if isinstance(notif.action_payload, str) else notif.action_payload
-                if payload and payload.get('execution_id') == execution_id:
-                    notif.read = True
-                    # Mark the action as handled with decision info
-                    payload['handled'] = True
-                    payload['decision'] = 'approved' if approved else 'rejected'
-                    payload['handled_by'] = user_email
-                    payload['handled_at'] = datetime.utcnow().isoformat()
-                    notif.action_payload = json.dumps(payload)
-                    db.add(notif)
-            except (json.JSONDecodeError, TypeError):
-                continue
-        
+        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',

@@ -55,8 +55,10 @@ class UnityCatalogLoader(EntityLoader):
     def __init__(self, workspace_client):
         self.ws = workspace_client
 
+    SUPPORTED_TYPES = ('catalog', 'schema', 'table', 'view', 'function', 'volume')
+
     def get_supported_types(self) -> List[str]:
-        return ['catalog', 'schema', 'table', 'view', 'function', 'volume']
+        return list(self.SUPPORTED_TYPES)
 
     def load_entities(
         self,
@@ -198,15 +200,12 @@ class AppEntityLoader(EntityLoader):
     def __init__(self, db: Session):
         self.db = db
 
+    # 'glossary_term' is not loaded yet (see load_entities), so it is not
+    # listed: rules on it must be reported as matching nothing.
+    SUPPORTED_TYPES = ('data_product', 'data_contract', 'domain', 'review')
+
     def get_supported_types(self) -> List[str]:
-        return [
-            'data_product',
-            'data_contract',
-            'domain',
-            # 'glossary_term' is not loaded yet (see load_entities), so it is
-            # not listed: rules on it must be reported as matching nothing.
-            'review',
-        ]
+        return list(self.SUPPORTED_TYPES)
 
     def load_entities(
         self,
@@ -460,3 +459,41 @@ def parse_entity_filter(rule: str, parsed: Optional[Dict[str, Any]] = None) -> E
         where_clause_ast=where_clause,
         match_type=match_type,
     )
+
+
+def validate_rule(rule: str) -> List[Dict[str, Any]]:
+    """Check a policy rule before it is saved.
+
+    Raises:
+        ValueError: The rule does not parse.
+
+    Returns:
+        Warnings for rules that parse but cannot work as written, each with a
+        ``code`` and ``params`` (for the UI to translate) and an English
+        ``message``.
+    """
+    from src.common.compliance_dsl import parse_rule
+
+    parsed = parse_rule(rule)
+    warnings: List[Dict[str, Any]] = []
+    entity_filter = parse_entity_filter(rule)
+    known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
+    # A rule without MATCH is valid: maturity gates and workflow policy checks
+    # evaluate it against one given entity.
+    if entity_filter.entity_types and not any(t in known for t in entity_filter.entity_types):
+        supported = ', '.join(known)
+        warnings.append({
+            'code': 'unsupported_match_type',
+            'params': {'type': entity_filter.match_type, 'supported': supported},
+            'message': f"MATCH type '{entity_filter.match_type}' is not supported, so the rule "
+                       f"matches no entities. Supported types: {supported}, or Object for all "
+                       f"of them.",
+        })
+    if parsed.get('assert_clause') is None:
+        warnings.append({
+            'code': 'missing_assert',
+            'params': {},
+            'message': "The rule has no ASSERT clause, so every entity passes.",
+        })
+    return warnings
+

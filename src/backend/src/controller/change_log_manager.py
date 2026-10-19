@@ -66,6 +66,17 @@ class ChangeLogManager:
             details_json=details_json
         )
 
+    def get_changes_for_entity(
+        self, db: Session, entity_type: str, entity_id: str, limit: int = 100
+    ) -> List[ChangeLogDb]:
+        """Change log entries for an entity, newest first (``entry.details`` is parsed).
+
+        Used by the request / approval flows to find who made a request.
+        """
+        return self.list_changes_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id, limit=limit
+        )
+
     def list_changes_for_entity(
         self, 
         db: Session, 

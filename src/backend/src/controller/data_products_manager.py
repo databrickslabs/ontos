@@ -968,12 +968,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     user_email=current_user,
                 )
                 if not gate_passed:
-                    failed = [e for e in gate_executions if e.status.value != 'succeeded']
-                    reasons = "; ".join(
-                        e.step_results.get(e.current_step_id or '', {}).get('error', e.status.value)
-                        for e in failed
-                        if e.step_results
-                    ) or "Workflow validation failed"
+                    from src.common.workflow_triggers import describe_failed_executions
+                    reasons = describe_failed_executions(gate_executions)
                     raise ValueError(
                         f"Status transition from '{current_status}' to '{new_status_lower}' "
                         f"blocked by workflow: {reasons}"
@@ -1104,6 +1100,117 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         return self.transition_status(product_id, 'draft', current_user)
 
+    def _validate_output_port_contracts(self, product_db, db=None) -> None:
+        """Raise ValueError unless every output port has an approved / active contract."""
+        db = db or self._db
+        if not product_db.output_ports:
+            return
+        ports_without_contracts = [
+            port.name for port in product_db.output_ports
+            if not port.contract_id
+        ]
+        if ports_without_contracts:
+            raise ValueError(
+                f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} "
+                f"must have data contracts assigned"
+            )
+
+        # Validate that all linked contracts are in an approved status
+        from src.repositories.data_contracts_repository import data_contract_repo
+
+        valid_contract_statuses = ['approved', 'active']
+        contracts_not_approved = []
+
+        for port in product_db.output_ports:
+            if port.contract_id:
+                contract = data_contract_repo.get(db=db, id=port.contract_id)
+                if not contract:
+                    contracts_not_approved.append(
+                        f"{port.name} -> {port.contract_id} (contract not found)"
+                    )
+                    continue
+                contract_status = (contract.status or '').lower()
+                if contract_status not in valid_contract_statuses:
+                    contracts_not_approved.append(
+                        f"{port.name} -> {contract.name} (status: {contract.status})"
+                    )
+
+        if contracts_not_approved:
+            raise ValueError(
+                f"Cannot publish product: These output ports have unapproved contracts: "
+                f"{', '.join(contracts_not_approved)}. Contracts must be approved first."
+            )
+
+    def set_publication_scope(self, product_id: str, scope: str,
+                              current_user: Optional[str] = None, db=None):
+        """Set a product's marketplace publication scope and return the product row.
+
+        Publishing (any scope but ``none``) needs an ``active`` product whose
+        output ports all have approved / active contracts, as ``publish_product``
+        does, and fires ``on_publish`` when the product wasn't published yet.
+        ``none`` unpublishes it and fires ``on_unpublish`` when it was published.
+        Routes pass their request session as ``db``; it defaults to the
+        manager's own session.
+
+        Raises:
+            ValueError: If the product is not found or can't be published
+        """
+        from datetime import datetime, timezone
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        db = db or self._db
+        product_db = self._repo.get(db=db, id=product_id)
+        if not product_db:
+            raise ValueError(f"Data product with ID {product_id} not found")
+        was_published = (product_db.publication_scope or 'none').lower() != 'none'
+
+        if scope != 'none':
+            if product_db.status != 'active':
+                raise ValueError(
+                    f"Product must be active to publish. Current status: {product_db.status}"
+                )
+            self._validate_output_port_contracts(product_db, db)
+            product_db.publication_scope = scope
+            product_db.published_at = datetime.now(timezone.utc)
+            product_db.published_by = current_user
+        else:
+            product_db.publication_scope = 'none'
+            product_db.published_at = None
+            product_db.published_by = None
+        db.add(product_db)
+        db.commit()
+        db.refresh(product_db)
+
+        try:
+            registry = get_trigger_registry(db)
+            if scope != 'none' and not was_published:
+                registry.on_publish(
+                    entity_type=WFEntityType.DATA_PRODUCT,
+                    entity_id=product_id,
+                    entity_name=product_db.name,
+                    entity_data={
+                        "name": product_db.name,
+                        "status": product_db.status,
+                        "publication_scope": scope,
+                        "published_by": current_user,
+                    },
+                    user_email=current_user,
+                )
+            elif scope == 'none' and was_published:
+                registry.on_unpublish(
+                    WFEntityType.DATA_PRODUCT,
+                    product_id,
+                    entity_name=product_db.name,
+                    user_email=current_user,
+                )
+        except Exception:
+            # The publication is committed; its on_publish / on_unpublish
+            # workflows didn't run, so log it as an error
+            logger.exception("Publication trigger failed for data product %s", product_id)
+
+        return product_db
+
     def publish_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
         Publish an approved product (approved → active).
@@ -1127,39 +1234,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if not product_db:
                 raise ValueError(f"Data product with ID {product_id} not found")
 
-            # Validate that all output ports have data contracts
-            if product_db.output_ports:
-                ports_without_contracts = [
-                    port.name for port in product_db.output_ports
-                    if not port.contract_id
-                ]
-                if ports_without_contracts:
-                    raise ValueError(
-                        f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} "
-                        f"must have data contracts assigned"
-                    )
-
-                # Validate that all linked contracts are in an approved status
-                from src.repositories.data_contracts_repository import data_contract_repo
-                
-                valid_contract_statuses = ['approved', 'active']
-                contracts_not_approved = []
-                
-                for port in product_db.output_ports:
-                    if port.contract_id:
-                        contract = data_contract_repo.get(db=self._db, id=port.contract_id)
-                        if contract:
-                            contract_status = (contract.status or '').lower()
-                            if contract_status not in valid_contract_statuses:
-                                contracts_not_approved.append(
-                                    f"{port.name} -> {contract.name} (status: {contract.status})"
-                                )
-                
-                if contracts_not_approved:
-                    raise ValueError(
-                        f"Cannot publish product: These output ports have unapproved contracts: "
-                        f"{', '.join(contracts_not_approved)}. Contracts must be approved first."
-                    )
+            self._validate_output_port_contracts(product_db)
 
             # Use transition_status for validation and update
             result = self.transition_status(product_id, 'active', current_user)
@@ -1184,8 +1259,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     entity_data={"name": product_db.name, "status": "active"},
                     user_email=current_user,
                 )
-            except Exception as e:
-                logger.warning(f"on_publish trigger error (non-fatal): {e}")
+            except Exception:
+                logger.exception("on_publish trigger failed for data product %s", product_id)
 
             return result
 

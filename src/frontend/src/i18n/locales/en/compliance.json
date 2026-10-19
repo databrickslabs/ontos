@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Policy '{{name}}' saved successfully",
+    "policySavedWithWarnings": "Policy '{{name}}' saved, but its rule may not work",
     "policyDeleted": "Policy deleted successfully"
   },
   "score": {
@@ -161,5 +162,9 @@
       "score": "Score",
       "issues": "Issues"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "MATCH type '{{type}}' is not supported, so the rule matches no entities. Supported types: {{supported}}, or Object for all of them.",
+    "missing_assert": "The rule has no ASSERT clause, so every entity passes."
   }
 }

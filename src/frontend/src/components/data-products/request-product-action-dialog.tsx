@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -124,6 +124,9 @@ export default function RequestProductActionDialog({
   // wizard fields are merged into the submit body. When no workflow is
   // configured, this dialog falls through to today's direct-submit flow.
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Set when the wizard's completion sent the request; closing the wizard
+  // then finishes like a direct submit (onSuccess, close)
+  const sentFromWizardRef = useRef(false);
   const [wizardWorkflowId, setWizardWorkflowId] = useState<string | null>(null);
   // Stashed submit context — captured at the moment Submit is clicked so the
   // wizard's onComplete can replay the API call with merged fields.
@@ -207,7 +210,8 @@ export default function RequestProductActionDialog({
           icon: <Rocket className="h-5 w-5" />,
           title: t('data-products:requestAction.types.publish.title'),
           description: t('data-products:requestAction.types.publish.description'),
-          enabled: productStatus?.toLowerCase() === 'approved' || productStatus?.toLowerCase() === 'active',
+          // Only active products can be published (same rule as the backend).
+          enabled: productStatus?.toLowerCase() === 'active',
           endpoint: `/api/data-products/${productId}/request-publish`,
         };
       case 'certify':
@@ -329,7 +333,8 @@ export default function RequestProductActionDialog({
     endpoint: string,
     payload: Record<string, unknown>,
     type: RequestType,
-  ) => {
+    { keepOpen = false }: { keepOpen?: boolean } = {},
+  ): Promise<boolean> => {
     setError(null);
     setSubmitting(true);
     try {
@@ -350,14 +355,20 @@ export default function RequestProductActionDialog({
         });
       }
       refreshNotifications();
-      if (onSuccess) onSuccess();
-      // Reset form and close dialog
+      // Reset form
       setMessage('');
       setJustification('');
       setTargetStatus('');
       setCertificationLevel(null);
       setPublicationScope('organization');
-      onOpenChange(false);
+      // keepOpen: sent from the wizard's completion; onSuccess (which reloads
+      // the page data) and closing wait until the user closes the wizard, so
+      // its completion screen stays up
+      if (!keepOpen) {
+        if (onSuccess) onSuccess();
+        onOpenChange(false);
+      }
+      return true;
     } catch (e: any) {
       setError(e.message || t('data-products:requestAction.errors.failedToSubmit'));
       toast({
@@ -365,6 +376,7 @@ export default function RequestProductActionDialog({
         description: e.message || t('data-products:requestAction.errors.failedToSubmit'),
         variant: 'destructive',
       });
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -511,10 +523,25 @@ export default function RequestProductActionDialog({
       // without colliding with first-class request fields (reason, duration).
       wizard_data: fields,
     };
+    // Submitted as soon as the wizard completes, not when it's closed, so
+    // leaving the page on the completion screen doesn't lose the request.
+    // The wizard stays open on its completion screen (PDF download).
+    setPendingSubmit(null);
+    const sent = await executeSubmit(
+      pendingSubmit.endpoint, merged, pendingSubmit.requestType, { keepOpen: true },
+    );
+    sentFromWizardRef.current = sent;
+  };
+
+  /** The user closed the wizard after it completed. */
+  const handleWizardClosedAfterComplete = () => {
     setWizardOpen(false);
     setWizardWorkflowId(null);
-    setPendingSubmit(null);
-    await executeSubmit(pendingSubmit.endpoint, merged, pendingSubmit.requestType);
+    if (sentFromWizardRef.current) {
+      sentFromWizardRef.current = false;
+      if (onSuccess) onSuccess();
+      onOpenChange(false);
+    }
   };
 
   const allowedTransitions = productStatus ? getAllowedTransitions(productStatus) : [];
@@ -786,7 +813,8 @@ export default function RequestProductActionDialog({
         entityName={productName}
         preselectedWorkflowId={wizardWorkflowId}
         autoStartWithPreselected
-        onComplete={handleWizardComplete}
+        onSessionComplete={handleWizardComplete}
+        onComplete={handleWizardClosedAfterComplete}
       />
     )}
     </>

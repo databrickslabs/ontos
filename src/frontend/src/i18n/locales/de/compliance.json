@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Richtlinie '{{name}}' erfolgreich gespeichert",
+    "policySavedWithWarnings": "Richtlinie '{{name}}' gespeichert, aber ihre Regel funktioniert möglicherweise nicht",
     "policyDeleted": "Richtlinie erfolgreich gelöscht"
   },
   "score": {
@@ -161,5 +162,9 @@
       "score": "Score",
       "issues": "Probleme"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "Der MATCH-Typ '{{type}}' wird nicht unterstützt, daher prüft die Regel keine Entitäten. Unterstützte Typen: {{supported}} oder Object für alle.",
+    "missing_assert": "Die Regel hat keine ASSERT-Klausel, daher besteht jede Entität."
   }
 }

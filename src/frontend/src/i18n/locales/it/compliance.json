@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Policy '{{name}}' salvata con successo",
+    "policySavedWithWarnings": "Policy '{{name}}' salvata, ma la sua regola potrebbe non funzionare",
     "policyDeleted": "Policy eliminata con successo"
   },
   "score": {
@@ -161,5 +162,9 @@
       "score": "Punteggio",
       "issues": "Problemi"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "Il tipo '{{type}}' di MATCH non è supportato, quindi la regola non valuta alcuna entità. Tipi supportati: {{supported}}, oppure Object per tutti.",
+    "missing_assert": "La regola non ha una clausola ASSERT, quindi ogni entità risulta conforme."
   }
 }

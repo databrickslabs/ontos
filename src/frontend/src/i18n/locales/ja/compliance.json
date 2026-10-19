@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "ポリシー '{{name}}' を保存しました",
+    "policySavedWithWarnings": "ポリシー '{{name}}' を保存しましたが、ルールが機能しない可能性があります",
     "policyDeleted": "ポリシーを削除しました"
   },
   "score": {
@@ -161,5 +162,9 @@
       "score": "スコア",
       "issues": "問題"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "MATCH の型 '{{type}}' はサポートされていないため、このルールはどのエンティティも評価しません。サポートされている型: {{supported}}、またはすべてを対象とする Object。",
+    "missing_assert": "ルールに ASSERT 句がないため、すべてのエンティティが合格します。"
   }
 }

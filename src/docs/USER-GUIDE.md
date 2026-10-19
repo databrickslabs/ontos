@@ -2380,7 +2380,7 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Dataset Review Request** | Review Request (dataset) | Data Steward approval for datasets |
 | **Data Contract Review Request** | Review Request (data_contract) | Data Steward approval for contracts |
 | **Data Product Review Request** | Review Request (data_product) | Domain owner approval for products |
-| **Data Contract Publish Request** | Publish Request (data_contract) | Contract approver authorization |
+| **Data Contract Deploy Request** | Deploy Request (data_contract) | Contract approver authorization for deploying to Unity Catalog |
 | **Access Grant Request** | Access Request (access_grant) | Admin approval for access |
 | **Status Change Request** | Status Change Request (dataset, data_product) | Admin approval for status changes |
 | **Role Access Request** | Access Request (role) | Admin approval for role assignments |
@@ -2432,6 +2432,7 @@ Create a copy of any workflow:
 
 - **Blocking Workflows** (before_create, before_update): Prevent the action if workflow fails
 - **Non-Blocking Workflows**: Run asynchronously; failures don't prevent the triggering action
+- **Publish / Unpublish** (`on_publish`, `on_unpublish`): non-blocking. They fire after the new publication scope is saved, so a product or contract stays published (or unpublished) even if its publish workflows fail to start; the failure is logged at error level in the app logs.
 
 #### Approval Pausing
 

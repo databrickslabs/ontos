@@ -114,6 +114,23 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 
 # --- Application Lifecycle Events ---
 
+def _seed_default_workflows() -> None:
+    """Create the default workflows that don't exist yet; existing ones are left
+    untouched. Without them, publish / review / access / certification /
+    status change requests start no workflow. Only request workflows are
+    created active, so an upgrade doesn't turn on automatic workflows or UI
+    wizards; admins enable those in the Workflows page.
+    """
+    try:
+        from src.common.database import get_session_factory
+        from src.controller.workflows_manager import WorkflowsManager
+        with get_session_factory()() as db:
+            counts = WorkflowsManager(db).load_from_yaml(requests_only_active=True)
+        logger.info("Default workflows seeded: %s", counts)
+    except Exception as e:
+        logger.warning("Failed seeding default workflows: %s", e, exc_info=True)
+
+
 # Application Startup Event
 async def startup_event():
     import os
@@ -160,6 +177,8 @@ async def startup_event():
         logger.info("Reference data seed step complete.")
     except Exception as e:
         logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
+
+    _seed_default_workflows()
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
     
@@ -483,6 +502,7 @@ async def retry_startup():
         app.state.health["seed_ok"] = True  # Reset seed health; initialize_managers will flip if it fails
         app.state.health["seed_error"] = None
         initialize_managers(app)  # Sets health["ws_ok"] / health["seed_ok"] internally
+        _seed_default_workflows()
     except Exception as e:
         app.state.health["warnings"].append(f"Manager init failed on retry: {e}")
         logger.error(f"Manager init failed on retry: {e}", exc_info=True)

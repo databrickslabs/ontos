@@ -104,6 +104,7 @@
   },
   "toast": {
     "policySaved": "Politique '{{name}}' enregistrée avec succès",
+    "policySavedWithWarnings": "Politique '{{name}}' enregistrée, mais sa règle risque de ne pas fonctionner",
     "policyDeleted": "Politique supprimée avec succès"
   },
   "score": {
@@ -161,5 +162,9 @@
       "score": "Score",
       "issues": "Problèmes"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "Le type '{{type}}' de MATCH n'est pas pris en charge : la règle n'évalue aucune entité. Types pris en charge : {{supported}}, ou Object pour tous.",
+    "missing_assert": "La règle n'a pas de clause ASSERT : toutes les entités sont conformes."
   }
 }

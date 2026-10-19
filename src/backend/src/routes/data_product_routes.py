@@ -371,35 +371,25 @@ async def set_publication_scope(
     """
     Set publication scope for a data product.
     Body: { "scope": "none" | "domain" | "organization" | "external" }
-    Product must be active to publish.
+    Publishing applies the same checks as POST /publish (product active, every
+    output port with an approved / active contract) and fires on_publish;
+    "none" unpublishes and fires on_unpublish.
     """
-    from datetime import datetime, timezone
     scope = body.get("scope", "none")
     valid_scopes = ["none", "domain", "organization", "external"]
     if scope not in valid_scopes:
         raise HTTPException(status_code=422, detail=f"Invalid scope. Must be one of: {valid_scopes}")
 
     try:
-        product_db = manager._repo.get(db=db, id=product_id)
-        if not product_db:
+        if not manager._repo.get(db=db, id=product_id):
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        if scope != "none" and product_db.status != "active":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Product must be active to publish. Current status: {product_db.status}"
+        try:
+            product_db = manager.set_publication_scope(
+                product_id, scope, current_user.username if current_user else None, db=db
             )
-
-        product_db.publication_scope = scope
-        if scope != "none":
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = current_user.username if current_user else None
-        else:
-            product_db.published_at = None
-            product_db.published_by = None
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         audit_manager.log_action(
             db=db,
@@ -687,8 +677,6 @@ async def handle_publish_product(
     _: bool = Depends(ApprovalChecker('PRODUCTS')),
 ):
     """Approve or deny a publication request for a data product."""
-    from datetime import datetime, timezone
-
     if body.get("approved") is None:
         raise HTTPException(status_code=422, detail="approved is required")
 
@@ -728,23 +716,11 @@ async def handle_publish_product(
         if scope not in valid_scopes:
             raise HTTPException(status_code=422, detail=f"Invalid scope. Must be one of: {valid_scopes}")
 
-        if scope != "none" and product_db.status != "active":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Product must be active to publish. Current status: {product_db.status}",
-            )
-
-        product_db.publication_scope = scope
-        if scope != "none":
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = username
-        else:
-            product_db.published_at = None
-            product_db.published_by = None
-
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        # Same checks and triggers as set-publication-scope.
+        try:
+            product_db = manager.set_publication_scope(product_id, scope, username, db=db)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         audit_manager.log_action(
             db=db,
@@ -755,23 +731,6 @@ async def handle_publish_product(
             success=True,
             details={'product_id': product_id, 'scope': scope},
         )
-
-        try:
-            if scope != "none":
-                get_trigger_registry(db).on_publish(
-                    EntityType.DATA_PRODUCT,
-                    product_id,
-                    entity_name=product_db.name,
-                    entity_data={
-                        "publication_scope": scope,
-                        "published_by": username,
-                        "name": product_db.name,
-                    },
-                    user_email=username,
-                    blocking=False,
-                )
-        except Exception as trigger_err:
-            logger.warning("on_publish trigger error (non-fatal): %s", trigger_err)
 
         return {
             'publication_scope': product_db.publication_scope,
@@ -815,6 +774,14 @@ async def request_publish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
+        # Same rule as set-publication-scope: only active products are published.
+        current_status = (product_db.status or "").lower()
+        if scope != "none" and current_status != "active":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Product must be active to publish. Current status: {product_db.status}"
+            )
+
         change_log_manager.log_change_with_details(
             db,
             entity_type="data_product",
@@ -832,6 +799,8 @@ async def request_publish_product(
                 "requested_scope": scope,
                 "justification": justification,
                 "requester": username,
+                # Same key as the data contract request (data_contracts_manager)
+                "current_status": current_status,
             },
             user_email=username,
             blocking=True,

@@ -20,6 +20,7 @@ export type TriggerType =
   | 'on_request_review'
   | 'on_request_access'
   | 'on_request_publish'
+  | 'on_request_deploy'
   | 'on_request_status_change'
   | 'on_request_certify'
   | 'on_certify'

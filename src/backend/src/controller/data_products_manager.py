@@ -143,6 +143,8 @@ from src.controller.domain_export_adapter import (
 from src.controller.lifecycle_fields import (
     DeprecationDetails,
     ImportedLifecycleError,
+    ImportLinks,
+    add_import_notes,
     apply_lifecycle_fields,
     check_lifecycle_fields,
     imported_lifecycle_columns,
@@ -300,6 +302,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         preserve_source_id: bool = False,
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
+        import_links: Optional[ImportLinks] = None,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
 
@@ -316,6 +319,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 non-colliding UUID in the payload is adopted as the primary key so
                 YAML-expressed cross-entity links survive import. Otherwise (or on a
                 non-UUID / colliding id) a fresh UUID is generated as before.
+            import_links: Set by an ODPS import: the ontos* lifecycle properties
+                then set the lifecycle columns, with replacements resolved among
+                the entities of the same import. Otherwise they're ignored, since
+                those columns only change through a status transition.
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -393,11 +400,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 product_data['draft_owner_id'] = user
 
             # Lifecycle fields exported as ontos* customProperties map back to
-            # columns, checked before anything is created
-            lifecycle_columns = imported_lifecycle_columns(
-                db_session, 'data_product', product_data['id'],
-                pop_lifecycle_custom_properties(product_data.get('customProperties')),
-            )
+            # columns on import, checked before anything is created
+            lifecycle_props = pop_lifecycle_custom_properties(product_data.get('customProperties'))
+            lifecycle_columns = {}
+            if import_links is not None and lifecycle_props:
+                lifecycle_columns = imported_lifecycle_columns(
+                    db_session, 'data_product', product_data['id'], lifecycle_props,
+                    links=import_links, source_id=incoming_id,
+                )
 
             # Validate
             try:
@@ -414,6 +424,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if lifecycle_columns:
                 set_lifecycle_columns(created_db_obj, lifecycle_columns)
                 db_session.flush()
+            if import_links is not None:
+                import_links.record(incoming_id, created_db_obj.id)
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -1938,6 +1950,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             individually and never abort the batch.
         """
         result = BatchImportResult()
+        links = ImportLinks('data_product')
         index = 0
         for filename, content in files:
             try:
@@ -2033,6 +2046,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
+                        import_links=links,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -2048,6 +2062,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=product_data.get('name'), status="failed", message=str(e),
+                        code=e.code, params=e.params,
                     ))
                 except CodedValueError as e:
                     # The app's own refusal (e.g. ``certified`` as a status):
@@ -2075,6 +2090,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     ))
                 index += 1
 
+        add_import_notes(result, links.finish(self._db, username=user))
         logger.info(
             "Product batch import complete: %d created, %d skipped, %d failed (%d total)",
             result.created, result.skipped, result.failed, result.total,

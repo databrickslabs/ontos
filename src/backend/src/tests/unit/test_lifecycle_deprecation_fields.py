@@ -3,7 +3,10 @@
 Moving to ``deprecated`` needs a reason, a sunset date that isn't in the past
 (UTC) and, if given, a replacement that exists, isn't deprecated or retired,
 isn't the entity itself and doesn't lead back to it. Reactivation clears the
-sunset date and deprecation time. Imports check the replacement too.
+sunset date and deprecation time. Imports keep what an export can hold, refuse
+a replacement that is the entity itself or leads back to it, and link a
+replacement imported in the same batch; one that isn't in the target is left
+unlinked with a note.
 """
 import os
 
@@ -21,6 +24,7 @@ from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.lifecycle_fields import (
     DeprecationDetails,
+    ImportLinks,
     apply_lifecycle_fields,
     check_lifecycle_fields,
     imported_lifecycle_columns,
@@ -345,12 +349,15 @@ def test_an_imported_replacement_is_checked(db_session):
     _deprecated_toward(back, product)
     db_session.flush()
 
-    for replacement_id, message in (
-        (product.id, 'own replacement'), ('missing', 'not found'), (back.id, 'leads back'),
+    for replacement_id, message, code in (
+        (product.id, 'own replacement', 'replacement_is_self'),
+        ('missing', 'not found', 'replacement_not_found'),
+        (back.id, 'leads back', 'replacement_leads_back'),
     ):
-        with pytest.raises(ValueError, match=f'Invalid ontosReplacedBy: .*{message}'):
+        with pytest.raises(ValueError, match=f'Invalid ontosReplacedBy: .*{message}') as raised:
             imported_lifecycle_columns(db_session, 'data_product', product.id,
                                        {'ontosReplacedBy': replacement_id})
+        assert raised.value.code == code
 
 
 def test_an_import_keeps_what_an_export_can_hold(db_session):
@@ -377,13 +384,27 @@ def _odps(product_id, **custom):
 def test_an_odps_import_with_an_invalid_replacement_creates_nothing(db_session):
     product_id = str(uuid.uuid4())
 
-    with pytest.raises(ValueError, match='Invalid ontosReplacedBy: Replacement missing not found'):
+    with pytest.raises(ValueError, match="Invalid ontosReplacedBy: An entity can't be its own"):
         DataProductsManager(db=db_session).create_product(
-            _odps(product_id, ontosDeprecationReason='Old', ontosReplacedBy='missing'),
-            db=db_session,
+            _odps(product_id, ontosDeprecationReason='Old', ontosReplacedBy=product_id),
+            db=db_session, import_links=ImportLinks('data_product'),
         )
 
     assert db_session.get(DataProductDb, product_id) is None
+
+
+def test_a_product_created_outside_an_import_ignores_the_lifecycle_properties(db_session):
+    replacement, product_id = _product(db_session), str(uuid.uuid4())
+
+    DataProductsManager(db=db_session).create_product(
+        _odps(product_id, ontosDeprecationReason='Old', ontosReplacedBy=replacement.id,
+              ontosSunsetDate='2020-01-31'),
+        db=db_session,
+    )
+
+    created = db_session.get(DataProductDb, product_id)
+    assert (created.deprecation_reason, created.sunset_date, created.replacement_product_id) == (
+        None, None, None)
 
 
 def test_an_odps_import_records_its_lifecycle_fields_in_the_change_log(db_session):
@@ -392,7 +413,7 @@ def test_an_odps_import_records_its_lifecycle_fields_in_the_change_log(db_sessio
     DataProductsManager(db=db_session).create_product(
         _odps(product_id, ontosDeprecationReason='Old', ontosReplacedBy=replacement.id,
               ontosSunsetDate='2027-01-31'),
-        db=db_session,
+        db=db_session, import_links=ImportLinks('data_product'),
     )
 
     created = db_session.get(DataProductDb, product_id)
@@ -406,30 +427,116 @@ def test_an_odps_import_records_its_lifecycle_fields_in_the_change_log(db_sessio
     assert details['deprecation_reason'] == 'Old'
 
 
-def test_a_batch_import_names_the_invalid_lifecycle_property(db_session):
+def _product_files(*docs):
     import json as _json
+    return [(f'{i}.json', _json.dumps(doc).encode()) for i, doc in enumerate(docs)]
 
-    replacement = _product(db_session)
-    files = [('products.json', _json.dumps([
-        _odps(str(uuid.uuid4()), ontosReplacedBy='missing'),
-        _odps(str(uuid.uuid4()), ontosReplacedBy=replacement.id, ontosSunsetDate='2020-01-31'),
-    ]).encode())]
+
+def test_a_batch_import_names_the_invalid_lifecycle_property(db_session):
+    files = _product_files(_odps(str(uuid.uuid4()), ontosSunsetDate='soon'))
 
     result = DataProductsManager(db=db_session).create_products_from_files(files)
 
-    assert (result.created, result.failed) == (1, 1)
-    failed = next(i for i in result.items if i.status == 'failed')
-    assert failed.message == 'Invalid ontosReplacedBy: Replacement missing not found'
+    assert result.failed == 1
+    failed = result.items[0]
+    assert failed.message == "Invalid ontosSunsetDate 'soon': expected an ISO date"
+    assert (failed.code, failed.params) == (
+        'imported_date_invalid', {'property': 'ontosSunsetDate', 'value': 'soon'})
+
+
+def test_a_batch_import_refuses_a_product_replacing_itself(db_session):
+    # The file names the product by its exported id; without adoption it gets a new one
+    source_id = str(uuid.uuid4())
+    files = _product_files(_odps(source_id, ontosReplacedBy=source_id))
+
+    result = DataProductsManager(db=db_session).create_products_from_files(
+        files, adopt_ids=False)
+
+    assert (result.created, result.failed) == (0, 1)
+    assert result.items[0].code == 'replacement_is_self'
+
+
+def test_a_replacement_missing_from_the_target_is_not_linked(db_session):
+    files = _product_files(_odps(str(uuid.uuid4()), ontosDeprecationReason='Old',
+                                 ontosReplacedBy='no-such-product'))
+
+    result = DataProductsManager(db=db_session).create_products_from_files(files)
+
+    assert (result.created, result.failed) == (1, 0)
+    item = result.items[0]
+    assert item.code == 'imported_replacement_dropped'
+    assert item.params == {'replacementId': 'no-such-product'}
+    assert 'no-such-product' in item.message
+    created = db_session.get(DataProductDb, item.entity_id)
+    assert (created.status, created.deprecation_reason, created.replacement_product_id) == (
+        'deprecated', 'Old', None)
+
+
+@pytest.mark.parametrize('replacement_first', [True, False])
+@pytest.mark.parametrize('adopt_ids', [True, False])
+def test_a_replacement_in_the_same_import_is_linked(db_session, replacement_first, adopt_ids):
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    a = _odps(a_id, ontosDeprecationReason='Replaced by B', ontosReplacedBy=b_id)
+    b = {**_odps(b_id), 'name': 'B', 'status': 'active'}
+    files = _product_files(*((b, a) if replacement_first else (a, b)))
+
+    result = DataProductsManager(db=db_session).create_products_from_files(
+        files, adopt_ids=adopt_ids)
+
+    assert (result.created, result.failed) == (2, 0)
+    assert all(i.message is None for i in result.items)
+    by_source = {i.source_id: i.entity_id for i in result.items}
+    created_a = db_session.get(DataProductDb, by_source[a_id])
+    assert created_a.replacement_product_id == by_source[b_id]
+    assert (by_source[b_id] == b_id) is adopt_ids
+
+
+def test_a_link_made_after_the_batch_is_in_the_change_log(db_session):
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    files = _product_files(_odps(a_id, ontosReplacedBy=b_id), {**_odps(b_id), 'status': 'active'})
+
+    result = DataProductsManager(db=db_session).create_products_from_files(
+        files, user='alice@example.com', adopt_ids=False)
+
+    by_source = {i.source_id: i.entity_id for i in result.items}
+    entries = change_log_manager.list_changes_for_entity(
+        db_session, entity_type='data_product', entity_id=by_source[a_id])
+    linked = next(e for e in entries if e.action == 'UPDATE')
+    import json
+    assert json.loads(linked.details_json)['replacement_product_id'] == by_source[b_id]
+    assert linked.username == 'alice@example.com'
+
+
+def test_two_products_replacing_each_other_in_one_import_link_only_one(db_session):
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    files = _product_files(_odps(a_id, ontosReplacedBy=b_id), _odps(b_id, ontosReplacedBy=a_id))
+
+    result = DataProductsManager(db=db_session).create_products_from_files(
+        files, adopt_ids=False)
+
+    assert (result.created, result.failed) == (2, 0)
+    by_source = {i.source_id: i for i in result.items}
+    a, b = (db_session.get(DataProductDb, by_source[x].entity_id) for x in (a_id, b_id))
+    assert (a.replacement_product_id, b.replacement_product_id) == (None, a.id)
+    assert by_source[a_id].code == 'imported_replacement_leads_back'
+    assert by_source[a_id].params['replacementId'] == b_id
+
+
+def _odcs(contract_id, **custom):
+    return {
+        'id': contract_id, 'name': f'Imported {contract_id[:4]}', 'version': '1.0.0',
+        'status': 'deprecated', 'apiVersion': 'v3.1.0', 'kind': 'DataContract',
+        'customProperties': [{'property': k, 'value': v} for k, v in custom.items()],
+    }
+
+
+def _contract_files(*docs):
+    import json as _json
+    return [(f'{i}.json', _json.dumps(doc), 'application/json') for i, doc in enumerate(docs)]
 
 
 def test_a_contract_batch_import_names_the_invalid_lifecycle_property(db_session):
-    import json as _json
-
-    files = [('contracts.json', _json.dumps({
-        'id': str(uuid.uuid4()), 'name': 'Imported', 'version': '1.0.0', 'status': 'deprecated',
-        'apiVersion': 'v3.1.0', 'kind': 'DataContract',
-        'customProperties': [{'property': 'ontosSunsetDate', 'value': 'soon'}],
-    }), 'application/json')]
+    files = _contract_files(_odcs(str(uuid.uuid4()), ontosSunsetDate='soon'))
 
     result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
         db_session, files,
@@ -437,6 +544,7 @@ def test_a_contract_batch_import_names_the_invalid_lifecycle_property(db_session
 
     assert result.failed == 1
     assert result.items[0].message == "Invalid ontosSunsetDate 'soon': expected an ISO date"
+    assert result.items[0].code == 'imported_date_invalid'
 
 
 def test_an_odcs_upload_with_an_invalid_replacement_creates_nothing(db_session):
@@ -447,10 +555,58 @@ def test_an_odcs_upload_with_an_invalid_replacement_creates_nothing(db_session):
         manager.create_from_upload(db_session, {
             'id': 'imported-contract', 'name': 'Imported', 'version': '1.0.0',
             'status': 'deprecated', 'apiVersion': 'v3.1.0', 'kind': 'DataContract',
-            'customProperties': [{'property': 'ontosReplacedBy', 'value': 'missing'}],
+            'customProperties': [{'property': 'ontosReplacedBy', 'value': 'imported-contract'}],
         }, current_user='alice@example.com')
 
     assert db_session.query(Contract).filter(Contract.name == 'Imported').count() == 0
+
+
+def test_a_contract_replacement_in_the_same_import_is_linked(db_session):
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    files = _contract_files(
+        _odcs(a_id, ontosDeprecationReason='Replaced by B', ontosReplacedBy=b_id),
+        {**_odcs(b_id), 'status': 'active'},
+    )
+
+    result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+        db_session, files, adopt_ids=False,
+    )
+
+    assert (result.created, result.failed) == (2, 0)
+    by_source = {i.source_id: i.entity_id for i in result.items}
+    created_a = db_session.get(DataContractDb, by_source[a_id])
+    assert created_a.replacement_contract_id == by_source[b_id]
+
+
+def test_a_contract_replacement_missing_from_the_target_is_not_linked(db_session):
+    files = _contract_files(_odcs(str(uuid.uuid4()), ontosReplacedBy='no-such-contract'))
+
+    result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+        db_session, files,
+    )
+
+    assert (result.created, result.failed) == (1, 0)
+    assert result.items[0].code == 'imported_replacement_dropped'
+    created = db_session.get(DataContractDb, result.items[0].entity_id)
+    assert created.replacement_contract_id is None
+
+
+def test_an_imported_contract_is_in_the_change_log_with_its_lifecycle_fields(db_session):
+    import json
+
+    files = _contract_files(_odcs(str(uuid.uuid4()), ontosDeprecationReason='Old',
+                                  ontosSunsetDate='2020-01-31'))
+
+    result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+        db_session, files, current_user='alice@example.com',
+    )
+
+    entry = next(c for c in change_log_manager.list_changes_for_entity(
+        db_session, entity_type='data_contract', entity_id=result.items[0].entity_id)
+        if c.action == 'CREATE')
+    details = json.loads(entry.details_json)
+    assert (details['deprecation_reason'], details['sunset_date']) == ('Old', '2020-01-31')
+    assert entry.username == 'alice@example.com'
 
 
 def test_an_active_entity_exports_no_lifecycle_fields(db_session):

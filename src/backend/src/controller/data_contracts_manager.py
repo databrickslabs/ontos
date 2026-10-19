@@ -135,6 +135,8 @@ from src.controller.domain_export_adapter import (
 from src.controller.lifecycle_fields import (
     DeprecationDetails,
     ImportedLifecycleError,
+    ImportLinks,
+    add_import_notes,
     apply_lifecycle_fields,
     check_lifecycle_fields,
     imported_lifecycle_columns,
@@ -2132,19 +2134,25 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db.add(pricing_db)
     
     def _create_custom_properties(self, db, contract_id: str, custom_props,
-                                  apply_lifecycle: bool = False):
+                                  apply_lifecycle: bool = False,
+                                  import_links: Optional[ImportLinks] = None,
+                                  source_id: Optional[str] = None) -> Dict[str, Any]:
         """Create custom properties from ODCS customProperties (handles both array and dict formats).
         
         ODCS uses array format: [{"property": "key", "value": "val"}, ...]
         Legacy format uses dict: {"key": "val", ...}
         The ontos* lifecycle properties are never stored as custom properties:
-        on import (``apply_lifecycle``) they set the lifecycle columns; on a
-        regular update they're ignored, since those columns only change
-        through a status transition.
+        on import (``apply_lifecycle``) they set the lifecycle columns, which
+        are returned; on a regular update they're ignored, since those columns
+        only change through a status transition.
         """
+        columns: Dict[str, Any] = {}
         lifecycle_props = pop_lifecycle_custom_properties(custom_props)
         if lifecycle_props and apply_lifecycle:
-            columns = imported_lifecycle_columns(db, 'data_contract', contract_id, lifecycle_props)
+            columns = imported_lifecycle_columns(
+                db, 'data_contract', contract_id, lifecycle_props,
+                links=import_links, source_id=source_id,
+            )
             contract = db.get(DataContractDb, contract_id)
             if contract is not None:
                 set_lifecycle_columns(contract, columns)
@@ -2183,6 +2191,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         value=value_str
                     )
                     db.add(custom_prop_db)
+        return columns
     
     def _create_sla_properties(self, db, contract_id: str, sla_properties_data: List[dict]):
         """Create SLA properties from ODCS slaProperties array."""
@@ -3041,6 +3050,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None,
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
+        import_links: Optional[ImportLinks] = None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -3051,6 +3061,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             current_user: Username of current user
             create_missing_domains: When True, auto-create by name any domain that
                 doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+            import_links: Replacement links of a batch import (``ImportLinks``); a
+                single upload gets its own, so a replacement that isn't in the
+                target is not linked rather than failing the upload.
 
         Returns:
             Created DataContractDb instance
@@ -3199,8 +3212,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Create custom properties if present (handles both ODCS array and legacy dict formats)
             custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties')
+            links = import_links if import_links is not None else ImportLinks('data_contract')
+            lifecycle_columns: Dict[str, Any] = {}
             if custom_props:
-                self._create_custom_properties(db, created.id, custom_props, apply_lifecycle=True)
+                lifecycle_columns = self._create_custom_properties(
+                    db, created.id, custom_props, apply_lifecycle=True,
+                    import_links=links, source_id=original_id,
+                )
             
             # Create SLA properties if present
             sla_properties_data = parsed_odcs.get('slaProperties', [])
@@ -3249,6 +3267,37 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             db.commit()
             db.refresh(created)
+            links.record(original_id, created.id)
+
+            # Log to change log for timeline, with the imported lifecycle fields
+            try:
+                from src.controller.change_log_manager import change_log_manager
+                change_log_manager.log_change_with_details(
+                    db,
+                    entity_type="data_contract",
+                    entity_id=str(created.id),
+                    action="CREATE",
+                    username=current_user,
+                    details={
+                        "name": created.name,
+                        "version": created.version,
+                        "status": created.status,
+                        "summary": f"Contract '{created.name}' imported"
+                                   + (f" by {current_user}" if current_user else ""),
+                        **{
+                            column: value.isoformat() if hasattr(value, 'isoformat') else value
+                            for column, value in lifecycle_columns.items()
+                        },
+                    },
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to log change for contract import: {log_err}")
+
+            if import_links is None:
+                for note in links.finish(db, username=current_user).values():
+                    logger.warning("Contract %s imported: %s", created.id, note.message)
+                db.commit()
+            db.refresh(created)  # the change log commit expired it
             self._update_search_index(created, db)
             return created
             
@@ -3335,6 +3384,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             its own transaction inside `create_from_upload`).
         """
         result = BatchImportResult()
+        links = ImportLinks('data_contract')
         index = 0
         for filename, content_text, content_type in files:
             try:
@@ -3421,6 +3471,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         db=db, parsed_odcs=entity, current_user=current_user,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
+                        import_links=links,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -3436,6 +3487,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=entity.get('name'), status="failed", message=str(e),
+                        code=e.code, params=e.params,
                     ))
                 except CodedValueError as e:
                     # The app's own refusal (e.g. ``certified`` as a status):
@@ -3463,6 +3515,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     ))
                 index += 1
 
+        add_import_notes(result, links.finish(db, username=current_user))
+        db.commit()
         logger.info(
             "Contract batch import complete: %d created, %d skipped, %d failed (%d total)",
             result.created, result.skipped, result.failed, result.total,

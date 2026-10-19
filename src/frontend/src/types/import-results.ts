@@ -12,7 +12,11 @@ export interface ImportItemResult {
   entity_id?: string | null;
   name?: string | null;
   status: ImportItemStatus;
+  /** Skip reason, error detail, or a note on a created entity. */
   message?: string | null;
+  /** Code of the message, translated by the UI when known. */
+  code?: string | null;
+  params?: Record<string, unknown> | null;
 }
 
 export interface BatchImportResult {

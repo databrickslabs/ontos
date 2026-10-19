@@ -767,6 +767,13 @@
       "replacement_deprecated": "El reemplazo {{replacementId}} está obsoleto.",
       "replacement_deprecated_replaced": "El reemplazo {{replacementId}} está obsoleto; lo reemplaza {{replacedBy}}.",
       "replacement_leads_back": "El reemplazo {{replacementId}} lleva de vuelta a esta entidad: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} no válido \"{{value}}\": se esperaba una fecha ISO.",
+      "replacement_is_self": "El reemplazo (ontosReplacedBy) no puede ser la propia entidad.",
+      "replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad: {{chain}}.",
+      "imported_replacement_dropped": "El reemplazo {{replacementId}} no está aquí, así que no se vinculó.",
+      "imported_replacement_leads_back": "El reemplazo {{replacementId}} vuelve a esta entidad ({{chain}}), así que no se vinculó."
     }
   }
 }

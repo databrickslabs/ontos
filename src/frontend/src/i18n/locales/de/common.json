@@ -767,6 +767,13 @@
       "replacement_deprecated": "Der Ersatz {{replacementId}} ist veraltet.",
       "replacement_deprecated_replaced": "Der Ersatz {{replacementId}} ist veraltet; er wird durch {{replacedBy}} ersetzt.",
       "replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Ungültiges {{property}} \"{{value}}\": ISO-Datum erwartet.",
+      "replacement_is_self": "Der Ersatz (ontosReplacedBy) kann nicht die Entität selbst sein.",
+      "replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück: {{chain}}.",
+      "imported_replacement_dropped": "Der Ersatz {{replacementId}} ist hier nicht vorhanden und wurde daher nicht verknüpft.",
+      "imported_replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück ({{chain}}) und wurde daher nicht verknüpft."
     }
   }
 }

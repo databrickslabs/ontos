@@ -46,6 +46,20 @@ describe('import report lines', () => {
       .toBe("• Legacy: 'production' não é um status do ciclo de vida, então foi importado como 'draft'.");
   });
 
+  it('translates older status names mapped like the database migration', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(importItemLine({ index: 7, name: 'Old', entity_id: 'p-7', status: 'created',
+      message: "'archived' is an older status name, so it was imported as 'retired'.",
+      code: 'imported_legacy_status', params: { status: 'archived', mappedTo: 'retired' } }, i18n.t))
+      .toBe("• Old: 'archived' é um nome de status antigo, então foi importado como 'retired'.");
+    expect(importItemLine({ index: 8, name: 'Cert', entity_id: 'p-8', status: 'created',
+      message: "'certified' is not a status any more, so it was imported as 'active'.",
+      code: 'imported_certified_as_active', params: { status: 'certified', mappedTo: 'active' } }, i18n.t))
+      .toBe("• Cert: 'certified' não é mais um status, então foi importado como 'active'. "
+        + 'A certificação não é importada: certifique a entidade no Ontos.');
+  });
+
   it('lists every note of an item that has more than one', async () => {
     await i18n.changeLanguage('pt');
 

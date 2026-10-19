@@ -89,16 +89,23 @@ export default function DeprecationFields({
 
   useEffect(() => {
     let cancelled = false;
-    const endpoint = entityType === 'data_product' ? '/api/data-products' : '/api/data-contracts';
-    get<Candidate[]>(endpoint).then((res) => {
-      if (cancelled || !Array.isArray(res.data)) return;
-      setCandidates(
-        res.data.filter(
-          (c) =>
-            c.id !== entityId &&
-            !['deprecated', 'retired'].includes((c.status || '').toLowerCase()),
-        ),
-      );
+    // The products list only holds the caller's own products, so a requester
+    // without write access also gets the published ones to choose from
+    const endpoints =
+      entityType === 'data_product'
+        ? ['/api/data-products', '/api/data-products/published']
+        : ['/api/data-contracts'];
+    Promise.all(endpoints.map((endpoint) => get<Candidate[]>(endpoint))).then((responses) => {
+      if (cancelled) return;
+      const byId = new Map<string, Candidate>();
+      for (const res of responses) {
+        for (const c of Array.isArray(res.data) ? res.data : []) {
+          if (c.id !== entityId && !['deprecated', 'retired'].includes((c.status || '').toLowerCase())) {
+            byId.set(c.id, c);
+          }
+        }
+      }
+      setCandidates([...byId.values()]);
     });
     return () => {
       cancelled = true;

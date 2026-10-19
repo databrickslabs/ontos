@@ -123,4 +123,32 @@ describe('deprecationPayload', () => {
       replacement_id: 'next',
     });
   });
+
+  it('also offers published products, for a requester who owns none of them', async () => {
+    get.mockImplementation((url: string) =>
+      Promise.resolve({
+        data:
+          url === '/api/data-products/published'
+            ? [{ id: 'pub', name: 'Orders v3', version: '3.0.0', status: 'active' }, PRODUCTS[1]]
+            : [],
+      }),
+    );
+    renderWithProviders(
+      <DeprecationFields
+        entityType="data_product"
+        entityId="self"
+        value={EMPTY_DEPRECATION}
+        onChange={vi.fn()}
+        hideReason
+      />,
+    );
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/data-products/published'));
+
+    const trigger = document.getElementById('deprecation-replacement')!;
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(screen.getByText('Orders v3 (3.0.0)')).toBeInTheDocument());
+    expect(screen.getAllByText('Orders v2 (2.0.0)')).toHaveLength(1);
+  });
 });

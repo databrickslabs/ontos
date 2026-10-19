@@ -750,12 +750,6 @@
     "detailsFailed": "Falha ao buscar detalhes do usuário",
     "loadFailed": "Falha ao carregar dados do perfil"
   },
-  "importSummary": {
-    "created": "Criados: {{created}}.",
-    "createdSkipped": "Criados: {{created}}, ignorados: {{skipped}}.",
-    "createdFailed": "Criados: {{created}}, com falha: {{failed}}.",
-    "createdSkippedFailed": "Criados: {{created}}, ignorados: {{skipped}}, com falha: {{failed}}."
-  },
   "deprecation": {
     "reason": "Motivo da descontinuação",
     "reasonPlaceholder": "Por que está sendo descontinuado? Os consumidores verão este texto.",
@@ -773,21 +767,6 @@
       "replacement_deprecated": "O substituto {{replacementId}} está obsoleto.",
       "replacement_deprecated_replaced": "O substituto {{replacementId}} está obsoleto; ele é substituído por {{replacedBy}}.",
       "replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade: {{chain}}."
-    },
-    "import": {
-      "imported_date_invalid": "{{property}} inválido \"{{value}}\": esperada uma data ISO.",
-      "replacement_is_self": "O substituto (ontosReplacedBy) não pode ser a própria entidade.",
-      "replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade: {{chain}}.",
-      "imported_replacement_dropped": "O substituto {{replacementId}} não existe aqui, então não foi vinculado.",
-      "imported_replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade ({{chain}}), então não foi vinculado.",
-      "imported_status_mapped": "'{{status}}' não é um status do ciclo de vida, então foi importado como '{{mappedTo}}'.",
-      "imported_legacy_status": "'{{status}}' é um nome de status antigo, então foi importado como '{{mappedTo}}'.",
-      "imported_certified_as_active": "'{{status}}' não é mais um status, então foi importado como '{{mappedTo}}'. A certificação não é importada: certifique a entidade no Ontos."
-    },
-    "notice": {
-      "deprecated": "Obsoleto",
-      "retired": "Aposentado",
-      "noReason": "Nenhum motivo registrado"
     }
   }
 }

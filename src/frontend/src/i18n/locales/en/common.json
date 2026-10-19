@@ -750,12 +750,6 @@
     "detailsFailed": "Failed to fetch user details",
     "loadFailed": "Failed to load profile data"
   },
-  "importSummary": {
-    "created": "Created: {{created}}.",
-    "createdSkipped": "Created: {{created}}, skipped: {{skipped}}.",
-    "createdFailed": "Created: {{created}}, failed: {{failed}}.",
-    "createdSkippedFailed": "Created: {{created}}, skipped: {{skipped}}, failed: {{failed}}."
-  },
   "deprecation": {
     "reason": "Deprecation reason",
     "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",
@@ -773,21 +767,6 @@
       "replacement_deprecated": "The replacement {{replacementId}} is deprecated.",
       "replacement_deprecated_replaced": "The replacement {{replacementId}} is deprecated; it is replaced by {{replacedBy}}.",
       "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}."
-    },
-    "import": {
-      "imported_date_invalid": "Invalid {{property}} \"{{value}}\": expected an ISO date.",
-      "replacement_is_self": "The replacement (ontosReplacedBy) can't be the entity itself.",
-      "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}.",
-      "imported_replacement_dropped": "The replacement {{replacementId}} isn't here, so it was not linked.",
-      "imported_replacement_leads_back": "The replacement {{replacementId}} leads back to this entity ({{chain}}), so it was not linked.",
-      "imported_status_mapped": "'{{status}}' isn't a lifecycle status, so it was imported as '{{mappedTo}}'.",
-      "imported_legacy_status": "'{{status}}' is an older status name, so it was imported as '{{mappedTo}}'.",
-      "imported_certified_as_active": "'{{status}}' is no longer a status, so it was imported as '{{mappedTo}}'. Certification isn't imported: certify the entity in Ontos."
-    },
-    "notice": {
-      "deprecated": "Deprecated",
-      "retired": "Retired",
-      "noReason": "No reason recorded"
     }
   }
 }

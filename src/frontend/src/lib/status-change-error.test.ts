@@ -72,6 +72,29 @@ describe('statusChangeErrorText', () => {
       .toBe(MESSAGE);
   });
 
+  it('translates the deprecation checks with their parameters', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText({
+      error: 'Replacement p-2 is deprecated; it is replaced by p-3',
+      errorCode: 'replacement_deprecated_replaced',
+      errorParams: { replacementId: 'p-2', replacedBy: 'p-3' },
+    }, i18n.t, 'data-products')).toBe('O substituto p-2 está obsoleto; ele é substituído por p-3.');
+    expect(statusChangeErrorText({
+      error: 'The sunset date 2026-10-18 is in the past',
+      errorCode: 'sunset_date_in_past',
+      errorParams: { sunsetDate: '2026-10-18' },
+    }, i18n.t, 'data-contracts')).toBe('A data de desativação 2026-10-18 está no passado.');
+  });
+
+  it('keeps the English text for a deprecation code without a translation', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText(
+      { error: 'Something new', errorCode: 'not_a_deprecation_code' }, i18n.t, 'data-products',
+    )).toBe('Something new');
+  });
+
   it('translates an edit that tries to change the status', async () => {
     await i18n.changeLanguage('pt');
 

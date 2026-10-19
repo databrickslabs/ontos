@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,6 +23,15 @@ _REPLACEMENT_COLUMN = {
     'data_product': 'replacement_product_id',
     'data_contract': 'replacement_contract_id',
 }
+
+
+class LifecycleFieldError(CodedValueError):
+    """A deprecation the details don't allow; the UI translates ``code``
+    (``common:deprecation.errors.<code>``), the message is the fallback."""
+
+    def __init__(self, message: str, code: str, **params: Any):
+        super().__init__(message, **params)
+        self.code = code
 
 
 @dataclass
@@ -85,11 +95,14 @@ def _check_replacement(
     export can hold one legitimately (A deprecated toward B, then B deprecated).
     """
     if replacement_id == entity_id:
-        raise ValueError("An entity can't be its own replacement")
+        raise LifecycleFieldError("An entity can't be its own replacement", 'replacement_is_self')
     model = _entity_model(entity_type)
     replacement = db.get(model, replacement_id)
     if not replacement:
-        raise ValueError(f"Replacement {replacement_id} not found")
+        raise LifecycleFieldError(
+            f"Replacement {replacement_id} not found", 'replacement_not_found',
+            replacementId=replacement_id,
+        )
     column = _REPLACEMENT_COLUMN[entity_type]
     # Follow the links in effect: those of deprecated or retired entities
     chain = [entity_id, replacement_id]
@@ -99,9 +112,10 @@ def _check_replacement(
         if not next_id:
             break
         if next_id == entity_id:
-            raise ValueError(
-                f"Replacement {replacement_id} leads back to this entity: "
-                + ' -> '.join(chain + [entity_id])
+            path = ' -> '.join(chain + [entity_id])
+            raise LifecycleFieldError(
+                f"Replacement {replacement_id} leads back to this entity: {path}",
+                'replacement_leads_back', replacementId=replacement_id, chain=path,
             )
         if next_id in chain:
             break  # a cycle among other entities, not through this one
@@ -111,14 +125,21 @@ def _check_replacement(
         return
     status = (replacement.status or '').lower()
     if status == 'retired':
-        raise ValueError(f"Replacement {replacement_id} is retired")
+        raise LifecycleFieldError(
+            f"Replacement {replacement_id} is retired", 'replacement_retired',
+            replacementId=replacement_id,
+        )
     if status == 'deprecated':
         message = f"Replacement {replacement_id} is deprecated"
         if current is not None and current is not replacement and (
             (current.status or '').lower() not in ('deprecated', 'retired')
         ):
-            message += f"; it is replaced by {' -> '.join(chain[2:])}"
-        raise ValueError(message)
+            replaced_by = ' -> '.join(chain[2:])
+            raise LifecycleFieldError(
+                f"{message}; it is replaced by {replaced_by}", 'replacement_deprecated_replaced',
+                replacementId=replacement_id, replacedBy=replaced_by,
+            )
+        raise LifecycleFieldError(message, 'replacement_deprecated', replacementId=replacement_id)
 
 
 def check_lifecycle_fields(
@@ -136,9 +157,14 @@ def check_lifecycle_fields(
         return
     details = details or DeprecationDetails()
     if not (details.reason or '').strip():
-        raise ValueError("A deprecation reason is required to deprecate")
+        raise LifecycleFieldError(
+            "A deprecation reason is required to deprecate", 'deprecation_reason_required',
+        )
     if details.sunset_date and details.sunset_date < utc_today():
-        raise ValueError(f"The sunset date {details.sunset_date} is in the past")
+        raise LifecycleFieldError(
+            f"The sunset date {details.sunset_date} is in the past", 'sunset_date_in_past',
+            sunsetDate=details.sunset_date.isoformat(),
+        )
     if details.replacement_id:
         _check_replacement(db, entity_type, entity_id, details.replacement_id)
 

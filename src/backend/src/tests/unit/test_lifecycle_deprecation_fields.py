@@ -148,6 +148,56 @@ def test_the_sunset_date_is_checked_against_the_utc_date(db_session):
         )
 
 
+def test_the_checks_send_a_code_and_parameters_for_the_ui(db_session):
+    from fastapi import FastAPI, HTTPException
+    from fastapi.testclient import TestClient
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    from src.common.api_errors import coded_http_exception_handler
+
+    product, old, newest = _product(db_session), _product(db_session), _product(db_session)
+    _deprecated_toward(old, newest)
+    db_session.flush()
+    app = FastAPI()
+    app.add_exception_handler(StarletteHTTPException, coded_http_exception_handler)
+
+    @app.post('/change-status')
+    def change_status():
+        # As the change-status routes answer a ValueError
+        try:
+            DataProductsManager(db=db_session).transition_status(
+                product.id, 'deprecated', 'alice@example.com',
+                deprecation=DeprecationDetails(reason='old', replacement_id=old.id),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    response = TestClient(app).post('/change-status')
+
+    assert response.status_code == 400
+    assert response.json() == {'detail': {
+        'code': 'replacement_deprecated_replaced',
+        'message': f'Replacement {old.id} is deprecated; it is replaced by {newest.id}',
+        'params': {'replacementId': old.id, 'replacedBy': newest.id},
+    }}
+
+
+@pytest.mark.parametrize('details, code, params', [
+    (None, 'deprecation_reason_required', {}),
+    (DeprecationDetails(reason='old', sunset_date=date(2020, 1, 1)),
+     'sunset_date_in_past', {'sunsetDate': '2020-01-01'}),
+    (DeprecationDetails(reason='old', replacement_id='missing'),
+     'replacement_not_found', {'replacementId': 'missing'}),
+])
+def test_each_check_has_its_code(db_session, details, code, params):
+    product = _product(db_session)
+
+    with pytest.raises(ValueError) as e:
+        check_lifecycle_fields(db_session, 'data_product', product.id, 'deprecated', details)
+
+    assert (e.value.code, e.value.params) == (code, params)
+
+
 def test_utc_today_is_the_utc_date():
     assert utc_today() == datetime.now(timezone.utc).date()
 

@@ -29,12 +29,13 @@ def _product(db, status='active'):
     return product
 
 
-def _complete(db, product, approved, target='deprecated', succeeded=None):
+def _complete(db, product, approved, target='deprecated', succeeded=None,
+              justification='Moving to v2'):
     context = TriggerContext(
         entity_type='data_product', entity_id=product.id, entity_name=product.name,
         trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
         from_status=product.status, to_status=target,
-        entity_data={'target_status': target, 'justification': 'Moving to v2'},
+        entity_data={'target_status': target, 'justification': justification},
     )
     workflow = SimpleNamespace(
         name='Status Change Request',
@@ -112,9 +113,35 @@ def test_the_app_notifications_and_search_managers_are_used(db_session):
 
     assert manager_cls.call_args.kwargs['notifications_manager'] is notifications
     manager_cls.return_value.set_search_manager.assert_called_once_with(search)
-    manager_cls.return_value.transition_status.assert_called_once_with(
-        product.id, 'deprecated', 'approver@example.com'
+    call = manager_cls.return_value.transition_status.call_args
+    assert call.args == (product.id, 'deprecated', 'approver@example.com')
+    assert call.kwargs['deprecation'].reason == 'Moving to v2'
+
+
+def test_an_approved_deprecation_uses_the_requests_justification_as_reason(db_session):
+    product = _product(db_session)
+
+    _complete(db_session, product, True)
+
+    db_session.refresh(product)
+    assert product.status == 'deprecated'
+    assert product.deprecation_reason == 'Moving to v2'
+
+
+def test_the_justification_falls_back_to_the_logged_request(db_session):
+    from src.controller.change_log_manager import change_log_manager
+
+    product = _product(db_session)
+    change_log_manager.log_change_with_details(
+        db_session, entity_type='data_product', entity_id=product.id,
+        action='status_change_requested', username='requester@example.com',
+        details={'target_status': 'deprecated', 'justification': 'Replaced by v2'},
     )
+
+    _complete(db_session, product, True, justification=None)
+
+    db_session.refresh(product)
+    assert product.deprecation_reason == 'Replaced by v2'
 
 
 def _notes_for(db, product):
@@ -171,3 +198,19 @@ def test_completing_twice_applies_once_and_warns_nobody(db_session):
     db_session.refresh(product)
     assert product.status == 'deprecated'
     assert _notes_for(db_session, product) == []
+
+
+def test_a_deprecation_without_any_justification_is_not_applied(db_session):
+    from src.db_models.notifications import NotificationDb
+
+    product = _product(db_session)
+
+    _complete(db_session, product, True, justification=None)
+
+    db_session.refresh(product)
+    assert product.status == 'active'
+    notes = db_session.query(NotificationDb).filter(
+        NotificationDb.subtitle == product.name
+    ).all()
+    assert len(notes) == 1
+    assert 'deprecation reason is required' in notes[0].description

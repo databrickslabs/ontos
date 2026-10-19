@@ -750,12 +750,6 @@
     "detailsFailed": "Impossibile recuperare i dettagli dell'utente",
     "loadFailed": "Impossibile caricare i dati del profilo"
   },
-  "importSummary": {
-    "created": "Creati: {{created}}.",
-    "createdSkipped": "Creati: {{created}}, saltati: {{skipped}}.",
-    "createdFailed": "Creati: {{created}}, non riusciti: {{failed}}.",
-    "createdSkippedFailed": "Creati: {{created}}, saltati: {{skipped}}, non riusciti: {{failed}}."
-  },
   "deprecation": {
     "reason": "Motivo della deprecazione",
     "reasonPlaceholder": "Perché viene deprecato? I consumatori vedranno questo testo.",
@@ -773,21 +767,6 @@
       "replacement_deprecated": "Il sostituto {{replacementId}} è obsoleto.",
       "replacement_deprecated_replaced": "Il sostituto {{replacementId}} è obsoleto; è sostituito da {{replacedBy}}.",
       "replacement_leads_back": "Il sostituto {{replacementId}} riporta a questa entità: {{chain}}."
-    },
-    "import": {
-      "imported_date_invalid": "{{property}} non valido \"{{value}}\": è attesa una data ISO.",
-      "replacement_is_self": "Il sostituto (ontosReplacedBy) non può essere l'entità stessa.",
-      "replacement_leads_back": "Il sostituto {{replacementId}} riporta a questa entità: {{chain}}.",
-      "imported_replacement_dropped": "Il sostituto {{replacementId}} non è presente qui, quindi non è stato collegato.",
-      "imported_replacement_leads_back": "Il sostituto {{replacementId}} riporta a questa entità ({{chain}}), quindi non è stato collegato.",
-      "imported_status_mapped": "'{{status}}' non è uno stato del ciclo di vita, quindi è stato importato come '{{mappedTo}}'.",
-      "imported_legacy_status": "'{{status}}' è un vecchio nome di stato, quindi è stato importato come '{{mappedTo}}'.",
-      "imported_certified_as_active": "'{{status}}' non è più uno stato, quindi è stato importato come '{{mappedTo}}'. La certificazione non viene importata: certifica l'entità in Ontos."
-    },
-    "notice": {
-      "deprecated": "Obsoleto",
-      "retired": "Ritirato",
-      "noReason": "Nessun motivo registrato"
     }
   }
 }

@@ -9,7 +9,15 @@ from pydantic import BaseModel, Field, HttpUrl
 # ============================================================================
 # Entity Types Pattern
 # ============================================================================
-ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset)$"
+# Every entity kind that renders EntityMetadataPanel (see the EntityKind union in
+# frontend components/metadata/entity-metadata-panel.tsx). Kept as an explicit
+# allow-list because entity_type is also used in document upload paths.
+METADATA_ENTITY_TYPES = (
+    "data_domain", "data_product", "data_contract", "dataset", "asset",
+    "concept", "collection", "compliance_policy", "authority_relation",
+    "team", "project",
+)
+ENTITY_TYPE_PATTERN = rf"^({'|'.join(METADATA_ENTITY_TYPES)})$"
 
 
 # ============================================================================

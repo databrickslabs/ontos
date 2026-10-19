@@ -3719,8 +3719,21 @@ class WorkflowExecutor:
         search_manager = get_app_state_manager('search_manager')
         if search_manager:
             manager.set_search_manager(search_manager)
+        # A requested deprecation uses the request's justification as its
+        # reason, as handle-status-change does
+        from src.controller.lifecycle_fields import (
+            DeprecationDetails, requested_status_change_justification,
+        )
+        justification = (trigger_context.entity_data or {}).get('justification') or (
+            requested_status_change_justification(
+                self._db, 'data_product', product_id, target_status
+            )
+        )
         try:
-            manager.transition_status(product_id, target_status, responded_by)
+            manager.transition_status(
+                product_id, target_status, responded_by,
+                deprecation=DeprecationDetails(reason=justification),
+            )
         except ValueError as e:
             logger.warning(
                 "Approved status change of data product %s to '%s' could not be applied: %s",

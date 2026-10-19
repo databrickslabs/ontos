@@ -281,3 +281,33 @@ def test_a_refused_approval_writes_no_lifecycle_audit(db_session, monkeypatch):
     _complete(db_session, product, True, justification=None)  # no reason: refused
 
     assert entries == []
+
+
+def test_an_approved_deprecation_applies_the_requested_sunset_date_and_replacement(db_session):
+    from datetime import timedelta
+
+    from src.controller.lifecycle_fields import utc_today
+
+    product, replacement = _product(db_session), _product(db_session)
+    sunset = (utc_today() + timedelta(days=20)).isoformat()
+    context = TriggerContext(
+        entity_type='data_product', entity_id=product.id, entity_name=product.name,
+        trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
+        from_status='active', to_status='deprecated',
+        entity_data={'target_status': 'deprecated', 'justification': 'Moving to v2',
+                     'sunset_date': sunset, 'replacement_id': replacement.id},
+    )
+    workflow = SimpleNamespace(
+        name='Status Change Request',
+        trigger=SimpleNamespace(type=TriggerType.ON_REQUEST_STATUS_CHANGE),
+    )
+    WorkflowExecutor(db_session)._handle_workflow_completion(
+        trigger_context=context, workflow=workflow, succeeded=True,
+        responded_by='approver@example.com', approved=True,
+    )
+
+    db_session.refresh(product)
+    assert product.status == 'deprecated'
+    assert product.deprecation_reason == 'Moving to v2'
+    assert product.sunset_date.isoformat() == sunset
+    assert product.replacement_product_id == replacement.id

@@ -144,6 +144,7 @@ from src.controller.lifecycle_fields import (
     DeprecationDetails,
     apply_lifecycle_fields,
     check_lifecycle_fields,
+    imported_lifecycle_columns,
     lifecycle_custom_properties,
     pop_lifecycle_custom_properties,
     requested_status_change_justification,
@@ -390,8 +391,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ):
                 product_data['draft_owner_id'] = user
 
-            # Lifecycle fields exported as ontos* customProperties map back to columns
-            lifecycle_props = pop_lifecycle_custom_properties(product_data.get('customProperties'))
+            # Lifecycle fields exported as ontos* customProperties map back to
+            # columns, checked before anything is created
+            lifecycle_columns = imported_lifecycle_columns(
+                db_session, 'data_product', product_data['id'],
+                pop_lifecycle_custom_properties(product_data.get('customProperties')),
+            )
 
             # Validate
             try:
@@ -405,8 +410,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
-            if lifecycle_props:
-                set_lifecycle_columns(created_db_obj, 'data_product', lifecycle_props)
+            if lifecycle_columns:
+                set_lifecycle_columns(created_db_obj, lifecycle_columns)
                 db_session.flush()
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
@@ -443,6 +448,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         "name": result.name,
                         "status": result.status.value if hasattr(result.status, 'value') else result.status,
                         "summary": f"Product '{result.name}' created" + (f" by {user}" if user else ""),
+                        # Imported lifecycle fields, as a deprecation records them
+                        **{
+                            column: value.isoformat() if hasattr(value, 'isoformat') else value
+                            for column, value in lifecycle_columns.items()
+                        },
                     },
                 )
             except Exception as log_err:

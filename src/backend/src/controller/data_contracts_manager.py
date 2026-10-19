@@ -136,6 +136,7 @@ from src.controller.lifecycle_fields import (
     DeprecationDetails,
     apply_lifecycle_fields,
     check_lifecycle_fields,
+    imported_lifecycle_columns,
     lifecycle_custom_properties,
     pop_lifecycle_custom_properties,
     requested_status_change_justification,
@@ -2142,9 +2143,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         """
         lifecycle_props = pop_lifecycle_custom_properties(custom_props)
         if lifecycle_props and apply_lifecycle:
+            columns = imported_lifecycle_columns(db, 'data_contract', contract_id, lifecycle_props)
             contract = db.get(DataContractDb, contract_id)
             if contract is not None:
-                set_lifecycle_columns(contract, 'data_contract', lifecycle_props)
+                set_lifecycle_columns(contract, columns)
         if isinstance(custom_props, list):
             # ODCS array format
             for prop_data in custom_props:

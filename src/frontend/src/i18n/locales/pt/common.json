@@ -767,6 +767,13 @@
       "replacement_deprecated": "O substituto {{replacementId}} está obsoleto.",
       "replacement_deprecated_replaced": "O substituto {{replacementId}} está obsoleto; ele é substituído por {{replacedBy}}.",
       "replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "{{property}} inválido \"{{value}}\": esperada uma data ISO.",
+      "replacement_is_self": "O substituto (ontosReplacedBy) não pode ser a própria entidade.",
+      "replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade: {{chain}}.",
+      "imported_replacement_dropped": "O substituto {{replacementId}} não existe aqui, então não foi vinculado.",
+      "imported_replacement_leads_back": "O substituto {{replacementId}} leva de volta a esta entidade ({{chain}}), então não foi vinculado."
     }
   }
 }

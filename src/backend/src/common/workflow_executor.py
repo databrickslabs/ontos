@@ -3588,12 +3588,14 @@ class WorkflowExecutor:
         # A requested deprecation uses the request's justification as its
         # reason, as handle-status-change does
         from src.controller.lifecycle_fields import (
-            DeprecationDetails, requested_status_change_justification,
+            DeprecationDetails, audit_approved_lifecycle_change, requested_status_change,
         )
+        logged_request_id, logged_justification = requested_status_change(
+            self._db, 'data_product', product_id, target_status
+        )
+        request_id = (trigger_context.entity_data or {}).get('request_id') or logged_request_id
         justification = (trigger_context.entity_data or {}).get('justification') or (
-            requested_status_change_justification(
-                self._db, 'data_product', product_id, target_status
-            )
+            logged_justification
         )
         try:
             manager.transition_status(
@@ -3616,6 +3618,10 @@ class WorkflowExecutor:
                 error=e,
             )
             return
+        audit_approved_lifecycle_change(
+            self._db, 'data_product', product_id, current_status, target_status,
+            request_id, responded_by,
+        )
         logger.info(
             "Data product %s moved to '%s' after its status change request was approved",
             product_id, target_status,

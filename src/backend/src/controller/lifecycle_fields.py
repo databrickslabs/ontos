@@ -10,7 +10,7 @@ values. See the lifecycle tag automation and deprecation PRD.
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -56,6 +56,24 @@ class DeprecationDetails:
     replacement_id: Optional[str] = None
 
 
+def deprecation_details_from_strings(
+    reason: Optional[str], sunset_date: Optional[str], replacement_id: Optional[str],
+) -> DeprecationDetails:
+    """DeprecationDetails from plain strings (MCP tool arguments).
+
+    Raises ValueError for a sunset date that isn't ``YYYY-MM-DD``.
+    """
+    parsed_date = None
+    if sunset_date:
+        try:
+            parsed_date = date.fromisoformat(str(sunset_date).strip()[:10])
+        except ValueError:
+            raise ValueError(f"Invalid sunset_date {sunset_date!r}: expected YYYY-MM-DD") from None
+    return DeprecationDetails(
+        reason=reason or None, sunset_date=parsed_date, replacement_id=replacement_id or None,
+    )
+
+
 def _entity_model(entity_type: str):
     if entity_type == 'data_product':
         from src.db_models.data_products import DataProductDb
@@ -64,11 +82,14 @@ def _entity_model(entity_type: str):
     return DataContractDb
 
 
-def requested_status_change_justification(
+def requested_status_change(
     db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
-) -> Optional[str]:
-    """Justification of the latest status change request (to ``target_status``,
-    when given), used as the deprecation reason when that request is approved."""
+) -> Tuple[Optional[str], Optional[str]]:
+    """Id and justification of the latest status change request (to
+    ``target_status``, when given); ``(None, None)`` when there is none.
+
+    The id is the request id the request returned (products), else the id of
+    its change log entry (contract requests have no id of their own)."""
     from src.controller.change_log_manager import change_log_manager
 
     try:
@@ -78,7 +99,7 @@ def requested_status_change_justification(
     except Exception as e:
         logger.warning("Could not read status change requests for %s %s: %s",
                        entity_type, entity_id, e)
-        return None
+        return None, None
     for change in changes:  # newest first
         if change.action != 'status_change_requested':
             continue
@@ -89,8 +110,68 @@ def requested_status_change_justification(
         requested = (details.get('target_status') or '').lower()
         if target_status and requested and requested != target_status.lower():
             continue
-        return details.get('justification')
-    return None
+        request_id = details.get('request_id') or (str(change.id) if change.id is not None else None)
+        return request_id, details.get('justification')
+    return None, None
+
+
+def requested_status_change_justification(
+    db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
+) -> Optional[str]:
+    """Justification of the latest status change request (to ``target_status``,
+    when given), used as the deprecation reason when that request is approved."""
+    return requested_status_change(db, entity_type, entity_id, target_status)[1]
+
+
+# Audit actions of lifecycle moves, as the change-status and deprecate routes write them
+LIFECYCLE_AUDIT_ACTIONS = {'deprecated': 'DEPRECATE', 'retired': 'RETIRE'}
+
+
+def audit_approved_lifecycle_change(
+    db: Session,
+    entity_type: str,
+    entity_id: str,
+    from_status: Optional[str],
+    to_status: str,
+    request_id: Optional[str],
+    approved_by: Optional[str],
+) -> None:
+    """Audit a deprecation or retirement applied by approving a status change request.
+
+    Writes the ``DEPRECATE`` / ``RETIRE`` entry the direct routes write, with
+    the stored deprecation details and the id of the approved request. Other
+    target statuses are not audited here.
+    """
+    action = LIFECYCLE_AUDIT_ACTIONS.get((to_status or '').lower())
+    if not action:
+        return
+    from src.controller.audit_manager import log_system_action
+
+    model = _entity_model(entity_type)
+    row = db.get(model, entity_id)
+    if row is not None:
+        db.refresh(row)
+    is_product = entity_type == 'data_product'
+    details: Dict[str, Any] = {
+        'product_id' if is_product else 'contract_id': entity_id,
+        'from': from_status,
+        'to': (to_status or '').lower(),
+        'request_id': request_id,
+        'approved_by': approved_by,
+    }
+    if action == 'DEPRECATE' and row is not None:
+        details['deprecation_reason'] = row.deprecation_reason
+        details['sunset_date'] = row.sunset_date.isoformat() if row.sunset_date else None
+        details['replacement_id' if is_product else 'replacement_contract_id'] = getattr(
+            row, _REPLACEMENT_COLUMN[entity_type], None
+        )
+    log_system_action(
+        username=approved_by or 'system',
+        feature='data-products' if is_product else 'data-contracts',
+        action=action,
+        success=True,
+        details=details,
+    )
 
 
 def utc_today() -> date:
@@ -267,6 +348,19 @@ def _source_key(entity_id: Any) -> str:
     return str(entity_id).strip().lower()
 
 
+def peek_lifecycle_replacement(custom_props) -> Optional[str]:
+    """The ``ontosReplacedBy`` of an imported ``customProperties``, left in place."""
+    if isinstance(custom_props, list):
+        for item in custom_props:
+            if isinstance(item, dict) and item.get('property') == 'ontosReplacedBy':
+                value = item.get('value')
+                return str(value).strip() if value not in (None, '') else None
+    elif isinstance(custom_props, dict):
+        value = custom_props.get('ontosReplacedBy')
+        return str(value).strip() if value not in (None, '') else None
+    return None
+
+
 @dataclass
 class ImportNote:
     """What an import tells about an entity it created (a dropped link)."""
@@ -289,6 +383,34 @@ class ImportLinks:
         self.entity_type = entity_type
         self._created: Dict[str, str] = {}
         self._pending: Dict[str, str] = {}
+        self._cycles: Dict[str, str] = {}
+
+    def plan(self, entries) -> None:
+        """Find the replacement cycles among the entities of the import, before any is created.
+
+        ``entries`` are ``(source_id, ontosReplacedBy)`` pairs of the file
+        entities. An entity whose replacement chain, followed through the file,
+        leads back to it (A -> B -> A) is refused, whatever the order of the
+        entities in the file; ``imported_lifecycle_columns`` raises for it.
+        """
+        links: Dict[str, str] = {}
+        for source_id, replacement_id in entries:
+            if source_id and replacement_id:
+                key, target = _source_key(source_id), _source_key(replacement_id)
+                if key != target:  # a self-replacement is refused on its own
+                    links[key] = target
+        for start in links:
+            chain = [start]
+            current = links[start]
+            while current in links and current not in chain:
+                chain.append(current)
+                current = links[current]
+            if current == start:
+                self._cycles[start] = ' -> '.join(chain + [start])
+
+    def cycle_through(self, source_id: Optional[str]) -> Optional[str]:
+        """The cycle (``A -> B -> A``) the entity's replacement makes in this import, if any."""
+        return self._cycles.get(_source_key(source_id)) if source_id else None
 
     def record(self, source_id: Optional[str], created_id: str) -> None:
         """Remember that the entity the file calls ``source_id`` is ``created_id``."""
@@ -387,6 +509,13 @@ def imported_lifecycle_columns(
     replacement_column = _REPLACEMENT_COLUMN[entity_type]
     replacement_id = columns.get(replacement_column)
     if replacement_id:
+        cycle = links.cycle_through(source_id) if links is not None else None
+        if cycle:
+            raise ImportedLifecycleError(
+                f"Invalid ontosReplacedBy: replacement {replacement_id} leads back to this "
+                f"entity in this import: {cycle}",
+                'replacement_leads_back', replacementId=replacement_id, chain=cycle,
+            )
         if source_id and _source_key(replacement_id) == _source_key(source_id):
             replacement_id = entity_id
         elif links is not None:

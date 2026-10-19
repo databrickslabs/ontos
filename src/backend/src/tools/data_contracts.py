@@ -8,6 +8,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
+from src.controller.lifecycle_fields import deprecation_details_from_strings
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
@@ -226,6 +227,18 @@ class UpdateDataContractTool(BaseTool):
                 "only an allowed transition, and status change workflows can block it."
             ),
             "enum": ["draft", "active", "deprecated"]
+        },
+        "deprecation_reason": {
+            "type": "string",
+            "description": "Why the contract is deprecated (required with status deprecated)"
+        },
+        "sunset_date": {
+            "type": "string",
+            "description": "Date the contract stops being supported, YYYY-MM-DD (with status deprecated; not in the past)"
+        },
+        "replacement_id": {
+            "type": "string",
+            "description": "ID of the contract that replaces it (with status deprecated)"
         }
     }
     required_params = ["contract_id"]
@@ -237,7 +250,10 @@ class UpdateDataContractTool(BaseTool):
         contract_id: str,
         domain: Optional[str] = None,
         description: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        deprecation_reason: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> ToolResult:
         """Update an existing data contract."""
         logger.info(f"[update_data_contract] Starting - contract_id={contract_id}, domain={domain}, status={status}")
@@ -278,6 +294,9 @@ class UpdateDataContractTool(BaseTool):
                         contract_id=contract_id,
                         new_status=status.lower(),
                         current_user=None,
+                        deprecation=deprecation_details_from_strings(
+                            deprecation_reason, sunset_date, replacement_id
+                        ),
                     )
                 else:
                     updated = current
@@ -304,7 +323,8 @@ class UpdateDataContractTool(BaseTool):
                     "success": True,
                     "contract_id": updated.id,
                     "name": updated.name,
-                    "domain": updated.domain,
+                    # A status-only change returns the DB row, which has no `domain`
+                    "domain": getattr(updated, 'domain', None),
                     "status": updated.status,
                     "message": f"Contract '{updated.name}' updated successfully.",
                     "url": f"/data-contracts/{updated.id}"

@@ -167,6 +167,24 @@ def check_requested_deprecation(
     return details
 
 
+def requested_deprecation_data(
+    db: Session, entity_type: str, details: DeprecationDetails,
+) -> Dict[str, Optional[str]]:
+    """What a status change request records of the deprecation it asks for.
+
+    The replacement's name goes with its id, so the approver sees which
+    entity it is; the id is what the approval applies.
+    """
+    data: Dict[str, Optional[str]] = {
+        'sunset_date': details.sunset_date.isoformat() if details.sunset_date else None,
+        'replacement_id': details.replacement_id,
+    }
+    if details.replacement_id:
+        replacement = db.get(_entity_model(entity_type), details.replacement_id)
+        data['replacement_name'] = getattr(replacement, 'name', None)
+    return data
+
+
 def requested_status_change_justification(
     db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
 ) -> Optional[str]:

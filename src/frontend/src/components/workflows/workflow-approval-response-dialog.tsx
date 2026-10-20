@@ -23,7 +23,6 @@ import {
 import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 
@@ -72,10 +71,54 @@ interface WorkflowApprovalResponseDialogProps {
   onDecisionMade?: () => void;
 }
 
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  data_product: 'Data Product',
+  data_contract: 'Data Contract',
+  data_domain: 'Data Domain',
+  data_asset_review: 'Data Asset Review',
+  access_grant: 'Access Grant',
+  asset: 'Asset',
+};
+
+function humanizeEntityType(entityType: string | undefined | null): string {
+  if (!entityType) return 'Entity';
+  const key = entityType.toLowerCase();
+  if (ENTITY_TYPE_LABELS[key]) return ENTITY_TYPE_LABELS[key];
+  return entityType
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 const SKIP_KEYS = new Set([
   'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
+
+function renderPayloadValue(val: unknown): string {
+  if (Array.isArray(val)) return val.join(', ');
+  if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+  return String(val);
+}
+
+/**
+ * A requested deprecation carries its replacement's name next to its id: the
+ * approver sees the name, and the id only when there is no name. Pure.
+ */
+export function withReplacementName(fullPayload: Record<string, unknown>): Record<string, unknown> {
+  const { replacement_name: name, ...rest } = fullPayload;
+  if (typeof name === 'string' && name && rest.replacement_id) {
+    const { replacement_id: _id, ...others } = rest;
+    return { ...others, replacement_name: name };
+  }
+  return rest;
+}
+
+function humanizeKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 interface DetailRow {
   label: string;
@@ -86,7 +129,6 @@ function buildDetailRows(
   payload: WorkflowApprovalResponseDialogPayload,
   onNavigate: () => void,
   t: (key: string, options?: Record<string, unknown>) => string,
-  workflowText: (text: string) => string | undefined = (text) => text,
 ): DetailRow[] {
   const rows: DetailRow[] = [];
 
@@ -109,7 +151,7 @@ function buildDetailRows(
       : undefined);
   const resourceId = payload.underlying_entity_id ?? payload.entity_id;
   if (resourceType || resourceName || resourceId) {
-    const typeLabel = approvalEntityTypeLabel(resourceType, t);
+    const typeLabel = humanizeEntityType(resourceType);
     const displayName = resourceName || resourceId || '—';
     const detailPath = getUnderlyingEntityDetailPath(
       payload as unknown as Record<string, unknown>,
@@ -150,11 +192,7 @@ function buildDetailRows(
   }
 
   if (payload.workflow_name) {
-    // A shipped default workflow's name in the user's language
-    rows.push({
-      label: t('workflows:approvalResponse.rows.workflow'),
-      value: workflowText(payload.workflow_name) ?? payload.workflow_name,
-    });
+    rows.push({ label: t('workflows:approvalResponse.rows.workflow'), value: payload.workflow_name });
   }
 
   if (payload.full_payload) {
@@ -165,12 +203,12 @@ function buildDetailRows(
       'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
     ]);
-    for (const [key, val] of Object.entries(payload.full_payload)) {
+    for (const [key, val] of Object.entries(withReplacementName(payload.full_payload))) {
       if (key.startsWith('_')) continue;
       if (SKIP_KEYS.has(key)) continue;
       if (alreadySurfaced.has(key)) continue;
       if (val === null || val === undefined || val === '') continue;
-      rows.push({ label: approvalFieldLabel(key, t), value: approvalFieldValue(key, val, resourceType, t) });
+      rows.push({ label: humanizeKey(key), value: renderPayloadValue(val) });
     }
   }
 
@@ -301,7 +339,7 @@ export default function WorkflowApprovalResponseDialog({
   const description =
     defaultText(config.description) ?? t('workflows:approvalResponse.descriptionFallback');
 
-  const detailRows = payload ? buildDetailRows(payload, () => onOpenChange(false), t, defaultText) : [];
+  const detailRows = payload ? buildDetailRows(payload, () => onOpenChange(false), t) : [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

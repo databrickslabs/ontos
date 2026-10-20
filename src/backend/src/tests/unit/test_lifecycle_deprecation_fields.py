@@ -969,3 +969,26 @@ def test_the_requested_sunset_date_and_replacement_are_stored_with_the_request(d
     assert (details.reason, details.sunset_date.isoformat(), details.replacement_id) == (
         'Superseded by v2', sunset, replacement.id,
     )
+
+
+def test_the_approver_gets_the_replacement_name_with_the_request(db_session):
+    """The approval dialog lists the request's data; the name says which product it is."""
+    from unittest.mock import MagicMock, patch
+    product, replacement = _product(db_session), _product(db_session)
+    replacement.name = 'Orders v2'
+    db_session.flush()
+    registry = MagicMock()
+    registry.on_request_status_change.return_value = []
+
+    with patch('src.common.workflow_triggers.get_trigger_registry', return_value=registry):
+        DataProductsManager(db=db_session).request_status_change(
+            db=db_session, notifications_manager=MagicMock(), product_id=product.id,
+            target_status='deprecated', justification='Superseded by v2',
+            requester_email='alice@example.com', current_user='alice',
+            replacement_id=replacement.id,
+        )
+
+    entity_data = registry.on_request_status_change.call_args.kwargs['entity_data']
+    assert (entity_data['replacement_id'], entity_data['replacement_name']) == (
+        replacement.id, 'Orders v2',
+    )

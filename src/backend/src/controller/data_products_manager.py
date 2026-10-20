@@ -1533,14 +1533,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # checked now and applied with the justification as the reason
         requested_deprecation: Dict[str, Optional[str]] = {}
         if target_status_lower == 'deprecated' and (sunset_date or replacement_id):
-            from src.controller.lifecycle_fields import check_requested_deprecation
+            from src.controller.lifecycle_fields import (
+                check_requested_deprecation, requested_deprecation_data,
+            )
             details = check_requested_deprecation(
                 db, 'data_product', product_id, justification, sunset_date, replacement_id,
             )
-            requested_deprecation = {
-                'sunset_date': details.sunset_date.isoformat() if details.sunset_date else None,
-                'replacement_id': details.replacement_id,
-            }
+            requested_deprecation = requested_deprecation_data(db, 'data_product', details)
 
         now = datetime.utcnow()
         request_id = str(uuid4())

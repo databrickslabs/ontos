@@ -454,21 +454,23 @@ class TestDataProductRoutes:
 
     def test_get_owners(self, client, sample_product_data):
         """Test GET /api/data-products/owners returns distinct owners."""
-        # Arrange - Create products with different owners
-        for owner in ["owner1@test.com", "owner2@test.com"]:
+        # Arrange - owners are the names of the ODPS team members with role "owner"
+        for owner in ["owner1@test.com", "owner2@test.com", "owner1@test.com"]:
             data = sample_product_data.copy()
             data["id"] = str(uuid.uuid4())
-            data["owner"] = owner
-            client.post("/api/data-products", json=data)
+            data["team"] = {"members": [
+                {"username": owner, "name": owner, "role": "owner"},
+                {"username": "steward@test.com", "name": "steward@test.com",
+                 "role": "data steward"},
+            ]}
+            assert client.post("/api/data-products", json=data).status_code == 201
 
         # Act
         response = client.get("/api/data-products/owners")
 
         # Assert
         assert response.status_code == 200
-        owners = response.json()
-        assert "owner1@test.com" in owners
-        assert "owner2@test.com" in owners
+        assert response.json() == ["owner1@test.com", "owner2@test.com"]
 
     def test_get_published_products(self, client, db_session):
         """GET /api/data-products/published returns products with publication_scope != none."""

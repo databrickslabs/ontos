@@ -37,7 +37,6 @@ _ODCS_NAME = (
     'the ODCS export has no root `name` since d0cd3c80 (the import reads it); '
     'needs a decision on whether the export should carry it'
 )
-_UNTRIAGED = 'fails; the cause has not been analysed yet'
 # Candidate app bugs: the test asserts the intended behaviour and fails on it.
 _NO_GROUPS = (
     'app: get_user_groups() returns [] outside LOCAL/mock mode, so an admin '
@@ -47,11 +46,13 @@ _AUDIT_UUID = (
     'app: the create route puts the new id (a UUID) in the audit details, '
     'which are not JSON serialisable, so no audit entry is written'
 )
+_ODCS_JSON_TEXT = (
+    'app: the ODCS export emits schema tags (stored as JSON text) as a string, '
+    'not as a list'
+)
 
 QUARANTINE = {
     'test_comments_routes.py::TestCommentsRoutes::test_create_comment': _NO_GROUPS,
-    'test_compliance_routes.py::TestComplianceRoutes::test_get_policies': _UNTRIAGED,
-    'test_compliance_routes.py::TestComplianceRoutes::test_update_policy': _UNTRIAGED,
     'test_costs_routes.py::TestCostsRoutes::test_create_cost_item_is_audited': _AUDIT_UUID,
     'test_costs_routes.py::TestCostsRoutes::test_delete_cost_item': _SQLITE_UUID,
     'test_costs_routes.py::TestCostsRoutes::test_update_cost_item': _SQLITE_UUID,
@@ -63,32 +64,20 @@ QUARANTINE = {
     'test_create_domain_with_nonexistent_parent_fails': _SQLITE_UUID,
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_create_domain_with_parent': (
         _SQLITE_UUID),
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_delete_domain_with_children_fails': (
-        _UNTRIAGED),
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_update_domain_change_parent': (
         _SQLITE_UUID),
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
     'test_update_domain_circular_reference_prevention': _SQLITE_UUID,
-    'test_data_product_routes.py::TestDataProductRoutes::test_get_owners': _UNTRIAGED,
-    'test_knowledge_routes.py::TestSemanticLinksAgainstConcepts::'
-    'test_create_link_persists_and_is_listable': _UNTRIAGED,
     'test_metadata_routes.py::TestMetadataRoutes::test_delete_metadata': _SQLITE_UUID,
     'test_metadata_routes.py::TestMetadataRoutes::test_update_rich_text': _SQLITE_UUID,
     'test_odcs_export_validation.py::TestODCSExportValidation::'
     'test_odcs_export_has_all_required_root_fields': _ODCS_NAME,
     'test_odcs_export_validation.py::TestODCSExportValidation::'
-    'test_odcs_export_has_complete_team_structure': _UNTRIAGED,
-    'test_odcs_export_validation.py::TestODCSExportValidation::'
-    'test_odcs_export_has_tags_and_custom_properties': _UNTRIAGED,
-    'test_odcs_export_validation.py::TestODCSExportValidation::'
-    'test_odcs_export_json_parsing_in_text_fields': _UNTRIAGED,
+    'test_odcs_export_json_parsing_in_text_fields': _ODCS_JSON_TEXT,
     'test_odcs_export_validation.py::TestODCSExportValidation::'
     'test_odcs_export_missing_fields_validation': _ODCS_NAME,
     'test_odcs_roundtrip.py::test_odcs_upload_then_export_roundtrip': _ODCS_NAME,
     'test_pr_i_partial_put.py::TestPartialPutPreservesUnmodifiedFields': _SQLITE_UUID,
-    'test_semantic_upload_integration.py::TestSemanticUploadIntegration::'
-    'test_upload_with_mixed_authoritative_definitions': _UNTRIAGED,
-    'test_teams_routes.py::TestTeamsRoutes::test_get_teams_filtered_by_domain': _UNTRIAGED,
 }
 
 

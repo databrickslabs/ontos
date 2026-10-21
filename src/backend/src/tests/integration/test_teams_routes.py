@@ -321,26 +321,31 @@ class TestTeamsRoutes:
 
     def test_get_teams_filtered_by_domain(self, client: TestClient, db_session: Session):
         """Test getting teams filtered by domain ID."""
+        from src.db_models.data_domains import DataDomain
+
+        domain = DataDomain(name="Teams Filter Domain", created_by="test@example.com")
+        db_session.add(domain)
+        db_session.flush()
+        domain_id = domain.id
+
         # Create team with domain
-        domain_id = "test-domain-id"
-        client.post("/api/teams", json={
+        created = client.post("/api/teams", json={
             "name": "Domain Team",
             "description": "Belongs to domain",
-            "domain_id": domain_id
+            "domain_ids": [domain_id],
         })
+        assert created.status_code == 201, created.text
 
         # Create standalone team
         client.post("/api/teams", json={
             "name": "Standalone Team",
             "description": "No domain",
-            "domain_id": None
         })
 
         # Filter by domain
         response = client.get(f"/api/teams?domain_id={domain_id}")
         assert response.status_code == 200
-
         data = response.json()
         assert len(data) == 1
         assert data[0]["name"] == "Domain Team"
-        assert data[0]["domain_id"] == domain_id
+        assert data[0]["domain_ids"] == [domain_id]

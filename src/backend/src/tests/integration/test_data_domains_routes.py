@@ -423,26 +423,29 @@ class TestDataDomainsRoutes:
         # Assert
         assert response.status_code == 404
 
-    def test_delete_domain_with_children_fails(self, client):
-        """Test that deleting domain with children fails."""
+    def test_delete_domain_cascades_to_children(self, client, db_session):
+        """Deleting a parent also deletes its children (cascade, see #520).
+
+        Deletion is only blocked when the domain or a descendant is an entity's
+        primary domain; children alone do not block it.
+        """
         # Arrange - Create parent with child
-        parent_response = client.post("/api/data-domains", json={
-            "name": "Parent",
-        })
-        parent_id = parent_response.json()["id"]
+        parent = seed_domain(db_session, "Parent")
+        child = seed_domain(db_session, "Child", parent)
+        parent_id, child_id = parent.id, child.id
 
-        client.post("/api/data-domains", json={
-            "name": "Child",
-            "parent_id": parent_id,
-        })
+        impact = client.get(f"/api/data-domains/{parent_id}/deletion-impact")
+        assert impact.status_code == 200
+        assert impact.json()["deletable"] is True
 
-        # Act - Try to delete parent
+        # Act - Delete parent
         response = client.delete(f"/api/data-domains/{parent_id}")
 
         # Assert
-        # Should fail or return specific status code
-        assert response.status_code in [400, 409]
-        assert "children" in response.json()["detail"].lower() or "child" in response.json()["detail"].lower()
+        assert response.status_code == 200
+        remaining = {d["id"] for d in client.get("/api/data-domains").json()}
+        assert parent_id not in remaining
+        assert child_id not in remaining
 
     def test_delete_domain_requires_admin_permission(
         self, client, mock_test_user, sample_domain_data

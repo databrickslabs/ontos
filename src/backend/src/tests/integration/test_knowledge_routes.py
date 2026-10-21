@@ -671,9 +671,10 @@ class TestSemanticLinksAgainstConcepts:
         ).json()
         assert any(item["id"] == link_id for item in by_entity)
 
-        # Lookup by IRI
-        by_iri = client.get(f"/api/semantic-links/iri/{concept_iri}").json()
-        assert any(item["id"] == link_id for item in by_iri)
+        # Lookup by IRI (query param: a path IRI loses its "//" behind proxies)
+        by_iri = client.get("/api/semantic-links/by-iri", params={"iri": concept_iri})
+        assert by_iri.status_code == 200, by_iri.text
+        assert any(item["id"] == link_id for item in by_iri.json())
 
     def test_delete_link_round_trip(
         self, client: TestClient, make_collection, db_session: Session

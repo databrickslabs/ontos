@@ -26,12 +26,19 @@ class TestComplianceRoutes:
             "is_active": True,
         }
 
-    def test_get_policies(self, client: TestClient, db_session: Session):
-        """Test getting compliance policies."""
+    def test_get_policies(self, client: TestClient, db_session: Session, sample_policy_data):
+        """Test getting compliance policies (with their summary stats)."""
+        created = client.post("/api/compliance/policies", json=sample_policy_data)
+        assert created.status_code == 200, created.text
+
         response = client.get("/api/compliance/policies")
         assert response.status_code == 200
-        # Response should be a list
-        assert isinstance(response.json(), list)
+        data = response.json()
+        names = [p["name"] for p in data["policies"]]
+        assert "Test Policy" in names
+        assert data["stats"]["active_policies"] == sum(
+            1 for p in data["policies"] if p["is_active"]
+        )
 
     def test_create_policy(self, client: TestClient, db_session: Session, sample_policy_data):
         """Test creating a compliance policy without an id — server generates the UUID (issue #235).
@@ -100,14 +107,19 @@ class TestComplianceRoutes:
         create_response = client.post("/api/compliance/policies", json=sample_policy_data)
         policy_id = create_response.json()["id"]
 
-        # Update the policy
+        # Update the policy (PUT replaces it: send the whole policy)
         update_data = {
+            **create_response.json(),
             "name": "Updated Policy Name",
             "description": "Updated description",
         }
         response = client.put(f"/api/compliance/policies/{policy_id}", json=update_data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.text
         assert response.json()["name"] == "Updated Policy Name"
+        assert response.json()["rule"] == sample_policy_data["rule"]
+
+        fetched = client.get(f"/api/compliance/policies/{policy_id}")
+        assert fetched.json()["description"] == "Updated description"
 
     def test_delete_policy(self, client: TestClient, db_session: Session, sample_policy_data):
         """Test deleting a compliance policy."""

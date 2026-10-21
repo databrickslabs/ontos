@@ -1,14 +1,22 @@
-"""Tests for manifest signing key providers."""
+"""Tests for Ed25519 manifest signing key providers.
 
-import base64
-import os
+ADR: docs/decisions/manifest-canonicalization-hashing-signing.md
+Decision 7: Keys and key providers.
+"""
+
+import hashlib
 import pytest
-from unittest.mock import MagicMock, patch, Mock
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock, patch
 
-from src.services.manifest_signing import (
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
+
+from src.common.manifest_signing import (
     SigningKeyProvider,
-    LocalFileKeyProvider,
-    DatabricksSecretScopeKeyProvider,
+    LocalDevKeyProvider,
+    DatabricksSecretKeyProvider,
     KeyProviderError,
 )
 
@@ -16,306 +24,368 @@ from src.services.manifest_signing import (
 # Test fixtures
 
 @pytest.fixture
-def valid_ed25519_key():
-    """A valid 32-byte Ed25519 private key (all zeros for testing)."""
-    return b'\x00' * 32
+def test_ed25519_key():
+    """Generate a valid Ed25519 private key for testing."""
+    return ed25519.Ed25519PrivateKey.generate()
 
 
 @pytest.fixture
-def valid_ed25519_key_b64(valid_ed25519_key):
-    """Base64-encoded Ed25519 key."""
-    return base64.b64encode(valid_ed25519_key).decode('utf-8')
+def test_ed25519_pem(test_ed25519_key):
+    """PEM-encoded Ed25519 private key."""
+    return test_ed25519_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode('utf-8')
+
+
+@pytest.fixture
+def test_ed25519_public_key_bytes(test_ed25519_key):
+    """Raw 32-byte public key from test key."""
+    public_key = test_ed25519_key.public_key()
+    return public_key.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw
+    )
+
+
+@pytest.fixture
+def test_key_id(test_ed25519_public_key_bytes):
+    """Expected key_id for test key (ed25519: + first 16 hex of sha256)."""
+    digest = hashlib.sha256(test_ed25519_public_key_bytes).hexdigest()
+    return f"ed25519:{digest[:16]}"
 
 
 @pytest.fixture
 def different_ed25519_key():
-    """A different 32-byte Ed25519 private key."""
-    return b'\xFF' * 32
+    """Generate a different Ed25519 key for testing."""
+    return ed25519.Ed25519PrivateKey.generate()
 
 
 @pytest.fixture
-def different_ed25519_key_b64(different_ed25519_key):
-    """Base64-encoded different key."""
-    return base64.b64encode(different_ed25519_key).decode('utf-8')
+def different_ed25519_pem(different_ed25519_key):
+    """PEM-encoded different Ed25519 key."""
+    return different_ed25519_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode('utf-8')
 
 
-# LocalFileKeyProvider Tests
+# LocalDevKeyProvider Tests
 
-class TestLocalFileKeyProvider:
-    """Tests for LocalFileKeyProvider."""
+class TestLocalDevKeyProvider:
+    """Tests for LocalDevKeyProvider."""
 
-    def test_initialization_success(self, valid_ed25519_key_b64, monkeypatch):
-        """Provider initializes when MANIFEST_SIGNING_KEY is set."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', valid_ed25519_key_b64)
-        provider = LocalFileKeyProvider()
+    def test_initialization_from_env_var(self, test_ed25519_pem, monkeypatch):
+        """Provider initializes when MANIFEST_SIGNING_KEY_PEM is set."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider = LocalDevKeyProvider()
         assert provider is not None
 
-    def test_get_signing_key(self, valid_ed25519_key_b64, valid_ed25519_key,
-                             monkeypatch):
-        """get_signing_key returns the key from environment."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', valid_ed25519_key_b64)
-        provider = LocalFileKeyProvider()
-        assert provider.get_signing_key() == valid_ed25519_key
+    def test_get_private_key(self, test_ed25519_pem, monkeypatch):
+        """get_private_key returns an Ed25519PrivateKey."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider = LocalDevKeyProvider()
+        key = provider.get_private_key()
+        assert isinstance(key, ed25519.Ed25519PrivateKey)
 
-    def test_get_key_id_uses_env(self, valid_ed25519_key_b64, monkeypatch):
-        """get_key_id returns MANIFEST_SIGNING_KEY_ID if set."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', valid_ed25519_key_b64)
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'my-key-2026-10-21')
-        provider = LocalFileKeyProvider()
-        assert provider.get_key_id() == 'my-key-2026-10-21'
+    def test_get_public_key_bytes(self, test_ed25519_pem, test_ed25519_public_key_bytes,
+                                   monkeypatch):
+        """get_public_key_bytes returns the correct 32-byte public key."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider = LocalDevKeyProvider()
+        pubkey1 = provider.get_public_key_bytes()
+        pubkey2 = provider.get_public_key_bytes()
+        assert len(pubkey1) == 32
+        assert pubkey1 == pubkey2
 
-    def test_get_key_id_default(self, valid_ed25519_key_b64, monkeypatch):
-        """get_key_id uses default 'local-dev' if env var not set."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', valid_ed25519_key_b64)
-        monkeypatch.delenv('MANIFEST_SIGNING_KEY_ID', raising=False)
-        provider = LocalFileKeyProvider()
-        assert provider.get_key_id() == 'local-dev'
+    def test_get_key_id_format(self, test_ed25519_pem, monkeypatch):
+        """get_key_id returns format 'ed25519:XXXXXXXXXXXXXXXX'."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider = LocalDevKeyProvider()
+        key_id = provider.get_key_id()
+        assert key_id.startswith('ed25519:')
+        assert len(key_id) == len('ed25519:') + 16
 
-    def test_get_algorithm(self, valid_ed25519_key_b64, monkeypatch):
+    def test_get_key_id_deterministic(self, test_ed25519_pem, monkeypatch):
+        """get_key_id is deterministic for the same key."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider1 = LocalDevKeyProvider()
+        key_id1 = provider1.get_key_id()
+
+        provider2 = LocalDevKeyProvider()
+        key_id2 = provider2.get_key_id()
+
+        assert key_id1 == key_id2
+
+    def test_get_algorithm(self, test_ed25519_pem, monkeypatch):
         """get_algorithm returns 'Ed25519'."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', valid_ed25519_key_b64)
-        provider = LocalFileKeyProvider()
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider = LocalDevKeyProvider()
         assert provider.get_algorithm() == 'Ed25519'
 
-    def test_missing_env_var_raises_error(self, monkeypatch):
-        """Raises KeyProviderError if MANIFEST_SIGNING_KEY not set."""
-        monkeypatch.delenv('MANIFEST_SIGNING_KEY', raising=False)
+    def test_missing_key_pem_raises_error(self, monkeypatch, tmp_path):
+        """Raises KeyProviderError if key not found in env or file."""
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PEM', raising=False)
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PATH', str(tmp_path / 'nonexistent.pem'))
         with pytest.raises(KeyProviderError) as exc_info:
-            LocalFileKeyProvider()
-        assert exc_info.value.code == 'key_provider_error'
-        assert 'MANIFEST_SIGNING_KEY' in str(exc_info.value)
-
-    def test_invalid_base64_raises_error(self, monkeypatch):
-        """Raises KeyProviderError if base64 decoding fails."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', 'not-valid-base64!!!')
-        with pytest.raises(KeyProviderError) as exc_info:
-            LocalFileKeyProvider()
+            LocalDevKeyProvider()
         assert exc_info.value.code == 'key_provider_error'
 
-    def test_wrong_key_length_raises_error(self, monkeypatch):
-        """Raises KeyProviderError if decoded key is not 32 bytes."""
-        # 16-byte key encoded as base64
-        short_key = base64.b64encode(b'\x00' * 16).decode('utf-8')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', short_key)
+    def test_invalid_pem_raises_error(self, monkeypatch):
+        """Raises KeyProviderError if PEM is invalid."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', 'not-a-valid-pem')
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
         with pytest.raises(KeyProviderError) as exc_info:
-            LocalFileKeyProvider()
+            LocalDevKeyProvider()
         assert exc_info.value.code == 'key_provider_error'
-        assert '32 bytes' in str(exc_info.value)
 
-    def test_key_id_in_params(self, valid_ed25519_key_b64, monkeypatch):
-        """KeyProviderError includes key_id in params."""
-        invalid_b64 = 'bad!!!'
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', invalid_b64)
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'test-key-id')
-        with pytest.raises(KeyProviderError):
-            LocalFileKeyProvider()
+    def test_wrong_key_type_raises_error(self, monkeypatch):
+        """Raises KeyProviderError if PEM is not Ed25519."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa_pem = rsa_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', rsa_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        with pytest.raises(KeyProviderError) as exc_info:
+            LocalDevKeyProvider()
+        assert 'not Ed25519' in str(exc_info.value)
 
-    def test_multiple_keys_different_instances(self, valid_ed25519_key_b64,
-                                               different_ed25519_key_b64,
-                                               monkeypatch):
-        """Different provider instances can have different keys."""
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', valid_ed25519_key_b64)
-        provider1 = LocalFileKeyProvider()
+    def test_initialization_from_file(self, test_ed25519_pem, monkeypatch):
+        """Provider initializes from file when env var not set."""
+        with TemporaryDirectory() as tmpdir:
+            key_file = Path(tmpdir) / 'key.pem'
+            key_file.write_text(test_ed25519_pem)
+            monkeypatch.delenv('MANIFEST_SIGNING_KEY_PEM', raising=False)
+            monkeypatch.setenv('MANIFEST_SIGNING_KEY_PATH', str(key_file))
+            provider = LocalDevKeyProvider()
+            assert provider is not None
 
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY', different_ed25519_key_b64)
-        provider2 = LocalFileKeyProvider()
+    def test_different_keys_different_key_ids(self, test_ed25519_pem,
+                                               different_ed25519_pem, monkeypatch):
+        """Different keys produce different key_ids."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider1 = LocalDevKeyProvider()
+        key_id1 = provider1.get_key_id()
 
-        assert provider1.get_signing_key() != provider2.get_signing_key()
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', different_ed25519_pem)
+        provider2 = LocalDevKeyProvider()
+        key_id2 = provider2.get_key_id()
+
+        assert key_id1 != key_id2
 
 
-# DatabricksSecretScopeKeyProvider Tests
+# DatabricksSecretKeyProvider Tests
 
-class TestDatabricksSecretScopeKeyProvider:
-    """Tests for DatabricksSecretScopeKeyProvider."""
+class TestDatabricksSecretKeyProvider:
+    """Tests for DatabricksSecretKeyProvider."""
 
     def test_initialization_missing_scope(self, monkeypatch):
         """Raises KeyProviderError if MANIFEST_SIGNING_SECRET_SCOPE not set."""
         monkeypatch.delenv('MANIFEST_SIGNING_SECRET_SCOPE', raising=False)
         monkeypatch.delenv('MANIFEST_SIGNING_SECRET_KEY', raising=False)
-        monkeypatch.delenv('MANIFEST_SIGNING_KEY_ID', raising=False)
 
         ws_client = MagicMock()
         with pytest.raises(KeyProviderError) as exc_info:
-            DatabricksSecretScopeKeyProvider(ws_client)
+            DatabricksSecretKeyProvider(ws_client)
         assert 'scope' in str(exc_info.value).lower()
 
     def test_initialization_missing_key(self, monkeypatch):
         """Raises KeyProviderError if MANIFEST_SIGNING_SECRET_KEY not set."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.delenv('MANIFEST_SIGNING_SECRET_KEY', raising=False)
-        monkeypatch.delenv('MANIFEST_SIGNING_KEY_ID', raising=False)
 
         ws_client = MagicMock()
         with pytest.raises(KeyProviderError) as exc_info:
-            DatabricksSecretScopeKeyProvider(ws_client)
+            DatabricksSecretKeyProvider(ws_client)
         assert 'secret' in str(exc_info.value).lower()
 
-    def test_initialization_missing_key_id(self, monkeypatch):
-        """Raises KeyProviderError if MANIFEST_SIGNING_KEY_ID not set."""
-        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
-        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.delenv('MANIFEST_SIGNING_KEY_ID', raising=False)
-
-        ws_client = MagicMock()
-        with pytest.raises(KeyProviderError) as exc_info:
-            DatabricksSecretScopeKeyProvider(ws_client)
-        assert 'key id' in str(exc_info.value).lower()
-
     def test_initialization_success(self, monkeypatch):
-        """Provider initializes when all env vars are set."""
+        """Provider initializes when config is set."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key-2026-10-21')
 
         ws_client = MagicMock()
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
+        provider = DatabricksSecretKeyProvider(ws_client)
         assert provider is not None
 
-    def test_get_key_id(self, monkeypatch):
-        """get_key_id returns the configured key ID."""
+    def test_get_private_key_success(self, test_ed25519_pem, monkeypatch):
+        """get_private_key retrieves and decodes the key."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key-2026-10-21')
-
-        ws_client = MagicMock()
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
-        assert provider.get_key_id() == 'prod-key-2026-10-21'
-
-    def test_get_algorithm(self, monkeypatch):
-        """get_algorithm returns 'Ed25519'."""
-        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
-        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
-
-        ws_client = MagicMock()
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
-        assert provider.get_algorithm() == 'Ed25519'
-
-    def test_get_signing_key_success_bytes(self, valid_ed25519_key_b64,
-                                           valid_ed25519_key, monkeypatch):
-        """get_signing_key retrieves and decodes the key when API returns
-        bytes."""
-        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
-        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
 
         ws_client = MagicMock()
         resp = MagicMock()
-        resp.value = valid_ed25519_key_b64.encode('utf-8')
+        resp.value = test_ed25519_pem
         ws_client.secrets.get_secret.return_value = resp
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
-        key = provider.get_signing_key()
+        provider = DatabricksSecretKeyProvider(ws_client)
+        key = provider.get_private_key()
 
-        assert key == valid_ed25519_key
+        assert isinstance(key, ed25519.Ed25519PrivateKey)
         ws_client.secrets.get_secret.assert_called_once_with(
             scope='my-scope',
             key='my-key'
         )
 
-    def test_get_signing_key_success_str(self, valid_ed25519_key_b64,
-                                         valid_ed25519_key, monkeypatch):
-        """get_signing_key handles when API returns string."""
+    def test_get_private_key_bytes_response(self, test_ed25519_pem, monkeypatch):
+        """get_private_key handles bytes response from API."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
 
         ws_client = MagicMock()
         resp = MagicMock()
-        resp.value = valid_ed25519_key_b64  # String
+        resp.value = test_ed25519_pem.encode('utf-8')
         ws_client.secrets.get_secret.return_value = resp
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
-        key = provider.get_signing_key()
+        provider = DatabricksSecretKeyProvider(ws_client)
+        key = provider.get_private_key()
 
-        assert key == valid_ed25519_key
+        assert isinstance(key, ed25519.Ed25519PrivateKey)
 
-    def test_get_signing_key_empty_secret(self, monkeypatch):
-        """Raises KeyProviderError if secret value is empty."""
+    def test_get_private_key_base64_response(self, test_ed25519_pem, monkeypatch):
+        """get_private_key auto-decodes base64 if not PEM."""
+        import base64
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
+
+        ws_client = MagicMock()
+        resp = MagicMock()
+        resp.value = base64.b64encode(test_ed25519_pem.encode('utf-8')).decode('utf-8')
+        ws_client.secrets.get_secret.return_value = resp
+
+        provider = DatabricksSecretKeyProvider(ws_client)
+        key = provider.get_private_key()
+
+        assert isinstance(key, ed25519.Ed25519PrivateKey)
+
+    def test_get_public_key_bytes(self, test_ed25519_pem, monkeypatch):
+        """get_public_key_bytes returns 32 bytes."""
+        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
+        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
+
+        ws_client = MagicMock()
+        resp = MagicMock()
+        resp.value = test_ed25519_pem
+        ws_client.secrets.get_secret.return_value = resp
+
+        provider = DatabricksSecretKeyProvider(ws_client)
+        pubkey = provider.get_public_key_bytes()
+
+        assert isinstance(pubkey, bytes)
+        assert len(pubkey) == 32
+
+    def test_get_key_id_format(self, test_ed25519_pem, monkeypatch):
+        """get_key_id returns format 'ed25519:XXXXXXXXXXXXXXXX'."""
+        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
+        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
+
+        ws_client = MagicMock()
+        resp = MagicMock()
+        resp.value = test_ed25519_pem
+        ws_client.secrets.get_secret.return_value = resp
+
+        provider = DatabricksSecretKeyProvider(ws_client)
+        key_id = provider.get_key_id()
+
+        assert key_id.startswith('ed25519:')
+        assert len(key_id) == len('ed25519:') + 16
+
+    def test_empty_secret_raises_error(self, monkeypatch):
+        """Raises KeyProviderError if secret is empty."""
+        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
+        monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
 
         ws_client = MagicMock()
         resp = MagicMock()
         resp.value = None
         ws_client.secrets.get_secret.return_value = resp
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
+        provider = DatabricksSecretKeyProvider(ws_client)
         with pytest.raises(KeyProviderError) as exc_info:
-            provider.get_signing_key()
+            provider.get_private_key()
         assert 'empty' in str(exc_info.value).lower()
 
-    def test_get_signing_key_invalid_base64(self, monkeypatch):
-        """Raises KeyProviderError if secret is not valid base64."""
+    def test_invalid_pem_raises_error(self, monkeypatch):
+        """Raises KeyProviderError if secret is not valid PEM."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
 
         ws_client = MagicMock()
         resp = MagicMock()
-        resp.value = 'not-valid-base64!!!'
+        resp.value = 'not-a-valid-pem'
         ws_client.secrets.get_secret.return_value = resp
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
+        provider = DatabricksSecretKeyProvider(ws_client)
         with pytest.raises(KeyProviderError) as exc_info:
-            provider.get_signing_key()
-        assert 'base64' in str(exc_info.value).lower()
+            provider.get_private_key()
+        assert 'valid Ed25519 PEM' in str(exc_info.value)
 
-    def test_get_signing_key_wrong_length(self, monkeypatch):
-        """Raises KeyProviderError if decoded key is not 32 bytes."""
-        short_key = base64.b64encode(b'\x00' * 16).decode('utf-8')
+    def test_wrong_key_type_raises_error(self, monkeypatch):
+        """Raises KeyProviderError if PEM is not Ed25519."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa_pem = rsa_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
 
         ws_client = MagicMock()
         resp = MagicMock()
-        resp.value = short_key
+        resp.value = rsa_pem
         ws_client.secrets.get_secret.return_value = resp
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
+        provider = DatabricksSecretKeyProvider(ws_client)
         with pytest.raises(KeyProviderError) as exc_info:
-            provider.get_signing_key()
-        assert '32 bytes' in str(exc_info.value)
+            provider.get_private_key()
+        assert 'not Ed25519' in str(exc_info.value)
 
-    def test_get_signing_key_api_error(self, monkeypatch):
+    def test_api_error_raises_error(self, monkeypatch):
         """Raises KeyProviderError if secrets API call fails."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
 
         ws_client = MagicMock()
         ws_client.secrets.get_secret.side_effect = RuntimeError('API error')
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
+        provider = DatabricksSecretKeyProvider(ws_client)
         with pytest.raises(KeyProviderError) as exc_info:
-            provider.get_signing_key()
+            provider.get_private_key()
         assert 'Failed to retrieve' in str(exc_info.value)
 
-    def test_get_signing_key_whitespace_handling(self, valid_ed25519_key_b64,
-                                                  valid_ed25519_key,
-                                                  monkeypatch):
-        """get_signing_key handles base64 with whitespace."""
-        # Add newlines as might happen from multi-line secrets
-        key_with_whitespace = f'  {valid_ed25519_key_b64}  \n'
-
+    def test_whitespace_handling(self, test_ed25519_pem, monkeypatch):
+        """get_private_key handles whitespace around PEM."""
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
         monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
-        monkeypatch.setenv('MANIFEST_SIGNING_KEY_ID', 'prod-key')
 
         ws_client = MagicMock()
         resp = MagicMock()
-        resp.value = key_with_whitespace
+        resp.value = f'  {test_ed25519_pem}  \n'
         ws_client.secrets.get_secret.return_value = resp
 
-        provider = DatabricksSecretScopeKeyProvider(ws_client)
-        key = provider.get_signing_key()
+        provider = DatabricksSecretKeyProvider(ws_client)
+        key = provider.get_private_key()
 
-        assert key == valid_ed25519_key
+        assert isinstance(key, ed25519.Ed25519PrivateKey)
 
 
-# Inheritance Tests
+# SigningKeyProvider Interface Tests
 
 class TestSigningKeyProviderInterface:
     """Tests for SigningKeyProvider abstract base class."""
@@ -326,9 +396,16 @@ class TestSigningKeyProviderInterface:
             SigningKeyProvider()
 
     def test_local_provider_is_subclass(self):
-        """LocalFileKeyProvider is a SigningKeyProvider."""
-        assert issubclass(LocalFileKeyProvider, SigningKeyProvider)
+        """LocalDevKeyProvider is a SigningKeyProvider."""
+        assert issubclass(LocalDevKeyProvider, SigningKeyProvider)
 
     def test_databricks_provider_is_subclass(self):
-        """DatabricksSecretScopeKeyProvider is a SigningKeyProvider."""
-        assert issubclass(DatabricksSecretScopeKeyProvider, SigningKeyProvider)
+        """DatabricksSecretKeyProvider is a SigningKeyProvider."""
+        assert issubclass(DatabricksSecretKeyProvider, SigningKeyProvider)
+
+    def test_algorithm_constant(self, test_ed25519_pem, monkeypatch):
+        """All providers return 'Ed25519' for algorithm."""
+        monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
+        monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
+        provider = LocalDevKeyProvider()
+        assert provider.get_algorithm() == 'Ed25519'

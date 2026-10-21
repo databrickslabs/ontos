@@ -117,14 +117,15 @@ class TestProjectsRoutes:
         assert response.status_code == 422
 
     def test_get_project_summary(self, client: TestClient, db_session: Session, sample_project_data):
-        """Test getting project summary."""
+        """Test getting project summary (GET /api/projects/summary lists every project)."""
         # Create project first
         create_response = client.post("/api/projects", json=sample_project_data)
         project_id = create_response.json()["id"]
 
         # Get project summary
-        response = client.get(f"/api/projects/{project_id}/summary")
+        response = client.get("/api/projects/summary")
         assert response.status_code == 200
-        data = response.json()
-        assert "name" in data
-
+        summary = next((p for p in response.json() if p["id"] == project_id), None)
+        assert summary is not None
+        assert summary["name"] == "Test Project"
+        assert summary["team_count"] == 0

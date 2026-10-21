@@ -29,8 +29,6 @@ _WS_GETTERS = ('get_workspace_client', 'get_obo_workspace_client')
 # Tests that fail on `development` for a known reason are skipped, so the rest of
 # the suite can run in CI. Fix and remove entries one at a time, as with the
 # unit tests' collect_ignore list.
-_NO_SUCH_ENDPOINT = 'calls an endpoint or a parameter the API does not have'
-_STALE = 'expects an older response (status code, payload or message)'
 _SQLITE_UUID = (
     'SQLite only: a UUID value is bound to a String column or a str to a Uuid '
     'column (Postgres accepts both)'
@@ -40,35 +38,27 @@ _ODCS_NAME = (
     'needs a decision on whether the export should carry it'
 )
 _UNTRIAGED = 'fails; the cause has not been analysed yet'
+# Candidate app bugs: the test asserts the intended behaviour and fails on it.
+_NO_GROUPS = (
+    'app: get_user_groups() returns [] outside LOCAL/mock mode, so an admin '
+    'gets 403 creating a global comment'
+)
+_AUDIT_UUID = (
+    'app: the create route puts the new id (a UUID) in the audit details, '
+    'which are not JSON serialisable, so no audit entry is written'
+)
 
 QUARANTINE = {
-    'test_audit_routes.py::TestAuditRoutes::test_get_audit_logs': _NO_SUCH_ENDPOINT,
-    'test_audit_routes.py::TestAuditRoutes::test_get_audit_logs_by_action': _NO_SUCH_ENDPOINT,
-    'test_audit_routes.py::TestAuditRoutes::test_get_audit_logs_by_feature': _NO_SUCH_ENDPOINT,
-    'test_audit_routes.py::TestAuditRoutes::test_get_audit_logs_by_username': _NO_SUCH_ENDPOINT,
-    'test_audit_routes.py::TestAuditRoutes::test_get_audit_logs_pagination': _NO_SUCH_ENDPOINT,
-    'test_audit_routes.py::TestAuditRoutes::test_get_audit_stats': _NO_SUCH_ENDPOINT,
-    'test_audit_routes.py::TestAuditRoutes::test_get_change_logs': _NO_SUCH_ENDPOINT,
-    'test_comments_routes.py::TestCommentsRoutes::test_create_comment': _NO_SUCH_ENDPOINT,
-    'test_comments_routes.py::TestCommentsRoutes::test_create_comment_validation_error': (
-        _NO_SUCH_ENDPOINT),
-    'test_comments_routes.py::TestCommentsRoutes::test_create_comment_with_audience': (
-        _NO_SUCH_ENDPOINT),
-    'test_comments_routes.py::TestCommentsRoutes::test_get_comments_for_entity': _NO_SUCH_ENDPOINT,
-    'test_comments_routes.py::TestCommentsRoutes::test_update_comment': _NO_SUCH_ENDPOINT,
+    'test_comments_routes.py::TestCommentsRoutes::test_create_comment': _NO_GROUPS,
     'test_compliance_routes.py::TestComplianceRoutes::test_get_policies': _UNTRIAGED,
     'test_compliance_routes.py::TestComplianceRoutes::test_update_policy': _UNTRIAGED,
-    'test_costs_routes.py::TestCostsRoutes::test_create_cost_item': _NO_SUCH_ENDPOINT,
-    'test_costs_routes.py::TestCostsRoutes::test_create_cost_validation_error': _NO_SUCH_ENDPOINT,
-    'test_costs_routes.py::TestCostsRoutes::test_get_costs_for_entity': _NO_SUCH_ENDPOINT,
-    'test_data_contracts_routes.py::TestDataContractsRoutes::test_bulk_operations': (
-        _NO_SUCH_ENDPOINT),
+    'test_costs_routes.py::TestCostsRoutes::test_create_cost_item_is_audited': _AUDIT_UUID,
+    'test_costs_routes.py::TestCostsRoutes::test_delete_cost_item': _SQLITE_UUID,
+    'test_costs_routes.py::TestCostsRoutes::test_update_cost_item': _SQLITE_UUID,
     'test_data_contracts_routes.py::TestDataContractsRoutes::test_export_contract_as_odcs_yaml': (
         _ODCS_NAME),
     'test_data_contracts_routes.py::TestDataContractsRoutes::'
     'test_export_with_missing_relationships': _ODCS_NAME,
-    'test_data_contracts_routes.py::TestDataContractsRoutes::test_list_contracts_pagination': (
-        _NO_SUCH_ENDPOINT),
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
     'test_create_domain_with_nonexistent_parent_fails': _SQLITE_UUID,
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_create_domain_with_parent': (
@@ -80,18 +70,10 @@ QUARANTINE = {
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
     'test_update_domain_circular_reference_prevention': _SQLITE_UUID,
     'test_data_product_routes.py::TestDataProductRoutes::test_get_owners': _UNTRIAGED,
-    'test_jobs_routes.py::TestJobsRoutes::test_get_workflow_installations': _NO_SUCH_ENDPOINT,
     'test_knowledge_routes.py::TestSemanticLinksAgainstConcepts::'
     'test_create_link_persists_and_is_listable': _UNTRIAGED,
-    'test_metadata_routes.py::TestMetadataRoutes::test_create_link': _NO_SUCH_ENDPOINT,
-    'test_metadata_routes.py::TestMetadataRoutes::test_create_rich_text': _NO_SUCH_ENDPOINT,
-    'test_metadata_routes.py::TestMetadataRoutes::test_create_rich_text_validation_error': (
-        _NO_SUCH_ENDPOINT),
-    'test_metadata_routes.py::TestMetadataRoutes::test_get_metadata_for_entity': _NO_SUCH_ENDPOINT,
-    'test_notifications_routes.py::TestNotificationsRoutes::test_get_notification_count': (
-        _NO_SUCH_ENDPOINT),
-    'test_notifications_routes.py::TestNotificationsRoutes::test_mark_all_as_read': (
-        _NO_SUCH_ENDPOINT),
+    'test_metadata_routes.py::TestMetadataRoutes::test_delete_metadata': _SQLITE_UUID,
+    'test_metadata_routes.py::TestMetadataRoutes::test_update_rich_text': _SQLITE_UUID,
     'test_odcs_export_validation.py::TestODCSExportValidation::'
     'test_odcs_export_has_all_required_root_fields': _ODCS_NAME,
     'test_odcs_export_validation.py::TestODCSExportValidation::'
@@ -104,20 +86,9 @@ QUARANTINE = {
     'test_odcs_export_missing_fields_validation': _ODCS_NAME,
     'test_odcs_roundtrip.py::test_odcs_upload_then_export_roundtrip': _ODCS_NAME,
     'test_pr_i_partial_put.py::TestPartialPutPreservesUnmodifiedFields': _SQLITE_UUID,
-    'test_projects_routes.py::TestProjectsRoutes::test_get_project_summary': _NO_SUCH_ENDPOINT,
-    'test_security_features_routes.py::TestSecurityFeaturesRoutes::test_enable_security_feature': (
-        _NO_SUCH_ENDPOINT),
     'test_semantic_upload_integration.py::TestSemanticUploadIntegration::'
     'test_upload_with_mixed_authoritative_definitions': _UNTRIAGED,
-    'test_tags_routes.py::TestTagsRoutes::test_assign_tag_to_entity': _NO_SUCH_ENDPOINT,
-    'test_tags_routes.py::TestTagsRoutes::test_create_tag': _STALE,
-    'test_tags_routes.py::TestTagsRoutes::test_get_tags_for_entity': _NO_SUCH_ENDPOINT,
     'test_teams_routes.py::TestTeamsRoutes::test_get_teams_filtered_by_domain': _UNTRIAGED,
-    'test_user_routes.py::TestUserRoutes::test_get_current_user': _NO_SUCH_ENDPOINT,
-    'test_user_routes.py::TestUserRoutes::test_get_user_profile': _NO_SUCH_ENDPOINT,
-    'test_user_routes.py::TestUserRoutes::test_search_users': _NO_SUCH_ENDPOINT,
-    'test_workspace_routes.py::TestWorkspaceRoutes::test_get_catalogs': _NO_SUCH_ENDPOINT,
-    'test_workspace_routes.py::TestWorkspaceRoutes::test_get_users': _NO_SUCH_ENDPOINT,
 }
 
 

@@ -14,16 +14,33 @@ class TestSecurityFeaturesRoutes:
         response = client.get("/api/security-features")
         assert response.status_code in [200, 404]
 
-    def test_enable_security_feature(self, client: TestClient, db_session: Session):
-        """Test enabling a security feature for an entity."""
+    def test_enable_security_feature(self, client: TestClient, db_session: Session, monkeypatch):
+        """Test enabling a security feature for an entity (POST /api/security-features)."""
+        from src.routes import security_features_routes
+
+        # The route module keeps the features in memory: work on a copy.
+        monkeypatch.setattr(
+            security_features_routes.manager, "features",
+            dict(security_features_routes.manager.features),
+        )
         enable_data = {
-            "entity_type": "data_product",
-            "entity_id": "test-product-123",
-            "feature": "differential_privacy",
-            "config": {},
+            "name": "Differential privacy on test product",
+            "description": "Adds noise to aggregates",
+            "type": "differential_privacy",
+            "target": "data_product:test-product-123",
+            "conditions": ["epsilon=1.0"],
+            "status": "enabled",
         }
-        response = client.post("/api/security-features/enable", json=enable_data)
-        assert response.status_code in [200, 201, 404]
+        response = client.post("/api/security-features", json=enable_data)
+        assert response.status_code == 200, response.text
+        created = response.json()
+        assert created["type"] == "differential_privacy"
+        assert created["target"] == "data_product:test-product-123"
+        assert created["status"] == "enabled"
+
+        fetched = client.get(f"/api/security-features/{created['id']}")
+        assert fetched.status_code == 200
+        assert fetched.json()["name"] == "Differential privacy on test product"
 
     def test_disable_security_feature(self, client: TestClient, db_session: Session):
         """Test disabling a security feature."""

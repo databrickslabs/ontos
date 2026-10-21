@@ -181,6 +181,46 @@ class TestIntegersOnly:
         result = canonicalize_to_string({"value": value})
         assert result == f'{{"value":{value}}}'
 
+    def test_largest_safe_integers(self):
+        """2^53 - 1 and -(2^53 - 1) are accepted."""
+        for value in (2**53 - 1, -(2**53 - 1)):
+            assert canonicalize_to_string({"value": value}) == f'{{"value":{value}}}'
+
+    @pytest.mark.parametrize("value", [2**53, -(2**53), 2**64, -(2**70)])
+    def test_integer_out_of_range_top_level(self, value):
+        """Integers with absolute value >= 2^53 are rejected, with the path."""
+        with pytest.raises(CanonicalizationError) as exc:
+            canonicalize(value)
+        assert exc.value.code == "integer_out_of_range"
+        assert exc.value.path == "$"
+
+    @pytest.mark.parametrize("value", [2**53, -(2**53)])
+    def test_integer_out_of_range_in_dict(self, value):
+        """Out-of-range integer nested in a dict reports its path."""
+        with pytest.raises(CanonicalizationError) as exc:
+            canonicalize({"a": {"b": value}})
+        assert exc.value.code == "integer_out_of_range"
+        assert exc.value.path == "$.a.b"
+        assert "at $.a.b" in str(exc.value)
+
+    @pytest.mark.parametrize("value", [2**53, -(2**53)])
+    def test_integer_out_of_range_in_list(self, value):
+        """Out-of-range integer nested in a list reports its path."""
+        with pytest.raises(CanonicalizationError) as exc:
+            canonicalize_to_string({"items": [1, {"n": [0, value]}]})
+        assert exc.value.code == "integer_out_of_range"
+        assert exc.value.path == "$.items[1].n[1]"
+
+    def test_booleans_are_not_range_checked(self):
+        """bool stays a boolean, not an integer."""
+        assert canonicalize_to_string({"a": True, "b": False}) == '{"a":true,"b":false}'
+
+    def test_encoder_guards_direct_use(self):
+        """The encoder rejects an out-of-range integer even without the pre-check."""
+        with pytest.raises(CanonicalizationError) as exc:
+            CanonicalJSONEncoder().encode([2**53])
+        assert exc.value.code == "integer_out_of_range"
+
 
 class TestBasicTypes:
     """Test handling of basic JSON types."""

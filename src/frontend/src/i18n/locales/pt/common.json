@@ -750,6 +750,12 @@
     "detailsFailed": "Falha ao buscar detalhes do usuário",
     "loadFailed": "Falha ao carregar dados do perfil"
   },
+  "importSummary": {
+    "created": "Criados: {{created}}.",
+    "createdSkipped": "Criados: {{created}}, ignorados: {{skipped}}.",
+    "createdFailed": "Criados: {{created}}, com falha: {{failed}}.",
+    "createdSkippedFailed": "Criados: {{created}}, ignorados: {{skipped}}, com falha: {{failed}}."
+  },
   "deprecation": {
     "reason": "Motivo da descontinuação",
     "reasonPlaceholder": "Por que está sendo descontinuado? Os consumidores verão este texto.",

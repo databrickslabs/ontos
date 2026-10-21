@@ -750,6 +750,12 @@
     "detailsFailed": "Échec de la récupération des détails de l'utilisateur",
     "loadFailed": "Échec du chargement des données de profil"
   },
+  "importSummary": {
+    "created": "Créés : {{created}}.",
+    "createdSkipped": "Créés : {{created}}, ignorés : {{skipped}}.",
+    "createdFailed": "Créés : {{created}}, en échec : {{failed}}.",
+    "createdSkippedFailed": "Créés : {{created}}, ignorés : {{skipped}}, en échec : {{failed}}."
+  },
   "deprecation": {
     "reason": "Motif de dépréciation",
     "reasonPlaceholder": "Pourquoi est-il déprécié ? Les consommateurs verront ce texte.",

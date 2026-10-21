@@ -206,8 +206,8 @@
   },
   "lifecycle": {
     "deprecation": {
-      "title": "Produit déprécié",
-      "description": "Le produit de données « {{productName}} » a été marqué comme déprécié. Prévoyez la migration vers une alternative ou contactez le responsable."
+      "title": "Produit obsolète",
+      "description": "Le produit de données « {{productName}} » a été marqué comme obsolète. Prévoyez la migration vers une alternative ou contactez le responsable."
     },
     "retirement": {
       "title": "Produit retiré",

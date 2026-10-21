@@ -25,8 +25,8 @@ describe('lifecycle notifications', () => {
   it('renders a deprecation notice in Portuguese', async () => {
     await i18n.changeLanguage('pt');
     const n = notice('deprecation', "Product 'Vendas' has been deprecated");
-    expect(notificationTitle(n, i18n.t)).toBe('Produto descontinuado');
-    expect(notificationDescription(n, i18n.t)).toContain("'Vendas' foi marcado como descontinuado");
+    expect(notificationTitle(n, i18n.t)).toBe('Produto obsoleto');
+    expect(notificationDescription(n, i18n.t)).toContain("'Vendas' foi marcado como obsoleto");
   });
 
   it('renders a deletion notice in Portuguese', async () => {

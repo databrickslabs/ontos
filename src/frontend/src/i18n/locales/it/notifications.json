@@ -206,8 +206,8 @@
   },
   "lifecycle": {
     "deprecation": {
-      "title": "Prodotto deprecato",
-      "description": "Il prodotto dati '{{productName}}' è stato contrassegnato come deprecato. Pianifica la migrazione a un'alternativa o contatta il responsabile."
+      "title": "Prodotto obsoleto",
+      "description": "Il prodotto dati '{{productName}}' è stato contrassegnato come obsoleto. Pianifica la migrazione a un'alternativa o contatta il responsabile."
     },
     "retirement": {
       "title": "Prodotto ritirato",

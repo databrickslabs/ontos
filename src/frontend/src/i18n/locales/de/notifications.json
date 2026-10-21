@@ -210,8 +210,8 @@
       "description": "Das Datenprodukt '{{productName}}' wurde als veraltet markiert. Planen Sie die Migration auf eine Alternative oder wenden Sie sich an den Verantwortlichen."
     },
     "retirement": {
-      "title": "Produkt eingestellt",
-      "description": "Das Datenprodukt '{{productName}}' wurde eingestellt und ist nicht mehr verfügbar. Falls Sie es genutzt haben, wechseln Sie umgehend auf eine Alternative."
+      "title": "Produkt stillgelegt",
+      "description": "Das Datenprodukt '{{productName}}' wurde stillgelegt und ist nicht mehr verfügbar. Falls Sie es genutzt haben, wechseln Sie umgehend auf eine Alternative."
     },
     "deletion": {
       "title": "Produkt gelöscht",

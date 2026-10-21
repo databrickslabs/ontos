@@ -13,6 +13,26 @@ export const PRODUCT_NOT_SUBSCRIBABLE = 'product_not_subscribable';
  * the API sent it, and `fallback` when it sent none.
  */
 export function subscribeErrorText(detail: unknown, t: TFunction, fallback: string): string {
+  return subscribeCodedErrorText(detail, t, fallback);
+}
+
+/**
+ * The same for an `ApiResponse` of `useApi` (`error`, `errorCode`, `errorParams`),
+ * which carries the parts of the coded `detail` separately.
+ */
+export function subscribeResponseErrorText(
+  response: { error?: string | null; errorCode?: string | null; errorParams?: Record<string, unknown> | null },
+  t: TFunction,
+  fallback: string,
+): string {
+  return subscribeCodedErrorText(
+    { code: response.errorCode, message: response.error, params: response.errorParams },
+    t,
+    fallback,
+  );
+}
+
+function subscribeCodedErrorText(detail: unknown, t: TFunction, fallback: string): string {
   if (typeof detail === 'string') return detail || fallback;
   if (!detail || typeof detail !== 'object') return fallback;
   const { code, message, params } = detail as {

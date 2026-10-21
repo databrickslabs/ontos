@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import i18n from '@/i18n/config';
-import { subscribeErrorText } from './subscribe-error';
+import { subscribeErrorText, subscribeResponseErrorText } from './subscribe-error';
 
 afterEach(async () => {
   await i18n.changeLanguage('en');
@@ -33,5 +33,18 @@ describe('subscribeErrorText', () => {
     expect(subscribeErrorText({ code: 'x', message: 'Other' }, i18n.t, 'fb')).toBe('Other');
     expect(subscribeErrorText('Plain', i18n.t, 'fb')).toBe('Plain');
     expect(subscribeErrorText(undefined, i18n.t, 'fb')).toBe('fb');
+  });
+});
+
+describe('subscribeResponseErrorText', () => {
+  it('translates a useApi error response in Portuguese', async () => {
+    await i18n.changeLanguage('pt');
+    const text = subscribeResponseErrorText(
+      { error: detail.message, errorCode: detail.code, errorParams: detail.params },
+      i18n.t,
+      'fb',
+    );
+    expect(text).toContain("Não é possível assinar 'Old Product'");
+    expect(text).toContain("'Obsoleto'");
   });
 });

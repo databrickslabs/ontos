@@ -206,8 +206,8 @@
   },
   "lifecycle": {
     "deprecation": {
-      "title": "Produto descontinuado",
-      "description": "O produto de dados '{{productName}}' foi marcado como descontinuado. Planeje a migração para uma alternativa ou fale com o responsável."
+      "title": "Produto obsoleto",
+      "description": "O produto de dados '{{productName}}' foi marcado como obsoleto. Planeje a migração para uma alternativa ou fale com o responsável."
     },
     "retirement": {
       "title": "Produto aposentado",

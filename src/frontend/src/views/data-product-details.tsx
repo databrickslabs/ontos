@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { deleteOrThrow } from '@/lib/delete-or-throw';
+import { subscribeResponseErrorText } from '@/lib/subscribe-error';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DataProduct, InputPort, OutputPort, ManagementPort, TeamMember, Support, SubscriptionResponse, SubscribersListResponse } from '@/types/data-product';
@@ -811,6 +812,14 @@ export default function DataProductDetails() {
     setSubscriptionLoading(true);
     try {
       const response = await post<SubscriptionResponse>(`/api/data-products/${productId}/subscribe`, {});
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: subscribeResponseErrorText(response, t, 'Failed to subscribe'),
+          variant: 'destructive',
+        });
+        return;
+      }
       if (response.data) {
         setSubscriptionStatus(response.data);
         toast({ title: t('data-products:details.toasts.subscribedTitle'), description: t('data-products:details.toasts.subscribedMessage') });

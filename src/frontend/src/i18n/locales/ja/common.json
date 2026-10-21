@@ -750,6 +750,12 @@
     "detailsFailed": "ユーザー詳細の取得に失敗しました",
     "loadFailed": "プロフィールデータの読み込みに失敗しました"
   },
+  "importSummary": {
+    "created": "作成: {{created}} 件。",
+    "createdSkipped": "作成: {{created}} 件、スキップ: {{skipped}} 件。",
+    "createdFailed": "作成: {{created}} 件、失敗: {{failed}} 件。",
+    "createdSkippedFailed": "作成: {{created}} 件、スキップ: {{skipped}} 件、失敗: {{failed}} 件。"
+  },
   "deprecation": {
     "reason": "非推奨の理由",
     "reasonPlaceholder": "非推奨にする理由。利用者に表示されます。",

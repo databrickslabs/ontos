@@ -750,6 +750,12 @@
     "detailsFailed": "No se pudieron obtener los detalles del usuario",
     "loadFailed": "No se pudieron cargar los datos del perfil"
   },
+  "importSummary": {
+    "created": "Creados: {{created}}.",
+    "createdSkipped": "Creados: {{created}}, omitidos: {{skipped}}.",
+    "createdFailed": "Creados: {{created}}, con error: {{failed}}.",
+    "createdSkippedFailed": "Creados: {{created}}, omitidos: {{skipped}}, con error: {{failed}}."
+  },
   "deprecation": {
     "reason": "Motivo de la obsolescencia",
     "reasonPlaceholder": "¿Por qué queda obsoleto? Los consumidores verán este texto.",

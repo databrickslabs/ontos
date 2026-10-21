@@ -750,6 +750,12 @@
     "detailsFailed": "Failed to fetch user details",
     "loadFailed": "Failed to load profile data"
   },
+  "importSummary": {
+    "created": "Created: {{created}}.",
+    "createdSkipped": "Created: {{created}}, skipped: {{skipped}}.",
+    "createdFailed": "Created: {{created}}, failed: {{failed}}.",
+    "createdSkippedFailed": "Created: {{created}}, skipped: {{skipped}}, failed: {{failed}}."
+  },
   "deprecation": {
     "reason": "Deprecation reason",
     "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",

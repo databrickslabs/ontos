@@ -184,8 +184,9 @@ export function useMergedMetadata(
         params.set('contract_ids', contractIds.join(','));
       }
       params.set('max_level', String(maxLevel));
+      params.set('entity_id', entityId);
       
-      const resp = await fetch(`/api/entities/${entityType}/${entityId}/metadata/merged?${params.toString()}`);
+      const resp = await fetch(`/api/entities/${entityType}/metadata/merged?${params.toString()}`);
       if (!resp.ok) throw new Error(`merged metadata ${resp.status}`);
       
       const data: MergedMetadataResponse = await resp.json();
@@ -272,7 +273,7 @@ export async function attachSharedAsset(
   assetId: string,
   levelOverride?: number
 ): Promise<MetadataAttachment> {
-  const resp = await fetch(`/api/entities/${entityType}/${entityId}/attachments`, {
+  const resp = await fetch(`/api/entities/${entityType}/attachments?entity_id=${encodeURIComponent(entityId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
@@ -294,7 +295,7 @@ export async function detachSharedAsset(
   assetType: 'rich_text' | 'link' | 'document',
   assetId: string
 ): Promise<void> {
-  const resp = await fetch(`/api/entities/${entityType}/${entityId}/attachments/${assetType}/${assetId}`, {
+  const resp = await fetch(`/api/entities/${entityType}/attachments/${assetType}/${encodeURIComponent(assetId)}?entity_id=${encodeURIComponent(entityId)}`, {
     method: 'DELETE',
   });
   if (!resp.ok && resp.status !== 404) throw new Error('Failed to detach shared asset');

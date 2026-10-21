@@ -63,10 +63,6 @@ QUARANTINE = {
     'test_costs_routes.py::TestCostsRoutes::test_get_costs_for_entity': _NO_SUCH_ENDPOINT,
     'test_data_contracts_routes.py::TestDataContractsRoutes::test_bulk_operations': (
         _NO_SUCH_ENDPOINT),
-    'test_data_contracts_routes.py::TestDataContractsRoutes::test_create_contract_basic': _STALE,
-    'test_data_contracts_routes.py::TestDataContractsRoutes::'
-    'test_create_contract_duplicate_name_version': _STALE,
-    'test_data_contracts_routes.py::TestDataContractsRoutes::test_delete_contract': _STALE,
     'test_data_contracts_routes.py::TestDataContractsRoutes::test_export_contract_as_odcs_yaml': (
         _ODCS_NAME),
     'test_data_contracts_routes.py::TestDataContractsRoutes::'
@@ -77,7 +73,6 @@ QUARANTINE = {
     'test_create_domain_with_nonexistent_parent_fails': _SQLITE_UUID,
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_create_domain_with_parent': (
         _SQLITE_UUID),
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_delete_domain_success': _STALE,
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_delete_domain_with_children_fails': (
         _UNTRIAGED),
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_get_child_domains': _SQLITE_UUID,
@@ -90,10 +85,7 @@ QUARANTINE = {
         _SQLITE_UUID),
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
     'test_update_domain_circular_reference_prevention': _SQLITE_UUID,
-    'test_data_product_routes.py::TestDataProductRoutes::test_create_product_duplicate_id': _STALE,
     'test_data_product_routes.py::TestDataProductRoutes::test_get_owners': _UNTRIAGED,
-    'test_data_product_routes.py::TestDataProductRoutes::test_get_statuses': _STALE,
-    'test_data_product_routes.py::TestDataProductRoutes::test_publish_product_success': _STALE,
     'test_jobs_routes.py::TestJobsRoutes::test_get_workflow_installations': _NO_SUCH_ENDPOINT,
     'test_knowledge_routes.py::TestSemanticLinksAgainstConcepts::'
     'test_create_link_persists_and_is_listable': _UNTRIAGED,
@@ -123,17 +115,10 @@ QUARANTINE = {
         _NO_SUCH_ENDPOINT),
     'test_semantic_upload_integration.py::TestSemanticUploadIntegration::'
     'test_upload_with_mixed_authoritative_definitions': _UNTRIAGED,
-    'test_settings_routes.py::test_get_settings': _STALE,
     'test_tags_routes.py::TestTagsRoutes::test_assign_tag_to_entity': _NO_SUCH_ENDPOINT,
     'test_tags_routes.py::TestTagsRoutes::test_create_tag': _STALE,
     'test_tags_routes.py::TestTagsRoutes::test_get_tags_for_entity': _NO_SUCH_ENDPOINT,
-    'test_teams_routes.py::TestTeamsRoutes::test_add_team_member': _STALE,
-    'test_teams_routes.py::TestTeamsRoutes::test_add_team_member_duplicate': _STALE,
-    'test_teams_routes.py::TestTeamsRoutes::test_add_team_member_team_not_found': _STALE,
-    'test_teams_routes.py::TestTeamsRoutes::test_get_team_members': _STALE,
     'test_teams_routes.py::TestTeamsRoutes::test_get_teams_filtered_by_domain': _UNTRIAGED,
-    'test_teams_routes.py::TestTeamsRoutes::test_remove_team_member': _STALE,
-    'test_teams_routes.py::TestTeamsRoutes::test_update_team_member': _STALE,
     'test_user_routes.py::TestUserRoutes::test_get_current_user': _NO_SUCH_ENDPOINT,
     'test_user_routes.py::TestUserRoutes::test_get_user_profile': _NO_SUCH_ENDPOINT,
     'test_user_routes.py::TestUserRoutes::test_search_users': _NO_SUCH_ENDPOINT,

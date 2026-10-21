@@ -217,14 +217,14 @@ class TestDataContractsRoutes:
     def test_create_contract_basic(self, client: TestClient, db_session: Session, sample_contract_data):
         """Test creating a basic contract."""
         response = client.post("/api/data-contracts", json=sample_contract_data)
-        assert response.status_code == 201
+        assert response.status_code == 200
 
         data = response.json()
         assert data["name"] == "Test Contract"
         assert data["version"] == "1.0.0"
         assert data["status"] == "draft"
         assert "id" in data
-        assert "created_at" in data
+        assert data["created"]
 
         # Verify it's in the database
         contract = db_session.query(DataContractDb).filter_by(name="Test Contract").first()
@@ -235,12 +235,12 @@ class TestDataContractsRoutes:
         """Test creating contract with duplicate name and version should fail."""
         # Create first contract
         response1 = client.post("/api/data-contracts", json=sample_contract_data)
-        assert response1.status_code == 201
+        assert response1.status_code == 200
 
         # Try to create duplicate
         response2 = client.post("/api/data-contracts", json=sample_contract_data)
-        assert response2.status_code == 400
-        assert "already exists" in response2.json()["detail"]
+        assert response2.status_code == 409
+        assert "already exists" in str(response2.json()["detail"])
 
     def test_get_contract_by_id(self, client: TestClient, db_session: Session, sample_contract_data):
         """Test getting a contract by ID."""
@@ -304,7 +304,7 @@ class TestDataContractsRoutes:
 
         # Delete contract
         response = client.delete(f"/api/data-contracts/{contract_id}")
-        assert response.status_code == 200
+        assert response.status_code == 204
 
         # Verify it's deleted
         get_response = client.get(f"/api/data-contracts/{contract_id}")

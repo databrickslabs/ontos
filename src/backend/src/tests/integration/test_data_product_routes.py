@@ -123,16 +123,26 @@ class TestDataProductRoutes:
         assert response.status_code == 422
 
     def test_create_product_duplicate_id(self, client, sample_product_data):
-        """Test that duplicate ID returns 409 conflict."""
-        # Arrange - Create first product
-        client.post("/api/data-products", json=sample_product_data)
+        """A payload id that is already taken is not adopted (#853).
 
-        # Act - Try to create duplicate
+        The first product keeps the id; the second gets a fresh server-side one.
+        """
+        # Arrange - Create first product
+        first = client.post("/api/data-products", json=sample_product_data)
+        assert first.status_code == 201
+        assert first.json()["id"] == sample_product_data["id"]
+
+        # Act - Post the same id again
         response = client.post("/api/data-products", json=sample_product_data)
 
         # Assert
-        assert response.status_code == 409
-        assert "already exists" in response.json()["detail"]
+        assert response.status_code == 201
+        second_id = response.json()["id"]
+        assert second_id != sample_product_data["id"]
+        uuid.UUID(second_id)
+        listed = client.get(f"/api/data-products/{sample_product_data['id']}")
+        assert listed.status_code == 200
+        assert listed.json()["name"] == sample_product_data["name"]
 
     def test_create_product_requires_write_permission(
         self, client, mock_test_user, sample_product_data
@@ -361,14 +371,20 @@ class TestDataProductRoutes:
 
         assert response.status_code == 202
 
-    def test_publish_product_success(self, client, sample_product_data):
+    def test_publish_product_success(self, client, db_session, sample_product_data):
         """Test POST /api/data-products/{id}/publish."""
-        # Arrange
-        sample_product_data["status"] = "proposed"
+        from src.db_models.data_contracts import DataContractDb
+
+        # Arrange - publishing needs every output port's contract approved or active
+        contract = DataContractDb(name="Publish Contract", version="1.0.0", status="active")
+        db_session.add(contract)
+        db_session.flush()
+        # ODPS lifecycle: only an approved product is published (approved -> active)
+        sample_product_data["status"] = "approved"
         sample_product_data["outputPorts"] = [{
             "name": "test-output",
             "version": "1.0.0",
-            "contractId": "test-contract"
+            "contractId": contract.id
         }]
         create_response = client.post("/api/data-products", json=sample_product_data)
         product_id = create_response.json()["id"]
@@ -413,17 +429,19 @@ class TestDataProductRoutes:
     # Utility Endpoints
     # =================================================================
 
-    def test_get_statuses(self, client):
-        """Test GET /api/data-products/statuses returns all status values."""
+    def test_get_statuses(self, client, sample_product_data):
+        """Test GET /api/data-products/statuses returns the statuses in use."""
+        # Arrange - the route lists the distinct statuses of stored products
+        for status in ("draft", "proposed", "draft"):
+            data = {**sample_product_data, "id": str(uuid.uuid4()), "status": status}
+            assert client.post("/api/data-products", json=data).status_code == 201
+
         # Act
         response = client.get("/api/data-products/statuses")
 
         # Assert
         assert response.status_code == 200
-        statuses = response.json()
-        assert isinstance(statuses, list)
-        assert "draft" in statuses
-        assert "active" in statuses
+        assert response.json() == ["draft", "proposed"]
 
     def test_get_types(self, client):
         """Test GET /api/data-products/types returns product types."""

@@ -390,15 +390,17 @@ class TestDataDomainsRoutes:
         # Act
         response = client.delete(f"/api/data-domains/{domain_id}")
 
-        # Assert
-        assert response.status_code == 204
+        # Assert - the route answers 200 with the deleted domain
+        assert response.status_code == 200
+        assert response.json()["id"] == domain_id
+
+        # Verify audit log (before the 404 below: an error response rolls back
+        # the request session, which in this harness is the test's transaction)
+        verify_audit_log("data-domains", "DELETE", success=True)
 
         # Verify deletion
         get_response = client.get(f"/api/data-domains/{domain_id}")
         assert get_response.status_code == 404
-
-        # Verify audit log
-        verify_audit_log("data-domains", "DELETE", success=True)
 
     def test_delete_domain_not_found(self, client):
         """Test deleting non-existent domain returns 404."""

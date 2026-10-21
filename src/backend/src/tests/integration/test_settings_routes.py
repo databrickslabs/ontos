@@ -50,23 +50,15 @@ def test_get_settings(client: TestClient):
     response_data = response.json()
 
     # Check for top-level keys
-    assert "job_clusters" in response_data
     assert "current_settings" in response_data
-    assert "available_jobs" in response_data
+    assert "available_workflows" in response_data
+    assert response_data["job_cluster_id"] is None
+    assert response_data["enabled_jobs"] == []
 
-    # Check job_clusters (mocked to be empty)
-    assert response_data["job_clusters"] == []
-
-    # Check available_jobs (based on SettingsManager._available_jobs)
-    # This list might change, so it's good to be aware if this test breaks due to it.
-    expected_available_jobs = [
-        'data_contracts',
-        'business_glossaries',
-        'entitlements',
-        'mdm_jobs',
-        'catalog_commander_jobs'
-    ]
-    assert response_data["available_jobs"] == expected_available_jobs
+    # Check available_workflows (the workflows the app can install)
+    workflows = response_data["available_workflows"]
+    assert all(w["id"] and w["name"] for w in workflows)
+    assert "compliance_checks" in [w["id"] for w in workflows]
 
     # Check current_settings (based on test_settings fixture and Settings.to_dict())
     current_settings = response_data["current_settings"]

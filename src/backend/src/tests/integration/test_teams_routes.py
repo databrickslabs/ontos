@@ -19,9 +19,9 @@ class TestTeamsRoutes:
     def sample_team_member_data(self):
         """Sample team member data for testing."""
         return {
+            "member_type": "user",
             "member_identifier": "test.member@example.com",
-            "role": "Developer",
-            "start_date": "2024-01-01"
+            "app_role_override": "Data Producer",
         }
 
     # Team CRUD Tests
@@ -208,7 +208,8 @@ class TestTeamsRoutes:
 
         data = response.json()
         assert data["member_identifier"] == "test.member@example.com"
-        assert data["role"] == "Developer"
+        assert data["member_type"] == "user"
+        assert data["app_role_override"] == "Data Producer"
         assert "id" in data
 
     def test_add_team_member_duplicate(self, client: TestClient, db_session: Session, sample_team_data, sample_team_member_data):
@@ -254,12 +255,12 @@ class TestTeamsRoutes:
         member_id = member_response.json()["id"]
 
         # Update member
-        update_data = {"role": "Senior Developer"}
+        update_data = {"app_role_override": "Data Steward"}
         response = client.put(f"/api/teams/{team_id}/members/{member_id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
-        assert data["role"] == "Senior Developer"
+        assert data["app_role_override"] == "Data Steward"
 
     def test_update_team_member_not_found(self, client: TestClient, db_session: Session, sample_team_data):
         """Test updating non-existent team member."""
@@ -268,7 +269,7 @@ class TestTeamsRoutes:
         team_id = create_response.json()["id"]
 
         # Try to update non-existent member
-        update_data = {"role": "New Role"}
+        update_data = {"app_role_override": "Data Steward"}
         response = client.put(f"/api/teams/{team_id}/members/non-existent-id", json=update_data)
         assert response.status_code == 404
 

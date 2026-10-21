@@ -41,4 +41,11 @@ describe('lifecycle notifications', () => {
     expect(notificationTitle(n, i18n.t)).toBe('Product retired');
     expect(notificationDescription(n, i18n.t)).toContain("'Vendas' has been retired");
   });
+
+  it('renders an activation and a certification notice in Portuguese', async () => {
+    await i18n.changeLanguage('pt');
+    expect(notificationTitle(notice('activation', 'x'), i18n.t)).toBe('Produto ativado');
+    expect(notificationDescription(notice('certification', 'x'), i18n.t))
+      .toContain("'Vendas' obteve o status certificado");
+  });
 });

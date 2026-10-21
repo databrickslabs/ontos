@@ -90,26 +90,31 @@ class TestSubscriberNotices:
         manager.subscribe(product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session)
         return product_id
 
-    @pytest.mark.parametrize('new_status,key', [('deprecated', 'deprecation'),
-                                                ('retired', 'retirement')])
+    @pytest.mark.parametrize('new_status,key,kind', [
+        ('deprecated', 'deprecation', 'WARNING'),
+        ('retired', 'retirement', 'ACTION_REQUIRED'),
+        ('active', 'activation', 'INFO'),
+        ('certified', 'certification', 'SUCCESS'),
+    ])
     def test_status_change_notifies_with_i18n_keys(
-        self, manager, make_product, db_session, notifications, new_status, key
+        self, manager, make_product, db_session, notifications, new_status, key, kind
     ):
         product_id = self._subscribed(manager, make_product, db_session)
 
         manager._notify_subscribers_of_status_change(
             product_id=product_id, product_name='Active Product',
-            old_status='active', new_status=new_status,
+            old_status='draft', new_status=new_status,
         )
 
         (notification,) = _sent(notifications)
         assert notification.recipient == SUBSCRIBER
+        assert notification.type.name == kind
         i18n = notification.data['i18n']
         assert i18n['title'] == f'notifications:lifecycle.{key}.title'
         assert i18n['description'] == f'notifications:lifecycle.{key}.description'
         assert i18n['params']['productName'] == 'Active Product'
 
-    @pytest.mark.parametrize('new_status', ['active', 'certified', 'draft'])
+    @pytest.mark.parametrize('new_status', ['draft', 'proposed', 'under_review', 'approved'])
     def test_other_status_changes_do_not_notify(
         self, manager, make_product, db_session, notifications, new_status
     ):

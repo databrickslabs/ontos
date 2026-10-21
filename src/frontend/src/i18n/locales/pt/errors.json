@@ -26,6 +26,6 @@
   },
   "internalError": "Ocorreu um erro inesperado. Os detalhes estão no log do servidor (id do erro {{errorId}}).",
   "subscription": {
-    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+    "productNotSubscribable": "Não é possível assinar '{{productName}}': o status é '{{status}}'. Apenas produtos ativos ou certificados aceitam novas assinaturas."
   }
 }

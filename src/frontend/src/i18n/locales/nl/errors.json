@@ -26,6 +26,6 @@
   },
   "internalError": "Er is een onverwachte fout opgetreden. De details staan in het serverlogboek (fout-id {{errorId}}).",
   "subscription": {
-    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+    "productNotSubscribable": "U kunt zich niet abonneren op '{{productName}}': de status is '{{status}}'. Alleen actieve of gecertificeerde producten accepteren nieuwe abonnementen."
   }
 }

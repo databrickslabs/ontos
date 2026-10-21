@@ -207,15 +207,15 @@
   "lifecycle": {
     "deprecation": {
       "title": "Product deprecated",
-      "description": "The data product '{{productName}}' has been marked as deprecated. {{reason}}{{sunsetDate}} Please contact the owner for information about the replacement.{{replacementProductName}}"
+      "description": "The data product '{{productName}}' has been marked as deprecated. Please plan your migration to an alternative or contact the owner."
     },
     "retirement": {
       "title": "Product retired",
-      "description": "The data product '{{productName}}' has been retired and is no longer available. If you were using this product, please migrate to an alternative immediately.{{replacementProductName}}"
+      "description": "The data product '{{productName}}' has been retired and is no longer available. If you were using it, please migrate to an alternative immediately."
     },
     "deletion": {
       "title": "Product deleted",
-      "description": "The data product '{{productName}}' has been deleted{{deletedBy}}{{replacementProductName}}."
+      "description": "The data product '{{productName}}' has been deleted."
     }
   }
 }

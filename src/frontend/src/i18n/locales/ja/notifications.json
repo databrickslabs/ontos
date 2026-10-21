@@ -206,16 +206,16 @@
   },
   "lifecycle": {
     "deprecation": {
-      "title": "Product deprecated",
-      "description": "The data product '{{productName}}' has been marked as deprecated. {{reason}}{{sunsetDate}} Please contact the owner for information about the replacement.{{replacementProductName}}"
+      "title": "プロダクトが非推奨になりました",
+      "description": "データプロダクト「{{productName}}」は非推奨に設定されました。代替への移行を計画するか、オーナーにお問い合わせください。"
     },
     "retirement": {
-      "title": "Product retired",
-      "description": "The data product '{{productName}}' has been retired and is no longer available. If you were using this product, please migrate to an alternative immediately.{{replacementProductName}}"
+      "title": "プロダクトが廃止されました",
+      "description": "データプロダクト「{{productName}}」は廃止され、利用できなくなりました。ご利用中の場合は、直ちに代替へ移行してください。"
     },
     "deletion": {
-      "title": "Product deleted",
-      "description": "The data product '{{productName}}' has been deleted{{deletedBy}}{{replacementProductName}}."
+      "title": "プロダクトが削除されました",
+      "description": "データプロダクト「{{productName}}」は削除されました。"
     }
   }
 }

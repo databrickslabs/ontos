@@ -26,7 +26,6 @@
   },
   "internalError": "An unexpected error occurred. The details are in the server log (error id {{errorId}}).",
   "subscription": {
-    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+    "productNotSubscribable": "Cannot subscribe to '{{productName}}': its status is '{{status}}'. Only active or certified products accept new subscriptions."
   }
 }
-

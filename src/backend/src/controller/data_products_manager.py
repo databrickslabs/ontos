@@ -4549,8 +4549,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Create i18n data
             i18n_data = notification_i18n_data(
-                title_key='notifications:lifecycle:deletion.title',
-                description_key='notifications:lifecycle:deletion.description',
+                title_key='notifications:lifecycle.deletion.title',
+                description_key='notifications:lifecycle.deletion.description',
                 **i18n_params
             )
 
@@ -4563,7 +4563,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     f"{'by ' + deleted_by if deleted_by else 'recently'}."
                 ),
                 notification_type='ACTION_REQUIRED',
-                link=None,
+                link="/data-products",
                 data=i18n_data
             )
             logger.info(f"Notified {count} subscribers about product {product_id} deletion")
@@ -4649,8 +4649,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "The data product has been marked as deprecated. "
                     "Please plan to migrate to an alternative or contact the owner for information."
                 ),
-                'title_key': 'notifications:lifecycle:deprecation.title',
-                'description_key': 'notifications:lifecycle:deprecation.description',
+                'title_key': 'notifications:lifecycle.deprecation.title',
+                'description_key': 'notifications:lifecycle.deprecation.description',
                 'notification_type': 'WARNING'
             },
             'retired': {
@@ -4659,8 +4659,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "The data product has been retired and is no longer available. "
                     "If you were using this product, please migrate to an alternative immediately."
                 ),
-                'title_key': 'notifications:lifecycle:retirement.title',
-                'description_key': 'notifications:lifecycle:retirement.description',
+                'title_key': 'notifications:lifecycle.retirement.title',
+                'description_key': 'notifications:lifecycle.retirement.description',
                 'notification_type': 'ACTION_REQUIRED'
             }
         }

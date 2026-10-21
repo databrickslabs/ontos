@@ -26,6 +26,6 @@
   },
   "internalError": "Si è verificato un errore imprevisto. I dettagli sono nel log del server (id dell'errore {{errorId}}).",
   "subscription": {
-    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+    "productNotSubscribable": "Impossibile sottoscrivere '{{productName}}': il suo stato è '{{status}}'. Solo i prodotti attivi o certificati accettano nuove sottoscrizioni."
   }
 }

@@ -1,10 +1,11 @@
-"""Unit tests for subscription refusal on deprecated/retired products.
+"""Unit tests for the lifecycle notices to subscribers (I-23, #998).
 
 Covers:
-  * Subscription to deprecated products raises ProductNotSubscribableError
-  * Subscription to retired products raises ProductNotSubscribableError
-  * Error includes product status and optional replacement info
+  * Subscribing to a deprecated or retired product is refused with the coded
+    error ``product_not_subscribable`` (status and product name as params)
   * Active and certified products still accept subscriptions
+  * Subscribers get a translatable notification (``data.i18n``) when a product
+    is deprecated, retired or deleted, and only those
 """
 
 # Set test environment variables BEFORE any app imports
@@ -12,14 +13,18 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+from unittest.mock import MagicMock
 from uuid import uuid4
+
 import pytest
 
 from src.controller.data_products_manager import (
     DataProductsManager,
     ProductNotSubscribableError,
 )
-from src.models.data_products import DataProduct
+from src.db_models.data_products import DataProductDb
+
+SUBSCRIBER = 'sub@example.com'
 
 
 @pytest.fixture
@@ -29,218 +34,111 @@ def manager(db_session):
 
 
 @pytest.fixture
-def deprecated_product(db_session):
-    """Create a deprecated product for testing."""
-    product = DataProduct(
-        id=str(uuid4()),
-        status='deprecated',
-        name='Deprecated Product',
-        domain='test-domain',
-    )
-    db_session.add(
-        __import__('src.db_models.data_products', fromlist=['DataProductDb'])
-        .DataProductDb(
-            id=product.id,
-            status='deprecated',
-            name='Deprecated Product',
-            domain='test-domain',
-        )
-    )
-    db_session.commit()
-    return product
+def make_product(db_session):
+    def _make(status: str, name: str) -> str:
+        product_id = str(uuid4())
+        db_session.add(DataProductDb(id=product_id, status=status, name=name))
+        db_session.commit()
+        return product_id
+    return _make
 
 
-@pytest.fixture
-def retired_product(db_session):
-    """Create a retired product for testing."""
-    product = DataProduct(
-        id=str(uuid4()),
-        status='retired',
-        name='Retired Product',
-        domain='test-domain',
-    )
-    db_session.add(
-        __import__('src.db_models.data_products', fromlist=['DataProductDb'])
-        .DataProductDb(
-            id=product.id,
-            status='retired',
-            name='Retired Product',
-            domain='test-domain',
-        )
-    )
-    db_session.commit()
-    return product
+def _sent(notifications_manager):
+    """The notifications handed to ``create_notification``."""
+    return [c.kwargs['notification'] for c in notifications_manager.create_notification.call_args_list]
 
 
-@pytest.fixture
-def active_product(db_session):
-    """Create an active product for testing."""
-    product = DataProduct(
-        id=str(uuid4()),
-        status='active',
-        name='Active Product',
-        domain='test-domain',
-    )
-    db_session.add(
-        __import__('src.db_models.data_products', fromlist=['DataProductDb'])
-        .DataProductDb(
-            id=product.id,
-            status='active',
-            name='Active Product',
-            domain='test-domain',
-        )
-    )
-    db_session.commit()
-    return product
-
-
-class TestSubscribeDeprecatedRefusal:
-    def test_subscribe_to_deprecated_product_raises_error(
-        self, manager, deprecated_product, db_session
-    ):
-        """Subscribing to a deprecated product raises ProductNotSubscribableError."""
+class TestSubscribeRefusal:
+    @pytest.mark.parametrize('status', ['deprecated', 'retired'])
+    def test_refused_with_coded_error(self, manager, make_product, db_session, status):
+        product_id = make_product(status, 'Old Product')
         with pytest.raises(ProductNotSubscribableError) as exc_info:
-            manager.subscribe(
-                product_id=deprecated_product.id,
-                subscriber_email='test@example.com',
-                db=db_session,
-            )
+            manager.subscribe(product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session)
 
         error = exc_info.value
         assert error.code == 'product_not_subscribable'
-        assert 'deprecated' in str(error).lower()
-        assert error.params['status'] == 'deprecated'
+        assert error.params['status'] == status
+        assert error.params['productName'] == 'Old Product'
+        assert status in str(error)
 
-    def test_subscribe_to_retired_product_raises_error(
-        self, manager, retired_product, db_session
+    def test_refusal_is_a_value_error(self, manager, make_product, db_session):
+        # The route turns a ValueError into a 400 whose detail carries code and params.
+        product_id = make_product('deprecated', 'Old Product')
+        with pytest.raises(ValueError):
+            manager.subscribe(product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session)
+
+    @pytest.mark.parametrize('status', ['active', 'certified'])
+    def test_active_and_certified_accept_subscriptions(
+        self, manager, make_product, db_session, status
     ):
-        """Subscribing to a retired product raises ProductNotSubscribableError."""
-        with pytest.raises(ProductNotSubscribableError) as exc_info:
-            manager.subscribe(
-                product_id=retired_product.id,
-                subscriber_email='test@example.com',
-                db=db_session,
-            )
-
-        error = exc_info.value
-        assert error.code == 'product_not_subscribable'
-        assert 'retired' in str(error).lower()
-        assert error.params['status'] == 'retired'
-
-    def test_subscribe_to_active_product_succeeds(
-        self, manager, active_product, db_session
-    ):
-        """Subscribing to an active product succeeds."""
+        product_id = make_product(status, 'Good Product')
         response = manager.subscribe(
-            product_id=active_product.id,
-            subscriber_email='test@example.com',
-            db=db_session,
+            product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session
         )
         assert response.subscribed is True
-        assert response.subscription is not None
-
-    def test_error_includes_product_name(self, manager, deprecated_product, db_session):
-        """Error includes product name in parameters."""
-        with pytest.raises(ProductNotSubscribableError) as exc_info:
-            manager.subscribe(
-                product_id=deprecated_product.id,
-                subscriber_email='test@example.com',
-                db=db_session,
-            )
-
-        error = exc_info.value
-        assert error.params['productName'] == 'Deprecated Product'
-
-    def test_error_message_is_user_friendly(self, manager, deprecated_product, db_session):
-        """Error message is user-friendly and doesn't include exception text."""
-        with pytest.raises(ProductNotSubscribableError) as exc_info:
-            manager.subscribe(
-                product_id=deprecated_product.id,
-                subscriber_email='test@example.com',
-                db=db_session,
-            )
-
-        error_msg = str(exc_info.value)
-        # Should not contain exception text like "SELECT ..."
-        assert 'SELECT' not in error_msg
-        assert 'deprecated' in error_msg.lower() or 'status' in error_msg.lower()
 
 
-class TestSubscriberNotifications:
-    """Test that notifications are sent with i18n keys when status changes."""
+class TestSubscriberNotices:
+    @pytest.fixture
+    def notifications(self, manager):
+        notifications_manager = MagicMock()
+        manager._notifications_manager = notifications_manager
+        return notifications_manager
 
-    def test_subscribers_notified_on_deprecation_with_i18n_keys(
-        self, manager, active_product, db_session
+    def _subscribed(self, manager, make_product, db_session, name='Active Product'):
+        product_id = make_product('active', name)
+        manager.subscribe(product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session)
+        return product_id
+
+    @pytest.mark.parametrize('new_status,key', [('deprecated', 'deprecation'),
+                                                ('retired', 'retirement')])
+    def test_status_change_notifies_with_i18n_keys(
+        self, manager, make_product, db_session, notifications, new_status, key
     ):
-        """When product becomes deprecated, subscribers get notification with i18n keys."""
-        from unittest.mock import MagicMock
-
-        # Mock the notifications manager to capture notifications
-        mock_notif_manager = MagicMock()
-        manager._notifications_manager = mock_notif_manager
-
-        # Trigger deprecation notification
-        manager._notify_subscribers_of_status_change(
-            product_id=active_product.id,
-            product_name='Active Product',
-            old_status='active',
-            new_status='deprecated',
-        )
-
-        # Verify notification was sent
-        assert mock_notif_manager.create_notification.called
-        call_args = mock_notif_manager.create_notification.call_args
-        notification = call_args[1]['notification']
-
-        # Verify i18n keys are present
-        assert notification.data is not None
-        assert 'i18n' in notification.data
-        assert notification.data['i18n']['title'] == 'notifications:lifecycle:deprecation.title'
-        assert notification.data['i18n']['description'] == 'notifications:lifecycle:deprecation.description'
-
-        # Verify product name is in params
-        assert notification.data['i18n']['params']['productName'] == 'Active Product'
-
-    def test_subscribers_notified_on_retirement_with_i18n_keys(
-        self, manager, active_product, db_session
-    ):
-        """When product becomes retired, subscribers get notification with i18n keys."""
-        from unittest.mock import MagicMock
-
-        mock_notif_manager = MagicMock()
-        manager._notifications_manager = mock_notif_manager
+        product_id = self._subscribed(manager, make_product, db_session)
 
         manager._notify_subscribers_of_status_change(
-            product_id=active_product.id,
-            product_name='Active Product',
-            old_status='active',
-            new_status='retired',
+            product_id=product_id, product_name='Active Product',
+            old_status='active', new_status=new_status,
         )
 
-        call_args = mock_notif_manager.create_notification.call_args
-        notification = call_args[1]['notification']
+        (notification,) = _sent(notifications)
+        assert notification.recipient == SUBSCRIBER
+        i18n = notification.data['i18n']
+        assert i18n['title'] == f'notifications:lifecycle.{key}.title'
+        assert i18n['description'] == f'notifications:lifecycle.{key}.description'
+        assert i18n['params']['productName'] == 'Active Product'
 
-        assert notification.data['i18n']['title'] == 'notifications:lifecycle:retirement.title'
-        assert notification.data['i18n']['description'] == 'notifications:lifecycle:retirement.description'
-
-    def test_subscribers_notified_on_deletion_with_i18n_keys(
-        self, manager, active_product, db_session
+    @pytest.mark.parametrize('new_status', ['active', 'certified', 'draft'])
+    def test_other_status_changes_do_not_notify(
+        self, manager, make_product, db_session, notifications, new_status
     ):
-        """When product is deleted, subscribers get notification with i18n keys."""
-        from unittest.mock import MagicMock
-
-        mock_notif_manager = MagicMock()
-        manager._notifications_manager = mock_notif_manager
-
-        manager._notify_subscribers_on_delete(
-            product_id=active_product.id,
-            product_name='Active Product',
-            deleted_by='admin@example.com',
+        product_id = self._subscribed(manager, make_product, db_session)
+        manager._notify_subscribers_of_status_change(
+            product_id=product_id, product_name='Active Product',
+            old_status='deprecated', new_status=new_status,
         )
+        assert _sent(notifications) == []
 
-        call_args = mock_notif_manager.create_notification.call_args
-        notification = call_args[1]['notification']
+    def test_delete_notifies_subscribers_before_the_rows_cascade(
+        self, manager, make_product, db_session, notifications
+    ):
+        product_id = self._subscribed(manager, make_product, db_session, 'Doomed Product')
 
-        assert notification.data['i18n']['title'] == 'notifications:lifecycle:deletion.title'
-        assert notification.data['i18n']['description'] == 'notifications:lifecycle:deletion.description'
-        assert notification.data['i18n']['params']['deletedBy'] == 'admin@example.com'
+        assert manager.delete_product(product_id, user='admin@example.com') is True
+
+        (notification,) = _sent(notifications)
+        assert notification.recipient == SUBSCRIBER
+        i18n = notification.data['i18n']
+        assert i18n['title'] == 'notifications:lifecycle.deletion.title'
+        assert i18n['description'] == 'notifications:lifecycle.deletion.description'
+        assert i18n['params']['productName'] == 'Doomed Product'
+        assert i18n['params']['deletedBy'] == 'admin@example.com'
+        assert manager.get_product(product_id) is None
+
+    def test_delete_still_succeeds_when_notifying_fails(
+        self, manager, make_product, db_session, notifications
+    ):
+        product_id = self._subscribed(manager, make_product, db_session)
+        notifications.create_notification.side_effect = RuntimeError('boom')
+        assert manager.delete_product(product_id) is True

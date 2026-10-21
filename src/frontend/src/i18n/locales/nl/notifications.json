@@ -206,16 +206,16 @@
   },
   "lifecycle": {
     "deprecation": {
-      "title": "Product deprecated",
-      "description": "The data product '{{productName}}' has been marked as deprecated. {{reason}}{{sunsetDate}} Please contact the owner for information about the replacement.{{replacementProductName}}"
+      "title": "Product verouderd",
+      "description": "Het dataproduct '{{productName}}' is als verouderd gemarkeerd. Plan de migratie naar een alternatief of neem contact op met de eigenaar."
     },
     "retirement": {
-      "title": "Product retired",
-      "description": "The data product '{{productName}}' has been retired and is no longer available. If you were using this product, please migrate to an alternative immediately.{{replacementProductName}}"
+      "title": "Product buiten gebruik gesteld",
+      "description": "Het dataproduct '{{productName}}' is buiten gebruik gesteld en niet meer beschikbaar. Als u het gebruikte, stap dan direct over op een alternatief."
     },
     "deletion": {
-      "title": "Product deleted",
-      "description": "The data product '{{productName}}' has been deleted{{deletedBy}}{{replacementProductName}}."
+      "title": "Product verwijderd",
+      "description": "Het dataproduct '{{productName}}' is verwijderd."
     }
   }
 }

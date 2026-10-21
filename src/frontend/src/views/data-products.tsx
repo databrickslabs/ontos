@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { deleteOrThrow } from '@/lib/delete-or-throw';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +16,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
 import { BatchImportResult, summarizeImport } from '@/types/import-results';
-import { importItemLine, reportedImportItems } from '@/lib/import-item-text';
+import { productUploadSuccessText } from '@/lib/upload-text';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
@@ -327,7 +328,7 @@ export default function DataProducts() {
           return;
       }
       try {
-          await deleteApi(`/api/data-products/${id}`);
+          await deleteOrThrow(deleteApi, `/api/data-products/${id}`);
           toast({ title: t('messages.success'), description: t('messages.deleteSuccess') });
           fetchProducts();
       } catch (err: any) {
@@ -351,10 +352,7 @@ export default function DataProducts() {
       // Track individual delete statuses
       const results = await Promise.allSettled(selectedIds.map(async (id) => {
           try {
-              await deleteApi(`/api/data-products/${id}`);
-              // If deleteApi throws on error, we won't reach here on failure
-              // If it returns an object like { error: string } on failure, 
-              // we need to check that, but the current structure assumes throw.
+              await deleteOrThrow(deleteApi, `/api/data-products/${id}`);
               return id; // Return ID on success
           } catch (err: any) {
               // Re-throw the error with the ID for better context in the main handler
@@ -454,7 +452,6 @@ export default function DataProducts() {
     // #853: id adoption + duplicate handling.
     formData.append('adopt_ids', String(adoptIds));
     formData.append('on_duplicate', duplicatesAsNew ? 'new' : 'skip');
-    const fileLabel = files.length === 1 ? files[0].name : `${files.length} files`;
     try {
       // The upload endpoint returns a truthful BatchImportResult summary
       // (created/skipped/failed) across all files and entities.
@@ -476,28 +473,28 @@ export default function DataProducts() {
       }
 
       const result = response.data;
-      // Surface anything not created (failed entities AND files skipped as the
-      // wrong type, e.g. an ODCS contract dropped here) and the notes on created
-      // ones (e.g. a replacement that isn't here).
-      const reportedItems = result ? reportedImportItems(result) : [];
-      const detail = reportedItems.slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
+      // Surface anything not created: failed entities AND files skipped as the
+      // wrong type (e.g. an ODCS contract dropped here).
+      const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
       const allCreated = !!result && result.failed === 0 && result.skipped === 0;
       if (result && (result.failed > 0 || result.skipped > 0)) {
         // Partial success: surface the truthful summary plus the first issues.
+        const detail = unimportedItems
+          .slice(0, 5)
+          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
+          .join('\n');
         toast({
           title: result.created > 0 ? t('upload.partialSuccess', 'Imported with issues') : t('upload.failed'),
-          description: `${summarizeImport(result)}${detail ? `\n${detail}` : ''}`,
+          description: `${summarizeImport(result, t)}${detail ? `\n${detail}` : ''}`,
           variant: result.failed > 0 && result.created === 0 ? 'destructive' : 'default',
           duration: 10000,
         });
-        if (reportedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
+        if (unimportedItems.length > 0) setError(`${summarizeImport(result, t)}\n${detail}`);
       } else {
         setUploadDialogOpen(false);
-        const success = t('upload.successMessage', { filename: fileLabel, count: result?.created ?? 0 });
         toast({
           title: t('upload.success'),
-          description: detail ? `${success}\n${detail}` : success,
-          ...(detail ? { duration: 10000 } : {}),
+          description: productUploadSuccessText(files, result?.created ?? 0, t),
         });
       }
       await fetchProducts();

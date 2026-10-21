@@ -216,14 +216,6 @@
     "deletion": {
       "title": "Product deleted",
       "description": "The data product '{{productName}}' has been deleted{{deletedBy}}{{replacementProductName}}."
-    },
-    "activation": {
-      "title": "Product activated",
-      "description": "The data product '{{productName}}' has been activated and is now available for use."
-    },
-    "certification": {
-      "title": "Product certified",
-      "description": "The data product '{{productName}}' has achieved certified status and meets quality requirements."
     }
   }
 }

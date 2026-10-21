@@ -4640,7 +4640,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             old_status: Previous status
             new_status: New status
         """
-        # Define which status changes warrant notifications
+        # Define which status changes warrant notifications (per #998 PRD)
+        # Only deprecation and retirement trigger subscriber notifications
         notification_configs = {
             'deprecated': {
                 'title': f"Product '{product_name}' has been deprecated",
@@ -4661,25 +4662,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 'title_key': 'notifications:lifecycle:retirement.title',
                 'description_key': 'notifications:lifecycle:retirement.description',
                 'notification_type': 'ACTION_REQUIRED'
-            },
-            'active': {
-                'title': f"Product '{product_name}' is now active",
-                'description': (
-                    "The data product has been activated and is now available for use."
-                ),
-                'title_key': 'notifications:lifecycle:activation.title',
-                'description_key': 'notifications:lifecycle:activation.description',
-                'notification_type': 'INFO'
-            },
-            'certified': {
-                'title': f"Product '{product_name}' has been certified",
-                'description': (
-                    "The data product has achieved certified status, "
-                    "indicating it meets all quality and compliance requirements."
-                ),
-                'title_key': 'notifications:lifecycle:certification.title',
-                'description_key': 'notifications:lifecycle:certification.description',
-                'notification_type': 'SUCCESS'
             }
         }
 

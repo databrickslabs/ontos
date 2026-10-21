@@ -19,6 +19,8 @@ from src.common.manifest_signing import (
     LocalDevKeyProvider,
     DatabricksSecretKeyProvider,
     KeyProviderError,
+    key_id_for,
+    public_key_bytes_of,
 )
 
 
@@ -354,3 +356,18 @@ class TestSigningKeyProviderInterface:
         monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)
         provider = LocalDevKeyProvider()
         assert provider.get_algorithm() == 'Ed25519'
+
+
+def test_secret_scope_key_id_matches_the_adr_format(monkeypatch):
+    """get_key_id on the secret-scope provider reads the key once per call, without recursing."""
+    pem = _generate_ed25519_pem()
+    monkeypatch.setenv('MANIFEST_SIGNING_SECRET_SCOPE', 'my-scope')
+    monkeypatch.setenv('MANIFEST_SIGNING_SECRET_KEY', 'my-key')
+    ws_client = MagicMock()
+    ws_client.secrets.get_secret.return_value = MagicMock(value=pem)
+
+    provider = DatabricksSecretKeyProvider(ws_client)
+    expected = key_id_for(public_key_bytes_of(provider.get_private_key()))
+
+    assert provider.get_key_id() == expected
+    assert expected.startswith('ed25519:') and len(expected) == len('ed25519:') + 16

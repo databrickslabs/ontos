@@ -37,6 +37,19 @@ class KeyProviderError(CodedValueError):
         super().__init__(message, provider=provider, **params)
 
 
+def public_key_bytes_of(private_key: ed25519.Ed25519PrivateKey) -> bytes:
+    """The raw 32-byte Ed25519 public key of a private key."""
+    return private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw
+    )
+
+
+def key_id_for(public_key_bytes: bytes) -> str:
+    """The ADR's key id: "ed25519:" + the first 16 hex characters of sha256(public key)."""
+    return f"ed25519:{hashlib.sha256(public_key_bytes).hexdigest()[:16]}"
+
+
 class SigningKeyProvider(ABC):
     """Abstract base for Ed25519 manifest signing key providers.
 
@@ -70,9 +83,7 @@ class SigningKeyProvider(ABC):
         Returns:
             str: Key identifier in format "ed25519:XXXXXXXXXXXXXXXX".
         """
-        public_key_bytes = self.get_public_key_bytes()
-        digest = hashlib.sha256(public_key_bytes).hexdigest()
-        return f"ed25519:{digest[:16]}"
+        return key_id_for(self.get_public_key_bytes())
 
     def get_public_key_bytes(self) -> bytes:
         """Get the raw 32-byte Ed25519 public key.
@@ -83,12 +94,7 @@ class SigningKeyProvider(ABC):
         Returns:
             bytes: The raw public key (32 bytes).
         """
-        private_key = self.get_private_key()
-        public_key = private_key.public_key()
-        return public_key.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
+        return public_key_bytes_of(self.get_private_key())
 
     def get_algorithm(self) -> str:
         """Get the signing algorithm name.
@@ -302,7 +308,7 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
 
         logger.debug(
             'Retrieved signing key from UC Secrets; key_id=%s',
-            self.get_key_id()
+            key_id_for(public_key_bytes_of(private_key))
         )
         return private_key
 

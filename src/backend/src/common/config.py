@@ -203,6 +203,21 @@ class Settings(BaseSettings):
     DELIVERY_MODE_MANUAL: bool = Field(True, env='DELIVERY_MODE_MANUAL')  # Generate notifications for manual action
     DELIVERY_DIRECT_DRY_RUN: bool = Field(False, env='DELIVERY_DIRECT_DRY_RUN')  # Dry-run mode for direct delivery
 
+    # Manifest Signing settings
+    # Ed25519 private keys for signing data product manifests (ADR Decision 7).
+    # Read through Settings so values from the .env file and from the process
+    # environment (e.g. Databricks Apps injection) both reach the key providers.
+    # PEM-encoded Ed25519 private key (local provider)
+    MANIFEST_SIGNING_KEY_PEM: Optional[str] = Field(None, env='MANIFEST_SIGNING_KEY_PEM')
+    MANIFEST_SIGNING_KEY_PATH: str = Field(
+        '~/.ontos/manifest_signing_ed25519.pem',
+        env='MANIFEST_SIGNING_KEY_PATH'
+    )  # PEM file path (local; used if MANIFEST_SIGNING_KEY_PEM is not set)
+    # Databricks secret scope
+    MANIFEST_SIGNING_SECRET_SCOPE: Optional[str] = Field(None, env='MANIFEST_SIGNING_SECRET_SCOPE')
+    # Databricks secret key name
+    MANIFEST_SIGNING_SECRET_KEY: Optional[str] = Field(None, env='MANIFEST_SIGNING_SECRET_KEY')
+
     # UI Customization settings
     UI_I18N_ENABLED: bool = Field(True, env='UI_I18N_ENABLED')  # Enable/disable internationalization (disable forces English)
     UI_CUSTOM_LOGO_URL: Optional[str] = Field(None, env='UI_CUSTOM_LOGO_URL')  # URL to custom logo image

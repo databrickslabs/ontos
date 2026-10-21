@@ -1,7 +1,7 @@
 """Pluggable manifest signing key providers.
 
 Supports multiple key storage backends for Ed25519 signing:
-- LocalDevKeyProvider: For local development, reads PEM from environment or file
+- LocalDevKeyProvider: For local development, reads PEM from settings or file
 - DatabricksSecretKeyProvider: For production, reads PEM from UC Secrets
 
 Keys are Ed25519 private keys in PEM format. Key material is never logged;
@@ -15,6 +15,7 @@ ADR: docs/decisions/manifest-canonicalization-hashing-signing.md
 """
 
 import hashlib
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from src.common.api_errors import CodedValueError
+from src.common.config import Settings
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -106,15 +108,17 @@ class SigningKeyProvider(ABC):
 
 
 class LocalDevKeyProvider(SigningKeyProvider):
-    """Development-only key provider using local PEM file or environment.
+    """Development-only key provider using a local PEM file or a PEM setting.
 
-    Reads an Ed25519 private key in PEM format from:
-    1. Environment variable MANIFEST_SIGNING_KEY_PEM (if set)
-    2. File at MANIFEST_SIGNING_KEY_PATH (default ~/.ontos/manifest_signing_ed25519.pem)
+    Reads an Ed25519 private key in PEM format from the application settings
+    (``Settings``, which merges the process environment and the ``.env`` file):
+    1. ``MANIFEST_SIGNING_KEY_PEM`` (if set)
+    2. The file at ``MANIFEST_SIGNING_KEY_PATH`` (default
+       ``~/.ontos/manifest_signing_ed25519.pem``)
 
-    If the file doesn't exist and environment variable is not set, raises
-    KeyProviderError. File is created with mode 0600 if needed (outside scope
-    of this provider).
+    If neither is present, a new key is generated and written to the file with
+    mode 0600 (parent directories are created; an existing file is never
+    overwritten).
 
     Use only in local development (ENV=LOCAL). This provider has no access
     controls and stores keys in process memory.
@@ -122,36 +126,29 @@ class LocalDevKeyProvider(SigningKeyProvider):
     ADR Decision 7: local PEM provider.
     """
 
-    def __init__(self):
+    def __init__(self, settings: Settings):
         """Initialize provider by loading or generating the key.
+
+        Args:
+            settings: Application settings carrying the MANIFEST_SIGNING_KEY_* values.
 
         Raises:
             KeyProviderError: If key cannot be loaded or generated.
         """
-        import os
-        # Try environment variable first
-        key_pem = os.environ.get('MANIFEST_SIGNING_KEY_PEM')
+        key_pem = settings.MANIFEST_SIGNING_KEY_PEM
         if not key_pem:
-            # Fall back to file path from environment or default
-            key_path_str = os.environ.get(
-                'MANIFEST_SIGNING_KEY_PATH',
-                '~/.ontos/manifest_signing_ed25519.pem'
-            )
-            key_path = Path(key_path_str).expanduser()
-            if key_path.exists():
-                try:
-                    key_pem = key_path.read_text(encoding='utf-8')
-                except Exception as e:
-                    raise KeyProviderError(
-                        f'Failed to read key file {key_path}: {type(e).__name__}',
-                        provider='LocalDevKeyProvider'
-                    ) from e
-            else:
+            key_path = Path(settings.MANIFEST_SIGNING_KEY_PATH).expanduser()
+            try:
+                if not key_path.exists():
+                    self._create_key_file(key_path)
+                key_pem = key_path.read_text(encoding='utf-8')
+            except KeyProviderError:
+                raise
+            except Exception as e:
                 raise KeyProviderError(
-                    f'Manifest signing key not found. Set MANIFEST_SIGNING_KEY_PEM '
-                    f'or create {key_path} with an Ed25519 private key in PEM format.',
+                    f'Failed to read key file {key_path}: {type(e).__name__}',
                     provider='LocalDevKeyProvider'
-                )
+                ) from e
 
         # Load and validate the private key
         try:
@@ -176,6 +173,27 @@ class LocalDevKeyProvider(SigningKeyProvider):
             self.get_key_id()
         )
 
+    @staticmethod
+    def _create_key_file(key_path: Path) -> None:
+        """Generate an Ed25519 key and write it to key_path with mode 0600.
+
+        Never overwrites an existing file: if another process created it first,
+        the existing file is kept.
+        """
+        pem = ed25519.Ed25519PrivateKey.generate().private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return
+        with os.fdopen(fd, 'wb') as f:
+            f.write(pem)
+        logger.info('Generated a new local manifest signing key at %s', key_path)
+
     def get_private_key(self) -> ed25519.Ed25519PrivateKey:
         """Return the loaded private key."""
         return self._private_key
@@ -199,19 +217,19 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
     ADR Decision 7: Databricks Secrets provider.
     """
 
-    def __init__(self, workspace_client):
-        """Initialize the provider with a WorkspaceClient.
+    def __init__(self, workspace_client, settings: Settings):
+        """Initialize the provider with a WorkspaceClient and the settings.
 
         Args:
             workspace_client: databricks.sdk.WorkspaceClient instance
+            settings: Application settings carrying MANIFEST_SIGNING_SECRET_*
 
         Raises:
             KeyProviderError: If configuration is missing or invalid.
         """
-        import os
         self._ws_client = workspace_client
 
-        scope = os.environ.get('MANIFEST_SIGNING_SECRET_SCOPE')
+        scope = settings.MANIFEST_SIGNING_SECRET_SCOPE
         if not scope:
             raise KeyProviderError(
                 f'Databricks secret scope not configured. '
@@ -219,7 +237,7 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
                 provider='DatabricksSecretKeyProvider'
             )
 
-        key_name = os.environ.get('MANIFEST_SIGNING_SECRET_KEY')
+        key_name = settings.MANIFEST_SIGNING_SECRET_KEY
         if not key_name:
             raise KeyProviderError(
                 f'Databricks secret name not configured. '

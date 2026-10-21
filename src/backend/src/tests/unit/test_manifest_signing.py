@@ -5,10 +5,11 @@ Decision 7: Keys and key providers.
 """
 
 import hashlib
+import os
 import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -40,32 +41,10 @@ def test_ed25519_pem(test_ed25519_key):
 
 
 @pytest.fixture
-def test_ed25519_public_key_bytes(test_ed25519_key):
-    """Raw 32-byte public key from test key."""
-    public_key = test_ed25519_key.public_key()
-    return public_key.public_bytes(
-        encoding=serialization.Encoding.Raw,
-        format=serialization.PublicFormat.Raw
-    )
-
-
-@pytest.fixture
-def test_key_id(test_ed25519_public_key_bytes):
-    """Expected key_id for test key (ed25519: + first 16 hex of sha256)."""
-    digest = hashlib.sha256(test_ed25519_public_key_bytes).hexdigest()
-    return f"ed25519:{digest[:16]}"
-
-
-@pytest.fixture
-def different_ed25519_key():
-    """Generate a different Ed25519 key for testing."""
-    return ed25519.Ed25519PrivateKey.generate()
-
-
-@pytest.fixture
-def different_ed25519_pem(different_ed25519_key):
-    """PEM-encoded different Ed25519 key."""
-    return different_ed25519_key.private_bytes(
+def different_ed25519_pem():
+    """Generate a different PEM-encoded Ed25519 key."""
+    key = ed25519.Ed25519PrivateKey.generate()
+    return key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption()
@@ -92,8 +71,7 @@ class TestLocalDevKeyProvider:
         key = provider.get_private_key()
         assert isinstance(key, ed25519.Ed25519PrivateKey)
 
-    def test_get_public_key_bytes(self, test_ed25519_pem, test_ed25519_public_key_bytes,
-                                   monkeypatch):
+    def test_get_public_key_bytes(self, test_ed25519_pem, monkeypatch):
         """get_public_key_bytes returns the correct 32-byte public key."""
         monkeypatch.setenv('MANIFEST_SIGNING_KEY_PEM', test_ed25519_pem)
         monkeypatch.delenv('MANIFEST_SIGNING_KEY_PATH', raising=False)

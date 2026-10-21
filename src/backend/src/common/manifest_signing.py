@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from src.common.api_errors import CodedValueError
+from src.common.config import get_settings
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -122,15 +123,12 @@ class LocalDevKeyProvider(SigningKeyProvider):
         Raises:
             KeyProviderError: If key cannot be loaded or generated.
         """
-        import os
+        settings = get_settings()
         # Try environment variable first
-        key_pem = os.environ.get('MANIFEST_SIGNING_KEY_PEM')
+        key_pem = settings.MANIFEST_SIGNING_KEY_PEM
         if not key_pem:
-            # Fall back to file path from environment or default
-            key_path_str = os.environ.get(
-                'MANIFEST_SIGNING_KEY_PATH',
-                '~/.ontos/manifest_signing_ed25519.pem'
-            )
+            # Fall back to file path from settings or default
+            key_path_str = settings.MANIFEST_SIGNING_KEY_PATH
             key_path = Path(key_path_str).expanduser()
             if key_path.exists():
                 try:
@@ -202,10 +200,10 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
         Raises:
             KeyProviderError: If configuration is missing or invalid.
         """
-        import os
+        settings = get_settings()
         self._ws_client = workspace_client
 
-        scope = os.environ.get('MANIFEST_SIGNING_SECRET_SCOPE')
+        scope = settings.MANIFEST_SIGNING_SECRET_SCOPE
         if not scope:
             raise KeyProviderError(
                 f'Databricks secret scope not configured. '
@@ -213,7 +211,7 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
                 provider='DatabricksSecretKeyProvider'
             )
 
-        key_name = os.environ.get('MANIFEST_SIGNING_SECRET_KEY')
+        key_name = settings.MANIFEST_SIGNING_SECRET_KEY
         if not key_name:
             raise KeyProviderError(
                 f'Databricks secret name not configured. '

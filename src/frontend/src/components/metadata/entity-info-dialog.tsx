@@ -96,17 +96,18 @@ export default function EntityInfoDialog({
   maxLevelInheritance = 99,
 }: Props) {
   const { t } = useTranslation(['metadata', 'common']);
-  // Use merged metadata when contractIds are provided (for DP/DS with inheritance)
-  const directMetadata = useEntityMetadata(entityType, entityId || undefined);
+  // Use merged if we have contract IDs, otherwise use direct
+  const useMerged = !!contractIds && contractIds.length > 0;
+  // Use merged metadata when contractIds are provided (for DP/DS with inheritance).
+  // Only the hook in use gets an entity id, so the other one skips its fetches.
+  const directMetadata = useEntityMetadata(entityType, useMerged ? undefined : entityId || undefined);
   const mergedMetadata = useMergedMetadata(
     entityType, 
-    entityId || undefined, 
+    useMerged ? entityId || undefined : undefined, 
     contractIds, 
     maxLevelInheritance
   );
   
-  // Use merged if we have contract IDs, otherwise use direct
-  const useMerged = contractIds && contractIds.length > 0;
   const { richTexts, documents, links, loading, error } = useMerged 
     ? { 
         richTexts: mergedMetadata.richTexts, 

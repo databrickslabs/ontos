@@ -698,7 +698,10 @@ describe('useEntityMetadata Hook', () => {
 });
 
 describe('useMergedMetadata Hook', () => {
+  const originalFetch = global.fetch;
+
   afterEach(() => {
+    global.fetch = originalFetch;
     vi.clearAllMocks();
   });
 
@@ -721,7 +724,10 @@ describe('useMergedMetadata Hook', () => {
 });
 
 describe('Shared asset attachments', () => {
+  const originalFetch = global.fetch;
+
   afterEach(() => {
+    global.fetch = originalFetch;
     vi.clearAllMocks();
   });
 

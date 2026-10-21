@@ -13,7 +13,24 @@ import json
 import uuid
 from fastapi.testclient import TestClient
 
+from src.db_models.data_domains import DataDomain
 from src.models.data_domains import DataDomainRead
+
+
+def seed_domain(db_session, name, parent=None):
+    """Store a domain row directly.
+
+    Creating a child through POST binds the parent id as a ``uuid.UUID`` to a
+    String column, which SQLite rejects (#1051); the GET routes are what these
+    tests exercise.
+    """
+    domain = DataDomain(
+        id=str(uuid.uuid4()), name=name, parent_id=parent.id if parent else None,
+        created_by="test@example.com",
+    )
+    db_session.add(domain)
+    db_session.flush()
+    return domain
 
 
 class TestDataDomainsRoutes:
@@ -221,31 +238,26 @@ class TestDataDomainsRoutes:
         # Assert
         assert response.status_code == 404
 
-    def test_get_domain_includes_hierarchy_info(self, client):
+    def test_get_domain_includes_hierarchy_info(self, client, db_session):
         """Test that domain includes parent and children information."""
         # Arrange - Create hierarchy
-        parent_response = client.post("/api/data-domains", json={
-            "name": "Parent Domain",
-        })
-        parent_id = parent_response.json()["id"]
-
-        client.post("/api/data-domains", json={
-            "name": "Child 1",
-            "parent_id": parent_id,
-        })
-
-        client.post("/api/data-domains", json={
-            "name": "Child 2",
-            "parent_id": parent_id,
-        })
+        parent = seed_domain(db_session, "Parent Domain")
+        child = seed_domain(db_session, "Child 1", parent)
+        seed_domain(db_session, "Child 2", parent)
 
         # Act - Get parent domain
-        response = client.get(f"/api/data-domains/{parent_id}")
+        response = client.get(f"/api/data-domains/{parent.id}")
 
         # Assert
+        assert response.status_code == 200
         data = response.json()
         assert data["children_count"] == 2
-        assert len(data["children_info"]) == 2
+        assert {c["name"] for c in data["children_info"]} == {"Child 1", "Child 2"}
+
+        child_data = client.get(f"/api/data-domains/{child.id}").json()
+        assert child_data["parent_id"] == parent.id
+        assert child_data["parent_name"] == "Parent Domain"
+        assert child_data["parent_info"]["name"] == "Parent Domain"
 
     # =================================================================
     # PUT /api/data-domains/{domain_id} - Update Domain
@@ -450,151 +462,83 @@ class TestDataDomainsRoutes:
         assert response.status_code == 403
 
     # =================================================================
-    # GET /api/data-domains/roots - Get Root Domains
+    # Hierarchy - read from GET /api/data-domains and GET /api/data-domains/{id}
+    # (the API has no /roots, /hierarchy, /path or /children routes)
     # =================================================================
 
-    def test_get_root_domains(self, client):
-        """Test GET /api/data-domains/roots returns only root domains."""
+    def test_get_root_domains(self, client, db_session):
+        """Root domains are the listed domains without a parent."""
         # Arrange - Create hierarchy
-        parent_response = client.post("/api/data-domains", json={
-            "name": "Parent",
-        })
-        parent_id = parent_response.json()["id"]
-
-        client.post("/api/data-domains", json={
-            "name": "Child",
-            "parent_id": parent_id,
-        })
-
-        client.post("/api/data-domains", json={
-            "name": "Another Root",
-        })
+        parent = seed_domain(db_session, "Parent")
+        seed_domain(db_session, "Child", parent)
+        seed_domain(db_session, "Another Root")
 
         # Act
-        response = client.get("/api/data-domains/roots")
+        response = client.get("/api/data-domains")
 
         # Assert
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
-        names = [d["name"] for d in data]
-        assert "Parent" in names
-        assert "Another Root" in names
-        assert "Child" not in names
+        roots = {d["name"] for d in response.json() if d["parent_id"] is None}
+        assert roots == {"Parent", "Another Root"}
 
-    # =================================================================
-    # GET /api/data-domains/hierarchy - Get Domain Hierarchy
-    # =================================================================
-
-    def test_get_domain_hierarchy(self, client):
-        """Test GET /api/data-domains/hierarchy returns tree structure."""
+    def test_get_domain_hierarchy(self, client, db_session):
+        """The domain list carries the parent links that make up the tree."""
         # Arrange - Create multi-level hierarchy
-        root_response = client.post("/api/data-domains", json={
-            "name": "Root",
-        })
-        root_id = root_response.json()["id"]
-
-        child1_response = client.post("/api/data-domains", json={
-            "name": "Child 1",
-            "parent_id": root_id,
-        })
-        child1_id = child1_response.json()["id"]
-
-        client.post("/api/data-domains", json={
-            "name": "Grandchild",
-            "parent_id": child1_id,
-        })
-
-        client.post("/api/data-domains", json={
-            "name": "Child 2",
-            "parent_id": root_id,
-        })
+        root = seed_domain(db_session, "Root")
+        child1 = seed_domain(db_session, "Child 1", root)
+        seed_domain(db_session, "Grandchild", child1)
+        seed_domain(db_session, "Child 2", root)
 
         # Act
-        response = client.get("/api/data-domains/hierarchy")
+        response = client.get("/api/data-domains")
 
         # Assert
         assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        # Should return hierarchical structure
+        by_id = {d["id"]: d for d in response.json()}
+        parent_of = {
+            d["name"]: by_id[d["parent_id"]]["name"] if d["parent_id"] else None
+            for d in by_id.values()
+        }
+        assert parent_of == {
+            "Root": None, "Child 1": "Root", "Child 2": "Root", "Grandchild": "Child 1",
+        }
+        assert by_id[root.id]["children_count"] == 2
 
-    # =================================================================
-    # GET /api/data-domains/{domain_id}/path - Get Domain Path
-    # =================================================================
-
-    def test_get_domain_path(self, client):
-        """Test GET /api/data-domains/{id}/path returns full path from root."""
+    def test_get_domain_path(self, client, db_session):
+        """Following parent_info from a domain gives its full path from the root."""
         # Arrange - Create hierarchy
-        root_response = client.post("/api/data-domains", json={
-            "name": "Root",
-        })
-        root_id = root_response.json()["id"]
+        root = seed_domain(db_session, "Root")
+        child = seed_domain(db_session, "Child", root)
+        grandchild = seed_domain(db_session, "Grandchild", child)
 
-        child_response = client.post("/api/data-domains", json={
-            "name": "Child",
-            "parent_id": root_id,
-        })
-        child_id = child_response.json()["id"]
-
-        grandchild_response = client.post("/api/data-domains", json={
-            "name": "Grandchild",
-            "parent_id": child_id,
-        })
-        grandchild_id = grandchild_response.json()["id"]
-
-        # Act
-        response = client.get(f"/api/data-domains/{grandchild_id}/path")
+        # Act - walk up from the grandchild
+        path = []
+        current = client.get(f"/api/data-domains/{grandchild.id}").json()
+        while True:
+            path.insert(0, current["name"])
+            if not current["parent_info"]:
+                break
+            current = client.get(f"/api/data-domains/{current['parent_info']['id']}").json()
 
         # Assert
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) == 3
-        assert data[0]["name"] == "Root"
-        assert data[1]["name"] == "Child"
-        assert data[2]["name"] == "Grandchild"
+        assert path == ["Root", "Child", "Grandchild"]
 
-    # =================================================================
-    # GET /api/data-domains/{domain_id}/children - Get Child Domains
-    # =================================================================
-
-    def test_get_child_domains(self, client):
-        """Test GET /api/data-domains/{id}/children returns direct children."""
+    def test_get_child_domains(self, client, db_session):
+        """children_info lists the direct children only."""
         # Arrange - Create parent with children
-        parent_response = client.post("/api/data-domains", json={
-            "name": "Parent",
-        })
-        parent_id = parent_response.json()["id"]
-
-        child1_response = client.post("/api/data-domains", json={
-            "name": "Child 1",
-            "parent_id": parent_id,
-        })
-        child1_id = child1_response.json()["id"]
-
-        client.post("/api/data-domains", json={
-            "name": "Child 2",
-            "parent_id": parent_id,
-        })
-
+        parent = seed_domain(db_session, "Parent")
+        child1 = seed_domain(db_session, "Child 1", parent)
+        seed_domain(db_session, "Child 2", parent)
         # Create grandchild (should not be included)
-        client.post("/api/data-domains", json={
-            "name": "Grandchild",
-            "parent_id": child1_id,
-        })
+        seed_domain(db_session, "Grandchild", child1)
 
         # Act
-        response = client.get(f"/api/data-domains/{parent_id}/children")
+        response = client.get(f"/api/data-domains/{parent.id}")
 
         # Assert
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
-        names = [d["name"] for d in data]
-        assert "Child 1" in names
-        assert "Child 2" in names
-        assert "Grandchild" not in names  # Only direct children
+        names = {d["name"] for d in response.json()["children_info"]}
+        assert names == {"Child 1", "Child 2"}  # Only direct children
 
     # =================================================================
     # Error Scenarios

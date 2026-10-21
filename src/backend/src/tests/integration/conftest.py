@@ -75,12 +75,6 @@ QUARANTINE = {
         _SQLITE_UUID),
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_delete_domain_with_children_fails': (
         _UNTRIAGED),
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_get_child_domains': _SQLITE_UUID,
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_get_domain_hierarchy': _SQLITE_UUID,
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_get_domain_includes_hierarchy_info': (
-        _SQLITE_UUID),
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_get_domain_path': _SQLITE_UUID,
-    'test_data_domains_routes.py::TestDataDomainsRoutes::test_get_root_domains': _NO_SUCH_ENDPOINT,
     'test_data_domains_routes.py::TestDataDomainsRoutes::test_update_domain_change_parent': (
         _SQLITE_UUID),
     'test_data_domains_routes.py::TestDataDomainsRoutes::'

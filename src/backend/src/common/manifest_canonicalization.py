@@ -42,13 +42,31 @@ def _is_float(value: Any) -> bool:
     return False
 
 
+# ADR: "Only integers with absolute value below 2^53" (the I-JSON safe range).
+_MAX_ABS_INTEGER = 2**53
+
+
+def _check_integer_range(value: int, path: str) -> None:
+    """Raise CanonicalizationError if value is outside the I-JSON integer range."""
+    if abs(value) >= _MAX_ABS_INTEGER:
+        raise CanonicalizationError(
+            "integer_out_of_range",
+            f"Integer {value} is outside the range allowed in canonical JSON "
+            f"(absolute value must be below 2^53)",
+            path,
+        )
+
+
 def _check_no_floats(obj: Any, path: str = "$") -> None:
     """
-    Recursively check that obj contains no floats anywhere.
+    Recursively check that obj contains no floats and no out-of-range integers.
 
-    Raises CanonicalizationError if a float is found.
+    Raises CanonicalizationError if a float is found, or an integer whose
+    absolute value is 2^53 or more. The error carries the JSON path of the value.
     """
-    if _is_float(obj):
+    if isinstance(obj, int) and not isinstance(obj, bool):
+        _check_integer_range(obj, path)
+    elif _is_float(obj):
         raise CanonicalizationError(
             "float_not_allowed",
             f"Float value {obj} encountered",
@@ -150,6 +168,9 @@ class CanonicalJSONEncoder(json.JSONEncoder):
         elif isinstance(obj, str):
             return '"' + "".join(_canonical_string(obj)) + '"'
         elif isinstance(obj, int):
+            # canonicalize() checks the whole tree first, with real paths; this
+            # guards direct use of the encoder.
+            _check_integer_range(obj, "$")
             return str(obj)
         elif isinstance(obj, dict):
             sorted_dict = _sort_keys_by_utf16(obj)

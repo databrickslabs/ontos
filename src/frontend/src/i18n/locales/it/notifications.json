@@ -203,5 +203,27 @@
         "approval-gate": "Esamina la richiesta di pubblicazione per {{entity_type}} '{{entity_name}}'."
       }
     }
+  },
+  "lifecycle": {
+    "deprecation": {
+      "title": "Product deprecated",
+      "description": "The data product '{{productName}}' has been marked as deprecated. {{reason}}{{sunsetDate}} Please contact the owner for information about the replacement.{{replacementProductName}}"
+    },
+    "retirement": {
+      "title": "Product retired",
+      "description": "The data product '{{productName}}' has been retired and is no longer available. If you were using this product, please migrate to an alternative immediately.{{replacementProductName}}"
+    },
+    "deletion": {
+      "title": "Product deleted",
+      "description": "The data product '{{productName}}' has been deleted{{deletedBy}}{{replacementProductName}}."
+    },
+    "activation": {
+      "title": "Product activated",
+      "description": "The data product '{{productName}}' has been activated and is now available for use."
+    },
+    "certification": {
+      "title": "Product certified",
+      "description": "The data product '{{productName}}' has achieved certified status and meets quality requirements."
+    }
   }
 }

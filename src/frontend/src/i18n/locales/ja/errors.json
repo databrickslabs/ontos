@@ -24,5 +24,8 @@
     "message": "予期しないエラーが発生しました。",
     "retry": "再試行"
   },
-  "internalError": "予期しないエラーが発生しました。詳細はサーバーログにあります（エラー ID {{errorId}}）。"
+  "internalError": "予期しないエラーが発生しました。詳細はサーバーログにあります（エラー ID {{errorId}}）。",
+  "subscription": {
+    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+  }
 }

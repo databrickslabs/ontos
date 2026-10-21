@@ -24,5 +24,8 @@
     "message": "Ocurrió un error inesperado.",
     "retry": "Reintentar"
   },
-  "internalError": "Se produjo un error inesperado. Los detalles están en el registro del servidor (id del error {{errorId}})."
+  "internalError": "Se produjo un error inesperado. Los detalles están en el registro del servidor (id del error {{errorId}}).",
+  "subscription": {
+    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+  }
 }

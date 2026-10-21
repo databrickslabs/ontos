@@ -12,6 +12,9 @@ from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
 from pathlib import Path
 
+from src.common.api_errors import CodedValueError
+from src.common.notification_i18n import notification_i18n_data
+
 SOURCE_ID_PROPERTY = "sourceId"
 # Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
 # convention (both written during the transition; either read); ontosEntityId is the
@@ -26,6 +29,36 @@ def _is_valid_uuid(value: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+class ProductNotSubscribableError(CodedValueError):
+    """A product is not in a subscribable status (active or certified).
+
+    ``str()`` is the English message; ``code`` and ``params`` (the status
+    and optional replacement product info) let the UI show it in the user's
+    language.
+    """
+
+    code = 'product_not_subscribable'
+
+    def __init__(
+        self,
+        status: str,
+        product_name: Optional[str] = None,
+        replacement_product_id: Optional[str] = None,
+        replacement_product_name: Optional[str] = None,
+    ):
+        message = (
+            f"Cannot subscribe to {product_name or 'product'} in status "
+            f"'{status}'. Product must be in one of: active, certified"
+        )
+        super().__init__(
+            message,
+            status=status,
+            productName=product_name or '',
+            replacementProductId=replacement_product_id or '',
+            replacementProductName=replacement_product_name or '',
+        )
 
 
 def _canonical_uuid(value: str) -> Optional[str]:
@@ -867,15 +900,28 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise
 
     def delete_product(self, product_id: str, user: Optional[str] = None) -> bool:
-        """Delete an ODPS v1.0.0 data product."""
+        """Delete an ODPS v1.0.0 data product.
+
+        Notifies subscribers before deletion (since deletion cascades remove them).
+        """
         try:
-            # Get product info before deletion for change log
+            # Get product info and subscribers before deletion
             product_db = self._repo.get(db=self._db, id=product_id)
             product_name = product_db.name if product_db else None
 
+            # Notify subscribers before deletion (deletion cascades remove them)
+            try:
+                self._notify_subscribers_on_delete(
+                    product_id=product_id,
+                    product_name=product_name,
+                    deleted_by=user
+                )
+            except Exception as notify_err:
+                logger.warning(f"Failed to notify subscribers of product deletion: {notify_err}")
+
             entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
-            
+
             if deleted_obj:
                 # Log to change log for timeline
                 try:
@@ -893,9 +939,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     )
                 except Exception as log_err:
                     logger.warning(f"Failed to log change for product deletion: {log_err}")
-                
+
                 self._notify_index_remove(f"product::{product_id}")
-            
+
             return deleted_obj is not None
         except SQLAlchemyError as e:
             logger.error(f"Database error deleting product {product_id}: {e}")
@@ -3942,9 +3988,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Check if product is in a subscribable status
             subscribable_statuses = ['active', 'certified']
             if product.status and product.status.lower() not in subscribable_statuses:
-                raise ValueError(
-                    f"Cannot subscribe to product in status '{product.status}'. "
-                    f"Product must be in one of: {', '.join(subscribable_statuses)}"
+                # Try to get replacement product info if available (from #1042)
+                replacement_id = None
+                replacement_name = None
+                if hasattr(product, 'replacement_product_id'):
+                    replacement_id = product.replacement_product_id
+                    # Try to get replacement product name
+                    if replacement_id:
+                        try:
+                            replacement = self.get_product(replacement_id)
+                            if replacement:
+                                replacement_name = replacement.name
+                        except Exception:
+                            # If we can't get replacement, continue without it
+                            pass
+                raise ProductNotSubscribableError(
+                    status=product.status,
+                    product_name=product.name,
+                    replacement_product_id=replacement_id,
+                    replacement_product_name=replacement_name,
                 )
 
             # Validate on_behalf_of principal exists in workspace SCIM (groups,
@@ -4366,40 +4428,42 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         description: str,
         notification_type: str = "INFO",
         link: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
         db: Optional[Session] = None
     ) -> int:
         """
         Send a notification to all subscribers of a product.
-        
+
         Args:
             product_id: ID of the product
             title: Notification title
             description: Notification description
             notification_type: Type of notification (INFO, WARNING, ACTION_REQUIRED)
             link: Optional link to include
+            data: Optional additional data including i18n keys
             db: Optional database session
-            
+
         Returns:
             Number of notifications sent
         """
         if not self._notifications_manager:
             logger.warning("NotificationsManager not available, cannot notify subscribers")
             return 0
-        
+
         db_session = db if db is not None else self._db
-        
+
         # Get all subscriber emails
         subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
             db_session,
             product_id=product_id
         )
-        
+
         if not subscriber_emails:
             logger.debug(f"No subscribers to notify for product {product_id}")
             return 0
-        
+
         from src.models.notifications import NotificationType, Notification
-        
+
         # Map string to enum
         type_map = {
             "INFO": NotificationType.INFO,
@@ -4409,7 +4473,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "ERROR": NotificationType.ERROR
         }
         notif_type = type_map.get(notification_type.upper(), NotificationType.INFO)
-        
+
         notifications_sent = 0
         for email in subscriber_emails:
             try:
@@ -4421,7 +4485,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     description=description,
                     recipient=email,
                     link=link or f"/data-products/{product_id}",
-                    can_delete=True
+                    can_delete=True,
+                    data=data
                 )
                 self._notifications_manager.create_notification(
                     notification=notification,
@@ -4430,9 +4495,81 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 notifications_sent += 1
             except Exception as e:
                 logger.error(f"Failed to send notification to {email}: {e}")
-        
+
         logger.info(f"Sent {notifications_sent} notifications for product {product_id}")
         return notifications_sent
+
+    def _notify_subscribers_on_delete(
+        self,
+        product_id: str,
+        product_name: Optional[str],
+        deleted_by: Optional[str] = None
+    ) -> None:
+        """
+        Notify all subscribers when a product is deleted.
+
+        The notification includes who deleted it, when it happened, and the product
+        name. If the product has a replacement (from #1042), that info is included.
+
+        Called BEFORE deletion since deletion cascades remove the subscription rows.
+
+        Args:
+            product_id: ID of the product
+            product_name: Name of the product
+            deleted_by: Username or email of who deleted it
+        """
+        try:
+            # Get replacement info if available
+            product = self.get_product(product_id) if product_id else None
+            replacement_id = None
+            replacement_name = None
+
+            if product:
+                if hasattr(product, 'replacement_product_id') and product.replacement_product_id:
+                    replacement_id = product.replacement_product_id
+                    try:
+                        replacement = self.get_product(replacement_id)
+                        if replacement:
+                            replacement_name = replacement.name
+                    except Exception:
+                        pass
+
+            # Prepare i18n data
+            deletion_time = datetime.utcnow().isoformat()
+            i18n_params = {
+                'productName': product_name or product_id,
+                'deletedAt': deletion_time,
+            }
+            if deleted_by:
+                i18n_params['deletedBy'] = deleted_by
+            if replacement_id:
+                i18n_params['replacementProductId'] = replacement_id
+            if replacement_name:
+                i18n_params['replacementProductName'] = replacement_name
+
+            # Create i18n data
+            i18n_data = notification_i18n_data(
+                title_key='notifications:lifecycle:deletion.title',
+                description_key='notifications:lifecycle:deletion.description',
+                **i18n_params
+            )
+
+            # Send notification
+            count = self.notify_subscribers(
+                product_id=product_id,
+                title=f"Product '{product_name or product_id}' has been deleted",
+                description=(
+                    f"The data product '{product_name or product_id}' has been deleted "
+                    f"{'by ' + deleted_by if deleted_by else 'recently'}."
+                ),
+                notification_type='ACTION_REQUIRED',
+                link=None,
+                data=i18n_data
+            )
+            logger.info(f"Notified {count} subscribers about product {product_id} deletion")
+        except Exception as e:
+            # Log but don't raise - notification failure shouldn't block deletion
+            logger.error(f"Failed to notify subscribers of product deletion: {e}")
 
     def _log_subscription_change(
         self,
@@ -4486,13 +4623,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     ) -> None:
         """
         Notify subscribers when a product's status changes to a notable state.
-        
+
         Subscribers are notified for:
         - Deprecation (deprecated status)
         - Retirement (retired status)
         - Activation (active status from non-active)
         - New certification (certified status)
-        
+
+        Notifications include i18n keys so each subscriber sees their language.
+        Deprecation and retirement notifications include reason, sunset date, and
+        replacement product info when available (from #1042).
+
         Args:
             product_id: ID of the product
             product_name: Name of the product
@@ -4504,49 +4645,85 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             'deprecated': {
                 'title': f"Product '{product_name}' has been deprecated",
                 'description': (
-                    f"The data product '{product_name}' has been marked as deprecated. "
-                    "Please plan to migrate to an alternative product or contact the owner for more information."
+                    "The data product has been marked as deprecated. "
+                    "Please plan to migrate to an alternative or contact the owner for information."
                 ),
+                'title_key': 'notifications:lifecycle:deprecation.title',
+                'description_key': 'notifications:lifecycle:deprecation.description',
                 'notification_type': 'WARNING'
             },
             'retired': {
                 'title': f"Product '{product_name}' has been retired",
                 'description': (
-                    f"The data product '{product_name}' has been retired and is no longer available. "
+                    "The data product has been retired and is no longer available. "
                     "If you were using this product, please migrate to an alternative immediately."
                 ),
+                'title_key': 'notifications:lifecycle:retirement.title',
+                'description_key': 'notifications:lifecycle:retirement.description',
                 'notification_type': 'ACTION_REQUIRED'
             },
             'active': {
                 'title': f"Product '{product_name}' is now active",
                 'description': (
-                    f"The data product '{product_name}' has been activated and is now available for use."
+                    "The data product has been activated and is now available for use."
                 ),
+                'title_key': 'notifications:lifecycle:activation.title',
+                'description_key': 'notifications:lifecycle:activation.description',
                 'notification_type': 'INFO'
             },
             'certified': {
                 'title': f"Product '{product_name}' has been certified",
                 'description': (
-                    f"The data product '{product_name}' has achieved certified status, "
+                    "The data product has achieved certified status, "
                     "indicating it meets all quality and compliance requirements."
                 ),
+                'title_key': 'notifications:lifecycle:certification.title',
+                'description_key': 'notifications:lifecycle:certification.description',
                 'notification_type': 'SUCCESS'
             }
         }
-        
+
         # Check if this status change warrants notification
         config = notification_configs.get(new_status)
         if not config:
             logger.debug(f"No notification needed for status change to {new_status}")
             return
-        
+
         try:
+            # Prepare i18n data with product name and any lifecycle fields
+            i18n_params = {'productName': product_name}
+
+            # Add deprecation fields if available (from #1042)
+            product = self.get_product(product_id)
+            if product:
+                if hasattr(product, 'deprecation_reason') and product.deprecation_reason:
+                    i18n_params['reason'] = product.deprecation_reason
+                if hasattr(product, 'sunset_date') and product.sunset_date:
+                    i18n_params['sunsetDate'] = str(product.sunset_date)
+                if hasattr(product, 'replacement_product_id') and product.replacement_product_id:
+                    i18n_params['replacementProductId'] = product.replacement_product_id
+                    # Try to get replacement name
+                    try:
+                        replacement = self.get_product(product.replacement_product_id)
+                        if replacement:
+                            i18n_params['replacementProductName'] = replacement.name
+                    except Exception:
+                        pass
+
+            # Create i18n data
+            i18n_data = notification_i18n_data(
+                title_key=config['title_key'],
+                description_key=config['description_key'],
+                **i18n_params
+            )
+
             count = self.notify_subscribers(
                 product_id=product_id,
                 title=config['title'],
                 description=config['description'],
                 notification_type=config['notification_type'],
-                link=f"/data-products/{product_id}"
+                link=f"/data-products/{product_id}",
+                data=i18n_data
             )
             logger.info(
                 f"Notified {count} subscribers about product {product_id} status change "

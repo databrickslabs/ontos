@@ -24,5 +24,8 @@
     "message": "Ein unerwarteter Fehler ist aufgetreten.",
     "retry": "Erneut versuchen"
   },
-  "internalError": "Ein unerwarteter Fehler ist aufgetreten. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}})."
+  "internalError": "Ein unerwarteter Fehler ist aufgetreten. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}}).",
+  "subscription": {
+    "productNotSubscribable": "Cannot subscribe to '{{productName}}' (status: {{status}}). Product must be in one of: active, certified. {{replacementProductName}}"
+  }
 }

@@ -885,6 +885,43 @@ class JobsManager:
             logger.error(f"Failed to list active runs for job {job_id}: {e}")
             return None
 
+    # Run states before the tasks start: such a run reads the app database after anything
+    # committed now. A RUNNING run may have read it already, so it isn't in this list.
+    _NOT_STARTED_RUN_STATES = (
+        RunLifeCycleState.QUEUED,
+        RunLifeCycleState.PENDING,
+        RunLifeCycleState.BLOCKED,
+        RunLifeCycleState.WAITING_FOR_RETRY,
+    )
+
+    def get_not_started_run_id(self, job_id: int) -> Optional[int]:
+        """Return the id of a run of the job that hasn't started its tasks yet, if any.
+
+        Asks the Jobs API: ``workflow_job_runs`` is only refreshed by the background
+        poll, so it can miss a run just requested or show a started run as PENDING.
+        """
+        for run in self._client.jobs.list_runs(job_id=job_id, active_only=True):
+            if run.state and run.state.life_cycle_state in self._NOT_STARTED_RUN_STATES:
+                return int(run.run_id)
+        return None
+
+    def run_workflow_unless_pending(self, workflow_id: str) -> Optional[int]:
+        """Run an installed workflow's job, unless one of its runs hasn't started yet.
+
+        Returns the new run id, or None when the workflow isn't installed or a run
+        that will see the current data is already waiting. Saved configuration and
+        database parameters are injected as for a manual run.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None or installation.status != 'installed':
+            return None
+        job_id = int(installation.job_id)
+        if self.get_not_started_run_id(job_id) is not None:
+            return None
+        return self.run_job(job_id=job_id, job_name=workflow_id, workflow_id=workflow_id)
+
     def pause_job(self, job_id: int) -> None:
         """Pause a scheduled/continuous job by setting pause_status to PAUSED."""
         try:

@@ -209,14 +209,14 @@ class Settings(BaseSettings):
     # environment (e.g. Databricks Apps injection) both reach the key providers.
     # PEM-encoded Ed25519 private key (local provider)
     MANIFEST_SIGNING_KEY_PEM: Optional[str] = Field(None, env='MANIFEST_SIGNING_KEY_PEM')
-    MANIFEST_SIGNING_KEY_PATH: str = Field(
+    MANIFEST_LOCAL_KEY_PATH: str = Field(
         '~/.ontos/manifest_signing_ed25519.pem',
-        env='MANIFEST_SIGNING_KEY_PATH'
+        env='MANIFEST_LOCAL_KEY_PATH'
     )  # PEM file path (local; used if MANIFEST_SIGNING_KEY_PEM is not set)
     # Databricks secret scope
-    MANIFEST_SIGNING_SECRET_SCOPE: Optional[str] = Field(None, env='MANIFEST_SIGNING_SECRET_SCOPE')
+    MANIFEST_SECRET_SCOPE: Optional[str] = Field(None, env='MANIFEST_SECRET_SCOPE')
     # Databricks secret key name
-    MANIFEST_SIGNING_SECRET_KEY: Optional[str] = Field(None, env='MANIFEST_SIGNING_SECRET_KEY')
+    MANIFEST_SECRET_KEY: Optional[str] = Field(None, env='MANIFEST_SECRET_KEY')
 
     # UI Customization settings
     UI_I18N_ENABLED: bool = Field(True, env='UI_I18N_ENABLED')  # Enable/disable internationalization (disable forces English)

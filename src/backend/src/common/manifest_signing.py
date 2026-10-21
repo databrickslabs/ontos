@@ -113,7 +113,7 @@ class LocalDevKeyProvider(SigningKeyProvider):
     Reads an Ed25519 private key in PEM format from the application settings
     (``Settings``, which merges the process environment and the ``.env`` file):
     1. ``MANIFEST_SIGNING_KEY_PEM`` (if set)
-    2. The file at ``MANIFEST_SIGNING_KEY_PATH`` (default
+    2. The file at ``MANIFEST_LOCAL_KEY_PATH`` (default
        ``~/.ontos/manifest_signing_ed25519.pem``)
 
     If neither is present, a new key is generated and written to the file with
@@ -137,7 +137,7 @@ class LocalDevKeyProvider(SigningKeyProvider):
         """
         key_pem = settings.MANIFEST_SIGNING_KEY_PEM
         if not key_pem:
-            key_path = Path(settings.MANIFEST_SIGNING_KEY_PATH).expanduser()
+            key_path = Path(settings.MANIFEST_LOCAL_KEY_PATH).expanduser()
             try:
                 if not key_path.exists():
                     self._create_key_file(key_path)
@@ -204,8 +204,8 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
 
     Retrieves an Ed25519 private key in PEM format from a Databricks
     workspace secret:
-    - Scope: MANIFEST_SIGNING_SECRET_SCOPE (required)
-    - Key: MANIFEST_SIGNING_SECRET_KEY (required)
+    - Scope: MANIFEST_SECRET_SCOPE (required)
+    - Key: MANIFEST_SECRET_KEY (required)
 
     The secret value must contain a PEM-encoded Ed25519 private key
     (optionally base64-encoded by the API; decoding is automatic).
@@ -229,19 +229,19 @@ class DatabricksSecretKeyProvider(SigningKeyProvider):
         """
         self._ws_client = workspace_client
 
-        scope = settings.MANIFEST_SIGNING_SECRET_SCOPE
+        scope = settings.MANIFEST_SECRET_SCOPE
         if not scope:
             raise KeyProviderError(
                 f'Databricks secret scope not configured. '
-                f'Set MANIFEST_SIGNING_SECRET_SCOPE.',
+                f'Set MANIFEST_SECRET_SCOPE.',
                 provider='DatabricksSecretKeyProvider'
             )
 
-        key_name = settings.MANIFEST_SIGNING_SECRET_KEY
+        key_name = settings.MANIFEST_SECRET_KEY
         if not key_name:
             raise KeyProviderError(
                 f'Databricks secret name not configured. '
-                f'Set MANIFEST_SIGNING_SECRET_KEY.',
+                f'Set MANIFEST_SECRET_KEY.',
                 provider='DatabricksSecretKeyProvider'
             )
 

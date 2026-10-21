@@ -361,7 +361,7 @@ const CatalogCommander: React.FC = () => {
         console.warn('Table not found:', tableId);
         toast({
           title: t('common:error'),
-          description: `Table "${tableName}" not found in ${schemaId}`,
+          description: t('messages.tableNotFound', { name: tableName, schema: schemaId }),
           variant: 'destructive',
         });
       }
@@ -376,7 +376,7 @@ const CatalogCommander: React.FC = () => {
       console.error('Error navigating to table:', err);
       toast({
         title: t('common:error'),
-        description: `Failed to navigate to ${tablePath}`,
+        description: t('messages.failedToNavigate', { path: tablePath }),
         variant: 'destructive',
       });
     }
@@ -422,8 +422,8 @@ const CatalogCommander: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Chat request failed' }));
-        throw new Error(error.detail || 'Chat request failed');
+        const error = await response.json().catch(() => ({ detail: t('errors.chatRequestFailed') }));
+        throw new Error(error.detail || t('errors.chatRequestFailed'));
       }
 
       const data = await response.json();
@@ -432,11 +432,11 @@ const CatalogCommander: React.FC = () => {
       // Add assistant response
       setAskMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.message.content || 'No response',
+        content: data.message.content || t('messages.noResponse'),
         timestamp: data.message.timestamp || new Date().toISOString()
       }]);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      const errorMessage = err instanceof Error ? err.message : t('errors.failedToSendMessage');
       toast({
         title: t('errors.error'),
         description: errorMessage,
@@ -486,8 +486,8 @@ const CatalogCommander: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Chat request failed' }));
-        throw new Error(error.detail || 'Chat request failed');
+        const error = await response.json().catch(() => ({ detail: t('errors.chatRequestFailed') }));
+        throw new Error(error.detail || t('errors.chatRequestFailed'));
       }
 
       const data = await response.json();
@@ -496,11 +496,11 @@ const CatalogCommander: React.FC = () => {
       // Add assistant response
       setAskMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.message.content || 'No response',
+        content: data.message.content || t('messages.noResponse'),
         timestamp: data.message.timestamp || new Date().toISOString()
       }]);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      const errorMessage = err instanceof Error ? err.message : t('errors.failedToSendMessage');
       toast({
         title: t('errors.error'),
         description: errorMessage,
@@ -875,7 +875,7 @@ const CatalogCommander: React.FC = () => {
                           onValueChange={setSelectedTargetEstate}
                         >
                           <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Select Estate" />
+                            <SelectValue placeholder={t('labels.selectEstate')} />
                           </SelectTrigger>
                           <SelectContent>
                             {estates.map(estate => (
@@ -915,7 +915,7 @@ const CatalogCommander: React.FC = () => {
                         <div className="flex flex-col items-center justify-center h-full min-h-[200px] p-4">
                           <div className="text-destructive text-sm mb-3">{error}</div>
                           <Button size="sm" variant="outline" onClick={() => fetchCatalogs()}>
-                            Retry
+                            {t('actions.retry')}
                           </Button>
                         </div>
                       ) : (

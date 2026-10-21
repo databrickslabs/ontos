@@ -1,5 +1,12 @@
 # Canned test personas exposed via GET /api/test/personas when TEST_USER_TOKEN is set.
 #
+# This is the DEFAULT / FALLBACK list. To customize the personas in a deployed
+# app (e.g. a DABs-from-git deployment) WITHOUT editing this repo, place a file
+# with the same schema at:
+#     {DATABRICKS_VOLUME}/config/test_personas.yaml
+# When that volume file exists it fully REPLACES this list, and edits to it are
+# picked up at runtime (within a short cache TTL) — no rebuild or restart needed.
+#
 # Each persona pairs a synthetic identity with the workspace groups that should
 # resolve to a given AppRole during permission evaluation. The default groups
 # below mirror the seeded role definitions (see DEFAULT_ROLES /

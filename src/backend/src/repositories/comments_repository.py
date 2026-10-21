@@ -1,4 +1,5 @@
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Union
+from uuid import UUID
 import json
 
 from sqlalchemy.orm import Session
@@ -169,7 +170,9 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
             db.rollback()
             raise
     
-    def soft_delete(self, db: Session, *, comment_id: str, deleted_by: str) -> Optional[CommentDb]:
+    def soft_delete(
+        self, db: Session, *, comment_id: Union[str, UUID], deleted_by: str,
+    ) -> Optional[CommentDb]:
         """Soft delete a comment by setting status to DELETED."""
         comment = self.get(db, comment_id)
         if comment:

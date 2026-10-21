@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
 import { Button } from './button';
@@ -18,6 +19,7 @@ import WorkflowApprovalResponseDialog, {
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Notification, NotificationType } from '@/types/notification';
 import { getEntityDetailPathFromPayload } from '@/lib/entity-detail-path';
+import { notificationDescription, notificationTitle } from '@/lib/notification-text';
 
 /** Only actionable rows should keep the dropdown open on select (Radix default). */
 function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
@@ -40,6 +42,7 @@ function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
 }
 
 export default function NotificationBell() {
+  const { t, i18n } = useTranslation();
   // Use selective subscriptions to avoid unnecessary re-renders
   const notifications = useNotificationsStore(state => state.notifications);
   const unreadCount = useNotificationsStore(state => state.unreadCount);
@@ -171,7 +174,7 @@ export default function NotificationBell() {
     setIsAccessGrantDialogOpen(false);
   };
 
-  const getIcon = (type: NotificationType) => {
+  const getIcon = (type: NotificationType, data?: Record<string, unknown> | null) => {
     switch (type) {
       case 'info':
         return <Info className="h-4 w-4 text-blue-500" />;
@@ -183,8 +186,19 @@ export default function NotificationBell() {
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'action_required':
         return <AlertCircle className="h-4 w-4 text-orange-500" />;
-      case 'job_progress':
+      case 'job_progress': {
+        // A job_progress notification carries its terminal outcome in data.status
+        // (the notification type can't be changed after creation). Only spin
+        // while it's actually running; show the outcome icon once it's done.
+        const status = String((data as { status?: unknown } | null | undefined)?.status ?? 'running');
+        if (status === 'completed')
+          return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        if (status === 'failed')
+          return <AlertCircle className="h-4 w-4 text-red-500" />;
+        if (status === 'cancelled')
+          return <X className="h-4 w-4 text-muted-foreground" />;
         return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      }
       default:
         return <Info className="h-4 w-4" />;
     }
@@ -213,21 +227,21 @@ export default function NotificationBell() {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Notifications</TooltipContent>
+        <TooltipContent>{t('notifications:ui.tooltip')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-80">
         <ScrollArea className="h-[400px]">
           {isLoading ? (
              <div className="p-4 text-center text-sm text-muted-foreground">
-                Loading notifications...
+                {t('notifications:ui.loading')}
              </div>
           ) : error ? (
              <div className="p-4 text-center text-sm text-red-600">
-                Error: {error}
+                {t('notifications:ui.error', { error })}
              </div>
           ) : notifications.length === 0 ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
-              No notifications
+              {t('notifications:ui.empty')}
             </div>
           ) : (
             notifications.map((notification) => {
@@ -249,8 +263,8 @@ export default function NotificationBell() {
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    {getIcon(notification.type)}
-                    <p className="text-sm font-medium">{notification.title}</p>
+                    {getIcon(notification.type, notification.data || notification.action_payload)}
+                    <p className="text-sm font-medium">{notificationTitle(notification, t)}</p>
                   </div>
                   {notification.subtitle && (
                     <p className="text-xs text-muted-foreground mt-1">
@@ -259,7 +273,7 @@ export default function NotificationBell() {
                   )}
                   {(notification.description || notification.message) && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {notification.description || notification.message}
+                      {notificationDescription(notification, t)}
                     </p>
                   )}
                   {/* Render link button if present */}
@@ -276,7 +290,7 @@ export default function NotificationBell() {
                         size="sm" // Changed to small size
                         className="h-7 px-2 text-xs" // Use text-xs for smaller font, adjust height/padding
                       >
-                         Open
+                         {t('notifications:ui.open')}
                       </Button>
                     </a>
                   )}
@@ -291,7 +305,7 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      {notification.read ? "View Details" : "Approve/Deny"}
+                      {notification.read ? t('notifications:ui.viewDetails') : t('notifications:ui.approveDeny')}
                     </Button>
                   )}
                   {notification.action_type === 'handle_access_grant_request' && notification.action_payload && (
@@ -305,7 +319,7 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      {notification.read ? "View Details" : "Handle Access Grant"}
+                      {notification.read ? t('notifications:ui.viewDetails') : t('notifications:ui.handleAccessGrant')}
                     </Button>
                   )}
                   {notification.action_type === 'handle_steward_review' && notification.action_payload && (
@@ -319,7 +333,7 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      {notification.read ? "View Details" : "Review Contract"}
+                      {notification.read ? t('notifications:ui.viewDetails') : t('notifications:ui.reviewContract')}
                     </Button>
                   )}
                   {notification.action_type === 'handle_publish_request' && notification.action_payload && (
@@ -333,7 +347,7 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      {notification.read ? "View Details" : "Handle Publish"}
+                      {notification.read ? t('notifications:ui.viewDetails') : t('notifications:ui.handlePublish')}
                     </Button>
                   )}
                   {notification.action_type === 'handle_deploy_request' && notification.action_payload && (
@@ -347,13 +361,13 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      {notification.read ? "View Details" : "Handle Deploy"}
+                      {notification.read ? t('notifications:ui.viewDetails') : t('notifications:ui.handleDeploy')}
                     </Button>
                   )}
                   {notification.action_type === 'workflow_approval' && notification.action_payload?.execution_id && (
                     notification.action_payload?.handled ? (
                       <div className="text-xs text-muted-foreground mt-2 italic">
-                        {notification.action_payload?.decision === 'approved' ? '✓ Approved' : '✗ Rejected'}
+                        {notification.action_payload?.decision === 'approved' ? t('notifications:ui.approved') : t('notifications:ui.rejected')}
                       </div>
                     ) : (
                       <Button
@@ -366,7 +380,7 @@ export default function NotificationBell() {
                         }}
                       >
                         <CheckSquare className="h-3.5 w-3.5" />
-                        {notification.read ? 'View / Respond' : 'Approve/Deny'}
+                        {notification.read ? t('notifications:ui.viewRespond') : t('notifications:ui.approveDeny')}
                       </Button>
                     )
                   )}
@@ -382,7 +396,7 @@ export default function NotificationBell() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <CheckSquare className="h-3.5 w-3.5" />
-                          Review certification request
+                          {t('notifications:ui.reviewCertification')}
                         </Link>
                       </Button>
                     )}
@@ -398,27 +412,31 @@ export default function NotificationBell() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <CheckSquare className="h-3.5 w-3.5" />
-                          Review publication request
+                          {t('notifications:ui.reviewPublication')}
                         </Link>
                       </Button>
                     )}
                   {(notification.type === 'job_progress' || notification.action_type === 'job_progress') && (notification.data || notification.action_payload) && (
                     <div className="mt-2">
-                      <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
+                      {!['completed', 'failed', 'cancelled'].includes(
+                        String((notification.data || notification.action_payload)?.status ?? 'running')
+                      ) && (
+                        <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
+                      )}
                       {((notification.data || notification.action_payload)?.status) && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Status: {String((notification.data || notification.action_payload)?.status)}
+                          {t('notifications:ui.status', { status: String((notification.data || notification.action_payload)?.status) })}
                         </p>
                       )}
                       {(notification.data || notification.action_payload)?.run_id && (
                         <p className="text-xs text-muted-foreground">
-                          Run ID: {String((notification.data || notification.action_payload)?.run_id)}
+                          {t('notifications:ui.runId', { runId: String((notification.data || notification.action_payload)?.run_id) })}
                         </p>
                       )}
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(notification.created_at).toLocaleString()}
+                    {new Date(notification.created_at).toLocaleString(i18n.language)}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -430,6 +448,7 @@ export default function NotificationBell() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6"
+                      aria-label={t('notifications:ui.delete')}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(notification.id);
@@ -450,9 +469,9 @@ export default function NotificationBell() {
       <ConfirmRoleRequestDialog
         isOpen={isConfirmDialogOpen}
         onOpenChange={setIsConfirmDialogOpen}
-        requesterEmail={selectedNotificationPayload?.requester_email ?? 'Unknown User'}
-        roleId={selectedNotificationPayload?.role_id ?? 'Unknown Role ID'}
-        roleName={selectedNotificationPayload?.role_name ?? 'Unknown Role Name'}
+        requesterEmail={selectedNotificationPayload?.requester_email ?? t('notifications:ui.unknownUser')}
+        roleId={selectedNotificationPayload?.role_id ?? t('notifications:ui.unknownRoleId')}
+        roleName={selectedNotificationPayload?.role_name ?? t('notifications:ui.unknownRoleName')}
         requesterMessage={selectedNotificationPayload?.requester_message}
         onDecisionMade={handleDecisionMade}
       />
@@ -461,9 +480,9 @@ export default function NotificationBell() {
       <HandleStewardReviewDialog
         isOpen={isReviewDialogOpen}
         onOpenChange={setIsReviewDialogOpen}
-        contractId={selectedReviewPayload.contract_id ?? 'Unknown ID'}
+        contractId={selectedReviewPayload.contract_id ?? t('notifications:ui.unknownId')}
         contractName={selectedReviewPayload.contract_name}
-        requesterEmail={selectedReviewPayload.requester_email ?? 'Unknown User'}
+        requesterEmail={selectedReviewPayload.requester_email ?? t('notifications:ui.unknownUser')}
         onDecisionMade={handleDecisionMade}
       />
     )}
@@ -471,9 +490,9 @@ export default function NotificationBell() {
       <HandlePublishRequestDialog
         isOpen={isPublishDialogOpen}
         onOpenChange={setIsPublishDialogOpen}
-        contractId={selectedPublishPayload.contract_id ?? 'Unknown ID'}
+        contractId={selectedPublishPayload.contract_id ?? t('notifications:ui.unknownId')}
         contractName={selectedPublishPayload.contract_name}
-        requesterEmail={selectedPublishPayload.requester_email ?? 'Unknown User'}
+        requesterEmail={selectedPublishPayload.requester_email ?? t('notifications:ui.unknownUser')}
         onDecisionMade={handleDecisionMade}
       />
     )}
@@ -481,9 +500,9 @@ export default function NotificationBell() {
       <HandleDeployRequestDialog
         isOpen={isDeployDialogOpen}
         onOpenChange={setIsDeployDialogOpen}
-        contractId={selectedDeployPayload.contract_id ?? 'Unknown ID'}
+        contractId={selectedDeployPayload.contract_id ?? t('notifications:ui.unknownId')}
         contractName={selectedDeployPayload.contract_name}
-        requesterEmail={selectedDeployPayload.requester_email ?? 'Unknown User'}
+        requesterEmail={selectedDeployPayload.requester_email ?? t('notifications:ui.unknownUser')}
         catalog={selectedDeployPayload.catalog}
         schema={selectedDeployPayload.schema}
         onDecisionMade={handleDecisionMade}
@@ -495,7 +514,7 @@ export default function NotificationBell() {
         onOpenChange={setIsAccessGrantDialogOpen}
         request={{
           id: selectedAccessGrantPayload.request_id ?? '',
-          requester_email: selectedAccessGrantPayload.requester_email ?? 'Unknown User',
+          requester_email: selectedAccessGrantPayload.requester_email ?? t('notifications:ui.unknownUser'),
           entity_type: selectedAccessGrantPayload.entity_type ?? 'unknown',
           entity_id: selectedAccessGrantPayload.entity_id ?? '',
           entity_name: selectedAccessGrantPayload.entity_name,

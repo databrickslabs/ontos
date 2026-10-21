@@ -1,0 +1,78 @@
+# ============================================================================
+# Linked fixture — Contract C1: Raw Orders  (id fbfa8318-…)
+# ----------------------------------------------------------------------------
+# Referenced BY: sales_analytics.odps.yaml inputPorts[0].contractId
+# References:    (none — this is a source contract)
+#
+# The top-level `id` is a stable UUID. With adopt_ids ON (default, #853) it is
+# adopted as the primary key on import, so the reference from the product's
+# input port keeps resolving after a round-trip.
+# ============================================================================
+id: fbfa8318-bb26-4172-a705-80c1ec94c4b6
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: active
+name: Raw Orders
+domain: sales
+tenant: AcmeRetail
+
+description:
+  purpose: Immutable landing table of individual customer orders.
+  usage: Source feed for downstream sales analytics products.
+  limitations: Raw, uncleansed; no currency normalization.
+
+schema:
+  - id: orders_obj
+    name: orders
+    physicalName: raw_orders
+    physicalType: table
+    businessName: Customer Orders
+    description: One row per placed order.
+    tags: [ 'domain/sales', 'governance/raw' ]
+    properties:
+      - id: order_id_prop
+        name: order_id
+        physicalName: order_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        unique: true
+        classification: public
+        description: Unique order identifier (UUID).
+      - id: customer_id_prop
+        name: customer_id
+        logicalType: string
+        physicalType: varchar(36)
+        required: true
+        classification: restricted
+        description: Identifier of the ordering customer.
+      - id: order_ts_prop
+        name: order_ts
+        logicalType: date
+        physicalType: timestamp
+        required: true
+        partitioned: true
+        partitionKeyPosition: 1
+        classification: public
+        description: Order placement timestamp (UTC).
+      - id: amount_prop
+        name: amount
+        logicalType: number
+        physicalType: decimal(12,2)
+        required: true
+        classification: public
+        description: Gross order amount in the order's currency.
+    quality:
+      - metric: rowCount
+        mustBeGreaterThan: 0
+        type: library
+        dimension: completeness
+        severity: error
+        businessImpact: operational
+
+tags:
+  - domain/sales
+  - governance/raw

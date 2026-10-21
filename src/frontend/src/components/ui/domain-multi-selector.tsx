@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -93,15 +94,36 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
   value,
   primaryDomainId,
   onChange,
-  placeholder = 'Select domains...',
+  placeholder,
   disabled = false,
   maxDomains,
   label,
   className,
 }) => {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const { domains, loading, getDomainName } = useDomains();
+
+  // When open inside a modal Dialog, a single Escape closes BOTH the popover and
+  // the surrounding Dialog: Radix routes Escape through document-level listeners
+  // registered (on mount) before anything this child can add, so it can't be
+  // stopped from within the popover's own handlers. A `window` capture-phase
+  // listener fires before any document listener, so we intercept Escape there
+  // while open, close only the popover, and stop the event — the Dialog stays
+  // open, and a second Escape (listener now removed) closes it as expected.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open]);
 
   // Resolve the effective primary: the explicit one if still selected, else the first.
   const effectivePrimary = resolveEffectivePrimary(value, primaryDomainId);
@@ -147,9 +169,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
                   <button
                     type="button"
                     onClick={() => setPrimary(domainId)}
-                    title={isPrimary ? 'Primary domain' : 'Set as primary domain'}
+                    title={isPrimary ? t('common:domainSelector.primaryDomain') : t('common:domainSelector.setAsPrimary')}
                     className="focus:outline-none"
-                    aria-label={isPrimary ? 'Primary domain' : 'Set as primary domain'}
+                    aria-label={isPrimary ? t('common:domainSelector.primaryDomain') : t('common:domainSelector.setAsPrimary')}
                   >
                     <Star className={cn('h-3 w-3', isPrimary ? 'fill-current' : 'opacity-40')} />
                   </button>
@@ -161,9 +183,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
                   <button
                     type="button"
                     onClick={() => removeDomain(domainId)}
-                    title="Remove domain"
+                    title={t('common:domainSelector.removeDomain')}
                     className="focus:outline-none"
-                    aria-label="Remove domain"
+                    aria-label={t('common:domainSelector.removeDomain')}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -189,65 +211,83 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
           >
             {value.length > 0 ? (
               <span className="truncate">
-                {value.length === 1 ? '1 domain selected' : `${value.length} domains selected`}
+                {t('common:domainSelector.selectedCount', { count: value.length })}
               </span>
             ) : (
-              placeholder
+              placeholder ?? t('common:domainSelector.selectPlaceholder')
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full p-0" align="start">
+        {/*
+          pointer-events-auto is the real scroll fix: a modal Dialog sets
+          `body { pointer-events: none }` and only re-enables it on the dialog
+          content. This popover is portaled to <body> (a sibling of the dialog),
+          so without this it inherits pointer-events:none — the dropdown is
+          painted but click/wheel-through, and the wheel scrolls the dialog
+          behind it. Re-enabling it here makes the dropdown interactive again.
+        */}
+        <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
           <Command shouldFilter={false}>
             <CommandInput
-              placeholder="Search domains..."
+              placeholder={t('common:domainSelector.searchPlaceholder')}
               value={searchValue}
               onValueChange={setSearchValue}
             />
-            <div
-              className="max-h-60 overflow-y-auto"
+            {/*
+              Single scroll container: the primitive supplies `overflow-y-auto`
+              and `max-h-60` caps the height (twMerge overrides max-h-[300px]).
+              A previous wrapper <div> added a second, shorter scroller — nested
+              scrollers that clipped long lists.
+              onWheel stopPropagation is REQUIRED here: the modal Dialog installs
+              a body-level wheel listener (scroll-lock) that preventDefaults;
+              since this popover is portaled to <body>, a bubbling wheel reaches
+              that handler and cancels the list's own scroll unless stopped.
+              overscroll-contain stops chaining at the list edges. (Interactivity
+              — pointer-events-auto — is on PopoverContent above.)
+            */}
+            <CommandList
+              className="max-h-60 overscroll-contain"
               onWheel={(e) => e.stopPropagation()}
             >
-              <CommandList>
-                {loading ? (
-                  <CommandEmpty>Loading domains...</CommandEmpty>
-                ) : filteredDomains.length === 0 ? (
-                  <CommandEmpty>No domains found.</CommandEmpty>
-                ) : (
-                  <CommandGroup>
-                    {filteredDomains.map((domain) => (
-                      <CommandItem
-                        key={domain.id}
-                        value={domain.name}
-                        onSelect={() => (isSelected(domain.id) ? removeDomain(domain.id) : addDomain(domain.id))}
-                      >
-                        <Check
-                          className={cn(
-                            'mr-2 h-4 w-4',
-                            isSelected(domain.id) ? 'opacity-100' : 'opacity-0'
-                          )}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium truncate">{domain.name}</span>
-                          {domain.description && (
-                            <div className="text-sm text-muted-foreground truncate">
-                              {domain.description}
-                            </div>
-                          )}
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            </div>
+              {loading ? (
+                <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
+              ) : filteredDomains.length === 0 ? (
+                <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {filteredDomains.map((domain) => (
+                    <CommandItem
+                      key={domain.id}
+                      value={domain.name}
+                      onSelect={() => (isSelected(domain.id) ? removeDomain(domain.id) : addDomain(domain.id))}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          isSelected(domain.id) ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium truncate">{domain.name}</span>
+                        {domain.description && (
+                          <div className="text-sm text-muted-foreground truncate">
+                            {domain.description}
+                          </div>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
 
       {maxDomains && (
         <p className="text-sm text-muted-foreground">
-          {value.length} of {maxDomains} domains selected
+          {t('common:domainSelector.selectedOfMax', { count: value.length, max: maxDomains })}
         </p>
       )}
     </div>

@@ -24,7 +24,8 @@
     "noEdit": "Je hebt geen toestemming om dataproducten te bewerken.",
     "noDelete": "Je hebt geen toestemming om dataproducten te verwijderen.",
     "noBulkDelete": "Je hebt geen toestemming voor bulk verwijdering.",
-    "noGenieSpace": "Je hebt geen toestemming om Genie Spaces aan te maken."
+    "noGenieSpace": "Je hebt geen toestemming om Genie Spaces aan te maken.",
+    "noUpload": "Je hebt geen toestemming om dataproducten te uploaden."
   },
   "bulk": {
     "deleteConfirm": "Weet je zeker dat je {{count}} geselecteerde product(en) wilt verwijderen?",
@@ -54,7 +55,8 @@
     "uploading": "Uploaden...",
     "tooltipTitle": "Dataproduct Uploaden (ODPS formaat)",
     "tooltipDescription": "Accepteert YAML of JSON bestanden die het ODPS (Open Data Product Standard) schema volgen.",
-    "tooltipHint": "Voor Datacontracten (ODCS), gebruik in plaats daarvan de Datacontracten pagina."
+    "tooltipHint": "Voor Datacontracten (ODCS), gebruik in plaats daarvan de Datacontracten pagina.",
+    "odcsHint": "Hint: Deze pagina is voor Dataproducten (ODPS formaat). Als je een Datacontract (ODCS formaat) probeert te uploaden, gebruik dan in plaats daarvan de Datacontracten pagina."
   },
   "genie": {
     "noSelection": "Geen Selectie",
@@ -85,7 +87,11 @@
     "viewDetails": "Details bekijken",
     "editProduct": "Product bewerken",
     "deleteProduct": "Product verwijderen",
-    "subscribed": "Geabonneerd"
+    "subscribed": "Geabonneerd",
+    "unnamedProduct": "Naamloos Product",
+    "previewMetadata": "Metadata bekijken",
+    "editDenied": "Bewerken (Geen Toegang)",
+    "deleteDenied": "Verwijderen (Geen Toegang)"
   },
   "messages": {
     "deleteConfirm": "Weet je zeker dat je dit dataproduct wilt verwijderen?",
@@ -95,7 +101,13 @@
     "importSuccess": "Dataproduct succesvol geïmporteerd",
     "importError": "Kon dataproduct niet importeren",
     "success": "Succes",
-    "error": "Fout"
+    "error": "Fout",
+    "validationErrors": "{{count}} validatiefout(en) opgetreden",
+    "validationTitle": "Validatiefout",
+    "loadInitialError": "Laden van initiële data mislukt",
+    "refreshError": "Vernieuwen van productenlijst mislukt",
+    "unknownError": "Onbekende fout",
+    "unknownErrorFormat": "Onbekend foutformaat"
   },
   "status": {
     "draft": "Concept",
@@ -108,7 +120,8 @@
     "certified": "Gecertificeerd",
     "deprecated": "Verouderd",
     "retired": "Buiten Gebruik",
-    "published": "Gepubliceerd"
+    "published": "Gepubliceerd",
+    "personalDraft": "Persoonlijk Concept"
   },
   "viewMode": {
     "table": "Tabel",
@@ -135,7 +148,15 @@
       "updated": "Bijgewerkt",
       "tags": "Tags",
       "noTags": "Geen tags",
-      "notAssigned": "Niet toegewezen"
+      "notAssigned": "Niet toegewezen",
+      "project": "Project",
+      "tenant": "Tenant",
+      "ownerTeam": "Team",
+      "apiVersion": "API-versie",
+      "certification": "Cert.",
+      "publishedLabel": "Gepubliceerd",
+      "quality": "Kwaliteit",
+      "linkedConcepts": "Gekoppelde bedrijfsconcepten"
     },
     "sections": {
       "overview": "Overzicht",
@@ -172,7 +193,9 @@
         "email": "E-mail",
         "subscribed": "Geabonneerd",
         "reason": "Reden"
-      }
+      },
+      "titleWithCount": "Abonnees ({{count}})",
+      "notificationSubtitle": "Gebruikers die op dit product zijn geabonneerd ontvangen notificaties over statuswijzigingen, compliance-problemen en nieuwe versies."
     },
     "subscription": {
       "subscribed": "Geabonneerd",
@@ -183,7 +206,155 @@
     },
     "deleteConfirm": "Weet je zeker dat je \"{{name}}\" wilt verwijderen?",
     "deleteSuccess": "Dataproduct succesvol verwijderd",
-    "deleteError": "Kon dataproduct niet verwijderen"
+    "deleteError": "Kon dataproduct niet verwijderen",
+    "unnamedProduct": "Naamloos Product",
+    "ratings": {
+      "title": "Beoordelingen & Recensies"
+    },
+    "actions": {
+      "requestAccess": "Aanvragen...",
+      "certify": "Certificeren",
+      "createGenieSpace": "Genie Space aanmaken",
+      "cloneForEditing": "Klonen voor bewerking",
+      "commitChanges": "Wijzigingen committen",
+      "discardDraft": "Concept verwerpen",
+      "newVersion": "Nieuwe versie",
+      "exportODPS": "ODPS exporteren",
+      "manageLineage": "Lineage beheren"
+    },
+    "banners": {
+      "personalDraftTitle": "Persoonlijk Concept",
+      "personalDraftMessage": "Dit is je persoonlijke concept. Alleen jij kunt het zien. Commit wijzigingen om te delen met je team.",
+      "readOnlyTitle": "Alleen-lezen",
+      "readOnlyMessage": "Dit product is {{status}}. Kloon het om een persoonlijk concept aan te maken voor bewerking."
+    },
+    "contacts": {
+      "title": "Contacten",
+      "fromImportedData": "Uit geïmporteerde data",
+      "teamAssignmentOnly": "Alleen teamtoewijzing",
+      "defaultRole": "Eigenaar",
+      "teamRole": "Team",
+      "importedContactsLabel": "Geïmporteerde contacten",
+      "noContactsAssigned": "Geen contacten toegewezen"
+    },
+    "deliverables": {
+      "titleWithCount": "Leveringen ({{count}})",
+      "addDeliverable": "Levering toevoegen",
+      "subtitle": "Definieer leveringen en hun leveringsmethoden. Koppel assets en contracten aan elke levering.",
+      "noDeliverables": "Geen leveringen gedefinieerd.",
+      "noDeliverablesWithEdit": "Geen leveringen gedefinieerd. Voeg leveringen toe en koppel assets wanneer je klaar bent.",
+      "contractLabel": "Contract: {{name}}",
+      "editTitle": "Levering bewerken",
+      "deleteTitle": "Levering verwijderen",
+      "linkAsset": "Asset koppelen",
+      "linkAssetsTitle": "Assets koppelen aan \"{{portName}}\"",
+      "linkAssetsDescription": "Alleen leverbare assettypes (Tabel, View, Dataset, API Endpoint, ML Model) kunnen aan een output poort worden gekoppeld.",
+      "linkedToPort": "gekoppeld aan poort",
+      "assetsLinkedTitle": "Assets gekoppeld",
+      "assetsLinked": "{{count}} asset(s) gekoppeld aan {{portName}}",
+      "assetUnlinked": "Asset ontkoppeld",
+      "linkAssetsFailed": "Koppelen van assets mislukt",
+      "unlinkAssetFailed": "Ontkoppelen van asset mislukt"
+    },
+    "description": {
+      "purposeLabel": "Doel",
+      "limitationsLabel": "Beperkingen",
+      "usageLabel": "Gebruik"
+    },
+    "lineage": {
+      "businessLineageTitle": "Business Lineage"
+    },
+    "consumables": {
+      "titleWithCount": "Consumables ({{count}})",
+      "addConsumable": "Consumable toevoegen",
+      "contractLabel": "Contract: {{contractId}}",
+      "noConsumables": "Geen consumables gedefinieerd"
+    },
+    "managementPorts": {
+      "titleWithCount": "Management Poorten ({{count}})",
+      "addManagementPort": "Management Poort toevoegen",
+      "subtitle": "Endpoints voor observability, controle en vindbaarheid",
+      "contentLabel": "Inhoud",
+      "urlLabel": "URL",
+      "noManagementPorts": "Geen management poorten gedefinieerd"
+    },
+    "teamMetadata": {
+      "titleWithCount": "ODPS Team Metadata ({{count}} leden)",
+      "subtitle": "Alleen-lezen herkomst uit geïmporteerde product-YAML. Beheer eigenaarschap via het Eigenaren-paneel hierboven.",
+      "defaultRole": "Lid"
+    },
+    "supportChannels": {
+      "titleWithCount": "Supportkanalen ({{count}})",
+      "addChannel": "Kanaal toevoegen",
+      "toolLabel": "Tool",
+      "noChannels": "Geen supportkanalen gedefinieerd"
+    },
+    "relatedEntities": {
+      "title": "Gerelateerde entiteiten"
+    },
+    "toasts": {
+      "loadError": "Laden van data mislukt: {{error}}",
+      "certifyTitle": "Gecertificeerd",
+      "certifySuccess": "Het certificeringsniveau is toegepast.",
+      "publishTitle": "Publicatie bijgewerkt",
+      "publishSuccess": "Het publicatiebereik is opgeslagen.",
+      "deleteError": "Verwijderen mislukt: {{error}}",
+      "draftCreatedTitle": "Concept Aangemaakt",
+      "draftCreatedMessage": "Persoonlijk concept aangemaakt. Je kunt het nu bewerken.",
+      "draftDiscardedTitle": "Concept Verworpen",
+      "draftDiscardedMessage": "Persoonlijk concept is verworpen.",
+      "approvalNotConfiguredTitle": "Goedkeuringsworkflow niet geconfigureerd",
+      "approvalNotConfiguredMessage": "Direct abonneren. Laad standaardworkflows in Instellingen om de goedkeuringsflow te gebruiken.",
+      "subscribedTitle": "Geabonneerd",
+      "subscribedMessage": "Je ontvangt nu notificaties over dit product.",
+      "unsubscribedTitle": "Afgemeld",
+      "unsubscribedMessage": "Je ontvangt geen notificaties meer over dit product.",
+      "updatedTitle": "Bijgewerkt",
+      "updatedMessage": "Product succesvol bijgewerkt.",
+      "createNewVersionTitle": "Nieuwe versie aanmaken",
+      "createNewVersionMessage": "Het aanmaken van een nieuwe versie kloont dit product. Pas je wijzigingen toe op de nieuwe versie na het aanmaken.",
+      "creatingVersionTitle": "Nieuwe versie aanmaken",
+      "creatingVersionMessage": "Versie {{version}} aanmaken...",
+      "versionCreatedMessage": "Versie {{version}} aangemaakt!",
+      "consumableUpdatedTitle": "Consumable Bijgewerkt",
+      "consumableUpdatedMessage": "Consumable succesvol bijgewerkt.",
+      "consumableDeletedTitle": "Consumable Verwijderd",
+      "consumableDeletedMessage": "Consumable succesvol verwijderd.",
+      "deliverableUpdatedTitle": "Levering Bijgewerkt",
+      "deliverableUpdatedMessage": "Levering succesvol bijgewerkt.",
+      "deliverableDeletedTitle": "Levering Verwijderd",
+      "deliverableDeletedMessage": "Levering succesvol verwijderd.",
+      "managementPortUpdatedTitle": "Management Poort Bijgewerkt",
+      "managementPortUpdatedMessage": "Management poort succesvol bijgewerkt.",
+      "managementPortDeletedTitle": "Management Poort Verwijderd",
+      "managementPortDeletedMessage": "Management poort succesvol verwijderd.",
+      "teamMemberAddedTitle": "Teamlid Toegevoegd",
+      "teamMemberAddedMessage": "Teamlid succesvol toegevoegd.",
+      "teamMemberUpdatedTitle": "Teamlid Bijgewerkt",
+      "teamMemberUpdatedMessage": "Teamlid succesvol bijgewerkt.",
+      "supportChannelUpdatedTitle": "Supportkanaal Bijgewerkt",
+      "supportChannelUpdatedMessage": "Supportkanaal succesvol bijgewerkt.",
+      "supportChannelDeletedTitle": "Supportkanaal Verwijderd",
+      "supportChannelDeletedMessage": "Supportkanaal succesvol verwijderd.",
+      "contractUnlinkedTitle": "Contract Ontkoppeld",
+      "contractUnlinkedMessage": "Contract succesvol ontkoppeld van levering",
+      "iriLinkedTitle": "Gekoppeld",
+      "iriLinkedMessage": "IRI gekoppeld aan dataproduct.",
+      "iriRemovedTitle": "Verwijderd",
+      "iriRemovedMessage": "IRI-koppeling verwijderd.",
+      "genieSpaceRequesting": "Genie Space aanmaak aanvragen...",
+      "genieSpaceInitiated": "Genie Space aanmaak geïnitieerd."
+    },
+    "confirms": {
+      "deleteProduct": "Dataproduct \"{{name}}\" verwijderen?",
+      "discardDraft": "Dit concept verwerpen? Deze actie kan niet ongedaan worden gemaakt.",
+      "deleteConsumable": "Deze consumable verwijderen?",
+      "deleteDeliverable": "Deze levering verwijderen?",
+      "deleteManagementPort": "Deze management poort verwijderen?",
+      "deleteSupportChannel": "Dit supportkanaal verwijderen?",
+      "unlinkContract": "Contract ontkoppelen van deze levering?",
+      "createGenieSpace": "Een Genie Space aanmaken voor \"{{name}}\"?"
+    }
   },
   "form": {
     "createTitle": "Dataproduct Aanmaken",
@@ -214,7 +385,144 @@
     "createSuccess": "Dataproduct succesvol aangemaakt",
     "updateSuccess": "Dataproduct succesvol bijgewerkt",
     "createError": "Kon dataproduct niet aanmaken",
-    "updateError": "Kon dataproduct niet bijwerken"
+    "updateError": "Kon dataproduct niet bijwerken",
+    "dialogDescription": "Vul de details voor het dataproduct in. Gebruik de tabbladen om te schakelen tussen de UI- en JSON-editors.",
+    "loadingDetails": "Productdetails laden...",
+    "tabs": {
+      "uiEditor": "UI-editor",
+      "jsonEditor": "JSON-editor"
+    },
+    "fields": {
+      "id": "ID (unieke identificatie)",
+      "title": "Titel *",
+      "owner": "Eigenaar *",
+      "productType": "Producttype *",
+      "project": "Project",
+      "domains": "Domeinen",
+      "archetype": "Archetype"
+    },
+    "placeholders": {
+      "systemId": "(Systeem-ID)",
+      "productIdOptional": "bijv. my-unique-product (optioneel)",
+      "selectProductType": "Selecteer producttype",
+      "selectProject": "Selecteer project (optioneel)",
+      "selectDomains": "Selecteer domeinen...",
+      "selectArchetype": "Selecteer archetype",
+      "selectStatus": "Selecteer status"
+    },
+    "projectTeamCount": " ({{count}} teams)",
+    "projectMemberHint": "Je kunt alleen projecten selecteren waar je lid van bent",
+    "sections": {
+      "info": "Info",
+      "infoDescription": "Basisinformatie over het dataproduct.",
+      "consumables": "Consumables",
+      "consumablesDescription": "Bronnen die dit product voeden. Selecteer tabellen uit de metastore.",
+      "deliverables": "Leveringen",
+      "deliverablesDescription": "Output geleverd door dit dataproduct.",
+      "tagsDescription": "Voeg relevante tags toe (door komma's gescheiden).",
+      "consumerGroups": "Consumentengroepen",
+      "consumerGroupsDescriptionPart1": "Workspace-groepen die de verwachte consumenten van dit product vertegenwoordigen. Elke invoer wordt opgeslagen als een getypeerde principal ",
+      "consumerGroupsDescriptionPart2": "; beschikbaar gesteld aan subscribe-webhooks via ",
+      "links": "Links",
+      "linksDescription": "Voeg relevante links toe (bijv. documentatie, dashboards).",
+      "customProperties": "Aangepaste eigenschappen",
+      "customPropertiesDescription": "Voeg aangepaste key-value metadata toe."
+    },
+    "validation": {
+      "titleRequired": "Titel is verplicht",
+      "ownerRequired": "Eigenaar is verplicht",
+      "productTypeRequired": "Producttype is verplicht",
+      "loadingSchema": "Schema laden...",
+      "schemaReady": "Schema gereed.",
+      "schemaError": "Schemafout",
+      "schemaNotReady": "Schema niet gereed.",
+      "schemaValid": "Schema geldig",
+      "schemaErrors": "{{count}} schemavalidatiefout(en)",
+      "invalidJsonSyntax": "Ongeldige JSON-syntaxis",
+      "dataFailedValidation": "Data heeft de schemavalidatie niet doorstaan. Controleer de gemarkeerde velden of de JSON-editor."
+    },
+    "consumable": {
+      "idLabel": "Consumable-ID *",
+      "idRequired": "Consumable-ID is verplicht",
+      "nameLabel": "Consumable-naam *",
+      "nameRequired": "Consumable-naam is verplicht",
+      "sourceTableLabel": "Brontabel (Metastore) *",
+      "sourceTableRequired": "Brontabel is verplicht",
+      "selectSourceTable": "Selecteer brontabel...",
+      "searchMetastore": "Zoek metastore-tabellen...",
+      "searching": "Zoeken...",
+      "noTablesFound": "Geen tabellen gevonden.",
+      "tagsPlaceholder": "Zoek en selecteer tags voor deze consumable...",
+      "defaultName": "Nieuwe Consumable",
+      "add": "Consumable toevoegen",
+      "removeTitle": "Consumable verwijderen"
+    },
+    "deliverable": {
+      "idLabel": "Levering-ID *",
+      "idRequired": "Levering-ID is verplicht",
+      "nameLabel": "Leveringsnaam *",
+      "nameRequired": "Leveringsnaam is verplicht",
+      "tagsPlaceholder": "Zoek en selecteer tags voor deze levering...",
+      "defaultName": "Nieuwe Levering",
+      "add": "Levering toevoegen",
+      "removeTitle": "Levering verwijderen"
+    },
+    "tagsProductPlaceholder": "Zoek en selecteer tags voor dit dataproduct...",
+    "links": {
+      "keyPlaceholder": "Linksleutel (bijv. docs)",
+      "urlPlaceholder": "URL *",
+      "descriptionPlaceholder": "Beschrijving",
+      "removeTitle": "Link verwijderen",
+      "add": "Link toevoegen"
+    },
+    "customProps": {
+      "keyPlaceholder": "Eigenschapssleutel",
+      "valuePlaceholder": "Eigenschapswaarde (tekst)",
+      "removeTitle": "Eigenschap verwijderen",
+      "add": "Aangepaste eigenschap toevoegen"
+    },
+    "portEditor": {
+      "portLinks": "Poortlinks",
+      "linkKey": "Linksleutel",
+      "url": "URL",
+      "removeLink": "Link verwijderen",
+      "addLink": "Link toevoegen",
+      "portCustomProperties": "Aangepaste poorteigenschappen",
+      "propertyKey": "Eigenschapssleutel",
+      "propertyValue": "Eigenschapswaarde",
+      "removeProperty": "Eigenschap verwijderen",
+      "addCustomProperty": "Aangepaste eigenschap toevoegen"
+    },
+    "buttons": {
+      "updateProduct": "Product bijwerken",
+      "createProduct": "Product aanmaken",
+      "updateViaJson": "Bijwerken via JSON",
+      "createViaJson": "Aanmaken via JSON"
+    },
+    "jsonPayloadLabel": "JSON-payload",
+    "jsonPlaceholder": "Voer de dataproduct-JSON in of bewerk deze...",
+    "validationStatusLabel": "Validatiestatus:",
+    "showValidationDetails": "Toon {{count}} validatiedetails",
+    "confirmUnsavedClose": "Je hebt niet-opgeslagen wijzigingen. Weet je zeker dat je wilt sluiten?",
+    "messages": {
+      "syncError": "Synchronisatiefout",
+      "couldNotSyncUiToJson": "Kon UI-status niet synchroniseren naar JSON-editor.",
+      "invalidJson": "Ongeldige JSON",
+      "invalidJsonDescription": "Kan niet naar UI-editor schakelen. Los eerst de schemavalidatiefouten op.",
+      "couldNotParseJson": "Kon JSON niet parsen: {{message}}",
+      "validationError": "Validatiefout",
+      "pleaseFixValidation": "Los de validatiefouten op voordat je opslaat.",
+      "jsonDataFailedValidation": "JSON-data heeft de schemavalidatie niet doorstaan. Kan niet opslaan.",
+      "saveError": "Opslagfout",
+      "errorLoadingData": "Fout bij Laden Data",
+      "couldNotFetchDetails": "Kon details niet ophalen. {{message}}",
+      "failedToLoadDetails": "Laden van productdetails mislukt: {{message}}",
+      "invalidJsonError": "Ongeldige JSON: {{message}}",
+      "couldNotLoadSchema": "Kon schema niet laden: {{message}}",
+      "failedToSerialize": "Serialiseren van UI-status naar JSON mislukt.",
+      "unexpectedError": "Er is een onverwachte fout opgetreden."
+    },
+    "syntaxErrorLabel": "Syntaxisfout:"
   },
   "import": {
     "title": "Dataproduct Importeren",
@@ -224,6 +532,621 @@
     "cancel": "Annuleren",
     "import": "Importeren",
     "importing": "Importeren..."
+  },
+  "versionFamily": {
+    "showAllVersions": "Toon alle versies"
+  },
+  "authoritativeDefinitionForm": {
+    "editTitle": "Gezaghebbende definitie bewerken",
+    "addTitle": "Gezaghebbende definitie toevoegen",
+    "dialogDescription": "Koppel naar gezaghebbende bronnen zoals bedrijfsdefinities, implementaties of tutorials (ODPS v1.0.0).",
+    "typeLabel": "Type",
+    "typeHint": "Type gezaghebbende bron",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://docs.example.com/definitions/customer",
+    "urlHint": "Volledige URL naar de gezaghebbende bron",
+    "descriptionPlaceholder": "Beschrijf welke informatie deze bron biedt",
+    "addButton": "Definitie toevoegen",
+    "validationTypeRequired": "Type is verplicht",
+    "validationUrlRequired": "URL is verplicht",
+    "validationUrlInvalid": "Voer een geldige URL in",
+    "successAdded": "Gezaghebbende definitie toegevoegd",
+    "successUpdated": "Gezaghebbende definitie bijgewerkt",
+    "saveError": "Opslaan van gezaghebbende definitie mislukt"
+  },
+  "consumerGroups": {
+    "searchPlaceholder": "Zoek workspace-groepen…",
+    "removeAriaLabel": "{{name}} verwijderen",
+    "loadError": "Kon workspace-groepen niet laden ({{error}}). Je kunt nog steeds groepen toevoegen door de naam te typen en op Enter te drukken."
+  },
+  "customProperty": {
+    "editTitle": "Aangepaste eigenschap bewerken",
+    "addTitle": "Aangepaste eigenschap toevoegen",
+    "dialogDescription": "Voeg aangepaste metadata toe om het ODPS v1.0.0 dataproductschema uit te breiden.",
+    "propertyNameLabel": "Eigenschapsnaam",
+    "propertyNamePlaceholder": "bijv. internalId, deploymentRegion",
+    "propertyNameHint": "Moet in camelCase zijn (ODPS-vereiste)",
+    "propertyValueLabel": "Eigenschapswaarde",
+    "propertyValuePlaceholder": "Eenvoudige tekst of JSON: {\"key\": \"value\"}",
+    "propertyValueHint": "Kan elk type zijn: tekst, getal, boolean, object of array. JSON-waarden worden automatisch geparst.",
+    "descriptionPlaceholder": "Leg het doel van deze aangepaste eigenschap uit",
+    "addButton": "Eigenschap toevoegen",
+    "validationNameRequired": "Eigenschapsnaam is verplicht",
+    "validationValueRequired": "Eigenschapswaarde is verplicht",
+    "validationCamelCase": "Eigenschapsnaam moet in camelCase zijn (begin met een kleine letter)",
+    "successAdded": "Aangepaste eigenschap toegevoegd",
+    "successUpdated": "Aangepaste eigenschap bijgewerkt",
+    "saveError": "Opslaan van aangepaste eigenschap mislukt"
+  },
+  "teamMemberForm": {
+    "editTitle": "Teamlid bewerken",
+    "addTitle": "Teamlid toevoegen",
+    "dialogDescription": "Voeg een teamlid toe dat verantwoordelijk is voor dit dataproduct (ODPS v1.0.0).",
+    "usernameLabel": "Gebruikersnaam",
+    "usernamePlaceholder": "bijv. user@example.com of gebruikersnaam",
+    "usernameHint": "Gebruikersnaam of e-mailadres van de gebruiker (VERPLICHT in ODPS)",
+    "fullNameLabel": "Volledige naam",
+    "fullNamePlaceholder": "Volledige naam (optioneel)",
+    "roleLabel": "Rol",
+    "rolePlaceholder": "bijv. owner, data steward, contributor",
+    "roleHint": "Rol van de gebruiker in het team (bijv. owner, data steward, contributor)",
+    "descriptionPlaceholder": "Aanvullende informatie over dit teamlid",
+    "dateJoinedLabel": "Datum toegetreden",
+    "dateLeftLabel": "Datum vertrokken",
+    "addButton": "Lid toevoegen",
+    "validationUsernameRequired": "Gebruikersnaam is verplicht",
+    "successAdded": "Teamlid toegevoegd",
+    "successUpdated": "Teamlid bijgewerkt",
+    "saveError": "Opslaan van teamlid mislukt"
+  },
+  "readiness": {
+    "title": "Productieklaarheid",
+    "checking": "Klaarheid controleren...",
+    "loadError": "Laden van klaarheidsrapport mislukt",
+    "loadFallbackError": "Kan klaarheidsrapport niet laden",
+    "passCount": "{{passed}}/{{total}} geslaagd",
+    "retry": "Opnieuw proberen",
+    "status": {
+      "ready": "Klaar",
+      "notReady": "Niet klaar",
+      "partial": "Gedeeltelijk klaar"
+    }
+  },
+  "requestAction": {
+    "types": {
+      "access": {
+        "title": "Toegang tot product aanvragen",
+        "description": "Vraag toestemming aan om dit dataproduct te bekijken en te gebruiken."
+      },
+      "review": {
+        "title": "Data steward-beoordeling aanvragen",
+        "description": "Dien dit product in voor beoordeling door een data steward (gaat over naar PROPOSED-status)."
+      },
+      "publish": {
+        "title": "Publicatie naar Marketplace aanvragen",
+        "description": "Vraag aan om dit goedgekeurde product te publiceren naar de organisatiebrede marketplace."
+      },
+      "certify": {
+        "title": "Certificering aanvragen",
+        "description": "Vraag aan om dit product op een specifiek niveau te certificeren."
+      },
+      "statusChange": {
+        "titleDirect": "Status wijzigen",
+        "titleRequest": "Statuswijziging aanvragen",
+        "descriptionDirect": "Wijzig direct de levenscyclusstatus van dit product.",
+        "descriptionRequest": "Vraag goedkeuring aan om de levenscyclusstatus van dit product te wijzigen."
+      }
+    },
+    "transitions": {
+      "moveToSandbox": "Naar Sandbox verplaatsen",
+      "submitForReview": "Indienen voor beoordeling",
+      "returnToDraft": "Terug naar concept",
+      "startReview": "Beoordeling starten",
+      "approve": "Goedkeuren",
+      "rejectReturnToDraft": "Afwijzen (Terug naar concept)",
+      "publishActivate": "Publiceren/Activeren",
+      "deprecate": "Afkeuren",
+      "retire": "Buiten gebruik stellen",
+      "reactivate": "Heractiveren"
+    },
+    "validation": {
+      "reasonRequired": "Geef een reden op voor het aanvragen van toegang",
+      "reasonTooShort": "Geef een meer gedetailleerde reden op (minimaal 10 tekens)",
+      "targetStatusRequired": "Selecteer een doelstatus",
+      "justificationRequired": "Geef een onderbouwing op voor de statuswijziging",
+      "justificationTooShort": "Geef een meer gedetailleerde onderbouwing op (minimaal 20 tekens)",
+      "certLevelRequired": "Selecteer een certificeringsniveau"
+    },
+    "errors": {
+      "cannotRequest": "Kan geen {{requestType}} aanvragen voor een product met status '{{productStatus}}'",
+      "failedToSubmit": "Verzenden van verzoek mislukt"
+    },
+    "toast": {
+      "statusChanged": "Status Gewijzigd",
+      "statusChangedDesc": "Productstatus gewijzigd van \"{{fromStatus}}\" naar \"{{toStatus}}\".",
+      "requestSubmitted": "Verzoek Verzonden",
+      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing."
+    },
+    "labels": {
+      "requestType": "Verzoektype",
+      "targetStatus": "Doelstatus",
+      "justification": "Onderbouwing",
+      "justificationOptional": "Onderbouwing (optioneel)",
+      "messageOptional": "Bericht (optioneel)",
+      "publicationScope": "Publicatiebereik",
+      "certLevel": "Certificeringsniveau"
+    },
+    "placeholders": {
+      "selectRequestType": "Selecteer verzoektype",
+      "selectTargetStatus": "Selecteer doelstatus",
+      "justification": "Leg uit waarom deze statuswijziging nodig is en geef relevante context...",
+      "reviewMessage": "Voeg eventuele notities voor de beoordelaar toe...",
+      "publishJustification": "Waarom moet dit product worden gepubliceerd?",
+      "certMessage": "Waarom moet dit product worden gecertificeerd?",
+      "selectCertLevel": "Selecteer certificeringsniveau"
+    },
+    "selectItems": {
+      "review": "Beoordeling aanvragen",
+      "publish": "Publicatie aanvragen",
+      "certify": "Certificering aanvragen",
+      "access": "Toegang aanvragen"
+    },
+    "scopes": {
+      "organization": "Organisatie",
+      "external": "Extern"
+    },
+    "wizard": {
+      "noticeBefore": "Voor dit verzoek is een wizard met meerdere stappen geconfigureerd. Klik op",
+      "noticeAfter": "om te beginnen."
+    },
+    "hints": {
+      "noTransitionsAvailable": "Geen statusovergangen beschikbaar vanaf de huidige status.",
+      "justificationMinChars": "Minimaal 20 tekens vereist. Dit wordt beoordeeld door een beheerder."
+    },
+    "buttons": {
+      "changingStatus": "Status wijzigen...",
+      "opening": "Openen...",
+      "sendingRequest": "Verzoek verzenden...",
+      "continue": "Doorgaan",
+      "sendRequest": "Verzoek verzenden"
+    }
+  },
+  "statusTransition": {
+    "title": "Productstatus wijzigen",
+    "description": "Wijzig de levenscyclusstatus van {{name}} (ODPS v1.0.0)",
+    "thisProduct": "dit dataproduct",
+    "currentStatus": "Huidige status:",
+    "recommended": "Aanbevolen:",
+    "selectTargetStatus": "Selecteer doelstatus",
+    "terminalState": "Eindtoestand:",
+    "terminalDesc": "Geen overgangen beschikbaar vanaf status {{statusLabel}}. Dit product kan niet naar een andere status worden gewijzigd.",
+    "notesLabel": "Overgangsnotities (optioneel)",
+    "notesPlaceholder": "Voeg notities toe over waarom deze statuswijziging wordt doorgevoerd...",
+    "notesHint": "Deze notities worden vastgelegd voor auditdoeleinden",
+    "lifecycleTitle": "ODPS v1.0.0 levenscyclusstroom:",
+    "lifecycleHint": "De huidige status is gemarkeerd. Noodafkeuring is toegestaan vanuit elke status.",
+    "toast": {
+      "validationError": "Validatiefout",
+      "selectTargetStatus": "Selecteer een doelstatus",
+      "invalidTransition": "Ongeldige overgang",
+      "transitionFailed": "Overgang mislukt",
+      "failedToUpdate": "Bijwerken van productstatus mislukt"
+    },
+    "buttons": {
+      "updating": "Bijwerken...",
+      "updateStatus": "Status bijwerken"
+    }
+  },
+  "outputPortForm": {
+    "addTitle": "Levering toevoegen",
+    "editTitle": "Levering bewerken",
+    "description": "Definieer een levering voor dit dataproduct. Assets kunnen na het aanmaken worden gekoppeld.",
+    "labels": {
+      "deliveryMethod": "Leveringsmethode",
+      "contractAssignment": "Contracttoewijzing",
+      "accessAndPrivacy": "Toegang & Privacy",
+      "containsPii": "Bevat PII",
+      "autoApprove": "Automatisch goedkeuren"
+    },
+    "placeholders": {
+      "name": "bijv. Dagelijkse Churn Rate",
+      "deliveryMethod": "Selecteer leveringsmethode...",
+      "description": "Beschrijf wat deze levering biedt",
+      "type": "bijv. table, api, stream",
+      "status": "bijv. active, draft",
+      "chooseContract": "Kies een contract..."
+    },
+    "contractOptions": {
+      "noContract": "Geen contract",
+      "selectExisting": "Bestaand contract selecteren",
+      "createNew": "Nieuw contract aanmaken"
+    },
+    "hints": {
+      "deliveryMethodHint": "Hoe deze levering data aan consumenten aanbiedt (bijv. Tabeltoegang, Serving Endpoint)",
+      "onlyActiveContracts": "Toont alleen actieve/goedgekeurde/gecertificeerde contracten",
+      "containsPiiHint": "Bevat deze levering persoonlijk identificeerbare informatie?",
+      "autoApproveHint": "Toegangsverzoeken voor deze levering automatisch goedkeuren?",
+      "afterCreation": "Na het aanmaken van deze levering kun je assets (tabellen, views, datasets, enz.) eraan koppelen vanaf de detailpagina."
+    },
+    "messages": {
+      "noActiveContracts": "Geen actieve/goedgekeurde contracten beschikbaar",
+      "contractCreated": "Contract aangemaakt:",
+      "deliverableAdded": "Levering toegevoegd",
+      "deliverableUpdated": "Levering bijgewerkt"
+    },
+    "validation": {
+      "error": "Validatiefout",
+      "nameRequired": "Naam is verplicht",
+      "versionRequired": "Versie is verplicht"
+    },
+    "errors": {
+      "failedToLoadContracts": "Laden van contracten mislukt",
+      "failedToSaveDeliverable": "Opslaan van levering mislukt"
+    },
+    "actions": {
+      "addDeliverable": "Levering toevoegen"
+    },
+    "warnings": {
+      "couldNotLoadDeliveryMethods": "Kon leveringsmethoden niet laden"
+    }
+  },
+  "inputPortForm": {
+    "addTitle": "Consumable toevoegen",
+    "editTitle": "Consumable bewerken",
+    "description": "Definieer een input-dataafhankelijkheid voor dit dataproduct (ODPS v1.0.0).",
+    "labels": {
+      "consumableName": "Consumable-naam",
+      "contractId": "Contract-ID",
+      "databricksExtensions": "Databricks-extensies (optioneel)",
+      "assetType": "Assettype",
+      "assetIdentifier": "Asset-identificatie"
+    },
+    "placeholders": {
+      "name": "bijv. customer-data-input",
+      "contractId": "bijv. customer-data-contract-v1",
+      "assetType": "bijv. table, notebook, job",
+      "assetIdentifier": "bijv. catalog.schema.table, /path/to/notebook"
+    },
+    "hints": {
+      "versionHint": "Versie van deze consumable (bijv. 1.0.0, 2.1.3)",
+      "contractIdHint": "Verwijzing naar het datacontract-ID (VERPLICHT in ODPS v1.0.0)",
+      "assetTypeHint": "Type Databricks-asset",
+      "assetIdentifierHint": "Unieke identificatie voor de Databricks-asset"
+    },
+    "messages": {
+      "consumableAdded": "Consumable toegevoegd",
+      "consumableUpdated": "Consumable bijgewerkt"
+    },
+    "validation": {
+      "error": "Validatiefout",
+      "portNameRequired": "Poortnaam is verplicht",
+      "portVersionRequired": "Poortversie is verplicht",
+      "contractIdRequired": "Contract-ID is verplicht (ODPS v1.0.0-vereiste)"
+    },
+    "errors": {
+      "failedToSaveConsumable": "Opslaan van consumable mislukt"
+    },
+    "actions": {
+      "addConsumable": "Consumable toevoegen"
+    }
+  },
+  "managementPortForm": {
+    "addTitle": "Management poort toevoegen",
+    "editTitle": "Management poort bewerken",
+    "description": "Management poorten bieden toegang tot endpoints voor observability, controle, vindbaarheid en datawoordenboek (ODPS v1.0.0).",
+    "labels": {
+      "portName": "Poortnaam",
+      "contentType": "Content-type",
+      "portType": "Poorttype",
+      "url": "URL",
+      "channel": "Kanaal"
+    },
+    "placeholders": {
+      "name": "bijv. observability-endpoint, data-dictionary",
+      "url": "https://observability.example.com/metrics",
+      "channel": "bijv. prometheus-metrics, openapi-spec",
+      "description": "Beschrijf het doel en gebruik van deze management poort"
+    },
+    "hints": {
+      "contentTypeHint": "Doel van deze management poort",
+      "urlHint": "Toegangs-URL voor deze management poort",
+      "channelHint": "Identificatie van het communicatiekanaal"
+    },
+    "messages": {
+      "portAdded": "Management poort toegevoegd",
+      "portUpdated": "Management poort bijgewerkt"
+    },
+    "validation": {
+      "error": "Validatiefout",
+      "portNameRequired": "Poortnaam is verplicht",
+      "contentTypeRequired": "Content-type is verplicht",
+      "invalidUrl": "Voer een geldige URL in"
+    },
+    "errors": {
+      "failedToSave": "Opslaan van management poort mislukt"
+    },
+    "actions": {
+      "addPort": "Poort toevoegen"
+    }
+  },
+  "linkContract": {
+    "title": "Contract koppelen aan levering",
+    "descriptionPrefix": "Selecteer een bestaand contract of maak een nieuw contract om te koppelen aan",
+    "thisDeliverable": "deze levering",
+    "labels": {
+      "deliverable": "Levering",
+      "selectContract": "Selecteer contract",
+      "or": "OF"
+    },
+    "placeholders": {
+      "chooseContract": "Kies een contract…"
+    },
+    "hints": {
+      "contractFilter": "Toont alleen contracten met status 'active', 'approved' of 'certified'. Kies een specifieke versie — contracten met dezelfde naam tonen nu hun versie inline."
+    },
+    "messages": {
+      "contractLinked": "Contract Gekoppeld",
+      "contractLinkedDescription": "Contract succesvol gekoppeld aan levering"
+    },
+    "validation": {
+      "error": "Validatiefout",
+      "selectContract": "Selecteer een contract"
+    },
+    "errors": {
+      "failedToLink": "Koppelen van contract mislukt"
+    },
+    "actions": {
+      "createNewContract": "Nieuw contract aanmaken",
+      "linkContract": "Contract koppelen",
+      "linking": "Koppelen..."
+    }
+  },
+  "hierarchy": {
+    "title": "Datahiërarchie",
+    "loadFailed": "Laden van hiërarchie mislukt",
+    "noDatasets": "Nog geen datasets gekoppeld aan dit dataproduct.",
+    "noTablesOrViews": "Geen tabellen of views gekoppeld",
+    "contract": "Contract",
+    "governedByContract": "Beheerd door contract {{id}}",
+    "objectCount_one": "{{count}} object",
+    "objectCount_other": "{{count}} objecten",
+    "datasetCount_one": "{{count}} dataset",
+    "datasetCount_other": "{{count}} datasets",
+    "colCount_one": "{{count}} kol.",
+    "colCount_other": "{{count}} kol."
+  },
+  "commitDraft": {
+    "title": "Conceptwijzigingen committen",
+    "description": "Commit je persoonlijke concept om het zichtbaar te maken voor je team.",
+    "analyzing": "Wijzigingen analyseren...",
+    "changeAnalysisTitle": "Wijzigingsanalyse",
+    "changeAnalysisDescription": "Op basis van je wijzigingen bevelen we een {{bump}}-versieverhoging aan.",
+    "selectVersion": "Selecteer versie",
+    "patch": "Patch",
+    "patchDescription": "Bugfixes",
+    "minor": "Minor",
+    "minorDescription": "Nieuwe functies",
+    "major": "Major",
+    "majorDescription": "Breaking changes",
+    "customVersion": "Aangepaste versie",
+    "customVersionPlaceholder": "bijv. 2.0.0",
+    "changeSummaryLabel": "Wijzigingssamenvatting *",
+    "changeSummaryPlaceholder": "Beschrijf de wijzigingen in deze versie...",
+    "validationInvalidVersion": "Voer een geldig versienummer in (bijv. 1.0.0)",
+    "validationNoSummary": "Geef een samenvatting van de wijzigingen op",
+    "errorAnalyze": "Analyseren van wijzigingen mislukt",
+    "errorCommit": "Committen van concept mislukt",
+    "toastCommittedTitle": "Concept Gecommit",
+    "toastCommittedDescription": "Productversie {{version}} is nu zichtbaar voor je team.",
+    "committing": "Committen...",
+    "commitButton": "Concept committen"
+  },
+  "supportChannelForm": {
+    "titleAdd": "Supportkanaal toevoegen",
+    "titleEdit": "Supportkanaal bewerken",
+    "description": "Definieer een supportkanaal voor gebruikers van dit dataproduct (ODPS v1.0.0).",
+    "channelName": "Kanaalnaam",
+    "channelNamePlaceholder": "bijv. data-product-support",
+    "accessUrl": "Toegangs-URL",
+    "accessUrlPlaceholder": "https://slack.com/channels/data-product-support",
+    "accessUrlHint": "URL om dit supportkanaal te openen",
+    "tool": "Tool",
+    "scope": "Bereik",
+    "invitationUrl": "Uitnodigings-URL",
+    "invitationUrlPlaceholder": "https://slack.com/invite/...",
+    "invitationUrlHint": "Optionele uitnodigingslink voor nieuwe leden",
+    "descriptionPlaceholder": "Beschrijf hoe gebruikers dit supportkanaal moeten gebruiken",
+    "addChannel": "Kanaal toevoegen",
+    "validationErrorTitle": "Validatiefout",
+    "channelRequired": "Kanaalnaam is verplicht",
+    "urlRequired": "URL is verplicht",
+    "invalidUrl": "Voer een geldige URL in",
+    "invalidInvitationUrl": "Voer een geldige uitnodigings-URL in",
+    "successUpdated": "Supportkanaal bijgewerkt",
+    "successAdded": "Supportkanaal toegevoegd",
+    "errorSave": "Opslaan van supportkanaal mislukt"
+  },
+  "maturity": {
+    "title": "Volwassenheid",
+    "evaluating": "Volwassenheid evalueren...",
+    "loadFailed": "Laden van volwassenheidsrapport mislukt",
+    "unableToLoad": "Kan volwassenheidsrapport niet laden",
+    "gatesPassed": "{{passed}}/{{total}} gates geslaagd",
+    "reevaluate": "Volwassenheid opnieuw evalueren",
+    "gates": "{{passed}}/{{total}} gates",
+    "required": "Vereist",
+    "advisory": "Adviserend",
+    "overTime": "Volwassenheid in de tijd",
+    "retry": "Opnieuw proberen"
+  },
+  "createDialog": {
+    "editTitle": "Dataproduct-metadata bewerken",
+    "createTitle": "Dataproduct aanmaken (ODPS v1.0.0)",
+    "editDescription": "Werk de kernmetadata voor dit dataproduct bij.",
+    "createDescription": "Maak een nieuw dataproduct aan met essentiële informatie. Je kunt poorten, teamleden en supportkanalen toevoegen in de detailweergave.",
+    "productNameLabel": "Productnaam",
+    "productNamePlaceholder": "bijv. Customer Analytics Data",
+    "versionPlaceholder": "0.0.1",
+    "productTypeLabel": "Producttype",
+    "productTypePlaceholder": "Selecteer producttype...",
+    "productTypeHint": "Positie in de datawaardeketen",
+    "selectTeamPlaceholder": "Selecteer team...",
+    "loadingTeams": "Teams laden...",
+    "ownerTeamHint": "Team verantwoordelijk voor dit product",
+    "projectLabel": "Project",
+    "selectProjectPlaceholder": "Selecteer project (optioneel)",
+    "projectOption_one": "{{name}} ({{count}} team)",
+    "projectOption_other": "{{name}} ({{count}} teams)",
+    "projectMemberHint": "Je kunt alleen projecten selecteren waar je lid van bent",
+    "domainsLabel": "Domeinen",
+    "domainsPlaceholder": "Selecteer domeinen...",
+    "tenantLabel": "Tenant/Organisatie",
+    "tenantPlaceholder": "bijv. acme-corp",
+    "descriptionSectionTitle": "Beschrijving (ODPS gestructureerd)",
+    "purposePlaceholder": "Wat is het beoogde doel van deze data?",
+    "limitationsLabel": "Beperkingen",
+    "limitationsPlaceholder": "Technische, compliance- en juridische beperkingen",
+    "usagePlaceholder": "Aanbevolen gebruik van deze data",
+    "tagsPlaceholder": "Zoek en selecteer tags voor dit dataproduct...",
+    "tagsHint": "Voeg tags toe om dit dataproduct te categoriseren en te organiseren",
+    "consumerGroupsLabel": "Consumentengroepen",
+    "createProductButton": "Product aanmaken",
+    "discardDescription": "Je hebt niet-opgeslagen wijzigingen die verloren gaan als je dit dialoogvenster sluit. Weet je zeker dat je ze wilt verwerpen?",
+    "continueEditing": "Doorgaan met bewerken",
+    "discardChanges": "Wijzigingen verwerpen",
+    "messages": {
+      "createSuccessDesc": "Dataproduct succesvol aangemaakt. Voeg poorten en team toe in de detailweergave."
+    },
+    "validation": {
+      "nameRequired": "Productnaam is verplicht",
+      "versionRequired": "Versie is verplicht",
+      "statusRequired": "Status is verplicht"
+    }
+  },
+  "createFromContract": {
+    "title": "Dataproduct aanmaken vanuit contract",
+    "description": "Maak een nieuw dataproduct dat dit contract gebruikt om één levering te beheren. Het product erft het domein, het eigenaar-team en het project van het contract.",
+    "contractLabel": "Contract:",
+    "productNameLabel": "Productnaam *",
+    "productNamePlaceholder": "bijv. Customer Analytics Product",
+    "productTypeLabel": "Producttype *",
+    "productTypePlaceholder": "Selecteer producttype",
+    "versionLabel": "Versie *",
+    "versionPlaceholder": "bijv. v1.0.0",
+    "deliverableNameLabel": "Leveringsnaam (optioneel)",
+    "deliverableNamePlaceholder": "Standaard: {{contractName}}",
+    "deliverableNameHint": "Indien niet opgegeven, gebruikt de levering de contractnaam",
+    "creating": "Aanmaken...",
+    "createButton": "Product aanmaken",
+    "errors": {
+      "nameRequired": "Productnaam is verplicht",
+      "versionRequired": "Versie is verplicht",
+      "typeRequired": "Producttype is verplicht",
+      "createError": "Aanmaken van product vanuit contract mislukt"
+    },
+    "messages": {
+      "productCreated": "Product Aangemaakt",
+      "productCreatedDesc": "Dataproduct \"{{productName}}\" succesvol aangemaakt vanuit contract."
+    }
+  },
+  "createVersion": {
+    "title": "Nieuwe versie aanmaken",
+    "description": "Voer de nieuwe versie-identificatie in voor dataproduct \"{{productTitle}}\". Het is vaak handig om te verhogen op basis van de huidige versie ({{currentVersion}}).",
+    "versionLabel": "Nieuwe versiestring",
+    "versionPlaceholder": "bijv. v1.1, v2.0-beta",
+    "createButton": "Versie aanmaken",
+    "errors": {
+      "versionEmpty": "Versiestring mag niet leeg zijn."
+    }
+  },
+  "graphView": {
+    "unnamedProduct": "Naamloos Product",
+    "switchToTableView": "Overschakelen naar Tabelweergave",
+    "switchToGraphView": "Overschakelen naar Grafiekweergave",
+    "inputPortLabel": "{{name}} (Consumable)",
+    "outputPortLabel": "{{name}} (Levering)",
+    "labels": {
+      "contract": "Contract"
+    }
+  },
+  "importExport": {
+    "title": "ODPS v1.0.0 Import/Export",
+    "description": "Importeer of exporteer dataproducten in Open Data Product Standard v1.0.0 JSON-formaat",
+    "pasteLabel": "Plak ODPS v1.0.0 JSON",
+    "validationErrors": "Validatiefouten:",
+    "validate": "Valideren",
+    "validationFailed": "Validatie Mislukt",
+    "errorsFound_one": "{{count}} fout gevonden",
+    "errorsFound_other": "{{count}} fouten gevonden",
+    "validationPassed": "Validatie Geslaagd",
+    "validationPassedDesc": "JSON is geldig ODPS v1.0.0-formaat",
+    "invalidJson": "Ongeldige JSON",
+    "cannotImportErrors_one": "Kan niet importeren: {{count}} fout gevonden",
+    "cannotImportErrors_other": "Kan niet importeren: {{count}} fouten gevonden",
+    "importSuccessful": "Import Geslaagd",
+    "importSuccessfulDesc": "Dataproduct \"{{name}}\" succesvol geïmporteerd",
+    "importFailed": "Import Mislukt",
+    "noProductSelected": "Geen Product Geselecteerd",
+    "noProductSelectedDesc": "Kan niet exporteren zonder een product",
+    "exportSuccessful": "Export Geslaagd",
+    "exportSuccessfulDesc": "{{filename}} gedownload",
+    "exportFailed": "Export Mislukt",
+    "exportFailedDesc": "Exporteren van dataproduct mislukt",
+    "exportDescription": "Door op \"Exporteren\" te klikken wordt dit product gedownload als een ODPS v1.0.0-conform JSON-bestand. Auditvelden (created_at, updated_at) worden uitgesloten voor overdraagbaarheid.",
+    "exportAsJson": "Exporteren als JSON",
+    "currentProduct": "Huidig Product",
+    "unnamed": "Naamloos",
+    "noProductDesc": "Geen product geselecteerd. Open dit dialoogvenster vanaf een productdetailpagina om te exporteren."
+  },
+  "subscribeDialog": {
+    "title": "Abonneren op dataproduct",
+    "descriptionPre": "Abonneer op",
+    "descriptionPost": "om notificaties te ontvangen over updates, wijzigingen en compliance-status.",
+    "subscribeAs": "Abonneren als",
+    "forMyself": "Voor mezelf",
+    "forMyGroup": "Voor een groep waar ik deel van uitmaak",
+    "noGroupsAvailable": "(geen groepen beschikbaar)",
+    "selectGroup": "Selecteer een van je groepen",
+    "otherGroupOrSP": "Andere groep of service principal",
+    "groupDisplayName": "Groep (weergavenaam)",
+    "spDisplayName": "Service principal (weergavenaam of applicationId)",
+    "groupPlaceholder": "bijv. sales_consumers",
+    "spPlaceholder": "bijv. 11111111-2222-3333-4444-555555555555",
+    "validationNote": "Wordt gevalideerd tegen de workspace-directory voordat het verzoek wordt vastgelegd.",
+    "reasonLabel": "Waarom abonneer je je?",
+    "optional": "(optioneel)",
+    "reasonPlaceholder": "Bijv. Nodig voor kwartaalrapportage, een dashboard bouwen, enz.",
+    "reasonHint": "Dit helpt data-eigenaren te begrijpen hoe hun producten worden gebruikt.",
+    "subscribedTitle": "Geabonneerd!",
+    "subscribedDesc": "Je bent nu geabonneerd op \"{{productName}}\". Je ontvangt notificaties over updates en wijzigingen.",
+    "subscribedOnBehalfGroup": "Je bent nu geabonneerd op \"{{productName}}\" namens groep \"{{value}}\".",
+    "subscribedOnBehalfSP": "Je bent nu geabonneerd op \"{{productName}}\" namens service principal \"{{value}}\".",
+    "subscriptionFailed": "Abonnement Mislukt",
+    "failedToSubscribe": "Abonneren mislukt",
+    "subscribing": "Abonneren..."
+  },
+  "myProductsView": {
+    "retry": "Opnieuw proberen",
+    "untitled": "Naamloos",
+    "productsAvailable_one": "{{count}} product beschikbaar",
+    "productsAvailable_other": "{{count}} producten beschikbaar"
+  },
+  "ownerConsumers": {
+    "breadcrumb": "Consumenten",
+    "totalProducts": "Totaal producten",
+    "activeProducts": "Actieve producten",
+    "totalSubscribers": "Totaal abonnees",
+    "products": "Producten",
+    "noProducts": "Geen producten gevonden",
+    "noDomain": "Geen domein",
+    "subscribersFor": "Abonnees — {{name}}",
+    "selectProduct": "Selecteer een product",
+    "filterPlaceholder": "Abonnees filteren...",
+    "selectProductHint": "Selecteer een product om de abonnees te bekijken",
+    "noSubscribersMatch": "Geen abonnees komen overeen met je filter",
+    "noSubscribers": "Nog geen abonnees",
+    "colSubscriber": "Abonnee",
+    "colSubscribed": "Geabonneerd",
+    "colReason": "Reden"
   }
 }
-

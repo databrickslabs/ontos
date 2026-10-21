@@ -1,0 +1,255 @@
+{
+  "title": "Metadados",
+  "description": "Notas, links e anexos.",
+  "previewRenderedPage": "Visualizar página renderizada",
+  "notes": {
+    "title": "Notas adicionais",
+    "add": "Adicionar",
+    "refresh": "Atualizar",
+    "noNotes": "Ainda não há notas.",
+    "preview": "Visualizar",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "editTitle": "Editar nota",
+    "addTitle": "Adicionar nota",
+    "attachShared": "Anexar nota compartilhada",
+    "selectShared": "Selecionar nota compartilhada",
+    "table": {
+      "title": "Título",
+      "description": "Descrição",
+      "created": "Criado",
+      "actions": "Ações",
+      "level": "Nível",
+      "flags": "Sinalizadores"
+    },
+    "form": {
+      "title": "Título",
+      "shortDescription": "Descrição curta",
+      "content": "Conteúdo (Markdown)",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "level": "Nível",
+      "inheritable": "Herdável",
+      "shared": "Ativo compartilhado"
+    },
+    "messages": {
+      "deleteFailed": "Falha ao excluir",
+      "addFailed": "Falha ao adicionar nota",
+      "updateFailed": "Falha ao atualizar"
+    }
+  },
+  "links": {
+    "title": "Links relacionados",
+    "add": "Adicionar",
+    "refresh": "Atualizar",
+    "noLinks": "Ainda não há links.",
+    "open": "Abrir",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "editTitle": "Editar link",
+    "addTitle": "Adicionar link",
+    "attachShared": "Anexar link compartilhado",
+    "selectShared": "Selecionar link compartilhado",
+    "table": {
+      "title": "Título",
+      "url": "URL",
+      "description": "Descrição",
+      "created": "Criado",
+      "actions": "Ações",
+      "level": "Nível",
+      "flags": "Sinalizadores"
+    },
+    "form": {
+      "title": "Título",
+      "url": "URL",
+      "shortDescription": "Descrição curta",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "level": "Nível",
+      "inheritable": "Herdável",
+      "shared": "Ativo compartilhado"
+    },
+    "messages": {
+      "deleteFailed": "Falha ao excluir",
+      "addFailed": "Falha ao adicionar link",
+      "updateFailed": "Falha ao atualizar"
+    }
+  },
+  "documents": {
+    "title": "Documentos anexados",
+    "add": "Adicionar",
+    "refresh": "Atualizar",
+    "noDocuments": "Nenhum documento enviado.",
+    "preview": "Visualizar",
+    "delete": "Excluir",
+    "attachShared": "Anexar documento compartilhado",
+    "selectShared": "Selecionar documento compartilhado",
+    "table": {
+      "title": "Título",
+      "filename": "Nome do arquivo",
+      "description": "Descrição",
+      "size": "Tamanho",
+      "created": "Criado",
+      "actions": "Ações",
+      "level": "Nível",
+      "flags": "Sinalizadores"
+    },
+    "form": {
+      "title": "Título",
+      "shortDescription": "Descrição curta",
+      "file": "Arquivo",
+      "upload": "Enviar",
+      "cancel": "Cancelar",
+      "level": "Nível",
+      "inheritable": "Herdável",
+      "shared": "Ativo compartilhado"
+    },
+    "messages": {
+      "deleteFailed": "Falha ao excluir",
+      "uploadFailed": "Falha ao enviar"
+    }
+  },
+  "sharedAssets": {
+    "selectDescription": "Selecione um ativo compartilhado para anexar a esta entidade",
+    "noSharedNotes": "Nenhuma nota compartilhada disponível",
+    "noSharedLinks": "Nenhum link compartilhado disponível",
+    "noSharedDocuments": "Nenhum documento compartilhado disponível",
+    "loading": "Carregando ativos compartilhados...",
+    "attach": "Anexar",
+    "levelInfo": "Nível: {{level}}",
+    "inheritable": "Herdável",
+    "notInheritable": "Não herdável"
+  },
+  "messages": {
+    "loadFailed": "Falha ao carregar metadados",
+    "attachSuccess": "Ativo compartilhado anexado com sucesso",
+    "attachFailed": "Falha ao anexar ativo compartilhado"
+  },
+  "tags": {
+    "title": "Tags",
+    "description": "Aplique tags de governança a este objeto.",
+    "edit": "Editar tags",
+    "refresh": "Atualizar",
+    "placeholder": "Pesquisar e selecionar tags...",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "noTags": "Nenhuma tag aplicada.",
+    "messages": {
+      "saveSuccess": "Tags atualizadas",
+      "saveFailed": "Falha ao atualizar tags"
+    }
+  },
+  "costs": {
+    "title": "Gerenciamento de custos",
+    "total": "Total",
+    "breakdown": "Distribuição",
+    "noItems": "Nenhum item",
+    "addExpense": "Adicionar despesa",
+    "editExpense": "Editar despesa",
+    "loading": "Carregando",
+    "noItemsForMonth": "Nenhum item de custo para este mês.",
+    "donutAria": "Distribuição de custos",
+    "table": {
+      "title": "Título",
+      "center": "Centro",
+      "monthRange": "Intervalo de meses",
+      "amountMonth": "Valor/Mês"
+    },
+    "form": {
+      "title": "Título",
+      "center": "Centro",
+      "customCenter": "Centro personalizado",
+      "amountCents": "Valor (centavos)",
+      "currency": "Moeda",
+      "startMonth": "Mês inicial (AAAA-MM)",
+      "endMonth": "Mês final (AAAA-MM)",
+      "monthPlaceholder": "AAAA-MM"
+    },
+    "validation": {
+      "required": "Obrigatório"
+    },
+    "messages": {
+      "loadFailed": "Falha ao carregar custos",
+      "missingFields": "Campos obrigatórios ausentes",
+      "missingFieldsDescription": "Preencha todos os campos obrigatórios.",
+      "added": "Custo adicionado",
+      "updated": "Custo atualizado",
+      "deleted": "Custo excluído",
+      "deleteFailed": "Falha ao excluir",
+      "saveFailed": "Falha ao salvar"
+    }
+  },
+  "quality": {
+    "title": "Qualidade dos dados",
+    "overallScore": "Pontuação geral",
+    "byDimension": "Por dimensão",
+    "noMeasurements": "Nenhuma medição",
+    "addMeasurement": "Adicionar medição",
+    "editMeasurement": "Editar medição",
+    "lastMeasured": "Última medição em {{date}}",
+    "loading": "Carregando",
+    "noMeasurementsRecorded": "Nenhuma medição de qualidade registrada.",
+    "gaugeAria": "Pontuação de qualidade",
+    "table": {
+      "title": "Título",
+      "dimension": "Dimensão",
+      "source": "Fonte",
+      "score": "Pontuação",
+      "measured": "Medido"
+    },
+    "form": {
+      "title": "Título",
+      "dimension": "Dimensão",
+      "source": "Fonte",
+      "score": "Pontuação (%)",
+      "checksPassed": "Verificações aprovadas",
+      "checksTotal": "Total de verificações"
+    },
+    "validation": {
+      "required": "Obrigatório",
+      "range": "0-100"
+    },
+    "messages": {
+      "loadFailed": "Falha ao carregar dados de qualidade",
+      "missingFields": "Campos obrigatórios ausentes",
+      "added": "Medição adicionada",
+      "updated": "Medição atualizada",
+      "deleted": "Medição excluída",
+      "deleteFailed": "Falha ao excluir",
+      "saveFailed": "Falha ao salvar"
+    }
+  },
+  "ratings": {
+    "title": "Avaliações",
+    "youRated": "Sua avaliação: {{rating}}★",
+    "updateYourRating": "Atualize sua avaliação",
+    "rateThisItem": "Avalie este item",
+    "addReviewOptional": "Adicionar uma resenha (opcional)",
+    "reviewPlaceholder": "Compartilhe sua experiência...",
+    "submitting": "Enviando...",
+    "submitRating": "Enviar avaliação",
+    "labels": {
+      "poor": "Ruim",
+      "fair": "Regular",
+      "good": "Bom",
+      "veryGood": "Muito bom",
+      "excellent": "Excelente"
+    }
+  },
+  "info": {
+    "entityInformation": "Informações da entidade",
+    "subscribed": "Inscrito",
+    "tableOfContents": "Sumário",
+    "noNotesAvailable": "Nenhuma nota disponível.",
+    "noLinks": "Nenhum link.",
+    "inherited": "Herdado",
+    "shared": "Compartilhado",
+    "ratingsAndReviews": "Avaliações e resenhas",
+    "loadingRatings": "Carregando avaliações...",
+    "yourRating": "Sua avaliação",
+    "addReviewPlaceholder": "Adicionar uma resenha (opcional)...",
+    "goToDetails": "Ir para detalhes",
+    "alreadySubscribed": "Já inscrito",
+    "subscribe": "Inscrever-se"
+  }
+}

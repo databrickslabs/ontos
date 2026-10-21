@@ -24,7 +24,8 @@
     "noEdit": "Sie haben keine Berechtigung, Datenprodukte zu bearbeiten.",
     "noDelete": "Sie haben keine Berechtigung, Datenprodukte zu löschen.",
     "noBulkDelete": "Sie haben keine Berechtigung für Massenlöschung.",
-    "noGenieSpace": "Sie haben keine Berechtigung, Genie Spaces zu erstellen."
+    "noGenieSpace": "Sie haben keine Berechtigung, Genie Spaces zu erstellen.",
+    "noUpload": "Sie haben keine Berechtigung, Datenprodukte hochzuladen."
   },
   "bulk": {
     "deleteConfirm": "Möchten Sie wirklich {{count}} ausgewählte(s) Produkt(e) löschen?",
@@ -54,7 +55,8 @@
     "uploading": "Wird hochgeladen...",
     "tooltipTitle": "Datenprodukt hochladen (ODPS-Format)",
     "tooltipDescription": "Akzeptiert YAML- oder JSON-Dateien nach dem ODPS (Open Data Product Standard) Schema.",
-    "tooltipHint": "Für Datenverträge (ODCS) verwenden Sie bitte die Datenverträge-Seite."
+    "tooltipHint": "Für Datenverträge (ODCS) verwenden Sie bitte die Datenverträge-Seite.",
+    "odcsHint": "Hinweis: Diese Seite ist für Datenprodukte (ODPS-Format). Wenn Sie einen Datenvertrag (ODCS-Format) hochladen möchten, verwenden Sie bitte stattdessen die Datenverträge-Seite."
   },
   "genie": {
     "noSelection": "Keine Auswahl",
@@ -85,7 +87,11 @@
     "viewDetails": "Details anzeigen",
     "editProduct": "Produkt bearbeiten",
     "deleteProduct": "Produkt löschen",
-    "subscribed": "Abonniert"
+    "subscribed": "Abonniert",
+    "unnamedProduct": "Unbenanntes Produkt",
+    "previewMetadata": "Metadaten-Vorschau",
+    "editDenied": "Bearbeiten (Zugriff verweigert)",
+    "deleteDenied": "Löschen (Zugriff verweigert)"
   },
   "messages": {
     "deleteConfirm": "Möchten Sie dieses Datenprodukt wirklich löschen?",
@@ -95,7 +101,13 @@
     "importSuccess": "Datenprodukt erfolgreich importiert",
     "importError": "Fehler beim Importieren des Datenprodukts",
     "success": "Erfolg",
-    "error": "Fehler"
+    "error": "Fehler",
+    "validationErrors": "{{count}} Validierungsfehler aufgetreten",
+    "validationTitle": "Validierungsfehler",
+    "loadInitialError": "Anfangsdaten konnten nicht geladen werden",
+    "refreshError": "Produktliste konnte nicht aktualisiert werden",
+    "unknownError": "Unbekannter Fehler",
+    "unknownErrorFormat": "Unbekanntes Fehlerformat"
   },
   "status": {
     "draft": "Entwurf",
@@ -108,7 +120,8 @@
     "certified": "Zertifiziert",
     "deprecated": "Veraltet",
     "retired": "Stillgelegt",
-    "published": "Veröffentlicht"
+    "published": "Veröffentlicht",
+    "personalDraft": "Persönlicher Entwurf"
   },
   "viewMode": {
     "table": "Tabelle",
@@ -135,7 +148,15 @@
       "updated": "Aktualisiert",
       "tags": "Tags",
       "noTags": "Keine Tags",
-      "notAssigned": "Nicht zugewiesen"
+      "notAssigned": "Nicht zugewiesen",
+      "project": "Projekt",
+      "tenant": "Tenant",
+      "ownerTeam": "Team",
+      "apiVersion": "API-Ver.",
+      "certification": "Zert.",
+      "publishedLabel": "Veröffentlicht",
+      "quality": "Qualität",
+      "linkedConcepts": "Verknüpfte Geschäftskonzepte"
     },
     "sections": {
       "overview": "Übersicht",
@@ -172,7 +193,9 @@
         "email": "E-Mail",
         "subscribed": "Abonniert",
         "reason": "Grund"
-      }
+      },
+      "titleWithCount": "Abonnenten ({{count}})",
+      "notificationSubtitle": "Benutzer, die dieses Produkt abonniert haben, erhalten Benachrichtigungen über Statusänderungen, Compliance-Probleme und neue Versionen."
     },
     "subscription": {
       "subscribed": "Abonniert",
@@ -183,7 +206,155 @@
     },
     "deleteConfirm": "Möchten Sie \"{{name}}\" wirklich löschen?",
     "deleteSuccess": "Datenprodukt erfolgreich gelöscht",
-    "deleteError": "Fehler beim Löschen des Datenprodukts"
+    "deleteError": "Fehler beim Löschen des Datenprodukts",
+    "unnamedProduct": "Unbenanntes Produkt",
+    "ratings": {
+      "title": "Bewertungen & Rezensionen"
+    },
+    "actions": {
+      "requestAccess": "Anfordern...",
+      "certify": "Zertifizieren",
+      "createGenieSpace": "Genie Space erstellen",
+      "cloneForEditing": "Zum Bearbeiten klonen",
+      "commitChanges": "Änderungen committen",
+      "discardDraft": "Entwurf verwerfen",
+      "newVersion": "Neue Version",
+      "exportODPS": "ODPS exportieren",
+      "manageLineage": "Lineage verwalten"
+    },
+    "banners": {
+      "personalDraftTitle": "Persönlicher Entwurf",
+      "personalDraftMessage": "Dies ist Ihr persönlicher Entwurf. Nur Sie können ihn sehen. Committen Sie Änderungen, um sie mit Ihrem Team zu teilen.",
+      "readOnlyTitle": "Schreibgeschützt",
+      "readOnlyMessage": "Dieses Produkt ist {{status}}. Klonen Sie es, um einen persönlichen Entwurf zum Bearbeiten zu erstellen."
+    },
+    "contacts": {
+      "title": "Kontakte",
+      "fromImportedData": "Aus importierten Daten",
+      "teamAssignmentOnly": "Nur Teamzuweisung",
+      "defaultRole": "Owner",
+      "teamRole": "Team",
+      "importedContactsLabel": "Importierte Kontakte",
+      "noContactsAssigned": "Keine Kontakte zugewiesen"
+    },
+    "deliverables": {
+      "titleWithCount": "Deliverables ({{count}})",
+      "addDeliverable": "Deliverable hinzufügen",
+      "subtitle": "Definieren Sie Deliverables und ihre Bereitstellungsmethoden. Verknüpfen Sie Assets und Verträge mit jedem Deliverable.",
+      "noDeliverables": "Keine Deliverables definiert.",
+      "noDeliverablesWithEdit": "Keine Deliverables definiert. Fügen Sie Deliverables hinzu und verknüpfen Sie Assets, wenn Sie bereit sind.",
+      "contractLabel": "Vertrag: {{name}}",
+      "editTitle": "Deliverable bearbeiten",
+      "deleteTitle": "Deliverable löschen",
+      "linkAsset": "Asset verknüpfen",
+      "linkAssetsTitle": "Assets mit \"{{portName}}\" verknüpfen",
+      "linkAssetsDescription": "Nur Deliverable-Asset-Typen (Tabelle, View, Datensatz, API-Endpunkt, ML-Modell) können mit einem Ausgangsport verknüpft werden.",
+      "linkedToPort": "mit Port verknüpft",
+      "assetsLinkedTitle": "Assets verknüpft",
+      "assetsLinked": "{{count}} Asset(s) mit {{portName}} verknüpft",
+      "assetUnlinked": "Asset-Verknüpfung gelöst",
+      "linkAssetsFailed": "Assets konnten nicht verknüpft werden",
+      "unlinkAssetFailed": "Asset-Verknüpfung konnte nicht gelöst werden"
+    },
+    "description": {
+      "purposeLabel": "Zweck",
+      "limitationsLabel": "Einschränkungen",
+      "usageLabel": "Verwendung"
+    },
+    "lineage": {
+      "businessLineageTitle": "Business Lineage"
+    },
+    "consumables": {
+      "titleWithCount": "Consumables ({{count}})",
+      "addConsumable": "Consumable hinzufügen",
+      "contractLabel": "Vertrag: {{contractId}}",
+      "noConsumables": "Keine Consumables definiert"
+    },
+    "managementPorts": {
+      "titleWithCount": "Management-Ports ({{count}})",
+      "addManagementPort": "Management-Port hinzufügen",
+      "subtitle": "Endpunkte für Observability, Steuerung und Auffindbarkeit",
+      "contentLabel": "Inhalt",
+      "urlLabel": "URL",
+      "noManagementPorts": "Keine Management-Ports definiert"
+    },
+    "teamMetadata": {
+      "titleWithCount": "ODPS-Team-Metadaten ({{count}} Mitglieder)",
+      "subtitle": "Schreibgeschützte Provenienz aus importiertem Produkt-YAML. Verwalten Sie die Zuständigkeit über das Owner-Panel oben.",
+      "defaultRole": "Mitglied"
+    },
+    "supportChannels": {
+      "titleWithCount": "Support-Kanäle ({{count}})",
+      "addChannel": "Kanal hinzufügen",
+      "toolLabel": "Tool",
+      "noChannels": "Keine Support-Kanäle definiert"
+    },
+    "relatedEntities": {
+      "title": "Verwandte Entitäten"
+    },
+    "toasts": {
+      "loadError": "Daten konnten nicht geladen werden: {{error}}",
+      "certifyTitle": "Zertifiziert",
+      "certifySuccess": "Die Zertifizierungsstufe wurde angewendet.",
+      "publishTitle": "Veröffentlichung aktualisiert",
+      "publishSuccess": "Der Veröffentlichungsbereich wurde gespeichert.",
+      "deleteError": "Löschen fehlgeschlagen: {{error}}",
+      "draftCreatedTitle": "Entwurf erstellt",
+      "draftCreatedMessage": "Persönlicher Entwurf erstellt. Sie können ihn jetzt bearbeiten.",
+      "draftDiscardedTitle": "Entwurf verworfen",
+      "draftDiscardedMessage": "Der persönliche Entwurf wurde verworfen.",
+      "approvalNotConfiguredTitle": "Genehmigungs-Workflow nicht konfiguriert",
+      "approvalNotConfiguredMessage": "Direktes Abonnieren. Laden Sie die Standard-Workflows in den Einstellungen, um den Genehmigungsablauf zu verwenden.",
+      "subscribedTitle": "Abonniert",
+      "subscribedMessage": "Sie erhalten nun Benachrichtigungen über dieses Produkt.",
+      "unsubscribedTitle": "Abbestellt",
+      "unsubscribedMessage": "Sie erhalten keine Benachrichtigungen mehr über dieses Produkt.",
+      "updatedTitle": "Aktualisiert",
+      "updatedMessage": "Produkt erfolgreich aktualisiert.",
+      "createNewVersionTitle": "Neue Version erstellen",
+      "createNewVersionMessage": "Beim Erstellen einer neuen Version wird dieses Produkt geklont. Wenden Sie Ihre Änderungen nach der Erstellung auf die neue Version an.",
+      "creatingVersionTitle": "Neue Version wird erstellt",
+      "creatingVersionMessage": "Version {{version}} wird erstellt...",
+      "versionCreatedMessage": "Version {{version}} erstellt!",
+      "consumableUpdatedTitle": "Consumable aktualisiert",
+      "consumableUpdatedMessage": "Consumable erfolgreich aktualisiert.",
+      "consumableDeletedTitle": "Consumable gelöscht",
+      "consumableDeletedMessage": "Consumable erfolgreich gelöscht.",
+      "deliverableUpdatedTitle": "Deliverable aktualisiert",
+      "deliverableUpdatedMessage": "Deliverable erfolgreich aktualisiert.",
+      "deliverableDeletedTitle": "Deliverable gelöscht",
+      "deliverableDeletedMessage": "Deliverable erfolgreich gelöscht.",
+      "managementPortUpdatedTitle": "Management-Port aktualisiert",
+      "managementPortUpdatedMessage": "Management-Port erfolgreich aktualisiert.",
+      "managementPortDeletedTitle": "Management-Port gelöscht",
+      "managementPortDeletedMessage": "Management-Port erfolgreich gelöscht.",
+      "teamMemberAddedTitle": "Teammitglied hinzugefügt",
+      "teamMemberAddedMessage": "Teammitglied erfolgreich hinzugefügt.",
+      "teamMemberUpdatedTitle": "Teammitglied aktualisiert",
+      "teamMemberUpdatedMessage": "Teammitglied erfolgreich aktualisiert.",
+      "supportChannelUpdatedTitle": "Support-Kanal aktualisiert",
+      "supportChannelUpdatedMessage": "Support-Kanal erfolgreich aktualisiert.",
+      "supportChannelDeletedTitle": "Support-Kanal gelöscht",
+      "supportChannelDeletedMessage": "Support-Kanal erfolgreich gelöscht.",
+      "contractUnlinkedTitle": "Vertragsverknüpfung gelöst",
+      "contractUnlinkedMessage": "Vertragsverknüpfung mit dem Deliverable erfolgreich gelöst",
+      "iriLinkedTitle": "Verknüpft",
+      "iriLinkedMessage": "IRI mit Datenprodukt verknüpft.",
+      "iriRemovedTitle": "Entfernt",
+      "iriRemovedMessage": "IRI-Verknüpfung entfernt.",
+      "genieSpaceRequesting": "Genie Space Erstellung wird angefordert...",
+      "genieSpaceInitiated": "Genie Space Erstellung initiiert."
+    },
+    "confirms": {
+      "deleteProduct": "Datenprodukt \"{{name}}\" löschen?",
+      "discardDraft": "Diesen Entwurf verwerfen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "deleteConsumable": "Dieses Consumable löschen?",
+      "deleteDeliverable": "Dieses Deliverable löschen?",
+      "deleteManagementPort": "Diesen Management-Port löschen?",
+      "deleteSupportChannel": "Diesen Support-Kanal löschen?",
+      "unlinkContract": "Vertragsverknüpfung mit diesem Deliverable lösen?",
+      "createGenieSpace": "Einen Genie Space für \"{{name}}\" erstellen?"
+    }
   },
   "form": {
     "createTitle": "Datenprodukt erstellen",
@@ -214,7 +385,144 @@
     "createSuccess": "Datenprodukt erfolgreich erstellt",
     "updateSuccess": "Datenprodukt erfolgreich aktualisiert",
     "createError": "Fehler beim Erstellen des Datenprodukts",
-    "updateError": "Fehler beim Aktualisieren des Datenprodukts"
+    "updateError": "Fehler beim Aktualisieren des Datenprodukts",
+    "dialogDescription": "Füllen Sie die Details für das Datenprodukt aus. Verwenden Sie die Tabs, um zwischen UI- und JSON-Editor zu wechseln.",
+    "loadingDetails": "Produktdetails werden geladen...",
+    "tabs": {
+      "uiEditor": "UI-Editor",
+      "jsonEditor": "JSON-Editor"
+    },
+    "fields": {
+      "id": "ID (eindeutige Kennung)",
+      "title": "Titel *",
+      "owner": "Owner *",
+      "productType": "Produkttyp *",
+      "project": "Projekt",
+      "domains": "Bereiche",
+      "archetype": "Archetyp"
+    },
+    "placeholders": {
+      "systemId": "(System-ID)",
+      "productIdOptional": "z. B. my-unique-product (optional)",
+      "selectProductType": "Produkttyp auswählen",
+      "selectProject": "Projekt auswählen (optional)",
+      "selectDomains": "Bereiche auswählen...",
+      "selectArchetype": "Archetyp auswählen",
+      "selectStatus": "Status auswählen"
+    },
+    "projectTeamCount": "({{count}} Teams)",
+    "projectMemberHint": "Sie können nur Projekte auswählen, in denen Sie Mitglied sind",
+    "sections": {
+      "info": "Info",
+      "infoDescription": "Grundinformationen über das Datenprodukt.",
+      "consumables": "Consumables",
+      "consumablesDescription": "Quellen, die dieses Produkt speisen. Wählen Sie Tabellen aus dem Metastore aus.",
+      "deliverables": "Deliverables",
+      "deliverablesDescription": "Von diesem Datenprodukt bereitgestellte Ausgaben.",
+      "tagsDescription": "Fügen Sie relevante Tags hinzu (durch Kommas getrennt).",
+      "consumerGroups": "Verbrauchergruppen",
+      "consumerGroupsDescriptionPart1": "Workspace-Gruppen, die die erwarteten Verbraucher dieses Produkts repräsentieren. Jeder Eintrag wird als typisierter Principal gespeichert ",
+      "consumerGroupsDescriptionPart2": "; über ",
+      "links": "Links",
+      "linksDescription": "Fügen Sie relevante Links hinzu (z. B. Dokumentation, Dashboards).",
+      "customProperties": "Benutzerdefinierte Eigenschaften",
+      "customPropertiesDescription": "Fügen Sie benutzerdefinierte Schlüssel-Wert-Metadaten hinzu."
+    },
+    "validation": {
+      "titleRequired": "Titel ist erforderlich",
+      "ownerRequired": "Owner ist erforderlich",
+      "productTypeRequired": "Produkttyp ist erforderlich",
+      "loadingSchema": "Schema wird geladen...",
+      "schemaReady": "Schema bereit.",
+      "schemaError": "Schema-Fehler",
+      "schemaNotReady": "Schema nicht bereit.",
+      "schemaValid": "Schema gültig",
+      "schemaErrors": "{{count}} Schema-Validierungsfehler",
+      "invalidJsonSyntax": "Ungültige JSON-Syntax",
+      "dataFailedValidation": "Daten haben die Schema-Validierung nicht bestanden. Bitte überprüfen Sie die markierten Felder oder den JSON-Editor."
+    },
+    "consumable": {
+      "idLabel": "Consumable-ID *",
+      "idRequired": "Consumable-ID ist erforderlich",
+      "nameLabel": "Consumable-Name *",
+      "nameRequired": "Consumable-Name ist erforderlich",
+      "sourceTableLabel": "Quelltabelle (Metastore) *",
+      "sourceTableRequired": "Quelltabelle ist erforderlich",
+      "selectSourceTable": "Quelltabelle auswählen...",
+      "searchMetastore": "Metastore-Tabellen suchen...",
+      "searching": "Wird gesucht...",
+      "noTablesFound": "Keine Tabellen gefunden.",
+      "tagsPlaceholder": "Tags für dieses Consumable suchen und auswählen...",
+      "defaultName": "Neues Consumable",
+      "add": "Consumable hinzufügen",
+      "removeTitle": "Consumable entfernen"
+    },
+    "deliverable": {
+      "idLabel": "Deliverable-ID *",
+      "idRequired": "Deliverable-ID ist erforderlich",
+      "nameLabel": "Deliverable-Name *",
+      "nameRequired": "Deliverable-Name ist erforderlich",
+      "tagsPlaceholder": "Tags für dieses Deliverable suchen und auswählen...",
+      "defaultName": "Neues Deliverable",
+      "add": "Deliverable hinzufügen",
+      "removeTitle": "Deliverable entfernen"
+    },
+    "tagsProductPlaceholder": "Tags für dieses Datenprodukt suchen und auswählen...",
+    "links": {
+      "keyPlaceholder": "Link-Schlüssel (z. B. docs)",
+      "urlPlaceholder": "URL *",
+      "descriptionPlaceholder": "Beschreibung",
+      "removeTitle": "Link entfernen",
+      "add": "Link hinzufügen"
+    },
+    "customProps": {
+      "keyPlaceholder": "Eigenschaftsschlüssel",
+      "valuePlaceholder": "Eigenschaftswert (Zeichenkette)",
+      "removeTitle": "Eigenschaft entfernen",
+      "add": "Benutzerdefinierte Eigenschaft hinzufügen"
+    },
+    "portEditor": {
+      "portLinks": "Port-Links",
+      "linkKey": "Link-Schlüssel",
+      "url": "URL",
+      "removeLink": "Link entfernen",
+      "addLink": "Link hinzufügen",
+      "portCustomProperties": "Benutzerdefinierte Port-Eigenschaften",
+      "propertyKey": "Eigenschaftsschlüssel",
+      "propertyValue": "Eigenschaftswert",
+      "removeProperty": "Eigenschaft entfernen",
+      "addCustomProperty": "Benutzerdefinierte Eigenschaft hinzufügen"
+    },
+    "buttons": {
+      "updateProduct": "Produkt aktualisieren",
+      "createProduct": "Produkt erstellen",
+      "updateViaJson": "Über JSON aktualisieren",
+      "createViaJson": "Über JSON erstellen"
+    },
+    "jsonPayloadLabel": "JSON-Payload",
+    "jsonPlaceholder": "Datenprodukt-JSON eingeben oder bearbeiten...",
+    "validationStatusLabel": "Validierungsstatus:",
+    "showValidationDetails": "{{count}} Validierungsdetails anzeigen",
+    "confirmUnsavedClose": "Sie haben ungespeicherte Änderungen. Möchten Sie wirklich schließen?",
+    "messages": {
+      "syncError": "Synchronisierungsfehler",
+      "couldNotSyncUiToJson": "UI-Status konnte nicht mit dem JSON-Editor synchronisiert werden.",
+      "invalidJson": "Ungültiges JSON",
+      "invalidJsonDescription": "Wechsel zum UI-Editor nicht möglich. Bitte beheben Sie zuerst die Schema-Validierungsfehler.",
+      "couldNotParseJson": "JSON konnte nicht geparst werden: {{message}}",
+      "validationError": "Validierungsfehler",
+      "pleaseFixValidation": "Bitte beheben Sie die Validierungsfehler vor dem Speichern.",
+      "jsonDataFailedValidation": "JSON-Daten haben die Schema-Validierung nicht bestanden. Speichern nicht möglich.",
+      "saveError": "Speicherfehler",
+      "errorLoadingData": "Fehler beim Laden der Daten",
+      "couldNotFetchDetails": "Details konnten nicht abgerufen werden. {{message}}",
+      "failedToLoadDetails": "Produktdetails konnten nicht geladen werden: {{message}}",
+      "invalidJsonError": "Ungültiges JSON: {{message}}",
+      "couldNotLoadSchema": "Schema konnte nicht geladen werden: {{message}}",
+      "failedToSerialize": "UI-Status konnte nicht in JSON serialisiert werden.",
+      "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten."
+    },
+    "syntaxErrorLabel": "Syntaxfehler:"
   },
   "import": {
     "title": "Datenprodukt importieren",
@@ -224,6 +532,621 @@
     "cancel": "Abbrechen",
     "import": "Importieren",
     "importing": "Wird importiert..."
+  },
+  "versionFamily": {
+    "showAllVersions": "Alle Versionen anzeigen"
+  },
+  "authoritativeDefinitionForm": {
+    "editTitle": "Maßgebliche Definition bearbeiten",
+    "addTitle": "Maßgebliche Definition hinzufügen",
+    "dialogDescription": "Verknüpfen Sie maßgebliche Quellen wie Geschäftsdefinitionen, Implementierungen oder Tutorials (ODPS v1.0.0).",
+    "typeLabel": "Typ",
+    "typeHint": "Typ der maßgeblichen Quelle",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://docs.example.com/definitions/customer",
+    "urlHint": "Vollständige URL zur maßgeblichen Quelle",
+    "descriptionPlaceholder": "Beschreiben Sie, welche Informationen diese Quelle bereitstellt",
+    "addButton": "Definition hinzufügen",
+    "validationTypeRequired": "Typ ist erforderlich",
+    "validationUrlRequired": "URL ist erforderlich",
+    "validationUrlInvalid": "Bitte geben Sie eine gültige URL ein",
+    "successAdded": "Maßgebliche Definition hinzugefügt",
+    "successUpdated": "Maßgebliche Definition aktualisiert",
+    "saveError": "Maßgebliche Definition konnte nicht gespeichert werden"
+  },
+  "consumerGroups": {
+    "searchPlaceholder": "Workspace-Gruppen suchen…",
+    "removeAriaLabel": "{{name}} entfernen",
+    "loadError": "Workspace-Gruppen konnten nicht geladen werden ({{error}}). Sie können Gruppen dennoch hinzufügen, indem Sie den Namen eingeben und Enter drücken."
+  },
+  "customProperty": {
+    "editTitle": "Benutzerdefinierte Eigenschaft bearbeiten",
+    "addTitle": "Benutzerdefinierte Eigenschaft hinzufügen",
+    "dialogDescription": "Fügen Sie benutzerdefinierte Metadaten hinzu, um das ODPS v1.0.0 Datenprodukt-Schema zu erweitern.",
+    "propertyNameLabel": "Eigenschaftsname",
+    "propertyNamePlaceholder": "z. B. internalId, deploymentRegion",
+    "propertyNameHint": "Muss in camelCase sein (ODPS-Anforderung)",
+    "propertyValueLabel": "Eigenschaftswert",
+    "propertyValuePlaceholder": "Einfacher Text oder JSON: {\"key\": \"value\"}",
+    "propertyValueHint": "Kann jeder Typ sein: Zeichenkette, Zahl, Boolean, Objekt oder Array. JSON-Werte werden automatisch geparst.",
+    "descriptionPlaceholder": "Erklären Sie den Zweck dieser benutzerdefinierten Eigenschaft",
+    "addButton": "Eigenschaft hinzufügen",
+    "validationNameRequired": "Eigenschaftsname ist erforderlich",
+    "validationValueRequired": "Eigenschaftswert ist erforderlich",
+    "validationCamelCase": "Eigenschaftsname muss in camelCase sein (mit Kleinbuchstaben beginnen)",
+    "successAdded": "Benutzerdefinierte Eigenschaft hinzugefügt",
+    "successUpdated": "Benutzerdefinierte Eigenschaft aktualisiert",
+    "saveError": "Benutzerdefinierte Eigenschaft konnte nicht gespeichert werden"
+  },
+  "teamMemberForm": {
+    "editTitle": "Teammitglied bearbeiten",
+    "addTitle": "Teammitglied hinzufügen",
+    "dialogDescription": "Fügen Sie ein für dieses Datenprodukt verantwortliches Teammitglied hinzu (ODPS v1.0.0).",
+    "usernameLabel": "Benutzername",
+    "usernamePlaceholder": "z. B. user@example.com oder Benutzername",
+    "usernameHint": "Benutzername oder E-Mail-Adresse des Benutzers (in ODPS ERFORDERLICH)",
+    "fullNameLabel": "Vollständiger Name",
+    "fullNamePlaceholder": "Vollständiger Name (optional)",
+    "roleLabel": "Rolle",
+    "rolePlaceholder": "z. B. Owner, Data Steward, Contributor",
+    "roleHint": "Rolle des Benutzers im Team (z. B. Owner, Data Steward, Contributor)",
+    "descriptionPlaceholder": "Zusätzliche Informationen zu diesem Teammitglied",
+    "dateJoinedLabel": "Beitrittsdatum",
+    "dateLeftLabel": "Austrittsdatum",
+    "addButton": "Mitglied hinzufügen",
+    "validationUsernameRequired": "Benutzername ist erforderlich",
+    "successAdded": "Teammitglied hinzugefügt",
+    "successUpdated": "Teammitglied aktualisiert",
+    "saveError": "Teammitglied konnte nicht gespeichert werden"
+  },
+  "readiness": {
+    "title": "Produktionsreife",
+    "checking": "Reife wird geprüft...",
+    "loadError": "Reifebericht konnte nicht geladen werden",
+    "loadFallbackError": "Reifebericht kann nicht geladen werden",
+    "passCount": "{{passed}}/{{total}} bestanden",
+    "retry": "Erneut versuchen",
+    "status": {
+      "ready": "Bereit",
+      "notReady": "Nicht bereit",
+      "partial": "Teilweise bereit"
+    }
+  },
+  "requestAction": {
+    "types": {
+      "access": {
+        "title": "Zugriff auf Produkt anfordern",
+        "description": "Fordern Sie die Berechtigung an, dieses Datenprodukt anzuzeigen und zu verwenden."
+      },
+      "review": {
+        "title": "Data-Steward-Prüfung anfordern",
+        "description": "Reichen Sie dieses Produkt zur Prüfung durch einen Data Steward ein (Übergang in den Status VORGESCHLAGEN)."
+      },
+      "publish": {
+        "title": "Veröffentlichung im Marktplatz anfordern",
+        "description": "Fordern Sie an, dieses genehmigte Produkt im organisationsweiten Marktplatz zu veröffentlichen."
+      },
+      "certify": {
+        "title": "Zertifizierung anfordern",
+        "description": "Fordern Sie an, dass dieses Produkt auf einer bestimmten Stufe zertifiziert wird."
+      },
+      "statusChange": {
+        "titleDirect": "Status ändern",
+        "titleRequest": "Statusänderung anfordern",
+        "descriptionDirect": "Ändern Sie den Lebenszyklusstatus dieses Produkts direkt.",
+        "descriptionRequest": "Fordern Sie die Genehmigung zur Änderung des Lebenszyklusstatus dieses Produkts an."
+      }
+    },
+    "transitions": {
+      "moveToSandbox": "In Sandbox verschieben",
+      "submitForReview": "Zur Prüfung einreichen",
+      "returnToDraft": "Zurück zum Entwurf",
+      "startReview": "Prüfung starten",
+      "approve": "Genehmigen",
+      "rejectReturnToDraft": "Ablehnen (zurück zum Entwurf)",
+      "publishActivate": "Veröffentlichen/Aktivieren",
+      "deprecate": "Als veraltet markieren",
+      "retire": "Stilllegen",
+      "reactivate": "Reaktivieren"
+    },
+    "validation": {
+      "reasonRequired": "Bitte geben Sie einen Grund für die Zugriffsanfrage an",
+      "reasonTooShort": "Bitte geben Sie einen ausführlicheren Grund an (mindestens 10 Zeichen)",
+      "targetStatusRequired": "Bitte wählen Sie einen Zielstatus aus",
+      "justificationRequired": "Bitte geben Sie eine Begründung für die Statusänderung an",
+      "justificationTooShort": "Bitte geben Sie eine ausführlichere Begründung an (mindestens 20 Zeichen)",
+      "certLevelRequired": "Bitte wählen Sie eine Zertifizierungsstufe aus"
+    },
+    "errors": {
+      "cannotRequest": "{{requestType}} kann für ein Produkt mit dem Status '{{productStatus}}' nicht angefordert werden",
+      "failedToSubmit": "Anfrage konnte nicht gesendet werden"
+    },
+    "toast": {
+      "statusChanged": "Status geändert",
+      "statusChangedDesc": "Produktstatus von \"{{fromStatus}}\" auf \"{{toStatus}}\" geändert.",
+      "requestSubmitted": "Anfrage gesendet",
+      "requestSubmittedDesc": "Ihre {{type}}-Anfrage wurde gesendet und Sie werden über die Entscheidung benachrichtigt."
+    },
+    "labels": {
+      "requestType": "Anfragetyp",
+      "targetStatus": "Zielstatus",
+      "justification": "Begründung",
+      "justificationOptional": "Begründung (optional)",
+      "messageOptional": "Nachricht (optional)",
+      "publicationScope": "Veröffentlichungsbereich",
+      "certLevel": "Zertifizierungsstufe"
+    },
+    "placeholders": {
+      "selectRequestType": "Anfragetyp auswählen",
+      "selectTargetStatus": "Zielstatus auswählen",
+      "justification": "Erklären Sie, warum diese Statusänderung erforderlich ist, und geben Sie relevanten Kontext an...",
+      "reviewMessage": "Fügen Sie Notizen für den Prüfer hinzu...",
+      "publishJustification": "Warum sollte dieses Produkt veröffentlicht werden?",
+      "certMessage": "Warum sollte dieses Produkt zertifiziert werden?",
+      "selectCertLevel": "Zertifizierungsstufe auswählen"
+    },
+    "selectItems": {
+      "review": "Prüfung anfordern",
+      "publish": "Veröffentlichung anfordern",
+      "certify": "Zertifizierung anfordern",
+      "access": "Zugriff anfordern"
+    },
+    "scopes": {
+      "organization": "Organisation",
+      "external": "Extern"
+    },
+    "wizard": {
+      "noticeBefore": "Für diese Anfrage ist ein mehrstufiger Assistent konfiguriert. Klicken Sie auf",
+      "noticeAfter": "um zu beginnen."
+    },
+    "hints": {
+      "noTransitionsAvailable": "Vom aktuellen Status sind keine Statusübergänge verfügbar.",
+      "justificationMinChars": "Mindestens 20 Zeichen erforderlich. Dies wird von einem Administrator geprüft."
+    },
+    "buttons": {
+      "changingStatus": "Status wird geändert...",
+      "opening": "Wird geöffnet...",
+      "sendingRequest": "Anfrage wird gesendet...",
+      "continue": "Weiter",
+      "sendRequest": "Anfrage senden"
+    }
+  },
+  "statusTransition": {
+    "title": "Produktstatus ändern",
+    "description": "Ändern Sie den Lebenszyklusstatus von {{name}} (ODPS v1.0.0)",
+    "thisProduct": "dieses Datenprodukt",
+    "currentStatus": "Aktueller Status:",
+    "recommended": "Empfohlen:",
+    "selectTargetStatus": "Zielstatus auswählen",
+    "terminalState": "Endzustand:",
+    "terminalDesc": "Vom Status {{statusLabel}} sind keine Übergänge verfügbar. Dieses Produkt kann in keinen anderen Status geändert werden.",
+    "notesLabel": "Übergangsnotizen (optional)",
+    "notesPlaceholder": "Fügen Sie Notizen hinzu, warum diese Statusänderung vorgenommen wird...",
+    "notesHint": "Diese Notizen werden zu Prüfzwecken protokolliert",
+    "lifecycleTitle": "ODPS v1.0.0 Lebenszyklus-Ablauf:",
+    "lifecycleHint": "Der aktuelle Status ist hervorgehoben. Eine Notfall-Deaktivierung ist aus jedem Status heraus zulässig.",
+    "toast": {
+      "validationError": "Validierungsfehler",
+      "selectTargetStatus": "Bitte wählen Sie einen Zielstatus aus",
+      "invalidTransition": "Ungültiger Übergang",
+      "transitionFailed": "Übergang fehlgeschlagen",
+      "failedToUpdate": "Produktstatus konnte nicht aktualisiert werden"
+    },
+    "buttons": {
+      "updating": "Wird aktualisiert...",
+      "updateStatus": "Status aktualisieren"
+    }
+  },
+  "outputPortForm": {
+    "addTitle": "Deliverable hinzufügen",
+    "editTitle": "Deliverable bearbeiten",
+    "description": "Definieren Sie ein Deliverable für dieses Datenprodukt. Assets können nach der Erstellung verknüpft werden.",
+    "labels": {
+      "deliveryMethod": "Bereitstellungsmethode",
+      "contractAssignment": "Vertragszuweisung",
+      "accessAndPrivacy": "Zugriff & Datenschutz",
+      "containsPii": "Enthält PII",
+      "autoApprove": "Automatisch genehmigen"
+    },
+    "placeholders": {
+      "name": "z. B. Tägliche Abwanderungsrate",
+      "deliveryMethod": "Bereitstellungsmethode auswählen...",
+      "description": "Beschreiben Sie, was dieses Deliverable bereitstellt",
+      "type": "z. B. table, api, stream",
+      "status": "z. B. active, draft",
+      "chooseContract": "Vertrag auswählen..."
+    },
+    "contractOptions": {
+      "noContract": "Kein Vertrag",
+      "selectExisting": "Bestehenden Vertrag auswählen",
+      "createNew": "Neuen Vertrag erstellen"
+    },
+    "hints": {
+      "deliveryMethodHint": "Wie dieses Deliverable Daten an Verbraucher bereitstellt (z. B. Tabellenzugriff, Serving-Endpunkt)",
+      "onlyActiveContracts": "Es werden nur aktive/genehmigte/zertifizierte Verträge angezeigt",
+      "containsPiiHint": "Enthält dieses Deliverable personenbezogene Daten?",
+      "autoApproveHint": "Zugriffsanfragen für dieses Deliverable automatisch genehmigen?",
+      "afterCreation": "Nach dem Erstellen dieses Deliverables können Sie Assets (Tabellen, Views, Datensätze usw.) über die Detailseite damit verknüpfen."
+    },
+    "messages": {
+      "noActiveContracts": "Keine aktiven/genehmigten Verträge verfügbar",
+      "contractCreated": "Vertrag erstellt:",
+      "deliverableAdded": "Deliverable hinzugefügt",
+      "deliverableUpdated": "Deliverable aktualisiert"
+    },
+    "validation": {
+      "error": "Validierungsfehler",
+      "nameRequired": "Name ist erforderlich",
+      "versionRequired": "Version ist erforderlich"
+    },
+    "errors": {
+      "failedToLoadContracts": "Verträge konnten nicht geladen werden",
+      "failedToSaveDeliverable": "Deliverable konnte nicht gespeichert werden"
+    },
+    "actions": {
+      "addDeliverable": "Deliverable hinzufügen"
+    },
+    "warnings": {
+      "couldNotLoadDeliveryMethods": "Bereitstellungsmethoden konnten nicht geladen werden"
+    }
+  },
+  "inputPortForm": {
+    "addTitle": "Consumable hinzufügen",
+    "editTitle": "Consumable bearbeiten",
+    "description": "Definieren Sie eine Eingangsdatenabhängigkeit für dieses Datenprodukt (ODPS v1.0.0).",
+    "labels": {
+      "consumableName": "Consumable-Name",
+      "contractId": "Vertrags-ID",
+      "databricksExtensions": "Databricks-Erweiterungen (optional)",
+      "assetType": "Asset-Typ",
+      "assetIdentifier": "Asset-Kennung"
+    },
+    "placeholders": {
+      "name": "z. B. customer-data-input",
+      "contractId": "z. B. customer-data-contract-v1",
+      "assetType": "z. B. table, notebook, job",
+      "assetIdentifier": "z. B. catalog.schema.table, /path/to/notebook"
+    },
+    "hints": {
+      "versionHint": "Version dieses Consumables (z. B. 1.0.0, 2.1.3)",
+      "contractIdHint": "Verweis auf die Datenvertrags-ID (in ODPS v1.0.0 ERFORDERLICH)",
+      "assetTypeHint": "Typ des Databricks-Assets",
+      "assetIdentifierHint": "Eindeutige Kennung für das Databricks-Asset"
+    },
+    "messages": {
+      "consumableAdded": "Consumable hinzugefügt",
+      "consumableUpdated": "Consumable aktualisiert"
+    },
+    "validation": {
+      "error": "Validierungsfehler",
+      "portNameRequired": "Port-Name ist erforderlich",
+      "portVersionRequired": "Port-Version ist erforderlich",
+      "contractIdRequired": "Vertrags-ID ist erforderlich (ODPS v1.0.0 Anforderung)"
+    },
+    "errors": {
+      "failedToSaveConsumable": "Consumable konnte nicht gespeichert werden"
+    },
+    "actions": {
+      "addConsumable": "Consumable hinzufügen"
+    }
+  },
+  "managementPortForm": {
+    "addTitle": "Management-Port hinzufügen",
+    "editTitle": "Management-Port bearbeiten",
+    "description": "Management-Ports bieten Zugriff auf Endpunkte für Observability, Steuerung, Auffindbarkeit und Datenkatalog (ODPS v1.0.0).",
+    "labels": {
+      "portName": "Port-Name",
+      "contentType": "Inhaltstyp",
+      "portType": "Port-Typ",
+      "url": "URL",
+      "channel": "Kanal"
+    },
+    "placeholders": {
+      "name": "z. B. observability-endpoint, data-dictionary",
+      "url": "https://observability.example.com/metrics",
+      "channel": "z. B. prometheus-metrics, openapi-spec",
+      "description": "Beschreiben Sie Zweck und Verwendung dieses Management-Ports"
+    },
+    "hints": {
+      "contentTypeHint": "Zweck dieses Management-Ports",
+      "urlHint": "Zugriffs-URL für diesen Management-Port",
+      "channelHint": "Kennung des Kommunikationskanals"
+    },
+    "messages": {
+      "portAdded": "Management-Port hinzugefügt",
+      "portUpdated": "Management-Port aktualisiert"
+    },
+    "validation": {
+      "error": "Validierungsfehler",
+      "portNameRequired": "Port-Name ist erforderlich",
+      "contentTypeRequired": "Inhaltstyp ist erforderlich",
+      "invalidUrl": "Bitte geben Sie eine gültige URL ein"
+    },
+    "errors": {
+      "failedToSave": "Management-Port konnte nicht gespeichert werden"
+    },
+    "actions": {
+      "addPort": "Port hinzufügen"
+    }
+  },
+  "linkContract": {
+    "title": "Vertrag mit Deliverable verknüpfen",
+    "descriptionPrefix": "Wählen Sie einen bestehenden Vertrag aus oder erstellen Sie einen neuen, um ihn zu verknüpfen mit",
+    "thisDeliverable": "diesem Deliverable",
+    "labels": {
+      "deliverable": "Deliverable",
+      "selectContract": "Vertrag auswählen",
+      "or": "ODER"
+    },
+    "placeholders": {
+      "chooseContract": "Vertrag auswählen…"
+    },
+    "hints": {
+      "contractFilter": "Es werden nur Verträge mit dem Status 'aktiv', 'genehmigt' oder 'zertifiziert' angezeigt. Wählen Sie eine bestimmte Version — gleichnamige Verträge zeigen ihre Version jetzt inline an."
+    },
+    "messages": {
+      "contractLinked": "Vertrag verknüpft",
+      "contractLinkedDescription": "Vertrag erfolgreich mit dem Deliverable verknüpft"
+    },
+    "validation": {
+      "error": "Validierungsfehler",
+      "selectContract": "Bitte wählen Sie einen Vertrag aus"
+    },
+    "errors": {
+      "failedToLink": "Vertrag konnte nicht verknüpft werden"
+    },
+    "actions": {
+      "createNewContract": "Neuen Vertrag erstellen",
+      "linkContract": "Vertrag verknüpfen",
+      "linking": "Wird verknüpft..."
+    }
+  },
+  "hierarchy": {
+    "title": "Datenhierarchie",
+    "loadFailed": "Hierarchie konnte nicht geladen werden",
+    "noDatasets": "Noch keine Datensätze mit diesem Datenprodukt verknüpft.",
+    "noTablesOrViews": "Keine Tabellen oder Views verknüpft",
+    "contract": "Vertrag",
+    "governedByContract": "Geregelt durch Vertrag {{id}}",
+    "objectCount_one": "{{count}} Objekt",
+    "objectCount_other": "{{count}} Objekte",
+    "datasetCount_one": "{{count}} Datensatz",
+    "datasetCount_other": "{{count}} Datensätze",
+    "colCount_one": "{{count}} Spalte",
+    "colCount_other": "{{count}} Spalten"
+  },
+  "commitDraft": {
+    "title": "Entwurfsänderungen committen",
+    "description": "Committen Sie Ihren persönlichen Entwurf, um ihn für Ihr Team sichtbar zu machen.",
+    "analyzing": "Änderungen werden analysiert...",
+    "changeAnalysisTitle": "Änderungsanalyse",
+    "changeAnalysisDescription": "Basierend auf Ihren Änderungen empfehlen wir eine {{bump}}-Versionsanhebung.",
+    "selectVersion": "Version auswählen",
+    "patch": "Patch",
+    "patchDescription": "Fehlerbehebungen",
+    "minor": "Minor",
+    "minorDescription": "Neue Features",
+    "major": "Major",
+    "majorDescription": "Breaking Changes",
+    "customVersion": "Benutzerdefinierte Version",
+    "customVersionPlaceholder": "z. B. 2.0.0",
+    "changeSummaryLabel": "Änderungszusammenfassung *",
+    "changeSummaryPlaceholder": "Beschreiben Sie die in dieser Version vorgenommenen Änderungen...",
+    "validationInvalidVersion": "Bitte geben Sie eine gültige Versionsnummer ein (z. B. 1.0.0)",
+    "validationNoSummary": "Bitte geben Sie eine Zusammenfassung der Änderungen an",
+    "errorAnalyze": "Änderungen konnten nicht analysiert werden",
+    "errorCommit": "Entwurf konnte nicht committet werden",
+    "toastCommittedTitle": "Entwurf committet",
+    "toastCommittedDescription": "Produktversion {{version}} ist jetzt für Ihr Team sichtbar.",
+    "committing": "Wird committet...",
+    "commitButton": "Entwurf committen"
+  },
+  "supportChannelForm": {
+    "titleAdd": "Support-Kanal hinzufügen",
+    "titleEdit": "Support-Kanal bearbeiten",
+    "description": "Definieren Sie einen Support-Kanal für Benutzer dieses Datenprodukts (ODPS v1.0.0).",
+    "channelName": "Kanalname",
+    "channelNamePlaceholder": "z. B. data-product-support",
+    "accessUrl": "Zugriffs-URL",
+    "accessUrlPlaceholder": "https://slack.com/channels/data-product-support",
+    "accessUrlHint": "URL für den Zugriff auf diesen Support-Kanal",
+    "tool": "Tool",
+    "scope": "Geltungsbereich",
+    "invitationUrl": "Einladungs-URL",
+    "invitationUrlPlaceholder": "https://slack.com/invite/...",
+    "invitationUrlHint": "Optionaler Einladungslink für neue Mitglieder",
+    "descriptionPlaceholder": "Beschreiben Sie, wie Benutzer diesen Support-Kanal verwenden sollen",
+    "addChannel": "Kanal hinzufügen",
+    "validationErrorTitle": "Validierungsfehler",
+    "channelRequired": "Kanalname ist erforderlich",
+    "urlRequired": "URL ist erforderlich",
+    "invalidUrl": "Bitte geben Sie eine gültige URL ein",
+    "invalidInvitationUrl": "Bitte geben Sie eine gültige Einladungs-URL ein",
+    "successUpdated": "Support-Kanal aktualisiert",
+    "successAdded": "Support-Kanal hinzugefügt",
+    "errorSave": "Support-Kanal konnte nicht gespeichert werden"
+  },
+  "maturity": {
+    "title": "Reifegrad",
+    "evaluating": "Reifegrad wird bewertet...",
+    "loadFailed": "Reifebericht konnte nicht geladen werden",
+    "unableToLoad": "Reifebericht kann nicht geladen werden",
+    "gatesPassed": "{{passed}}/{{total}} Gates bestanden",
+    "reevaluate": "Reifegrad neu bewerten",
+    "gates": "{{passed}}/{{total}} Gates",
+    "required": "Erforderlich",
+    "advisory": "Beratend",
+    "overTime": "Reifegrad im Zeitverlauf",
+    "retry": "Erneut versuchen"
+  },
+  "createDialog": {
+    "editTitle": "Datenprodukt-Metadaten bearbeiten",
+    "createTitle": "Datenprodukt erstellen (ODPS v1.0.0)",
+    "editDescription": "Aktualisieren Sie die Kernmetadaten für dieses Datenprodukt.",
+    "createDescription": "Erstellen Sie ein neues Datenprodukt mit den wesentlichen Informationen. Ports, Teammitglieder und Support-Kanäle können Sie in der Detailansicht hinzufügen.",
+    "productNameLabel": "Produktname",
+    "productNamePlaceholder": "z. B. Customer Analytics Data",
+    "versionPlaceholder": "0.0.1",
+    "productTypeLabel": "Produkttyp",
+    "productTypePlaceholder": "Produkttyp auswählen...",
+    "productTypeHint": "Position in der Datenwertschöpfungskette",
+    "selectTeamPlaceholder": "Team auswählen...",
+    "loadingTeams": "Teams werden geladen...",
+    "ownerTeamHint": "Für dieses Produkt verantwortliches Team",
+    "projectLabel": "Projekt",
+    "selectProjectPlaceholder": "Projekt auswählen (optional)",
+    "projectOption_one": "{{name}} ({{count}} Team)",
+    "projectOption_other": "{{name}} ({{count}} Teams)",
+    "projectMemberHint": "Sie können nur Projekte auswählen, in denen Sie Mitglied sind",
+    "domainsLabel": "Bereiche",
+    "domainsPlaceholder": "Bereiche auswählen...",
+    "tenantLabel": "Tenant/Organisation",
+    "tenantPlaceholder": "z. B. acme-corp",
+    "descriptionSectionTitle": "Beschreibung (ODPS-strukturiert)",
+    "purposePlaceholder": "Was ist der beabsichtigte Zweck dieser Daten?",
+    "limitationsLabel": "Einschränkungen",
+    "limitationsPlaceholder": "Technische, Compliance- und rechtliche Einschränkungen",
+    "usagePlaceholder": "Empfohlene Verwendung dieser Daten",
+    "tagsPlaceholder": "Tags für dieses Datenprodukt suchen und auswählen...",
+    "tagsHint": "Fügen Sie Tags hinzu, um dieses Datenprodukt zu kategorisieren und zu organisieren",
+    "consumerGroupsLabel": "Verbrauchergruppen",
+    "createProductButton": "Produkt erstellen",
+    "discardDescription": "Sie haben ungespeicherte Änderungen, die verloren gehen, wenn Sie diesen Dialog schließen. Möchten Sie sie wirklich verwerfen?",
+    "continueEditing": "Weiter bearbeiten",
+    "discardChanges": "Änderungen verwerfen",
+    "messages": {
+      "createSuccessDesc": "Datenprodukt erfolgreich erstellt. Fügen Sie Ports und Team in der Detailansicht hinzu."
+    },
+    "validation": {
+      "nameRequired": "Produktname ist erforderlich",
+      "versionRequired": "Version ist erforderlich",
+      "statusRequired": "Status ist erforderlich"
+    }
+  },
+  "createFromContract": {
+    "title": "Datenprodukt aus Vertrag erstellen",
+    "description": "Erstellen Sie ein neues Datenprodukt, das diesen Vertrag zur Regelung eines Deliverables verwendet. Das Produkt erbt Bereich, Owner-Team und Projekt des Vertrags.",
+    "contractLabel": "Vertrag:",
+    "productNameLabel": "Produktname *",
+    "productNamePlaceholder": "z. B. Customer Analytics Product",
+    "productTypeLabel": "Produkttyp *",
+    "productTypePlaceholder": "Produkttyp auswählen",
+    "versionLabel": "Version *",
+    "versionPlaceholder": "z. B. v1.0.0",
+    "deliverableNameLabel": "Deliverable-Name (optional)",
+    "deliverableNamePlaceholder": "Standardwert: {{contractName}}",
+    "deliverableNameHint": "Wenn nicht angegeben, verwendet das Deliverable den Vertragsnamen",
+    "creating": "Wird erstellt...",
+    "createButton": "Produkt erstellen",
+    "errors": {
+      "nameRequired": "Produktname ist erforderlich",
+      "versionRequired": "Version ist erforderlich",
+      "typeRequired": "Produkttyp ist erforderlich",
+      "createError": "Produkt konnte nicht aus dem Vertrag erstellt werden"
+    },
+    "messages": {
+      "productCreated": "Produkt erstellt",
+      "productCreatedDesc": "Datenprodukt \"{{productName}}\" erfolgreich aus dem Vertrag erstellt."
+    }
+  },
+  "createVersion": {
+    "title": "Neue Version erstellen",
+    "description": "Geben Sie die neue Versionskennung für das Datenprodukt \"{{productTitle}}\" ein. Es ist oft hilfreich, ausgehend von der aktuellen Version ({{currentVersion}}) hochzuzählen.",
+    "versionLabel": "Neue Versionszeichenkette",
+    "versionPlaceholder": "z. B. v1.1, v2.0-beta",
+    "createButton": "Version erstellen",
+    "errors": {
+      "versionEmpty": "Die Versionszeichenkette darf nicht leer sein."
+    }
+  },
+  "graphView": {
+    "unnamedProduct": "Unbenanntes Produkt",
+    "switchToTableView": "Zur Tabellenansicht wechseln",
+    "switchToGraphView": "Zur Graphansicht wechseln",
+    "inputPortLabel": "{{name}} (Consumable)",
+    "outputPortLabel": "{{name}} (Deliverable)",
+    "labels": {
+      "contract": "Vertrag"
+    }
+  },
+  "importExport": {
+    "title": "ODPS v1.0.0 Import/Export",
+    "description": "Importieren oder exportieren Sie Datenprodukte im JSON-Format des Open Data Product Standard v1.0.0",
+    "pasteLabel": "ODPS v1.0.0 JSON einfügen",
+    "validationErrors": "Validierungsfehler:",
+    "validate": "Validieren",
+    "validationFailed": "Validierung fehlgeschlagen",
+    "errorsFound_one": "{{count}} Fehler gefunden",
+    "errorsFound_other": "{{count}} Fehler gefunden",
+    "validationPassed": "Validierung bestanden",
+    "validationPassedDesc": "JSON ist ein gültiges ODPS v1.0.0 Format",
+    "invalidJson": "Ungültiges JSON",
+    "cannotImportErrors_one": "Import nicht möglich: {{count}} Fehler gefunden",
+    "cannotImportErrors_other": "Import nicht möglich: {{count}} Fehler gefunden",
+    "importSuccessful": "Import erfolgreich",
+    "importSuccessfulDesc": "Datenprodukt \"{{name}}\" erfolgreich importiert",
+    "importFailed": "Import fehlgeschlagen",
+    "noProductSelected": "Kein Produkt ausgewählt",
+    "noProductSelectedDesc": "Export ohne Produkt nicht möglich",
+    "exportSuccessful": "Export erfolgreich",
+    "exportSuccessfulDesc": "{{filename}} heruntergeladen",
+    "exportFailed": "Export fehlgeschlagen",
+    "exportFailedDesc": "Datenprodukt konnte nicht exportiert werden",
+    "exportDescription": "Ein Klick auf \"Exportieren\" lädt dieses Produkt als ODPS v1.0.0-konforme JSON-Datei herunter. Audit-Felder (created_at, updated_at) werden zur Portabilität ausgeschlossen.",
+    "exportAsJson": "Als JSON exportieren",
+    "currentProduct": "Aktuelles Produkt",
+    "unnamed": "Unbenannt",
+    "noProductDesc": "Kein Produkt ausgewählt. Öffnen Sie diesen Dialog von einer Produktdetailseite, um zu exportieren."
+  },
+  "subscribeDialog": {
+    "title": "Datenprodukt abonnieren",
+    "descriptionPre": "Abonnieren Sie",
+    "descriptionPost": "um Benachrichtigungen über Updates, Änderungen und Compliance-Status zu erhalten.",
+    "subscribeAs": "Abonnieren als",
+    "forMyself": "Für mich selbst",
+    "forMyGroup": "Für eine Gruppe, der ich angehöre",
+    "noGroupsAvailable": "(keine Gruppen verfügbar)",
+    "selectGroup": "Wählen Sie eine Ihrer Gruppen aus",
+    "otherGroupOrSP": "Andere Gruppe oder Service Principal",
+    "groupDisplayName": "Gruppe (Anzeigename)",
+    "spDisplayName": "Service Principal (Anzeigename oder applicationId)",
+    "groupPlaceholder": "z. B. sales_consumers",
+    "spPlaceholder": "z. B. 11111111-2222-3333-4444-555555555555",
+    "validationNote": "Wird vor dem Aufzeichnen der Anfrage gegen das Workspace-Verzeichnis validiert.",
+    "reasonLabel": "Warum abonnieren Sie?",
+    "optional": "(optional)",
+    "reasonPlaceholder": "Z. B. Diese Daten für die Quartalsberichterstattung benötigt, ein Dashboard erstellen usw.",
+    "reasonHint": "Dies hilft Datenverantwortlichen zu verstehen, wie ihre Produkte verwendet werden.",
+    "subscribedTitle": "Abonniert!",
+    "subscribedDesc": "Sie haben \"{{productName}}\" jetzt abonniert. Sie erhalten Benachrichtigungen über Updates und Änderungen.",
+    "subscribedOnBehalfGroup": "Sie haben \"{{productName}}\" jetzt im Namen der Gruppe \"{{value}}\" abonniert.",
+    "subscribedOnBehalfSP": "Sie haben \"{{productName}}\" jetzt im Namen des Service Principals \"{{value}}\" abonniert.",
+    "subscriptionFailed": "Abonnement fehlgeschlagen",
+    "failedToSubscribe": "Abonnieren fehlgeschlagen",
+    "subscribing": "Wird abonniert..."
+  },
+  "myProductsView": {
+    "retry": "Erneut versuchen",
+    "untitled": "Ohne Titel",
+    "productsAvailable_one": "{{count}} Produkt verfügbar",
+    "productsAvailable_other": "{{count}} Produkte verfügbar"
+  },
+  "ownerConsumers": {
+    "breadcrumb": "Verbraucher",
+    "totalProducts": "Produkte gesamt",
+    "activeProducts": "Aktive Produkte",
+    "totalSubscribers": "Abonnenten gesamt",
+    "products": "Produkte",
+    "noProducts": "Keine Produkte gefunden",
+    "noDomain": "Kein Bereich",
+    "subscribersFor": "Abonnenten — {{name}}",
+    "selectProduct": "Produkt auswählen",
+    "filterPlaceholder": "Abonnenten filtern...",
+    "selectProductHint": "Wählen Sie ein Produkt aus, um seine Abonnenten anzuzeigen",
+    "noSubscribersMatch": "Keine Abonnenten entsprechen Ihrem Filter",
+    "noSubscribers": "Noch keine Abonnenten",
+    "colSubscriber": "Abonnent",
+    "colSubscribed": "Abonniert",
+    "colReason": "Grund"
   }
 }
-

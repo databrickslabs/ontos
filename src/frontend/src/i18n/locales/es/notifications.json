@@ -1,0 +1,39 @@
+{
+  "statusChangeNotApplied": {
+    "title": "Cambio de estado no aplicado",
+    "statusChanged": "La solicitud de cambiar el estado de «{{fromStatus}}» a «{{toStatus}}» se aprobó, pero el estado ahora es «{{currentStatus}}», por lo que el cambio no se aplicó. Vuelva a solicitarlo si todavía es necesario.",
+    "refused": "Su solicitud de cambiar el estado a «{{toStatus}}» se aprobó, pero el cambio no se pudo aplicar: {{reason}}"
+  },
+  "contractStatusNotChanged": {
+    "title": "Estado del contrato sin cambios",
+    "notUnderReview": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: el contrato no está en revisión (estado «{{currentStatus}}»)",
+    "notApplied": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Notificaciones",
+    "loading": "Cargando notificaciones...",
+    "error": "Error: {{error}}",
+    "empty": "No hay notificaciones",
+    "open": "Abrir",
+    "viewDetails": "Ver detalles",
+    "approveDeny": "Aprobar/Denegar",
+    "handleAccessGrant": "Gestionar concesión de acceso",
+    "reviewContract": "Revisar contrato",
+    "handlePublish": "Gestionar publicación",
+    "handleDeploy": "Gestionar despliegue",
+    "approved": "✓ Aprobado",
+    "rejected": "✗ Rechazado",
+    "viewRespond": "Ver / Responder",
+    "reviewCertification": "Revisar solicitud de certificación",
+    "reviewPublication": "Revisar solicitud de publicación",
+    "status": "Estado: {{status}}",
+    "runId": "ID de ejecución: {{runId}}",
+    "delete": "Eliminar notificación",
+    "unknownUser": "Usuario desconocido",
+    "unknownRoleId": "ID de rol desconocido",
+    "unknownRoleName": "Nombre de rol desconocido",
+    "unknownId": "ID desconocido",
+    "badge": "Notificación",
+    "markRead": "Marcar como leída"
+  }
+}

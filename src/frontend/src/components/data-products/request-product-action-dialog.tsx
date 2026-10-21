@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { statusChangeErrorText } from '@/lib/status-change-error';
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
@@ -53,34 +55,35 @@ interface RequestProductActionDialogProps {
   defaultRequestType?: RequestType;
 }
 
-// ODPS lifecycle transitions
+// ODPS lifecycle transitions — label values are i18n key suffixes under
+// data-products:requestAction.transitions.*; rendered via t() at the call site.
 const ALLOWED_TRANSITIONS: Record<string, { target: string; label: string }[]> = {
   'draft': [
-    { target: 'sandbox', label: 'Move to Sandbox' },
-    { target: 'proposed', label: 'Submit for Review' },
+    { target: 'sandbox', label: 'moveToSandbox' },
+    { target: 'proposed', label: 'submitForReview' },
   ],
   'sandbox': [
-    { target: 'draft', label: 'Return to Draft' },
-    { target: 'proposed', label: 'Submit for Review' },
+    { target: 'draft', label: 'returnToDraft' },
+    { target: 'proposed', label: 'submitForReview' },
   ],
   'proposed': [
-    { target: 'draft', label: 'Return to Draft' },
-    { target: 'under_review', label: 'Start Review' },
+    { target: 'draft', label: 'returnToDraft' },
+    { target: 'under_review', label: 'startReview' },
   ],
   'under_review': [
-    { target: 'approved', label: 'Approve' },
-    { target: 'draft', label: 'Reject (Return to Draft)' },
+    { target: 'approved', label: 'approve' },
+    { target: 'draft', label: 'rejectReturnToDraft' },
   ],
   'approved': [
-    { target: 'active', label: 'Publish/Activate' },
-    { target: 'draft', label: 'Return to Draft' },
+    { target: 'active', label: 'publishActivate' },
+    { target: 'draft', label: 'returnToDraft' },
   ],
   'active': [
-    { target: 'deprecated', label: 'Deprecate' },
+    { target: 'deprecated', label: 'deprecate' },
   ],
   'deprecated': [
-    { target: 'retired', label: 'Retire' },
-    { target: 'active', label: 'Reactivate' },
+    { target: 'retired', label: 'retire' },
+    { target: 'active', label: 'reactivate' },
   ],
   'retired': [],
 };
@@ -99,6 +102,7 @@ export default function RequestProductActionDialog({
   canDirectStatusChange = false,
   defaultRequestType = 'access'
 }: RequestProductActionDialogProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { post, get } = useApi();
   const { toast } = useToast();
   const { lookupWorkflowId } = useApprovalWizardTrigger();
@@ -121,6 +125,9 @@ export default function RequestProductActionDialog({
   // wizard fields are merged into the submit body. When no workflow is
   // configured, this dialog falls through to today's direct-submit flow.
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Set when the wizard's completion sent the request; closing the wizard
+  // then finishes like a direct submit (onSuccess, close)
+  const sentFromWizardRef = useRef(false);
   const [wizardWorkflowId, setWizardWorkflowId] = useState<string | null>(null);
   // Stashed submit context — captured at the moment Submit is clicked so the
   // wizard's onComplete can replay the API call with merged fields.
@@ -186,32 +193,33 @@ export default function RequestProductActionDialog({
       case 'access':
         return {
           icon: <Eye className="h-5 w-5" />,
-          title: 'Request Access to Product',
-          description: 'Request permission to view and use this data product.',
+          title: t('data-products:requestAction.types.access.title'),
+          description: t('data-products:requestAction.types.access.description'),
           enabled: true,
           endpoint: '/api/access-grants/request',
         };
       case 'review':
         return {
           icon: <FileText className="h-5 w-5" />,
-          title: 'Request Data Steward Review',
-          description: 'Submit this product for review by a data steward (transitions to PROPOSED status).',
+          title: t('data-products:requestAction.types.review.title'),
+          description: t('data-products:requestAction.types.review.description'),
           enabled: productStatus?.toLowerCase() === 'draft' || productStatus?.toLowerCase() === 'sandbox',
           endpoint: `/api/data-products/${productId}/request-review`,
         };
       case 'publish':
         return {
           icon: <Rocket className="h-5 w-5" />,
-          title: 'Request Publish to Marketplace',
-          description: 'Request to publish this approved product to the organization-wide marketplace.',
-          enabled: productStatus?.toLowerCase() === 'approved' || productStatus?.toLowerCase() === 'active',
+          title: t('data-products:requestAction.types.publish.title'),
+          description: t('data-products:requestAction.types.publish.description'),
+          // Only active products can be published (same rule as the backend).
+          enabled: productStatus?.toLowerCase() === 'active',
           endpoint: `/api/data-products/${productId}/request-publish`,
         };
       case 'certify':
         return {
           icon: <ShieldCheck className="h-5 w-5" />,
-          title: 'Request Certification',
-          description: 'Request that this product be certified at a specific level.',
+          title: t('data-products:requestAction.types.certify.title'),
+          description: t('data-products:requestAction.types.certify.description'),
           enabled: true,
           endpoint: `/api/data-products/${productId}/request-certify`,
         };
@@ -219,10 +227,10 @@ export default function RequestProductActionDialog({
         const allowedTransitions = productStatus ? getAllowedTransitions(productStatus) : [];
         return {
           icon: <RefreshCw className="h-5 w-5" />,
-          title: canDirectStatusChange ? 'Change Status' : 'Request Status Change',
-          description: canDirectStatusChange 
-            ? 'Directly change the lifecycle status of this product.'
-            : 'Request approval to change the lifecycle status of this product.',
+          title: canDirectStatusChange ? t('data-products:requestAction.types.statusChange.titleDirect') : t('data-products:requestAction.types.statusChange.titleRequest'),
+          description: canDirectStatusChange
+            ? t('data-products:requestAction.types.statusChange.descriptionDirect')
+            : t('data-products:requestAction.types.statusChange.descriptionRequest'),
           enabled: allowedTransitions.length > 0,
           endpoint: canDirectStatusChange 
             ? `/api/data-products/${productId}/change-status`
@@ -236,28 +244,28 @@ export default function RequestProductActionDialog({
     
     if (requestType === 'access') {
       if (!message.trim()) {
-        setError('Please provide a reason for requesting access');
+        setError(t('data-products:requestAction.validation.reasonRequired'));
         return false;
       }
       if (message.trim().length < 10) {
-        setError('Please provide a more detailed reason (at least 10 characters)');
+        setError(t('data-products:requestAction.validation.reasonTooShort'));
         return false;
       }
     }
-    
+
     if (requestType === 'status_change') {
       if (!targetStatus) {
-        setError('Please select a target status');
+        setError(t('data-products:requestAction.validation.targetStatusRequired'));
         return false;
       }
       // Justification is only required for approval requests, not direct changes
       if (!canDirectStatusChange) {
         if (!justification.trim()) {
-          setError('Please provide a justification for the status change');
+          setError(t('data-products:requestAction.validation.justificationRequired'));
           return false;
         }
         if (justification.trim().length < 20) {
-          setError('Please provide a more detailed justification (at least 20 characters)');
+          setError(t('data-products:requestAction.validation.justificationTooShort'));
           return false;
         }
       }
@@ -265,7 +273,7 @@ export default function RequestProductActionDialog({
 
     if (requestType === 'certify') {
       if (!certificationLevel) {
-        setError('Please select a certification level');
+        setError(t('data-products:requestAction.validation.certLevelRequired'));
         return false;
       }
     }
@@ -297,7 +305,7 @@ export default function RequestProductActionDialog({
       };
     } else if (type === 'certify') {
       if (!certificationLevel) {
-        setError('Please select a certification level');
+        setError(t('data-products:requestAction.validation.certLevelRequired'));
         return null;
       }
       return {
@@ -326,42 +334,50 @@ export default function RequestProductActionDialog({
     endpoint: string,
     payload: Record<string, unknown>,
     type: RequestType,
-  ) => {
+    { keepOpen = false }: { keepOpen?: boolean } = {},
+  ): Promise<boolean> => {
     setError(null);
     setSubmitting(true);
     try {
       const response = await post(endpoint, payload);
       if (response.error) {
-        throw new Error(response.error);
+        throw new Error(statusChangeErrorText(response, t, 'data-products'));
       }
       // Different success messages for direct changes vs requests
       if (type === 'status_change' && canDirectStatusChange) {
         toast({
-          title: 'Status Changed',
-          description: `Product status changed from "${productStatus}" to "${targetStatus}".`,
+          title: t('data-products:requestAction.toast.statusChanged'),
+          description: t('data-products:requestAction.toast.statusChangedDesc', { fromStatus: productStatus, toStatus: targetStatus }),
         });
       } else {
         toast({
-          title: 'Request Submitted',
-          description: `Your ${type} request has been submitted and you will be notified of the decision.`,
+          title: t('data-products:requestAction.toast.requestSubmitted'),
+          description: t('data-products:requestAction.toast.requestSubmittedDesc', { type }),
         });
       }
       refreshNotifications();
-      if (onSuccess) onSuccess();
-      // Reset form and close dialog
+      // Reset form
       setMessage('');
       setJustification('');
       setTargetStatus('');
       setCertificationLevel(null);
       setPublicationScope('organization');
-      onOpenChange(false);
+      // keepOpen: sent from the wizard's completion; onSuccess (which reloads
+      // the page data) and closing wait until the user closes the wizard, so
+      // its completion screen stays up
+      if (!keepOpen) {
+        if (onSuccess) onSuccess();
+        onOpenChange(false);
+      }
+      return true;
     } catch (e: any) {
-      setError(e.message || 'Failed to submit request');
+      setError(e.message || t('data-products:requestAction.errors.failedToSubmit'));
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to submit request',
+        title: t('data-products:messages.error'),
+        description: e.message || t('data-products:requestAction.errors.failedToSubmit'),
         variant: 'destructive',
       });
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -370,7 +386,7 @@ export default function RequestProductActionDialog({
   const handleSubmit = async () => {
     const config = getRequestTypeConfig(requestType);
     if (!config.enabled) {
-      setError(`Cannot request ${requestType} for a product with status '${productStatus}'`);
+      setError(t('data-products:requestAction.errors.cannotRequest', { requestType, productStatus }));
       return;
     }
 
@@ -508,10 +524,25 @@ export default function RequestProductActionDialog({
       // without colliding with first-class request fields (reason, duration).
       wizard_data: fields,
     };
+    // Submitted as soon as the wizard completes, not when it's closed, so
+    // leaving the page on the completion screen doesn't lose the request.
+    // The wizard stays open on its completion screen (PDF download).
+    setPendingSubmit(null);
+    const sent = await executeSubmit(
+      pendingSubmit.endpoint, merged, pendingSubmit.requestType, { keepOpen: true },
+    );
+    sentFromWizardRef.current = sent;
+  };
+
+  /** The user closed the wizard after it completed. */
+  const handleWizardClosedAfterComplete = () => {
     setWizardOpen(false);
     setWizardWorkflowId(null);
-    setPendingSubmit(null);
-    await executeSubmit(pendingSubmit.endpoint, merged, pendingSubmit.requestType);
+    if (sentFromWizardRef.current) {
+      sentFromWizardRef.current = false;
+      if (onSuccess) onSuccess();
+      onOpenChange(false);
+    }
   };
 
   const allowedTransitions = productStatus ? getAllowedTransitions(productStatus) : [];
@@ -540,40 +571,40 @@ export default function RequestProductActionDialog({
         <div className="space-y-4 py-4">
           {/* Request Type Selector */}
           <div className="space-y-2">
-            <Label htmlFor="request-type">Request Type</Label>
+            <Label htmlFor="request-type">{t('data-products:requestAction.labels.requestType')}</Label>
             <Select value={requestType} onValueChange={(value) => setRequestType(value as RequestType)}>
               <SelectTrigger id="request-type">
-                <SelectValue placeholder="Select request type" />
+                <SelectValue placeholder={t('data-products:requestAction.placeholders.selectRequestType')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="status_change">
                   <div className="flex items-center gap-2">
                     <RefreshCw className="h-4 w-4" />
-                    {canDirectStatusChange ? 'Change Status' : 'Request Status Change'}
+                    {canDirectStatusChange ? t('data-products:requestAction.types.statusChange.titleDirect') : t('data-products:requestAction.types.statusChange.titleRequest')}
                   </div>
                 </SelectItem>
                 <SelectItem value="review" disabled={!getRequestTypeConfig('review').enabled}>
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    Request Review
+                    {t('data-products:requestAction.selectItems.review')}
                   </div>
                 </SelectItem>
                 <SelectItem value="publish" disabled={!getRequestTypeConfig('publish').enabled}>
                   <div className="flex items-center gap-2">
                     <Rocket className="h-4 w-4" />
-                    Request Publish
+                    {t('data-products:requestAction.selectItems.publish')}
                   </div>
                 </SelectItem>
                 <SelectItem value="certify" disabled={!getRequestTypeConfig('certify').enabled}>
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4" />
-                    Request Certification
+                    {t('data-products:requestAction.selectItems.certify')}
                   </div>
                 </SelectItem>
                 <SelectItem value="access">
                   <div className="flex items-center gap-2">
                     <Eye className="h-4 w-4" />
-                    Request Access
+                    {t('data-products:requestAction.selectItems.access')}
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -589,8 +620,9 @@ export default function RequestProductActionDialog({
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                A multi-step wizard is configured for this request. Click
-                {' '}<strong>Continue</strong>{' '}to begin.
+                {t('data-products:requestAction.wizard.noticeBefore')}
+                {' '}<strong>{t('data-products:requestAction.buttons.continue')}</strong>{' '}
+                {t('data-products:requestAction.wizard.noticeAfter')}
               </AlertDescription>
             </Alert>
           )}
@@ -600,22 +632,22 @@ export default function RequestProductActionDialog({
           {requestType === 'status_change' && (isDirectStatusChange || !wizardActive) && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="target-status">Target Status *</Label>
+                <Label htmlFor="target-status">{t('data-products:requestAction.labels.targetStatus')} *</Label>
                 <Select value={targetStatus} onValueChange={setTargetStatus} disabled={submitting}>
                   <SelectTrigger id="target-status">
-                    <SelectValue placeholder="Select target status" />
+                    <SelectValue placeholder={t('data-products:requestAction.placeholders.selectTargetStatus')} />
                   </SelectTrigger>
                   <SelectContent>
                     {allowedTransitions.map((transition) => (
                       <SelectItem key={transition.target} value={transition.target}>
-                        {transition.label}
+                        {t(`data-products:requestAction.transitions.${transition.label}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {allowedTransitions.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    No status transitions available from current status.
+                    {t('data-products:requestAction.hints.noTransitionsAvailable')}
                   </p>
                 )}
               </div>
@@ -623,17 +655,17 @@ export default function RequestProductActionDialog({
               {/* Justification - only for approval requests */}
               {!canDirectStatusChange && (
                 <div className="space-y-2">
-                  <Label htmlFor="status-justification">Justification *</Label>
+                  <Label htmlFor="status-justification">{t('data-products:requestAction.labels.justification')} *</Label>
                   <Textarea
                     id="status-justification"
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
-                    placeholder="Explain why this status change is needed and any relevant context..."
+                    placeholder={t('data-products:requestAction.placeholders.justification')}
                     className="min-h-[100px] resize-none"
                     disabled={submitting}
                   />
                   <div className="text-xs text-muted-foreground">
-                    Minimum 20 characters required. This will be reviewed by an admin.
+                    {t('data-products:requestAction.hints.justificationMinChars')}
                   </div>
                 </div>
               )}
@@ -655,12 +687,12 @@ export default function RequestProductActionDialog({
           {/* Review Request Message */}
           {requestType === 'review' && !wizardActive && (
             <div className="space-y-2">
-              <Label htmlFor="review-message">Message (optional)</Label>
+              <Label htmlFor="review-message">{t('data-products:requestAction.labels.messageOptional')}</Label>
               <Textarea
                 id="review-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Add any notes for the reviewer..."
+                placeholder={t('data-products:requestAction.placeholders.reviewMessage')}
                 className="min-h-[80px] resize-none"
                 disabled={submitting}
               />
@@ -671,25 +703,25 @@ export default function RequestProductActionDialog({
           {requestType === 'publish' && !wizardActive && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="pub-scope">Publication Scope *</Label>
+                <Label htmlFor="pub-scope">{t('data-products:requestAction.labels.publicationScope')} *</Label>
                 <Select value={publicationScope} onValueChange={setPublicationScope} disabled={submitting}>
                   <SelectTrigger id="pub-scope">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="domain">Domain</SelectItem>
-                    <SelectItem value="organization">Organization</SelectItem>
-                    <SelectItem value="external">External</SelectItem>
+                    <SelectItem value="domain">{t('common:labels.domain')}</SelectItem>
+                    <SelectItem value="organization">{t('data-products:requestAction.scopes.organization')}</SelectItem>
+                    <SelectItem value="external">{t('data-products:requestAction.scopes.external')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="publish-justification">Justification (optional)</Label>
+                <Label htmlFor="publish-justification">{t('data-products:requestAction.labels.justificationOptional')}</Label>
                 <Textarea
                   id="publish-justification"
                   value={justification}
                   onChange={(e) => setJustification(e.target.value)}
-                  placeholder="Why should this product be published?"
+                  placeholder={t('data-products:requestAction.placeholders.publishJustification')}
                   className="min-h-[80px] resize-none"
                   rows={3}
                   disabled={submitting}
@@ -701,14 +733,14 @@ export default function RequestProductActionDialog({
           {requestType === 'certify' && !wizardActive && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="cert-level">Certification Level *</Label>
+                <Label htmlFor="cert-level">{t('data-products:requestAction.labels.certLevel')} *</Label>
                 <Select
                   value={certificationLevel !== null ? certificationLevel.toString() : ''}
                   onValueChange={(v) => setCertificationLevel(parseInt(v, 10))}
                   disabled={submitting}
                 >
                   <SelectTrigger id="cert-level">
-                    <SelectValue placeholder="Select certification level" />
+                    <SelectValue placeholder={t('data-products:requestAction.placeholders.selectCertLevel')} />
                   </SelectTrigger>
                   <SelectContent>
                     {certificationLevels.map((l) => (
@@ -720,12 +752,12 @@ export default function RequestProductActionDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cert-message">Message (optional)</Label>
+                <Label htmlFor="cert-message">{t('data-products:requestAction.labels.messageOptional')}</Label>
                 <Textarea
                   id="cert-message"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Why should this product be certified?"
+                  placeholder={t('data-products:requestAction.placeholders.certMessage')}
                   rows={3}
                   className="min-h-[80px] resize-none"
                   disabled={submitting}
@@ -745,16 +777,16 @@ export default function RequestProductActionDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={submitting || !config.enabled}>
             {submitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isDirectStatusChange ? 'Changing Status...' : (wizardActive ? 'Opening...' : 'Sending Request...')}
+                {isDirectStatusChange ? t('data-products:requestAction.buttons.changingStatus') : (wizardActive ? t('data-products:requestAction.buttons.opening') : t('data-products:requestAction.buttons.sendingRequest'))}
               </>
             ) : (
-              isDirectStatusChange ? 'Change Status' : (wizardActive ? 'Continue' : 'Send Request')
+              isDirectStatusChange ? t('data-products:requestAction.types.statusChange.titleDirect') : (wizardActive ? t('data-products:requestAction.buttons.continue') : t('data-products:requestAction.buttons.sendRequest'))
             )}
           </Button>
         </DialogFooter>
@@ -782,7 +814,8 @@ export default function RequestProductActionDialog({
         entityName={productName}
         preselectedWorkflowId={wizardWorkflowId}
         autoStartWithPreselected
-        onComplete={handleWizardComplete}
+        onSessionComplete={handleWizardComplete}
+        onComplete={handleWizardClosedAfterComplete}
       />
     )}
     </>

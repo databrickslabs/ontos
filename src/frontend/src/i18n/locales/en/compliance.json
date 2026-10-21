@@ -34,15 +34,80 @@
     "security": "Security",
     "dataQuality": "Data Quality",
     "privacy": "Privacy",
-    "governance": "Governance"
+    "governance": "Governance",
+    "maturity": "Maturity"
   },
   "errors": {
     "loadingPolicies": "Error Loading Policies",
     "savingPolicy": "Error Saving Policy",
-    "deletingPolicy": "Error Deleting Policy"
+    "deletingPolicy": "Error Deleting Policy",
+    "loadPolicyFailed": "Failed to load policy",
+    "loadFailed": "Failed to load",
+    "savePolicyFailed": "Failed to save policy",
+    "deletePolicyFailed": "Failed to delete policy",
+    "noDataReceived": "No data received from compliance policies endpoint.",
+    "saveNoDataReturned": "Failed to save policy: No data returned",
+    "loadPoliciesFailed": "Failed to load compliance policies",
+    "loadRunResultsFailed": "Failed to load run results",
+    "policyNotFound": "Compliance policy not found.",
+    "runNotFound": "Run not found.",
+    "runningPolicy": "Error Running Policy"
+  },
+  "results": {
+    "passed": "Passed",
+    "failed": "Failed",
+    "showFailed": "Show Failed",
+    "showAll": "Show All",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Back to List",
+    "run": "Run",
+    "id": "ID",
+    "examples": "Examples",
+    "shouldPass": "Should Pass",
+    "shouldFail": "Should Fail",
+    "noExamples": "No examples",
+    "runSummary": {
+      "title": "Run Summary",
+      "lastRunStarted": "Last run started {{date}}",
+      "statusLabel": "Status:",
+      "score": "Score",
+      "passed": "Passed",
+      "failed": "Failed",
+      "passedExamples": "Passed examples",
+      "failedExamples": "Failed examples",
+      "noPassedExamples": "No passed examples in this run",
+      "noFailures": "No failures in this run",
+      "errorLabel": "Error:"
+    },
+    "runsList": {
+      "title": "Runs",
+      "mostRecentFirst": "Most recent first",
+      "noRuns": "No runs yet",
+      "scoreLabel": "Score:",
+      "scoreDetail": "{{passed}} passed / {{failed}} failed",
+      "openRunDetails": "Open run details"
+    },
+    "resultsCard": {
+      "title": "Results",
+      "filteredFailed": "Filtered to failed only — latest run {{date}}",
+      "filteredAll": "Filtered to all — latest run {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Run {{id}}",
+    "viewPolicy": "View Policy",
+    "statusLabel": "Status:",
+    "scoreLabel": "Score:",
+    "passedLabel": "Passed:",
+    "failedLabel": "Failed:",
+    "startedLabel": "Started: {{date}}",
+    "errorLabel": "Error:"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' saved successfully",
+    "policySavedWithWarnings": "Policy '{{name}}' saved, but its rule may not work",
     "policyDeleted": "Policy deleted successfully"
   },
   "score": {
@@ -100,6 +165,14 @@
       "score": "Score",
       "issues": "Issues"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "MATCH type '{{type}}' is not supported, so the rule matches no entities. Supported types: {{supported}}, or Object for all of them.",
+    "missing_assert": "The rule has no ASSERT clause, so every entity passes."
+  },
+  "runErrors": {
+    "rule_parse_failed": "The rule could not be parsed: {{detail}}",
+    "workspace_client_unavailable": "The Databricks workspace isn't available ({{detail}}), and this rule checks Unity Catalog objects, so it could not run.",
+    "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
   }
 }
-

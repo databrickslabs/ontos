@@ -381,6 +381,121 @@ class TestRuleEvaluation:
         assert passed is False
 
 
+class TestBooleanLiterals:
+    """Test boolean literal parsing and evaluation (issue #684)."""
+
+    def test_lexer_bool_keywords(self):
+        """True/False (any case) lex as TRUE/FALSE keyword tokens, not identifiers."""
+        for text, expected in [
+            ("True", TokenType.TRUE),
+            ("False", TokenType.FALSE),
+            ("true", TokenType.TRUE),
+            ("false", TokenType.FALSE),
+        ]:
+            tokens = Lexer(text).tokenize()
+            assert tokens[0].type == expected
+
+    def test_parse_bool_literal_is_python_bool(self):
+        """A bare True/False parses to a Literal holding a real Python bool."""
+        for text, expected in [("True", True), ("False", False),
+                               ("true", True), ("false", False)]:
+            parser = Parser(Lexer(text).tokenize())
+            ast = parser.parse_primary()
+            assert isinstance(ast, Literal)
+            assert ast.value is expected
+
+    def test_eq_true_against_bool_field(self):
+        """`field = True` evaluates True when field is bool True, False when bool False."""
+        rule = "ASSERT obj.has_owner = True"
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': True})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': False})
+        assert passed is False
+
+    def test_eq_false_against_bool_field(self):
+        """`field = False` evaluates True when field is bool False, False when bool True."""
+        rule = "ASSERT obj.has_pii = False"
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': False})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': True})
+        assert passed is False
+
+    def test_neq_true_against_bool_field(self):
+        """`field != True` behaves as bool-to-bool inequality."""
+        rule = "ASSERT obj.has_owner != True"
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': False})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_owner': True})
+        assert passed is False
+
+    def test_neq_false_against_bool_field(self):
+        """`field != False` behaves as bool-to-bool inequality."""
+        rule = "ASSERT obj.has_pii != False"
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': True})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object(rule, {'has_pii': False})
+        assert passed is False
+
+    def test_lowercase_bool_matches_bool_field(self):
+        """Lowercase true/false evaluate the same as True/False."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.has_owner = true", {'has_owner': True})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.has_pii = false", {'has_pii': False})
+        assert passed is True
+
+    def test_bool_literal_not_equal_to_string(self):
+        """Regression: bool literal is a real bool, so True != the string 'True'."""
+        evaluator = Evaluator({})
+        ast = Parser(Lexer("True").tokenize()).parse_primary()
+        assert evaluator.evaluate(ast) is True
+        assert evaluator.evaluate(ast) != "True"
+
+    def test_bool_literal_does_not_coerce_integer_field(self):
+        """Integer fields are not equal to booleans, while numeric equality is unchanged."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = true", {'count': 1})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count != true", {'count': 1})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = false", {'count': 0})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count != false", {'count': 0})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1})
+        assert passed is True
+
+    def test_bool_literal_does_not_coerce_float_field(self):
+        """Float fields are not equal to booleans, while numeric equality is unchanged."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = true", {'count': 1.0})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1.0})
+        assert passed is True
+
+    def test_bool_literal_does_not_equal_string_field(self):
+        """Quoting regression: string properties do not match bare boolean literals."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.status = true", {'status': 'active'})
+        assert passed is False
+
+    def test_tag_string_true_requires_quoted_literal(self):
+        """Quoting regression: string TAG values require quoted string literals."""
+        obj = {'tags': {'enabled': 'true'}}
+        passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = true", obj)
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = 'true'", obj)
+        assert passed is True
+
+    @pytest.mark.parametrize('field', [
+        'has_owner',
+        'has_description',
+        'has_upstream_lineage',
+        'has_delivery_channels',
+        'has_contract',
+    ])
+    def test_live_maturity_boolean_gates_still_pass(self, field):
+        """Live maturity gates continue comparing real booleans normally."""
+        passed, _ = evaluate_rule_on_object(f"ASSERT obj.{field} = True", {field: True})
+        assert passed is True
+
+
 class TestRuleParsing:
     """Test full rule parsing."""
 
@@ -430,6 +545,99 @@ class TestRuleParsing:
         assert len(parsed['on_fail_actions']) == 1
         assert parsed['on_fail_actions'][0]['type'] == 'NOTIFY'
         assert 'security-team@example.com' in parsed['on_fail_actions'][0]['recipients']
+
+    def test_parse_repeated_on_fail_clauses_accumulate(self):
+        """Repeated ON_FAIL clauses (one action per line, as in the DSL guide) all count."""
+        rule = """
+        MATCH (tbl:table)
+        WHERE HAS_TAG('contains_pii')
+        ASSERT TAG('encryption') = 'AES256'
+        ON_FAIL FAIL 'PII data must be encrypted with AES256'
+        ON_FAIL ASSIGN_TAG security_risk: 'high'
+        ON_FAIL NOTIFY 'security-team@example.com'
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['FAIL', 'ASSIGN_TAG', 'NOTIFY']
+        assert parsed['on_pass_actions'] == []
+
+    def test_parse_on_pass_after_on_fail(self):
+        """ON_PASS may follow ON_FAIL; neither clause is dropped."""
+        rule = """
+        MATCH (prod:data_product)
+        ASSERT prod.owner != 'unknown'
+        ON_FAIL ASSIGN_TAG needs_attention: 'missing_owner'
+        ON_PASS REMOVE_TAG needs_attention
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['ASSIGN_TAG']
+        assert [a['type'] for a in parsed['on_pass_actions']] == ['REMOVE_TAG']
+
+    def test_parse_interleaved_clauses_keep_declaration_order(self):
+        """Actions accumulate per clause type in the order they are written."""
+        rule = """
+        MATCH (obj:Object)
+        ASSERT obj.comment != ''
+        ON_PASS ASSIGN_TAG documentation_status: 'complete'
+        ON_FAIL FAIL 'Missing description'
+        ON_PASS REMOVE_TAG compliance_issue
+        ON_FAIL ASSIGN_TAG documentation_status: 'incomplete'
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_pass_actions']] == ['ASSIGN_TAG', 'REMOVE_TAG']
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['FAIL', 'ASSIGN_TAG']
+
+    def test_parse_multiple_actions_in_single_clause_still_supported(self):
+        """The compact form (several actions after one ON_FAIL) keeps working."""
+        rule = """
+        MATCH (obj:table)
+        ASSERT obj.owner != 'unknown'
+        ON_FAIL FAIL 'No owner' ASSIGN_TAG compliance_issue: 'missing_owner'
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['FAIL', 'ASSIGN_TAG']
+
+    def test_trailing_input_is_reported_with_its_source(self, caplog):
+        """Unparsed trailing input is still ignored (shipped demo rules rely on it, see the
+        issue about truncated shipped rules), but it is logged with the rule's source so the
+        offending policy can be found. Tighten to an error once those rules are fixed."""
+        rule = "MATCH (d:Dataset) ASSERT d.consent_mechanism IS NOT NULL"
+
+        with caplog.at_level('WARNING', logger='src.common.compliance_dsl'):
+            parse_rule(rule, source="policy 'Vehicle PII consent' (p-1)")
+
+        [record] = [r for r in caplog.records if 'unparsed trailing input' in r.getMessage()]
+        assert "policy 'Vehicle PII consent' (p-1)" in record.getMessage()
+        assert "'IS'" in record.getMessage()
+
+    def test_dsl_guide_examples_parse_all_written_actions(self):
+        """Every rule example in the DSL guide yields as many actions as it writes."""
+        import re
+        from pathlib import Path
+
+        guide = Path(__file__).resolve().parents[2] / 'docs' / 'compliance-dsl-guide.md'
+        text = guide.read_text(encoding='utf-8').replace('\r\n', '\n')
+        blocks = [
+            b for b in re.findall(r"```[a-zA-Z]*\n(.*?)```", text, re.S)
+            if re.match(r"\s*MATCH\s*\(", b)
+        ]
+        # Skip the syntax skeleton ("ON_PASS action" / "ON_FAIL action").
+        placeholder = re.compile(r"^\s*ON_(?:PASS|FAIL)\s+action\s*$", re.M)
+        examples = [b for b in blocks if not placeholder.search(b)]
+        # Guard against the extraction silently matching (almost) nothing after a guide edit.
+        assert len(examples) >= 6, f'expected at least 6 rule examples, found {len(examples)}'
+
+        for block in examples:
+            written = len(re.findall(r'^\s*ON_(?:PASS|FAIL)\s', block, re.M))
+            parsed = parse_rule(block)
+            assert len(parsed['on_pass_actions']) + len(parsed['on_fail_actions']) == written, block
 
 
 class TestEdgeCases:

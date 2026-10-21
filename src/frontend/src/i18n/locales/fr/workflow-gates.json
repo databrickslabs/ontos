@@ -1,0 +1,14 @@
+{
+  "blocked": "Un workflow a bloqué le changement de statut de {{fromStatus}} à {{toStatus}} : {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "en attente d'approbation ({{step}})",
+    "entityLoadFailed": "impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
+    "validationFailed": "la validation du workflow a échoué",
+    "status": {
+      "failed": "échoué",
+      "cancelled": "annulé",
+      "pending": "en attente",
+      "running": "en cours"
+    }
+  }
+}

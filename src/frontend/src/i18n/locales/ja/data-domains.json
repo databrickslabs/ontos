@@ -6,6 +6,8 @@
   "editDomain": "ドメインを編集",
   "deleteDomain": "ドメインを削除",
   "noDomainsYet": "まだデータドメインはありません。",
+  "openMenu": "メニューを開く",
+  "previewMetadata": "メタデータをプレビュー",
   "table": {
     "name": "名前",
     "description": "説明",
@@ -28,12 +30,133 @@
     "domainDeletedSuccess": "データドメインが正常に削除されました。",
     "errorFetchingDomains": "ドメインの取得エラー",
     "errorDeletingDomain": "ドメインの削除エラー",
-    "errorLoadingData": "データの読み込みエラー"
+    "errorLoadingData": "データの読み込みエラー",
+    "failedLoadDomains": "データドメインの読み込みに失敗しました",
+    "failedDeleteDomain": "ドメインの削除に失敗しました。"
   },
   "deleteDialog": {
     "title": "本当によろしいですか？",
     "description": "この操作は元に戻せません。データドメインが完全に削除されます。",
     "cancel": "キャンセル",
-    "delete": "削除"
+    "delete": "削除",
+    "cannotDelete": "このドメインは削除できません。",
+    "primaryForAssignments_one": "{{count}} 件のエンティティ割り当てのプライマリドメインになっています:",
+    "primaryForAssignments_other": "{{count}} 件のエンティティ割り当てのプライマリドメインになっています:",
+    "assignmentCount": "{{count}} 件の {{type}}",
+    "reassignFirst": "先にそれらを別のプライマリドメインに再割り当てしてください。"
+  },
+  "form": {
+    "editTitle": "データドメインを編集",
+    "createTitle": "新しいデータドメインを作成",
+    "editDescription": "既存のデータドメインを変更します。",
+    "createDescription": "新しいデータドメインをシステムに追加します。",
+    "createSubmit": "ドメインを作成",
+    "nameLabel": "名前 *",
+    "namePlaceholder": "例: 営業分析",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "このドメインの目的を記述...",
+    "tagsLabel": "タグ",
+    "tagsPlaceholder": "このデータドメインのタグを検索して選択...",
+    "parentLabel": "親ドメイン",
+    "parentPlaceholder": "親ドメインを選択（任意）",
+    "noParent": "親なし",
+    "validation": {
+      "nameMin": "名前は2文字以上である必要があります。",
+      "descriptionMax": "説明は500文字を超えてはいけません。"
+    },
+    "discardDescription": "未保存の変更があります。このダイアログを閉じると失われます。破棄してもよろしいですか？",
+    "continueEditing": "編集を続ける",
+    "discardChanges": "変更を破棄",
+    "toasts": {
+      "updated": "ドメインを更新しました",
+      "created": "ドメインを作成しました",
+      "saveSuccess": "'{{name}}' を正常に保存しました。",
+      "saveError": "ドメインの保存エラー"
+    }
+  },
+  "details": {
+    "backToList": "一覧に戻る",
+    "backToDataDomains": "データドメインに戻る",
+    "edit": "編集",
+    "notFound": "データドメインが見つからないか、読み込めませんでした。",
+    "noDomainIdProvided": "ドメインIDが指定されていません。",
+    "invalidDomain": "無効なドメイン",
+    "relatedEntities": "関連エンティティ",
+    "addConcept": "コンセプトを追加",
+    "hierarchyContext": "ドメイン階層のコンテキスト",
+    "info": {
+      "id": "ID",
+      "parentDomain": "親ドメイン",
+      "childrenCount": "子の数",
+      "tags": "タグ",
+      "createdBy": "作成者",
+      "createdAt": "作成日時",
+      "lastUpdatedAt": "最終更新日時",
+      "linkedBusinessConcepts": "リンクされたビジネスコンセプト"
+    },
+    "childDomains": {
+      "title": "子データドメイン ({{count}})",
+      "description": "直下にネストされたデータドメインです。",
+      "empty": "子ドメインが見つかりません",
+      "columns": {
+        "name": "名前",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "ドメインチーム",
+      "countBadge_one": "{{count}} チーム",
+      "countBadge_other": "{{count}} チーム",
+      "create": "チームを作成",
+      "description": "このデータドメインに割り当てられたチームです。チームはドメイン固有の権限と責任を継承します。",
+      "empty": "チームが割り当てられていません",
+      "emptyHint": "チームを作成して、このデータドメインに割り当ててください。",
+      "createFirst": "最初のチームを作成",
+      "columns": {
+        "name": "チーム名",
+        "title": "タイトル",
+        "noTitle": "タイトルなし",
+        "members": "メンバー",
+        "memberCount_one": "{{count}} 名のメンバー",
+        "memberCount_other": "{{count}} 名のメンバー",
+        "actions": "アクション",
+        "edit": "編集"
+      }
+    },
+    "assignedEntities": {
+      "title": "割り当て済みエンティティ",
+      "description": "このドメインに割り当てられた（プライマリまたは追加の）データプロダクト、コントラクト、アセットです。",
+      "dataProducts": "データプロダクト",
+      "dataContracts": "データコントラクト",
+      "assets": "アセット",
+      "primaryDomain": "プライマリドメイン",
+      "additionalDomain": "追加ドメイン",
+      "noneAssigned": "割り当てはありません。"
+    },
+    "linkedAssets": {
+      "title": "リンクされたアセット",
+      "description": "セマンティックな関係を通じてこのデータドメインにリンクされたアセット（データプロダクト、コントラクトなど）です。",
+      "empty": "リンクされたアセットが見つかりません",
+      "countBadge": "合計 {{count}}",
+      "columns": {
+        "name": "アセット名",
+        "type": "種別",
+        "unknownType": "不明",
+        "path": "パス",
+        "domain": "ドメイン"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "ビジネスコンセプトをデータドメインにリンクしました。",
+    "conceptUnlinked": "ビジネスコンセプトのデータドメインへのリンクを解除しました。",
+    "linkConceptError": "ビジネスコンセプトのリンクに失敗しました",
+    "unlinkConceptError": "ビジネスコンセプトのリンク解除に失敗しました",
+    "errorFetchingDomain": "ドメインの取得エラー",
+    "couldNotLoadDomain": "ドメインの詳細を読み込めませんでした。",
+    "failedFetchDomain": "ドメインの詳細の取得に失敗しました。",
+    "metadataLoadFailed": "メタデータの読み込みに失敗しました",
+    "couldNotLoadMetadata": "メタデータを読み込めませんでした。",
+    "editTeamLoadError": "編集用のチーム詳細の読み込みに失敗しました。"
   }
 }

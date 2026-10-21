@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.common.config import Settings, get_settings
 from src.common.database import get_db
+from src.common.workspace_client import get_obo_workspace_client
 from src.common.dependencies import AuditManagerDep
 from src.common.logging import get_logger
 from src.controller.audit_manager import AuditManager
@@ -28,12 +29,21 @@ from src.tools.registry import create_default_registry
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/mcp", tags=["MCP Server"])
+# No prefix on the router itself: it is mounted at two roots below so the same
+# handlers serve both the native MCP path and the legacy one.
+router = APIRouter(tags=["MCP Server"])
 
 
 def register_routes(app):
-    """Register MCP routes with the FastAPI app."""
-    app.include_router(router)
+    """Register MCP routes with the FastAPI app.
+
+    Mounted at two roots:
+    - ``/mcp``     — canonical, native MCP integration path.
+    - ``/api/mcp`` — legacy alias kept for existing clients; hidden from the
+      OpenAPI schema to avoid duplicate operation ids.
+    """
+    app.include_router(router, prefix="/mcp")
+    app.include_router(router, prefix="/api/mcp", include_in_schema=False)
 
 
 # JSON-RPC 2.0 Error Codes
@@ -48,7 +58,17 @@ MCP_AUTH_FAILED = -32001
 MCP_AUTH_MISSING_SCOPE = -32002
 
 # MCP Protocol Version
-MCP_PROTOCOL_VERSION = "2024-11-05"
+# MCP protocol revisions this server is compatible with, newest first. Per the
+# MCP spec's initialize negotiation, the server echoes back the client's
+# requested protocolVersion when it's one of these, otherwise it responds with
+# its newest. Our JSON-RPC surface (initialize / tools.list / tools.call / ping
+# / notifications) is stable across these revisions and uses no version-specific
+# features, so declaring support for all of them is safe. Clients that speak a
+# newer revision (e.g. the Databricks AI Gateway MCP client) reject a server
+# that answers with an older version than they requested, so a single hardcoded
+# version breaks them — hence the echo-with-fallback below.
+SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"]
+MCP_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 # Feature ID for audit logging
 MCP_FEATURE_ID = "mcp"
@@ -142,6 +162,9 @@ class MCPHandler:
         self._audit_manager = audit_manager
         self._session_id = session_id
         self._tool_registry = create_default_registry()
+        # Set when a tool context is built: "obo" (ran as the forwarded user) or
+        # "service_principal" (app identity). Audited so UC data scope is traceable.
+        self._identity_mode: Optional[str] = None
     
     def _get_username(self) -> str:
         return self._token_info.created_by or self._token_info.name
@@ -205,7 +228,18 @@ class MCPHandler:
         if self._session_id and self._session_id in _sessions:
             _sessions[self._session_id]["client_info"] = client_info
             _sessions[self._session_id]["initialized"] = True
-        
+
+        # Protocol version negotiation: echo the client's requested version when
+        # we support it, otherwise fall back to our newest. Answering with an
+        # older version than the client asked for makes strict clients (e.g. the
+        # Databricks AI Gateway) abort with "unsupported protocol version".
+        requested_version = params.get("protocolVersion")
+        negotiated_version = (
+            requested_version
+            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
+            else MCP_PROTOCOL_VERSION
+        )
+
         self._audit(
             action="SESSION_CREATE",
             success=True,
@@ -213,11 +247,13 @@ class MCPHandler:
                 "session_id": self._session_id,
                 "token_name": self._token_info.name,
                 "client_info": client_info,
+                "requested_protocol_version": requested_version,
+                "negotiated_protocol_version": negotiated_version,
             },
         )
-        
+
         return {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "protocolVersion": negotiated_version,
             "serverInfo": {
                 "name": "ontos-mcp-server",
                 "version": "1.0.0"
@@ -283,15 +319,16 @@ class MCPHandler:
                 {"required_scope": required_scope, "token_scopes": self._token_info.scopes}
             )
         
-        # Create tool context
+        # Create tool context (also sets self._identity_mode)
         ctx = self._create_tool_context()
-        
+
         # Execute the tool with audit logging
         success = False
         details_for_audit: Dict[str, Any] = {
             "tool_name": tool_name,
             "token_name": self._token_info.name,
             "session_id": self._session_id,
+            "identity_mode": self._identity_mode,
         }
         try:
             result = await tool.execute(ctx, **tool_args)
@@ -361,15 +398,60 @@ class MCPHandler:
         
         return False
     
+    def _resolve_workspace_client(self):
+        """Pick the workspace client identity for UC-touching tools.
+
+        When the request carries a Databricks-forwarded user token (i.e. it came
+        through the app proxy / native integration), run tools on-behalf-of that
+        user so Unity Catalog results are scoped to their grants — matching the
+        in-app Ask Ontos path. Raw external token agents (no forwarded token) keep
+        the app service-principal client, preserving the prior behavior.
+
+        Fail-closed on bad forwarded tokens: if the token is present but OBO setup
+        fails (expired/invalid), raise an auth error rather than silently falling
+        back to the service principal — otherwise the caller's SQL would run with
+        SP grants, which they can't see and shouldn't have.
+        """
+        app = self._request.app
+        if self._request.headers.get("x-forwarded-access-token"):
+            try:
+                client = get_obo_workspace_client(self._request, self._settings)
+            except Exception as e:
+                logger.warning("OBO workspace client failed: %s", e)
+                # Audit the rejection so a security investigator can trace it
+                # the same way SCOPE_VIOLATION is recorded. The exception
+                # otherwise aborts handle() before any audit row is written.
+                self._audit(
+                    action="IDENTITY_REJECTED",
+                    success=False,
+                    details={
+                        "reason": "obo_setup_failed",
+                        "error": str(e),
+                        "token_name": self._token_info.name,
+                        "session_id": self._session_id,
+                    },
+                )
+                raise MCPError(
+                    MCP_AUTH_FAILED,
+                    "Forwarded identity could not be verified. "
+                    "The forwarded access token was rejected (expired or invalid). "
+                    "Not falling back to the service principal — the request would run "
+                    "with grants the caller cannot see.",
+                )
+            self._identity_mode = "obo"
+            return client
+        self._identity_mode = "service_principal"
+        return getattr(app.state, "workspace_client", None)
+
     def _create_tool_context(self) -> ToolContext:
         """Create a ToolContext for tool execution."""
         # Get managers from app.state if available
         app = self._request.app
-        
+
         return ToolContext(
             db=self._db,
             settings=self._settings,
-            workspace_client=getattr(app.state, "workspace_client", None),
+            workspace_client=self._resolve_workspace_client(),
             data_products_manager=getattr(app.state, "data_products_manager", None),
             data_contracts_manager=getattr(app.state, "data_contracts_manager", None),
             semantic_models_manager=getattr(app.state, "semantic_models_manager", None),
@@ -394,9 +476,52 @@ def validate_api_key(
     """Validate the API key and return token info if valid."""
     if not x_api_key:
         return None
-    
+
     token_manager = MCPTokensManager(db=db)
     return token_manager.validate_token(x_api_key)
+
+
+def _forwarded_email(request: Request) -> Optional[str]:
+    """
+    Extract the caller's Databricks identity from the app-proxy forwarded headers.
+
+    These headers are injected by the Databricks Apps OAuth2 proxy after it
+    authenticates the user, so their presence means the request has already
+    cleared the app-gate. Header-trust only — no OBO/SDK round-trip — matching
+    the trust level the regular HTTP API places in the same headers.
+    """
+    return request.headers.get("X-Forwarded-Email") or request.headers.get("X-Forwarded-User")
+
+
+def resolve_mcp_principal(
+    db: Session,
+    x_api_key: Optional[str],
+    request: Request
+) -> Optional[MCPTokenInfo]:
+    """
+    Resolve the caller of an MCP request to a token principal, or None to reject.
+
+    Two paths:
+    - A request carrying an ``X-API-Key`` is validated exactly as before; the
+      keyless default is never consulted.
+    - A request with no key but a forwarded Databricks identity (i.e. it cleared
+      the app-gate) is resolved to the active keyless default token, if one exists,
+      stamped with the caller's forwarded email for audit attribution. This is the
+      opt-in keyless path: it is inert unless an admin has designated an active
+      default token.
+
+    Returns None (reject) when no key is present and either keyless access is not
+    enabled or the request carries no forwarded identity.
+    """
+    if x_api_key:
+        return validate_api_key(db, x_api_key)
+
+    email = _forwarded_email(request)
+    if not email:
+        return None
+
+    token_manager = MCPTokensManager(db=db)
+    return token_manager.resolve_keyless_default(email)
 
 
 async def sse_event_generator(
@@ -475,14 +600,15 @@ async def mcp_sse_stream(
             detail="GET requires Accept: text/event-stream header"
         )
     
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key"
         )
-    
+
     # Get or create session
     session_id = mcp_session_id
     if session_id and session_id not in _sessions:
@@ -580,8 +706,9 @@ async def mcp_handler(
         return Response(status_code=202,
                         headers={"MCP-Session-Id": session_id} if session_id else {})
     
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         audit_manager.log_action(
             db=db,
@@ -661,8 +788,9 @@ async def mcp_delete_session(
     
     Clients should call this when they no longer need the session.
     """
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         audit_manager.log_action(
             db=db,
@@ -717,4 +845,5 @@ async def mcp_health():
         "server": "ontos-mcp-server",
         "version": "1.0.0",
         "protocol_version": MCP_PROTOCOL_VERSION,
+        "supported_protocol_versions": SUPPORTED_PROTOCOL_VERSIONS,
     }

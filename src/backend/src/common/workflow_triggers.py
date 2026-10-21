@@ -17,6 +17,7 @@ from src.models.process_workflows import (
     WorkflowExecution,
     ExecutionStatus,
 )
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -650,13 +651,13 @@ class TriggerRegistry:
         *,
         blocking: bool = True,
     ) -> List[WorkflowExecution]:
-        """Fire when publish or deployment is requested.
+        """Fire when publication to the marketplace is requested.
         
-        Used for data contracts when requesting to publish to marketplace
-        or deploy to a catalog.
+        Used for data contracts and data products. Deployment requests fire
+        ``on_request_deploy`` instead.
         
         Args:
-            entity_type: Type of entity (data_contract)
+            entity_type: Type of entity (data_contract, data_product)
             entity_id: ID of the entity
             entity_name: Name of the entity
             entity_data: Request details (target catalog, justification, etc.)
@@ -679,6 +680,48 @@ class TriggerRegistry:
             scope_id=scope_id,
         )
         logger.info(f"on_request_publish fired for {entity_type.value} '{entity_id}' by {user_email}")
+        return self.fire_trigger(event, blocking=blocking)
+
+    def on_request_deploy(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        entity_name: Optional[str] = None,
+        entity_data: Optional[Dict[str, Any]] = None,
+        user_email: Optional[str] = None,
+        scope_type: Optional[str] = None,
+        scope_id: Optional[str] = None,
+        *,
+        blocking: bool = True,
+    ) -> List[WorkflowExecution]:
+        """Fire when deployment of a data contract to Unity Catalog is requested.
+        
+        Args:
+            entity_type: Type of entity (data_contract)
+            entity_id: ID of the entity
+            entity_name: Name of the entity
+            entity_data: Request details (target catalog and schema, message)
+            user_email: User requesting the deployment
+            scope_type: Scope type
+            scope_id: Scope ID
+            blocking: Execute synchronously
+            
+        Returns:
+            List of workflow executions
+        """
+        event = TriggerEvent(
+            trigger_type=TriggerType.ON_REQUEST_DEPLOY,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=entity_data,
+            user_email=user_email,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        logger.info(
+            "on_request_deploy fired for %s '%s' by %s", entity_type.value, entity_id, user_email
+        )
         return self.fire_trigger(event, blocking=blocking)
 
     def on_request_status_change(
@@ -955,6 +998,89 @@ class TriggerRegistry:
         )
         logger.info(f"on_revoke fired for {entity_type.value} '{entity_id}' (revoked by {revoked_by})")
         return self.fire_trigger(event, blocking=blocking)
+
+
+def failed_execution_reasons(executions: List[WorkflowExecution]) -> List[Dict[str, Any]]:
+    """Why blocking (``before_*``) workflows did not let an operation through.
+
+    One reason per execution that did not succeed: "waiting for approval"
+    for paused executions; otherwise the execution's error (the message of
+    the step it ended on, e.g. a Fail step), else the error or message of
+    its last failed step, else its status.
+
+    Each reason is ``{workflow, text}``; a reason the app writes also has a
+    ``code`` and ``params`` (``waiting_for_approval``, the step's own error
+    code such as ``rule_entity_load_failed``, ``execution_status``), so the UI
+    can show it in the user's language. A text an admin wrote has no code.
+    """
+    reasons: List[Dict[str, Any]] = []
+    for exe in executions:
+        if exe.status == ExecutionStatus.SUCCEEDED:
+            continue
+        code: Optional[str] = None
+        params: Dict[str, Any] = {}
+        if exe.status == ExecutionStatus.PAUSED:
+            step = exe.current_step_name or exe.current_step_id
+            reason = f"waiting for approval ({step})"
+            code, params = 'waiting_for_approval', {'step': step}
+        else:
+            reason = exe.error_message
+            for step in reversed(exe.step_executions or []):
+                if reason:
+                    break
+                if step.passed is False or step.error_message:
+                    data = step.result_data if isinstance(step.result_data, dict) else {}
+                    reason = step.error_message or data.get('message')
+            if reason:
+                code, params = _step_error_code(exe, reason)
+            else:
+                reason = exe.status.value
+                code, params = 'execution_status', {'status': reason}
+        entry: Dict[str, Any] = {'workflow': exe.workflow_name, 'text': str(reason)}
+        if code:
+            entry['code'] = code
+            entry['params'] = params
+        reasons.append(entry)
+    return reasons
+
+
+def _step_error_code(exe: WorkflowExecution, reason: Any) -> Tuple[Optional[str], Dict[str, Any]]:
+    """The code and parameters a step stored with the error shown as ``reason``."""
+    for step in reversed(exe.step_executions or []):
+        data = step.result_data if isinstance(step.result_data, dict) else {}
+        if step.error_message == reason and isinstance(data.get('error_code'), str):
+            params = data.get('error_params')
+            return data['error_code'], params if isinstance(params, dict) else {}
+    return None, {}
+
+
+def describe_failed_executions(executions: List[WorkflowExecution]) -> str:
+    """The reasons of ``failed_execution_reasons`` as one English text."""
+    reasons = [
+        f"{r['workflow']}: {r['text']}" if r['workflow'] else r['text']
+        for r in failed_execution_reasons(executions)
+    ]
+    return "; ".join(reasons) or "Workflow validation failed"
+
+
+class StatusChangeBlockedError(CodedValueError):
+    """A ``before_status_change`` workflow blocked a status change.
+
+    ``str()`` is the English message; ``code`` and ``params`` (the statuses
+    and the reasons of ``failed_execution_reasons``) let the UI show it in the
+    user's language.
+    """
+
+    code = 'status_change_blocked'
+
+    def __init__(self, from_status: str, to_status: str, executions: List[WorkflowExecution]):
+        super().__init__(
+            f"Status transition from '{from_status}' to '{to_status}' "
+            f"blocked by workflow: {describe_failed_executions(executions)}",
+            fromStatus=from_status,
+            toStatus=to_status,
+            reasons=failed_execution_reasons(executions),
+        )
 
 
 def get_trigger_registry(db: Session) -> TriggerRegistry:

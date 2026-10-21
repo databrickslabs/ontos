@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import yaml
-from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends, Request, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 import json
@@ -28,7 +28,9 @@ from src.models.data_products import (
 from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -42,6 +44,8 @@ from src.common.dependencies import (
 from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
 from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
+from src.models.import_results import BatchImportResult
+from src.common.upload_limits import read_uploads_capped
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
 
 from src.common.logging import get_logger
@@ -367,35 +371,25 @@ async def set_publication_scope(
     """
     Set publication scope for a data product.
     Body: { "scope": "none" | "domain" | "organization" | "external" }
-    Product must be active to publish.
+    Publishing applies the same checks as POST /publish (product active, every
+    output port with an approved / active contract) and fires on_publish;
+    "none" unpublishes and fires on_unpublish.
     """
-    from datetime import datetime, timezone
     scope = body.get("scope", "none")
     valid_scopes = ["none", "domain", "organization", "external"]
     if scope not in valid_scopes:
         raise HTTPException(status_code=422, detail=f"Invalid scope. Must be one of: {valid_scopes}")
 
     try:
-        product_db = manager._repo.get(db=db, id=product_id)
-        if not product_db:
+        if not manager._repo.get(db=db, id=product_id):
             raise HTTPException(status_code=404, detail="Data product not found")
 
-        if scope != "none" and product_db.status != "active":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Product must be active to publish. Current status: {product_db.status}"
+        try:
+            product_db = manager.set_publication_scope(
+                product_id, scope, current_user.username if current_user else None, db=db
             )
-
-        product_db.publication_scope = scope
-        if scope != "none":
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = current_user.username if current_user else None
-        else:
-            product_db.published_at = None
-            product_db.published_by = None
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         audit_manager.log_action(
             db=db,
@@ -683,8 +677,6 @@ async def handle_publish_product(
     _: bool = Depends(ApprovalChecker('PRODUCTS')),
 ):
     """Approve or deny a publication request for a data product."""
-    from datetime import datetime, timezone
-
     if body.get("approved") is None:
         raise HTTPException(status_code=422, detail="approved is required")
 
@@ -724,23 +716,11 @@ async def handle_publish_product(
         if scope not in valid_scopes:
             raise HTTPException(status_code=422, detail=f"Invalid scope. Must be one of: {valid_scopes}")
 
-        if scope != "none" and product_db.status != "active":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Product must be active to publish. Current status: {product_db.status}",
-            )
-
-        product_db.publication_scope = scope
-        if scope != "none":
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = username
-        else:
-            product_db.published_at = None
-            product_db.published_by = None
-
-        db.add(product_db)
-        db.commit()
-        db.refresh(product_db)
+        # Same checks and triggers as set-publication-scope.
+        try:
+            product_db = manager.set_publication_scope(product_id, scope, username, db=db)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         audit_manager.log_action(
             db=db,
@@ -751,23 +731,6 @@ async def handle_publish_product(
             success=True,
             details={'product_id': product_id, 'scope': scope},
         )
-
-        try:
-            if scope != "none":
-                get_trigger_registry(db).on_publish(
-                    EntityType.DATA_PRODUCT,
-                    product_id,
-                    entity_name=product_db.name,
-                    entity_data={
-                        "publication_scope": scope,
-                        "published_by": username,
-                        "name": product_db.name,
-                    },
-                    user_email=username,
-                    blocking=False,
-                )
-        except Exception as trigger_err:
-            logger.warning("on_publish trigger error (non-fatal): %s", trigger_err)
 
         return {
             'publication_scope': product_db.publication_scope,
@@ -811,6 +774,14 @@ async def request_publish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
+        # Same rule as set-publication-scope: only active products are published.
+        current_status = (product_db.status or "").lower()
+        if scope != "none" and current_status != "active":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Product must be active to publish. Current status: {product_db.status}"
+            )
+
         change_log_manager.log_change_with_details(
             db,
             entity_type="data_product",
@@ -828,6 +799,8 @@ async def request_publish_product(
                 "requested_scope": scope,
                 "justification": justification,
                 "requester": username,
+                # Same key as the data contract request (data_contracts_manager)
+                "current_status": current_status,
             },
             user_email=username,
             blocking=True,
@@ -1039,11 +1012,12 @@ async def request_product_review(
     """
     Request a data steward review for a product.
     Transitions draft/sandbox → proposed → under_review with notifications.
+    The reviewer is optional: without one, the review workflow resolves it.
     """
     from pydantic import BaseModel
     
     class ReviewRequest(BaseModel):
-        reviewer_email: str
+        reviewer_email: Optional[str] = None
         message: Optional[str] = None
     
     try:
@@ -1053,7 +1027,10 @@ async def request_product_review(
         result = manager.request_review(
             product_id=product_id,
             reviewer_email=review_request.reviewer_email,
-            requester_email=current_user.username if current_user else "unknown",
+            # The review record needs an email; the username isn't always one
+            requester_email=(
+                (current_user.email or current_user.username) if current_user else "unknown"
+            ),
             message=review_request.message,
             current_user=current_user.username if current_user else None
         )
@@ -1588,139 +1565,96 @@ async def get_my_subscriptions(
     )
 
 
-@router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
+@router.post("/data-products/upload", response_model=BatchImportResult, status_code=200)
 async def upload_data_products(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
+    create_missing_domains: bool = Form(False),
+    adopt_ids: bool = Form(False),
+    on_duplicate: str = Form("skip"),
     manager: DataProductsManager = Depends(get_data_products_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    # SECURITY: Sanitize filename for safe logging and validation
-    raw_filename = file.filename or "upload.bin"
-    safe_filename = sanitize_filename(raw_filename, default="upload.bin")
-    
-    # Validate file extension using sanitized filename
-    if not (safe_filename.lower().endswith('.yaml') or safe_filename.lower().endswith('.json')):
-        audit_manager.log_action(
-            db=db,
-            username=current_user.username,
-            ip_address=request.client.host if request.client else None,
-            feature=DATA_PRODUCTS_FEATURE_ID,
-            action="UPLOAD_BATCH",
-            success=False,
-            details={
-                "filename": safe_filename,
-                "error": "Invalid file type",
-                "params": { "filename_in_request": safe_filename },
-                "response_status_code": 400
-            }
-        )
-        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a YAML or JSON file.")
+    """Upload one or more ODPS product files (each single-entity or an array).
+
+    Every file may hold a single product object or a top-level array of them; all
+    entities across all files are imported in one operation and reported via a
+    truthful `BatchImportResult` summary. Per-entity failures are captured as
+    failed items and never abort the batch.
+
+    `create_missing_domains` is the opt-in "Create missing domains" toggle (#851),
+    applied per-upload to every entity in the batch (default off).
+    """
+    safe_filenames = [sanitize_filename(f.filename or "upload.bin", default="upload.bin") for f in files]
 
     # Tracking for audit
     success = False
-    response_status_code = 500
-    created_products_for_response: List[DataProduct] = []
-    processing_errors_for_audit: List[Dict[str, Any]] = []
-    created_ids_for_audit: List[str] = []
-
     details_for_audit = {
-        "filename": safe_filename,
-        "params": { "filename_in_request": safe_filename },
+        "params": {"filenames": safe_filenames},
     }
 
     try:
-        # Read file content
-        # Read file content
-        content = await file.read()
-        if safe_filename.lower().endswith('.yaml'):
-            data = yaml.safe_load(content)
-        else:
-            import json
-            data = json.loads(content)
-            
-        data_list: List[Dict[str, Any]]
-        if isinstance(data, dict):
-            data_list = [data]
-        elif isinstance(data, list):
-            data_list = data
-        else:
-            response_status_code = 400
-            exc = HTTPException(status_code=response_status_code, detail="File must contain a JSON object/array or a YAML mapping/list of data product objects.")
-            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
-            raise exc
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+        if on_duplicate not in ("skip", "new"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"on_duplicate must be 'skip' or 'new' (got {on_duplicate!r}).",
+            )
+        effective_adopt_ids = adopt_ids and user_can_adopt_entity_ids_for(
+            auth_manager, current_user, 'data-products'
+        )
+        details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
+        # Feature-admins may see the existing row's id/name on a skipped duplicate;
+        # others get a generic skip so the response isn't an existence oracle.
+        reveal_dup_detail = user_has_feature_level(
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+        )
+        capped = await read_uploads_capped(
+            files,
+            sanitize=lambda n: sanitize_filename(n or "upload.bin", default="upload.bin"),
+        )
+        # The product parser handles raw bytes (YAML/JSON decode UTF-8 internally);
+        # we only need (filename, bytes), so drop the content_type.
+        file_inputs: List[tuple] = [(name, raw) for name, raw, _ in capped]
 
-        # Delegate to manager
-        created_products, errors_list = manager.upload_products_batch(content, file.filename)
+        result = manager.create_products_from_files(
+            file_inputs, user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
+            adopt_ids=effective_adopt_ids,
+            on_duplicate=on_duplicate,
+            reveal_dup_detail=reveal_dup_detail,
+        )
 
-        # Extract created IDs for audit
-        created_ids = [p.id for p in created_products if p and hasattr(p, 'id')]
+        success = result.created > 0
+        details_for_audit["summary"] = {"created": result.created, "skipped": result.skipped, "failed": result.failed}
+        if result.created_ids:
+            details_for_audit["created_resource_ids"] = result.created_ids
+        logger.info(
+            "Product upload: %d created, %d skipped, %d failed from %d file(s)",
+            result.created, result.skipped, result.failed, len(files),
+        )
+        return result
 
-        # Determine response status
-        if errors_list:
-            if created_products:
-                # Partial success
-                success = True
-                response_status_code = 422
-                logger.warning(
-                    f"Partial success: {len(created_products)} created, "
-                    f"{len(errors_list)} errors from file {file.filename}"
-                )
-                raise HTTPException(
-                    status_code=response_status_code,
-                    detail={
-                        "message": "Validation or creation errors occurred during upload.",
-                        "errors": errors_list,
-                        "created_count": len(created_products)
-                    }
-                )
-            else:
-                # Total failure
-                success = False
-                response_status_code = 422
-                raise HTTPException(
-                    status_code=response_status_code,
-                    detail={
-                        "message": "All items failed validation or creation.",
-                        "errors": errors_list
-                    }
-                )
-
-        # Complete success
-        success = True
-        response_status_code = 201
-        logger.info(f"Successfully created {len(created_products)} data products from uploaded file {safe_filename}")
-        return created_products
-
-    except ValueError as e:
-        # File parsing or format errors
-        success = False
-        response_status_code = 400
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        logger.error(f"File processing error for {file.filename}: {e}")
-        raise HTTPException(status_code=response_status_code, detail=str(e))
     except HTTPException:
-        # Re-raise HTTP exceptions (from partial success handling above)
         raise
     except Exception as e:
-        # Unexpected errors
-        success = False
-        response_status_code = 500
-        error_msg = f"Unexpected error processing uploaded file: {e!s}"
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        logger.exception(error_msg)
-        raise HTTPException(status_code=response_status_code, detail=error_msg)
+        # Log the full detail; return a generic message so no SQL/internal text leaks.
+        logger.exception("Product upload failed")
+        raise HTTPException(status_code=500, detail="Upload failed. See server logs for details.")
     finally:
         # Audit logging
-        details_for_audit["response_status_code"] = response_status_code
-        if created_ids:
-            details_for_audit["created_resource_ids"] = created_ids
-        if errors_list:
-            details_for_audit["item_processing_errors"] = errors_list
-
         audit_manager.log_action(
             db=db,
             username=current_user.username,

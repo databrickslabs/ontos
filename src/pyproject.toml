@@ -1,5 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.21.0", "hatch-requirements-txt~=0.4.1"]
+# hatchling capped <1.32: 1.32.0 enforces "readme must be within the project
+# directory" and rejects this package's ``readme = "../README.md"`` (the README
+# lives at the repo root, one level above src/). Uncapped, a fresh CI/dev env
+# pulls 1.32.x and every hatch-built job fails at metadata generation. Cap until
+# the readme is relocated into src/ or the field is made project-local.
+requires = ["hatchling>=1.21.0,<1.32", "hatch-requirements-txt~=0.4.1"]
 build-backend = "hatchling.build"
 
 [project]

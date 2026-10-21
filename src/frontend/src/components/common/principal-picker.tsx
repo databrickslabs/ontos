@@ -28,6 +28,7 @@ import {
   useState,
 } from 'react';
 import { Loader2, Search, Users, User, UserSquare, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,6 +123,7 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
     className,
     multiple,
   } = props as PrincipalPickerProps & { multiple?: boolean };
+  const { t } = useTranslation('common');
   const inputId = useId();
 
   const status = useDirectoryStore((s) => s.status);
@@ -237,8 +239,8 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
             size="icon"
             disabled={disabled}
             onClick={() => setDialogOpen(true)}
-            title="Browse directory"
-            aria-label="Browse directory"
+            title={t('common:principalPicker.browseDirectory')}
+            aria-label={t('common:principalPicker.browseDirectory')}
           >
             <Search className="h-4 w-4" />
           </Button>
@@ -271,6 +273,7 @@ interface SelectionBadgesProps {
 }
 
 function SelectionBadges({ ids, resolved, disabled, onRemove }: SelectionBadgesProps) {
+  const { t } = useTranslation('common');
   if (ids.length === 0) return null;
   return (
     <TooltipProvider>
@@ -299,7 +302,7 @@ function SelectionBadges({ ids, resolved, disabled, onRemove }: SelectionBadgesP
                       type="button"
                       onClick={() => onRemove(id)}
                       className="ml-0.5 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-ring"
-                      aria-label={`Remove ${displayName}`}
+                      aria-label={t('common:principalPicker.removeAria', { name: displayName })}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -340,6 +343,7 @@ function ConfiguredInput({
   onSearchFail,
   ariaLabel,
 }: ConfiguredInputProps) {
+  const { t } = useTranslation('common');
   const [query, setQuery] = useState('');
   // ``userClosed`` lets the user dismiss the dropdown (Esc / click
   // outside) without us re-opening it on the next render. It's
@@ -381,7 +385,7 @@ function ConfiguredInput({
           autoComplete="off"
           value={query}
           disabled={disabled}
-          placeholder={placeholder ?? 'Search directory…'}
+          placeholder={placeholder ?? t('common:principalPicker.searchDirectory')}
           aria-label={ariaLabel}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -399,10 +403,10 @@ function ConfiguredInput({
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Searching…
+            {t('common:principalPicker.searching')}
           </div>
         ) : visible.length === 0 ? (
-          <div className="px-2 py-2 text-sm text-muted-foreground">No matches.</div>
+          <div className="px-2 py-2 text-sm text-muted-foreground">{t('common:states.noMatches')}</div>
         ) : (
           <ul className="flex flex-col">
             {visible.map((p) => (
@@ -435,6 +439,7 @@ interface ManualInputProps {
 }
 
 function ManualInput({ id, placeholder, disabled, onAdd, ariaLabel }: ManualInputProps) {
+  const { t } = useTranslation('common');
   const [value, setValue] = useState('');
 
   const commit = () => {
@@ -458,7 +463,7 @@ function ManualInput({ id, placeholder, disabled, onAdd, ariaLabel }: ManualInpu
       autoComplete="off"
       value={value}
       disabled={disabled}
-      placeholder={placeholder ?? 'Type and press Enter…'}
+      placeholder={placeholder ?? t('common:principalPicker.typeAndEnter')}
       aria-label={ariaLabel}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={onKeyDown}
@@ -515,6 +520,7 @@ function PrincipalPickerDialog({
   onPick,
   onSearchFail,
 }: PrincipalPickerDialogProps) {
+  const { t } = useTranslation('common');
   const [filter, setFilter] = useState<PrincipalKind[]>(accepts);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 250);
@@ -542,12 +548,12 @@ function PrincipalPickerDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Browse directory</DialogTitle>
-          <DialogDescription>Search users and groups from the configured provider.</DialogDescription>
+          <DialogTitle>{t('common:principalPicker.browseDirectory')}</DialogTitle>
+          <DialogDescription>{t('common:principalPicker.browseDirectoryDescription')}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           {accepts.length > 1 && (
-            <div className="flex gap-2" role="group" aria-label="Filter by type">
+            <div className="flex gap-2" role="group" aria-label={t('common:principalPicker.filterByType')}>
               {accepts.map((kind) => {
                 const active = filter.includes(kind);
                 return (
@@ -573,7 +579,7 @@ function PrincipalPickerDialog({
                     )}
                     data-testid={`type-chip-${kind}`}
                   >
-                    {kind === 'user' ? 'Users' : 'Groups'}
+                    {kind === 'user' ? t('common:principalPicker.users') : t('common:principalPicker.groups')}
                   </button>
                 );
               })}
@@ -582,7 +588,7 @@ function PrincipalPickerDialog({
           <Input
             type="text"
             autoComplete="off"
-            placeholder="Search…"
+            placeholder={t('common:principalPicker.searchPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             data-testid="principal-picker-dialog-input"
@@ -591,14 +597,14 @@ function PrincipalPickerDialog({
             {loading ? (
               <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Searching…
+                {t('common:principalPicker.searching')}
               </div>
             ) : debouncedQuery.trim().length < 2 ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
-                Type at least 2 characters.
+                {t('common:principalPicker.typeAtLeast2')}
               </div>
             ) : visible.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">No matches.</div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">{t('common:states.noMatches')}</div>
             ) : (
               <ul className="flex flex-col p-1">
                 {visible.map((p) => (
@@ -614,7 +620,7 @@ function PrincipalPickerDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t('common:actions.close')}
           </Button>
         </DialogFooter>
       </DialogContent>

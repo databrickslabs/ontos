@@ -2,10 +2,10 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Set
+from typing import Optional, List, Set, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from src.controller.data_contracts_manager import DataContractsManager
@@ -51,9 +51,13 @@ from src.models.data_contracts_api import (
     DataContractCommentRead,
 )
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
+from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
 from src.common.deployment_dependencies import get_deployment_policy_manager
@@ -87,6 +91,7 @@ def get_jobs_manager(request: Request):
 
 @router.get('/data-contracts', response_model=list[DataContractSummary])
 async def get_contracts(
+    request: Request,
     db: DBSessionDep,
     domain_id: Optional[str] = None,
     domain_ids: Optional[str] = None,
@@ -110,12 +115,21 @@ async def get_contracts(
     is already permitted to see.
     """
     try:
-        # Check if user is admin
-        from src.common.authorization import is_user_admin
-        from src.common.config import get_settings
-        settings = get_settings()
+        # Determine admin via the role-aware check, not just workspace-group
+        # membership. A user whose admin rights come from an Ontos role (rather
+        # than the workspace ``admins`` group) must still bypass the PRD #442
+        # visibility filter — exactly as the data-products listing does. The
+        # narrower ``is_user_admin`` used here previously let such role-based
+        # admins fall through to consumer visibility, hiding their own draft/
+        # proposed contracts (e.g. a freshly uploaded draft would never appear).
+        from src.common.authorization import is_user_feature_admin
         user_groups = current_user.groups if current_user else []
-        is_admin = is_user_admin(user_groups, settings)
+        is_admin = await is_user_feature_admin(
+            user_email=current_user.email if current_user else None,
+            user_groups=user_groups,
+            feature_id='data-contracts',
+            request=request,
+        )
 
         logger.info(
             f"User {current_user.email if current_user else 'unknown'} fetching contracts "
@@ -187,6 +201,79 @@ async def get_contract(
 
 # --- Lifecycle Transition Endpoints (minimal) ---
 
+def _decide_waiting_review_workflows(
+    db, contract_id: str, approved: bool, user_email: Optional[str],
+) -> int:
+    """Pass a review decided on the contract page on to its review workflows.
+
+    A review request starts the contract's ``on_request_review`` workflows,
+    which pause at an approval step. Approving or rejecting the contract on
+    its page decides the same review, so those executions are resumed with
+    that decision (their remaining steps, e.g. telling the requester, run)
+    and their approval notifications are marked handled. Otherwise they stay
+    paused and keep asking for an approval that was already given (#963).
+
+    Returns the number of executions resumed. A failure is logged and does
+    not undo the status change.
+    """
+    from src.common.workflow_executor import WorkflowExecutor
+    from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
+    from src.models.process_workflows import TriggerType
+    from src.routes.workflows_routes import _mark_step_notifications_handled
+
+    paused = db.query(WorkflowExecutionDb).filter(
+        WorkflowExecutionDb.status == 'paused',
+        WorkflowExecutionDb.trigger_context.contains(contract_id),
+    ).all()
+    waiting = []
+    for execution in paused:
+        try:
+            context = json.loads(execution.trigger_context or '{}')
+        except ValueError:
+            continue
+        if (
+            context.get('entity_type') != 'data_contract'
+            or context.get('entity_id') != contract_id
+            or context.get('trigger_type') != TriggerType.ON_REQUEST_REVIEW.value
+        ):
+            continue
+        step = db.query(WorkflowStepDb).filter(
+            WorkflowStepDb.workflow_id == execution.workflow_id,
+            WorkflowStepDb.step_id == execution.current_step_id,
+        ).first()
+        if step is not None and step.step_type == 'approval':
+            waiting.append((execution.id, execution.current_step_id))
+
+    resumed = 0
+    decision = 'approved' if approved else 'rejected'
+    for execution_id, step_id in waiting:
+        try:
+            WorkflowExecutor(db).resume_workflow(
+                execution_id=execution_id,
+                step_result=approved,
+                # `decided_on` is the stable code; the message is the English
+                # fallback shown where no translation exists.
+                result_data={
+                    'decision': decision,
+                    'decided_on': 'contract_page',
+                    'message': f'Review {decision} on the contract page',
+                    'reason': f'Review {decision} on the contract page',
+                },
+                user_email=user_email,
+            )
+            _mark_step_notifications_handled(db, execution_id, step_id, approved, user_email)
+            db.commit()
+            resumed += 1
+        except Exception:
+            # The status change is already committed; only this resume is undone.
+            db.rollback()
+            logger.exception(
+                "Could not resume review workflow execution %s of contract %s",
+                execution_id, contract_id,
+            )
+    return resumed
+
+
 @router.post('/data-contracts/{contract_id}/approve')
 async def approve_contract(
     contract_id: str,
@@ -213,6 +300,9 @@ async def approve_contract(
             contract_id=contract_id,
             new_status='approved',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, True, current_user.email if current_user else None,
         )
         
         # Audit
@@ -264,6 +354,9 @@ async def reject_contract(
             contract_id=contract_id,
             new_status='draft',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, False, current_user.email if current_user else None,
         )
         
         # Audit
@@ -1014,49 +1107,26 @@ async def set_contract_publication_scope(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker("data-contracts", FeatureAccessLevel.READ_WRITE)),
 ):
-    """Set publication scope. Contract must be active or approved."""
+    """Set publication scope. Contract must be active or approved to publish.
+
+    Fires on_publish when the contract gets published and on_unpublish when it
+    is unpublished.
+    """
     scope = body.get("scope", "none")
     valid_scopes = ["none", "domain", "organization", "external"]
     if scope not in valid_scopes:
         raise HTTPException(status_code=422, detail=f"Invalid scope. Must be one of: {valid_scopes}")
 
     try:
-        contract_db = data_contract_repo.get(db, id=contract_id)
-        if not contract_db:
+        if not data_contract_repo.get(db, id=contract_id):
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        st = (contract_db.status or "").lower()
-        if scope != "none" and st not in ("active", "approved"):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Contract must be active or approved to publish. Current status: {contract_db.status}",
+        try:
+            contract_db = manager.set_publication_scope(
+                db, contract_id, scope, current_user.username if current_user else None
             )
-
-        was_published = (contract_db.publication_scope or "none").lower() != "none"
-
-        if scope != "none":
-            contract_db.publication_scope = scope
-            contract_db.published_at = datetime.now(timezone.utc)
-            contract_db.published_by = current_user.username if current_user else None
-        else:
-            contract_db.publication_scope = "none"
-            contract_db.published_at = None
-            contract_db.published_by = None
-        db.add(contract_db)
-        db.commit()
-        db.refresh(contract_db)
-
-        # Fire on_unpublish trigger when transitioning from published to unpublished
-        if scope == "none" and was_published:
-            from src.common.workflow_triggers import fire_trigger_safe
-            from src.models.process_workflows import EntityType
-            fire_trigger_safe(
-                db, "on_unpublish",
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_name=contract_db.name,
-                user_email=current_user.username if current_user else None,
-            )
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         audit_manager.log_action(
             db=db,
@@ -1519,78 +1589,117 @@ async def delete_contract(
             details=details_for_audit,
         )
 
-@router.post('/data-contracts/upload')
+@router.post('/data-contracts/upload', response_model=BatchImportResult)
 async def upload_contract(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
+    create_missing_domains: bool = Form(False),
+    adopt_ids: bool = Form(False),
+    on_duplicate: str = Form("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Upload a contract file and parse it into normalized ODCS structure"""
-    # SECURITY: Sanitize filename for safe logging and processing
-    raw_filename = file.filename or "uploaded_contract"
-    safe_filename = sanitize_filename(raw_filename, default="uploaded_contract")
-    
+    """Upload one or more contract files (each single-entity or an ODCS array).
+
+    Every file may hold a single ODCS object or a top-level array of them; all
+    entities across all files are imported in one operation and reported via a
+    truthful `BatchImportResult` summary. A single bad entity is recorded as a
+    failed item and never aborts the batch.
+
+    `create_missing_domains` is the opt-in "Create missing domains" toggle (#851),
+    applied per-upload to every entity in the batch (default off).
+    """
     success = False
     details_for_audit = {
-        "params": {"filename": safe_filename},
+        "params": {"filenames": [sanitize_filename(f.filename or "uploaded_contract", default="uploaded_contract") for f in files]},
     }
-    created_contract_id = None
 
     try:
-        # Read file content
-        contract_text = (await file.read()).decode('utf-8')
-        
-        # Parse file using manager (use sanitized filename)
-        parsed = manager.parse_uploaded_file(
-            file_content=contract_text,
-            filename=safe_filename,
-            content_type=file.content_type or 'application/json'
+        # The "create missing domains" toggle creates top-level domains, so it
+        # requires data-domains write on top of the contract-write permission —
+        # otherwise a contract-writer could create domains they cannot manage (#851 review).
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+        # Validate on_duplicate at the route (#853 review item 3): a typo in a bare
+        # form string must not silently fall through to the "new" branch.
+        if on_duplicate not in ("skip", "new"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"on_duplicate must be 'skip' or 'new' (got {on_duplicate!r}).",
+            )
+        # ID adoption is gated on the new 'Adopt entity IDs on import' app-role
+        # privilege (OR feature-Admin). Non-privileged callers silently fall back to
+        # a generated UUID + ontosOriginalId provenance (#853 review item 1).
+        effective_adopt_ids = adopt_ids and user_can_adopt_entity_ids_for(
+            auth_manager, current_user, 'data-contracts'
         )
-        
-        # Validate ODCS (optional, log warnings)
-        validation_warnings = manager.validate_odcs(parsed, strict=False)
-        for warning in validation_warnings[:5]:
-            logger.warning(warning)
-        
-        # Create contract with all nested entities using manager
-        created = manager.create_from_upload(
-            db=db,
-            parsed_odcs=parsed,
-            current_user=current_user.username if current_user else None
+        details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
+        # Feature-admins may see the existing row's id/name on a skipped duplicate;
+        # others get a generic skip so the response isn't an existence oracle.
+        reveal_dup_detail = user_has_feature_level(
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
         )
-        
-        success = True
-        created_contract_id = created.id
 
-        # Load with relationships for response
-        created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        result = manager._build_contract_api_model(db, created_with_relations)
+        capped = await read_uploads_capped(
+            files,
+            sanitize=lambda n: sanitize_filename(n or "uploaded_contract", default="uploaded_contract"),
+        )
+        # Decode per file (not up front): a single non-UTF-8 file is recorded as a
+        # failed item and never aborts the batch, mirroring the per-entity policy.
+        file_inputs: List[tuple] = []
+        decode_failures: List[str] = []
+        for safe_filename, raw, content_type in capped:
+            try:
+                contract_text = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                decode_failures.append(safe_filename)
+                continue
+            file_inputs.append((safe_filename, contract_text, content_type or 'application/json'))
+
+        result = manager.create_contracts_from_files(
+            db=db,
+            files=file_inputs,
+            current_user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
+            adopt_ids=effective_adopt_ids,
+            on_duplicate=on_duplicate,
+            reveal_dup_detail=reveal_dup_detail,
+        )
+        for safe_filename in decode_failures:
+            result.add(ImportItemResult(
+                index=result.total, source_file=safe_filename, status="failed",
+                message="File is not valid UTF-8 text (expected an ODCS .yaml, .yml or .json file).",
+            ))
+
+        # Success = at least one entity created (partial success still 200 with detail).
+        success = result.created > 0
+        details_for_audit["summary"] = {"created": result.created, "skipped": result.skipped, "failed": result.failed}
+        if result.created_ids:
+            details_for_audit["created_resource_ids"] = result.created_ids
         return result
 
-    except ValueError as e:
-        logger.error("Validation error uploading contract: %s", e)
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail={
-            "message": "Invalid contract data",
-            "error": str(e),
-        })
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
     except Exception as e:
         logger.exception("Upload failed")
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        # Do not echo raw exception text to the client — it can leak SQL/internal
+        # detail. The full traceback is in the server logs above.
         raise HTTPException(status_code=500, detail={
-            "message": "Upload failed",
-            "error": f"{type(e).__name__}: {e}",
+            "message": "Upload failed. See server logs for details.",
         })
     finally:
-        if created_contract_id:
-            details_for_audit["created_resource_id"] = created_contract_id
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else "anonymous",
@@ -1617,65 +1726,71 @@ async def get_odcs_schema(_perm: bool = Depends(PermissionChecker('data-contract
         raise HTTPException(status_code=500, detail="Failed to load schema file")
 
 
-@router.post('/data-contracts/odcs/import')
+@router.post('/data-contracts/odcs/import', response_model=BatchImportResult)
 async def import_odcs_json(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    body: dict = Body(...),
+    body: Any = Body(...),
+    create_missing_domains: bool = Query(False),
+    adopt_ids: bool = Query(False),
+    on_duplicate: str = Query("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Import an ODCS contract from a pasted JSON object."""
+    """Import ODCS contract(s) from a pasted JSON object or array."""
     success = False
     details_for_audit: dict = {"params": {"source": "paste"}}
-    created_contract_id = None
 
     try:
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+        if on_duplicate not in ("skip", "new"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"on_duplicate must be 'skip' or 'new' (got {on_duplicate!r}).",
+            )
+        effective_adopt_ids = adopt_ids and user_can_adopt_entity_ids_for(
+            auth_manager, current_user, 'data-contracts'
+        )
+        details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
+        reveal_dup_detail = user_has_feature_level(
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+        )
         contract_text = json.dumps(body)
-
-        parsed = manager.parse_uploaded_file(
-            file_content=contract_text,
-            filename="paste.json",
-            content_type="application/json",
-        )
-
-        validation_warnings = manager.validate_odcs(parsed, strict=False)
-        for warning in validation_warnings[:5]:
-            logger.warning(warning)
-
-        created = manager.create_from_upload(
+        result = manager.create_contracts_from_files(
             db=db,
-            parsed_odcs=parsed,
+            files=[("paste.json", contract_text, "application/json")],
             current_user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
+            adopt_ids=effective_adopt_ids,
+            on_duplicate=on_duplicate,
+            reveal_dup_detail=reveal_dup_detail,
         )
 
-        success = True
-        created_contract_id = created.id
+        success = result.created > 0
+        details_for_audit["summary"] = {"created": result.created, "skipped": result.skipped, "failed": result.failed}
+        if result.created_ids:
+            details_for_audit["created_resource_ids"] = result.created_ids
+        return result
 
-        created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        return manager._build_contract_api_model(db, created_with_relations)
-
-    except ValueError as e:
-        logger.error("Validation error importing ODCS JSON: %s", e)
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail={
-            "message": "Invalid contract data",
-            "error": str(e),
-        })
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("ODCS JSON import failed")
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail={
-            "message": "Import failed",
-            "error": f"{type(e).__name__}: {e}",
+            "message": "Import failed. See server logs for details.",
         })
     finally:
-        if created_contract_id:
-            details_for_audit["created_resource_id"] = created_contract_id
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else "anonymous",
@@ -1840,6 +1955,8 @@ async def get_schema_properties(
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
+    from src.utils.property_custom_properties import custom_properties_by_property
+    custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
     for p in props:
@@ -1868,6 +1985,7 @@ async def get_schema_properties(
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
             "encryptedName": p.encrypted_name,
+            "customProperties": custom_props.get(p.id, {}),
         }
         item.update(options)
         items.append(item)

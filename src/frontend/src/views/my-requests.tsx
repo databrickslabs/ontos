@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Table,
@@ -73,15 +74,15 @@ function getEntityDetailPath(entityType: string, entityId: string, basePath: str
   return null;
 }
 
-function entityTypeLabel(entityType: string): string {
+function entityTypeLabel(entityType: string, t: TFunction): string {
   const key = entityType?.toLowerCase?.() ?? '';
-  if (key === 'data_product') return 'Data Product';
-  if (key === 'data_contract') return 'Data Contract';
+  if (key === 'data_product') return t('data-asset-reviews:myRequests.entityTypes.dataProduct');
+  if (key === 'data_contract') return t('data-asset-reviews:myRequests.entityTypes.dataContract');
   return entityType;
 }
 
 export default function MyRequests() {
-  const { t } = useTranslation('home');
+  const { t } = useTranslation(['data-asset-reviews', 'common', 'home']);
   const api = useApi();
   const { toast } = useToast();
   const { pathname } = useLocation();
@@ -101,9 +102,9 @@ export default function MyRequests() {
   const [subscriptionsError, setSubscriptionsError] = useState<string | null>(null);
 
   useEffect(() => {
-    setStaticSegments([{ label: 'My Requests' }]);
+    setStaticSegments([{ label: t('home:myRequests.title') }]);
     return () => setStaticSegments([]);
-  }, [setStaticSegments]);
+  }, [setStaticSegments, t]);
 
   const loadRequests = useCallback(async () => {
     setRequestsLoading(true);
@@ -133,12 +134,12 @@ export default function MyRequests() {
       setRows(mapped);
     } catch (e) {
       console.warn('Failed to fetch access requests:', e);
-      setRequestsError(e instanceof Error ? e.message : 'Failed to load');
+      setRequestsError(e instanceof Error ? e.message : t('data-asset-reviews:myRequests.loadFailed'));
       setRows([]);
     } finally {
       setRequestsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadSubscriptions = useCallback(async () => {
     setSubscriptionsLoading(true);
@@ -148,12 +149,12 @@ export default function MyRequests() {
       setSubscriptions(Array.isArray(data) ? data : []);
     } catch (e) {
       console.warn('Failed to fetch subscriptions:', e);
-      setSubscriptionsError(e instanceof Error ? e.message : 'Failed to load');
+      setSubscriptionsError(e instanceof Error ? e.message : t('data-asset-reviews:myRequests.loadFailed'));
       setSubscriptions([]);
     } finally {
       setSubscriptionsLoading(false);
     }
-  }, [api]);
+  }, [api, t]);
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
   useEffect(() => { loadSubscriptions(); }, [loadSubscriptions]);
@@ -162,12 +163,12 @@ export default function MyRequests() {
     try {
       setCancellingId(requestId);
       await api.delete(`/api/access-grants/requests/${requestId}`);
-      toast({ title: t('myRequests.cancelSuccess'), variant: 'default' });
+      toast({ title: t('home:myRequests.cancelSuccess'), variant: 'default' });
       await loadRequests();
     } catch (e) {
       toast({
-        title: 'Error',
-        description: e instanceof Error ? e.message : 'Failed to cancel request',
+        title: t('common:toast.error'),
+        description: e instanceof Error ? e.message : t('data-asset-reviews:myRequests.cancelError'),
         variant: 'destructive',
       });
     } finally {
@@ -180,8 +181,8 @@ export default function MyRequests() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('myRequests.title')}</h1>
-        <p className="text-muted-foreground mt-1">{t('myRequests.description')}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('home:myRequests.title')}</h1>
+        <p className="text-muted-foreground mt-1">{t('home:myRequests.description')}</p>
       </div>
 
       {/* Summary cards */}
@@ -193,7 +194,7 @@ export default function MyRequests() {
                 <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Pending Requests</p>
+                <p className="text-sm text-muted-foreground">{t('data-asset-reviews:myRequests.pendingRequests')}</p>
                 {requestsLoading ? (
                   <SkeletonLine height="h-7" width="w-10" className="mt-1" />
                 ) : (
@@ -210,7 +211,7 @@ export default function MyRequests() {
                 <Bell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Requests</p>
+                <p className="text-sm text-muted-foreground">{t('data-asset-reviews:myRequests.totalRequests')}</p>
                 {requestsLoading ? (
                   <SkeletonLine height="h-7" width="w-10" className="mt-1" />
                 ) : (
@@ -227,7 +228,7 @@ export default function MyRequests() {
                 <Package className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Active Subscriptions</p>
+                <p className="text-sm text-muted-foreground">{t('data-asset-reviews:myRequests.activeSubscriptions')}</p>
                 {subscriptionsLoading ? (
                   <SkeletonLine height="h-7" width="w-10" className="mt-1" />
                 ) : (
@@ -242,13 +243,13 @@ export default function MyRequests() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="requests">
-            Access Requests
+            {t('data-asset-reviews:myRequests.accessRequestsTab')}
             {pendingCount > 0 && (
               <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{pendingCount}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="subscriptions">
-            My Subscriptions
+            {t('data-asset-reviews:myRequests.subscriptionsTab')}
             {subscriptions.length > 0 && (
               <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">{subscriptions.length}</Badge>
             )}
@@ -261,24 +262,24 @@ export default function MyRequests() {
           ) : requestsError ? (
             <div className="flex flex-col gap-2">
               <p className="text-destructive">{requestsError}</p>
-              <Button variant="outline" onClick={loadRequests}>Retry</Button>
+              <Button variant="outline" onClick={loadRequests}>{t('common:retry')}</Button>
             </div>
           ) : rows.length === 0 ? (
             <div className="border rounded-lg flex flex-col items-center justify-center py-12">
               <Inbox className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-center">{t('myRequests.empty')}</p>
+              <p className="text-muted-foreground text-center">{t('home:myRequests.empty')}</p>
             </div>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Asset Type</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Permission</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Requested</TableHead>
-                    <TableHead>Resolved</TableHead>
+                    <TableHead>{t('data-asset-reviews:myRequests.assetType')}</TableHead>
+                    <TableHead>{t('common:labels.name')}</TableHead>
+                    <TableHead>{t('common:labels.permission')}</TableHead>
+                    <TableHead>{t('common:labels.status')}</TableHead>
+                    <TableHead>{t('home:myRequests.requestedAt')}</TableHead>
+                    <TableHead>{t('home:myRequests.handledAt')}</TableHead>
                     <TableHead className="w-[80px]" />
                   </TableRow>
                 </TableHeader>
@@ -289,7 +290,7 @@ export default function MyRequests() {
                     return (
                       <TableRow key={row.id}>
                         <TableCell className="text-muted-foreground">
-                          {entityTypeLabel(row.entityType)}
+                          {entityTypeLabel(row.entityType, t)}
                         </TableCell>
                         <TableCell>
                           {detailPath ? (
@@ -321,7 +322,7 @@ export default function MyRequests() {
                               className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                               onClick={() => handleCancel(row.id)}
                               disabled={cancellingId === row.id}
-                              title="Cancel"
+                              title={t('common:actions.cancel')}
                             >
                               {cancellingId === row.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -346,22 +347,22 @@ export default function MyRequests() {
           ) : subscriptionsError ? (
             <div className="flex flex-col gap-2">
               <p className="text-destructive">{subscriptionsError}</p>
-              <Button variant="outline" onClick={loadSubscriptions}>Retry</Button>
+              <Button variant="outline" onClick={loadSubscriptions}>{t('common:retry')}</Button>
             </div>
           ) : subscriptions.length === 0 ? (
             <div className="border rounded-lg flex flex-col items-center justify-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-center">You haven't subscribed to any data products yet.</p>
+              <p className="text-muted-foreground text-center">{t('data-asset-reviews:myRequests.noSubscriptions')}</p>
             </div>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Domain</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Version</TableHead>
+                    <TableHead>{t('data-asset-reviews:myRequests.product')}</TableHead>
+                    <TableHead>{t('common:labels.domain')}</TableHead>
+                    <TableHead>{t('common:labels.status')}</TableHead>
+                    <TableHead>{t('common:labels.version')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

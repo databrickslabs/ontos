@@ -17,6 +17,7 @@
  * jsdom (which has known hang issues with <Select>).
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { Label } from '@/components/ui/label';
 import {
@@ -110,6 +111,7 @@ export function TriggerPicker({
   workflowType,
   options: optionsProp,
 }: TriggerPickerProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   const { get } = useApi();
   const [options, setOptions] = useState<TriggerTypeOption[]>(optionsProp ?? []);
 
@@ -143,18 +145,18 @@ export function TriggerPicker({
 
   return (
     <div className="space-y-1">
-      <Label>{TRIGGER_PICKER_LABEL}</Label>
-      <p className="text-xs text-muted-foreground">{TRIGGER_PICKER_HELPER}</p>
+      <Label>{t('workflows:triggerPicker.label', TRIGGER_PICKER_LABEL)}</Label>
+      <p className="text-xs text-muted-foreground">{t('workflows:triggerPicker.helper', TRIGGER_PICKER_HELPER)}</p>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
           <SelectValue>
-            {value ? getTriggerLabel(value) : 'Select a trigger…'}
+            {value ? getTriggerLabel(value) : t('workflows:triggerPicker.placeholder')}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {groups.map(({ group, label, items }) => (
             <SelectGroup key={group}>
-              <SelectLabel>{label}</SelectLabel>
+              <SelectLabel>{t(`workflows:triggerPicker.groups.${group}`, label)}</SelectLabel>
               {items.map((opt) => (
                 <TooltipProvider key={opt.value} delayDuration={400}>
                   <Tooltip>
@@ -173,7 +175,7 @@ export function TriggerPicker({
           ))}
           {groups.length === 0 && (
             <div className="px-2 py-1.5 text-sm text-muted-foreground">
-              No trigger types available.
+              {t('workflows:triggerPicker.noTypes')}
             </div>
           )}
         </SelectContent>
@@ -186,14 +188,15 @@ export function TriggerPicker({
             <AlertDescription className="text-xs">
               {required ? (
                 <>
-                  <strong>Required permission:</strong> users need{' '}
+                  <strong>{t('workflows:triggerPicker.requiredPermission.label')}</strong>{' '}
+                  {t('workflows:triggerPicker.requiredPermission.prefix')}{' '}
                   <code className="text-xs">
                     {required.feature}: {required.level}
                   </code>{' '}
-                  or higher to see and run this workflow. Set this in Settings → Roles.
+                  {t('workflows:triggerPicker.requiredPermission.suffix')}
                 </>
               ) : (
-                <>Available to any authenticated user.</>
+                <>{t('workflows:triggerPicker.availableToAny')}</>
               )}
             </AlertDescription>
           </Alert>

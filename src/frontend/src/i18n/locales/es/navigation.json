@@ -5,5 +5,25 @@
     "build": "Construir",
     "govern": "Gobernar",
     "deploy": "Desplegar"
+  },
+  "dbDown": {
+    "title": "Base de datos no disponible",
+    "body": "La aplicación no puede acceder a su base de datos de metadatos. La mayoría de las funciones devolverán errores hasta que se restablezca la conexión.",
+    "retrying": "Reintentando…",
+    "retryConnection": "Reintentar conexión",
+    "retryFailed": "El reintento falló",
+    "autoRetrying": "Reintentando automáticamente cada {{seconds}} segundos",
+    "pausedTitle": "Aplicación en pausa",
+    "pausedBodyBefore": "La base de datos de metadatos no es accesible, por lo que la navegación y las vistas de datos están deshabilitadas para evitar mostrar un estado inconsistente. Usa",
+    "pausedBodyAfter": "arriba (o espera al siguiente reintento automático) para reanudar."
+  },
+  "warning": {
+    "title": "Advertencia del sistema",
+    "workspaceFailed": "Falló la conexión con el workspace de Databricks. Es posible que algunas funciones no estén disponibles."
+  },
+  "routeError": {
+    "title": "Algo salió mal",
+    "body": "Se produjo un error inesperado al mostrar esta página. Puedes volver a intentarlo o regresar a la página de inicio.",
+    "goHome": "Ir al inicio"
   }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ export default function AuthoritativeDefinitionFormDialog({
   onSubmit,
   initial,
 }: AuthoritativeDefinitionFormProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,12 +52,12 @@ export default function AuthoritativeDefinitionFormDialog({
 
   const handleSubmit = async () => {
     if (!type.trim()) {
-      toast({ title: 'Validation Error', description: 'Type is required', variant: 'destructive' });
+      toast({ title: t('data-products:messages.validationTitle'), description: t('data-products:authoritativeDefinitionForm.validationTypeRequired'), variant: 'destructive' });
       return;
     }
 
     if (!url.trim()) {
-      toast({ title: 'Validation Error', description: 'URL is required', variant: 'destructive' });
+      toast({ title: t('data-products:messages.validationTitle'), description: t('data-products:authoritativeDefinitionForm.validationUrlRequired'), variant: 'destructive' });
       return;
     }
 
@@ -63,7 +65,7 @@ export default function AuthoritativeDefinitionFormDialog({
     try {
       new URL(url.trim());
     } catch {
-      toast({ title: 'Validation Error', description: 'Please enter a valid URL', variant: 'destructive' });
+      toast({ title: t('data-products:messages.validationTitle'), description: t('data-products:authoritativeDefinitionForm.validationUrlInvalid'), variant: 'destructive' });
       return;
     }
 
@@ -78,13 +80,13 @@ export default function AuthoritativeDefinitionFormDialog({
       await onSubmit(definition);
       onOpenChange(false);
       toast({
-        title: 'Success',
-        description: initial ? 'Authoritative definition updated' : 'Authoritative definition added',
+        title: t('common:toast.success'),
+        description: initial ? t('data-products:authoritativeDefinitionForm.successUpdated') : t('data-products:authoritativeDefinitionForm.successAdded'),
       });
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save authoritative definition',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-products:authoritativeDefinitionForm.saveError'),
         variant: 'destructive',
       });
     } finally {
@@ -96,58 +98,58 @@ export default function AuthoritativeDefinitionFormDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Authoritative Definition' : 'Add Authoritative Definition'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-products:authoritativeDefinitionForm.editTitle') : t('data-products:authoritativeDefinitionForm.addTitle')}</DialogTitle>
           <DialogDescription>
-            Link to authoritative sources like business definitions, implementations, or tutorials (ODPS v1.0.0).
+            {t('data-products:authoritativeDefinitionForm.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="type">
-              Type <span className="text-destructive">*</span>
+              {t('data-products:authoritativeDefinitionForm.typeLabel')} <span className="text-destructive">*</span>
             </Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger id="type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {DEFINITION_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
+                {DEFINITION_TYPES.map((defType) => (
+                  <SelectItem key={defType} value={defType}>
+                    {defType}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Type of authoritative source
+              {t('data-products:authoritativeDefinitionForm.typeHint')}
             </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="url">
-              URL <span className="text-destructive">*</span>
+              {t('data-products:authoritativeDefinitionForm.urlLabel')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="url"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://docs.example.com/definitions/customer"
+              placeholder={t('data-products:authoritativeDefinitionForm.urlPlaceholder')}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              Full URL to the authoritative source
+              {t('data-products:authoritativeDefinitionForm.urlHint')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe what information this source provides"
+              placeholder={t('data-products:authoritativeDefinitionForm.descriptionPlaceholder')}
               rows={3}
             />
           </div>
@@ -155,10 +157,10 @@ export default function AuthoritativeDefinitionFormDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Save Changes' : 'Add Definition'}
+            {isSubmitting ? t('common:actions.saving') : initial ? t('common:actions.saveChanges') : t('data-products:authoritativeDefinitionForm.addButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

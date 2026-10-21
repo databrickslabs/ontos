@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Iterable, Optional, List, Union
 
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, selectinload
@@ -244,6 +244,18 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
             raise
 
     # Override get_multi to support project filtering
+    def get_by_ids(self, db: Session, *, ids: Iterable[str]) -> Dict[str, DataContractDb]:
+        """Batch-fetch contracts by id. Returns {id: DataContractDb} for those found.
+
+        Used by list_products to resolve all port.contractId references in one query
+        instead of N × M get() calls (#854 review).
+        """
+        id_list = [i for i in ids if i]
+        if not id_list:
+            return {}
+        rows = db.query(self.model).filter(self.model.id.in_(id_list)).all()
+        return {r.id: r for r in rows}
+
     def get_multi(
         self,
         db: Session,

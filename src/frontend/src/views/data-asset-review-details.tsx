@@ -91,28 +91,28 @@ export default function DataAssetReviewDetails() {
     // Fetch request details
     const fetchRequestDetails = async () => {
         if (!requestId) {
-            setError('Request ID not found in URL.');
+            setError(t('data-asset-reviews:details.requestIdMissing'));
             setLoading(false);
-            setStaticSegments([{ label: 'Data Asset Reviews', path: '/data-asset-reviews'}]);
+            setStaticSegments([{ label: t('data-asset-reviews:title'), path: '/data-asset-reviews'}]);
             setDynamicTitle(null);
             return;
         }
         setLoading(true);
         setError(null);
-        setStaticSegments([{ label: 'Data Asset Reviews', path: '/data-asset-reviews'}]);
-        setDynamicTitle('Loading Review...');
+        setStaticSegments([{ label: t('data-asset-reviews:title'), path: '/data-asset-reviews'}]);
+        setDynamicTitle(t('data-asset-reviews:details.loadingReview'));
         try {
             const response = await get<DataAssetReviewRequest>(`/api/data-asset-reviews/${requestId}`);
             const requestData = checkApiResponse(response, 'Review Request Details');
             setRequest(requestData);
-            setDynamicTitle(requestData.title || `Review ${requestData.id.substring(0, 8)}`);
+            setDynamicTitle(requestData.title || t('data-asset-reviews:details.reviewTitleShort', { id: requestData.id.substring(0, 8) }));
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Failed to fetch request details';
+            const errorMessage = err instanceof Error ? err.message : t('data-asset-reviews:details.fetchFailed');
             setError(errorMessage);
             setRequest(null);
-            setStaticSegments([{ label: 'Data Asset Reviews', path: '/data-asset-reviews'}]);
-            setDynamicTitle('Error');
-            toast({ title: 'Error', description: `Failed to load request: ${errorMessage}`, variant: 'destructive' });
+            setStaticSegments([{ label: t('data-asset-reviews:title'), path: '/data-asset-reviews'}]);
+            setDynamicTitle(t('common:states.error'));
+            toast({ title: t('common:toast.error'), description: t('data-asset-reviews:details.loadRequestError', { error: errorMessage }), variant: 'destructive' });
         } finally {
             setLoading(false);
         }
@@ -156,8 +156,8 @@ export default function DataAssetReviewDetails() {
             toast({ title: t('common:toast.success'), description: t('data-asset-reviews:toast.titleUpdated') });
             setIsEditingTitle(false);
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Failed to update title';
-            toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+            const errorMessage = err instanceof Error ? err.message : t('data-asset-reviews:details.updateTitleFailed');
+            toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
         } finally {
             setIsSavingTitle(false);
         }
@@ -183,10 +183,10 @@ export default function DataAssetReviewDetails() {
             const response = await put<DataAssetReviewRequest>(`/api/data-asset-reviews/${requestId}/status`, updatePayload);
             const updatedRequest = checkApiResponse(response, 'Update Request Status');
             setRequest(updatedRequest); // Update local state
-            toast({ title: 'Success', description: `Request status updated to ${newStatus}.` });
+            toast({ title: t('common:toast.success'), description: t('data-asset-reviews:details.statusUpdated', { status: newStatus }) });
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Failed to update status';
-            toast({ title: 'Error', description: `Failed to update status: ${errorMessage}`, variant: 'destructive' });
+            const errorMessage = err instanceof Error ? err.message : t('data-asset-reviews:details.updateStatusFailed');
+            toast({ title: t('common:toast.error'), description: t('data-asset-reviews:details.updateStatusError', { error: errorMessage }), variant: 'destructive' });
         } finally {
             setIsUpdatingStatus(false);
         }
@@ -220,7 +220,7 @@ export default function DataAssetReviewDetails() {
             accessorKey: "asset_fqn",
             header: ({ column }) => (
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="h-8 px-2 -ml-2">
-                    Asset FQN
+                    {t('data-asset-reviews:details.columnAssetFqn')}
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
@@ -230,7 +230,7 @@ export default function DataAssetReviewDetails() {
             accessorKey: "asset_type",
             header: ({ column }) => (
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="h-8 px-2 -ml-2">
-                    Type
+                    {t('common:labels.type')}
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
@@ -240,7 +240,7 @@ export default function DataAssetReviewDetails() {
             accessorKey: "status",
             header: ({ column }) => (
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="h-8 px-2 -ml-2">
-                    Status
+                    {t('common:labels.status')}
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
@@ -252,7 +252,7 @@ export default function DataAssetReviewDetails() {
             accessorKey: "updated_at",
             header: ({ column }) => (
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="h-8 px-2 -ml-2">
-                    Last Reviewed
+                    {t('data-asset-reviews:details.columnLastReviewed')}
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
@@ -268,7 +268,7 @@ export default function DataAssetReviewDetails() {
                     setSelectedAssetIndex(idx >= 0 ? idx + 1 : 1); // 1-based
                     setIsEditorOpen(true);
                 }}>
-                    Review
+                    {t('data-asset-reviews:details.review')}
                 </Button>
             ),
         },
@@ -289,7 +289,7 @@ export default function DataAssetReviewDetails() {
         return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>;
     }
     if (!request) {
-        return <Alert><AlertDescription>Review request not found.</AlertDescription></Alert>;
+        return <Alert><AlertDescription>{t('data-asset-reviews:details.notFound')}</AlertDescription></Alert>;
     }
 
     return (
@@ -298,7 +298,7 @@ export default function DataAssetReviewDetails() {
                 <div className="flex justify-between items-start mb-4 gap-4">
                     <div className="min-w-0 flex-1">
                         <Button variant="outline" size="sm" onClick={() => navigate('/data-asset-reviews')} className="mb-2">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+                            <ArrowLeft className="mr-2 h-4 w-4" /> {t('data-asset-reviews:details.backToList')}
                         </Button>
                         {isEditingTitle ? (
                             <div className="flex items-center gap-2">
@@ -371,7 +371,7 @@ export default function DataAssetReviewDetails() {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Label htmlFor="overall-status" className="text-sm font-medium">Overall Status:</Label>
+                        <Label htmlFor="overall-status" className="text-sm font-medium">{t('data-asset-reviews:details.overallStatus')}:</Label>
                         <Select
                             value={request.status}
                             onValueChange={(value) => handleOverallStatusChange(value as ReviewRequestStatus)}
@@ -393,22 +393,22 @@ export default function DataAssetReviewDetails() {
                 {/* Request Info Card */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Request Information</CardTitle>
+                        <CardTitle>{t('data-asset-reviews:details.requestInformation')}</CardTitle>
                     </CardHeader>
                     <CardContent className="grid md:grid-cols-3 gap-4 text-sm">
-                        <div><Label>Requester:</Label> {request.requester_email}</div>
-                        <div><Label>Reviewer:</Label> {request.reviewer_email}</div>
-                        <div><Label>Current Status:</Label> <Badge variant={getRequestStatusColor(request.status)}>{request.status}</Badge></div>
-                        <div><Label>Created:</Label> <RelativeDate date={request.created_at} /></div>
-                        <div><Label>Last Updated:</Label> <RelativeDate date={request.updated_at} /></div>
-                        <div className="md:col-span-3"><Label>Notes:</Label> <p className="text-xs mt-1 whitespace-pre-wrap">{request.notes || t('common:states.none')}</p></div>
+                        <div><Label>{t('common:labels.requester')}:</Label> {request.requester_email}</div>
+                        <div><Label>{t('common:labels.reviewer')}:</Label> {request.reviewer_email}</div>
+                        <div><Label>{t('data-asset-reviews:details.currentStatus')}:</Label> <Badge variant={getRequestStatusColor(request.status)}>{request.status}</Badge></div>
+                        <div><Label>{t('common:labels.created')}:</Label> <RelativeDate date={request.created_at} /></div>
+                        <div><Label>{t('common:labels.lastUpdated')}:</Label> <RelativeDate date={request.updated_at} /></div>
+                        <div className="md:col-span-3"><Label>{t('common:labels.notes')}:</Label> <p className="text-xs mt-1 whitespace-pre-wrap">{request.notes || t('common:states.none')}</p></div>
                     </CardContent>
                 </Card>
 
                 {/* Assets Table Card */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Assets for Review ({request.assets?.length ?? 0})</CardTitle>
+                        <CardTitle>{t('data-asset-reviews:details.assetsForReview', { count: request.assets?.length ?? 0 })}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <DataTable
@@ -425,7 +425,7 @@ export default function DataAssetReviewDetails() {
                 <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                     <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-background">
                         <CardHeader className="flex flex-row justify-between items-center">
-                            <CardTitle>Reviewing: {selectedAsset.asset_fqn}</CardTitle>
+                            <CardTitle>{t('data-asset-reviews:details.reviewing', { fqn: selectedAsset.asset_fqn })}</CardTitle>
                             <Button variant="ghost" size="icon" onClick={() => setIsEditorOpen(false)}><X className="h-4 w-4" /></Button>
                         </CardHeader>
                         <CardContent className="flex-1 overflow-auto space-y-4">
@@ -462,7 +462,7 @@ export default function DataAssetReviewDetails() {
                                 but usually triggered from parent dialog for consistency.
                                 Keeping a simplified footer here for closing. */}
                              <div className="flex justify-end p-4 border-t">
-                                <Button variant="outline" onClick={() => setIsEditorOpen(false)} className="mr-2">Close</Button>
+                                <Button variant="outline" onClick={() => setIsEditorOpen(false)} className="mr-2">{t('common:actions.close')}</Button>
                                 {/* Save action is triggered within AssetReviewEditor via its internal state/button */}
                             </div>
                         </CardContent>

@@ -30,7 +30,8 @@ class TriggerType(str, Enum):
     # Request triggers - fire when a request action is initiated
     ON_REQUEST_REVIEW = "on_request_review"  # When review is requested (datasets, contracts, products)
     ON_REQUEST_ACCESS = "on_request_access"  # When access is requested (access grants, projects)
-    ON_REQUEST_PUBLISH = "on_request_publish"  # When publish/deployment is requested (contracts)
+    ON_REQUEST_PUBLISH = "on_request_publish"  # Marketplace publication requested
+    ON_REQUEST_DEPLOY = "on_request_deploy"  # Deployment to Unity Catalog requested (contracts)
     ON_REQUEST_STATUS_CHANGE = "on_request_status_change"  # When status change is requested
     
     # Job lifecycle triggers
@@ -63,7 +64,7 @@ class TriggerType(str, Enum):
     FOR_SUBSCRIBE = "for_subscribe"  # User subscribes to / signs a contract (matches ON_SUBSCRIBE)
     FOR_REQUEST_REVIEW = "for_request_review"  # Wizard before review request (matches ON_REQUEST_REVIEW)
     FOR_REQUEST_ACCESS = "for_request_access"  # Wizard before access request (matches ON_REQUEST_ACCESS)
-    FOR_REQUEST_PUBLISH = "for_request_publish"  # Wizard before publish/deploy request (matches ON_REQUEST_PUBLISH)
+    FOR_REQUEST_PUBLISH = "for_request_publish"  # Wizard before a publish request
     FOR_REQUEST_CERTIFY = "for_request_certify"  # Wizard before certification request (matches ON_REQUEST_CERTIFY)
     FOR_REQUEST_STATUS_CHANGE = "for_request_status_change"  # Wizard before status change request (matches ON_REQUEST_STATUS_CHANGE)
 

@@ -64,7 +64,7 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
   onPromote,
   onMigrate,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['semantic-models', 'common']);
   const [isLoading, setIsLoading] = useState(false);
   const [action, setAction] = useState<PromotionAction>(initialAction || 'promote');
   const [targetCollectionIri, setTargetCollectionIri] = useState('');
@@ -129,11 +129,11 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
   const getActionTitle = () => {
     switch (action) {
       case 'promote':
-        return t('Promote Concept');
+        return t('semantic-models:promotion.promoteConcept');
       case 'demote':
-        return t('Demote Concept');
+        return t('semantic-models:promotion.demoteConcept');
       case 'migrate':
-        return t('Migrate Concept');
+        return t('semantic-models:promotion.migrateConcept');
     }
   };
 
@@ -148,14 +148,14 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
             {getActionTitle()}
           </DialogTitle>
           <DialogDescription>
-            {t('Move')} <strong>{concept.label}</strong> {t('to a different collection')}
+            {t('semantic-models:promotion.move')} <strong>{concept.label}</strong> {t('semantic-models:promotion.toDifferentCollection')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           {/* Action type */}
           <div className="grid gap-2">
-            <Label>{t('Action')}</Label>
+            <Label>{t('semantic-models:promotion.actionLabel')}</Label>
             <Select value={action} onValueChange={(v) => setAction(v as PromotionAction)}>
               <SelectTrigger>
                 <SelectValue />
@@ -164,13 +164,13 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
                 <SelectItem value="promote">
                   <div className="flex items-center gap-2">
                     <ArrowUp className="h-4 w-4 text-green-500" />
-                    <span>{t('Promote')}</span>
+                    <span>{t('semantic-models:promotion.promote')}</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="migrate">
                   <div className="flex items-center gap-2">
                     <ArrowLeftRight className="h-4 w-4 text-blue-500" />
-                    <span>{t('Migrate')}</span>
+                    <span>{t('semantic-models:promotion.migrate')}</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -179,7 +179,7 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
 
           {/* Current collection */}
           <div className="grid gap-2">
-            <Label className="text-muted-foreground">{t('Current Location')}</Label>
+            <Label className="text-muted-foreground">{t('semantic-models:promotion.currentLocation')}</Label>
             <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded">
               <span className="text-sm">
                 {currentCollection?.label || concept.source_context}
@@ -194,10 +194,10 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
 
           {/* Target collection */}
           <div className="grid gap-2">
-            <Label>{t('Target Collection')}</Label>
+            <Label>{t('semantic-models:import.targetCollection')}</Label>
             <Select value={targetCollectionIri} onValueChange={setTargetCollectionIri}>
               <SelectTrigger>
-                <SelectValue placeholder={t('Select target collection...')} />
+                <SelectValue placeholder={t('semantic-models:promotion.selectTargetPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {eligibleCollections.map((c) => (
@@ -220,14 +220,14 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                {t('New IRI')}: <code className="text-xs">{targetCollectionIri}/{concept.label?.toLowerCase().replace(/\s+/g, '-')}</code>
+                {t('semantic-models:promotion.newIri')}: <code className="text-xs">{targetCollectionIri}/{concept.label?.toLowerCase().replace(/\s+/g, '-')}</code>
               </AlertDescription>
             </Alert>
           )}
 
           {/* Source handling options */}
           <div className="space-y-3">
-            <Label>{t('Source Concept')}</Label>
+            <Label>{t('semantic-models:promotion.sourceConcept')}</Label>
             
             {action !== 'migrate' && (
               <div className="flex items-center space-x-2">
@@ -240,7 +240,7 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
                   htmlFor="deprecate"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  {t('Deprecate original (recommended)')}
+                  {t('semantic-models:promotion.deprecateOriginal')}
                 </label>
               </div>
             )}
@@ -258,12 +258,12 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
                     htmlFor="delete"
                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                   >
-                    {t('Delete original')}
+                    {t('semantic-models:promotion.deleteOriginal')}
                   </label>
                 </div>
                 {!canDelete && (
                   <p className="text-xs text-muted-foreground ml-6">
-                    {t('Only draft concepts can be deleted. Published concepts will be deprecated.')}
+                    {t('semantic-models:promotion.deleteHelp')}
                   </p>
                 )}
               </div>
@@ -275,7 +275,7 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
             <Alert variant="default">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                {t('Promoted concepts require re-approval at the new scope level.')}
+                {t('semantic-models:promotion.promoteWarning')}
               </AlertDescription>
             </Alert>
           )}
@@ -288,7 +288,7 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
           >
-            {t('Cancel')}
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={handleSubmit}

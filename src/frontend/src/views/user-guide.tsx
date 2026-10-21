@@ -33,7 +33,7 @@ function buildToc(markdown: string) {
 }
 
 export default function UserGuide() {
-  useTranslation('common');
+  const { t } = useTranslation(['about', 'common']);
   const [markdown, setMarkdown] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,12 +45,12 @@ export default function UserGuide() {
   // Set breadcrumb
   useEffect(() => {
     setStaticSegments([]);
-    setDynamicTitle('User Guide');
+    setDynamicTitle(t('about:userGuide.title', 'User Guide'));
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [setStaticSegments, setDynamicTitle]);
+  }, [setStaticSegments, setDynamicTitle, t]);
 
   // Fetch user guide content
   useEffect(() => {
@@ -60,13 +60,13 @@ export default function UserGuide() {
         setError(null);
         const response = await fetch('/api/user-guide');
         if (!response.ok) {
-          throw new Error(`Failed to load user guide: ${response.statusText}`);
+          throw new Error(t('about:userGuide.loadError', { statusText: response.statusText }));
         }
         const data = await response.json();
         setMarkdown(data.content || '');
       } catch (err) {
         console.error('Error loading user guide:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load user guide');
+        setError(err instanceof Error ? err.message : t('about:userGuide.loadErrorGeneric', 'Failed to load user guide'));
       } finally {
         setLoading(false);
       }
@@ -143,7 +143,7 @@ export default function UserGuide() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
           <BookOpenCheck className="w-8 h-8" />
-          <h1 className="text-4xl font-bold">User Guide</h1>
+          <h1 className="text-4xl font-bold">{t('about:userGuide.title', 'User Guide')}</h1>
         </div>
         <DocViewerSkeleton showTitle={false} proseRows={14} />
       </div>
@@ -155,7 +155,7 @@ export default function UserGuide() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-6">
           <BookOpenCheck className="w-8 h-8" />
-          <h1 className="text-4xl font-bold">User Guide</h1>
+          <h1 className="text-4xl font-bold">{t('about:userGuide.title', 'User Guide')}</h1>
         </div>
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -168,7 +168,7 @@ export default function UserGuide() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center gap-3 mb-6">
         <BookOpenCheck className="w-8 h-8" />
-        <h1 className="text-4xl font-bold">User Guide</h1>
+        <h1 className="text-4xl font-bold">{t('about:userGuide.title', 'User Guide')}</h1>
       </div>
 
       <div className="flex gap-8 items-start relative">
@@ -177,7 +177,7 @@ export default function UserGuide() {
           <aside className="hidden lg:block w-64 shrink-0">
             <div className="sticky top-24 rounded-lg border bg-card p-4 shadow-sm">
               <div className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">
-                Table of Contents
+                {t('about:userGuide.tableOfContents', 'Table of Contents')}
               </div>
               <nav className="space-y-0.5">
                 {toc.map((heading, idx) => (

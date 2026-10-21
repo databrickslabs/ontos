@@ -156,6 +156,9 @@ class StepContext:
     # ${context.on_behalf_of.value|.type|.display} in webhook bodies +
     # grant_permissions principal_variable. None when subscribing for self.
     on_behalf_of: Optional[Dict[str, str]] = None
+    # Id of the step being executed (WorkflowStep.step_id), set by the
+    # executor before each step
+    step_id: Optional[str] = None
 
 
 @dataclass
@@ -188,6 +191,78 @@ class StepHandler(ABC):
         pass
 
 
+class RuleEntityLoadError(RuntimeError):
+    """The stored entity a rule needs could not be loaded.
+
+    Carries a stable code and parameters next to the English message, so the
+    UI can show the step's error in the user's language.
+    """
+
+    code = 'rule_entity_load_failed'
+
+    def __init__(self, entity_type: Optional[str], entity_id: Optional[str]):
+        self.params = {'entityType': entity_type, 'entityId': entity_id}
+        super().__init__(f"Could not load {entity_type} {entity_id} to evaluate the rule")
+
+
+def _rule_step_error(error: Exception, data: Optional[Dict[str, Any]] = None) -> 'StepResult':
+    """Failed result of a rule step (validation, conditional, policy check).
+
+    Errors with a code (``RuleEntityLoadError``) also put it in the result
+    data, as ``error_code`` / ``error_params``; the English text stays in
+    ``error``.
+    """
+    data = dict(data or {})
+    code = getattr(error, 'code', None)
+    if code:
+        data['error_code'] = code
+        data['error_params'] = getattr(error, 'params', {})
+    return StepResult(passed=False, error=str(error), data=data or None)
+
+
+def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """What workflow rules see as ``obj``: the stored entity plus the trigger payload.
+
+    Trigger payloads are small (often just name and status), so a rule on any
+    other field passed vacuously. For data products and data contracts the
+    entity is loaded with ``entity_dict_builder`` (the fields maturity gates
+    use); payload keys win, so request fields such as ``current_status`` keep
+    their meaning. Other entity types get the payload unchanged, and so do
+    ``before_update`` gates: their payload is the proposed change, and values
+    derived from the stored row (``has_owner``, counts) would describe the
+    entity before it.
+
+    Raises when the stored entity can't be loaded: evaluating the rule on the
+    payload alone could let it pass on fields the payload doesn't carry, so the
+    step fails instead (its handler turns the error into a failed result).
+    """
+    from src.controller.entity_dict_builder import (
+        build_data_contract_dict,
+        build_data_product_dict,
+    )
+
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    if getattr(trigger_type, 'value', trigger_type) == 'before_update':
+        return payload
+    builder = {
+        'data_product': build_data_product_dict,
+        'data_contract': build_data_contract_dict,
+    }.get((context.entity_type or '').lower())
+    if not builder or not context.entity_id:
+        return payload
+    try:
+        # Savepoint: a failed query must not leave the session that the
+        # workflow and its caller keep using in an aborted transaction.
+        with db.begin_nested():
+            stored = builder(db, context.entity_id)
+    except Exception as e:
+        # The database error stays in the server log; the step result shows
+        # only what failed.
+        raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+    return {**stored, **payload} if stored else payload
+
+
 class ValidationStepHandler(StepHandler):
     """Handler for validation steps using compliance DSL."""
 
@@ -199,7 +274,7 @@ class ValidationStepHandler(StepHandler):
             return StepResult(passed=False, error="No rule configured")
         
         try:
-            passed, message = evaluate_rule_on_object(rule, context.entity)
+            passed, message = evaluate_rule_on_object(rule, _rule_object(self._db, context))
             return StepResult(
                 passed=passed,
                 message=message,
@@ -207,10 +282,104 @@ class ValidationStepHandler(StepHandler):
             )
         except Exception as e:
             logger.exception(f"Validation step failed: {e}")
-            return StepResult(
-                passed=False,
-                error=str(e)
-            )
+            return _rule_step_error(e)
+
+
+# Trigger entities that stand in for the real entity owners are assigned to.
+# on_request_access fires on entity_type=access_grant, where context.entity_id
+# is the request's UUID; the trigger firer puts the underlying entity under
+# context.entity['entity_type'] / ['entity_id']. on_subscribe already fires on
+# the data product itself, so the list is intentionally narrow.
+_PROXY_ENTITY_TYPES = {'access_grant'}
+
+
+def _underlying_entity(context: 'StepContext') -> Tuple[str, str]:
+    """(entity_type, entity_id) that owners and Business Owners are assigned to."""
+    entity = context.entity if isinstance(context.entity, dict) else {}
+    if (context.entity_type or '').lower() not in _PROXY_ENTITY_TYPES or not entity:
+        return context.entity_type, context.entity_id
+    underlying_id = entity.get('entity_id')
+    underlying_type = entity.get('entity_type')
+    if not (underlying_id and underlying_type):
+        logger.warning(
+            "Proxy entity_type=%s has no entity.entity_type/entity_id to traverse to; "
+            "falling back to context.entity_id=%s (owner lookups will likely be empty)",
+            context.entity_type, context.entity_id,
+        )
+        return context.entity_type, context.entity_id
+    logger.info(
+        "Traversing proxy entity_type=%s entity_id=%s -> underlying %s=%s",
+        context.entity_type, context.entity_id, underlying_type, underlying_id,
+    )
+    return underlying_type, underlying_id
+
+
+def _entity_owner_emails(db: Session, context: 'StepContext') -> List[str]:
+    """Owners of the trigger entity (see ``resolve_owner_emails``)."""
+    from src.repositories.entity_owners_repository import resolve_owner_emails
+
+    return resolve_owner_emails(db, *_underlying_entity(context))
+
+
+# Approver tokens used by the default workflows that have no app role in a
+# default install (normalized: lowercase, no spaces or underscores).
+_OWNER_APPROVER_TOKENS = {
+    'domainowner': 'DomainOwner',
+    'domainowners': 'DomainOwner',
+    'contractapprover': 'ContractApprover',
+}
+
+
+def _owner_approvers(
+    db: Session, role_name: str, context: 'StepContext', token: Optional[str] = None,
+) -> List[tuple]:
+    """Approvers for the 'DomainOwner' / 'ContractApprover' tokens.
+
+    An app role with that name wins (an admin may have created one).
+    Otherwise 'DomainOwner' resolves to the owners of the entity's domain and
+    'ContractApprover' to the owners of the entity itself (the data
+    contract), leaving out the requester. When nobody is left, the request
+    goes to the Data Steward and Admin roles instead of a recipient no user
+    matches; handle-approval refuses the requester's own decision.
+    """
+    from src.db_models.settings import AppRoleDb
+    from src.repositories.entity_owners_repository import (
+        resolve_domain_owner_emails,
+        resolve_owner_emails,
+    )
+
+    role = db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
+    if role:
+        return [(role.name, role.id)]
+    # Also the token as written (e.g. an app role named 'Domain Owners')
+    names = {role_name.lower(), (token or '').lower().replace(' ', '').replace('_', '')}
+    for r in db.query(AppRoleDb).all():
+        if r.name.lower().replace(' ', '').replace('_', '') in names:
+            return [(r.name, r.id)]
+
+    entity_type, entity_id = _underlying_entity(context)
+    if role_name == 'DomainOwner':
+        emails = resolve_domain_owner_emails(db, entity_type, entity_id)
+    else:
+        emails = resolve_owner_emails(db, entity_type, entity_id)
+    # The requester is often an owner; they must not approve their own request.
+    requester = (context.user_email or '').lower()
+    emails = [email for email in emails if email.lower() != requester]
+    if emails:
+        return [(email, None) for email in emails]
+
+    # Fallback: the Data Stewards, and the admins, who are told that no owner
+    # other than the requester was found. The requester may be a steward or an
+    # admin; handle-approval refuses their own decision on an owner approval.
+    logger.warning(
+        "No %s other than the requester found for %s %s; "
+        "requesting approval from Data Stewards and admins",
+        role_name, entity_type, entity_id,
+    )
+    return (
+        _resolve_role_to_users(db, 'data_stewards', context)
+        + _resolve_role_to_users(db, 'admins', context)
+    )
 
 
 def _resolve_role_to_users(
@@ -221,12 +390,14 @@ def _resolve_role_to_users(
     """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
 
     Handles:
-    - 'requester' → original user email
-    - 'owner' → entity owner
+    - 'requester' / 'trigger_user' → original user email
+    - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
+    - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
+    - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
     - '<uuid>' → app role UUID
     - 'user@email.com' → direct email
-    - Legacy aliases like 'domain_owners', 'admins', etc.
+    - Legacy aliases like 'data_stewards', 'admins', etc.
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -257,18 +428,30 @@ def _resolve_role_to_users(
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
-        'domain_owners': 'DomainOwner',
         'project_owners': 'ProjectOwner',
         'data_stewards': 'DataSteward',
+        'data_steward': 'DataSteward',
         'admins': 'Admin',
     }
 
-    if role_spec == 'requester':
+    # 'trigger_user' is the name the default workflows use for the requester.
+    if role_spec in ('requester', 'trigger_user'):
         return [(context.user_email, None)] if context.user_email else []
 
+    if role_spec == 'entity_owner':
+        return [(email, None) for email in _entity_owner_emails(db, context)]
+
     if role_spec == 'owner':
+        # Most trigger payloads (e.g. on_publish / on_unpublish) carry no
+        # `owner`; fall back to the entity's owners.
         owner = context.entity.get('owner') if context.entity else None
-        return [(owner, None)] if owner else []
+        if owner:
+            return [(owner, None)]
+        return [(email, None) for email in _entity_owner_emails(db, context)]
+
+    owner_approver = _OWNER_APPROVER_TOKENS.get(role_spec.lower().replace(' ', '').replace('_', ''))
+    if owner_approver:
+        return _owner_approvers(db, owner_approver, context, token=role_spec)
 
     if role_spec in role_aliases:
         role_name = role_aliases[role_spec]
@@ -297,37 +480,7 @@ def _resolve_role_to_users(
             logger.warning(f"Business role {br_id} not found")
             return []
 
-        # Some trigger contexts carry a "proxy" entity that stands in for the
-        # real entity that Business Owners are assigned to. For example:
-        #   - on_request_access fires on entity_type=access_grant, where
-        #     context.entity_id is the access-grant request's UUID, NOT the
-        #     underlying data product. Business Owners are assigned to data
-        #     products, so a naive lookup by context.entity_id returns [].
-        # For these proxy entity types, the trigger firer puts the underlying
-        # entity's id under context.entity['entity_id']. We traverse to that
-        # so the BusinessOwnerDb lookup hits the right object.
-        # NOTE: on_subscribe already fires with entity_type=data_product +
-        # entity_id=<product_id> directly (see data_products_manager
-        # ._fire_on_subscribe_trigger), so subscription proxying is not needed
-        # here. The traversal list is intentionally narrow.
-        PROXY_ENTITY_TYPES = {'access_grant'}
-        lookup_object_id = context.entity_id
-        if context.entity_type in PROXY_ENTITY_TYPES and context.entity:
-            underlying_id = context.entity.get('entity_id')
-            if underlying_id:
-                logger.info(
-                    f"Business role resolver: traversing proxy "
-                    f"entity_type={context.entity_type} entity_id={context.entity_id} "
-                    f"-> underlying {context.entity.get('entity_type', '?')}={underlying_id} "
-                    f"for Business Owner lookup"
-                )
-                lookup_object_id = underlying_id
-            else:
-                logger.warning(
-                    f"Business role resolver: proxy entity_type={context.entity_type} "
-                    f"has no entity.entity_id to traverse to; falling back to "
-                    f"context.entity_id={context.entity_id} (lookup will likely return [])"
-                )
+        _, lookup_object_id = _underlying_entity(context)
 
         # Runtime resolution: look up who holds this business role for this entity
         owners = (
@@ -356,10 +509,11 @@ def _resolve_role_to_users(
     if role_by_id:
         return [(role_by_id.name, role_by_id.id)]
 
-    # Fallback: role name (legacy)
-    normalized = role_spec.lower().replace(' ', '')
+    # Fallback: role name (legacy), ignoring case, spaces and underscores so
+    # 'data_steward' matches 'Data Steward'
+    normalized = role_spec.lower().replace(' ', '').replace('_', '')
     for r in db.query(AppRoleDb).all():
-        if r.name.lower().replace(' ', '') == normalized:
+        if r.name.lower().replace(' ', '').replace('_', '') == normalized:
             return [(r.name, r.id)]
 
     return [(role_spec, None)]
@@ -561,14 +715,21 @@ class ApprovalStepHandler(StepHandler):
         from src.models.notifications import Notification, NotificationType
         from src.repositories.notification_repository import notification_repo
         
-        approvers = self._config.get('approvers', '')
+        # Default workflows loaded before 'approvers' was used in the YAML
+        # store the approver under 'approver_role'; accept it so existing
+        # databases keep working without reloading the defaults.
+        approvers = self._config.get('approvers') or self._config.get('approver_role', '')
         timeout_days = self._config.get('timeout_days', 7)
         require_all = self._config.get('require_all', False)
         approval_message = self._config.get('message', '')
         
         if not approvers:
             return StepResult(passed=False, error="No approvers configured")
-        
+
+        # Render ${entity_name} etc., as notification steps do.
+        if approval_message:
+            approval_message = substitute_template(approval_message, context)
+
         try:
             # Resolve approvers - returns list of (identifier, role_id or None)
             resolved_approvers = self._resolve_approvers(approvers, context)
@@ -614,6 +775,9 @@ class ApprovalStepHandler(StepHandler):
                         action_type="workflow_approval",
                         action_payload={
                             "execution_id": context.execution_id,
+                            # The approval step this notification is for, so
+                            # only its approvers can answer it
+                            "step_id": context.step_id,
                             "workflow_id": context.workflow_id,
                             "workflow_name": context.workflow_name,
                             "entity_type": context.entity_type,
@@ -1008,7 +1172,7 @@ class ConditionalStepHandler(StepHandler):
             tokens = lexer.tokenize()
             parser = Parser(tokens)
             ast = parser.parse_expression()
-            evaluator = Evaluator(context.entity)
+            evaluator = Evaluator(_rule_object(self._db, context))
             result = evaluator.evaluate(ast)
             
             return StepResult(
@@ -1018,7 +1182,7 @@ class ConditionalStepHandler(StepHandler):
             )
         except Exception as e:
             logger.exception(f"Conditional step failed: {e}")
-            return StepResult(passed=False, error=str(e))
+            return _rule_step_error(e)
 
 
 class ScriptStepHandler(StepHandler):
@@ -1278,7 +1442,9 @@ class PolicyCheckStepHandler(StepHandler):
                 )
             
             # Evaluate the policy's rule against the entity
-            passed, technical_message = evaluate_rule_on_object(policy.rule, context.entity)
+            passed, technical_message = evaluate_rule_on_object(
+                policy.rule, _rule_object(self._db, context)
+            )
             
             # Combine human-readable failure message with technical details
             if passed:
@@ -1304,11 +1470,7 @@ class PolicyCheckStepHandler(StepHandler):
             )
         except Exception as e:
             logger.exception(f"Policy check step failed: {e}")
-            return StepResult(
-                passed=False, 
-                error=str(e),
-                data={'policy_id': policy_id}
-            )
+            return _rule_step_error(e, {'policy_id': policy_id})
 
 
 class CreateAssetReviewStepHandler(StepHandler):
@@ -1318,7 +1480,10 @@ class CreateAssetReviewStepHandler(StepHandler):
     useful when workflows need to integrate with the data asset review system.
     
     Config options:
-        reviewer_role: Role name or UUID of the reviewer (default: 'DataSteward')
+        reviewer_role: Who reviews (default: 'DataSteward'): any approver
+            spec ``_resolve_role_to_users`` accepts (e.g. 'DomainOwner', an
+            email), or a role name / UUID whose group members are looked up.
+            A ``reviewer_email`` in the request wins.
         review_type: Type of review (default: 'standard')  
         notes: Additional notes for the review
         use_entity_as_asset: If true, uses the trigger entity as the asset to review
@@ -1339,17 +1504,21 @@ class CreateAssetReviewStepHandler(StepHandler):
             if not requester_email:
                 requester_email = 'system@app.local'
             
-            # Resolve reviewer email from role
-            reviewer_email = self._resolve_reviewer_from_role(reviewer_role)
-            used_fallback = False
+            reviewer_email = self._resolve_reviewer(reviewer_role, context, requester_email)
             if not reviewer_email:
-                # Fallback: use the requester as the reviewer (self-review placeholder)
-                # This allows the asset review to be created even if the role has no members
-                reviewer_email = requester_email
-                used_fallback = True
+                # Nobody but the requester: they must not review their own request.
+                # No asset review is created; the approval step that follows decides.
                 logger.warning(
-                    f"Could not resolve reviewer from role: {reviewer_role}. "
-                    f"Using requester ({requester_email}) as fallback reviewer."
+                    "No reviewer other than the requester found for role %s; "
+                    "no asset review created", reviewer_role,
+                )
+                return StepResult(
+                    passed=True,
+                    message=(
+                        f"No reviewer other than the requester found for {reviewer_role}; "
+                        "no asset review created"
+                    ),
+                    data={'review_id': None, 'reviewer_email': None},
                 )
             
             # Determine asset FQN
@@ -1445,18 +1614,16 @@ class CreateAssetReviewStepHandler(StepHandler):
             # Use repository to create
             review = data_asset_review_repo.create_with_assets(db=self._db, obj_in=full_request)
             
-            fallback_note = " (using requester as fallback reviewer)" if used_fallback else ""
-            logger.info(f"Created asset review {review.id} for {asset_fqns} by {reviewer_email}{fallback_note}")
+            logger.info(f"Created asset review {review.id} for {asset_fqns} by {reviewer_email}")
             
             return StepResult(
                 passed=True,
-                message=f"Asset review created: {review.id}{fallback_note}",
+                message=f"Asset review created: {review.id}",
                 data={
                     'review_id': review.id,
                     'reviewer_email': reviewer_email,
                     'asset_fqns': asset_fqns,
                     'review_type': review_type,
-                    'used_fallback': used_fallback,
                 }
             )
             
@@ -1464,11 +1631,40 @@ class CreateAssetReviewStepHandler(StepHandler):
             logger.exception(f"Failed to create asset review: {e}")
             return StepResult(passed=False, error=str(e))
     
-    def _resolve_reviewer_from_role(self, role_identifier: str) -> Optional[str]:
+    def _resolve_reviewer(
+        self, reviewer_role: str, context: StepContext, requester_email: str,
+    ) -> Optional[str]:
+        """The reviewer's email: the one named in the request, else the first
+        person ``reviewer_role`` resolves to other than the requester (as the
+        approval steps resolve it), else a member of the groups of the role it
+        resolves to (or of ``reviewer_role`` itself)."""
+        tc = context.trigger_context
+        requester = requester_email.lower()
+        requested = (tc.entity_data or {}).get('reviewer_email') if tc else None
+        if requested and requested.lower() != requester:
+            return requested
+        if requested:
+            logger.warning("Ignoring reviewer_email: the requester can't review their own request")
+        roles = []
+        for recipient, role_id in _resolve_role_to_users(self._db, reviewer_role, context):
+            if role_id is not None:
+                roles.append(recipient)
+            elif '@' in recipient and recipient.lower() != requester:
+                return recipient
+        # A role (e.g. Data Stewards when a domain has no owner): one of its members
+        for role_name in roles or [reviewer_role]:
+            reviewer = self._resolve_reviewer_from_role(role_name, exclude=requester_email)
+            if reviewer:
+                return reviewer
+        return None
+
+    def _resolve_reviewer_from_role(
+        self, role_identifier: str, exclude: Optional[str] = None,
+    ) -> Optional[str]:
         """Resolve a reviewer email from a role name or UUID.
         
-        Returns the email of the first user in the role's assigned groups,
-        or None if no users are found.
+        Returns the email of the first user in the role's assigned groups
+        other than ``exclude`` (the requester), or None if no users are found.
         """
         from src.db_models.settings import AppRoleDb
         from uuid import UUID
@@ -1517,7 +1713,10 @@ class CreateAssetReviewStepHandler(StepHandler):
                                     # Get user by ID
                                     try:
                                         user = ws.users.get(member.value)
-                                        if user and user.user_name:
+                                        if (
+                                            user and user.user_name
+                                            and user.user_name.lower() != (exclude or '').lower()
+                                        ):
                                             return user.user_name
                                     except Exception:
                                         continue
@@ -1941,6 +2140,12 @@ class EntityActionStepHandler(StepHandler):
         fixed_scope: str  (when scope_source == fixed)
     """
 
+    # Same rules as the set-publication-scope routes.
+    PUBLISHABLE_STATUSES = {
+        'data_product': {'active'},
+        'data_contract': {'approved', 'active'},
+    }
+
     def execute(self, context: StepContext) -> StepResult:
         from datetime import datetime, timezone
 
@@ -2042,14 +2247,90 @@ class EntityActionStepHandler(StepHandler):
             return StepResult(passed=False, error=f"{entity_type} {entity_id} not found")
 
         scope = self._resolve_scope(context)
+        # Approval can come days after the request: re-check the live status
+        # with the same rules as the set-publication-scope routes.
+        allowed = self.PUBLISHABLE_STATUSES.get(resolved_type)
+        status = (getattr(db_entity, 'status', None) or '').lower()
+        if scope != 'none' and allowed and status not in allowed:
+            return StepResult(
+                passed=False,
+                error=f"Cannot publish {resolved_type} in status '{status}' "
+                      f"(allowed: {', '.join(sorted(allowed))})",
+            )
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = scope
-        db_entity.published_at = datetime.now(timezone.utc)
-        db_entity.published_by = context.user_email
+        if scope == 'none':
+            # Unpublishing: clear the publication metadata, as unpublish does
+            db_entity.published_at = None
+            db_entity.published_by = None
+        else:
+            db_entity.published_at = datetime.now(timezone.utc)
+            db_entity.published_by = context.user_email
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: published {entity_type} {entity_id} with scope={scope}")
-        return StepResult(passed=True, message=f"Published with scope {scope}",
-                          data={'publication_scope': scope})
+        failed_trigger = self._fire_publication_trigger(
+            resolved_type, entity_id, db_entity, scope, was_published, context,
+        )
+        message = f"Published with scope {scope}"
+        data = {'publication_scope': scope}
+        if failed_trigger:
+            # The publication stands; say in the step result that its workflows didn't run
+            message += f"; the {failed_trigger} workflows did not run"
+            data['trigger_failed'] = failed_trigger
+        return StepResult(passed=True, message=message, data=data)
+
+    def _fire_publication_trigger(
+        self, entity_type: str, entity_id: str, db_entity: Any, scope: str,
+        was_published: bool, context: StepContext,
+    ) -> Optional[str]:
+        """Fire ``on_publish`` / ``on_unpublish`` when the publication changed.
+
+        Same rule as the set-publication-scope routes: ``on_publish`` only when
+        the entity wasn't published yet, ``on_unpublish`` only when it was.
+        The publication is already committed, so a trigger error doesn't undo
+        it; it is logged as an error because those workflows didn't run, and
+        the failed trigger (``'on_publish'`` / ``'on_unpublish'``) is returned
+        so the step result says so. Returns None otherwise.
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        wf_type = {
+            'data_product': WFEntityType.DATA_PRODUCT,
+            'data_contract': WFEntityType.DATA_CONTRACT,
+        }.get(entity_type)
+        publishing = scope != 'none'
+        if not wf_type or publishing == was_published:
+            return None
+        name = getattr(db_entity, 'name', None) or context.entity_name
+        try:
+            registry = get_trigger_registry(self._db)
+            if publishing:
+                registry.on_publish(
+                    entity_type=wf_type,
+                    entity_id=entity_id,
+                    entity_name=name,
+                    entity_data={
+                        'name': name,
+                        'status': getattr(db_entity, 'status', None),
+                        'publication_scope': scope,
+                        'published_by': context.user_email,
+                    },
+                    user_email=context.user_email,
+                )
+            else:
+                registry.on_unpublish(
+                    wf_type, entity_id, entity_name=name, user_email=context.user_email,
+                )
+        except Exception:
+            trigger = 'on_publish' if publishing else 'on_unpublish'
+            logger.exception(
+                "Publication trigger failed for %s %s; its %s workflows did not run",
+                entity_type, entity_id, trigger,
+            )
+            return trigger
+        return None
 
     def _handle_unpublish(self, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
         db_entity, resolved_type = self._get_db_entity(entity_type, entity_id)
@@ -2739,17 +3020,116 @@ class WorkflowExecutor:
                 trigger_context=trigger_context,
                 workflow=workflow,
                 succeeded=(final_status == ExecutionStatus.SUCCEEDED),
+                responded_by=user_email,
+                approved=step_result,
             )
         
         # Return updated execution
         db_execution = workflow_execution_repo.get(self._db, execution_id)
         return self._db_to_model(db_execution, workflow.name)
 
+    def _apply_contract_review_decision(
+        self,
+        trigger_context: TriggerContext,
+        contract_id: str,
+        approved: bool,
+        responded_by: Optional[str],
+    ) -> None:
+        """Set a reviewed contract to ``approved`` or back to ``draft``.
+
+        Goes through ``transition_status``, so the lifecycle rules, the
+        before_status_change gates and the on_status_change trigger apply as on
+        the contract page. A contract that is no longer under review (decided
+        from the contract page meanwhile) is left alone. If the change can't be
+        applied, the approver is told: the workflow has already recorded the
+        decision.
+        """
+        from src.controller.data_contracts_manager import get_live_contracts_manager
+        from src.repositories.data_contracts_repository import data_contract_repo
+
+        target_status = 'approved' if approved else 'draft'
+        contract = data_contract_repo.get(db=self._db, id=contract_id)
+        if not contract:
+            return
+        current_status = (contract.status or '').lower()
+        if current_status == target_status:
+            return
+        if current_status not in ('proposed', 'under_review'):
+            reason = f"the contract is not under review (status '{current_status}')"
+            logger.warning(
+                "Review decision for data contract %s not applied: %s", contract_id, reason,
+            )
+            self._notify_status_not_changed(
+                trigger_context, target_status, reason, responded_by,
+                'notUnderReview', {'currentStatus': current_status},
+            )
+            return
+        try:
+            get_live_contracts_manager().transition_status(
+                db=self._db, contract_id=contract_id, new_status=target_status,
+                current_user=responded_by,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Review decision for data contract %s not applied: %s", contract_id, e,
+            )
+            self._notify_status_not_changed(
+                trigger_context, target_status, str(e), responded_by,
+                'notApplied', {'reason': str(e)},
+            )
+            return
+        logger.info(
+            "Data contract %s moved to '%s' after its review was decided",
+            contract_id, target_status,
+        )
+
+    def _notify_status_not_changed(
+        self,
+        trigger_context: TriggerContext,
+        target_status: str,
+        reason: str,
+        responded_by: Optional[str],
+        description_key: str,
+        params: Dict[str, str],
+    ) -> None:
+        """Warn the approver that their decision didn't change the contract.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        frontend's ``notifications`` namespace so the bell can translate them.
+        """
+        if not responded_by:
+            return
+        from uuid import uuid4
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+
+        notification_repo.create(db=self._db, obj_in=Notification(
+            id=str(uuid4()),
+            created_at=datetime.utcnow(),
+            type=NotificationType.WARNING,
+            title="Contract status not changed",
+            subtitle=trigger_context.entity_name or trigger_context.entity_id,
+            description=(
+                f"Your review decision was recorded, but the contract was not set to "
+                f"'{target_status}': {reason}"
+            ),
+            recipient=responded_by,
+            can_delete=True,
+            data={'i18n': {
+                'title': 'notifications:contractStatusNotChanged.title',
+                'description': f'notifications:contractStatusNotChanged.{description_key}',
+                'params': {'toStatus': target_status, **params},
+            }},
+        ))
+        self._db.commit()
+
     def _handle_workflow_completion(
         self,
         trigger_context: Optional[TriggerContext],
         workflow: ProcessWorkflow,
         succeeded: bool,
+        responded_by: Optional[str] = None,
+        approved: Optional[bool] = None,
     ) -> None:
         """Handle entity status updates when a workflow completes.
         
@@ -2780,18 +3160,44 @@ class WorkflowExecutor:
                         logger.info(f"Asset {entity_id} status reverted to 'draft' after review rejection")
                     self._db.commit()
                     
-            # Handle data contract deploy completion
-            elif entity_type == 'data_contract' and trigger_type in ('on_request_publish', 'ON_REQUEST_PUBLISH'):
-                from src.repositories.data_contracts_repository import data_contract_repo
-                db_contract = data_contract_repo.get(db=self._db, id=entity_id)
-                if db_contract:
-                    if succeeded:
-                        db_contract.status = 'deployed'
-                        logger.info(f"Data contract {entity_id} status updated to 'deployed' after approval")
-                    else:
-                        db_contract.status = 'draft'
-                        logger.info(f"Data contract {entity_id} status reverted to 'draft' after rejection")
-                    self._db.commit()
+            # Data contract deploy request decided by an approver: record it in
+            # the change log, as the legacy handle-deploy flow does. A
+            # workflow without an approval step decides nothing, so nothing is
+            # recorded. The contract status is left alone: the lifecycle has no
+            # "deployed" status, and an approval doesn't deploy anything.
+            elif (entity_type == 'data_contract'
+                  and trigger_type in ('on_request_deploy', 'ON_REQUEST_DEPLOY')
+                  and approved is not None):
+                from src.controller.change_log_manager import change_log_manager
+                # The approver's choice, not the run's outcome: a later step
+                # (e.g. a notification) can fail after an approval.
+                decision = 'approve' if approved else 'deny'
+                change_log_manager.log_change_with_details(
+                    self._db,
+                    entity_type='data_contract',
+                    entity_id=entity_id,
+                    action=f'deploy_{decision}',
+                    username=responded_by,
+                    details={
+                        'approver_email': responded_by,
+                        'decision': decision,
+                        'workflow': workflow.name,
+                        'requester_email': trigger_context.user_email,
+                        'summary': f"Deploy request {'approved' if approved else 'denied'} "
+                                   f"via workflow '{workflow.name}'",
+                    },
+                )
+                self._db.commit()
+                    
+            # Data contract review decided by an approver: approve the contract,
+            # or return it to draft, as the contract page's approve / reject
+            # endpoints do. A workflow without an approval step decides nothing.
+            elif (entity_type == 'data_contract'
+                  and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW')
+                  and approved is not None):
+                self._apply_contract_review_decision(
+                    trigger_context, entity_id, approved, responded_by
+                )
                     
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
@@ -2805,11 +3211,155 @@ class WorkflowExecutor:
                         db_product.status = 'draft'
                         logger.info(f"Data product {entity_id} status reverted to 'draft' after rejection")
                     self._db.commit()
+
+            # Approved status change request: apply the requested transition,
+            # with the same validation and gates as a direct status change
+            elif (entity_type == 'data_product'
+                  and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')):
+                approved_request = succeeded if approved is None else approved
+                target_status = trigger_context.to_status or (
+                    trigger_context.entity_data or {}
+                ).get('target_status')
+                if approved_request and target_status:
+                    self._apply_requested_status_change(
+                        trigger_context, entity_id, target_status, responded_by
+                    )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    def _apply_requested_status_change(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        target_status: str,
+        responded_by: Optional[str],
+    ) -> None:
+        """Apply an approved status change request to a data product.
+
+        Uses the app's notifications and search managers, so subscribers are
+        notified and the search index is updated as for a direct status
+        change. The request is applied only while the product still has the
+        status it was made from: if the status changed meanwhile, the approval
+        was about a different situation, so nothing is applied and the
+        requester and approver are told. A product that already has the
+        requested status (e.g. the completion ran twice) is left as is. If the
+        transition is refused (e.g. a before_status_change gate blocks), the
+        requester is told, since the workflow has already reported the request
+        as approved.
+        """
+        from src.common.app_state import get_app_state_manager
+        from src.controller.data_products_manager import DataProductsManager
+        from src.db_models.data_products import DataProductDb
+
+        product = self._db.get(DataProductDb, product_id)
+        if product is None:
+            logger.warning(
+                "Approved status change of data product %s: the product no longer exists",
+                product_id,
+            )
+            return
+        current_status = (product.status or '').lower()
+        if current_status == target_status.lower():
+            logger.info(
+                "Data product %s already has status '%s'; approved status change not reapplied",
+                product_id, target_status,
+            )
+            return
+        requested_from = trigger_context.from_status or (
+            trigger_context.entity_data or {}
+        ).get('from_status')
+        if requested_from and current_status != requested_from.lower():
+            logger.warning(
+                "Approved status change of data product %s from '%s' to '%s' not applied: "
+                "its status is now '%s'",
+                product_id, requested_from, target_status, current_status,
+            )
+            self._notify_status_change_not_applied(
+                trigger_context, product_id,
+                f"The request to change the status from '{requested_from}' to "
+                f"'{target_status}' was approved, but the status is now "
+                f"'{current_status}', so the change was not applied. "
+                f"Request it again if it is still needed.",
+                recipients=[trigger_context.user_email, responded_by],
+                description_key='statusChanged',
+                params={
+                    'fromStatus': requested_from, 'toStatus': target_status,
+                    'currentStatus': current_status,
+                },
+            )
+            return
+
+        manager = DataProductsManager(
+            db=self._db, notifications_manager=get_app_state_manager('notifications_manager'),
+        )
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager:
+            manager.set_search_manager(search_manager)
+        try:
+            manager.transition_status(product_id, target_status, responded_by)
+        except ValueError as e:
+            logger.warning(
+                "Approved status change of data product %s to '%s' could not be applied: %s",
+                product_id, target_status, e,
+            )
+            self._notify_status_change_not_applied(
+                trigger_context, product_id,
+                f"Your request to change the status to '{target_status}' was approved, "
+                f"but the change could not be applied: {e}",
+                recipients=[trigger_context.user_email],
+                description_key='refused',
+                params={'toStatus': target_status, 'reason': str(e)},
+            )
+            return
+        logger.info(
+            "Data product %s moved to '%s' after its status change request was approved",
+            product_id, target_status,
+        )
+
+    def _notify_status_change_not_applied(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        description: str,
+        recipients: List[Optional[str]],
+        description_key: str,
+        params: Dict[str, Any],
+    ) -> None:
+        """Tell the given people that an approved status change was not applied.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        ``notifications`` namespace and their parameters, so the UI can show
+        them in the user's language.
+        """
+        from uuid import uuid4
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+
+        sent = set()
+        for recipient in recipients:
+            if not recipient or recipient in sent:
+                continue
+            sent.add(recipient)
+            notification_repo.create(db=self._db, obj_in=Notification(
+                id=str(uuid4()),
+                created_at=datetime.utcnow(),
+                type=NotificationType.WARNING,
+                title="Status change not applied",
+                subtitle=trigger_context.entity_name or product_id,
+                description=description,
+                recipient=recipient,
+                can_delete=True,
+                data={'i18n': {
+                    'title': 'notifications:statusChangeNotApplied.title',
+                    'description': f'notifications:statusChangeNotApplied.{description_key}',
+                    'params': params,
+                }},
+            ))
+        if sent:
+            self._db.commit()
+
     def _execute_step(self, step: WorkflowStep, context: StepContext) -> StepResult:
         """Execute a single step."""
         step_type = step.step_type.value if hasattr(step.step_type, 'value') else step.step_type
@@ -2828,6 +3378,7 @@ class WorkflowExecutor:
                     config = {}
             
             handler = handler_class(self._db, config)
+            context.step_id = step.step_id
             return handler.execute(context)
         except Exception as e:
             logger.exception(f"Step execution failed: {e}")

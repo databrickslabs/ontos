@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, Plus, Trash2, Edit, Settings, Tag, Hash, Users, Loader2, AlertCircle, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -106,6 +107,7 @@ interface PermissionFormData {
 
 export default function TagsSettings() {
   const { get, post, put, delete: deleteApi, loading } = useApi();
+  const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { setTagDisplayFormat: setGlobalTagDisplayFormat } = useAppSettingsStore();
 
@@ -157,7 +159,7 @@ export default function TagsSettings() {
       }
     } catch (err: any) {
       setError(err.message);
-      toast({ variant: 'destructive', title: 'Error fetching namespaces', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.fetchNamespacesError'), description: err.message });
     }
   }, [get, toast, selectedNamespace]);
 
@@ -170,7 +172,7 @@ export default function TagsSettings() {
       }
     } catch (err: any) {
       setError(err.message);
-      toast({ variant: 'destructive', title: 'Error fetching tags', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.fetchTagsError'), description: err.message });
     }
   }, [get, toast, selectedNamespace]);
 
@@ -183,7 +185,7 @@ export default function TagsSettings() {
       }
     } catch (err: any) {
       setError(err.message);
-      toast({ variant: 'destructive', title: 'Error fetching permissions', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.fetchPermissionsError'), description: err.message });
     }
   }, [get, toast, selectedNamespace]);
 
@@ -210,9 +212,9 @@ export default function TagsSettings() {
       setTagDisplayFormat(format);
       // Also update the global store so all TagChips update immediately
       setGlobalTagDisplayFormat(format);
-      toast({ title: 'Tag display format updated' });
+      toast({ title: t('settings:tags.toasts.displayFormatUpdated') });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error saving display format', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.displayFormatError'), description: err.message });
     } finally {
       setIsSavingDisplayFormat(false);
     }
@@ -244,15 +246,15 @@ export default function TagsSettings() {
     try {
       if (editingNamespace) {
         await put(`/api/tags/namespaces/${editingNamespace.id}`, namespaceForm);
-        toast({ title: 'Namespace updated successfully' });
+        toast({ title: t('settings:tags.toasts.namespaceUpdated') });
       } else {
         await post('/api/tags/namespaces', namespaceForm);
-        toast({ title: 'Namespace created successfully' });
+        toast({ title: t('settings:tags.toasts.namespaceCreated') });
       }
       setIsNamespaceDialogOpen(false);
       fetchNamespaces();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error saving namespace', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.namespaceSaveError'), description: err.message });
     }
   };
 
@@ -280,15 +282,15 @@ export default function TagsSettings() {
 
       if (editingTag) {
         await put(`/api/tags/${editingTag.id}`, payload);
-        toast({ title: 'Tag updated successfully' });
+        toast({ title: t('settings:tags.toasts.tagUpdated') });
       } else {
         await post('/api/tags', payload);
-        toast({ title: 'Tag created successfully' });
+        toast({ title: t('settings:tags.toasts.tagCreated') });
       }
       setIsTagDialogOpen(false);
       fetchTags();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error saving tag', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.tagSaveError'), description: err.message });
     }
   };
 
@@ -306,15 +308,15 @@ export default function TagsSettings() {
     try {
       if (editingPermission) {
         await put(`/api/tags/namespaces/${selectedNamespace}/permissions/${editingPermission.id}`, permissionForm);
-        toast({ title: 'Permission updated successfully' });
+        toast({ title: t('settings:tags.toasts.permissionUpdated') });
       } else {
         await post(`/api/tags/namespaces/${selectedNamespace}/permissions`, permissionForm);
-        toast({ title: 'Permission created successfully' });
+        toast({ title: t('settings:tags.toasts.permissionCreated') });
       }
       setIsPermissionDialogOpen(false);
       fetchPermissions();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error saving permission', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.permissionSaveError'), description: err.message });
     }
   };
 
@@ -339,11 +341,11 @@ export default function TagsSettings() {
         await deleteApi(`/api/tags/namespaces/${selectedNamespace}/permissions/${deletingItem.id}`);
         fetchPermissions();
       }
-      toast({ title: `${deletingItem.type} deleted successfully` });
+      toast({ title: t('settings:tags.toasts.deleteSuccess', { type: deletingItem.type }) });
       setIsDeleteDialogOpen(false);
       setDeletingItem(null);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error deleting item', description: err.message });
+      toast({ variant: 'destructive', title: t('settings:tags.toasts.deleteError'), description: err.message });
     }
   };
 
@@ -351,7 +353,7 @@ export default function TagsSettings() {
   const tagColumns: ColumnDef<Tag>[] = [
     {
       accessorKey: 'name',
-      header: 'Name',
+      header: t('common:labels.name'),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <Tag className="h-4 w-4" />
@@ -361,14 +363,14 @@ export default function TagsSettings() {
     },
     {
       accessorKey: 'description',
-      header: 'Description',
+      header: t('common:labels.description'),
       cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">{row.original.description || '—'}</span>
       ),
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: t('common:labels.status'),
       cell: ({ row }) => (
         <Badge variant={row.original.status === 'active' ? 'default' : 'secondary'}>
           {row.original.status}
@@ -377,14 +379,14 @@ export default function TagsSettings() {
     },
     {
       accessorKey: 'version',
-      header: 'Version',
+      header: t('common:labels.version'),
       cell: ({ row }) => (
         <span className="text-sm">{row.original.version || '—'}</span>
       ),
     },
     {
       accessorKey: 'updated_at',
-      header: 'Updated',
+      header: t('common:labels.updated'),
       cell: ({ row }) => <RelativeDate date={row.original.updated_at} />,
     },
     {
@@ -397,10 +399,10 @@ export default function TagsSettings() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('common:labels.actions')}</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => openTagDialog(row.original)}>
               <Edit className="mr-2 h-4 w-4" />
-              Edit
+              {t('common:actions.edit')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -408,7 +410,7 @@ export default function TagsSettings() {
               onClick={() => openDeleteDialog('tag', row.original.id, row.original.name)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              {t('common:actions.delete')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -419,7 +421,7 @@ export default function TagsSettings() {
   const permissionColumns: ColumnDef<TagNamespacePermission>[] = [
     {
       accessorKey: 'group_id',
-      header: 'Group',
+      header: t('settings:tags.columns.group'),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4" />
@@ -429,7 +431,7 @@ export default function TagsSettings() {
     },
     {
       accessorKey: 'access_level',
-      header: 'Access Level',
+      header: t('settings:tags.columns.accessLevel'),
       cell: ({ row }) => (
         <Badge variant={row.original.access_level === 'admin' ? 'destructive' : 'default'}>
           {row.original.access_level}
@@ -438,7 +440,7 @@ export default function TagsSettings() {
     },
     {
       accessorKey: 'updated_at',
-      header: 'Updated',
+      header: t('common:labels.updated'),
       cell: ({ row }) => <RelativeDate date={row.original.updated_at} />,
     },
     {
@@ -451,10 +453,10 @@ export default function TagsSettings() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('common:labels.actions')}</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => openPermissionDialog(row.original)}>
               <Edit className="mr-2 h-4 w-4" />
-              Edit
+              {t('common:actions.edit')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -462,7 +464,7 @@ export default function TagsSettings() {
               onClick={() => openDeleteDialog('permission', row.original.id, row.original.group_id)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              {t('common:actions.delete')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -484,10 +486,10 @@ export default function TagsSettings() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Tag className="w-8 h-8" />
-          Tags
+          {t('settings:tags.title')}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Manage tag namespaces, configure display settings, and organize tags across the application.
+          {t('settings:tags.description')}
         </p>
       </div>
 
@@ -499,28 +501,28 @@ export default function TagsSettings() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Eye className="h-5 w-5" />
-                Tag Display Settings
+                {t('settings:tags.display.title')}
               </CardTitle>
               <CardDescription>
-                Configure how tags are displayed throughout the application.
+                {t('settings:tags.display.description')}
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
-            <Label htmlFor="display-format-select">Display Format:</Label>
+            <Label htmlFor="display-format-select">{t('settings:tags.display.formatLabel')}</Label>
             <Select 
               value={tagDisplayFormat} 
               onValueChange={(value: 'short' | 'long') => saveDisplayFormat(value)}
               disabled={isLoadingDisplayFormat || isSavingDisplayFormat}
             >
               <SelectTrigger id="display-format-select" className="w-[240px]">
-                <SelectValue placeholder="Select format" />
+                <SelectValue placeholder={t('settings:tags.display.formatPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="short" className="whitespace-nowrap">Short (tag name only)</SelectItem>
-                <SelectItem value="long" className="whitespace-nowrap">Long (namespace/tag name)</SelectItem>
+                <SelectItem value="short" className="whitespace-nowrap">{t('settings:tags.display.short')}</SelectItem>
+                <SelectItem value="long" className="whitespace-nowrap">{t('settings:tags.display.long')}</SelectItem>
               </SelectContent>
             </Select>
             {(isLoadingDisplayFormat || isSavingDisplayFormat) && (
@@ -528,8 +530,10 @@ export default function TagsSettings() {
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            <strong>Short:</strong> Shows only the tag name (e.g., "pii"). <br />
-            <strong>Long:</strong> Shows namespace and tag name (e.g., "compliance/pii").
+            <Trans
+              i18nKey="settings:tags.display.help"
+              components={{ strong: <strong />, br: <br /> }}
+            />
           </p>
         </CardContent>
       </Card>
@@ -541,24 +545,24 @@ export default function TagsSettings() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Hash className="h-5 w-5" />
-                Tag Namespaces
+                {t('settings:tags.namespaces.title')}
               </CardTitle>
               <CardDescription>
-                Organize tags into logical namespaces for better management and permissions.
+                {t('settings:tags.namespaces.description')}
               </CardDescription>
             </div>
             <Button onClick={() => openNamespaceDialog()}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Namespace
+              {t('settings:tags.namespaces.add')}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4 mb-4">
-            <Label htmlFor="namespace-select">Active Namespace:</Label>
+            <Label htmlFor="namespace-select">{t('settings:tags.namespaces.activeLabel')}</Label>
             <Select value={selectedNamespace} onValueChange={setSelectedNamespace}>
               <SelectTrigger id="namespace-select" className="w-[200px]">
-                <SelectValue placeholder="Select namespace" />
+                <SelectValue placeholder={t('settings:tags.namespaces.selectPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {namespaces.map((ns) => (
@@ -576,7 +580,7 @@ export default function TagsSettings() {
                   onClick={() => openNamespaceDialog(namespaces.find(ns => ns.id === selectedNamespace))}
                 >
                   <Edit className="mr-2 h-4 w-4" />
-                  Edit
+                  {t('common:actions.edit')}
                 </Button>
                 <Button
                   variant="outline"
@@ -587,7 +591,7 @@ export default function TagsSettings() {
                   }}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
+                  {t('common:actions.delete')}
                 </Button>
               </div>
             )}
@@ -604,15 +608,15 @@ export default function TagsSettings() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Tag className="h-5 w-5" />
-                    Tags
+                    {t('settings:tags.title')}
                   </CardTitle>
                   <CardDescription>
-                    Manage tags within the selected namespace.
+                    {t('settings:tags.list.description')}
                   </CardDescription>
                 </div>
                 <Button onClick={() => openTagDialog()}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Tag
+                  {t('settings:tags.list.add')}
                 </Button>
               </div>
             </CardHeader>
@@ -628,15 +632,15 @@ export default function TagsSettings() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Settings className="h-5 w-5" />
-                    Namespace Permissions
+                    {t('settings:tags.permissions.title')}
                   </CardTitle>
                   <CardDescription>
-                    Control which groups can access and modify tags in this namespace.
+                    {t('settings:tags.permissions.description')}
                   </CardDescription>
                 </div>
                 <Button onClick={() => openPermissionDialog()}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Permission
+                  {t('settings:tags.permissions.add')}
                 </Button>
               </div>
             </CardHeader>
@@ -651,38 +655,38 @@ export default function TagsSettings() {
       <Dialog open={isNamespaceDialogOpen} onOpenChange={setIsNamespaceDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingNamespace ? 'Edit Namespace' : 'Create Namespace'}</DialogTitle>
+            <DialogTitle>{editingNamespace ? t('settings:tags.namespaceDialog.editTitle') : t('settings:tags.namespaceDialog.createTitle')}</DialogTitle>
             <DialogDescription>
-              {editingNamespace ? 'Update the namespace details.' : 'Create a new namespace for organizing tags.'}
+              {editingNamespace ? t('settings:tags.namespaceDialog.editDescription') : t('settings:tags.namespaceDialog.createDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="namespace-name">Name</Label>
+              <Label htmlFor="namespace-name">{t('common:labels.name')}</Label>
               <Input
                 id="namespace-name"
                 value={namespaceForm.name}
                 onChange={(e) => setNamespaceForm({ ...namespaceForm, name: e.target.value })}
-                placeholder="e.g., finance, marketing, engineering"
+                placeholder={t('settings:tags.namespaceDialog.namePlaceholder')}
               />
             </div>
             <div>
-              <Label htmlFor="namespace-description">Description</Label>
+              <Label htmlFor="namespace-description">{t('common:labels.description')}</Label>
               <Textarea
                 id="namespace-description"
                 value={namespaceForm.description}
                 onChange={(e) => setNamespaceForm({ ...namespaceForm, description: e.target.value })}
-                placeholder="Optional description for the namespace"
+                placeholder={t('settings:tags.namespaceDialog.descriptionPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsNamespaceDialogOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleNamespaceSubmit} disabled={loading || !namespaceForm.name}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingNamespace ? 'Update' : 'Create'}
+              {editingNamespace ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -692,66 +696,66 @@ export default function TagsSettings() {
       <Dialog open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingTag ? 'Edit Tag' : 'Create Tag'}</DialogTitle>
+            <DialogTitle>{editingTag ? t('settings:tags.tagDialog.editTitle') : t('settings:tags.tagDialog.createTitle')}</DialogTitle>
             <DialogDescription>
-              {editingTag ? 'Update the tag details.' : 'Create a new tag in the selected namespace.'}
+              {editingTag ? t('settings:tags.tagDialog.editDescription') : t('settings:tags.tagDialog.createDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="tag-name">Name</Label>
+                <Label htmlFor="tag-name">{t('common:labels.name')}</Label>
                 <Input
                   id="tag-name"
                   value={tagForm.name}
                   onChange={(e) => setTagForm({ ...tagForm, name: e.target.value })}
-                  placeholder="e.g., pii, sensitive, public"
+                  placeholder={t('settings:tags.tagDialog.namePlaceholder')}
                 />
               </div>
               <div>
-                <Label htmlFor="tag-status">Status</Label>
+                <Label htmlFor="tag-status">{t('common:labels.status')}</Label>
                 <Select value={tagForm.status} onValueChange={(value) => setTagForm({ ...tagForm, status: value })}>
                   <SelectTrigger id="tag-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="candidate">Candidate</SelectItem>
-                    <SelectItem value="deprecated">Deprecated</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="retired">Retired</SelectItem>
+                    <SelectItem value="active">{t('settings:tags.tagDialog.statuses.active')}</SelectItem>
+                    <SelectItem value="draft">{t('settings:tags.tagDialog.statuses.draft')}</SelectItem>
+                    <SelectItem value="candidate">{t('settings:tags.tagDialog.statuses.candidate')}</SelectItem>
+                    <SelectItem value="deprecated">{t('settings:tags.tagDialog.statuses.deprecated')}</SelectItem>
+                    <SelectItem value="inactive">{t('settings:tags.tagDialog.statuses.inactive')}</SelectItem>
+                    <SelectItem value="retired">{t('settings:tags.tagDialog.statuses.retired')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div>
-              <Label htmlFor="tag-description">Description</Label>
+              <Label htmlFor="tag-description">{t('common:labels.description')}</Label>
               <Textarea
                 id="tag-description"
                 value={tagForm.description}
                 onChange={(e) => setTagForm({ ...tagForm, description: e.target.value })}
-                placeholder="Describe what this tag represents"
+                placeholder={t('settings:tags.tagDialog.descriptionPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="tag-version">Version</Label>
+                <Label htmlFor="tag-version">{t('common:labels.version')}</Label>
                 <Input
                   id="tag-version"
                   value={tagForm.version}
                   onChange={(e) => setTagForm({ ...tagForm, version: e.target.value })}
-                  placeholder="e.g., v1.0, 2023.1"
+                  placeholder={t('settings:tags.tagDialog.versionPlaceholder')}
                 />
               </div>
               <div>
-                <Label htmlFor="tag-parent">Parent Tag</Label>
+                <Label htmlFor="tag-parent">{t('settings:tags.tagDialog.parentLabel')}</Label>
                 <Select value={tagForm.parent_id || '__none__'} onValueChange={(value) => setTagForm({ ...tagForm, parent_id: value === '__none__' ? undefined : value })}>
                   <SelectTrigger id="tag-parent">
-                    <SelectValue placeholder="None" />
+                    <SelectValue placeholder={t('common:states.none')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="__none__">{t('common:states.none')}</SelectItem>
                     {tags.filter(t => t.id !== editingTag?.id).map((tag) => (
                       <SelectItem key={tag.id} value={tag.id}>
                         {tag.name}
@@ -762,7 +766,7 @@ export default function TagsSettings() {
               </div>
             </div>
             <div>
-              <Label htmlFor="tag-possible-values">Possible Values (JSON Array)</Label>
+              <Label htmlFor="tag-possible-values">{t('settings:tags.tagDialog.possibleValuesLabel')}</Label>
               <Textarea
                 id="tag-possible-values"
                 value={tagForm.possible_values}
@@ -770,17 +774,17 @@ export default function TagsSettings() {
                 placeholder='["value1", "value2", "value3"]'
               />
               <p className="text-sm text-muted-foreground mt-1">
-                Optional. JSON array of allowed values for this tag when assigned to entities.
+                {t('settings:tags.tagDialog.possibleValuesHelp')}
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsTagDialogOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handleTagSubmit} disabled={loading || !tagForm.name}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingTag ? 'Update' : 'Create'}
+              {editingTag ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -790,44 +794,44 @@ export default function TagsSettings() {
       <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingPermission ? 'Edit Permission' : 'Add Permission'}</DialogTitle>
+            <DialogTitle>{editingPermission ? t('settings:tags.permissionDialog.editTitle') : t('settings:tags.permissionDialog.addTitle')}</DialogTitle>
             <DialogDescription>
-              {editingPermission ? 'Update the permission details.' : 'Grant access to a group for this namespace.'}
+              {editingPermission ? t('settings:tags.permissionDialog.editDescription') : t('settings:tags.permissionDialog.addDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="permission-group">Group</Label>
+              <Label htmlFor="permission-group">{t('settings:tags.permissionDialog.groupLabel')}</Label>
               <PrincipalPicker
                 id="permission-group"
                 accepts={['group']}
                 value={permissionForm.group_id || null}
                 onChange={(next) => setPermissionForm({ ...permissionForm, group_id: next ?? '' })}
-                placeholder="e.g., data-engineers, analysts"
-                aria-label="Group"
+                placeholder={t('settings:tags.permissionDialog.groupPlaceholder')}
+                aria-label={t('settings:tags.permissionDialog.groupLabel')}
               />
             </div>
             <div>
-              <Label htmlFor="permission-access">Access Level</Label>
+              <Label htmlFor="permission-access">{t('settings:tags.columns.accessLevel')}</Label>
               <Select value={permissionForm.access_level} onValueChange={(value) => setPermissionForm({ ...permissionForm, access_level: value })}>
                 <SelectTrigger id="permission-access">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="read_only">Read Only</SelectItem>
-                  <SelectItem value="read_write">Read/Write</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="read_only">{t('settings:tags.accessLevels.readOnly')}</SelectItem>
+                  <SelectItem value="read_write">{t('settings:tags.accessLevels.readWrite')}</SelectItem>
+                  <SelectItem value="admin">{t('settings:tags.accessLevels.admin')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button onClick={handlePermissionSubmit} disabled={loading || !permissionForm.group_id}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingPermission ? 'Update' : 'Add'}
+              {editingPermission ? t('common:actions.update') : t('common:actions.add')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -837,16 +841,16 @@ export default function TagsSettings() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deletingItem?.type}</AlertDialogTitle>
+            <AlertDialogTitle>{t('settings:tags.deleteDialog.title', { type: deletingItem?.type })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingItem?.name}"? This action cannot be undone.
-              {deletingItem?.type === 'namespace' && ' All tags and permissions in this namespace will also be deleted.'}
+              {t('settings:tags.deleteDialog.description', { name: deletingItem?.name })}
+              {deletingItem?.type === 'namespace' && ` ${t('settings:tags.deleteDialog.namespaceWarning')}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Delete
+              {t('common:actions.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

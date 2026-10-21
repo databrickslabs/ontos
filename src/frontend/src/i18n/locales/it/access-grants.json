@@ -2,16 +2,23 @@
   "request": {
     "title": "Richiedi Accesso",
     "description": "Richiedi il permesso di visualizzare e utilizzare questo {{entityType}}.",
+    "dialogTitle": "Richiedi Accesso a Tempo Limitato",
+    "dialogDescription": "Invia una richiesta di accesso temporaneo a questo {{entityType}}. Seleziona per quanto tempo ti serve l'accesso e fornisci un motivo.",
+    "permissionLabel": "Livello di Permesso",
     "reason": {
       "label": "Motivo dell'Accesso",
+      "fullLabel": "Motivo della Richiesta di Accesso",
       "placeholder": "Spiega perché hai bisogno di accedere a questo {{entityType}}...",
+      "detailedPlaceholder": "Spiega perché hai bisogno di accedere a questa risorsa. Includi dettagli sul caso d'uso previsto, sui requisiti del progetto o sulla giustificazione aziendale...",
       "required": "Per favore fornisci un motivo per richiedere l'accesso",
-      "minLength": "Per favore fornisci un motivo più dettagliato (almeno 10 caratteri)"
+      "minLength": "Per favore fornisci un motivo più dettagliato (almeno 10 caratteri)",
+      "help": "Sono richiesti almeno 10 caratteri. Queste informazioni saranno esaminate dagli amministratori."
     },
     "duration": {
       "label": "Durata dell'Accesso",
       "placeholder": "Seleziona durata",
       "helpText": "L'accesso scadrà dopo la durata selezionata. Puoi richiedere il rinnovo prima della scadenza.",
+      "help": "Il tuo accesso scadrà automaticamente al termine di questo periodo.",
       "days": "{{count}} giorno",
       "days_plural": "{{count}} giorni",
       "months": "{{count}} mese",
@@ -20,8 +27,13 @@
       "years_plural": "{{count}} anni"
     },
     "submit": "Invia Richiesta",
-    "cancel": "Annulla",
+    "submitting": "Invio della richiesta...",
+    "submitButtonWithDuration": "Richiedi Accesso {{duration}}",
     "success": "Richiesta di accesso inviata con successo",
+    "submittedTitle": "Richiesta Inviata",
+    "submittedDescription_one": "La tua richiesta di accesso per {{count}} giorno è stata inviata. Sarai notificato della decisione.",
+    "submittedDescription_other": "La tua richiesta di accesso per {{count}} giorni è stata inviata. Sarai notificato della decisione.",
+    "cancel": "Annulla",
     "error": "Impossibile inviare la richiesta di accesso"
   },
   "panel": {
@@ -29,20 +41,123 @@
     "description": "Utenti con accesso limitato nel tempo a questa risorsa",
     "noGrants": "Nessuna autorizzazione di accesso per questa risorsa",
     "noGrantsHint": "Gli utenti possono richiedere accesso limitato nel tempo utilizzando il pulsante \"Richiedi Accesso\".",
-    "columns": {
-      "user": "Utente",
-      "permission": "Livello di Permesso",
-      "granted": "Concesso",
-      "expires": "Scade",
-      "actions": "Azioni"
-    },
+    "requestButton": "Richiedi Accesso",
+    "refresh": "Aggiorna",
+    "activeGrants": "Autorizzazioni Attive",
+    "activeGrantsCount": "Autorizzazioni Attive ({{count}})",
+    "pendingRequests": "Richieste in Sospeso",
+    "pendingRequestsCount": "Richieste in Sospeso ({{count}})",
+    "expiresAt": "Scade",
+    "grantedAt": "Concesso",
+    "requestedAt": "Richiesto",
     "revoke": "Revoca",
-    "revokeConfirm": "Sei sicuro di voler revocare questa autorizzazione di accesso?"
+    "revokeConfirm": "Sei sicuro di voler revocare questa autorizzazione di accesso?",
+    "revokeConfirmDetailed": "Sei sicuro di voler revocare l'accesso per <bold>{{user}}</bold>? Questa azione non può essere annullata.",
+    "revokeTitle": "Revoca Accesso",
+    "revokeSuccess": "Accesso revocato con successo",
+    "revokedTitle": "Accesso Revocato",
+    "revokedDescription": "L'accesso per {{user}} è stato revocato.",
+    "revokeError": "Impossibile revocare l'accesso",
+    "review": "Esamina",
+    "expiringBadge": "{{count}} in scadenza",
+    "expiringSoonTooltip_one": "{{count}} autorizzazione in scadenza a breve",
+    "expiringSoonTooltip_other": "{{count}} autorizzazioni in scadenza a breve",
+    "durationDays_one": "{{count}} giorno",
+    "durationDays_other": "{{count}} giorni",
+    "expiresTooltip": "Scade: {{date}}",
+    "handle": "Gestisci Richiesta",
+    "columns": {
+      "actions": "Azioni",
+      "expires": "Scade",
+      "granted": "Concesso",
+      "grantedBy": "Concesso Da",
+      "permission": "Livello di Permesso",
+      "user": "Utente",
+      "requester": "Richiedente",
+      "duration": "Durata"
+    },
+    "expiry": {
+      "unknown": "Sconosciuto",
+      "expired": "Scaduto",
+      "today": "Oggi",
+      "days_one": "{{count}} giorno",
+      "days_other": "{{count}} giorni",
+      "weeks_one": "{{count}} settimana",
+      "weeks_other": "{{count}} settimane",
+      "months_one": "{{count}} mese",
+      "months_other": "{{count}} mesi"
+    }
+  },
+  "handle": {
+    "title": "Gestisci Richiesta di Accesso",
+    "description": "Esamina questa richiesta di accesso e approvala o rifiutala.",
+    "approve": "Approva",
+    "approveWithDuration": "Approva ({{duration}})",
+    "deny": "Rifiuta",
+    "clarify": "Richiedi Chiarimenti",
+    "grantDuration": "Durata dell'Autorizzazione",
+    "durationToGrant": "Durata da Concedere",
+    "permissionToGrant": "Livello di Permesso da Concedere",
+    "requestedSuffix": " (richiesto)",
+    "response": "Messaggio di Risposta",
+    "responsePlaceholder": "Fornisci un feedback o informazioni aggiuntive...",
+    "messageLabel": "Messaggio al Richiedente (Facoltativo)",
+    "messagePlaceholder": "Aggiungi un messaggio per il richiedente (es. condizioni di approvazione, motivo del rifiuto)...",
+    "adjustNote": "In caso di approvazione, puoi modificare l'accesso concesso:",
+    "approvedTitle": "Richiesta Approvata",
+    "deniedTitle": "Richiesta Rifiutata",
+    "approvedDescription": "Accesso concesso per {{duration}}.",
+    "deniedDescription": "Il richiedente è stato notificato.",
+    "error": "Impossibile elaborare la decisione",
+    "approveSuccess": "Richiesta di accesso approvata",
+    "denySuccess": "Richiesta di accesso rifiutata",
+    "clarifySuccess": "Chiarimento richiesto",
+    "fields": {
+      "requester": "Richiedente:",
+      "resource": "Risorsa:",
+      "requestedDuration": "Durata Richiesta:",
+      "requestedPermission": "Permesso Richiesto:",
+      "submitted": "Inviato:",
+      "reason": "Motivo:"
+    }
   },
   "entityTypes": {
     "data_product": "prodotto dati",
     "dataset": "dataset",
     "data_contract": "contratto dati"
+  },
+  "entityTypeLabels": {
+    "data_product": "Prodotto Dati",
+    "data_contract": "Contratto Dati",
+    "table": "Tabella",
+    "schema": "Schema",
+    "catalog": "Catalogo"
+  },
+  "permissionLevels": {
+    "READ": "Lettura",
+    "WRITE": "Scrittura",
+    "MANAGE": "Gestione"
+  },
+  "permissionOptions": {
+    "READ": "Sola Lettura",
+    "WRITE": "Lettura e Scrittura",
+    "MANAGE": "Accesso Completo (Gestione)"
+  },
+  "permissionSelectPlaceholder": "Seleziona livello di permesso",
+  "statuses": {
+    "active": "Attivo",
+    "expired": "Scaduto",
+    "revoked": "Revocato",
+    "pending": "In Sospeso"
+  },
+  "resource": "risorsa",
+  "resourceCapitalized": "Risorsa",
+  "duration": {
+    "days_one": "{{count}} giorno",
+    "days_other": "{{count}} giorni",
+    "months_one": "{{count}} mese",
+    "months_other": "{{count}} mesi",
+    "years_one": "{{count}} anno",
+    "years_other": "{{count}} anni"
   }
 }
-

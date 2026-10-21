@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-table"
 import { useApi } from '@/hooks/use-api';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
+import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
@@ -21,6 +22,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { DataTable } from "@/components/ui/data-table";
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
+import ImportEntityDialog from '@/components/common/import-entity-dialog';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -71,6 +73,18 @@ export default function DataProducts() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // #851: import options dialog + opt-in "Create missing domains" toggle (default off).
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [createMissingDomains, setCreateMissingDomains] = useState(false);
+  // #853: adopt valid, non-colliding file UUIDs as PK (default on); duplicate-id handling
+  // (default skip; on = import as a new copy).
+  // Default off, matching the backend-level privilege gate (#853 review): adoption
+  // is opt-in both on the UI and on the route.
+  const [adoptIds, setAdoptIds] = useState(false);
+  const [duplicatesAsNew, setDuplicatesAsNew] = useState(false);
+  // Paste ODPS JSON (parity with the Data Contracts uploader).
+  const [odpsPaste, setOdpsPaste] = useState('');
+  const [importingProductPaste, setImportingProductPaste] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,7 +107,6 @@ export default function DataProducts() {
 
   const api = useApi();
   const { get, post, delete: deleteApi } = api;
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -157,7 +170,7 @@ export default function DataProducts() {
 
       } catch (err: any) {
         console.error('Error fetching initial data:', err);
-        setError(err.message || 'Failed to load initial data');
+        setError(err.message || t('messages.loadInitialError'));
         // Reset state on error
         setProducts([]);
         setStatuses([]);
@@ -213,6 +226,20 @@ export default function DataProducts() {
     });
   }, [get]);
 
+  // Reset the upload dialog's transient state every time it opens so a later
+  // import doesn't silently carry over earlier toggles, paste text, or errors
+  // (#930 review item 3). Paste survives failures within one dialog session
+  // (see importPastedOdps) but is cleared on re-open.
+  useEffect(() => {
+    if (uploadDialogOpen) {
+      setCreateMissingDomains(false);
+      setAdoptIds(false);
+      setDuplicatesAsNew(false);
+      setOdpsPaste('');
+      setError(null);
+    }
+  }, [uploadDialogOpen]);
+
   // Toggle subscription filter
   const handleToggleMySubscriptions = () => {
     setShowMySubscriptions(!showMySubscriptions);
@@ -261,7 +288,7 @@ export default function DataProducts() {
       setProducts(Array.isArray(productsData) ? productsData : []);
     } catch (err: any) {
       console.error('Error refetching products:', err);
-      setError(err.message || 'Failed to refresh products list');
+      setError(err.message || t('messages.refreshError'));
       toast({ title: t('messages.error'), description: `${t('messages.fetchError')}: ${err.message}`, variant: 'destructive' });
     }
   };
@@ -378,7 +405,7 @@ export default function DataProducts() {
 
   // Helper to extract human-readable error message from API error responses
   const extractErrorMessage = (error: any): string => {
-    if (!error) return 'Unknown error';
+    if (!error) return t('messages.unknownError');
     if (typeof error === 'string') return error;
     if (typeof error === 'object') {
       // Handle structured error objects from the API
@@ -392,59 +419,88 @@ export default function DataProducts() {
         const firstError = error.errors[0];
         if (typeof firstError === 'string') return firstError;
         if (firstError?.message) return firstError.message;
-        return `${error.errors.length} validation error(s) occurred`;
+        return t('messages.validationErrors', { count: error.errors.length });
       }
       // Try to stringify, but limit length
       try {
         const str = JSON.stringify(error);
         return str.length > 200 ? str.substring(0, 200) + '...' : str;
       } catch {
-        return 'Unknown error format';
+        return t('messages.unknownErrorFormat');
       }
     }
     return String(error);
   };
 
-  // Keep File Upload Handlers
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // File upload handler shared by the dropzone and the paste box (via
+  // <ImportEntityDialog>). Each file may hold a single ODPS product or an array.
+  // Returns true iff every entity was created successfully; callers that need to
+  // preserve input on failure (paste box) check this before clearing (#930 review).
+  const uploadProductFiles = async (files: File[]): Promise<boolean> => {
     if (!canWrite) {
-      toast({ title: "Permission Denied", description: "You do not have permission to upload data products.", variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+      toast({ title: t('permissions.denied'), description: t('permissions.noUpload'), variant: "destructive" });
+      return false;
     }
-    const file = event.target.files?.[0];
-    if (!file) return;
+    if (!files || files.length === 0) return false;
     setIsUploading(true);
     setError(null);
     const formData = new FormData();
-    formData.append('file', file);
+    // Multi-file: append every selected file under the `files` field, matching
+    // the backend `List[UploadFile]`. Each file may itself hold an ODPS array.
+    files.forEach((f) => formData.append('files', f));
+    // #851: opt-in "Create missing domains" toggle, applied per-upload to every entity.
+    formData.append('create_missing_domains', String(createMissingDomains));
+    // #853: id adoption + duplicate handling.
+    formData.append('adopt_ids', String(adoptIds));
+    formData.append('on_duplicate', duplicatesAsNew ? 'new' : 'skip');
+    const fileLabel = files.length === 1 ? files[0].name : `${files.length} files`;
     try {
-      const response = await post<{ count: number }>('/api/data-products/upload', formData);
+      // The upload endpoint returns a truthful BatchImportResult summary
+      // (created/skipped/failed) across all files and entities.
+      const response = await post<BatchImportResult>('/api/data-products/upload', formData);
 
       if (response.error) {
         // Extract meaningful message from potentially complex error object
         const errorMsg = extractErrorMessage(response.error);
-        
+
         // Check if this might be a Data Contract file uploaded by mistake
-        const isLikelyODCSContract = errorMsg.toLowerCase().includes('validation') || 
+        const isLikelyODCSContract = errorMsg.toLowerCase().includes('validation') ||
           errorMsg.toLowerCase().includes('schema') ||
           errorMsg.toLowerCase().includes('odcs');
-        
+
         if (isLikelyODCSContract) {
-          throw new Error(
-            `${errorMsg}\n\nHint: This page is for Data Products (ODPS format). ` +
-            `If you're trying to upload a Data Contract (ODCS format), please use the Data Contracts page instead.`
-          );
+          throw new Error(`${errorMsg}\n\n${t('upload.odcsHint')}`);
         }
         throw new Error(errorMsg);
       }
 
-      const count = response.data?.count ?? 0;
-      toast({
-        title: t('upload.success'),
-        description: t('upload.successMessage', { filename: file.name, count }),
-      });
+      const result = response.data;
+      // Surface anything not created: failed entities AND files skipped as the
+      // wrong type (e.g. an ODCS contract dropped here).
+      const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
+      const allCreated = !!result && result.failed === 0 && result.skipped === 0;
+      if (result && (result.failed > 0 || result.skipped > 0)) {
+        // Partial success: surface the truthful summary plus the first issues.
+        const detail = unimportedItems
+          .slice(0, 5)
+          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
+          .join('\n');
+        toast({
+          title: result.created > 0 ? t('upload.partialSuccess', 'Imported with issues') : t('upload.failed'),
+          description: `${summarizeImport(result)}${detail ? `\n${detail}` : ''}`,
+          variant: result.failed > 0 && result.created === 0 ? 'destructive' : 'default',
+          duration: 10000,
+        });
+        if (unimportedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
+      } else {
+        setUploadDialogOpen(false);
+        toast({
+          title: t('upload.success'),
+          description: t('upload.successMessage', { filename: fileLabel, count: result?.created ?? 0 }),
+        });
+      }
       await fetchProducts();
+      return allCreated;
 
     } catch (err: any) {
       console.error('Error uploading file:', err);
@@ -456,16 +512,26 @@ export default function DataProducts() {
           duration: 10000, // Show longer for detailed errors
       });
       setError(errorMsg);
+      return false;
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   };
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
+  // Paste ODPS JSON: wrap the text as a .json file and reuse the batch endpoint.
+  // Only clear the textarea on full success — otherwise the user loses the input
+  // they would need to fix and retry (#930 review).
+  const importPastedOdps = async () => {
+    const value = odpsPaste.trim();
+    if (!value) return;
+    setImportingProductPaste(true);
+    try {
+      const file = new File([value], 'pasted.json', { type: 'application/json' });
+      const allCreated = await uploadProductFiles([file]);
+      if (allCreated) setOdpsPaste('');
+    } finally {
+      setImportingProductPaste(false);
+    }
   };
 
   // --- Genie Space Handler ---
@@ -544,7 +610,7 @@ export default function DataProducts() {
         const primaryId = product.primary_domain_id || getDomainIdByName(product.domain) || domainIds[0] || null;
         return (
           <div className="space-y-1">
-            <div className="font-medium">{product.name || 'Unnamed Product'}</div>
+            <div className="font-medium">{product.name || t('table.unnamedProduct')}</div>
             <DomainBadgeList
               domains={product.domains}
               domainIds={domainIds}
@@ -616,7 +682,7 @@ export default function DataProducts() {
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={getStatusColor(row.original.status)}>{row.original.status}</Badge>
             {row.original.draftOwnerId && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">Personal Draft</Badge>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">{t('data-products:status.personalDraft')}</Badge>
             )}
             <CertificationBadge
               certificationLevel={row.original.certification_level}
@@ -679,7 +745,7 @@ export default function DataProducts() {
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); setPreviewProductId(product.id ?? null); setPreviewProductTitle(product.name ?? ''); }}
-                title="Preview Metadata"
+                title={t('data-products:table.previewMetadata')}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -688,7 +754,7 @@ export default function DataProducts() {
                 size="icon"
                 onClick={() => handleEditClick(product)}
                 disabled={!canWrite || permissionsLoading}
-                title={canWrite ? "Edit" : "Edit (Permission Denied)"}
+                title={canWrite ? t('common:actions.edit') : t('table.editDenied')}
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -702,7 +768,7 @@ export default function DataProducts() {
                     handleDeleteClick(product);
                 }}
                 disabled={!canAdmin || permissionsLoading}
-                title={canAdmin ? "Delete" : "Delete (Permission Denied)"}
+                title={canAdmin ? t('common:actions.delete') : t('table.deleteDenied')}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -751,7 +817,7 @@ export default function DataProducts() {
                 onClick={() => setError(null)}
                 title={t('common:tooltips.dismiss')}
               >
-                <span className="sr-only">Dismiss</span>
+                <span className="sr-only">{t('common:actions.dismiss')}</span>
                 ×
               </Button>
             </Alert>
@@ -815,7 +881,7 @@ export default function DataProducts() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                            onClick={triggerFileUpload}
+                            onClick={() => setUploadDialogOpen(true)}
                             className="gap-2 h-9"
                             variant="outline"
                             disabled={isUploading || !canWrite || permissionsLoading}
@@ -836,12 +902,45 @@ export default function DataProducts() {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept=".json,.yaml,.yml"
-                    style={{ display: 'none' }}
+                  {/* Upload dialog (shared with Data Contracts via ImportEntityDialog) */}
+                  <ImportEntityDialog
+                    open={uploadDialogOpen}
+                    onOpenChange={setUploadDialogOpen}
+                    uploading={isUploading}
+                    disabled={importingProductPaste}
+                    accept={{
+                      'application/json': ['.json'],
+                      'application/x-yaml': ['.yaml', '.yml'],
+                      'text/yaml': ['.yaml', '.yml'],
+                    }}
+                    onFiles={uploadProductFiles}
+                    toggles={{
+                      createMissingDomains, setCreateMissingDomains,
+                      adoptIds, setAdoptIds,
+                      duplicatesAsNew, setDuplicatesAsNew,
+                    }}
+                    paste={{
+                      value: odpsPaste,
+                      onChange: setOdpsPaste,
+                      onSubmit: importPastedOdps,
+                      submitting: importingProductPaste,
+                    }}
+                    labels={{
+                      title: t('upload.dialogTitle', 'Upload Data Products'),
+                      description: t('upload.dialogDescription', 'Select one or more ODPS files (YAML/JSON). Each file may contain a single product or an array.'),
+                      createMissingDomains: t('upload.createMissingDomains', 'Create missing domains'),
+                      createMissingDomainsHint: t('upload.createMissingDomainsHint', "Auto-create domains that don't already exist. Off: unmatched domains are left unassigned (the original is preserved)."),
+                      adoptIds: t('upload.adoptIds', 'Adopt IDs from file'),
+                      adoptIdsHint: t('upload.adoptIdsHint', 'Reuse a valid, non-colliding UUID from the file as the primary key so links between entities survive import.'),
+                      duplicatesAsNew: t('upload.duplicatesAsNew', 'Import duplicate IDs as new copies'),
+                      duplicatesAsNewHint: t('upload.duplicatesAsNewHint', 'Off (default): a product whose ID already exists is skipped. On: it is imported as a new copy with a fresh ID.'),
+                      dropActive: t('upload.dropActive', 'Drop the file(s) here'),
+                      dropInactive: t('upload.dropInactive', 'Drag and drop product file(s) here, or click to select'),
+                      supportedFormats: t('upload.supportedFormats', 'Supported formats: JSON or YAML (ODPS)'),
+                      pasteLabel: t('upload.orPasteOdps', 'Or paste ODPS JSON'),
+                      pastePlaceholder: t('upload.pasteOdpsPlaceholder', 'Paste ODPS product JSON here'),
+                      pasteButton: t('upload.importJsonButton', 'Import JSON'),
+                    }}
                   />
                 </>
               }

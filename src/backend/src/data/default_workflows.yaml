@@ -106,7 +106,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.contract_id != '' OR obj.contracts != []
+            ASSERT obj.output_port_contract_count > 0
             ON_FAIL FAIL 'Data product must have at least one data contract'
         on_pass: "request-approval"
         on_fail: "notify-no-contract"
@@ -183,7 +183,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.schema != '' AND obj.schema != '{}' AND obj.schema != '[]'
+            ASSERT obj.schema_object_count > 0
             ON_FAIL FAIL 'Data contract must have a schema defined'
         on_pass: "check-owner"
         on_fail: "notify-no-schema"
@@ -194,7 +194,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.owner != '' OR HAS_TAG('owner')
+            ASSERT obj.has_owner = true OR HAS_TAG('owner')
             ON_FAIL FAIL 'Data contract must have an owner'
         on_pass: "success"
         on_fail: "auto-fix-owner"
@@ -451,12 +451,13 @@ workflows:
         config:
           message: "Data contract review request was rejected"
 
-  # Data Contract Publish Request
-  - id: "contract-publish-request"
-    name: "Data Contract Publish Request"
-    description: "Handles requests to publish data contracts to the marketplace with approver authorization."
+  # Data Contract Deploy Request (publication requests are handled by
+  # Publication Request Review)
+  - id: "contract-deploy-request"
+    name: "Data Contract Deploy Request"
+    description: "Handles requests to deploy data contracts to Unity Catalog with approver authorization."
     trigger:
-      type: "on_request_publish"
+      type: "on_request_deploy"
       entity_types:
         - "data_contract"
     scope:
@@ -465,12 +466,12 @@ workflows:
     is_default: true
     steps:
       - id: "notify-requester"
-        name: "Confirm Publish Request Received"
+        name: "Confirm Deploy Request Received"
         type: "notification"
         config:
           recipients: "requester"
           template: "request_submitted"
-          custom_message: "Your request to publish the data contract to the marketplace has been submitted."
+          custom_message: "Your request to deploy the data contract '${entity_name}' to Unity Catalog has been submitted."
         on_pass: "request-approval"
 
       - id: "request-approval"
@@ -484,32 +485,32 @@ workflows:
         on_fail: "notify-rejected"
 
       - id: "notify-approved"
-        name: "Notify Publish Approved"
+        name: "Notify Deploy Approved"
         type: "notification"
         config:
           recipients: "requester"
           template: "request_approved"
-          custom_message: "Your data contract has been approved for publishing to the marketplace."
+          custom_message: "Your request to deploy the data contract '${entity_name}' has been approved."
         on_pass: "success"
 
       - id: "notify-rejected"
-        name: "Notify Publish Rejected"
+        name: "Notify Deploy Rejected"
         type: "notification"
         config:
           recipients: "requester"
           template: "request_rejected"
-          custom_message: "Your publish request has been denied. Please review the feedback."
+          custom_message: "Your request to deploy the data contract '${entity_name}' has been denied. Please review the feedback."
         on_pass: "fail-rejected"
 
       - id: "success"
-        name: "Publish Approved"
+        name: "Deploy Approved"
         type: "pass"
 
       - id: "fail-rejected"
-        name: "Publish Rejected"
+        name: "Deploy Rejected"
         type: "fail"
         config:
-          message: "Data contract publish request was rejected"
+          message: "Data contract deploy request was rejected"
 
   # Data Product Review Request
   - id: "product-review-request"
@@ -1199,7 +1200,7 @@ workflows:
   # Publish/deploy request wizard (matches ON_REQUEST_PUBLISH)
   - id: "request-publish"
     name: "Request Publish"
-    description: "Wizard shown before submitting a publish or deployment request. Collects a reason."
+    description: "Wizard shown before submitting a publish request. Collects a reason."
     workflow_type: "approval"
     trigger:
       type: "for_request_publish"
@@ -1214,13 +1215,13 @@ workflows:
         type: "user_action"
         config:
           title: "Request publish"
-          description: "Provide a reason for your publish/deployment request."
+          description: "Provide a reason for your publish request."
           requires_input: true
           minimum_input_length: 10
           primary_field_id: "reason"
           required_fields:
             - id: "reason"
-              label: "Why are you requesting publish/deployment?"
+              label: "Why are you requesting publication?"
               type: "text"
               required: true
         on_pass: "done"
@@ -1370,9 +1371,9 @@ workflows:
         name: "Certification Approval"
         type: "approval"
         config:
-          approver_role: "data_steward"
+          approvers: "data_stewards"
           message: "Please review the certification request for ${entity_type} '${entity_name}'."
-          timeout_hours: 168
+          timeout_days: 7
         on_pass: "certify-entity"
         on_fail: "notify-denied"
 
@@ -1443,10 +1444,14 @@ workflows:
         name: "Validate Entity Status"
         type: "validation"
         config:
+          # The trigger entity is the request payload, which carries the
+          # entity status as `current_status`. Contracts can only be
+          # requested from `approved`, products only from `active`.
+          # Unpublishing (requested scope `none`) is allowed in any status.
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.status == 'active'
-            ON_FAIL FAIL 'Entity must be in active status to be published'
+            ASSERT obj.requested_scope = 'none' OR obj.current_status IN ['approved', 'active']
+            ON_FAIL FAIL 'Only approved data contracts and active data products can be published'
         on_pass: "notify-owner"
         on_fail: "notify-invalid"
 
@@ -1464,9 +1469,9 @@ workflows:
         name: "Publication Approval"
         type: "approval"
         config:
-          approver_role: "data_steward"
+          approvers: "data_stewards"
           message: "Please review the publication request for ${entity_type} '${entity_name}'."
-          timeout_hours: 168
+          timeout_days: 7
         on_pass: "publish-entity"
         on_fail: "notify-denied"
 
@@ -1505,7 +1510,7 @@ workflows:
         config:
           recipients: "trigger_user"
           template: "error"
-          custom_message: "Publication request for '${entity_name}' was rejected: entity must be in active status."
+          custom_message: "Publication request for '${entity_name}' was rejected: only approved data contracts and active data products can be published."
         on_pass: "fail-end"
         on_fail: "fail-end"
 

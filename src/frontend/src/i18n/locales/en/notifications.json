@@ -1,0 +1,39 @@
+{
+  "statusChangeNotApplied": {
+    "title": "Status change not applied",
+    "statusChanged": "The request to change the status from '{{fromStatus}}' to '{{toStatus}}' was approved, but the status is now '{{currentStatus}}', so the change was not applied. Request it again if it is still needed.",
+    "refused": "Your request to change the status to '{{toStatus}}' was approved, but the change could not be applied: {{reason}}"
+  },
+  "contractStatusNotChanged": {
+    "title": "Contract status not changed",
+    "notUnderReview": "Your review decision was recorded, but the contract was not set to '{{toStatus}}': the contract is not under review (status '{{currentStatus}}')",
+    "notApplied": "Your review decision was recorded, but the contract was not set to '{{toStatus}}': {{reason}}"
+  },
+  "ui": {
+    "tooltip": "Notifications",
+    "loading": "Loading notifications...",
+    "error": "Error: {{error}}",
+    "empty": "No notifications",
+    "open": "Open",
+    "viewDetails": "View Details",
+    "approveDeny": "Approve/Deny",
+    "handleAccessGrant": "Handle Access Grant",
+    "reviewContract": "Review Contract",
+    "handlePublish": "Handle Publish",
+    "handleDeploy": "Handle Deploy",
+    "approved": "✓ Approved",
+    "rejected": "✗ Rejected",
+    "viewRespond": "View / Respond",
+    "reviewCertification": "Review certification request",
+    "reviewPublication": "Review publication request",
+    "status": "Status: {{status}}",
+    "runId": "Run ID: {{runId}}",
+    "delete": "Delete notification",
+    "unknownUser": "Unknown User",
+    "unknownRoleId": "Unknown Role ID",
+    "unknownRoleName": "Unknown Role Name",
+    "unknownId": "Unknown ID",
+    "badge": "Notification",
+    "markRead": "Mark Read"
+  }
+}

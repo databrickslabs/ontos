@@ -26,6 +26,127 @@ from src.common.compliance_entities import (
 logger = get_logger(__name__)
 
 
+TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+def rule_changes_tags(rule: Optional[str]) -> bool:
+    """Whether a rule has ASSIGN_TAG / REMOVE_TAG actions (False if it doesn't parse)."""
+    if not rule:
+        return False
+    try:
+        parsed = parse_rule(rule)
+    except Exception:
+        return False
+    actions = (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+    return any(action.get('type') in TAG_ACTIONS for action in actions)
+
+
+class TagsManagerTagAdapter:
+    """EntityTagManager for compliance policy actions (ASSIGN_TAG / REMOVE_TAG).
+
+    Writes tag associations for the entities a policy evaluates, as part of the
+    policy run's transaction: nothing is committed here (the run commits once at
+    the end), and each write runs in a savepoint so a failing action is rolled
+    back on its own without breaking the session for the rest of the run.
+
+    Keys are tag names in the default namespace: the DSL grammar only accepts
+    identifiers (``[A-Za-z0-9_]``), so ``namespace/name`` keys cannot be written
+    in a rule. Tags must already exist. Only Ontos entities whose tags the app
+    displays are supported; Unity Catalog objects are rejected explicitly.
+
+    No permission check happens here: the compliance routes require write
+    access to tags (``require_tag_write_for_tag_actions``) before a policy with
+    tag actions is saved or run. Any other caller must check it first.
+    """
+
+    # Compliance entity type -> entity_type used by tag associations in the app
+    ENTITY_TYPES = {
+        'data_product': 'data_product',
+        'data_contract': 'data_contract',
+        'domain': 'data_domain',
+    }
+
+    def __init__(self, db: Session, user_email: Optional[str] = None):
+        self._db = db
+        self._user_email = user_email
+        self._tags: Dict[str, object] = {}
+
+    def _tag_entity_type(self, entity_type: str) -> str:
+        mapped = self.ENTITY_TYPES.get(entity_type)
+        if not mapped:
+            raise ValueError(
+                f"Tag actions are not supported for '{entity_type}' entities "
+                f"(supported: {', '.join(sorted(self.ENTITY_TYPES))})"
+            )
+        return mapped
+
+    @staticmethod
+    def _check_entity_id(entity_id: str) -> None:
+        if not entity_id or entity_id == 'unknown':
+            raise ValueError("Entity has no id; tag actions need a stable entity id")
+
+    def _resolve(self, key: str):
+        if key not in self._tags:
+            from src.repositories.tags_repository import tag_repo
+
+            self._tags[key] = tag_repo.get_by_fully_qualified_name(self._db, fqn=key)
+        tag = self._tags[key]
+        if not tag:
+            raise ValueError(f"Tag '{key}' not found; create it in the default tag namespace first")
+        return tag
+
+    def _log_change(self, entity_type: str, entity_id: str, action: str, details: dict) -> None:
+        # Same entry change_log_manager writes, without its commit.
+        from src.db_models.change_log import ChangeLogDb
+
+        self._db.add(ChangeLogDb(
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            action=action,
+            username=self._user_email,
+            details_json=json.dumps(details),
+        ))
+
+    def assign_tag(self, entity_type: str, entity_id: str, key: str, value: str) -> None:
+        from src.repositories.tags_repository import entity_tag_repo
+
+        tag_entity_type = self._tag_entity_type(entity_type)
+        self._check_entity_id(entity_id)
+        tag = self._resolve(key)
+        with self._db.begin_nested():
+            entity_tag_repo.add_tag_to_entity(
+                self._db,
+                entity_id=str(entity_id),
+                entity_type=tag_entity_type,
+                tag_id=tag.id,
+                assigned_value=value,
+                assigned_by=self._user_email,
+            )
+            self._log_change(tag_entity_type, entity_id, "TAG_ASSIGN", {
+                "tag": key,
+                "assigned_value": value,
+                "summary": f"Tag '{key}' assigned with value '{value}' by compliance policy",
+            })
+
+    def remove_tag(self, entity_type: str, entity_id: str, key: str) -> None:
+        from src.repositories.tags_repository import entity_tag_repo
+
+        tag_entity_type = self._tag_entity_type(entity_type)
+        self._check_entity_id(entity_id)
+        tag = self._resolve(key)
+        with self._db.begin_nested():
+            removed = entity_tag_repo.remove_tag_from_entity(
+                self._db, entity_id=str(entity_id), entity_type=tag_entity_type, tag_id=tag.id
+            )
+            if removed:
+                self._log_change(tag_entity_type, entity_id, "TAG_REMOVE", {
+                    "tag": key,
+                    "summary": f"Tag '{key}' removed by compliance policy",
+                })
+        if not removed:
+            logger.info(f"REMOVE_TAG {key}: tag was not assigned to {tag_entity_type} {entity_id}")
+
+
 class ComplianceManager:
     def __init__(self):
         # Stateless; uses DB via repositories
@@ -483,6 +604,39 @@ class ComplianceManager:
                 })
         return objs
 
+    def _workspace_client_for(self, entity_types: List[str], policy: CompliancePolicyDb):
+        """Workspace client for a run, or None when the rule doesn't need one.
+
+        Rules whose MATCH covers Unity Catalog types (including ``Object``,
+        which covers every type) need the client: without it the run fails
+        instead of passing after evaluating only part of its scope. Rules on
+        app entities alone run without it.
+        """
+        from src.common.compliance_entities import UnityCatalogLoader
+        from src.common.workspace_client import get_workspace_client
+
+        needs_uc = any(t in UnityCatalogLoader.SUPPORTED_TYPES for t in entity_types)
+        try:
+            ws = get_workspace_client()
+        except Exception as e:
+            if needs_uc:
+                # A code the UI translates; the message stays the fallback
+                e.error_code, e.error_params = 'workspace_client_unavailable', {'detail': str(e)}
+                raise
+            logger.warning(
+                "Workspace client unavailable, policy '%s' (%s) only matches app entities "
+                "and runs without it: %s", policy.name, policy.id, e,
+            )
+            return None
+        if ws is None and needs_uc:
+            error = RuntimeError(
+                "Databricks workspace client unavailable; this rule matches Unity Catalog "
+                "objects and cannot be evaluated without it"
+            )
+            error.error_code, error.error_params = 'workspace_client_unavailable', {'detail': 'no client'}
+            raise error
+        return ws
+
     def run_policy_inline(
         self, 
         db: Session, 
@@ -499,21 +653,24 @@ class ComplianceManager:
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
+        # Tag actions (ASSIGN_TAG / REMOVE_TAG) need a tag manager in the context
+        tag_manager = TagsManagerTagAdapter(db, user_email=current_user)
 
         try:
             # Parse the rule using enhanced DSL
-            parsed_rule = parse_rule(policy.rule)
-
-            # Create entity iterator
-            from src.common.workspace_client import get_workspace_client
-            ws = get_workspace_client()
-            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
+            parsed_rule = parse_rule(policy.rule, source=f"policy '{policy.name}' ({policy.id})")
 
             # Parse entity filter
-            entity_filter = parse_entity_filter(policy.rule)
+            entity_filter = parse_entity_filter(policy.rule, parsed=parsed_rule)
+
+            # Create entity iterator
+            ws = self._workspace_client_for(entity_filter.entity_types, policy)
+            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
 
             # Iterate over entities
-            for obj in entity_iterator.iterate(entity_filter, limit=limit):
+            for obj in entity_iterator.iterate(
+                entity_filter, limit=limit, source=f"policy '{policy.name}' ({policy.id})",
+            ):
                 # Evaluate ASSERT clause
                 ok = True
                 msg = None
@@ -540,13 +697,17 @@ class ComplianceManager:
                         rule_name=policy.name,
                         passed=ok,
                         message=msg,
+                        tag_manager=tag_manager,
                     )
                     action_results = self.action_executor.execute_actions(actions, action_context)
 
-                    # Update message from FAIL action if present
-                    for ar in action_results:
-                        if ar.action_type == 'FAIL' and ar.message:
-                            msg = ar.message
+                    # Use the FAIL action messages, in order, if present
+                    fail_messages = [
+                        ar.message for ar in action_results
+                        if ar.action_type == 'FAIL' and ar.message
+                    ]
+                    if fail_messages:
+                        msg = "; ".join(fail_messages)
 
                 # Store result
                 res = ComplianceResultDb(

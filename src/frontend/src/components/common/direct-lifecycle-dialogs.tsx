@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { CertificationLevel } from '@/types/lifecycle';
 import { PUBLICATION_SCOPE_LABELS, type PublicationScope } from '@/types/lifecycle';
 
@@ -36,30 +37,31 @@ interface DirectCertifyDialogProps {
 export function DirectCertifyDialog({
   open,
   onOpenChange,
-  title = 'Certify',
-  description = 'Choose a certification level. This applies immediately.',
+  title,
+  description,
   certificationLevels,
   selectedLevelOrder,
   onSelectedLevelOrderChange,
   isSubmitting,
   onConfirm,
 }: DirectCertifyDialogProps) {
+  const { t } = useTranslation('common');
   const sorted = [...certificationLevels].sort((a, b) => a.level_order - b.level_order);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogTitle>{title || t('common:lifecycleDialogs.certifyTitle')}</DialogTitle>
+          <DialogDescription>{description || t('common:lifecycleDialogs.certifyDescription')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          <Label>Certification level</Label>
+          <Label>{t('common:lifecycleDialogs.certificationLevel')}</Label>
           <Select
             value={selectedLevelOrder != null ? String(selectedLevelOrder) : ''}
             onValueChange={(v) => onSelectedLevelOrderChange(v ? parseInt(v, 10) : null)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select level" />
+              <SelectValue placeholder={t('common:lifecycleDialogs.selectLevel')} />
             </SelectTrigger>
             <SelectContent>
               {sorted.map((lvl) => (
@@ -72,14 +74,14 @@ export function DirectCertifyDialog({
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={onConfirm}
             disabled={isSubmitting || selectedLevelOrder == null || sorted.length === 0}
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Confirm
+            {t('common:actions.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -101,22 +103,23 @@ interface DirectPublishDialogProps {
 export function DirectPublishDialog({
   open,
   onOpenChange,
-  title = 'Set publication scope',
-  description = 'Choose who can discover this entity when published.',
+  title,
+  description,
   selectedScope,
   onSelectedScopeChange,
   isSubmitting,
   onConfirm,
 }: DirectPublishDialogProps) {
+  const { t } = useTranslation('common');
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogTitle>{title || t('common:lifecycleDialogs.publishTitle')}</DialogTitle>
+          <DialogDescription>{description || t('common:lifecycleDialogs.publishDescription')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          <Label>Publication scope</Label>
+          <Label>{t('common:lifecycleDialogs.publicationScope')}</Label>
           <Select value={selectedScope} onValueChange={(v) => onSelectedScopeChange(v as PublicationScope)}>
             <SelectTrigger>
               <SelectValue />
@@ -132,11 +135,11 @@ export function DirectPublishDialog({
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={onConfirm} disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Confirm
+            {t('common:actions.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

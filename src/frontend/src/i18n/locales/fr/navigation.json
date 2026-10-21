@@ -5,5 +5,25 @@
     "build": "Construire",
     "govern": "Gouverner",
     "deploy": "Déployer"
+  },
+  "dbDown": {
+    "title": "Base de données indisponible",
+    "body": "L'application ne parvient pas à joindre sa base de données de métadonnées. La plupart des fonctionnalités renverront des erreurs jusqu'au rétablissement de la connexion.",
+    "retrying": "Nouvelle tentative…",
+    "retryConnection": "Réessayer la connexion",
+    "retryFailed": "Échec de la nouvelle tentative",
+    "autoRetrying": "Nouvelle tentative automatique toutes les {{seconds}} secondes",
+    "pausedTitle": "Application en pause",
+    "pausedBodyBefore": "La base de données de métadonnées est inaccessible ; la navigation et les vues de données sont donc désactivées afin d'éviter d'afficher un état incohérent. Utilisez",
+    "pausedBodyAfter": "ci-dessus (ou attendez la prochaine nouvelle tentative automatique) pour reprendre."
+  },
+  "warning": {
+    "title": "Avertissement système",
+    "workspaceFailed": "Échec de la connexion à l'espace de travail Databricks. Certaines fonctionnalités peuvent être indisponibles."
+  },
+  "routeError": {
+    "title": "Une erreur s'est produite",
+    "body": "Une erreur inattendue s'est produite lors de l'affichage de cette page. Vous pouvez réessayer ou revenir à la page d'accueil.",
+    "goHome": "Accueil"
   }
 }

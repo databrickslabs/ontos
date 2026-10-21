@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -30,6 +31,7 @@ export default function VersionNavigator({
   currentVersion,
   onVersionChange,
 }: VersionNavigatorProps) {
+  const { t } = useTranslation('common')
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
 
   useEffect(() => {
@@ -62,13 +64,15 @@ export default function VersionNavigator({
               size="sm"
               disabled={!newerVersion}
               onClick={() => newerVersion && onVersionChange(newerVersion.id)}
-              aria-label="Newer version"
+              aria-label={t('common:versionNavigator.newerVersion')}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {newerVersion ? `Newer: v${newerVersion.version}` : 'Already on newest'}
+            {newerVersion
+              ? t('common:versionNavigator.newerTooltip', { version: newerVersion.version })
+              : t('common:versionNavigator.alreadyNewest')}
           </TooltipContent>
         </Tooltip>
 
@@ -86,13 +90,15 @@ export default function VersionNavigator({
               size="sm"
               disabled={!olderVersion}
               onClick={() => olderVersion && onVersionChange(olderVersion.id)}
-              aria-label="Older version"
+              aria-label={t('common:versionNavigator.olderVersion')}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {olderVersion ? `Older: v${olderVersion.version}` : 'Already on oldest'}
+            {olderVersion
+              ? t('common:versionNavigator.olderTooltip', { version: olderVersion.version })
+              : t('common:versionNavigator.alreadyOldest')}
           </TooltipContent>
         </Tooltip>
       </div>

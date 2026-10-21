@@ -34,15 +34,80 @@
     "security": "Sicherheit",
     "dataQuality": "Datenqualität",
     "privacy": "Datenschutz",
-    "governance": "Governance"
+    "governance": "Governance",
+    "maturity": "Reifegrad"
   },
   "errors": {
     "loadingPolicies": "Fehler beim Laden der Richtlinien",
     "savingPolicy": "Fehler beim Speichern der Richtlinie",
-    "deletingPolicy": "Fehler beim Löschen der Richtlinie"
+    "deletingPolicy": "Fehler beim Löschen der Richtlinie",
+    "loadPolicyFailed": "Richtlinie konnte nicht geladen werden",
+    "loadFailed": "Laden fehlgeschlagen",
+    "savePolicyFailed": "Richtlinie konnte nicht gespeichert werden",
+    "deletePolicyFailed": "Richtlinie konnte nicht gelöscht werden",
+    "noDataReceived": "Keine Daten vom Endpunkt für Compliance-Richtlinien erhalten.",
+    "saveNoDataReturned": "Richtlinie konnte nicht gespeichert werden: Keine Daten zurückgegeben",
+    "loadPoliciesFailed": "Compliance-Richtlinien konnten nicht geladen werden",
+    "loadRunResultsFailed": "Ausführungsergebnisse konnten nicht geladen werden",
+    "policyNotFound": "Compliance-Richtlinie nicht gefunden.",
+    "runNotFound": "Ausführung nicht gefunden.",
+    "runningPolicy": "Fehler beim Ausführen der Richtlinie"
+  },
+  "results": {
+    "passed": "Bestanden",
+    "failed": "Fehlgeschlagen",
+    "showFailed": "Fehlgeschlagene anzeigen",
+    "showAll": "Alle anzeigen",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Zurück zur Liste",
+    "run": "Ausführen",
+    "id": "ID",
+    "examples": "Beispiele",
+    "shouldPass": "Sollte bestehen",
+    "shouldFail": "Sollte fehlschlagen",
+    "noExamples": "Keine Beispiele",
+    "runSummary": {
+      "title": "Ausführungsübersicht",
+      "lastRunStarted": "Letzte Ausführung gestartet {{date}}",
+      "statusLabel": "Status:",
+      "score": "Score",
+      "passed": "Bestanden",
+      "failed": "Fehlgeschlagen",
+      "passedExamples": "Bestandene Beispiele",
+      "failedExamples": "Fehlgeschlagene Beispiele",
+      "noPassedExamples": "Keine bestandenen Beispiele in dieser Ausführung",
+      "noFailures": "Keine Fehler in dieser Ausführung",
+      "errorLabel": "Fehler:"
+    },
+    "runsList": {
+      "title": "Ausführungen",
+      "mostRecentFirst": "Neueste zuerst",
+      "noRuns": "Noch keine Ausführungen",
+      "scoreLabel": "Score:",
+      "scoreDetail": "{{passed}} bestanden / {{failed}} fehlgeschlagen",
+      "openRunDetails": "Ausführungsdetails öffnen"
+    },
+    "resultsCard": {
+      "title": "Ergebnisse",
+      "filteredFailed": "Gefiltert nur nach fehlgeschlagenen – letzte Ausführung {{date}}",
+      "filteredAll": "Gefiltert nach allen – letzte Ausführung {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Ausführung {{id}}",
+    "viewPolicy": "Richtlinie anzeigen",
+    "statusLabel": "Status:",
+    "scoreLabel": "Score:",
+    "passedLabel": "Bestanden:",
+    "failedLabel": "Fehlgeschlagen:",
+    "startedLabel": "Gestartet: {{date}}",
+    "errorLabel": "Fehler:"
   },
   "toast": {
     "policySaved": "Richtlinie '{{name}}' erfolgreich gespeichert",
+    "policySavedWithWarnings": "Richtlinie '{{name}}' gespeichert, aber ihre Regel funktioniert möglicherweise nicht",
     "policyDeleted": "Richtlinie erfolgreich gelöscht"
   },
   "score": {
@@ -100,6 +165,14 @@
       "score": "Score",
       "issues": "Probleme"
     }
+  },
+  "ruleWarnings": {
+    "unsupported_match_type": "Der MATCH-Typ '{{type}}' wird nicht unterstützt, daher prüft die Regel keine Entitäten. Unterstützte Typen: {{supported}} oder Object für alle.",
+    "missing_assert": "Die Regel hat keine ASSERT-Klausel, daher besteht jede Entität."
+  },
+  "runErrors": {
+    "rule_parse_failed": "Die Regel konnte nicht geparst werden: {{detail}}",
+    "workspace_client_unavailable": "Der Databricks-Workspace ist nicht verfügbar ({{detail}}), und diese Regel prüft Unity-Catalog-Objekte; sie konnte daher nicht ausgeführt werden.",
+    "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
   }
 }
-

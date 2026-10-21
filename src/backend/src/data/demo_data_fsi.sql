@@ -45,11 +45,10 @@ ON CONFLICT (id) DO NOTHING;
 -- 2. TEAMS
 -- ============================================================================
 
-INSERT INTO teams (id, name, title, description, domain_id, extra_metadata, created_by, updated_by, created_at, updated_at) VALUES
-('00100001-0002-4000-8000-000000000001', 'trading-analytics', 'Trading Analytics Team', 'Quantitative analytics for equities, fixed income, and derivatives trading', '00000002-0002-4000-8000-000000000002', '{"slack_channel": "https://company.slack.com/channels/trading-analytics", "lead": "quant.lead@bank.com"}', 'system@demo', 'system@demo', NOW(), NOW()),
-('00100002-0002-4000-8000-000000000002', 'risk-management', 'Risk Management Team', 'Enterprise risk measurement, stress testing, and model validation', '00000003-0002-4000-8000-000000000003', '{"slack_channel": "https://company.slack.com/channels/risk-mgmt", "tools": ["SAS", "Python", "Moody''s Analytics"]}', 'system@demo', 'system@demo', NOW(), NOW()),
-('00100003-0002-4000-8000-000000000003', 'compliance-ops', 'Compliance Operations Team', 'AML transaction monitoring, KYC remediation, and regulatory reporting', '00000004-0002-4000-8000-000000000004', '{"slack_channel": "https://company.slack.com/channels/compliance-ops", "responsibilities": ["BSA/AML", "OFAC", "KYC/CDD", "SAR Filing"]}', 'system@demo', 'system@demo', NOW(), NOW())
-
+INSERT INTO teams (id, name, title, description, extra_metadata, created_by, updated_by, created_at, updated_at) VALUES
+('00100001-0002-4000-8000-000000000001', 'trading-analytics', 'Trading Analytics Team', 'Quantitative analytics for equities, fixed income, and derivatives trading', '{"slack_channel": "https://company.slack.com/channels/trading-analytics", "lead": "quant.lead@bank.com"}', 'system@demo', 'system@demo', NOW(), NOW()),
+('00100002-0002-4000-8000-000000000002', 'risk-management', 'Risk Management Team', 'Enterprise risk measurement, stress testing, and model validation', '{"slack_channel": "https://company.slack.com/channels/risk-mgmt", "tools": ["SAS", "Python", "Moody''s Analytics"]}', 'system@demo', 'system@demo', NOW(), NOW()),
+('00100003-0002-4000-8000-000000000003', 'compliance-ops', 'Compliance Operations Team', 'AML transaction monitoring, KYC remediation, and regulatory reporting', '{"slack_channel": "https://company.slack.com/channels/compliance-ops", "responsibilities": ["BSA/AML", "OFAC", "KYC/CDD", "SAR Filing"]}', 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -98,12 +97,12 @@ ON CONFLICT (project_id, team_id) DO NOTHING;
 -- 4. DATA CONTRACTS
 -- ============================================================================
 
-INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, domain_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
-('00400001-0002-4000-8000-000000000001', 'Trading & Market Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0002-4000-8000-000000000001', '00000002-0002-4000-8000-000000000002', 'Standardized trade execution, order book, and market data for analytics and regulatory reporting', 'Real-time P&L, best execution analysis, MiFID II transaction reporting, and alpha research', 'Timestamps must be nanosecond precision; all prices in instrument native currency; T+1 settlement data only', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0002-4000-8000-000000000001'),
-('00400002-0002-4000-8000-000000000002', 'Risk Exposure Contract', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100002-0002-4000-8000-000000000002', '00000003-0002-4000-8000-000000000003', 'Aggregated risk exposures across credit, market, and counterparty risk', 'BCBS 239 risk reports, stress testing scenarios, and limit monitoring', 'Netting requires CSA-level granularity; VaR computed at 99% 10-day horizon; CVA/DVA excluded from market risk', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0002-4000-8000-000000000002'),
-('00400003-0002-4000-8000-000000000003', 'KYC/AML Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100003-0002-4000-8000-000000000003', '00000004-0002-4000-8000-000000000004', 'Customer due diligence, beneficial ownership, and transaction monitoring data', 'Entity resolution, risk scoring, SAR narrative generation, and OFAC screening', 'PEP and sanctions data refreshed daily; beneficial ownership threshold 25%; STR filing requires manual review', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0002-4000-8000-000000000003'),
-('00400004-0002-4000-8000-000000000004', 'Regulatory Reporting Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100003-0002-4000-8000-000000000003', '00000004-0002-4000-8000-000000000004', 'Data feeds for prudential regulatory submissions (FR Y-14, CCAR, DFAST)', 'Automated population of regulatory templates and submission validation', 'Quarter-end data only; manual overrides must have four-eyes approval; reconciliation tolerance ±$1M', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0002-4000-8000-000000000004'),
-('00400005-0002-4000-8000-000000000005', 'Account & Transaction Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0002-4000-8000-000000000001', '00000001-0002-4000-8000-000000000001', 'Core banking account master and transaction data for retail and commercial banking', 'Account analytics, fraud detection, fee optimization, and customer 360 enrichment', 'Real-time balance is T+0 approximation; currency conversion uses daily ECB fix; PII encrypted at rest with AES-256', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0002-4000-8000-000000000005')
+INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
+('00400001-0002-4000-8000-000000000001', 'Trading & Market Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0002-4000-8000-000000000001', 'Standardized trade execution, order book, and market data for analytics and regulatory reporting', 'Real-time P&L, best execution analysis, MiFID II transaction reporting, and alpha research', 'Timestamps must be nanosecond precision; all prices in instrument native currency; T+1 settlement data only', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0002-4000-8000-000000000001'),
+('00400002-0002-4000-8000-000000000002', 'Risk Exposure Contract', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100002-0002-4000-8000-000000000002', 'Aggregated risk exposures across credit, market, and counterparty risk', 'BCBS 239 risk reports, stress testing scenarios, and limit monitoring', 'Netting requires CSA-level granularity; VaR computed at 99% 10-day horizon; CVA/DVA excluded from market risk', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0002-4000-8000-000000000002'),
+('00400003-0002-4000-8000-000000000003', 'KYC/AML Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100003-0002-4000-8000-000000000003', 'Customer due diligence, beneficial ownership, and transaction monitoring data', 'Entity resolution, risk scoring, SAR narrative generation, and OFAC screening', 'PEP and sanctions data refreshed daily; beneficial ownership threshold 25%; STR filing requires manual review', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0002-4000-8000-000000000003'),
+('00400004-0002-4000-8000-000000000004', 'Regulatory Reporting Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100003-0002-4000-8000-000000000003', 'Data feeds for prudential regulatory submissions (FR Y-14, CCAR, DFAST)', 'Automated population of regulatory templates and submission validation', 'Quarter-end data only; manual overrides must have four-eyes approval; reconciliation tolerance ±$1M', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0002-4000-8000-000000000004'),
+('00400005-0002-4000-8000-000000000005', 'Account & Transaction Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0002-4000-8000-000000000001', 'Core banking account master and transaction data for retail and commercial banking', 'Account analytics, fraud detection, fee optimization, and customer 360 enrichment', 'Real-time balance is T+0 approximation; currency conversion uses daily ECB fix; PII encrypted at rest with AES-256', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0002-4000-8000-000000000005')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -237,12 +236,12 @@ ON CONFLICT (id) DO NOTHING;
 -- 5. DATA PRODUCTS
 -- ============================================================================
 
-INSERT INTO data_products (id, api_version, kind, status, name, version, domain, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
-('00700001-0002-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'Trading Analytics Dashboard v1', '1.0.0', 'Capital Markets', 'fsi-demo', '00100001-0002-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0002-4000-8000-000000000001'),
-('00700002-0002-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'Enterprise Risk Aggregation v1', '1.0.0', 'Risk Management', 'fsi-demo', '00100002-0002-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700002-0002-4000-8000-000000000002'),
-('00700003-0002-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'AML Transaction Monitoring v1', '1.0.0', 'Regulatory Compliance', 'fsi-demo', '00100003-0002-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700003-0002-4000-8000-000000000003'),
-('00700004-0002-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Regulatory Reporting Hub v1', '1.0.0', 'Regulatory Compliance', 'fsi-demo', '00100003-0002-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700004-0002-4000-8000-000000000004'),
-('00700005-0002-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Customer 360 Banking v1', '1.0.0', 'Banking', 'fsi-demo', '00100001-0002-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700005-0002-4000-8000-000000000005')
+INSERT INTO data_products (id, api_version, kind, status, name, version, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
+('00700001-0002-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'Trading Analytics Dashboard v1', '1.0.0', 'fsi-demo', '00100001-0002-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0002-4000-8000-000000000001'),
+('00700002-0002-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'Enterprise Risk Aggregation v1', '1.0.0', 'fsi-demo', '00100002-0002-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700002-0002-4000-8000-000000000002'),
+('00700003-0002-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'AML Transaction Monitoring v1', '1.0.0', 'fsi-demo', '00100003-0002-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700003-0002-4000-8000-000000000003'),
+('00700004-0002-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Regulatory Reporting Hub v1', '1.0.0', 'fsi-demo', '00100003-0002-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700004-0002-4000-8000-000000000004'),
+('00700005-0002-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Customer 360 Banking v1', '1.0.0', 'fsi-demo', '00100001-0002-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700005-0002-4000-8000-000000000005')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -340,23 +339,76 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0002-4000-8000-000000000001', 'BCBS 239 Data Lineage', 'Verify all risk data has documented end-to-end lineage per BCBS 239 Principle 4',
-'Risk dataset lacks documented data lineage. BCBS 239 requires complete, documented lineage from source to report for all material risk data.',
-'MATCH (d:Dataset) WHERE d.domain IN [''Risk Management'', ''Capital Markets''] ASSERT d.has_lineage = true AND d.lineage_validated = true', 'Governance', 'critical', true, NOW(), NOW()),
+('01100001-0002-4000-8000-000000000001', 'BCBS 239 Risk Tier Tagging', 'Verify that data products in BCBS 239 scope carry a risk tier, so material risk data is identified per BCBS 239',
+'Data product is in BCBS 239 scope but has no risk tier. Tag it risk-tier-1 (or the applicable tier) so its lineage and controls are reviewed with the material risk data.',
+'MATCH (p:data_product) WHERE HAS_TAG(''bcbs-239'') ASSERT HAS_TAG(''risk-tier-1'')', 'Governance', 'critical', true, NOW(), NOW()),
 
-('01100002-0002-4000-8000-000000000002', 'AML Transaction Monitoring Coverage', 'Ensure all customer accounts are covered by AML transaction monitoring',
-'Account not covered by AML monitoring. All retail and commercial accounts must be monitored for suspicious activity per BSA requirements.',
-'MATCH (a:Account) ASSERT a.aml_monitoring_enabled = true', 'Security', 'critical', true, NOW(), NOW()),
+('01100002-0002-4000-8000-000000000002', 'AML Monitoring Tagging', 'Ensure banking and regulatory compliance data products are tagged as covered by AML transaction monitoring',
+'Data product is not marked as AML-monitored. All banking and regulatory compliance products must be covered by AML transaction monitoring per BSA requirements.',
+'MATCH (p:data_product) WHERE p.domain IN [''Banking'', ''Regulatory Compliance''] ASSERT HAS_TAG(''aml-monitored'')', 'Security', 'critical', true, NOW(), NOW()),
 
-('01100003-0002-4000-8000-000000000003', 'KYC Periodic Review', 'Verify KYC profiles are reviewed within regulatory timelines based on risk rating',
-'KYC review overdue. High-risk customers must be reviewed annually, medium-risk every 2 years, and low-risk every 3 years.',
-'MATCH (c:Customer) ASSERT c.days_since_kyc_review <= CASE c.risk_rating WHEN ''high'' THEN 365 WHEN ''medium'' THEN 730 ELSE 1095 END', 'Governance', 'high', true, NOW(), NOW()),
+('01100003-0002-4000-8000-000000000003', 'KYC and Regulatory Contracts Active', 'Verify KYC and regulatory data contracts are active before use',
+'KYC or regulatory data contract is not active. Contracts for KYC and regulatory data must complete review and be active before consumers rely on them.',
+'MATCH (c:data_contract) WHERE c.name CONTAINS ''KYC'' OR c.name CONTAINS ''Regulatory'' ASSERT c.status = ''active''', 'Governance', 'high', true, NOW(), NOW()),
 
-('01100004-0002-4000-8000-000000000004', 'Market Data Timeliness', 'Ensure market data feeds are within acceptable staleness thresholds',
-'Market data feed is stale. Real-time feeds must be within 500ms and end-of-day feeds must be available by T+1 06:00 UTC.',
-'MATCH (f:MarketDataFeed) WHERE f.feed_type = ''realtime'' ASSERT f.latency_ms <= 500', 'Data Quality', 'high', true, NOW(), NOW())
+('01100004-0002-4000-8000-000000000004', 'Capital Markets Risk Classification', 'Ensure capital markets data products are classified for market risk',
+'Capital markets data product is not tagged market-risk. Market data products must be classified so their timeliness thresholds are monitored.',
+'MATCH (p:data_product) WHERE p.domain = ''Capital Markets'' ASSERT HAS_TAG(''market-risk'')', 'Data Quality', 'high', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'BCBS 239 Data Lineage'
+    THEN 'BCBS 239 Risk Tier Tagging' ELSE name END,
+  description = CASE WHEN description = 'Verify all risk data has documented end-to-end lineage per BCBS 239 Principle 4'
+    THEN 'Verify that data products in BCBS 239 scope carry a risk tier, so material risk data is identified per BCBS 239' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Risk dataset lacks documented data lineage. BCBS 239 requires complete, documented lineage from source to report for all material risk data.'
+    THEN 'Data product is in BCBS 239 scope but has no risk tier. Tag it risk-tier-1 (or the applicable tier) so its lineage and controls are reviewed with the material risk data.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''bcbs-239'') ASSERT HAS_TAG(''risk-tier-1'')',
+  updated_at = NOW()
+WHERE id = '01100001-0002-4000-8000-000000000001'
+  AND rule = 'MATCH (d:Dataset) WHERE d.domain IN [''Risk Management'', ''Capital Markets''] ASSERT d.has_lineage = true AND d.lineage_validated = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'AML Transaction Monitoring Coverage'
+    THEN 'AML Monitoring Tagging' ELSE name END,
+  description = CASE WHEN description = 'Ensure all customer accounts are covered by AML transaction monitoring'
+    THEN 'Ensure banking and regulatory compliance data products are tagged as covered by AML transaction monitoring' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Account not covered by AML monitoring. All retail and commercial accounts must be monitored for suspicious activity per BSA requirements.'
+    THEN 'Data product is not marked as AML-monitored. All banking and regulatory compliance products must be covered by AML transaction monitoring per BSA requirements.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain IN [''Banking'', ''Regulatory Compliance''] ASSERT HAS_TAG(''aml-monitored'')',
+  updated_at = NOW()
+WHERE id = '01100002-0002-4000-8000-000000000002'
+  AND rule = 'MATCH (a:Account) ASSERT a.aml_monitoring_enabled = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'KYC Periodic Review'
+    THEN 'KYC and Regulatory Contracts Active' ELSE name END,
+  description = CASE WHEN description = 'Verify KYC profiles are reviewed within regulatory timelines based on risk rating'
+    THEN 'Verify KYC and regulatory data contracts are active before use' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'KYC review overdue. High-risk customers must be reviewed annually, medium-risk every 2 years, and low-risk every 3 years.'
+    THEN 'KYC or regulatory data contract is not active. Contracts for KYC and regulatory data must complete review and be active before consumers rely on them.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE c.name CONTAINS ''KYC'' OR c.name CONTAINS ''Regulatory'' ASSERT c.status = ''active''',
+  updated_at = NOW()
+WHERE id = '01100003-0002-4000-8000-000000000003'
+  AND rule = 'MATCH (c:Customer) ASSERT c.days_since_kyc_review <= CASE c.risk_rating WHEN ''high'' THEN 365 WHEN ''medium'' THEN 730 ELSE 1095 END';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Market Data Timeliness'
+    THEN 'Capital Markets Risk Classification' ELSE name END,
+  description = CASE WHEN description = 'Ensure market data feeds are within acceptable staleness thresholds'
+    THEN 'Ensure capital markets data products are classified for market risk' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Market data feed is stale. Real-time feeds must be within 500ms and end-of-day feeds must be available by T+1 06:00 UTC.'
+    THEN 'Capital markets data product is not tagged market-risk. Market data products must be classified so their timeliness thresholds are monitored.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain = ''Capital Markets'' ASSERT HAS_TAG(''market-risk'')',
+  updated_at = NOW()
+WHERE id = '01100004-0002-4000-8000-000000000004'
+  AND rule = 'MATCH (f:MarketDataFeed) WHERE f.feed_type = ''realtime'' ASSERT f.latency_ms <= 500';
+
 
 
 -- ============================================================================
@@ -512,116 +564,84 @@ ON CONFLICT (id) DO NOTHING;
 -- 15. ASSETS — FSI catalog objects (type=0f3)
 -- ============================================================================
 
-INSERT INTO assets (id, name, description, asset_type_id, platform, location, domain_id, properties, tags, status, created_by, created_at, updated_at) VALUES
--- Trading
+INSERT INTO assets (id, name, description, asset_type_id, platform, location, properties, tags, status, created_by, created_at, updated_at) VALUES
 ('0f300101-0002-4000-8000-000000000001',
  'lakehouse.fsi.trading.executions',
  'FIX-protocol execution reports for equities and FX desks (intraday, sub-second).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.fsi.trading.executions',
- '00000002-0002-4000-8000-000000000002',
  '{"catalog": "lakehouse", "schema": "fsi_trading", "table_name": "executions", "row_count": 92000000, "format": "delta"}',
  '["transaction-data", "mifid-ii"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Trading Position (vertical asset type)
 ('0f300102-0002-4000-8000-000000000002',
  'positions.equities.eod_2026_05_01',
  'End-of-day equity positions snapshot for May 1 2026.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Trading Position' LIMIT 1), '0f200101-0002-4000-8000-000000000001'), 'Databricks', 'positions.equities.eod_2026_05_01',
- '00000002-0002-4000-8000-000000000002',
  '{"asset_class": "equities", "snapshot_date": "2026-05-01", "instrument_count": 8400}',
  '["risk-tier-1", "market-risk"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Risk Limit (vertical asset type)
 ('0f300103-0002-4000-8000-000000000003',
  'limit.equities.var_99_1d',
  'Equities desk 99% / 1-day VaR limit.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Risk Limit' LIMIT 1), '0f200102-0002-4000-8000-000000000002'), 'Risk System', 'limits/equities/var_99_1d',
- '00000003-0002-4000-8000-000000000003',
  '{"limit_type": "VaR", "confidence": 0.99, "horizon_days": 1, "limit_usd": 25000000}',
  '["risk-tier-1", "market-risk"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Risk aggregation table
 ('0f300104-0002-4000-8000-000000000004',
  'lakehouse.fsi.risk.aggregated_var',
  'Aggregated VaR metrics (firm-wide, by desk, by asset class) feeding CRO dashboard.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.fsi.risk.aggregated_var',
- '00000003-0002-4000-8000-000000000003',
  '{"catalog": "lakehouse", "schema": "fsi_risk", "table_name": "aggregated_var", "format": "delta"}',
  '["bcbs-239", "risk-tier-1"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- AML stream
 ('0f300105-0002-4000-8000-000000000005',
  'kafka.fsi.aml.transaction_alerts',
  'Real-time stream of AML scenario hits and ML anomaly alerts.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Stream' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts',
- '00000004-0002-4000-8000-000000000004',
  '{"topic": "aml.transaction_alerts", "throughput_msgs_per_sec": 600}',
  '["aml-monitored", "transaction-data"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Regulatory Filing (vertical asset type)
 ('0f300106-0002-4000-8000-000000000006',
  'FFIEC-Call-Report-2026-Q1',
  'FFIEC Call Report quarterly submission for 2026 Q1.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Regulatory Filing' LIMIT 1), '0f200103-0002-4000-8000-000000000003'), 'Reg Portal', 'filings/ffiec/2026-Q1',
- '00000004-0002-4000-8000-000000000004',
  '{"filing_type": "FFIEC Call Report", "period": "2026-Q1", "status": "submitted", "submission_date": "2026-04-30"}',
  '["bcbs-239"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Customer table
 ('0f300107-0002-4000-8000-000000000007',
  'lakehouse.fsi.banking.customer_master',
  'Banking customer master with KYC tier and segment classifications.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.fsi.banking.customer_master',
- '00000001-0002-4000-8000-000000000001',
  '{"catalog": "lakehouse", "schema": "fsi_banking", "table_name": "customer_master", "row_count": 4200000, "format": "delta"}',
  '["aml-monitored"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Dashboard
 ('0f300108-0002-4000-8000-000000000008',
  'CRO Risk Dashboard',
  'Daily firm-wide risk metrics, breach summary, and stress test results.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Dashboard' LIMIT 1), '0f200002-0000-4000-8000-000000000002'), 'Databricks', 'https://bi.bank.com/dashboards/cro-risk-v1',
- '00000003-0002-4000-8000-000000000003',
  '{"refresh_schedule": "hourly", "audience": "cro-team"}',
  '["bcbs-239", "risk-tier-1"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- ── Column assets for the FSI Tables / Streams above ──
--- 0f300101 lakehouse.fsi.trading.executions
-('0f520101-0002-4000-8000-000000000001', 'trade_id',     'Unique trade execution identifier',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.trade_id',     '00000002-0002-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}',  '["mifid-ii", "key"]',                'active', 'system@demo', NOW(), NOW()),
-('0f520102-0002-4000-8000-000000000002', 'instrument_id','ISIN or internal security identifier',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.instrument_id','00000002-0002-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520103-0002-4000-8000-000000000003', 'side',         'BUY or SELL',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.side',         '00000002-0002-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520104-0002-4000-8000-000000000004', 'quantity',     'Executed quantity',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.quantity',     '00000002-0002-4000-8000-000000000002', '{"data_type": "DECIMAL(18,4)", "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520105-0002-4000-8000-000000000005', 'price',        'Execution price (instrument currency)',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.price',        '00000002-0002-4000-8000-000000000002', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520106-0002-4000-8000-000000000006', 'execution_ts', 'Execution timestamp (nanosecond precision)', (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.execution_ts', '00000002-0002-4000-8000-000000000002', '{"data_type": "TIMESTAMP_NS",  "nullable": false, "partition_key": true}',   '["mifid-ii", "partition"]',          'active', 'system@demo', NOW(), NOW()),
-
--- 0f300104 lakehouse.fsi.risk.aggregated_var
-('0f520111-0002-4000-8000-000000000011', 'exposure_id',    'Unique exposure record identifier',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.exposure_id',   '00000003-0002-4000-8000-000000000003', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}', '["bcbs-239", "key"]',                'active', 'system@demo', NOW(), NOW()),
-('0f520112-0002-4000-8000-000000000012', 'risk_type',      'credit | market | counterparty | operational',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.risk_type',     '00000003-0002-4000-8000-000000000003', '{"data_type": "STRING",        "nullable": false}',                         '["bcbs-239"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520113-0002-4000-8000-000000000013', 'desk',           'Trading desk identifier',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.desk',          '00000003-0002-4000-8000-000000000003', '{"data_type": "STRING",        "nullable": false}',                         '["bcbs-239"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520114-0002-4000-8000-000000000014', 'var_99',         'Value-at-Risk at 99% confidence',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.var_99',        '00000003-0002-4000-8000-000000000003', '{"data_type": "DECIMAL(18,2)", "nullable": false}',                         '["bcbs-239", "kpi"]',                'active', 'system@demo', NOW(), NOW()),
-('0f520115-0002-4000-8000-000000000015', 'reporting_date', 'Risk reporting date (partition key)',       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.reporting_date','00000003-0002-4000-8000-000000000003', '{"data_type": "DATE",          "nullable": false, "partition_key": true}',  '["bcbs-239", "partition"]',          'active', 'system@demo', NOW(), NOW()),
-
--- 0f300105 kafka.fsi.aml.transaction_alerts (Stream — schema as advertised on the topic)
-('0f520121-0002-4000-8000-000000000021', 'alert_id',       'Unique AML alert identifier',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.alert_id',     '00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false, "is_primary_key": true}', '["aml", "key"]',     'active', 'system@demo', NOW(), NOW()),
-('0f520122-0002-4000-8000-000000000022', 'customer_id',    'FK to customer_kyc.customer_id',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.customer_id',  '00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false}',                          '["aml", "fk"]',      'active', 'system@demo', NOW(), NOW()),
-('0f520123-0002-4000-8000-000000000023', 'scenario_code',  'Scenario / model that fired',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.scenario_code','00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false}',                          '["aml"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520124-0002-4000-8000-000000000024', 'severity',       'low | medium | high | critical',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.severity',     '00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false}',                          '["aml"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520125-0002-4000-8000-000000000025', 'alert_ts',       'Alert generation timestamp (UTC)',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.alert_ts',     '00000004-0002-4000-8000-000000000004', '{"data_type": "TIMESTAMP", "nullable": false}',                       '["aml"]',            'active', 'system@demo', NOW(), NOW()),
-
--- 0f300107 lakehouse.fsi.banking.customer_master
-('0f520131-0002-4000-8000-000000000031', 'customer_id',  'Unique customer identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.customer_id', '00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["pii", "key"]',          'active', 'system@demo', NOW(), NOW()),
-('0f520132-0002-4000-8000-000000000032', 'kyc_tier',     'Tier of customer due diligence applied',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.kyc_tier',    '00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false}',                          '["aml-monitored"]',       'active', 'system@demo', NOW(), NOW()),
-('0f520133-0002-4000-8000-000000000033', 'segment',      'Retail | Mass-Affluent | Private | SMB | Corp',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.segment',     '00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false}',                          '["banking"]',             'active', 'system@demo', NOW(), NOW()),
-('0f520134-0002-4000-8000-000000000034', 'opened_date',  'Earliest account opening date for customer',   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.opened_date', '00000001-0002-4000-8000-000000000001', '{"data_type": "DATE",    "nullable": false}',                          '["banking"]',             'active', 'system@demo', NOW(), NOW()),
-('0f520135-0002-4000-8000-000000000035', 'country_code', 'ISO 3166-1 alpha-2 of customer residence',     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.country_code','00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false}',                          '["banking", "pii"]',      'active', 'system@demo', NOW(), NOW())
+('0f520101-0002-4000-8000-000000000001', 'trade_id',     'Unique trade execution identifier',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.trade_id', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}',  '["mifid-ii", "key"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520102-0002-4000-8000-000000000002', 'instrument_id','ISIN or internal security identifier',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.instrument_id', '{"data_type": "STRING",        "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520103-0002-4000-8000-000000000003', 'side',         'BUY or SELL',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.side', '{"data_type": "STRING",        "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520104-0002-4000-8000-000000000004', 'quantity',     'Executed quantity',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.quantity', '{"data_type": "DECIMAL(18,4)", "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520105-0002-4000-8000-000000000005', 'price',        'Execution price (instrument currency)',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.price', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520106-0002-4000-8000-000000000006', 'execution_ts', 'Execution timestamp (nanosecond precision)', (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.execution_ts', '{"data_type": "TIMESTAMP_NS",  "nullable": false, "partition_key": true}',   '["mifid-ii", "partition"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520111-0002-4000-8000-000000000011', 'exposure_id',    'Unique exposure record identifier',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.exposure_id', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}', '["bcbs-239", "key"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520112-0002-4000-8000-000000000012', 'risk_type',      'credit | market | counterparty | operational',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.risk_type', '{"data_type": "STRING",        "nullable": false}',                         '["bcbs-239"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520113-0002-4000-8000-000000000013', 'desk',           'Trading desk identifier',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.desk', '{"data_type": "STRING",        "nullable": false}',                         '["bcbs-239"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520114-0002-4000-8000-000000000014', 'var_99',         'Value-at-Risk at 99% confidence',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.var_99', '{"data_type": "DECIMAL(18,2)", "nullable": false}',                         '["bcbs-239", "kpi"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520115-0002-4000-8000-000000000015', 'reporting_date', 'Risk reporting date (partition key)',       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.reporting_date', '{"data_type": "DATE",          "nullable": false, "partition_key": true}',  '["bcbs-239", "partition"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520121-0002-4000-8000-000000000021', 'alert_id',       'Unique AML alert identifier',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.alert_id', '{"data_type": "STRING", "nullable": false, "is_primary_key": true}', '["aml", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520122-0002-4000-8000-000000000022', 'customer_id',    'FK to customer_kyc.customer_id',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.customer_id', '{"data_type": "STRING", "nullable": false}',                          '["aml", "fk"]',      'active', 'system@demo', NOW(), NOW()),
+('0f520123-0002-4000-8000-000000000023', 'scenario_code',  'Scenario / model that fired',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.scenario_code', '{"data_type": "STRING", "nullable": false}',                          '["aml"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520124-0002-4000-8000-000000000024', 'severity',       'low | medium | high | critical',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.severity', '{"data_type": "STRING", "nullable": false}',                          '["aml"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520125-0002-4000-8000-000000000025', 'alert_ts',       'Alert generation timestamp (UTC)',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.alert_ts', '{"data_type": "TIMESTAMP", "nullable": false}',                       '["aml"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520131-0002-4000-8000-000000000031', 'customer_id',  'Unique customer identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.customer_id', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["pii", "key"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520132-0002-4000-8000-000000000032', 'kyc_tier',     'Tier of customer due diligence applied',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.kyc_tier', '{"data_type": "STRING",  "nullable": false}',                          '["aml-monitored"]',       'active', 'system@demo', NOW(), NOW()),
+('0f520133-0002-4000-8000-000000000033', 'segment',      'Retail | Mass-Affluent | Private | SMB | Corp',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.segment', '{"data_type": "STRING",  "nullable": false}',                          '["banking"]',             'active', 'system@demo', NOW(), NOW()),
+('0f520134-0002-4000-8000-000000000034', 'opened_date',  'Earliest account opening date for customer',   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.opened_date', '{"data_type": "DATE",    "nullable": false}',                          '["banking"]',             'active', 'system@demo', NOW(), NOW()),
+('0f520135-0002-4000-8000-000000000035', 'country_code', 'ISO 3166-1 alpha-2 of customer residence',     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.country_code', '{"data_type": "STRING",  "nullable": false}',                          '["banking", "pii"]',      'active', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -793,3 +813,53 @@ COMMIT;
 -- ============================================================================
 -- End of FSI Demo Data — preset=fsi
 -- ============================================================================
+
+
+-- ============================================================================
+-- Domain associations (multi-domain assignment; replaces removed single-value
+-- domain columns on teams/data_contracts/data_products/assets). Type code 031.
+-- ============================================================================
+INSERT INTO entity_domain_associations (id, domain_id, entity_id, entity_type, is_primary, assigned_by, assigned_at) VALUES
+('03100001-0002-4000-8000-000000000001', '00000002-0002-4000-8000-000000000002', '00100001-0002-4000-8000-000000000001', 'team', true, 'system@demo', NOW()),
+('03100002-0002-4000-8000-000000000002', '00000003-0002-4000-8000-000000000003', '00100002-0002-4000-8000-000000000002', 'team', true, 'system@demo', NOW()),
+('03100003-0002-4000-8000-000000000003', '00000004-0002-4000-8000-000000000004', '00100003-0002-4000-8000-000000000003', 'team', true, 'system@demo', NOW()),
+('03100004-0002-4000-8000-000000000004', '00000002-0002-4000-8000-000000000002', '00400001-0002-4000-8000-000000000001', 'data_contract', true, 'system@demo', NOW()),
+('03100005-0002-4000-8000-000000000005', '00000003-0002-4000-8000-000000000003', '00400002-0002-4000-8000-000000000002', 'data_contract', true, 'system@demo', NOW()),
+('03100006-0002-4000-8000-000000000006', '00000004-0002-4000-8000-000000000004', '00400003-0002-4000-8000-000000000003', 'data_contract', true, 'system@demo', NOW()),
+('03100007-0002-4000-8000-000000000007', '00000004-0002-4000-8000-000000000004', '00400004-0002-4000-8000-000000000004', 'data_contract', true, 'system@demo', NOW()),
+('03100008-0002-4000-8000-000000000008', '00000001-0002-4000-8000-000000000001', '00400005-0002-4000-8000-000000000005', 'data_contract', true, 'system@demo', NOW()),
+('03100009-0002-4000-8000-000000000009', '00000002-0002-4000-8000-000000000002', '00700001-0002-4000-8000-000000000001', 'data_product', true, 'system@demo', NOW()),
+('0310000a-0002-4000-8000-000000000010', '00000003-0002-4000-8000-000000000003', '00700002-0002-4000-8000-000000000002', 'data_product', true, 'system@demo', NOW()),
+('0310000b-0002-4000-8000-000000000011', '00000004-0002-4000-8000-000000000004', '00700003-0002-4000-8000-000000000003', 'data_product', true, 'system@demo', NOW()),
+('0310000c-0002-4000-8000-000000000012', '00000004-0002-4000-8000-000000000004', '00700004-0002-4000-8000-000000000004', 'data_product', true, 'system@demo', NOW()),
+('0310000d-0002-4000-8000-000000000013', '00000001-0002-4000-8000-000000000001', '00700005-0002-4000-8000-000000000005', 'data_product', true, 'system@demo', NOW()),
+('0310000e-0002-4000-8000-000000000014', '00000002-0002-4000-8000-000000000002', '0f300101-0002-4000-8000-000000000001', 'asset', true, 'system@demo', NOW()),
+('0310000f-0002-4000-8000-000000000015', '00000002-0002-4000-8000-000000000002', '0f300102-0002-4000-8000-000000000002', 'asset', true, 'system@demo', NOW()),
+('03100010-0002-4000-8000-000000000016', '00000003-0002-4000-8000-000000000003', '0f300103-0002-4000-8000-000000000003', 'asset', true, 'system@demo', NOW()),
+('03100011-0002-4000-8000-000000000017', '00000003-0002-4000-8000-000000000003', '0f300104-0002-4000-8000-000000000004', 'asset', true, 'system@demo', NOW()),
+('03100012-0002-4000-8000-000000000018', '00000004-0002-4000-8000-000000000004', '0f300105-0002-4000-8000-000000000005', 'asset', true, 'system@demo', NOW()),
+('03100013-0002-4000-8000-000000000019', '00000004-0002-4000-8000-000000000004', '0f300106-0002-4000-8000-000000000006', 'asset', true, 'system@demo', NOW()),
+('03100014-0002-4000-8000-000000000020', '00000001-0002-4000-8000-000000000001', '0f300107-0002-4000-8000-000000000007', 'asset', true, 'system@demo', NOW()),
+('03100015-0002-4000-8000-000000000021', '00000003-0002-4000-8000-000000000003', '0f300108-0002-4000-8000-000000000008', 'asset', true, 'system@demo', NOW()),
+('03100016-0002-4000-8000-000000000022', '00000002-0002-4000-8000-000000000002', '0f520101-0002-4000-8000-000000000001', 'asset', true, 'system@demo', NOW()),
+('03100017-0002-4000-8000-000000000023', '00000002-0002-4000-8000-000000000002', '0f520102-0002-4000-8000-000000000002', 'asset', true, 'system@demo', NOW()),
+('03100018-0002-4000-8000-000000000024', '00000002-0002-4000-8000-000000000002', '0f520103-0002-4000-8000-000000000003', 'asset', true, 'system@demo', NOW()),
+('03100019-0002-4000-8000-000000000025', '00000002-0002-4000-8000-000000000002', '0f520104-0002-4000-8000-000000000004', 'asset', true, 'system@demo', NOW()),
+('0310001a-0002-4000-8000-000000000026', '00000002-0002-4000-8000-000000000002', '0f520105-0002-4000-8000-000000000005', 'asset', true, 'system@demo', NOW()),
+('0310001b-0002-4000-8000-000000000027', '00000002-0002-4000-8000-000000000002', '0f520106-0002-4000-8000-000000000006', 'asset', true, 'system@demo', NOW()),
+('0310001c-0002-4000-8000-000000000028', '00000003-0002-4000-8000-000000000003', '0f520111-0002-4000-8000-000000000011', 'asset', true, 'system@demo', NOW()),
+('0310001d-0002-4000-8000-000000000029', '00000003-0002-4000-8000-000000000003', '0f520112-0002-4000-8000-000000000012', 'asset', true, 'system@demo', NOW()),
+('0310001e-0002-4000-8000-000000000030', '00000003-0002-4000-8000-000000000003', '0f520113-0002-4000-8000-000000000013', 'asset', true, 'system@demo', NOW()),
+('0310001f-0002-4000-8000-000000000031', '00000003-0002-4000-8000-000000000003', '0f520114-0002-4000-8000-000000000014', 'asset', true, 'system@demo', NOW()),
+('03100020-0002-4000-8000-000000000032', '00000003-0002-4000-8000-000000000003', '0f520115-0002-4000-8000-000000000015', 'asset', true, 'system@demo', NOW()),
+('03100021-0002-4000-8000-000000000033', '00000004-0002-4000-8000-000000000004', '0f520121-0002-4000-8000-000000000021', 'asset', true, 'system@demo', NOW()),
+('03100022-0002-4000-8000-000000000034', '00000004-0002-4000-8000-000000000004', '0f520122-0002-4000-8000-000000000022', 'asset', true, 'system@demo', NOW()),
+('03100023-0002-4000-8000-000000000035', '00000004-0002-4000-8000-000000000004', '0f520123-0002-4000-8000-000000000023', 'asset', true, 'system@demo', NOW()),
+('03100024-0002-4000-8000-000000000036', '00000004-0002-4000-8000-000000000004', '0f520124-0002-4000-8000-000000000024', 'asset', true, 'system@demo', NOW()),
+('03100025-0002-4000-8000-000000000037', '00000004-0002-4000-8000-000000000004', '0f520125-0002-4000-8000-000000000025', 'asset', true, 'system@demo', NOW()),
+('03100026-0002-4000-8000-000000000038', '00000001-0002-4000-8000-000000000001', '0f520131-0002-4000-8000-000000000031', 'asset', true, 'system@demo', NOW()),
+('03100027-0002-4000-8000-000000000039', '00000001-0002-4000-8000-000000000001', '0f520132-0002-4000-8000-000000000032', 'asset', true, 'system@demo', NOW()),
+('03100028-0002-4000-8000-000000000040', '00000001-0002-4000-8000-000000000001', '0f520133-0002-4000-8000-000000000033', 'asset', true, 'system@demo', NOW()),
+('03100029-0002-4000-8000-000000000041', '00000001-0002-4000-8000-000000000001', '0f520134-0002-4000-8000-000000000034', 'asset', true, 'system@demo', NOW()),
+('0310002a-0002-4000-8000-000000000042', '00000001-0002-4000-8000-000000000001', '0f520135-0002-4000-8000-000000000035', 'asset', true, 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;

@@ -178,6 +178,7 @@ interface DebugPanelProps {
 }
 
 function DebugPanel({ debug }: DebugPanelProps) {
+  const { t } = useTranslation(['search']);
   const [isOpen, setIsOpen] = useState(false);
   const hasSessionContext = debug.session_context?.is_follow_up && debug.session_context.prior_tool_results > 0;
 
@@ -186,11 +187,11 @@ function DebugPanel({ debug }: DebugPanelProps) {
       <CollapsibleTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs text-muted-foreground hover:text-foreground px-2">
           <Bug className="w-3 h-3" />
-          <span>Debug</span>
+          <span>{t('search:llm.debug.title')}</span>
           <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
           <span className="opacity-60">
-            {debug.total_tool_calls} tool call{debug.total_tool_calls !== 1 ? 's' : ''}
-            {hasSessionContext && ` (${debug.session_context!.prior_tool_results} prior)`}
+            {t('search:llm.debug.toolCallCount', { count: debug.total_tool_calls })}
+            {hasSessionContext && ` ${t('search:llm.debug.priorResults', { count: debug.session_context!.prior_tool_results })}`}
             {' '}&middot; {debug.total_elapsed_ms}ms
           </span>
         </Button>
@@ -202,7 +203,7 @@ function DebugPanel({ debug }: DebugPanelProps) {
             <>
               <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                 <MessageSquare className="w-3 h-3" />
-                <span>Follow-up: LLM has {debug.session_context!.prior_messages} prior messages ({debug.session_context!.prior_tool_results} tool results) in conversation history</span>
+                <span>{t('search:llm.debug.followUp', { messages: debug.session_context!.prior_messages, results: debug.session_context!.prior_tool_results })}</span>
               </div>
               <Separator />
             </>
@@ -210,16 +211,16 @@ function DebugPanel({ debug }: DebugPanelProps) {
 
           {/* Query Classification */}
           <div>
-            <div className="font-semibold text-muted-foreground mb-1">Query Classification</div>
+            <div className="font-semibold text-muted-foreground mb-1">{t('search:llm.debug.queryClassification')}</div>
             <div className="space-y-1">
-              <div><span className="text-muted-foreground">Query:</span> {debug.query_classification.user_query}</div>
+              <div><span className="text-muted-foreground">{t('search:llm.debug.query')}</span> {debug.query_classification.user_query}</div>
               <div className="flex flex-wrap gap-1 items-center">
-                <span className="text-muted-foreground">Categories:</span>
+                <span className="text-muted-foreground">{t('search:llm.debug.categories')}</span>
                 {debug.query_classification.categories.map((cat) => (
                   <Badge key={cat} variant="secondary" className="text-[10px] px-1.5 py-0">{cat}</Badge>
                 ))}
               </div>
-              <div><span className="text-muted-foreground">Tools provided:</span> {debug.query_classification.tools_count} ({debug.query_classification.tools_provided.join(', ')})</div>
+              <div><span className="text-muted-foreground">{t('search:llm.debug.toolsProvided')}</span> {debug.query_classification.tools_count} ({debug.query_classification.tools_provided.join(', ')})</div>
             </div>
           </div>
 
@@ -227,11 +228,11 @@ function DebugPanel({ debug }: DebugPanelProps) {
 
           {/* Model Info */}
           <div className="flex flex-wrap gap-4">
-            <div><span className="text-muted-foreground">Model:</span> {debug.model}</div>
-            <div><span className="text-muted-foreground">Iterations:</span> {debug.total_iterations}</div>
+            <div><span className="text-muted-foreground">{t('search:llm.debug.model')}</span> {debug.model}</div>
+            <div><span className="text-muted-foreground">{t('search:llm.debug.iterations')}</span> {debug.total_iterations}</div>
             <div className="flex items-center gap-1">
               <Clock className="w-3 h-3 text-muted-foreground" />
-              <span>{debug.total_elapsed_ms}ms total</span>
+              <span>{debug.total_elapsed_ms}ms {t('search:llm.debug.total')}</span>
             </div>
           </div>
 
@@ -240,7 +241,7 @@ function DebugPanel({ debug }: DebugPanelProps) {
             <>
               <Separator />
               <div>
-                <div className="font-semibold text-muted-foreground mb-2">Tool Executions</div>
+                <div className="font-semibold text-muted-foreground mb-2">{t('search:llm.debug.toolExecutions')}</div>
                 <div className="space-y-2">
                   {debug.tool_executions.map((exec, idx) => (
                     <ToolExecutionDetail key={idx} exec={exec} />
@@ -255,13 +256,13 @@ function DebugPanel({ debug }: DebugPanelProps) {
             <>
               <Separator />
               <div>
-                <div className="font-semibold text-muted-foreground mb-1">LLM Iterations</div>
+                <div className="font-semibold text-muted-foreground mb-1">{t('search:llm.debug.llmIterations')}</div>
                 {debug.iterations.map((iter, idx) => (
                   <div key={idx} className="flex gap-3 text-muted-foreground">
                     <span>#{iter.iteration}</span>
                     <span>{iter.llm_call_ms}ms</span>
-                    <span>{iter.messages_sent} msgs</span>
-                    {iter.has_tool_calls && <span>{iter.tool_calls.length} tool call(s)</span>}
+                    <span>{t('search:llm.debug.messagesSent', { count: iter.messages_sent })}</span>
+                    {iter.has_tool_calls && <span>{t('search:llm.debug.toolCallsShort', { count: iter.tool_calls.length })}</span>}
                   </div>
                 ))}
               </div>
@@ -274,6 +275,7 @@ function DebugPanel({ debug }: DebugPanelProps) {
 }
 
 function ToolExecutionDetail({ exec }: { exec: DebugInfo['tool_executions'][0] }) {
+  const { t } = useTranslation(['search', 'common']);
   const [showResult, setShowResult] = useState(false);
 
   return (
@@ -289,18 +291,18 @@ function ToolExecutionDetail({ exec }: { exec: DebugInfo['tool_executions'][0] }
         <span className="text-muted-foreground ml-auto">{exec.execution_ms}ms</span>
       </div>
       <div className="text-muted-foreground">
-        <span>Args: </span>
+        <span>{t('search:llm.debug.args')} </span>
         <code className="text-[10px] break-all">{JSON.stringify(exec.arguments)}</code>
       </div>
       {exec.error && (
-        <div className="text-red-500">Error: {exec.error}</div>
+        <div className="text-red-500">{t('common:states.error')}: {exec.error}</div>
       )}
       {exec.result && (
         <Collapsible open={showResult} onOpenChange={setShowResult}>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1 text-muted-foreground">
               <ChevronRight className={`w-2.5 h-2.5 mr-0.5 transition-transform ${showResult ? 'rotate-90' : ''}`} />
-              {showResult ? 'Hide result' : 'Show result'}
+              {showResult ? t('search:llm.debug.hideResult') : t('search:llm.debug.showResult')}
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -466,7 +468,7 @@ export default function LLMSearch() {
         e.preventDefault();
         setDebugMode((prev) => {
           const next = !prev;
-          toast({ title: next ? 'Debug mode enabled' : 'Debug mode disabled', description: next ? 'LLM intermediate steps will be shown' : undefined });
+          toast({ title: next ? t('search:llm.debug.modeEnabled') : t('search:llm.debug.modeDisabled'), description: next ? t('search:llm.debug.modeEnabledDesc') : undefined });
           return next;
         });
       }
@@ -535,27 +537,27 @@ export default function LLMSearch() {
 
     try {
       const response = await sendMessage(messageContent, currentSessionId, debugMode);
-      
+
       // Update session ID
       setCurrentSessionId(response.session_id);
-      
+
       // Add assistant message
       setMessages((prev) => [...prev, response.message]);
-      
+
       // Store debug info keyed by the assistant message ID
       if (response.debug && response.message.id) {
         setDebugInfoMap((prev) => ({ ...prev, [response.message.id]: response.debug! }));
       }
-      
+
       // Refresh sessions list
       const updatedSessions = await fetchSessions();
       setSessions(updatedSessions);
-      
+
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      const errorMessage = err instanceof Error ? err.message : t('search:copilot.messageSendFailed');
       setError(errorMessage);
       toast({
-        title: 'Error',
+        title: t('common:toast.error'),
         description: errorMessage,
         variant: 'destructive',
       });
@@ -607,10 +609,10 @@ export default function LLMSearch() {
       const updatedSessions = await fetchSessions();
       setSessions(updatedSessions);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      const errorMessage = err instanceof Error ? err.message : t('search:copilot.messageSendFailed');
       setError(errorMessage);
       toast({
-        title: 'Error',
+        title: t('common:toast.error'),
         description: errorMessage,
         variant: 'destructive',
       });
@@ -846,9 +848,9 @@ export default function LLMSearch() {
             <span className="ml-2 opacity-60">• {t('search:llm.model')}: {status.model_name}</span>
           )}
           {debugMode && (
-            <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-pointer" onClick={() => setDebugMode(false)} title="Click to disable debug mode">
+            <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-pointer" onClick={() => setDebugMode(false)} title={t('search:llm.debug.clickToDisable')}>
               <Bug className="w-3 h-3 inline" />
-              Debug
+              {t('search:llm.debug.title')}
             </span>
           )}
         </p>

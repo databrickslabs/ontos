@@ -31,6 +31,7 @@ import {
   ListViewSkeleton,
   StatCardsSkeleton,
 } from '@/components/common/list-view-skeleton';
+import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -45,6 +46,7 @@ interface CompliancePolicy {
   is_active: boolean;
   severity: 'low' | 'medium' | 'high' | 'critical';
   category: string;
+  warnings?: RuleWarning[]; // returned by create/update when the rule cannot work as written
 }
 
 interface ComplianceStats {
@@ -93,11 +95,11 @@ export default function Compliance() {
       } else {
         setPolicies([]);
         setStats({ overall_compliance: 0, active_policies: 0, critical_issues: 0 });
-        throw new Error("No data received from compliance policies endpoint.");
+        throw new Error(t('compliance:errors.noDataReceived'));
       }
     } catch (error) {
       console.error('Error loading policies:', error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to load compliance policies";
+      const errorMessage = error instanceof Error ? error.message : t('compliance:errors.loadPoliciesFailed');
       setComponentError(errorMessage);
       toast({
         title: t('compliance:errors.loadingPolicies'),
@@ -155,18 +157,24 @@ export default function Compliance() {
       }
       
       if (response.error || !response.data) {
-        throw new Error(response.error || 'Failed to save policy: No data returned');
+        throw new Error(response.error || t('compliance:errors.saveNoDataReturned'));
       }
       
-      toast({
-        title: t('common:toast.success'),
-        description: t('compliance:toast.policySaved', { name: response.data.name })
-      });
+      const warnings = response.data.warnings ?? [];
+      toast(warnings.length
+        ? {
+            title: t('compliance:toast.policySavedWithWarnings', { name: response.data.name }),
+            description: warnings.map((w) => formatRuleWarning(t, w)).join(' '),
+          }
+        : {
+            title: t('common:toast.success'),
+            description: t('compliance:toast.policySaved', { name: response.data.name })
+          });
       
       setIsDialogOpen(false);
       loadPolicies();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to save policy";
+      const errorMessage = err instanceof Error ? err.message : t('compliance:errors.savePolicyFailed');
       setComponentError(errorMessage);
       toast({
         variant: "destructive",
@@ -192,7 +200,7 @@ export default function Compliance() {
       
       loadPolicies();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to delete policy";
+      const errorMessage = err instanceof Error ? err.message : t('compliance:errors.deletePolicyFailed');
       setComponentError(errorMessage);
       toast({
         variant: "destructive",
@@ -328,7 +336,7 @@ export default function Compliance() {
 
       {componentError && (
          <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400 px-4 py-3 rounded relative mb-4" role="alert">
-           <strong className="font-bold">Error: </strong>
+           <strong className="font-bold">{t('common:states.error')}: </strong>
            <span className="block sm:inline">{componentError}</span>
          </div>
       )}

@@ -4,9 +4,9 @@
 Two halves:
 
 1. **Dispatch pin** — the `for_approval_response` entry in
-   ``WIZARD_PERMISSION_DISPATCH`` must be
-   ``("notifications", READ_WRITE)``. Locks down PR K's outer-gate
-   relaxation. (The catch-all `test_dispatch_expected_features` in
+   ``WIZARD_PERMISSION_DISPATCH`` must be ``None`` (authenticated only,
+   #971), and ``POST /handle-approval`` has no feature-level gate.
+   (The catch-all `test_dispatch_expected_features` in
    ``test_wizard_permission_dispatch.py`` already pins this; we repeat
    the assertion here so the file documents PR K end to end.)
 
@@ -30,15 +30,15 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import asyncio
 import json
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
 
-from src.common.features import FeatureAccessLevel
 from src.models.notifications import Notification
 from src.models.process_workflows import TriggerType
 from src.models.users import UserInfo
@@ -46,6 +46,8 @@ from src.routes.workflows_routes import (
     WIZARD_PERMISSION_DISPATCH,
     _assert_caller_authorized_for_execution,
     _find_approval_notifications_for_execution,
+    _mark_step_notifications_handled,
+    handle_workflow_approval,
 )
 
 
@@ -54,20 +56,30 @@ from src.routes.workflows_routes import (
 # ---------------------------------------------------------------------------
 
 
-def test_dispatch_for_approval_response_is_notifications_read_only() -> None:
-    """PR L — relaxed further from PR K's ``("notifications", READ_WRITE)``
-    to ``("notifications", READ_ONLY)``. The outer gate's only job is to
-    confirm the caller is part of the notification system at all
-    (defense-in-depth alongside the per-execution check). Requiring
-    READ_WRITE was too tight: typical Business Owners hold a business
-    role on the entity but only have notifications:Read-only at the
-    app-role level. The real authorization remains the per-execution
-    check (``_assert_caller_authorized_for_execution``) — see tests
-    below."""
-    assert WIZARD_PERMISSION_DISPATCH[TriggerType.FOR_APPROVAL_RESPONSE.value] == (
-        "notifications",
-        FeatureAccessLevel.READ_ONLY,
-    )
+def test_dispatch_for_approval_response_is_authenticated_only() -> None:
+    """#971 — the former ``("notifications", READ_ONLY)`` gate could not be
+    granted to non-admin roles (``notifications`` is admin-only), so it
+    rejected every non-admin approver. The real authorization is the
+    per-execution check (``_assert_caller_authorized_for_execution``)."""
+    assert WIZARD_PERMISSION_DISPATCH[TriggerType.FOR_APPROVAL_RESPONSE.value] is None
+
+
+def test_handle_approval_has_no_feature_permission_gate() -> None:
+    """#971 — ``POST /handle-approval`` must not depend on a
+    ``PermissionChecker``: approvers holding only a business role have no
+    app role, so any feature-level gate would reject them."""
+    from src.common.authorization import PermissionChecker
+    from src.routes.workflows_routes import router
+
+    [route] = [
+        r for r in router.routes
+        if getattr(r, 'path', '') == '/api/workflows/handle-approval'
+    ]
+    checkers = [
+        d.call for d in route.dependant.dependencies
+        if isinstance(d.call, PermissionChecker)
+    ]
+    assert checkers == []
 
 
 # ---------------------------------------------------------------------------
@@ -276,3 +288,195 @@ def test_assert_short_circuits_on_first_match() -> None:
     assert len(matches) == 2  # _find_ returns both; auth returns both for downstream
     # Only one access check needed before returning success
     assert manager.can_user_access_notification.call_count == 1
+
+
+def test_assert_ignores_approval_notifications_without_recipient() -> None:
+    """An approval notification with neither recipient nor role is a
+    broadcast for ``can_user_access_notification`` (everyone may see it).
+    It must not let anyone approve the execution."""
+    rows = [_make_notif_row(notif_id='n1', execution_id='exec-A')]
+    db = _mock_db_with_rows(rows)
+    manager = MagicMock()
+    manager.can_user_access_notification.return_value = True  # broadcast: visible to all
+
+    with pytest.raises(HTTPException) as exc:
+        _assert_caller_authorized_for_execution(
+            db=db,
+            notifications_manager=manager,
+            execution_id='exec-A',
+            user_info=_user('mallory@example.com'),
+        )
+
+    assert exc.value.status_code == 403
+    manager.can_user_access_notification.assert_not_called()
+
+
+def test_assert_uses_only_addressed_approval_notifications() -> None:
+    """With a broadcast and an addressed notification for the same
+    execution, only the addressed one can authorize."""
+    rows = [
+        _make_notif_row(notif_id='broadcast', execution_id='exec-A'),
+        _make_notif_row(notif_id='n1', execution_id='exec-A', recipient='alice@example.com'),
+    ]
+    db = _mock_db_with_rows(rows)
+    manager = MagicMock()
+
+    def access(*, db, notification: Notification, user_info: UserInfo) -> bool:
+        return not notification.recipient or notification.recipient == user_info.email
+    manager.can_user_access_notification.side_effect = access
+
+    with pytest.raises(HTTPException):
+        _assert_caller_authorized_for_execution(
+            db=db, notifications_manager=manager, execution_id='exec-A',
+            user_info=_user('mallory@example.com'),
+        )
+    matches = _assert_caller_authorized_for_execution(
+        db=db, notifications_manager=manager, execution_id='exec-A',
+        user_info=_user('alice@example.com'),
+    )
+    assert [m.id for m in matches] == ['n1']
+
+
+
+# --- Only the approvers of the pending step may answer -----------------------
+
+
+def _db_with(rows: list, pending_step: str | None) -> MagicMock:
+    """``db.query(NotificationDb)`` returns ``rows``; the execution query
+    returns ``pending_step`` as its current step."""
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    notifications = _mock_db_with_rows(rows).query.return_value
+    execution = MagicMock()
+    execution.filter.return_value.first.return_value = (pending_step,)
+    db = MagicMock()
+    db.query.side_effect = lambda what: (
+        execution if getattr(what, 'class_', None) is WorkflowExecutionDb else notifications
+    )
+    return db
+
+
+def _step_row(notif_id: str, recipient: str, step_id: str | None) -> SimpleNamespace:
+    row = _make_notif_row(notif_id=notif_id, execution_id='exec-A', recipient=recipient)
+    payload = {'execution_id': 'exec-A'}
+    if step_id:
+        payload['step_id'] = step_id
+    row.action_payload = json.dumps(payload)
+    return row
+
+
+def _by_recipient() -> MagicMock:
+    manager = MagicMock()
+    manager.can_user_access_notification.side_effect = (
+        lambda *, db, notification, user_info: notification.recipient == user_info.email
+    )
+    return manager
+
+
+def test_an_earlier_steps_approver_cannot_answer_a_later_step() -> None:
+    db = _db_with([
+        _step_row('n-a', 'alice@example.com', 'approve-a'),
+        _step_row('n-b', 'bob@example.com', 'approve-b'),
+    ], pending_step='approve-b')
+
+    with pytest.raises(HTTPException) as err:
+        _assert_caller_authorized_for_execution(
+            db=db, notifications_manager=_by_recipient(), execution_id='exec-A',
+            user_info=_user('alice@example.com'),
+        )
+    assert err.value.status_code == 403
+
+    matches = _assert_caller_authorized_for_execution(
+        db=db, notifications_manager=_by_recipient(), execution_id='exec-A',
+        user_info=_user('bob@example.com'),
+    )
+    assert [m.id for m in matches] == ['n-b']
+
+
+def test_notifications_without_a_step_still_count() -> None:
+    # Created before approvals recorded their step (pending at upgrade time)
+    db = _db_with([_step_row('n-old', 'alice@example.com', None)], pending_step='approve-b')
+
+    matches = _assert_caller_authorized_for_execution(
+        db=db, notifications_manager=_by_recipient(), execution_id='exec-A',
+        user_info=_user('alice@example.com'),
+    )
+    assert [m.id for m in matches] == ['n-old']
+
+
+def test_the_executor_passes_the_step_id_to_its_handler() -> None:
+    from src.common.workflow_executor import StepContext, StepResult, WorkflowExecutor
+
+    seen = {}
+
+    class Handler:
+        def __init__(self, db, config):
+            pass
+
+        def execute(self, context):
+            seen['step_id'] = context.step_id
+            return StepResult(passed=True)
+
+    executor = WorkflowExecutor(MagicMock())
+    executor.HANDLERS = {'approval': Handler}
+    step = SimpleNamespace(step_id='approve-b', step_type='approval', config={})
+    context = StepContext(
+        entity={}, entity_type='data_product', entity_id='p-1', entity_name='P',
+        user_email='requester@example.com', trigger_context=None, execution_id='exec-A',
+        workflow_id='wf-1', workflow_name='W', step_results={},
+    )
+
+    executor._execute_step(step, context)
+
+    assert seen['step_id'] == 'approve-b'
+
+
+# --- Deciding a step leaves the next step's approval open ---------------------
+
+
+def test_marking_handled_skips_other_steps() -> None:
+    rows = [
+        _step_row('n-a', 'alice@example.com', 'approve-a'),
+        _step_row('n-b', 'bob@example.com', 'approve-b'),
+        _step_row('n-old', 'carol@example.com', None),
+    ]
+
+    _mark_step_notifications_handled(
+        _mock_db_with_rows(rows), 'exec-A', 'approve-a', True, 'alice@example.com',
+    )
+
+    marked = {r.id: (r.read, json.loads(r.action_payload).get('handled_by')) for r in rows}
+    assert marked == {
+        'n-a': (True, 'alice@example.com'),
+        'n-b': (False, None),
+        'n-old': (True, 'alice@example.com'),  # no step recorded: as before
+    }
+
+
+def test_approving_a_step_leaves_the_next_steps_notification_open() -> None:
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    rows = [_step_row('n-a', 'alice@example.com', 'approve-a')]
+    db = _db_with(rows, pending_step='approve-a')
+
+    def resume_workflow(**kwargs):
+        # The workflow pauses at the next approval step and notifies Bob
+        rows.append(_step_row('n-b', 'bob@example.com', 'approve-b'))
+        db.query(WorkflowExecutionDb).filter.return_value.first.return_value = ('approve-b',)
+        return SimpleNamespace(id='exec-A', status=SimpleNamespace(value='paused'))
+
+    executor = MagicMock()
+    executor.resume_workflow.side_effect = resume_workflow
+    request = MagicMock()
+    request.json = AsyncMock(
+        return_value={'execution_id': 'exec-A', 'approved': True, 'message': 'ok'}
+    )
+
+    asyncio.run(handle_workflow_approval(
+        request=request, db=db, audit_manager=MagicMock(),
+        current_user=_user('alice@example.com'), executor=executor,
+        notifications_manager=_by_recipient(),
+    ))
+
+    assert [(r.id, r.read) for r in rows] == [('n-a', True), ('n-b', False)]
+    assert 'handled' not in json.loads(rows[1].action_payload)

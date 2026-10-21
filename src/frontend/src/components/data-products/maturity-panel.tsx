@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ const API_PREFIX: Record<string, string> = {
 };
 
 export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const [report, setReport] = useState<MaturityReport | null>(null);
   const [history, setHistory] = useState<MaturitySnapshot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,11 +48,11 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       setReport(await res.json());
     } catch (e: any) {
-      setError(e.message || 'Failed to load maturity report');
+      setError(e.message || t('data-products:maturity.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [entityId, prefix]);
+  }, [entityId, prefix, t]);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -66,7 +68,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
       <Card>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Evaluating maturity...</span>
+          <span className="ml-2 text-sm text-muted-foreground">{t('data-products:maturity.evaluating')}</span>
         </CardContent>
       </Card>
     );
@@ -76,9 +78,9 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
     return (
       <Card>
         <CardContent className="py-6 text-center">
-          <p className="text-sm text-destructive">{error || 'Unable to load maturity report'}</p>
+          <p className="text-sm text-destructive">{error || t('data-products:maturity.unableToLoad')}</p>
           <Button variant="outline" size="sm" className="mt-2" onClick={() => fetchReport()}>
-            <RefreshCw className="mr-2 h-3.5 w-3.5" /> Retry
+            <RefreshCw className="mr-2 h-3.5 w-3.5" /> {t('data-products:maturity.retry')}
           </Button>
         </CardContent>
       </Card>
@@ -91,11 +93,11 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
-            Maturity
+            {t('data-products:maturity.title')}
           </span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-normal text-muted-foreground">
-              {report.gates_passed}/{report.gates_total} gates passed
+              {t('data-products:maturity.gatesPassed', { passed: report.gates_passed, total: report.gates_total })}
             </span>
             <MaturityBadge
               levelName={report.achieved_level_name}
@@ -104,7 +106,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
             />
             <Button variant="ghost" size="icon" className="h-7 w-7"
               onClick={() => { fetchReport(true); fetchHistory(); }}
-              title="Re-evaluate maturity">
+              title={t('data-products:maturity.reevaluate')}>
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -135,7 +137,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
                 <span className="font-mono text-xs text-muted-foreground w-4">{level.level_order}</span>
                 <span className="text-sm font-medium flex-1">{level.level_name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {level.gates.filter(g => g.passed).length}/{level.gates.length} gates
+                  {t('data-products:maturity.gates', { passed: level.gates.filter(g => g.passed).length, total: level.gates.length })}
                 </span>
               </button>
 
@@ -155,7 +157,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
                           )}
                         </div>
                         <Badge variant="outline" className="text-[10px]">
-                          {gate.required ? 'Required' : 'Advisory'}
+                          {gate.required ? t('data-products:maturity.required') : t('data-products:maturity.advisory')}
                         </Badge>
                       </div>
                     );
@@ -169,7 +171,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         {/* History mini-chart */}
         {history.length > 1 && (
           <div className="pt-2 border-t">
-            <p className="text-xs text-muted-foreground mb-2">Maturity over time</p>
+            <p className="text-xs text-muted-foreground mb-2">{t('data-products:maturity.overTime')}</p>
             <div className="flex items-end gap-0.5 h-8">
               {history.slice().reverse().map((snap, i) => {
                 const maxLevel = snap.total_levels || 5;

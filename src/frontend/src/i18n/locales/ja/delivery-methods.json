@@ -1,0 +1,75 @@
+{
+  "title": "配信方法",
+  "subtitle": "デリバラブル（例: テーブルアクセス、サービングエンドポイント）を通じて、データをどのように消費者へ配信するかを定義します。",
+  "addNew": "方法を追加",
+  "editMethod": "方法を編集",
+  "deleteMethod": "方法を削除",
+  "systemBadge": "システム",
+  "openMenu": "メニューを開く",
+  "table": {
+    "name": "名前",
+    "description": "説明",
+    "category": "カテゴリ",
+    "status": "ステータス",
+    "system": "システム",
+    "lastUpdated": "最終更新",
+    "actions": "アクション"
+  },
+  "categories": {
+    "access": "アクセス",
+    "endpoint": "エンドポイント",
+    "export": "エクスポート",
+    "streaming": "ストリーミング"
+  },
+  "statuses": {
+    "active": "有効",
+    "deprecated": "非推奨"
+  },
+  "permissions": {
+    "deniedView": "配信方法を表示する権限がありません。",
+    "deniedCreate": "配信方法を作成する権限がありません。",
+    "deniedEdit": "配信方法を編集する権限がありません。",
+    "deniedDelete": "配信方法を削除する権限がありません。",
+    "permissionDenied": "権限が拒否されました"
+  },
+  "messages": {
+    "errorFetching": "配信方法の取得エラー",
+    "loadFailed": "配信方法の読み込みに失敗しました",
+    "errorDeleting": "配信方法の削除エラー",
+    "deleted": "配信方法を削除しました",
+    "deletedSuccess": "配信方法が正常に削除されました。",
+    "errorLoadingData": "データの読み込みエラー"
+  },
+  "deleteDialog": {
+    "title": "配信方法を削除しますか？",
+    "description": "この操作は元に戻せません。この方法を使用している既存のデリバラブルが孤立する可能性があります。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  },
+  "emptyState": {
+    "title": "配信方法がまだ定義されていません",
+    "description": "最初の配信方法（例: テーブルアクセス、サービングエンドポイント、ファイルエクスポート）を作成してください。"
+  },
+  "form": {
+    "createTitle": "配信方法を作成",
+    "createDescription": "データ配布のための新しい配信方法を追加します。",
+    "editTitle": "配信方法を編集",
+    "editDescription": "この配信方法の詳細を更新します。",
+    "create": "作成",
+    "update": "変更を保存",
+    "noCategory": "カテゴリなし",
+    "placeholders": {
+      "name": "例: テーブルアクセス",
+      "description": "データの配信方法を記述...",
+      "category": "カテゴリを選択"
+    },
+    "toasts": {
+      "created": "配信方法を作成しました",
+      "createdDescription": "\"{{name}}\" を作成しました。",
+      "updated": "配信方法を更新しました",
+      "updatedDescription": "\"{{name}}\" を更新しました。",
+      "createFailed": "作成に失敗しました",
+      "updateFailed": "更新に失敗しました"
+    }
+  }
+}

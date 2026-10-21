@@ -2380,7 +2380,7 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Dataset Review Request** | Review Request (dataset) | Data Steward approval for datasets |
 | **Data Contract Review Request** | Review Request (data_contract) | Data Steward approval for contracts |
 | **Data Product Review Request** | Review Request (data_product) | Domain owner approval for products |
-| **Data Contract Publish Request** | Publish Request (data_contract) | Contract approver authorization |
+| **Data Contract Deploy Request** | Deploy Request (data_contract) | Contract approver authorization for deploying to Unity Catalog |
 | **Access Grant Request** | Access Request (access_grant) | Admin approval for access |
 | **Status Change Request** | Status Change Request (dataset, data_product) | Admin approval for status changes |
 | **Role Access Request** | Access Request (role) | Admin approval for role assignments |
@@ -2396,6 +2396,12 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Subscription Welcome** | Subscription (dataset) | Welcome message to subscribers (disabled by default) |
 | **Access Expiring Warning** | Expiring (access_grant) | Warns users before access expires |
 | **Access Revoked Notification** | Access Revoked (access_grant) | Notifies users of revocation |
+
+#### After an Upgrade
+
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+
+Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
 
 ### Editing a Default Workflow
 
@@ -2432,6 +2438,7 @@ Create a copy of any workflow:
 
 - **Blocking Workflows** (before_create, before_update): Prevent the action if workflow fails
 - **Non-Blocking Workflows**: Run asynchronously; failures don't prevent the triggering action
+- **Publish / Unpublish** (`on_publish`, `on_unpublish`): non-blocking. They fire after the new publication scope is saved, so a product or contract stays published (or unpublished) even if its publish workflows fail to start; the failure is logged at error level in the app logs.
 
 #### Approval Pausing
 
@@ -2976,15 +2983,24 @@ The MCP endpoint uses JSON-RPC 2.0 over HTTP.
 #### Endpoint URL
 
 ```text
-POST /api/mcp
+POST /mcp
 ```
+
+> The server is also mounted at the legacy path `/api/mcp`, which continues to
+> work for existing clients. New integrations should use `/mcp`.
+>
+> **On-behalf-of (OBO):** when the MCP server is reached through the Ontos app
+> proxy (native integration), tools that read Unity Catalog run **as the calling
+> user**, scoped to that user's grants. External agents calling with only an
+> `X-API-Key` (no forwarded user identity) run as the app service principal, as
+> before.
 
 #### Authentication
 
 Include your MCP token in the `X-API-Key` header:
 
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-mcp-token-here" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
@@ -3153,7 +3169,7 @@ Add Ontos as an MCP server in your Claude Desktop config:
 {
   "mcpServers": {
     "ontos": {
-      "url": "https://your-ontos-instance/api/mcp",
+      "url": "https://your-ontos-instance/mcp",
       "headers": {
         "X-API-Key": "your-mcp-token-here"
       }
@@ -3167,7 +3183,7 @@ Add Ontos as an MCP server in your Claude Desktop config:
 ```python
 import httpx
 
-MCP_URL = "https://your-ontos-instance/api/mcp"
+MCP_URL = "https://your-ontos-instance/mcp"
 MCP_TOKEN = "your-mcp-token-here"
 
 def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
@@ -3198,7 +3214,7 @@ print(result)
 
 **List available tools**:
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $MCP_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
@@ -3206,7 +3222,7 @@ curl -X POST https://your-ontos-instance/api/mcp \
 
 **Search data products**:
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $MCP_TOKEN" \
   -d '{
@@ -3222,7 +3238,7 @@ curl -X POST https://your-ontos-instance/api/mcp \
 
 **Find entities by concept**:
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $MCP_TOKEN" \
   -d '{
@@ -3292,7 +3308,7 @@ The MCP endpoint returns standard JSON-RPC 2.0 errors:
 Use the health endpoint to verify connectivity:
 
 ```bash
-curl https://your-ontos-instance/api/mcp/health
+curl https://your-ontos-instance/mcp/health
 ```
 
 **Response**:

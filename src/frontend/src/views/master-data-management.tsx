@@ -96,7 +96,7 @@ export default function MasterDataManagement() {
         setConfigs([]);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load MDM configurations');
+      setError(err.message || t('mdm:errors.loadFailed'));
       setConfigs([]);
     } finally {
       setLoading(false);
@@ -202,7 +202,7 @@ export default function MasterDataManagement() {
         fetchConfigs(); // Refresh source count
       }
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Delete failed', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: err.message || t('mdm:errors.deleteFailed'), variant: 'destructive' });
     }
   };
 
@@ -319,7 +319,7 @@ export default function MasterDataManagement() {
                           <div className="flex-1 min-w-0">
                             <h4 className="font-medium truncate">{config.name}</h4>
                             <p className="text-sm text-muted-foreground truncate">
-                              {config.entity_type} • {config.source_count} sources
+                              {config.entity_type} • {config.source_count} {t('mdm:sources')}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 ml-2">
@@ -340,7 +340,7 @@ export default function MasterDataManagement() {
                         {config.last_run_at && (
                           <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            Last run: <RelativeDate date={config.last_run_at} />
+                            {t('mdm:lastRun')}: <RelativeDate date={config.last_run_at} />
                             {config.last_run_status && (
                               <span className={
                                 config.last_run_status === 'completed' 
@@ -360,10 +360,10 @@ export default function MasterDataManagement() {
                       <div className="text-center py-12">
                         <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">
-                          No MDM configurations yet.
+                          {t('mdm:noConfigurations')}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Create one to get started.
+                          {t('mdm:emptyState.createOne')}
                         </p>
                       </div>
                     )}
@@ -382,7 +382,7 @@ export default function MasterDataManagement() {
                     <div>
                       <CardTitle className="text-xl">{selectedConfig.name}</CardTitle>
                       <CardDescription className="mt-1">
-                        {selectedConfig.description || `Master contract for ${selectedConfig.entity_type} entities`}
+                        {selectedConfig.description || t('mdm:overview.masterContractFor', { entityType: selectedConfig.entity_type })}
                       </CardDescription>
                     </div>
                     <div className="flex gap-2">
@@ -391,11 +391,11 @@ export default function MasterDataManagement() {
                         disabled={selectedConfig.status !== MdmConfigStatus.ACTIVE}
                       >
                         <Play className="h-4 w-4 mr-2" />
-                        Start Matching
+                        {t('mdm:configDetails.startMatching')}
                       </Button>
                       <Button variant="outline" onClick={() => setIsLinkDialogOpen(true)}>
                         <Link2 className="h-4 w-4 mr-2" />
-                        Link Source
+                        {t('mdm:buttons.linkSource')}
                       </Button>
                     </div>
                   </div>
@@ -403,17 +403,17 @@ export default function MasterDataManagement() {
                 <CardContent>
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="mb-4">
-                      <TabsTrigger value="overview">Overview</TabsTrigger>
+                      <TabsTrigger value="overview">{t('mdm:tabs.overview')}</TabsTrigger>
                       <TabsTrigger value="sources">
-                        Sources ({sourceLinks.length})
+                        {t('mdm:tabs.sources')} ({sourceLinks.length})
                       </TabsTrigger>
-                      <TabsTrigger value="rules">Matching Rules</TabsTrigger>
+                      <TabsTrigger value="rules">{t('mdm:tabs.matchingRules')}</TabsTrigger>
                       <TabsTrigger value="runs">
-                        Match Runs ({matchRuns.length})
+                        {t('mdm:tabs.matchRuns')} ({matchRuns.length})
                       </TabsTrigger>
                       {selectedRun && (
                         <TabsTrigger value="candidates">
-                          Candidates ({candidates.length})
+                          {t('mdm:tabs.candidates')} ({candidates.length})
                         </TabsTrigger>
                       )}
                     </TabsList>
@@ -422,19 +422,19 @@ export default function MasterDataManagement() {
                     <TabsContent value="overview" className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 rounded-lg border bg-muted/30">
-                          <p className="text-sm text-muted-foreground">Master Contract</p>
-                          <p className="font-medium mt-1">{selectedConfig.master_contract_name || 'Not set'}</p>
+                          <p className="text-sm text-muted-foreground">{t('mdm:overview.masterContract')}</p>
+                          <p className="font-medium mt-1">{selectedConfig.master_contract_name || t('mdm:overview.notSet')}</p>
                         </div>
                         <div className="p-4 rounded-lg border bg-muted/30">
-                          <p className="text-sm text-muted-foreground">Entity Type</p>
+                          <p className="text-sm text-muted-foreground">{t('mdm:overview.entityType')}</p>
                           <p className="font-medium capitalize mt-1">{selectedConfig.entity_type}</p>
                         </div>
                         <div className="p-4 rounded-lg border bg-muted/30">
-                          <p className="text-sm text-muted-foreground">Linked Sources</p>
+                          <p className="text-sm text-muted-foreground">{t('mdm:overview.linkedSources')}</p>
                           <p className="font-medium mt-1">{selectedConfig.source_count}</p>
                         </div>
                         <div className="p-4 rounded-lg border bg-muted/30">
-                          <p className="text-sm text-muted-foreground">Status</p>
+                          <p className="text-sm text-muted-foreground">{t('common:labels.status')}</p>
                           <div className="mt-1">{getStatusBadge(selectedConfig.status)}</div>
                         </div>
                       </div>
@@ -445,19 +445,19 @@ export default function MasterDataManagement() {
                           <div className="grid grid-cols-4 gap-4">
                             <div className="text-center p-4 rounded-lg border">
                               <p className="text-2xl font-bold text-primary">{configStats.totalRuns}</p>
-                              <p className="text-sm text-muted-foreground">Total Runs</p>
+                              <p className="text-sm text-muted-foreground">{t('mdm:stats.totalRuns')}</p>
                             </div>
                             <div className="text-center p-4 rounded-lg border">
                               <p className="text-2xl font-bold text-green-600">{configStats.totalMatches}</p>
-                              <p className="text-sm text-muted-foreground">Matches Found</p>
+                              <p className="text-sm text-muted-foreground">{t('mdm:stats.matchesFound')}</p>
                             </div>
                             <div className="text-center p-4 rounded-lg border">
                               <p className="text-2xl font-bold text-blue-600">{configStats.totalNew}</p>
-                              <p className="text-sm text-muted-foreground">New Records</p>
+                              <p className="text-sm text-muted-foreground">{t('mdm:stats.newRecords')}</p>
                             </div>
                             <div className="text-center p-4 rounded-lg border">
                               <p className="text-2xl font-bold text-yellow-600">{configStats.pendingReview}</p>
-                              <p className="text-sm text-muted-foreground">Pending Review</p>
+                              <p className="text-sm text-muted-foreground">{t('mdm:stats.pendingReview')}</p>
                             </div>
                           </div>
                         </>
@@ -470,11 +470,11 @@ export default function MasterDataManagement() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Source Contract</TableHead>
-                              <TableHead>Table</TableHead>
-                              <TableHead>Key Column</TableHead>
-                              <TableHead>Priority</TableHead>
-                              <TableHead>Status</TableHead>
+                              <TableHead>{t('mdm:sourcesTab.sourceContract')}</TableHead>
+                              <TableHead>{t('common:labels.table')}</TableHead>
+                              <TableHead>{t('mdm:sourcesTab.keyColumn')}</TableHead>
+                              <TableHead>{t('common:labels.priority')}</TableHead>
+                              <TableHead>{t('common:labels.status')}</TableHead>
                               <TableHead className="w-16"></TableHead>
                             </TableRow>
                           </TableHeader>
@@ -507,14 +507,14 @@ export default function MasterDataManagement() {
                       ) : (
                         <div className="text-center py-12">
                           <Link2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                          <p className="text-muted-foreground">No source contracts linked yet.</p>
-                          <Button 
-                            variant="outline" 
+                          <p className="text-muted-foreground">{t('mdm:sourcesTab.noSources')}</p>
+                          <Button
+                            variant="outline"
                             className="mt-4"
                             onClick={() => setIsLinkDialogOpen(true)}
                           >
                             <Plus className="h-4 w-4 mr-2" />
-                            Link Source Contract
+                            {t('mdm:configDetails.linkSource')}
                           </Button>
                         </div>
                       )}
@@ -526,14 +526,14 @@ export default function MasterDataManagement() {
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-medium flex items-center gap-2">
                             <Settings2 className="h-4 w-4" />
-                            Matching Rules
+                            {t('mdm:rulesTab.title')}
                           </h4>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => setIsRulesEditorOpen(true)}
                           >
-                            Edit Rules
+                            {t('mdm:rulesTab.editRules')}
                           </Button>
                         </div>
                         {selectedConfig.matching_rules?.length > 0 ? (
@@ -545,16 +545,16 @@ export default function MasterDataManagement() {
                                   <Badge variant="outline">{rule.type}</Badge>
                                 </div>
                                 <div className="mt-2 text-sm text-muted-foreground">
-                                  Fields: {rule.fields.join(', ')} • 
-                                  Weight: {rule.weight} • 
-                                  Threshold: {rule.threshold}
-                                  {rule.algorithm && ` • Algorithm: ${rule.algorithm}`}
+                                  {t('mdm:rulesTab.fields')}: {rule.fields.join(', ')} •
+                                  {t('mdm:rulesTab.weight')}: {rule.weight} •
+                                  {t('mdm:rulesTab.threshold')}: {rule.threshold}
+                                  {rule.algorithm && ` • ${t('mdm:rulesTab.algorithm')}: ${rule.algorithm}`}
                                 </div>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-muted-foreground text-sm">No matching rules configured. Default rules will be used.</p>
+                          <p className="text-muted-foreground text-sm">{t('mdm:rulesTab.noRulesDefault')}</p>
                         )}
                       </div>
 
@@ -563,7 +563,7 @@ export default function MasterDataManagement() {
                       <div>
                         <h4 className="font-medium mb-3 flex items-center gap-2">
                           <Merge className="h-4 w-4" />
-                          Survivorship Rules
+                          {t('mdm:survivorship.title')}
                         </h4>
                         {selectedConfig.survivorship_rules?.length > 0 ? (
                           <div className="space-y-2">
@@ -575,14 +575,14 @@ export default function MasterDataManagement() {
                                 </div>
                                 {rule.priority && (
                                   <div className="mt-1 text-sm text-muted-foreground">
-                                    Priority: {rule.priority.join(' > ')}
+                                    {t('common:labels.priority')}: {rule.priority.join(' > ')}
                                   </div>
                                 )}
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-muted-foreground text-sm">No survivorship rules configured. Source values will be preferred.</p>
+                          <p className="text-muted-foreground text-sm">{t('mdm:survivorship.noRules')}</p>
                         )}
                       </div>
                     </TabsContent>
@@ -608,7 +608,7 @@ export default function MasterDataManagement() {
                               <div className="flex justify-between items-start">
                                 <div>
                                   <p className="font-medium">
-                                    Run {run.id.slice(0, 8)}...
+                                    {t('mdm:runsTab.runLabel', { id: run.id.slice(0, 8) })}
                                   </p>
                                   <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                                     <span className="flex items-center gap-1">
@@ -638,19 +638,19 @@ export default function MasterDataManagement() {
                                 <div className="mt-3 flex items-center justify-between">
                                   <div className="flex gap-4 text-sm">
                                     <span className="text-green-600">
-                                      {run.matches_found} matches
+                                      {t('mdm:runsTab.matchesCount', { count: run.matches_found })}
                                     </span>
                                     <span className="text-blue-600">
-                                      {run.new_records} new
+                                      {t('mdm:runsTab.newCount', { count: run.new_records })}
                                     </span>
                                     {run.pending_review_count > 0 && (
                                       <span className="text-yellow-600">
-                                        {run.pending_review_count} pending review
+                                        {t('mdm:runsTab.pendingReviewCount', { count: run.pending_review_count })}
                                       </span>
                                     )}
                                     {run.approved_count > 0 && (
                                       <span className="text-emerald-600 font-medium">
-                                        {run.approved_count} ready to merge
+                                        {t('mdm:runsTab.readyToMergeCount', { count: run.approved_count })}
                                       </span>
                                     )}
                                   </div>
@@ -665,7 +665,7 @@ export default function MasterDataManagement() {
                                         }}
                                       >
                                         <Merge className="h-4 w-4 mr-1" />
-                                        Merge ({run.approved_count})
+                                        {t('mdm:runsTab.mergeButton', { count: run.approved_count })}
                                       </Button>
                                     )}
                                     {run.pending_review_count > 0 && (
@@ -679,7 +679,7 @@ export default function MasterDataManagement() {
                                         }}
                                       >
                                         <FileCheck className="h-4 w-4 mr-1" />
-                                        Create Review
+                                        {t('mdm:runsTab.createReview')}
                                       </Button>
                                     )}
                                     <Button
@@ -693,7 +693,7 @@ export default function MasterDataManagement() {
                                       }}
                                     >
                                       <Eye className="h-4 w-4 mr-1" />
-                                      View
+                                      {t('common:actions.view')}
                                     </Button>
                                   </div>
                                 </div>
@@ -701,7 +701,7 @@ export default function MasterDataManagement() {
 
                               {run.status === MdmMatchRunStatus.FAILED && run.error_message && (
                                 <div className="mt-3 text-sm text-destructive">
-                                  Error: {run.error_message}
+                                  {t('common:status.error')}: {run.error_message}
                                 </div>
                               )}
                             </div>
@@ -710,13 +710,13 @@ export default function MasterDataManagement() {
                       ) : (
                         <div className="text-center py-12">
                           <RefreshCw className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                          <p className="text-muted-foreground">No match runs yet.</p>
-                          <Button 
+                          <p className="text-muted-foreground">{t('mdm:runsTab.noRunsShort')}</p>
+                          <Button
                             className="mt-4"
                             onClick={() => handleStartMatching(selectedConfig.id)}
                           >
                             <Play className="h-4 w-4 mr-2" />
-                            Start First Matching Run
+                            {t('mdm:runsTab.startFirstRun')}
                           </Button>
                         </div>
                       )}
@@ -729,19 +729,21 @@ export default function MasterDataManagement() {
                           <div className="flex justify-between items-center">
                             <div>
                               <h4 className="font-medium">
-                                Match Candidates for Run {selectedRun.id.slice(0, 8)}...
+                                {t('mdm:candidates.forRun', { id: selectedRun.id.slice(0, 8) })}
                               </h4>
                               <p className="text-sm text-muted-foreground">
-                                {candidates.filter(c => c.status === MdmMatchCandidateStatus.PENDING).length} pending, 
-                                {' '}{candidates.filter(c => c.status === MdmMatchCandidateStatus.APPROVED).length} approved,
-                                {' '}{candidates.filter(c => c.status === MdmMatchCandidateStatus.MERGED).length} merged
+                                {t('mdm:candidates.summary', {
+                                  pending: candidates.filter(c => c.status === MdmMatchCandidateStatus.PENDING).length,
+                                  approved: candidates.filter(c => c.status === MdmMatchCandidateStatus.APPROVED).length,
+                                  merged: candidates.filter(c => c.status === MdmMatchCandidateStatus.MERGED).length,
+                                })}
                               </p>
                             </div>
                             <div className="flex gap-2">
                               {candidates.some(c => c.status === MdmMatchCandidateStatus.APPROVED) && (
                                 <Button onClick={() => handleMergeApproved(selectedRun.id)}>
                                   <Merge className="h-4 w-4 mr-2" />
-                                  Merge Approved
+                                  {t('mdm:candidates.mergeApproved')}
                                 </Button>
                               )}
                             </div>
@@ -751,12 +753,12 @@ export default function MasterDataManagement() {
                             <Table>
                               <TableHeader>
                                 <TableRow>
-                                  <TableHead>Type</TableHead>
-                                  <TableHead>Master ID</TableHead>
-                                  <TableHead>Source ID</TableHead>
-                                  <TableHead>Confidence</TableHead>
-                                  <TableHead>Matched Fields</TableHead>
-                                  <TableHead>Status</TableHead>
+                                  <TableHead>{t('common:labels.type')}</TableHead>
+                                  <TableHead>{t('mdm:candidates.masterId')}</TableHead>
+                                  <TableHead>{t('mdm:candidates.sourceId')}</TableHead>
+                                  <TableHead>{t('mdm:candidates.confidence')}</TableHead>
+                                  <TableHead>{t('mdm:candidates.matchedFields')}</TableHead>
+                                  <TableHead>{t('common:labels.status')}</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -773,7 +775,7 @@ export default function MasterDataManagement() {
                                   >
                                     <TableCell>{getMatchTypeBadge(candidate.match_type)}</TableCell>
                                     <TableCell className="font-mono text-sm">
-                                      {candidate.master_record_id || <span className="text-muted-foreground italic">New</span>}
+                                      {candidate.master_record_id || <span className="text-muted-foreground italic">{t('mdm:candidates.new')}</span>}
                                     </TableCell>
                                     <TableCell className="font-mono text-sm">
                                       {candidate.source_record_id}
@@ -808,7 +810,7 @@ export default function MasterDataManagement() {
                             </Table>
                           ) : (
                             <div className="text-center py-8 text-muted-foreground">
-                              No candidates found for this run.
+                              {t('mdm:candidates.noCandidatesFound')}
                             </div>
                           )}
                         </div>
@@ -821,13 +823,13 @@ export default function MasterDataManagement() {
               <Card>
                 <CardContent className="py-16 text-center">
                   <GitCompare className="h-16 w-16 mx-auto text-muted-foreground mb-6" />
-                  <h3 className="text-lg font-medium mb-2">Select an MDM Configuration</h3>
+                  <h3 className="text-lg font-medium mb-2">{t('mdm:emptyState.selectTitle')}</h3>
                   <p className="text-muted-foreground mb-6">
-                    Choose a configuration from the list to view details and manage matching runs.
+                    {t('mdm:emptyState.selectDescription')}
                   </p>
                   <Button onClick={() => setIsConfigDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Create New Configuration
+                    {t('mdm:emptyState.createNew')}
                   </Button>
                 </CardContent>
               </Card>

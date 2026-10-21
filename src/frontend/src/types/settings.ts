@@ -77,11 +77,15 @@ export interface AppRole {
     name: string;
     description?: string | null;
     assigned_groups: string[];
+    /** Individual users (by email) assigned to this role, parallel to assigned_groups (#196/#760). */
+    assigned_users?: string[];
     feature_permissions: Record<string, FeatureAccessLevel>;
     home_sections?: HomeSection[];
     approval_privileges?: ApprovalPrivileges;
     deployment_policy?: DeploymentPolicy | null;
     is_admin?: boolean;
+    /** Import privilege (#853 review): may this role adopt an entity's UUID from an imported file as the primary key? */
+    can_adopt_entity_ids?: boolean;
     // Role hierarchy fields
     requestable_by_roles?: string[];  // Role IDs that can request this role (use '__NO_ROLE__' for users without any role)
     approver_roles?: string[];  // Role IDs that can approve access requests for this role

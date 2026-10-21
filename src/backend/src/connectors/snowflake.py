@@ -86,6 +86,7 @@ class SnowflakeConnector(AssetConnector):
     connector_type = "snowflake"
     display_name = "Snowflake"
     description = "Connector for Snowflake Data Cloud (not yet implemented)"
+    is_selectable = False  # Stub: hide from the Add Connection dropdown
     
     def __init__(self, config: Optional[SnowflakeConnectorConfig] = None):
         """Initialize the Snowflake connector."""

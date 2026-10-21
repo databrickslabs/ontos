@@ -1,0 +1,94 @@
+{
+  "data-domains": {
+    "name": "Domínios",
+    "description": "Organize produtos de dados e ativos em domínios lógicos."
+  },
+  "datasets": {
+    "name": "Conjuntos de Dados",
+    "description": "Gerencie conjuntos de dados e suas implementações físicas entre ambientes."
+  },
+  "teams": {
+    "name": "Equipes",
+    "description": "Gerencie equipes e membros de equipe com substituições de papéis."
+  },
+  "projects": {
+    "name": "Projetos",
+    "description": "Gerencie projetos e atribua equipes para isolamento de workspace."
+  },
+  "data-contracts": {
+    "name": "Contratos",
+    "description": "Defina e aplique padrões de metadados técnicos."
+  },
+  "data-products": {
+    "name": "Produtos",
+    "description": "Agrupe e gerencie ativos relacionados do Databricks com tags."
+  },
+  "concepts": {
+    "name": "Conceitos",
+    "description": "Navegue, busque e gerencie conceitos de negócio, coleções e hierarquias."
+  },
+  "semantic-models": {
+    "name": "Navegador de Conceitos",
+    "description": "Explore termos do glossário de negócios, conceitos e seus relacionamentos."
+  },
+  "collections": {
+    "name": "Coleções de Conceitos",
+    "description": "Organize conceitos e ativos em coleções lógicas."
+  },
+  "process-workflows": {
+    "name": "Fluxos de Trabalho",
+    "description": "Configure fluxos de trabalho automatizados para validação, aprovação e notificações."
+  },
+  "data-asset-reviews": {
+    "name": "Revisões de Ativos",
+    "description": "Revise e aprove ativos do Databricks, como tabelas, views e funções."
+  },
+  "compliance": {
+    "name": "Conformidade",
+    "description": "Crie e verifique regras de conformidade e calcule pontuações."
+  },
+  "estate-manager": {
+    "name": "Gerenciador de Estates",
+    "description": "Gerencie múltiplas instâncias do Databricks entre regiões e nuvens."
+  },
+  "master-data": {
+    "name": "Gestão de Dados Mestres",
+    "description": "Construa um registro único e confiável dos seus dados."
+  },
+  "catalog-commander": {
+    "name": "Catalog Commander",
+    "description": "Explorador de catálogo lado a lado para gerenciamento de ativos."
+  },
+  "security": {
+    "name": "Recursos de Segurança",
+    "description": "Habilite segurança avançada, como privacidade diferencial."
+  },
+  "security-features": {
+    "name": "Recursos de Segurança",
+    "description": "Habilite segurança avançada, como privacidade diferencial."
+  },
+  "entitlements": {
+    "name": "Direitos de Acesso",
+    "description": "Gerencie privilégios de acesso por meio de personas e grupos."
+  },
+  "entitlements-sync": {
+    "name": "Sincronização de Direitos",
+    "description": "Sincronize direitos de acesso com sistemas externos."
+  },
+  "search": {
+    "name": "Busca",
+    "description": "Busque em produtos de dados, contratos e no grafo de conhecimento."
+  },
+  "audit": {
+    "name": "Trilha de Auditoria",
+    "description": "Visualize e filtre os logs de auditoria do aplicativo."
+  },
+  "settings": {
+    "name": "Configurações",
+    "description": "Configure as definições do aplicativo, jobs e integrações."
+  },
+  "about": {
+    "name": "Sobre",
+    "description": "Informações sobre o aplicativo e seus recursos."
+  }
+}

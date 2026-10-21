@@ -6,6 +6,8 @@
   "editDomain": "Editar dominio",
   "deleteDomain": "Eliminar dominio",
   "noDomainsYet": "Aún no hay dominios de datos.",
+  "openMenu": "Abrir menú",
+  "previewMetadata": "Previsualizar metadatos",
   "table": {
     "name": "Nombre",
     "description": "Descripción",
@@ -28,12 +30,133 @@
     "domainDeletedSuccess": "El dominio de datos se eliminó correctamente.",
     "errorFetchingDomains": "Error al obtener dominios",
     "errorDeletingDomain": "Error al eliminar dominio",
-    "errorLoadingData": "Error al cargar datos"
+    "errorLoadingData": "Error al cargar datos",
+    "failedLoadDomains": "No se pudieron cargar los dominios de datos",
+    "failedDeleteDomain": "No se pudo eliminar el dominio."
   },
   "deleteDialog": {
     "title": "¿Estás absolutamente seguro?",
     "description": "Esta acción no se puede deshacer. Esto eliminará permanentemente el dominio de datos.",
     "cancel": "Cancelar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "cannotDelete": "Este dominio no se puede eliminar.",
+    "primaryForAssignments_one": "Es el dominio principal de {{count}} asignación de entidad:",
+    "primaryForAssignments_other": "Es el dominio principal de {{count}} asignaciones de entidad:",
+    "assignmentCount": "{{count}} {{type}}(s)",
+    "reassignFirst": "Reasigne esas a un dominio principal diferente primero."
+  },
+  "form": {
+    "editTitle": "Editar dominio de datos",
+    "createTitle": "Crear nuevo dominio de datos",
+    "editDescription": "Realice cambios en el dominio de datos existente.",
+    "createDescription": "Agregue un nuevo dominio de datos al sistema.",
+    "createSubmit": "Crear dominio",
+    "nameLabel": "Nombre *",
+    "namePlaceholder": "p. ej., Análisis de ventas",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Describa el propósito de este dominio...",
+    "tagsLabel": "Etiquetas",
+    "tagsPlaceholder": "Busque y seleccione etiquetas para este dominio de datos...",
+    "parentLabel": "Dominio principal",
+    "parentPlaceholder": "Seleccione un dominio principal (opcional)",
+    "noParent": "Sin dominio principal",
+    "validation": {
+      "nameMin": "El nombre debe tener al menos 2 caracteres.",
+      "descriptionMax": "La descripción no debe superar los 500 caracteres."
+    },
+    "discardDescription": "Tiene cambios sin guardar que se perderán si cierra este cuadro de diálogo. ¿Seguro que desea descartarlos?",
+    "continueEditing": "Seguir editando",
+    "discardChanges": "Descartar cambios",
+    "toasts": {
+      "updated": "Dominio actualizado",
+      "created": "Dominio creado",
+      "saveSuccess": "'{{name}}' se guardó correctamente.",
+      "saveError": "Error al guardar el dominio"
+    }
+  },
+  "details": {
+    "backToList": "Volver a la lista",
+    "backToDataDomains": "Volver a los dominios de datos",
+    "edit": "Editar",
+    "notFound": "No se encontró el dominio de datos o no se pudo cargar.",
+    "noDomainIdProvided": "No se proporcionó ningún ID de dominio.",
+    "invalidDomain": "Dominio no válido",
+    "relatedEntities": "Entidades relacionadas",
+    "addConcept": "Agregar concepto",
+    "hierarchyContext": "Contexto de la jerarquía de dominios",
+    "info": {
+      "id": "ID",
+      "parentDomain": "Dominio principal",
+      "childrenCount": "Número de secundarios",
+      "tags": "Etiquetas",
+      "createdBy": "Creado por",
+      "createdAt": "Fecha de creación",
+      "lastUpdatedAt": "Última actualización",
+      "linkedBusinessConcepts": "Conceptos de negocio vinculados"
+    },
+    "childDomains": {
+      "title": "Dominios de datos secundarios ({{count}})",
+      "description": "Dominios de datos anidados directamente.",
+      "empty": "No se encontraron dominios secundarios",
+      "columns": {
+        "name": "Nombre",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "Equipos del dominio",
+      "countBadge_one": "{{count}} equipo",
+      "countBadge_other": "{{count}} equipos",
+      "create": "Crear equipo",
+      "description": "Equipos asignados a este dominio de datos. Los equipos heredan permisos y responsabilidades específicos del dominio.",
+      "empty": "No hay equipos asignados",
+      "emptyHint": "Cree un equipo para asignarlo a este dominio de datos.",
+      "createFirst": "Crear el primer equipo",
+      "columns": {
+        "name": "Nombre del equipo",
+        "title": "Título",
+        "noTitle": "Sin título",
+        "members": "Miembros",
+        "memberCount_one": "{{count}} miembro",
+        "memberCount_other": "{{count}} miembros",
+        "actions": "Acciones",
+        "edit": "Editar"
+      }
+    },
+    "assignedEntities": {
+      "title": "Entidades asignadas",
+      "description": "Productos de datos, contratos y activos asignados a este dominio (principal o adicional).",
+      "dataProducts": "Productos de datos",
+      "dataContracts": "Contratos de datos",
+      "assets": "Activos",
+      "primaryDomain": "Dominio principal",
+      "additionalDomain": "Dominio adicional",
+      "noneAssigned": "Ninguno asignado."
+    },
+    "linkedAssets": {
+      "title": "Activos vinculados",
+      "description": "Activos (productos de datos, contratos, etc.) vinculados a este dominio de datos mediante relaciones semánticas.",
+      "empty": "No se encontraron activos vinculados",
+      "countBadge": "{{count}} en total",
+      "columns": {
+        "name": "Nombre del activo",
+        "type": "Tipo",
+        "unknownType": "Desconocido",
+        "path": "Ruta",
+        "domain": "Dominio"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "Concepto de negocio vinculado al dominio de datos.",
+    "conceptUnlinked": "Concepto de negocio desvinculado del dominio de datos.",
+    "linkConceptError": "No se pudo vincular el concepto de negocio",
+    "unlinkConceptError": "No se pudo desvincular el concepto de negocio",
+    "errorFetchingDomain": "Error al obtener el dominio",
+    "couldNotLoadDomain": "No se pudieron cargar los detalles del dominio.",
+    "failedFetchDomain": "No se pudieron obtener los detalles del dominio.",
+    "metadataLoadFailed": "Error al cargar los metadatos",
+    "couldNotLoadMetadata": "No se pudieron cargar los metadatos.",
+    "editTeamLoadError": "No se pudieron cargar los detalles del equipo para editar."
   }
 }

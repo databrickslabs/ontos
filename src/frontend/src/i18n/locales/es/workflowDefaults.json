@@ -1,0 +1,97 @@
+{
+  "approvalResponse": {
+    "title": "Indica un motivo",
+    "description": "Indica el motivo de tu decisión de aprobar o rechazar.",
+    "fields": {
+      "reason": "Motivo de la aprobación o el rechazo"
+    }
+  },
+  "subscription": {
+    "title": "Detalles de la suscripción",
+    "description": "Describe cómo piensas usar este producto de datos.",
+    "fields": {
+      "reason": "Motivo de la suscripción",
+      "useCase": "Caso de uso previsto"
+    }
+  },
+  "requestReview": {
+    "title": "Solicitar revisión",
+    "description": "Indica el motivo de tu solicitud de revisión.",
+    "fields": {
+      "reason": "¿Por qué solicitas una revisión?"
+    }
+  },
+  "requestAccess": {
+    "title": "Solicitar acceso",
+    "description": "Indica el motivo de tu solicitud de acceso y, si quieres, define una duración.",
+    "fields": {
+      "reason": "¿Por qué necesitas acceso?",
+      "expiryDays": "Duración solicitada (días; déjalo vacío para indefinido)"
+    }
+  },
+  "requestPublish": {
+    "title": "Solicitar publicación",
+    "description": "Indica el motivo de tu solicitud de publicación.",
+    "fields": {
+      "reason": "¿Por qué solicitas la publicación?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Solicitar cambio de estado",
+    "description": "Indica el motivo de tu solicitud de cambio de estado.",
+    "fields": {
+      "reason": "¿Por qué solicitas este cambio de estado?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Indicar un motivo"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "El nombre del objeto no sigue las convenciones de nomenclatura",
+      "tagging": "No se pudieron aplicar las etiquetas obligatorias"
+    },
+    "dataProductApproval": {
+      "noContract": "El producto de datos requiere un contrato de datos",
+      "rejected": "La solicitud de publicación del producto de datos fue rechazada"
+    },
+    "dataContractValidation": {
+      "noSchema": "El contrato de datos requiere una definición de esquema"
+    },
+    "preCreationCompliance": {
+      "naming": "El nombre del activo no cumple la política de convenciones de nomenclatura",
+      "tagging": "El activo no tiene las etiquetas obligatorias"
+    },
+    "tablePreCreation": {
+      "invalidName": "El nombre de la tabla solo puede contener minúsculas y guiones bajos",
+      "reservedWord": "El nombre de la tabla no puede ser una palabra reservada de SQL"
+    },
+    "contractReviewRequest": {
+      "rejected": "La solicitud de revisión del contrato de datos fue rechazada"
+    },
+    "contractDeployRequest": {
+      "rejected": "La solicitud de despliegue del contrato de datos fue rechazada"
+    },
+    "productReviewRequest": {
+      "rejected": "La solicitud de revisión del producto de datos fue rechazada"
+    },
+    "accessGrantRequest": {
+      "rejected": "La solicitud de acceso fue denegada"
+    },
+    "statusChangeRequest": {
+      "rejected": "La solicitud de cambio de estado fue rechazada"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "La revisión del activo de datos requiere cambios"
+    },
+    "roleAccessRequest": {
+      "rejected": "La solicitud de acceso al rol fue denegada"
+    },
+    "certificationRequestReview": {
+      "end": "El flujo de trabajo de certificación falló"
+    },
+    "publicationRequestReview": {
+      "end": "El flujo de trabajo de publicación falló"
+    }
+  }
+}

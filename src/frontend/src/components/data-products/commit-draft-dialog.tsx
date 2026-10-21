@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ export default function CommitDraftDialog({
   productName,
   onSuccess,
 }: CommitDraftDialogProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
   
@@ -78,7 +80,7 @@ export default function CommitDraftDialog({
         setSuggestedVersion('1.0.0');
         setSelectedVersionBump('minor');
       } else {
-        setError(e.message || 'Failed to analyze changes');
+        setError(e.message || t('data-products:commitDraft.errorAnalyze'));
       }
     } finally {
       setLoadingDiff(false);
@@ -95,12 +97,12 @@ export default function CommitDraftDialog({
     const finalVersion = getVersionForBump(selectedVersionBump);
     
     if (!finalVersion || !/^\d+\.\d+\.\d+$/.test(finalVersion)) {
-      setError('Please enter a valid version number (e.g., 1.0.0)');
+      setError(t('data-products:commitDraft.validationInvalidVersion'));
       return;
     }
-    
+
     if (!changeSummary.trim()) {
-      setError('Please provide a summary of changes');
+      setError(t('data-products:commitDraft.validationNoSummary'));
       return;
     }
     
@@ -118,15 +120,15 @@ export default function CommitDraftDialog({
       }
       
       toast({
-        title: 'Draft Committed',
-        description: `Product version ${finalVersion} is now visible to your team.`,
+        title: t('data-products:commitDraft.toastCommittedTitle'),
+        description: t('data-products:commitDraft.toastCommittedDescription', { version: finalVersion }),
       });
-      
+
       onSuccess(productId);
       onOpenChange(false);
-      
+
     } catch (e: any) {
-      setError(e.message || 'Failed to commit draft');
+      setError(e.message || t('data-products:commitDraft.errorCommit'));
     } finally {
       setIsCommitting(false);
     }
@@ -138,12 +140,12 @@ export default function CommitDraftDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            Commit Draft Changes
+            {t('data-products:commitDraft.title')}
           </DialogTitle>
           <DialogDescription>
             {productName && <span className="font-medium">{productName}</span>}
             <span className="text-muted-foreground ml-2">
-              Commit your personal draft to make it visible to your team.
+              {t('data-products:commitDraft.description')}
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -152,16 +154,16 @@ export default function CommitDraftDialog({
           {loadingDiff ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              Analyzing changes...
+              {t('data-products:commitDraft.analyzing')}
             </div>
           ) : (
             <>
               {/* Change Analysis Summary */}
               {diffAnalysis && (
                 <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-                  <AlertTitle className="text-blue-800 dark:text-blue-200">Change Analysis</AlertTitle>
+                  <AlertTitle className="text-blue-800 dark:text-blue-200">{t('data-products:commitDraft.changeAnalysisTitle')}</AlertTitle>
                   <AlertDescription className="text-blue-700 dark:text-blue-300">
-                    Based on your changes, we recommend a <strong>{diffAnalysis.suggested_bump}</strong> version bump.
+                    {t('data-products:commitDraft.changeAnalysisDescription', { bump: diffAnalysis.suggested_bump })}
                     {diffAnalysis.analysis?.summary && (
                       <p className="mt-1 text-sm">{diffAnalysis.analysis.summary}</p>
                     )}
@@ -171,7 +173,7 @@ export default function CommitDraftDialog({
 
               {/* Version Selection */}
               <div className="space-y-3">
-                <Label>Select Version</Label>
+                <Label>{t('data-products:commitDraft.selectVersion')}</Label>
                 <RadioGroup
                   value={selectedVersionBump}
                   onValueChange={(v) => setSelectedVersionBump(v as typeof selectedVersionBump)}
@@ -179,27 +181,27 @@ export default function CommitDraftDialog({
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="patch" id="patch" />
                     <Label htmlFor="patch" className="font-normal">
-                      Patch ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'patch') : '?.?.?'})
-                      <span className="text-muted-foreground ml-2">- Bug fixes</span>
+                      {t('data-products:commitDraft.patch')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'patch') : '?.?.?'})
+                      <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.patchDescription')}</span>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="minor" id="minor" />
                     <Label htmlFor="minor" className="font-normal">
-                      Minor ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'minor') : '?.?.?'})
-                      <span className="text-muted-foreground ml-2">- New features</span>
+                      {t('data-products:commitDraft.minor')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'minor') : '?.?.?'})
+                      <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.minorDescription')}</span>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="major" id="major" />
                     <Label htmlFor="major" className="font-normal">
-                      Major ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'major') : '?.?.?'})
-                      <span className="text-muted-foreground ml-2">- Breaking changes</span>
+                      {t('data-products:commitDraft.major')} ({diffAnalysis ? calculateNextSemver(diffAnalysis.parent_version, 'major') : '?.?.?'})
+                      <span className="text-muted-foreground ml-2">- {t('data-products:commitDraft.majorDescription')}</span>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="custom" id="custom" />
-                    <Label htmlFor="custom" className="font-normal">Custom version</Label>
+                    <Label htmlFor="custom" className="font-normal">{t('data-products:commitDraft.customVersion')}</Label>
                   </div>
                 </RadioGroup>
                 
@@ -207,7 +209,7 @@ export default function CommitDraftDialog({
                   <Input
                     value={customVersion}
                     onChange={(e) => setCustomVersion(e.target.value)}
-                    placeholder="e.g., 2.0.0"
+                    placeholder={t('data-products:commitDraft.customVersionPlaceholder')}
                     className="mt-2"
                   />
                 )}
@@ -215,12 +217,12 @@ export default function CommitDraftDialog({
 
               {/* Change Summary */}
               <div className="space-y-2">
-                <Label htmlFor="change-summary">Change Summary *</Label>
+                <Label htmlFor="change-summary">{t('data-products:commitDraft.changeSummaryLabel')}</Label>
                 <Textarea
                   id="change-summary"
                   value={changeSummary}
                   onChange={(e) => setChangeSummary(e.target.value)}
-                  placeholder="Describe the changes made in this version..."
+                  placeholder={t('data-products:commitDraft.changeSummaryPlaceholder')}
                   className="min-h-[100px] resize-none"
                   disabled={isCommitting}
                 />
@@ -239,16 +241,16 @@ export default function CommitDraftDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCommitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isCommitting || loadingDiff}>
             {isCommitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Committing...
+                {t('data-products:commitDraft.committing')}
               </>
             ) : (
-              'Commit Draft'
+              t('data-products:commitDraft.commitButton')
             )}
           </Button>
         </DialogFooter>

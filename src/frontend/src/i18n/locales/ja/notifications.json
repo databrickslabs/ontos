@@ -1,0 +1,39 @@
+{
+  "statusChangeNotApplied": {
+    "title": "ステータスの変更は適用されませんでした",
+    "statusChanged": "ステータスを「{{fromStatus}}」から「{{toStatus}}」に変更するリクエストは承認されましたが、現在のステータスが「{{currentStatus}}」のため、変更は適用されませんでした。まだ必要な場合は、もう一度リクエストしてください。",
+    "refused": "ステータスを「{{toStatus}}」に変更するリクエストは承認されましたが、変更を適用できませんでした: {{reason}}"
+  },
+  "contractStatusNotChanged": {
+    "title": "契約のステータスは変更されませんでした",
+    "notUnderReview": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: 契約はレビュー中ではありません（ステータス「{{currentStatus}}」）",
+    "notApplied": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: {{reason}}"
+  },
+  "ui": {
+    "tooltip": "通知",
+    "loading": "通知を読み込んでいます...",
+    "error": "エラー: {{error}}",
+    "empty": "通知はありません",
+    "open": "開く",
+    "viewDetails": "詳細を表示",
+    "approveDeny": "承認/却下",
+    "handleAccessGrant": "アクセス付与を処理",
+    "reviewContract": "契約をレビュー",
+    "handlePublish": "公開を処理",
+    "handleDeploy": "デプロイを処理",
+    "approved": "✓ 承認済み",
+    "rejected": "✗ 却下済み",
+    "viewRespond": "表示 / 回答",
+    "reviewCertification": "認定リクエストをレビュー",
+    "reviewPublication": "公開リクエストをレビュー",
+    "status": "ステータス: {{status}}",
+    "runId": "実行 ID: {{runId}}",
+    "delete": "通知を削除",
+    "unknownUser": "不明なユーザー",
+    "unknownRoleId": "不明なロール ID",
+    "unknownRoleName": "不明なロール名",
+    "unknownId": "不明な ID",
+    "badge": "通知",
+    "markRead": "既読にする"
+  }
+}

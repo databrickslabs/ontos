@@ -46,7 +46,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
         fetch('/api/user/projects'),
       ]);
 
-      if (!detailsRes.ok) throw new Error('Failed to fetch user details');
+      if (!detailsRes.ok) throw new Error(t('common:userProfile.detailsFailed'));
 
       const details = await detailsRes.json();
       const role = roleRes.ok ? (await roleRes.json()).role : null;
@@ -61,7 +61,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
       });
     } catch (err: any) {
       console.error('Failed to fetch profile data:', err);
-      setError(err.message || 'Failed to load profile data');
+      setError(err.message || t('common:userProfile.loadFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -78,26 +78,26 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Display Name</p>
-            <p className="text-sm">{profileData.user || 'N/A'}</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('common:userProfile.displayName')}</p>
+            <p className="text-sm">{profileData.user || t('common:states.notAvailable')}</p>
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Email</p>
-            <p className="text-sm">{profileData.email || 'N/A'}</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('common:userProfile.email')}</p>
+            <p className="text-sm">{profileData.email || t('common:states.notAvailable')}</p>
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Username</p>
-            <p className="text-sm">{profileData.username || 'N/A'}</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('common:userProfile.username')}</p>
+            <p className="text-sm">{profileData.username || t('common:states.notAvailable')}</p>
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">IP Address</p>
-            <p className="text-sm">{profileData.ip || 'N/A'}</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('common:userProfile.ipAddress')}</p>
+            <p className="text-sm">{profileData.ip || t('common:states.notAvailable')}</p>
           </div>
         </div>
 
         <div className="space-y-3">
           <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">App Role</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">{t('common:userProfile.appRole')}</p>
             {profileData.role ? (
               <div className="flex items-center gap-2 p-2 rounded-md border bg-card">
                 <Shield className="h-4 w-4 text-muted-foreground" />
@@ -109,12 +109,12 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No app role assigned</p>
+              <p className="text-sm text-muted-foreground italic">{t('common:userProfile.noAppRole')}</p>
             )}
           </div>
 
           <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Groups ({groups.length})</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">{t('common:userProfile.groupsCount', { count: groups.length })}</p>
             {groups.length > 0 ? (
               <ScrollArea className="h-[150px] rounded-md border">
                 <div className="p-2 space-y-1">
@@ -130,7 +130,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
                 </div>
               </ScrollArea>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No groups assigned</p>
+              <p className="text-sm text-muted-foreground italic">{t('common:userProfile.noGroups')}</p>
             )}
           </div>
         </div>
@@ -156,7 +156,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
         <div>
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Teams ({teams.length})
+            {t('common:userProfile.teamsCount', { count: teams.length })}
           </h3>
           {teams.length > 0 ? (
             <ScrollArea className="h-[200px]">
@@ -174,7 +174,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground italic">Not a member of any teams</p>
+            <p className="text-sm text-muted-foreground italic">{t('common:userProfile.noTeams')}</p>
           )}
         </div>
 
@@ -182,7 +182,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
         <div>
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <FolderKanban className="h-4 w-4" />
-            Projects ({uniqueProjects.length})
+            {t('common:userProfile.projectsCount', { count: uniqueProjects.length })}
           </h3>
           {uniqueProjects.length > 0 ? (
             <ScrollArea className="h-[200px]">
@@ -203,13 +203,13 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
                           </div>
                           <div className="flex gap-1">
                             {isOwner && (
-                              <Badge variant="default" className="text-xs">Owner</Badge>
+                              <Badge variant="default" className="text-xs">{t('common:labels.owner')}</Badge>
                             )}
                             {isMember && !isOwner && (
-                              <Badge variant="secondary" className="text-xs">Member</Badge>
+                              <Badge variant="secondary" className="text-xs">{t('common:userProfile.member')}</Badge>
                             )}
                             {!isOwner && !isMember && (
-                              <Badge variant="outline" className="text-xs">Access</Badge>
+                              <Badge variant="outline" className="text-xs">{t('common:userProfile.access')}</Badge>
                             )}
                           </div>
                         </div>
@@ -220,7 +220,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground italic">No projects associated</p>
+            <p className="text-sm text-muted-foreground italic">{t('common:userProfile.noProjects')}</p>
           )}
         </div>
       </div>
@@ -236,7 +236,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
             {t('userMenu.profile')}
           </DialogTitle>
           <DialogDescription>
-            View your profile information and memberships
+            {t('common:userProfile.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -248,8 +248,8 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
 
         <Tabs defaultValue="info" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="info">Info</TabsTrigger>
-            <TabsTrigger value="memberships">Memberships</TabsTrigger>
+            <TabsTrigger value="info">{t('common:userProfile.tabInfo')}</TabsTrigger>
+            <TabsTrigger value="memberships">{t('common:userProfile.tabMemberships')}</TabsTrigger>
           </TabsList>
 
           <ScrollArea className="h-[400px] mt-4">

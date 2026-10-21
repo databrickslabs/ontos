@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ type Props = {
 };
 
 export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }: Props) {
+  const { t } = useTranslation(['data-contracts', 'common']);
   const { currentProject } = useProjectContext();
 
   const [createType, setCreateType] = useState<CreateType>('table');
@@ -107,7 +109,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      
+
       if (!res.ok) {
         // Try to parse as JSON for workflow errors
         const contentType = res.headers.get('content-type');
@@ -126,7 +128,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
       const data = await res.json();
       setSuccess(data);
     } catch (e: any) {
-      setError(e?.message || 'Failed to create');
+      setError(e?.message || t('data-contracts:selfService.errors.createFailed', 'Failed to create'));
     } finally {
       setLoading(false);
     }
@@ -134,34 +136,34 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent 
+      <DialogContent
         className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
         style={{ top: '5%', transform: 'translateX(-50%)' }}
       >
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Self-service data curation</DialogTitle>
+          <DialogTitle>{t('data-contracts:selfService.title', 'Self-service data curation')}</DialogTitle>
         </DialogHeader>
 
         {/* Top fields outside scroll area to prevent dropdown clipping */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
           <div>
-            <Label>What to create</Label>
+            <Label>{t('data-contracts:selfService.whatToCreateLabel', 'What to create')}</Label>
             <Select value={createType} onValueChange={(v) => setCreateType(v as CreateType)}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectTrigger className="w-full"><SelectValue placeholder={t('common:placeholders.selectType', 'Select type')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="catalog">Catalog</SelectItem>
-                <SelectItem value="schema">Schema</SelectItem>
-                <SelectItem value="table">Table</SelectItem>
+                <SelectItem value="catalog">{t('common:labels.catalog', 'Catalog')}</SelectItem>
+                <SelectItem value="schema">{t('common:labels.schema', 'Schema')}</SelectItem>
+                <SelectItem value="table">{t('common:labels.table', 'Table')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Catalog</Label>
-            <Input value={catalog} onChange={(e) => setCatalog(e.target.value)} placeholder="e.g. user_jdoe" />
+            <Label>{t('common:labels.catalog', 'Catalog')}</Label>
+            <Input value={catalog} onChange={(e) => setCatalog(e.target.value)} placeholder={t('data-contracts:selfService.catalogPlaceholder', 'e.g. user_jdoe')} />
           </div>
           <div>
-            <Label>Schema</Label>
-            <Input value={schema} onChange={(e) => setSchema(e.target.value)} placeholder="e.g. sandbox" />
+            <Label>{t('common:labels.schema', 'Schema')}</Label>
+            <Input value={schema} onChange={(e) => setSchema(e.target.value)} placeholder={t('data-contracts:selfService.schemaPlaceholder', 'e.g. sandbox')} />
           </div>
         </div>
 
@@ -169,13 +171,13 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
           {createType === 'table' && (
             <Card>
               <CardHeader>
-                <CardTitle>Table definition</CardTitle>
+                <CardTitle>{t('data-contracts:selfService.tableDefinition', 'Table definition')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Table name</Label>
-                    <Input value={tableName} onChange={(e) => setTableName(e.target.value)} placeholder="e.g. clicks" />
+                    <Label>{t('data-contracts:selfService.tableName', 'Table name')}</Label>
+                    <Input value={tableName} onChange={(e) => setTableName(e.target.value)} placeholder={t('data-contracts:selfService.tableNamePlaceholder', 'e.g. clicks')} />
                   </div>
                 </div>
                 <div className="mt-4">
@@ -189,7 +191,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
             <div className="flex gap-2 items-center">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={createContract} onChange={(e) => setCreateContract(e.target.checked)} />
-                Create as Data Contract
+                {t('data-contracts:selfService.createAsContract', 'Create as Data Contract')}
               </label>
             </div>
           )}
@@ -200,11 +202,11 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          
+
           {workflowErrors && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Pre-creation validation failed</AlertTitle>
+              <AlertTitle>{t('data-contracts:selfService.validationFailedTitle', 'Pre-creation validation failed')}</AlertTitle>
               <AlertDescription>
                 <p className="mb-2">{workflowErrors.message}</p>
                 <div className="space-y-2">
@@ -230,7 +232,7 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
                                 {step.policy_name && (
                                   <span className="font-medium">{step.policy_name}: </span>
                                 )}
-                                {step.message || 'Validation failed'}
+                                {step.message || t('data-contracts:selfService.stepValidationFailed', 'Validation failed')}
                               </div>
                             </div>
                           ))}
@@ -243,22 +245,22 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
                   );
                 })}
                 </div>
-                <p className="mt-3 text-sm">Please fix the issues above and try again.</p>
+                <p className="mt-3 text-sm">{t('data-contracts:selfService.fixIssues', 'Please fix the issues above and try again.')}</p>
               </AlertDescription>
             </Alert>
           )}
-          
+
           {success && (
             <Alert>
               <CheckCircle className="h-4 w-4" />
-              <AlertDescription>Created: {JSON.stringify(success.created)}{success.contractId ? `, contract ${success.contractId}` : ''}</AlertDescription>
+              <AlertDescription>{t('data-contracts:selfService.createdPrefix', 'Created:')} {JSON.stringify(success.created)}{success.contractId ? t('data-contracts:selfService.contractSuffix', ', contract {{id}}', { id: success.contractId }) : ''}</AlertDescription>
             </Alert>
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common:actions.close', 'Close')}</Button>
             <Button onClick={handleSubmit} disabled={!canSubmit || loading}>
-              {loading ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Working…</span>) : 'Create'}
+              {loading ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> {t('data-contracts:selfService.working', 'Working…')}</span>) : t('common:actions.create', 'Create')}
             </Button>
           </div>
         </div>
@@ -268,5 +270,4 @@ export default function SelfServiceDialog({ isOpen, onOpenChange, initialType }:
     </Dialog>
   );
 }
-
 

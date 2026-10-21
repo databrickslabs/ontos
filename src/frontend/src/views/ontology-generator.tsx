@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Wand2, Loader2, Copy, Download, Save, XCircle, Clock, CheckCircle2, AlertCircle, History, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -94,6 +95,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof Loader2; variant: 'default' |
 };
 
 export default function OntologyGeneratorView() {
+  const { t } = useTranslation(['semantic-models', 'common']);
   const { get: apiGet, post, delete: apiDelete } = useApi();
   const { toast } = useToast();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
@@ -134,12 +136,12 @@ export default function OntologyGeneratorView() {
 
   useEffect(() => {
     setStaticSegments([]);
-    setDynamicTitle('Ontology Generator');
+    setDynamicTitle(t('semantic-models:ontologyGenerator.title'));
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [setStaticSegments, setDynamicTitle]);
+  }, [setStaticSegments, setDynamicTitle, t]);
 
   // -- Connections --
 
@@ -216,18 +218,23 @@ export default function OntologyGeneratorView() {
           selectedRunIdRef.current = runId;
         }
         toast({
-          title: 'Ontology generated',
+          title: t('semantic-models:ontologyGenerator.toasts.generatedTitle'),
           description: run.result
-            ? `${run.result.classes.length} classes, ${run.result.properties.length} properties.`
-            : 'Generation completed.',
+            ? t('semantic-models:ontologyGenerator.toasts.generatedDescription', {
+                classes: run.result.classes.length,
+                properties: run.result.properties.length,
+              })
+            : t('semantic-models:ontologyGenerator.toasts.generatedFallback'),
         });
         fetchRuns();
       } else if (run.status === 'failed' || run.status === 'cancelled') {
         stopPolling();
         setActiveRunId(null);
         toast({
-          title: run.status === 'cancelled' ? 'Generation cancelled' : 'Generation failed',
-          description: run.error || 'Unknown error',
+          title: run.status === 'cancelled'
+            ? t('semantic-models:ontologyGenerator.toasts.cancelledTitle')
+            : t('semantic-models:ontologyGenerator.toasts.failedTitle'),
+          description: run.error || t('semantic-models:ontologyGenerator.toasts.unknownError'),
           variant: 'destructive',
         });
         fetchRuns();
@@ -235,7 +242,7 @@ export default function OntologyGeneratorView() {
     } catch (err) {
       console.error('Poll error:', err);
     }
-  }, [apiGet, stopPolling, toast, fetchRuns]);
+  }, [apiGet, stopPolling, toast, fetchRuns, t]);
 
   useEffect(() => {
     if (!activeRunId) return;
@@ -279,17 +286,17 @@ export default function OntologyGeneratorView() {
       });
 
       if (response.error) {
-        toast({ title: 'Failed to start generation', description: response.error, variant: 'destructive' });
+        toast({ title: t('semantic-models:ontologyGenerator.toasts.startFailed'), description: response.error, variant: 'destructive' });
         return;
       }
 
       if (response.data?.run_id) {
         setActiveRunId(response.data.run_id);
-        setProgressMessage('Starting...');
-        toast({ title: 'Generation started', description: 'The LLM agent is working in the background.' });
+        setProgressMessage(t('semantic-models:ontologyGenerator.progress.starting'));
+        toast({ title: t('semantic-models:ontologyGenerator.toasts.startedTitle'), description: t('semantic-models:ontologyGenerator.toasts.startedDescription') });
       }
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: String(err), variant: 'destructive' });
     } finally {
       setIsStarting(false);
     }
@@ -306,7 +313,7 @@ export default function OntologyGeneratorView() {
       setProgressMessage(null);
       fetchRuns();
     } catch (err) {
-      toast({ title: 'Cancel failed', description: String(err), variant: 'destructive' });
+      toast({ title: t('semantic-models:ontologyGenerator.toasts.cancelFailed'), description: String(err), variant: 'destructive' });
     }
   };
 
@@ -321,10 +328,10 @@ export default function OntologyGeneratorView() {
         selectedRunIdRef.current = runId;
         setLiveSteps(resp.data.steps || []);
       } else {
-        toast({ title: 'No result', description: 'This run has no result data.', variant: 'destructive' });
+        toast({ title: t('semantic-models:ontologyGenerator.toasts.noResultTitle'), description: t('semantic-models:ontologyGenerator.toasts.noResultDescription'), variant: 'destructive' });
       }
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: String(err), variant: 'destructive' });
     }
   };
 
@@ -340,7 +347,7 @@ export default function OntologyGeneratorView() {
       }
       fetchRuns();
     } catch (err) {
-      toast({ title: 'Delete failed', description: String(err), variant: 'destructive' });
+      toast({ title: t('semantic-models:ontologyGenerator.toasts.deleteFailed'), description: String(err), variant: 'destructive' });
     }
   };
 
@@ -349,7 +356,7 @@ export default function OntologyGeneratorView() {
   const copyTurtle = () => {
     if (result?.owl_content) {
       navigator.clipboard.writeText(result.owl_content);
-      toast({ title: 'Copied', description: 'Turtle content copied to clipboard.' });
+      toast({ title: t('common:copied'), description: t('semantic-models:ontologyGenerator.toasts.turtleCopied') });
     }
   };
 
@@ -384,24 +391,27 @@ export default function OntologyGeneratorView() {
       });
 
       if (response.error) {
-        toast({ title: 'Save failed', description: response.error, variant: 'destructive' });
+        toast({ title: t('semantic-models:ontologyGenerator.toasts.saveFailed'), description: response.error, variant: 'destructive' });
         return;
       }
 
       if (response.data?.success) {
         toast({
-          title: 'Saved to collection',
-          description: `${response.data.triples_imported} triples imported into "${collectionName}".`,
+          title: t('semantic-models:ontologyGenerator.toasts.savedTitle'),
+          description: t('semantic-models:ontologyGenerator.toasts.savedDescription', {
+            count: response.data.triples_imported,
+            name: collectionName,
+          }),
         });
         setIsSaveDialogOpen(false);
         setCollectionName('');
         setCollectionDescription('');
         bumpKnowledgeGraphRefresh('ontology-save');
       } else {
-        toast({ title: 'Save failed', description: response.data?.error || 'Unknown error', variant: 'destructive' });
+        toast({ title: t('semantic-models:ontologyGenerator.toasts.saveFailed'), description: response.data?.error || t('semantic-models:ontologyGenerator.toasts.unknownError'), variant: 'destructive' });
       }
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: String(err), variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -433,9 +443,9 @@ export default function OntologyGeneratorView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Ontology Generator</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{t('semantic-models:ontologyGenerator.title')}</h2>
         <p className="text-muted-foreground">
-          Browse a remote system, select tables, and generate an OWL ontology from their schemas.
+          {t('semantic-models:ontologyGenerator.subtitle')}
         </p>
       </div>
 
@@ -445,21 +455,21 @@ export default function OntologyGeneratorView() {
           {/* Connection selector */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Connection</CardTitle>
-              <CardDescription className="text-xs">Select a data platform connection</CardDescription>
+              <CardTitle className="text-sm font-medium">{t('common:labels.connection')}</CardTitle>
+              <CardDescription className="text-xs">{t('semantic-models:ontologyGenerator.connectionDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingConnections ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t('common:states.loading')}
                 </div>
               ) : connections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No connections configured. Add one in Settings &gt; Connectors.
+                  {t('semantic-models:ontologyGenerator.noConnections')}
                 </p>
               ) : (
                 <Select value={selectedConnectionId || ''} onValueChange={handleConnectionChange}>
-                  <SelectTrigger><SelectValue placeholder="Choose connection..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('semantic-models:ontologyGenerator.chooseConnection')} /></SelectTrigger>
                   <SelectContent>
                     {connections.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
@@ -478,30 +488,30 @@ export default function OntologyGeneratorView() {
           {/* Generation options */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Generation Options</CardTitle>
-              <CardDescription className="text-xs">Customize the ontology generation</CardDescription>
+              <CardTitle className="text-sm font-medium">{t('semantic-models:ontologyGenerator.generationOptions')}</CardTitle>
+              <CardDescription className="text-xs">{t('semantic-models:ontologyGenerator.generationOptionsDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label htmlFor="guidelines" className="text-xs">Guidelines</Label>
-                <Textarea id="guidelines" placeholder="E.g., Create a domain ontology for e-commerce data..." value={guidelines} onChange={(e) => setGuidelines(e.target.value)} rows={3} className="mt-1 text-sm" />
+                <Label htmlFor="guidelines" className="text-xs">{t('semantic-models:ontologyGenerator.guidelines')}</Label>
+                <Textarea id="guidelines" placeholder={t('semantic-models:ontologyGenerator.guidelinesPlaceholder')} value={guidelines} onChange={(e) => setGuidelines(e.target.value)} rows={3} className="mt-1 text-sm" />
               </div>
               <div>
-                <Label htmlFor="baseUri" className="text-xs">Base URI</Label>
+                <Label htmlFor="baseUri" className="text-xs">{t('semantic-models:ontologyGenerator.baseUri')}</Label>
                 <Input id="baseUri" value={baseUri} onChange={(e) => setBaseUri(e.target.value)} className="mt-1 font-mono text-xs" />
               </div>
               <Separator />
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="incDataProps" className="text-xs">Data properties</Label>
+                  <Label htmlFor="incDataProps" className="text-xs">{t('semantic-models:ontologyGenerator.dataProperties')}</Label>
                   <Switch id="incDataProps" checked={includeDataProperties} onCheckedChange={setIncludeDataProperties} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="incRels" className="text-xs">Relationships</Label>
+                  <Label htmlFor="incRels" className="text-xs">{t('semantic-models:ontologyGenerator.relationships')}</Label>
                   <Switch id="incRels" checked={includeRelationships} onCheckedChange={setIncludeRelationships} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="incInherit" className="text-xs">Inheritance</Label>
+                  <Label htmlFor="incInherit" className="text-xs">{t('semantic-models:ontologyGenerator.inheritance')}</Label>
                   <Switch id="incInherit" checked={includeInheritance} onCheckedChange={setIncludeInheritance} />
                 </div>
               </div>
@@ -514,18 +524,18 @@ export default function OntologyGeneratorView() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <span className="truncate">{progressMessage || 'Working...'}</span>
+                  <span className="truncate">{progressMessage || t('semantic-models:ontologyGenerator.progress.working')}</span>
                 </div>
                 <Button variant="destructive" onClick={handleCancel} className="w-full">
-                  <XCircle className="h-4 w-4 mr-2" /> Cancel Generation
+                  <XCircle className="h-4 w-4 mr-2" /> {t('semantic-models:ontologyGenerator.cancelGeneration')}
                 </Button>
               </div>
             ) : (
               <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full">
                 {isStarting ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Starting...</>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('semantic-models:ontologyGenerator.progress.starting')}</>
                 ) : (
-                  <><Wand2 className="h-4 w-4 mr-2" /> Generate Ontology ({selectedPaths.size} selected)</>
+                  <><Wand2 className="h-4 w-4 mr-2" /> {t('semantic-models:ontologyGenerator.generateOntology', { count: selectedPaths.size })}</>
                 )}
               </Button>
             )}
@@ -539,7 +549,7 @@ export default function OntologyGeneratorView() {
             >
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <History className="h-4 w-4" /> Recent Runs
+                  <History className="h-4 w-4" /> {t('semantic-models:ontologyGenerator.recentRuns')}
                   {runs.length > 0 && <Badge variant="secondary" className="text-xs">{runs.length}</Badge>}
                 </CardTitle>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${showRecentRuns ? 'rotate-180' : ''}`} />
@@ -549,7 +559,7 @@ export default function OntologyGeneratorView() {
               <CardContent className="pt-0 pb-3">
                 <ScrollArea className="max-h-[300px]">
                   {runs.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">No runs yet</p>
+                    <p className="text-xs text-muted-foreground text-center py-4">{t('semantic-models:ontologyGenerator.noRuns')}</p>
                   ) : (
                     <div className="space-y-0.5">
                       {runs.map((run) => (
@@ -563,14 +573,14 @@ export default function OntologyGeneratorView() {
                             >
                               <StatusIcon status={run.status} />
                               <span className="flex-1 truncate font-medium">
-                                {run.params.connection_name || 'Direct'}
+                                {run.params.connection_name || t('semantic-models:ontologyGenerator.direct')}
                               </span>
                               <span className="text-muted-foreground shrink-0">{formatTime(run.created_at)}</span>
                               {run.status !== 'running' && run.status !== 'pending' && (
                                 <button
                                   className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
                                   onClick={(e) => deleteRun(run.run_id, e)}
-                                  title="Delete run"
+                                  title={t('semantic-models:ontologyGenerator.deleteRun')}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </button>
@@ -580,23 +590,23 @@ export default function OntologyGeneratorView() {
                           <HoverCardContent side="right" align="start" className="w-72 text-xs">
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <span className="font-semibold">{run.params.connection_name || 'Direct generation'}</span>
+                                <span className="font-semibold">{run.params.connection_name || t('semantic-models:ontologyGenerator.directGeneration')}</span>
                                 <Badge variant={STATUS_CONFIG[run.status]?.variant || 'outline'} className="text-[10px]">
-                                  {STATUS_CONFIG[run.status]?.label || run.status}
+                                  {t(`semantic-models:ontologyGenerator.runStatus.${run.status}`, run.status)}
                                 </Badge>
                               </div>
                               <Separator />
                               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
-                                <span>Paths</span><span className="font-mono">{run.params.path_count}</span>
-                                <span>Steps</span><span className="font-mono">{run.step_count}</span>
-                                <span>Started</span><span>{run.created_at ? new Date(run.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' }) : '—'}</span>
-                                {run.completed_at && (<><span>Finished</span><span>{new Date(run.completed_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}</span></>)}
+                                <span>{t('semantic-models:ontologyGenerator.paths')}</span><span className="font-mono">{run.params.path_count}</span>
+                                <span>{t('semantic-models:ontologyGenerator.steps')}</span><span className="font-mono">{run.step_count}</span>
+                                <span>{t('semantic-models:ontologyGenerator.started')}</span><span>{run.created_at ? new Date(run.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' }) : '—'}</span>
+                                {run.completed_at && (<><span>{t('semantic-models:ontologyGenerator.finished')}</span><span>{new Date(run.completed_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}</span></>)}
                               </div>
                               {run.params.guidelines && (
                                 <>
                                   <Separator />
                                   <div>
-                                    <span className="text-muted-foreground">Guidelines:</span>
+                                    <span className="text-muted-foreground">{t('semantic-models:ontologyGenerator.guidelines')}:</span>
                                     <p className="mt-0.5 line-clamp-2">{run.params.guidelines}</p>
                                   </div>
                                 </>
@@ -627,11 +637,13 @@ export default function OntologyGeneratorView() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-sm font-medium">
-                    {selectedConnection ? `${selectedConnection.name} — Resources` : 'Resources'}
+                    {selectedConnection
+                      ? t('semantic-models:ontologyGenerator.resourcesWithName', { name: selectedConnection.name })
+                      : t('semantic-models:ontologyGenerator.resources')}
                   </CardTitle>
-                  <CardDescription className="text-xs">Select the catalogs, schemas, or tables to generate an ontology from</CardDescription>
+                  <CardDescription className="text-xs">{t('semantic-models:ontologyGenerator.resourcesDescription')}</CardDescription>
                 </div>
-                {selectedPaths.size > 0 && <Badge variant="secondary">{selectedPaths.size} selected</Badge>}
+                {selectedPaths.size > 0 && <Badge variant="secondary">{t('semantic-models:ontologyGenerator.selectedCount', { count: selectedPaths.size })}</Badge>}
               </div>
             </CardHeader>
             <CardContent>
@@ -644,7 +656,7 @@ export default function OntologyGeneratorView() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Agent Progress
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t('semantic-models:ontologyGenerator.agentProgress')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -669,10 +681,10 @@ export default function OntologyGeneratorView() {
           {result && (
             <Tabs defaultValue="classes">
               <TabsList className="w-full">
-                <TabsTrigger value="classes">Classes ({result.classes.length})</TabsTrigger>
-                <TabsTrigger value="properties">Properties ({result.properties.length})</TabsTrigger>
-                <TabsTrigger value="turtle">Turtle</TabsTrigger>
-                <TabsTrigger value="agent">Agent Log</TabsTrigger>
+                <TabsTrigger value="classes">{t('semantic-models:ontologyGenerator.tabs.classes', { count: result.classes.length })}</TabsTrigger>
+                <TabsTrigger value="properties">{t('semantic-models:ontologyGenerator.tabs.properties', { count: result.properties.length })}</TabsTrigger>
+                <TabsTrigger value="turtle">{t('semantic-models:ontologyGenerator.tabs.turtle')}</TabsTrigger>
+                <TabsTrigger value="agent">{t('semantic-models:ontologyGenerator.tabs.agentLog')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="classes">
@@ -682,10 +694,10 @@ export default function OntologyGeneratorView() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Class</TableHead>
-                            <TableHead>Parent</TableHead>
-                            <TableHead>Attributes</TableHead>
-                            <TableHead>Description</TableHead>
+                            <TableHead>{t('semantic-models:ontologyGenerator.table.class')}</TableHead>
+                            <TableHead>{t('semantic-models:ontologyGenerator.table.parent')}</TableHead>
+                            <TableHead>{t('semantic-models:ontologyGenerator.table.attributes')}</TableHead>
+                            <TableHead>{t('common:labels.description')}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -701,14 +713,14 @@ export default function OntologyGeneratorView() {
                                   {cls.dataProperties.map((dp) => (
                                     <Badge key={dp.name} variant="secondary" className="text-xs font-mono">{dp.name}</Badge>
                                   ))}
-                                  {cls.dataProperties.length === 0 && <span className="text-muted-foreground text-xs">none</span>}
+                                  {cls.dataProperties.length === 0 && <span className="text-muted-foreground text-xs">{t('semantic-models:ontologyGenerator.table.none')}</span>}
                                 </div>
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{cls.comment || '—'}</TableCell>
                             </TableRow>
                           ))}
                           {result.classes.length === 0 && (
-                            <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">No classes generated</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">{t('semantic-models:ontologyGenerator.noClasses')}</TableCell></TableRow>
                           )}
                         </TableBody>
                       </Table>
@@ -724,10 +736,10 @@ export default function OntologyGeneratorView() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Property</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Domain</TableHead>
-                            <TableHead>Range</TableHead>
+                            <TableHead>{t('semantic-models:ontologyGenerator.table.property')}</TableHead>
+                            <TableHead>{t('common:labels.type')}</TableHead>
+                            <TableHead>{t('common:labels.domain')}</TableHead>
+                            <TableHead>{t('semantic-models:ontologyGenerator.table.range')}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -736,7 +748,7 @@ export default function OntologyGeneratorView() {
                               <TableCell className="font-mono font-medium">{prop.name}</TableCell>
                               <TableCell>
                                 <Badge variant={prop.type === 'ObjectProperty' ? 'default' : 'secondary'} className="text-xs">
-                                  {prop.type === 'ObjectProperty' ? 'Object' : 'Data'}
+                                  {prop.type === 'ObjectProperty' ? t('semantic-models:ontologyGenerator.table.objectType') : t('semantic-models:ontologyGenerator.table.dataType')}
                                 </Badge>
                               </TableCell>
                               <TableCell className="font-mono text-sm">{prop.domain || '—'}</TableCell>
@@ -744,7 +756,7 @@ export default function OntologyGeneratorView() {
                             </TableRow>
                           ))}
                           {result.properties.length === 0 && (
-                            <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">No properties generated</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">{t('semantic-models:ontologyGenerator.noProperties')}</TableCell></TableRow>
                           )}
                         </TableBody>
                       </Table>
@@ -757,17 +769,17 @@ export default function OntologyGeneratorView() {
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm">Generated Turtle</CardTitle>
+                      <CardTitle className="text-sm">{t('semantic-models:ontologyGenerator.generatedTurtle')}</CardTitle>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={copyTurtle}><Copy className="h-3.5 w-3.5 mr-1" /> Copy</Button>
-                        <Button variant="outline" size="sm" onClick={downloadTurtle}><Download className="h-3.5 w-3.5 mr-1" /> Download</Button>
-                        <Button size="sm" onClick={() => setIsSaveDialogOpen(true)}><Save className="h-3.5 w-3.5 mr-1" /> Save to Collection</Button>
+                        <Button variant="outline" size="sm" onClick={copyTurtle}><Copy className="h-3.5 w-3.5 mr-1" /> {t('common:actions.copy')}</Button>
+                        <Button variant="outline" size="sm" onClick={downloadTurtle}><Download className="h-3.5 w-3.5 mr-1" /> {t('common:actions.download')}</Button>
+                        <Button size="sm" onClick={() => setIsSaveDialogOpen(true)}><Save className="h-3.5 w-3.5 mr-1" /> {t('semantic-models:ontologyGenerator.saveToCollection')}</Button>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <ScrollArea className="h-[400px]">
-                      <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-4 rounded-md">{result.owl_content || '(empty)'}</pre>
+                      <pre className="text-xs font-mono whitespace-pre-wrap bg-muted p-4 rounded-md">{result.owl_content || t('semantic-models:ontologyGenerator.empty')}</pre>
                     </ScrollArea>
                   </CardContent>
                 </Card>
@@ -776,9 +788,13 @@ export default function OntologyGeneratorView() {
               <TabsContent value="agent">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Agent Execution Log</CardTitle>
+                    <CardTitle className="text-sm">{t('semantic-models:ontologyGenerator.agentExecutionLog')}</CardTitle>
                     <CardDescription>
-                      {result.iterations} iteration(s) · {result.usage?.prompt_tokens ?? 0} prompt tokens · {result.usage?.completion_tokens ?? 0} completion tokens
+                      {t('semantic-models:ontologyGenerator.agentLogSummary', {
+                        iterations: result.iterations,
+                        promptTokens: result.usage?.prompt_tokens ?? 0,
+                        completionTokens: result.usage?.completion_tokens ?? 0,
+                      })}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -795,7 +811,7 @@ export default function OntologyGeneratorView() {
                           </div>
                         ))}
                         {result.steps.length === 0 && (
-                          <p className="text-center text-muted-foreground text-sm">No agent steps recorded</p>
+                          <p className="text-center text-muted-foreground text-sm">{t('semantic-models:ontologyGenerator.noAgentSteps')}</p>
                         )}
                       </div>
                     </ScrollArea>
@@ -819,28 +835,31 @@ export default function OntologyGeneratorView() {
       <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Save to Concept Collection</DialogTitle>
-            <DialogDescription>Create a new ontology collection and import the generated triples into the knowledge graph.</DialogDescription>
+            <DialogTitle>{t('semantic-models:ontologyGenerator.saveDialog.title')}</DialogTitle>
+            <DialogDescription>{t('semantic-models:ontologyGenerator.saveDialog.description')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label htmlFor="collName">Collection Name</Label>
-              <Input id="collName" placeholder="e.g., Customer Domain Ontology" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="mt-1" />
+              <Label htmlFor="collName">{t('semantic-models:ontologyGenerator.saveDialog.nameLabel')}</Label>
+              <Input id="collName" placeholder={t('semantic-models:ontologyGenerator.saveDialog.namePlaceholder')} value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="collDesc">Description (optional)</Label>
-              <Textarea id="collDesc" placeholder="Describe the purpose of this ontology collection..." value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} rows={3} className="mt-1" />
+              <Label htmlFor="collDesc">{t('semantic-models:ontologyGenerator.saveDialog.descriptionLabel')}</Label>
+              <Textarea id="collDesc" placeholder={t('semantic-models:ontologyGenerator.saveDialog.descriptionPlaceholder')} value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} rows={3} className="mt-1" />
             </div>
             {result && (
               <p className="text-xs text-muted-foreground">
-                {result.classes.length} classes and {result.properties.length} properties will be imported.
+                {t('semantic-models:ontologyGenerator.saveDialog.importSummary', {
+                  classes: result.classes.length,
+                  properties: result.properties.length,
+                })}
               </p>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSaveDialogOpen(false)} disabled={isSaving}>Cancel</Button>
+            <Button variant="outline" onClick={() => setIsSaveDialogOpen(false)} disabled={isSaving}>{t('common:actions.cancel')}</Button>
             <Button onClick={handleSaveToCollection} disabled={isSaving || !collectionName.trim()}>
-              {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : <><Save className="h-4 w-4 mr-2" /> Save</>}
+              {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('common:actions.saving')}</> : <><Save className="h-4 w-4 mr-2" /> {t('common:actions.save')}</>}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -63,6 +63,9 @@ class ColumnProperty(BaseModel):
     # Semantic concepts for business glossary integration
     semanticConcepts: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     authoritativeDefinitions: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # ODCS customProperties of the column: the ODCS list form on input, or the
+    # {name: value} form the schema property editor sends; returned as a dict
+    customProperties: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
 
     # ODCS additional property fields
     businessName: Optional[str] = None
@@ -525,6 +528,8 @@ class DataContractRead(BaseModel):
     domainIds: List[str] = Field(default_factory=list)  # All assigned domain IDs (primary first)
     primaryDomainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
+    dataProductName: Optional[str] = None  # Resolved product name at query time (#854)
+    dataProductId: Optional[str] = None  # Resolved product id at query time, for linking (#854)
     description: Optional[ContractDescription] = None
 
     # ODCS top-level fields

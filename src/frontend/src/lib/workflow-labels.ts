@@ -131,6 +131,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
   on_request_review: 'After a review request is submitted',
   for_request_publish: 'When a user requests publish',
   on_request_publish: 'After a publish request is submitted',
+  on_request_deploy: 'After a deploy request is submitted',
   for_request_certify: 'When a user requests certification',
   on_request_certify: 'After a certification request is submitted',
   for_request_status_change: 'When a user requests status change',
@@ -263,6 +264,7 @@ export const ALL_TRIGGER_TYPES: TriggerType[] = [
   'on_request_review',
   'on_request_access',
   'on_request_publish',
+  'on_request_deploy',
   'on_request_status_change',
   'on_request_certify',
   'on_certify',
@@ -387,6 +389,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_request_review: ['data_contract', 'data_product', 'data_asset_review'],
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
+  on_request_deploy: ['data_contract'],
   on_request_status_change: ['data_product'],
   // Job triggers
   on_job_success: ['job'],

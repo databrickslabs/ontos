@@ -3,6 +3,7 @@
  */
 
 import type React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -31,10 +32,10 @@ interface LineageToolbarProps {
   onZoomOut: () => void;
 }
 
-const DIRECTIONS: { value: LineageDirection; icon: React.ElementType; label: string }[] = [
-  { value: 'upstream', icon: ArrowLeft, label: 'Upstream' },
-  { value: 'both', icon: ArrowLeftRight, label: 'Both' },
-  { value: 'downstream', icon: ArrowRight, label: 'Downstream' },
+const DIRECTIONS: { value: LineageDirection; icon: React.ElementType; labelKey: string }[] = [
+  { value: 'upstream', icon: ArrowLeft, labelKey: 'data-catalog:lineage.toolbar.upstream' },
+  { value: 'both', icon: ArrowLeftRight, labelKey: 'data-catalog:lineage.toolbar.both' },
+  { value: 'downstream', icon: ArrowRight, labelKey: 'data-catalog:lineage.toolbar.downstream' },
 ];
 
 export default function LineageToolbar({
@@ -52,11 +53,12 @@ export default function LineageToolbar({
   onZoomIn,
   onZoomOut,
 }: LineageToolbarProps) {
+  const { t } = useTranslation(['data-catalog', 'common']);
   return (
     <div className="flex items-center gap-3 px-3 py-2 border-b bg-muted/30 rounded-t-md flex-wrap">
       {/* Direction toggle */}
       <div className="flex items-center rounded-md border bg-background p-0.5">
-        {DIRECTIONS.map(({ value, icon: Icon, label }) => (
+        {DIRECTIONS.map(({ value, icon: Icon, labelKey }) => (
           <Button
             key={value}
             variant="ghost"
@@ -68,14 +70,14 @@ export default function LineageToolbar({
             onClick={() => onDirectionChange(value)}
           >
             <Icon className="h-3.5 w-3.5 mr-1" />
-            {label}
+            {t(labelKey)}
           </Button>
         ))}
       </div>
 
       {/* Breadth selector (BFS hops) */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Breadth:</span>
+        <span className="text-xs text-muted-foreground">{t('data-catalog:lineage.toolbar.breadth')}</span>
         <Select
           value={String(maxDepth)}
           onValueChange={(v) => onMaxDepthChange(Number(v))}
@@ -93,7 +95,7 @@ export default function LineageToolbar({
 
       {/* Nesting depth selector (containment levels) */}
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Nesting:</span>
+        <span className="text-xs text-muted-foreground">{t('data-catalog:lineage.toolbar.nesting')}</span>
         <Select
           value={String(nestingDepth)}
           onValueChange={(v) => onNestingDepthChange(Number(v))}
@@ -111,7 +113,7 @@ export default function LineageToolbar({
 
       {/* Entity count */}
       <Badge variant="secondary" className="text-xs font-normal">
-        {nodeCount} entities · {edgeCount} edges
+        {t('data-catalog:lineage.toolbar.entitiesEdges', { nodes: nodeCount, edges: edgeCount })}
       </Badge>
 
       {/* Spacer */}

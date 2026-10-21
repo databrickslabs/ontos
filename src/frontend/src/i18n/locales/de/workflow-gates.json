@@ -1,0 +1,14 @@
+{
+  "blocked": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde von einem Workflow blockiert: {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "wartet auf Genehmigung ({{step}})",
+    "entityLoadFailed": "{{entityType}} {{entityId}} konnte zur Auswertung der Regel nicht geladen werden",
+    "validationFailed": "die Workflow-Validierung ist fehlgeschlagen",
+    "status": {
+      "failed": "fehlgeschlagen",
+      "cancelled": "abgebrochen",
+      "pending": "ausstehend",
+      "running": "läuft"
+    }
+  }
+}

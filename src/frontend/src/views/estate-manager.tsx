@@ -113,7 +113,7 @@ export default function EstateManager() {
     fetchEstates();
     // Set breadcrumbs for this top-level view
     setStaticSegments([]); // No static parents other than Home
-    setDynamicTitle('Estate Manager');
+    setDynamicTitle(t('estates:title'));
 
     return () => {
         // Clear breadcrumbs when component unmounts
@@ -322,7 +322,7 @@ export default function EstateManager() {
         const status = row.original.last_sync_status;
         const error = row.original.last_sync_error;
 
-        if (!status) return <Badge variant="outline">Never Synced</Badge>;
+        if (!status) return <Badge variant="outline">{t('estates:table.neverSynced')}</Badge>;
 
         let badgeVariant: "default" | "destructive" | "secondary" | "outline" = 'outline';
         if (status === 'success') badgeVariant = 'default';
@@ -342,10 +342,10 @@ export default function EstateManager() {
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p>Status: {statusText}</p>
-                {lastSyncTime && <p>Time: {new Date(lastSyncTime).toLocaleString()}</p>}
-                {status === 'failed' && error && <p className="text-red-400">Error: {error}</p>}
-                {(status === 'running' || status === 'pending') && <p>Sync in progress or queued...</p>}
+                <p>{t('estates:table.syncTooltip.status', { status: statusText })}</p>
+                {lastSyncTime && <p>{t('estates:table.syncTooltip.time', { time: new Date(lastSyncTime).toLocaleString() })}</p>}
+                {status === 'failed' && error && <p className="text-red-400">{t('estates:table.syncTooltip.error', { error })}</p>}
+                {(status === 'running' || status === 'pending') && <p>{t('estates:table.syncTooltip.inProgress')}</p>}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -361,7 +361,7 @@ export default function EstateManager() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">{t('estates:table.openMenu')}</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -446,7 +446,7 @@ export default function EstateManager() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., US Production Workspace"
+                placeholder={t('estates:form.namePlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -456,7 +456,7 @@ export default function EstateManager() {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., Primary production environment for US region"
+                placeholder={t('estates:form.descriptionPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -466,7 +466,7 @@ export default function EstateManager() {
                 value={formData.workspace_url}
                 onChange={(e) => setFormData({ ...formData, workspace_url: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., https://myworkspace.cloud.databricks.com"
+                placeholder={t('estates:form.workspaceUrlPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -507,7 +507,7 @@ export default function EstateManager() {
                 value={formData.metastore_name}
                 onChange={(e) => setFormData({ ...formData, metastore_name: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., primary_prod_metastore"
+                placeholder={t('estates:form.metastoreNamePlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">

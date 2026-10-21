@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Loader2, AlertCircle, ChevronRight, ChevronDown, Database,
@@ -104,6 +105,7 @@ function TableNode({ table, type }: { table: HierarchyTableOrView; type: 'table'
 function DatasetNode({ dataset }: { dataset: HierarchyDataset }) {
   const [expanded, setExpanded] = useState(true);
   const navigate = useNavigate();
+  const { t } = useTranslation(['data-products', 'common']);
   const tableCount = (dataset.tables?.length || 0) + (dataset.views?.length || 0);
 
   return (
@@ -160,7 +162,7 @@ function DatasetNode({ dataset }: { dataset: HierarchyDataset }) {
             <TableNode key={v.id} table={v} type="view" />
           ))}
           {tableCount === 0 && (
-            <p className="text-xs text-muted-foreground pl-8 py-2 italic">No tables or views linked</p>
+            <p className="text-xs text-muted-foreground pl-8 py-2 italic">{t('data-products:hierarchy.noTablesOrViews')}</p>
           )}
         </div>
       )}

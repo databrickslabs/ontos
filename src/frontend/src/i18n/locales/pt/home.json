@@ -1,0 +1,295 @@
+{
+  "title": "Bem-vindo ao {{appName}}",
+  "tagline": "Gerencie glossário de negócios, contratos de dados, produtos de dados, personas e muito mais",
+  "search": {
+    "placeholder": "Pesquise produtos de dados, termos do glossário, contratos..."
+  },
+  "overview": {
+    "title": "Visão geral",
+    "loading": "Carregando...",
+    "noData": "Nenhum dado de visão geral disponível para as versões prévias de recursos selecionadas ou suas permissões.",
+    "error": "Erro",
+    "tiles": {
+      "compliance": {
+        "title": "Conformidade",
+        "description": "Pontuação de conformidade atual",
+        "notAvailable": "N/D"
+      },
+      "dataContracts": {
+        "title": "Contratos de dados",
+        "description": "Contratos ativos"
+      },
+      "dataProducts": {
+        "title": "Produtos de dados",
+        "description": "Total de produtos de dados"
+      },
+      "semanticModels": {
+        "title": "Conceitos",
+        "description": "Termos e definições de negócios"
+      },
+      "estates": {
+        "title": "Estates",
+        "description": "Nenhum estate configurado",
+        "lastSync": "Última sincronização: {{date}} ({{status}})",
+        "syncStatus": {
+          "success": "sucesso",
+          "failed": "falha",
+          "in_progress": "em andamento",
+          "unknown": "desconhecido"
+        }
+      }
+    }
+  },
+  "complianceTrend": {
+    "title": "Tendência de conformidade",
+    "period": "Últimos 30 dias",
+    "loading": "Carregando dados de conformidade...",
+    "error": "Erro ao carregar dados de tendência: {{error}}",
+    "noData": "Nenhum dado de conformidade disponível para o período selecionado.",
+    "chartLabel": "Pontuação de conformidade"
+  },
+  "noAccess": {
+    "message": "Você não tem um papel específico atribuído no momento.",
+    "action": "Para acessar os recursos,",
+    "link": "solicite acesso a um papel",
+    "contactAdmin": "Entre em contato com um administrador para solicitar acesso ao aplicativo."
+  },
+  "requestRoleSection": {
+    "title": "Papéis",
+    "cardTitle": "Papéis disponíveis",
+    "description": "Você não tem nenhum papel de aplicativo atribuído no momento. Selecione um papel abaixo para solicitar acesso e começar.",
+    "info": "Após o envio de uma solicitação, um administrador a revisará e você será notificado da decisão pelo sino de notificações.",
+    "noDescription": "Nenhuma descrição disponível",
+    "requestAccess": "Solicitar acesso",
+    "moreRoles": "E mais {{count}} papéis disponíveis..."
+  },
+  "myActions": {
+    "title": "Minhas ações",
+    "approvals": "Aprovações"
+  },
+  "quickActions": {
+    "title": "Ações rápidas",
+    "loading": "Carregando...",
+    "noActions": "Nenhuma ação disponível.",
+    "actions": {
+      "browseProducts": "Explorar produtos de dados",
+      "browseGlossary": "Explorar navegador de conceitos",
+      "createProduct": "Criar produto de dados",
+      "defineContract": "Definir contrato de dados",
+      "reviewAssets": "Revisar ativos de dados",
+      "manageEntitlements": "Gerenciar direitos de acesso",
+      "catalogCommander": "Catalog Commander",
+      "settings": "Configurações"
+    }
+  },
+  "recentActivity": {
+    "title": "Atividade recente",
+    "loading": "Carregando atividade recente...",
+    "error": "Falha ao carregar atividade recente",
+    "noActivity": "Nenhuma atividade recente.",
+    "entityLabel": "Entidade:",
+    "actionLabel": "Ação:",
+    "userLabel": "Usuário:",
+    "timeLabel": "Hora:",
+    "iriLabel": "IRI:",
+    "linkIdLabel": "ID do link:",
+    "openButton": "Abrir",
+    "openDetails": "Abrir detalhes",
+    "noDetails": "Nenhum detalhe disponível",
+    "by": "por",
+    "at": "em"
+  },
+  "discoverySection": {
+    "title": "Descoberta",
+    "dataDomains": "Domínios de dados",
+    "exactMatchOnly": "Somente correspondências exatas",
+    "allDomains": "Todos os domínios",
+    "clearFilter": "Limpar filtro de domínio",
+    "selectDomain": "Selecione um domínio para ver sua hierarquia e filtrar produtos.",
+    "popularProducts": "Produtos de dados populares",
+    "loading": "Carregando produtos...",
+    "error": "Falha ao carregar produtos de dados",
+    "noProducts": "Nenhum produto de dados encontrado.",
+    "domain": "Domínio",
+    "owner": "Proprietário",
+    "unknown": "Desconhecido",
+    "status": "N/D",
+    "untitled": "Sem título",
+    "info": "Informações",
+    "manage": "Gerenciar",
+    "mySubscriptions": "Minhas assinaturas",
+    "subscribe": "Assinar",
+    "subscribed": "Assinado",
+    "unknownProduct": "Produto desconhecido",
+    "viewAllSubscribed": "Ver todos os assinados"
+  },
+  "dataCurationSection": {
+    "title": "Curadoria de dados",
+    "createDataProduct": {
+      "title": "Criar produto de dados",
+      "description": "Use o assistente para definir um novo produto de dados.",
+      "button": "Abrir"
+    },
+    "defineDataContract": {
+      "title": "Definir contrato de dados",
+      "description": "Crie ou atualize um contrato técnico.",
+      "button": "Abrir"
+    },
+    "createDataset": {
+      "title": "Criar conjunto de dados",
+      "description": "Gerencie conjuntos de dados para correspondência e consolidação de dados mestres.",
+      "button": "Abrir"
+    },
+    "createSchema": {
+      "title": "Criar esquema",
+      "description": "Crie ou gerencie esquemas e permissões.",
+      "openButton": "Abrir",
+      "createButton": "Criar"
+    },
+    "createCatalog": {
+      "title": "Criar catálogo",
+      "description": "Provisione catálogos e gerencie o acesso.",
+      "openButton": "Abrir",
+      "createButton": "Criar"
+    }
+  },
+  "requiredActionsSection": {
+    "title": "Ações necessárias",
+    "pendingNotifications": "Notificações pendentes",
+    "loading": "Carregando...",
+    "noActions": "Nenhuma ação pendente.",
+    "openButton": "Abrir",
+    "markReadButton": "Marcar como lida",
+    "readLabel": "Lida",
+    "alertMessage": "Esta lista mostra apenas notificações que exigem ação atribuídas aos seus papéis.",
+    "loadError": "Falha ao carregar aprovações",
+    "unknownUser": "Usuário desconhecido",
+    "unknownRole": "Papel desconhecido",
+    "approvalRequest": "Solicitação de aprovação",
+    "badges": {
+      "roleRequest": "Solicitação de papel",
+      "contract": "Contrato",
+      "product": "Produto",
+      "approval": "Aprovação"
+    },
+    "table": {
+      "type": "Tipo",
+      "requesterName": "Solicitante / Nome",
+      "roleStatusReason": "Papel / Status / Motivo",
+      "date": "Data",
+      "actions": "Ações"
+    },
+    "approveDenyRequest": "Aprovar/Negar solicitação",
+    "approveDenyWorkflow": "Aprovar/Negar solicitação de fluxo de trabalho"
+  },
+  "marketplace": {
+    "welcome": "Olá",
+    "welcomeWithName": "Olá, {{name}}",
+    "tagline": "Bem-vindo ao Marketplace de dados. Descubra, entenda e assine produtos de dados e conjuntos de dados.",
+    "searchPlaceholder": "O que podemos ajudar você a encontrar hoje?",
+    "searchDatasetsPlaceholder": "Pesquise conjuntos de dados por nome, caminho ou contrato...",
+    "browseAssetType": "Navegar:",
+    "assetTypes": {
+      "products": "Produtos de dados",
+      "datasets": "Conjuntos de dados"
+    },
+    "browseDataDomains": "Navegar por domínios de dados",
+    "allDomains": "Todos os domínios",
+    "loadingDomains": "Carregando domínios...",
+    "tabs": {
+      "explore": "Explorar dados",
+      "subscriptions": "Meus dados"
+    },
+    "products": {
+      "available": "{{count}} produto disponível",
+      "available_plural": "{{count}} produtos disponíveis",
+      "subscribed": "{{count}} produto assinado",
+      "subscribed_plural": "{{count}} produtos assinados",
+      "noProducts": "Nenhum produto de dados encontrado.",
+      "adjustFilters": "Tente ajustar sua pesquisa ou filtro.",
+      "noSubscriptions": "Você ainda não assinou nenhum produto de dados.",
+      "browseToSubscribe": "Navegue pela aba Explorar para encontrar produtos para assinar.",
+      "exploreProducts": "Explorar produtos de dados",
+      "owner": "Proprietário",
+      "unknown": "Desconhecido",
+      "unknownProduct": "Produto desconhecido",
+      "untitled": "Sem título"
+    },
+    "datasets": {
+      "available": "{{count}} conjunto de dados disponível",
+      "available_plural": "{{count}} conjuntos de dados disponíveis",
+      "subscribed": "{{count}} conjunto de dados assinado",
+      "subscribed_plural": "{{count}} conjuntos de dados assinados",
+      "noDatasets": "Nenhum conjunto de dados encontrado.",
+      "adjustFilters": "Tente ajustar sua pesquisa.",
+      "noSubscriptions": "Você ainda não assinou nenhum conjunto de dados.",
+      "browseToSubscribe": "Navegue pela aba Explorar para encontrar conjuntos de dados para assinar.",
+      "exploreDatasets": "Explorar conjuntos de dados",
+      "owner": "Proprietário"
+    },
+    "modeToggle": {
+      "marketplace": "Marketplace",
+      "management": "Gerenciamento"
+    },
+    "domainView": {
+      "pills": "Lista",
+      "graph": "Grafo"
+    },
+    "exactMatchOnly": "Somente correspondência exata",
+    "selectDomainForGraph": "Selecione um domínio para ver sua hierarquia.",
+    "domainInfo": {
+      "parentDomain": "Pai",
+      "childDomains": "{{count}} domínio filho",
+      "childDomains_plural": "{{count}} domínios filhos"
+    },
+    "tilesPerRow": {
+      "placeholder": "Cartões",
+      "one": "1 por linha",
+      "two": "2 por linha",
+      "three": "3 por linha",
+      "four": "4 por linha"
+    },
+    "scopeFilter": {
+      "placeholder": "Escopo",
+      "all": "Todos os escopos"
+    },
+    "openInDetails": "Abrir na visualização de detalhes",
+    "loadError": "Falha ao carregar produtos"
+  },
+  "myProducts": {
+    "title": "Meus produtos",
+    "description": "Produtos de dados que você assinou.",
+    "loading": "Carregando seus produtos...",
+    "empty": "Você ainda não assinou nenhum produto de dados.",
+    "browseMarketplace": "Navegar pelo Marketplace"
+  },
+  "myRequests": {
+    "title": "Minhas solicitações",
+    "description": "Solicitações que você criou e que exigem aprovação (incluindo acesso e assinaturas).",
+    "loading": "Carregando suas solicitações...",
+    "empty": "Você não criou nenhuma solicitação.",
+    "entity": "Entidade",
+    "type": "Tipo",
+    "status": "Status",
+    "requestedAt": "Solicitado",
+    "handledAt": "Resolvido",
+    "cancel": "Cancelar",
+    "cancelSuccess": "Solicitação cancelada",
+    "statusPending": "Pendente",
+    "statusApproved": "Aprovada",
+    "statusDenied": "Negada",
+    "statusCancelled": "Cancelada",
+    "statusExpired": "Expirada",
+    "statusInProgress": "Em andamento",
+    "statusCompleted": "Concluída",
+    "statusAbandoned": "Abandonada",
+    "typeAccess": "Acesso",
+    "typeSubscription": "Assinatura",
+    "typeApproval": "Aprovação",
+    "entityType": "Tipo de entidade",
+    "name": "Nome",
+    "entityTypeDataProduct": "Produto de dados",
+    "entityTypeDataset": "Conjunto de dados",
+    "entityTypeDataContract": "Contrato de dados"
+  }
+}

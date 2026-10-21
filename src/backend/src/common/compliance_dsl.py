@@ -32,6 +32,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 import re
 
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 class TokenType(Enum):
     """Token types for DSL lexer."""
@@ -79,6 +83,8 @@ class TokenType(Enum):
     IDENTIFIER = "IDENTIFIER"
     STRING = "STRING"
     NUMBER = "NUMBER"
+    TRUE = "TRUE"
+    FALSE = "FALSE"
 
     # Punctuation
     LPAREN = "("
@@ -111,7 +117,8 @@ class Lexer:
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'MATCHES', 'IN', 'CONTAINS', 'AND', 'OR', 'NOT',
         'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER',
-        'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY'
+        'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY',
+        'TRUE', 'FALSE'
     }
 
     def __init__(self, text: str):
@@ -391,6 +398,15 @@ class Parser:
             self.advance()
             return Literal(token.value)
 
+        # Boolean literals (case-insensitive: True/False/true/false)
+        if token.type == TokenType.TRUE:
+            self.advance()
+            return Literal(True)
+
+        if token.type == TokenType.FALSE:
+            self.advance()
+            return Literal(False)
+
         # List literal
         if token.type == TokenType.LBRACKET:
             return self.parse_list()
@@ -625,10 +641,17 @@ class Evaluator:
         left = self.evaluate(node.left)
         right = self.evaluate(node.right)
 
-        if op == TokenType.EQ:
-            return left == right
-        if op == TokenType.NEQ:
-            return left != right
+        if op in (TokenType.EQ, TokenType.NEQ):
+            # Python considers bool a subclass of int, but DSL booleans must not
+            # compare equal to numeric entity values such as 1 or 0.
+            has_bool_number_mismatch = (
+                (type(left) is bool and type(right) in (int, float))
+                or (type(right) is bool and type(left) in (int, float))
+            )
+            # Bool-to-bool intentionally falls through because neither type is int or float.
+            if has_bool_number_mismatch:
+                return op == TokenType.NEQ
+            return left == right if op == TokenType.EQ else left != right
         if op == TokenType.GT:
             return left > right if left is not None and right is not None else False
         if op == TokenType.LT:
@@ -729,8 +752,10 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
         return False, f"DSL evaluation error: {str(e)}"
 
 
-def parse_rule(rule: str) -> Dict[str, Any]:
+def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
     """Parse a full DSL rule into components.
+
+    ``source`` identifies the rule (e.g. the policy) in diagnostics.
 
     Returns dict with keys:
         - match_type: Entity type to match
@@ -772,15 +797,25 @@ def parse_rule(rule: str) -> Dict[str, Any]:
             parser.advance()
             result['assert_clause'] = parser.parse_expression()
 
-        # Parse ON_PASS actions
-        if parser.current().type == TokenType.ON_PASS:
-            parser.advance()
-            result['on_pass_actions'] = parse_actions(parser)
+        # Parse ON_PASS / ON_FAIL clauses. Both may appear in any order and may be
+        # repeated (one action per line, as in the DSL guide); actions accumulate
+        # in declaration order.
+        while parser.current().type in (TokenType.ON_PASS, TokenType.ON_FAIL):
+            clause = parser.advance().type
+            key = 'on_pass_actions' if clause == TokenType.ON_PASS else 'on_fail_actions'
+            result[key].extend(parse_actions(parser))
 
-        # Parse ON_FAIL actions
-        if parser.current().type == TokenType.ON_FAIL:
-            parser.advance()
-            result['on_fail_actions'] = parse_actions(parser)
+        # Leftover tokens are ignored, as before, but no longer silently: they usually
+        # mean unsupported syntax (e.g. `IS NOT NULL`) truncated the rule.
+        if parser.current().type != TokenType.EOF:
+            token = parser.current()
+            text = token.value if token.value is not None else token.type.value
+            logger.warning(
+                "Compliance rule%s has unparsed trailing input starting at line %s, "
+                "column %s (%r); it is ignored",
+                f" of {source}" if source else "",
+                token.line, token.column, text,
+            )
 
         return result
 

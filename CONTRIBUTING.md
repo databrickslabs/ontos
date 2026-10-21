@@ -552,26 +552,58 @@ locally, but please don't commit org-specific edits.
 
 The app supports per-request user impersonation via HTTP headers, so you can
 test how features behave for different personas (Admin, Data Producer,
-Consumer, etc.) against the **same running backend** — no restarts, works with
-or without the Vite dev server in front.
+Consumer, etc.) against the **same running backend**. No restarts are needed.
 
-**Setup:**
+> ⚠️ **Security:** anyone holding `TEST_USER_TOKEN` can act as any user and
+> any groups, including admin. Only enable it on local or dev/test
+> deployments, never in production. It is **off by default**: when the
+> variable is unset, the `X-Test-*` headers are ignored, normal OBO resolution
+> applies, and `GET /api/test/personas` returns 404.
 
-1. Pick a shared-secret token, e.g. `openssl rand -hex 32`.
+**How it works:**
+
+- The backend enables impersonation only when `TEST_USER_TOKEN` is set.
+- A client (the UI persona picker, curl, Playwright, ...) sends
+  `X-Test-Token: <token>` plus the identity to use (`X-Test-User-Email`,
+  optional `X-Test-User-Groups`). When the token matches, the backend uses
+  that identity instead of the real user.
+- The persona list shown in the UI (`GET /api/test/personas`) is resolved in
+  this order:
+  1. **Volume override:** `{DATABRICKS_VOLUME}/config/test_personas.yaml`.
+     When this file exists, it is used *exclusively*.
+  2. **Repo-bundled fallback:** `src/backend/src/data/test_personas.yaml`.
+
+  Both files use the same schema. The list is cached for ~30s, so edits show
+  up without a restart. The persona list only controls *which* personas the
+  picker offers. It does not grant anything by itself.
+
+Pick the setup that matches how you run Ontos:
+
+| | Option A: local development | Option B: deployed app |
+|---|---|---|
+| You run Ontos from | a clone of this repo (`npm run dev` + `hatch`) | a Databricks App deployed with a bundle that references the Ontos repo |
+| Token configured in | `src/backend/.env` | a secret scope, wired in **your** bundle |
+| UI picker token | `VITE_TEST_USER_TOKEN` in `src/frontend/.env` | `localStorage["ucapp.testToken"]` in the browser |
+| Edit personas by | editing the repo-bundled YAML (or the volume file) | uploading the YAML to the app's volume |
+
+#### Option A: local development (cloned repo)
+
+1. Generate a token, e.g. `openssl rand -hex 32`.
 2. Set it on the backend: `TEST_USER_TOKEN=<your-token>` in
    `src/backend/.env`.
-3. (Optional, for the UI picker) set the same value as
-   `VITE_TEST_USER_TOKEN=<your-token>` in `src/frontend/.env`.
+3. (For the UI picker) set the same value as
+   `VITE_TEST_USER_TOKEN=<your-token>` in `src/frontend/.env`. It is read by
+   the Vite dev server, so this only works in local dev.
+4. To change the personas, edit `src/backend/src/data/test_personas.yaml`
+   locally (please don't commit org-specific personas). If
+   `DATABRICKS_VOLUME` resolves to a Unity Catalog volume (e.g. the dotted
+   `main.default.app_files` from `.env.example`) and your workspace
+   credentials can read it, an override file on that volume takes precedence.
+5. In the user-info dropdown, a "Test persona" section lists the personas.
+   Pick one and the page reloads with every API request impersonating that
+   user. A yellow ring around the avatar shows that a persona is active.
 
-**Usage from the UI:**
-
-When `TEST_USER_TOKEN` is configured, the user-info dropdown gains a
-"Test persona" section listing personas defined in
-`src/backend/src/data/test_personas.yaml`. Pick one and the page reloads
-with every API request impersonating that user. A yellow ring around the
-avatar indicates an active persona.
-
-**Usage from curl / Playwright / any HTTP client:**
+From curl, Playwright, or any other HTTP client:
 
 ```bash
 curl -H "X-Test-Token: <your-token>" \
@@ -580,24 +612,219 @@ curl -H "X-Test-Token: <your-token>" \
      http://localhost:8000/api/user/details
 ```
 
+#### Option B: deployed app (bundle referencing the Ontos repo)
+
+Configure everything in **your own** bundle and workspace. No change to the
+Ontos repo is needed.
+
+1. Generate a token, e.g. `openssl rand -hex 32`.
+2. Store the token in a secret scope:
+
+   ```bash
+   databricks secrets create-scope <scope>          # if it doesn't exist yet
+   databricks secrets put-secret <scope> <key>      # paste the token
+   ```
+
+3. Update the bundle file `src/databricks.yaml`. Use the code snippet below as an example:
+
+   - `variables.app_config` is the app's runtime configuration (it replaces `src/app.yaml`).
+   - `resources.apps.ontos.resources` declares the workspace objects the app
+     may use (database, warehouse, endpoint, volume, secret). An `env` entry
+     with `value_from: <name>` takes its value from the resource with that
+     `name`.
+
+   The two blocks marked `TEST PERSONAS` are the only additions to test with
+   the impersonation.
+
+   ```yaml
+   bundle:
+     name: ontos
+
+   variables:
+     sql_warehouse_id:
+       description: "ID of the SQL warehouse to use"
+       lookup:
+         warehouse: "<warehouse name>"        # e.g. "Serverless Starter Warehouse"
+     catalog_name:
+       description: "Unity Catalog catalog for app data"
+       default: "app_data"
+     schema_name:
+       description: "Schema for app data; also used as the Postgres schema"
+       default: "app_ontos"
+     volume_name:
+       description: "Volume for app files (audit logs, outputs, persona override)"
+       default: "app_files"
+     lakebase_branch:
+       description: "Lakebase branch the app connects to"
+       default: "projects/<lakebase-project>/branches/<branch>"
+     lakebase_database:
+       description: "Lakebase database on that branch"
+       default: "projects/<lakebase-project>/branches/<branch>/databases/<database>"
+     llm_endpoint_name:
+       description: "Model serving endpoint for LLM features"
+       default: "<serving endpoint name>"
+     # TEST PERSONAS: where the TEST_USER_TOKEN secret lives (step 2).
+     test_user_token_secret_scope:
+       description: "Secret scope holding TEST_USER_TOKEN"
+       default: "<scope>"
+     test_user_token_secret_key:
+       description: "Secret key holding TEST_USER_TOKEN"
+       default: "<key>"
+
+     app_config:
+       type: complex
+       description: "Ontos runtime configuration (replaces src/app.yaml)"
+       default:
+         command:
+           - python
+           - backend/src/app.py
+         env:
+           - name: ENV
+             value: DEV
+           - name: APP_DEMO_MODE
+             value: "false"
+           # Keep "false". "true" drops the Postgres schema on every start.
+           - name: APP_DB_DROP_ON_START
+             value: "false"
+           - name: PYTHONPATH
+             value: ./backend
+           - name: PYTHONUNBUFFERED
+             value: "1"
+           - name: FRONTEND_STATIC_DIR
+             value: ./static
+           - name: PGSCHEMA
+             value: ${var.schema_name}
+           - name: POSTGRES_HOST
+             value_from: database
+           - name: DATABRICKS_CATALOG
+             value: ${var.catalog_name}
+           - name: DATABRICKS_SCHEMA
+             value: ${var.schema_name}
+           - name: DATABRICKS_WAREHOUSE_ID
+             value_from: sql-warehouse
+           # Resolves to /Volumes/<catalog>/<schema>/<volume>. The persona
+           # override is read from config/test_personas.yaml under it.
+           - name: DATABRICKS_VOLUME
+             value_from: volume
+           - name: APP_ADMIN_DEFAULT_GROUPS
+             value: '["admins"]'
+           - name: APP_AUDIT_LOG_DIR
+             value: audit_logs
+           - name: LLM_ENABLED
+             value: "True"
+           - name: LLM_ENDPOINT
+             value_from: serving-endpoint
+           # TEST PERSONAS: enables impersonation. Remove for production.
+           - name: TEST_USER_TOKEN
+             value_from: test-user-token
+
+   resources:
+     apps:
+       ontos:
+         name: "ontos-dev"
+         description: "Ontos (dev/test)"
+         # Path to the Ontos `src/` directory, relative to this file
+         # (e.g. "." if this file sits in src/, "./ontos/src" for a submodule).
+         source_code_path: "."
+         config: ${var.app_config}
+         resources:
+           - name: database
+             postgres:
+               branch: ${var.lakebase_branch}
+               database: ${var.lakebase_database}
+               permission: CAN_CONNECT_AND_CREATE
+           - name: sql-warehouse
+             sql_warehouse:
+               id: ${var.sql_warehouse_id}
+               permission: CAN_USE
+           - name: serving-endpoint
+             serving_endpoint:
+               name: ${var.llm_endpoint_name}
+               permission: CAN_QUERY
+           # WRITE_VOLUME (as in src/manifest.yaml): the app writes audit logs
+           # and other files here, and reads the persona override from it.
+           - name: volume
+             uc_securable:
+               securable_type: VOLUME
+               securable_full_name: ${var.catalog_name}.${var.schema_name}.${var.volume_name}
+               permission: WRITE_VOLUME
+           # TEST PERSONAS: supplies TEST_USER_TOKEN. Remove for production.
+           - name: test-user-token
+             secret:
+               scope: ${var.test_user_token_secret_scope}
+               key: ${var.test_user_token_secret_key}
+               permission: READ
+         permissions:
+           - user_name: "*"
+             level: CAN_USE
+
+   targets:
+     dev:
+       default: true
+       variables:
+         catalog_name: "app_data_dev"
+         schema_name: "app_ontos_dev"
+         volume_name: "app_files_dev"
+   ```
+4. Validate/Deploy and Run your bundle
+   ```bash
+   databricks bundle validate -t dev          # validate your deployment for the dev target
+   databricks bundle deploy -t dev            # deploy the bundle
+   databricks bundle run ontos -t dev         # run the Ontos app with the configuration passed in the app_config variable in databricks.yaml, which will take precedent over the app.yaml file.
+   ```
+
+   > ⚠️ **Security:** Make sure to not keep this feature enabled in 
+   > the production environment!
+   
+5. Enable the UI picker in your browser. The deployed frontend is a static
+   build, so `VITE_TEST_USER_TOKEN` is not available there. Open the app, 
+   then run this in the browser devtools console and reload:
+
+   ```js
+   localStorage.setItem("ucapp.testToken", "<your-token>")
+   ```
+
+   Run `localStorage.removeItem("ucapp.testToken")` to turn it off again.
+
+6. To customize the personas without a repo change, upload a YAML file (same
+   schema as `src/backend/src/data/test_personas.yaml`) to the app's volume:
+
+   ```bash
+   databricks fs cp test_personas.yaml \
+     dbfs:/Volumes/<catalog>/<schema>/<volume>/config/test_personas.yaml --overwrite
+   ```
+
+   It is picked up within ~30s. Delete the file to fall back to the bundled
+   list. If the app can't read the file (e.g. a missing volume permission),
+   the backend logs a warning and uses the bundled list.
+
+From curl or other clients, call the app URL and authenticate to Databricks
+as usual, in addition to the `X-Test-*` headers:
+
+```bash
+curl -H "Authorization: Bearer $(databricks auth token | jq -r .access_token)" \
+     -H "X-Test-Token: <your-token>" \
+     -H "X-Test-User-Email: producer@test.local" \
+     https://<your-app-url>/api/user/details
+```
+
+#### Header reference
+
 - `X-Test-User-Email` is required when `X-Test-Token` matches.
-- `X-Test-User-Groups` is optional (JSON array or comma-separated). When
-  omitted, the backend falls back to a real SCIM lookup so the persona
+- `X-Test-User-Groups` is optional (JSON array or comma-separated). When it
+  is omitted, the backend falls back to a real SCIM lookup, so the persona
   reflects actual workspace state.
-- Optional refinement headers: `X-Test-User-Username`,
-  `X-Test-User-Name`, `X-Test-User-Ip`.
+- Optional refinement headers: `X-Test-User-Username`, `X-Test-User-Name`,
+  `X-Test-User-Ip`.
 
-**Security notes:**
+#### Notes
 
-- The override is gated on `TEST_USER_TOKEN` being set server-side. Leave it
-  UNSET in production.
-- The token itself is never returned by the server. The persona discovery
-  endpoint (`GET /api/test/personas`) returns 404 when the feature is
-  disabled.
+- The server never returns the token itself. `GET /api/test/personas`
+  returns header names, not the token.
 - This mechanism is complementary to the env-based `MOCK_USER_*` variables
   (which require restarts) and to the in-process FastAPI
-  `app.dependency_overrides[get_user_details_from_sdk]` pattern used by
-  most integration tests.
+  `app.dependency_overrides[get_user_details_from_sdk]` pattern used by most
+  integration tests.
 
 See `src/backend/src/tests/integration/test_user_header_override.py` for
 worked examples.

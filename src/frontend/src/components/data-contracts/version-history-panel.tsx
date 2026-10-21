@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GitBranch, ArrowUp, ArrowDown, Calendar, User } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +33,7 @@ export default function VersionHistoryPanel({
   contractId,
   onNavigateToVersion,
 }: VersionHistoryPanelProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const [history, setHistory] = useState<VersionHistory | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -54,8 +56,8 @@ export default function VersionHistoryPanel({
     } catch (error) {
       console.error('Error fetching version history:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to load version history',
+        title: t('common:status.error', 'Error'),
+        description: t('data-contracts:versionHistory.loadError', 'Failed to load version history'),
         variant: 'destructive',
       })
       setHistory(null)
@@ -113,7 +115,7 @@ export default function VersionHistoryPanel({
           className="w-full mt-2"
           onClick={() => onNavigateToVersion(version.id)}
         >
-          View Version
+          {t('data-contracts:versionHistory.viewVersion', 'View Version')}
         </Button>
       )}
     </div>
@@ -125,9 +127,9 @@ export default function VersionHistoryPanel({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <GitBranch className="h-5 w-5" />
-            Version History
+            {t('data-contracts:versionHistory.title', 'Version History')}
           </CardTitle>
-          <CardDescription>Loading version lineage...</CardDescription>
+          <CardDescription>{t('data-contracts:versionHistory.loadingDescription', 'Loading version lineage...')}</CardDescription>
         </CardHeader>
         <CardContent>
           <VersionLineageSkeleton versions={2} />
@@ -149,9 +151,9 @@ export default function VersionHistoryPanel({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <GitBranch className="h-5 w-5" />
-          Version History
+          {t('data-contracts:versionHistory.title', 'Version History')}
         </CardTitle>
-        <CardDescription>Version lineage and relationships</CardDescription>
+        <CardDescription>{t('data-contracts:versionHistory.description', 'Version lineage and relationships')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Parent Version */}
@@ -159,7 +161,7 @@ export default function VersionHistoryPanel({
           <div className="space-y-2">
             {renderVersionCard(
               history.parent!,
-              'Parent Version',
+              t('data-contracts:versionHistory.parentVersion', 'Parent Version'),
               <ArrowUp className="h-4 w-4 text-blue-500" />
             )}
             <div className="flex justify-center">
@@ -173,7 +175,7 @@ export default function VersionHistoryPanel({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <GitBranch className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Current Version</span>
+              <span className="text-sm font-medium text-primary">{t('data-contracts:versionHistory.currentVersion', 'Current Version')}</span>
             </div>
             <Badge variant={getStatusBadgeVariant(history.current.status)}>
               {history.current.status}
@@ -206,14 +208,14 @@ export default function VersionHistoryPanel({
         {hasSiblings && (
           <div className="space-y-2">
             <div className="text-sm font-medium text-muted-foreground px-2">
-              Sibling Versions ({history.siblings.length})
+              {t('data-contracts:versionHistory.siblingVersionsCount', 'Sibling Versions ({{count}})', { count: history.siblings.length })}
             </div>
             <div className="space-y-2">
               {history.siblings.map((sibling) => (
                 <div key={sibling.id} className="pl-4 border-l-2">
                   {renderVersionCard(
                     sibling,
-                    'Sibling',
+                    t('data-contracts:versionHistory.sibling', 'Sibling'),
                     <GitBranch className="h-4 w-4 text-muted-foreground" />
                   )}
                 </div>
@@ -229,14 +231,14 @@ export default function VersionHistoryPanel({
               <div className="w-0.5 h-8 bg-border" />
             </div>
             <div className="text-sm font-medium text-muted-foreground px-2">
-              Child Versions ({history.children.length})
+              {t('data-contracts:versionHistory.childVersionsCount', 'Child Versions ({{count}})', { count: history.children.length })}
             </div>
             <div className="space-y-2">
               {history.children.map((child) => (
                 <div key={child.id}>
                   {renderVersionCard(
                     child,
-                    'Child Version',
+                    t('data-contracts:versionHistory.childVersion', 'Child Version'),
                     <ArrowDown className="h-4 w-4 text-green-500" />
                   )}
                 </div>
@@ -247,7 +249,7 @@ export default function VersionHistoryPanel({
 
         {!hasParent && !hasChildren && !hasSiblings && (
           <div className="text-center text-sm text-muted-foreground py-4">
-            This is the only version of this contract
+            {t('data-contracts:versionHistory.onlyVersion', 'This is the only version of this contract')}
           </div>
         )}
       </CardContent>

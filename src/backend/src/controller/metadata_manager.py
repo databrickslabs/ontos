@@ -5,7 +5,7 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
 
 from src.common.logging import get_logger
-from src.common.config import Settings
+from src.common.config import Settings, resolve_volume
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
     Link, LinkCreate, LinkUpdate,
@@ -67,10 +67,14 @@ class MetadataManager:
         Raises:
             Exception: If volume creation or access fails
         """
+        resolved = resolve_volume(settings)
+        if not resolved:
+            raise ValueError("DATABRICKS_VOLUME is not configured")
+        catalog, schema, volume = resolved
         # Unity Catalog volume name (catalog.schema.volume)
-        volume_name = f"{settings.DATABRICKS_CATALOG}.{settings.DATABRICKS_SCHEMA}.{settings.DATABRICKS_VOLUME}"
+        volume_name = f"{catalog}.{schema}.{volume}"
         # Filesystem mount path for the volume
-        volume_fs_base = f"/Volumes/{settings.DATABRICKS_CATALOG}/{settings.DATABRICKS_SCHEMA}/{settings.DATABRICKS_VOLUME}"
+        volume_fs_base = f"/Volumes/{catalog}/{schema}/{volume}"
         
         try:
             try:
@@ -80,9 +84,9 @@ class MetadataManager:
             except Exception as e:
                 logger.info(f"Creating volume {volume_name}")
                 ws.volumes.create(
-                    catalog_name=settings.DATABRICKS_CATALOG,
-                    schema_name=settings.DATABRICKS_SCHEMA,
-                    name=settings.DATABRICKS_VOLUME,
+                    catalog_name=catalog,
+                    schema_name=schema,
+                    name=volume,
                     volume_type=VolumeType.MANAGED,
                 )
                 logger.info(f"Successfully created volume {volume_name}")

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Plus, Minus, RefreshCw, Wrench } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +35,7 @@ type ContractDiffViewerProps = {
 
 export default function ContractDiffViewer({ oldContract, newContract }: ContractDiffViewerProps) {
   const { toast } = useToast()
+  const { t } = useTranslation(['data-contracts', 'common'])
   const [analysis, setAnalysis] = useState<ChangeAnalysis | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -61,16 +63,16 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
       } else {
         console.error('Failed to analyze changes')
         toast({
-          title: 'Error',
-          description: 'Failed to analyze contract changes',
+          title: t('common:states.error'),
+          description: t('data-contracts:diff.analyzeError', 'Failed to analyze contract changes'),
           variant: 'destructive',
         })
       }
     } catch (error) {
       console.error('Error analyzing changes:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to analyze contract changes',
+        title: t('common:states.error'),
+        description: t('data-contracts:diff.analyzeError', 'Failed to analyze contract changes'),
         variant: 'destructive',
       })
     } finally {
@@ -81,13 +83,13 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
   const getVersionBumpBadge = (versionBump: string) => {
     switch (versionBump) {
       case 'major':
-        return <Badge variant="destructive">MAJOR {versionBump.toUpperCase()}</Badge>
+        return <Badge variant="destructive">{t('data-contracts:diff.bumpMajor', 'MAJOR')} {versionBump.toUpperCase()}</Badge>
       case 'minor':
-        return <Badge variant="default">MINOR {versionBump.toUpperCase()}</Badge>
+        return <Badge variant="default">{t('data-contracts:diff.bumpMinor', 'MINOR')} {versionBump.toUpperCase()}</Badge>
       case 'patch':
-        return <Badge variant="secondary">PATCH {versionBump.toUpperCase()}</Badge>
+        return <Badge variant="secondary">{t('data-contracts:diff.bumpPatch', 'PATCH')} {versionBump.toUpperCase()}</Badge>
       default:
-        return <Badge variant="outline">NO CHANGE</Badge>
+        return <Badge variant="outline">{t('data-contracts:diff.noChange', 'NO CHANGE')}</Badge>
     }
   }
 
@@ -107,11 +109,11 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case 'critical':
-        return <Badge variant="destructive">Critical</Badge>
+        return <Badge variant="destructive">{t('data-contracts:diff.severityCritical', 'Critical')}</Badge>
       case 'moderate':
-        return <Badge variant="default">Moderate</Badge>
+        return <Badge variant="default">{t('data-contracts:diff.severityModerate', 'Moderate')}</Badge>
       case 'minor':
-        return <Badge variant="secondary">Minor</Badge>
+        return <Badge variant="secondary">{t('data-contracts:diff.severityMinor', 'Minor')}</Badge>
       default:
         return <Badge variant="outline">{severity}</Badge>
     }
@@ -121,8 +123,8 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Analyzing Changes...</CardTitle>
-          <CardDescription>Comparing contract versions</CardDescription>
+          <CardTitle>{t('data-contracts:diff.analyzingChanges', 'Analyzing Changes...')}</CardTitle>
+          <CardDescription>{t('data-contracts:diff.comparingVersions', 'Comparing contract versions')}</CardDescription>
         </CardHeader>
         <CardContent>
           <SkeletonBlock height="h-32" />
@@ -146,9 +148,9 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2">
               {getChangeIcon(analysis.change_type)}
-              Change Analysis
+              {t('data-contracts:diff.changeAnalysis', 'Change Analysis')}
             </CardTitle>
-            <CardDescription>Detected changes and recommended version bump</CardDescription>
+            <CardDescription>{t('data-contracts:diff.changeAnalysisDesc', 'Detected changes and recommended version bump')}</CardDescription>
           </div>
           {getVersionBumpBadge(analysis.version_bump)}
         </div>
@@ -158,10 +160,9 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
         {hasBreakingChanges && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Breaking Changes Detected</AlertTitle>
+            <AlertTitle>{t('data-contracts:diff.breakingDetected', 'Breaking Changes Detected')}</AlertTitle>
             <AlertDescription>
-              This update contains breaking changes that require a MAJOR version bump. Consumers
-              will need to update their integrations.
+              {t('data-contracts:diff.breakingDesc', 'This update contains breaking changes that require a MAJOR version bump. Consumers will need to update their integrations.')}
             </AlertDescription>
           </Alert>
         )}
@@ -169,12 +170,12 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
         {/* Detailed Changes */}
         <Tabs defaultValue="summary" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="summary">Summary</TabsTrigger>
+            <TabsTrigger value="summary">{t('data-contracts:diff.tabSummary', 'Summary')}</TabsTrigger>
             <TabsTrigger value="breaking">
-              Breaking ({analysis.breaking_changes.length})
+              {t('data-contracts:diff.tabBreaking', 'Breaking ({{count}})', { count: analysis.breaking_changes.length })}
             </TabsTrigger>
-            <TabsTrigger value="features">Features ({analysis.new_features.length})</TabsTrigger>
-            <TabsTrigger value="fixes">Fixes ({analysis.fixes.length})</TabsTrigger>
+            <TabsTrigger value="features">{t('data-contracts:diff.tabFeatures', 'Features ({{count}})', { count: analysis.new_features.length })}</TabsTrigger>
+            <TabsTrigger value="fixes">{t('data-contracts:diff.tabFixes', 'Fixes ({{count}})', { count: analysis.fixes.length })}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="summary" className="space-y-4">
@@ -185,7 +186,7 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
             {/* Schema Changes Overview */}
             {analysis.schema_changes.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-sm font-semibold">Schema Changes ({analysis.schema_changes.length})</h4>
+                <h4 className="text-sm font-semibold">{t('data-contracts:diff.schemaChanges', 'Schema Changes ({{count}})', { count: analysis.schema_changes.length })}</h4>
                 <div className="space-y-2">
                   {analysis.schema_changes.slice(0, 5).map((change, idx) => (
                     <div key={idx} className="flex items-start gap-2 text-sm border-l-2 pl-3 py-1">
@@ -212,7 +213,7 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
                   ))}
                   {analysis.schema_changes.length > 5 && (
                     <p className="text-xs text-muted-foreground">
-                      ... and {analysis.schema_changes.length - 5} more changes
+                      {t('data-contracts:diff.moreChanges', '... and {{count}} more changes', { count: analysis.schema_changes.length - 5 })}
                     </p>
                   )}
                 </div>
@@ -232,7 +233,7 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No breaking changes detected
+                {t('data-contracts:diff.noBreaking', 'No breaking changes detected')}
               </p>
             )}
           </TabsContent>
@@ -249,7 +250,7 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No new features detected
+                {t('data-contracts:diff.noFeatures', 'No new features detected')}
               </p>
             )}
           </TabsContent>
@@ -265,7 +266,7 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">No fixes detected</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t('data-contracts:diff.noFixes', 'No fixes detected')}</p>
             )}
           </TabsContent>
         </Tabs>

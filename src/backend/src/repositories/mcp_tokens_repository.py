@@ -28,11 +28,12 @@ class MCPTokensRepository:
         token_hash: str,
         scopes: List[str],
         created_by: Optional[str] = None,
-        expires_at: Optional[datetime] = None
+        expires_at: Optional[datetime] = None,
+        is_keyless_default: bool = False
     ) -> MCPTokenDb:
         """
         Create a new MCP token.
-        
+
         Args:
             db: Database session
             name: Human-readable name for the token
@@ -40,7 +41,8 @@ class MCPTokensRepository:
             scopes: List of allowed scopes
             created_by: Email/identifier of the creator
             expires_at: Optional expiration datetime
-            
+            is_keyless_default: Whether this token is the keyless default
+
         Returns:
             The created MCPTokenDb instance
         """
@@ -49,7 +51,8 @@ class MCPTokensRepository:
             token_hash=token_hash,
             scopes=scopes,
             created_by=created_by,
-            expires_at=expires_at
+            expires_at=expires_at,
+            is_keyless_default=is_keyless_default
         )
         db.add(token)
         db.flush()
@@ -108,6 +111,66 @@ class MCPTokensRepository:
         db.query(MCPTokenDb).filter(MCPTokenDb.id == token_id).update(
             {"last_used_at": datetime.now(timezone.utc)}
         )
+
+    def get_keyless_default(self, db: Session) -> Optional[MCPTokenDb]:
+        """
+        Get the active keyless-default token, if one exists and is still valid.
+
+        Returns the single active token flagged ``is_keyless_default``, or None if
+        there is none or the flagged token has expired. This is the token used to
+        resolve app-gate-authenticated MCP requests that carry no X-API-Key.
+        """
+        token = db.query(MCPTokenDb).filter(
+            and_(
+                MCPTokenDb.is_keyless_default == True,
+                MCPTokenDb.is_active == True
+            )
+        ).first()
+
+        if token and token.is_expired:
+            return None
+
+        return token
+
+    def set_keyless_default(self, db: Session, token_id: UUID) -> bool:
+        """
+        Designate a token as the keyless default, clearing the flag on any other.
+
+        Enforces the single-active-default invariant in code: the flag is cleared
+        on every other row before being set on the target, so at most one token
+        ever carries it.
+
+        Returns:
+            True if the target token was found and flagged, False otherwise.
+        """
+        target = db.query(MCPTokenDb).filter(MCPTokenDb.id == token_id).first()
+        if target is None:
+            return False
+
+        # Clear the flag everywhere else first, then set it on the target.
+        db.query(MCPTokenDb).filter(
+            and_(
+                MCPTokenDb.is_keyless_default == True,
+                MCPTokenDb.id != token_id
+            )
+        ).update({"is_keyless_default": False})
+
+        target.is_keyless_default = True
+        db.flush()
+        return True
+
+    def clear_keyless_default(self, db: Session) -> bool:
+        """
+        Clear the keyless-default flag from whichever token carries it.
+
+        Returns:
+            True if a token was found and cleared, False if none was flagged.
+        """
+        result = db.query(MCPTokenDb).filter(
+            MCPTokenDb.is_keyless_default == True
+        ).update({"is_keyless_default": False})
+        db.flush()
+        return result > 0
     
     def revoke(self, db: Session, token_id: UUID) -> bool:
         """

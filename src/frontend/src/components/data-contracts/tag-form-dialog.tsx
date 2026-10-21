@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ type TagFormProps = {
 }
 
 export default function TagFormDialog({ isOpen, onOpenChange, onSubmit, initial }: TagFormProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [name, setName] = useState('')
@@ -32,15 +34,15 @@ export default function TagFormDialog({ isOpen, onOpenChange, onSubmit, initial 
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      toast({ title: 'Validation Error', description: 'Tag name is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:tag.validationError', 'Validation Error'), description: t('data-contracts:tag.nameRequired', 'Tag name is required'), variant: 'destructive' })
       return
     }
 
     // Validate tag name format (alphanumeric, hyphens, underscores only)
     if (!/^[a-zA-Z0-9_-]+$/.test(name.trim())) {
       toast({
-        title: 'Validation Error',
-        description: 'Tag name can only contain letters, numbers, hyphens, and underscores',
+        title: t('data-contracts:tag.validationError', 'Validation Error'),
+        description: t('data-contracts:tag.nameFormatError', 'Tag name can only contain letters, numbers, hyphens, and underscores'),
         variant: 'destructive'
       })
       return
@@ -55,13 +57,13 @@ export default function TagFormDialog({ isOpen, onOpenChange, onSubmit, initial 
       await onSubmit(tag)
       onOpenChange(false)
       toast({
-        title: 'Success',
-        description: initial ? 'Tag updated successfully' : 'Tag created successfully'
+        title: t('common:toast.success'),
+        description: initial ? t('data-contracts:tag.updateSuccess', 'Tag updated successfully') : t('data-contracts:tag.createSuccess', 'Tag created successfully')
       })
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save tag',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:tag.saveError', 'Failed to save tag'),
         variant: 'destructive',
       })
     } finally {
@@ -73,37 +75,37 @@ export default function TagFormDialog({ isOpen, onOpenChange, onSubmit, initial 
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Tag' : 'Add Tag'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-contracts:tag.editTitle', 'Edit Tag') : t('data-contracts:tag.addTitle', 'Add Tag')}</DialogTitle>
           <DialogDescription>
-            {initial ? 'Update the tag name' : 'Add a new tag to this data contract (ODCS compliant)'}
+            {initial ? t('data-contracts:tag.editDescription', 'Update the tag name') : t('data-contracts:tag.addDescription', 'Add a new tag to this data contract (ODCS compliant)')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">
-              Tag Name <span className="text-destructive">*</span>
+              {t('data-contracts:tag.nameLabel', 'Tag Name')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., pii, sensitive, production"
+              placeholder={t('data-contracts:tag.namePlaceholder', 'e.g., pii, sensitive, production')}
               maxLength={255}
               autoFocus
             />
             <p className="text-sm text-muted-foreground">
-              Use letters, numbers, hyphens, and underscores only
+              {t('data-contracts:tag.nameHelp', 'Use letters, numbers, hyphens, and underscores only')}
             </p>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Update' : 'Add'}
+            {isSubmitting ? t('common:actions.saving') : initial ? t('common:actions.update') : t('common:actions.add')}
           </Button>
         </DialogFooter>
       </DialogContent>

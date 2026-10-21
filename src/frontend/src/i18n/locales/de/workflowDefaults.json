@@ -1,0 +1,97 @@
+{
+  "approvalResponse": {
+    "title": "Begründung angeben",
+    "description": "Begründen Sie Ihre Entscheidung zur Genehmigung oder Ablehnung.",
+    "fields": {
+      "reason": "Begründung der Genehmigung oder Ablehnung"
+    }
+  },
+  "subscription": {
+    "title": "Abonnementdetails",
+    "description": "Beschreiben Sie, wie Sie dieses Datenprodukt nutzen möchten.",
+    "fields": {
+      "reason": "Grund für das Abonnement",
+      "useCase": "Geplanter Anwendungsfall"
+    }
+  },
+  "requestReview": {
+    "title": "Überprüfung anfordern",
+    "description": "Begründen Sie Ihre Anfrage zur Überprüfung.",
+    "fields": {
+      "reason": "Warum fordern Sie eine Überprüfung an?"
+    }
+  },
+  "requestAccess": {
+    "title": "Zugriff anfordern",
+    "description": "Begründen Sie Ihre Zugriffsanfrage und legen Sie optional eine Dauer fest.",
+    "fields": {
+      "reason": "Warum benötigen Sie Zugriff?",
+      "expiryDays": "Gewünschte Dauer (Tage; leer lassen für unbefristet)"
+    }
+  },
+  "requestPublish": {
+    "title": "Veröffentlichung anfordern",
+    "description": "Begründen Sie Ihre Veröffentlichungsanfrage.",
+    "fields": {
+      "reason": "Warum fordern Sie die Veröffentlichung an?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Statusänderung anfordern",
+    "description": "Begründen Sie Ihre Anfrage zur Statusänderung.",
+    "fields": {
+      "reason": "Warum fordern Sie diese Statusänderung an?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Begründung angeben"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Der Objektname entspricht nicht den Namenskonventionen",
+      "tagging": "Die erforderlichen Tags konnten nicht angewendet werden"
+    },
+    "dataProductApproval": {
+      "noContract": "Das Datenprodukt erfordert einen Datenvertrag",
+      "rejected": "Die Veröffentlichungsanfrage für das Datenprodukt wurde abgelehnt"
+    },
+    "dataContractValidation": {
+      "noSchema": "Der Datenvertrag erfordert eine Schemadefinition"
+    },
+    "preCreationCompliance": {
+      "naming": "Der Asset-Name entspricht nicht der Richtlinie für Namenskonventionen",
+      "tagging": "Das Asset hat nicht die erforderlichen Tags"
+    },
+    "tablePreCreation": {
+      "invalidName": "Der Tabellenname darf nur Kleinbuchstaben und Unterstriche enthalten",
+      "reservedWord": "Der Tabellenname darf kein reserviertes SQL-Wort sein"
+    },
+    "contractReviewRequest": {
+      "rejected": "Die Prüfungsanfrage für den Datenvertrag wurde abgelehnt"
+    },
+    "contractDeployRequest": {
+      "rejected": "Die Bereitstellungsanfrage für den Datenvertrag wurde abgelehnt"
+    },
+    "productReviewRequest": {
+      "rejected": "Die Prüfungsanfrage für das Datenprodukt wurde abgelehnt"
+    },
+    "accessGrantRequest": {
+      "rejected": "Die Zugriffsanfrage wurde abgelehnt"
+    },
+    "statusChangeRequest": {
+      "rejected": "Die Anfrage zur Statusänderung wurde abgelehnt"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "Die Prüfung des Daten-Assets erfordert Änderungen"
+    },
+    "roleAccessRequest": {
+      "rejected": "Die Anfrage für den Rollenzugriff wurde abgelehnt"
+    },
+    "certificationRequestReview": {
+      "end": "Der Zertifizierungs-Workflow ist fehlgeschlagen"
+    },
+    "publicationRequestReview": {
+      "end": "Der Veröffentlichungs-Workflow ist fehlgeschlagen"
+    }
+  }
+}

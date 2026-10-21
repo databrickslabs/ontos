@@ -31,7 +31,6 @@ _WS_GETTERS = ('get_workspace_client', 'get_obo_workspace_client')
 # unit tests' collect_ignore list.
 _NO_SUCH_ENDPOINT = 'calls an endpoint or a parameter the API does not have'
 _STALE = 'expects an older response (status code, payload or message)'
-_SEEDED = 'does not expect the Admin Team the app creates at startup'
 _SQLITE_UUID = (
     'SQLite only: a UUID value is bound to a String column or a str to a Uuid '
     'column (Postgres accepts both)'
@@ -55,8 +54,7 @@ QUARANTINE = {
         _NO_SUCH_ENDPOINT),
     'test_comments_routes.py::TestCommentsRoutes::test_create_comment_with_audience': (
         _NO_SUCH_ENDPOINT),
-    'test_comments_routes.py::TestCommentsRoutes::test_get_comments_for_entity': (
-        _NO_SUCH_ENDPOINT),
+    'test_comments_routes.py::TestCommentsRoutes::test_get_comments_for_entity': _NO_SUCH_ENDPOINT,
     'test_comments_routes.py::TestCommentsRoutes::test_update_comment': _NO_SUCH_ENDPOINT,
     'test_compliance_routes.py::TestComplianceRoutes::test_get_policies': _UNTRIAGED,
     'test_compliance_routes.py::TestComplianceRoutes::test_update_policy': _UNTRIAGED,
@@ -134,8 +132,6 @@ QUARANTINE = {
     'test_teams_routes.py::TestTeamsRoutes::test_add_team_member_team_not_found': _STALE,
     'test_teams_routes.py::TestTeamsRoutes::test_get_team_members': _STALE,
     'test_teams_routes.py::TestTeamsRoutes::test_get_teams_filtered_by_domain': _UNTRIAGED,
-    'test_teams_routes.py::TestTeamsRoutes::test_get_teams_pagination': _SEEDED,
-    'test_teams_routes.py::TestTeamsRoutes::test_get_teams_with_data': _SEEDED,
     'test_teams_routes.py::TestTeamsRoutes::test_remove_team_member': _STALE,
     'test_teams_routes.py::TestTeamsRoutes::test_update_team_member': _STALE,
     'test_user_routes.py::TestUserRoutes::test_get_current_user': _NO_SUCH_ENDPOINT,

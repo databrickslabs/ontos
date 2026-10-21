@@ -77,8 +77,10 @@ class TestTeamsRoutes:
         assert response.status_code == 200
 
         data = response.json()
-        assert len(data) > 0
-        assert data[0]["name"] == "Test Team"
+        # The app's startup also creates the Admin Team.
+        test_team = next((team for team in data if team["name"] == "Test Team"), None)
+        assert test_team is not None
+        assert test_team["description"] == "A test team for unit testing"
 
     def test_get_teams_pagination(self, client: TestClient, db_session: Session):
         """Test team listing with pagination."""
@@ -89,17 +91,24 @@ class TestTeamsRoutes:
                 "description": f"Description {i}"
             })
 
+        # The app's startup also creates the Admin Team: 6 teams in all.
         # Test first page
         response = client.get("/api/teams?skip=0&limit=3")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 3
+        first_page = [team["name"] for team in response.json()]
+        assert len(first_page) == 3
 
         # Test second page
         response = client.get("/api/teams?skip=3&limit=3")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
+        second_page = [team["name"] for team in response.json()]
+        assert len(second_page) == 3
+
+        # Past the end
+        assert client.get("/api/teams?skip=6&limit=3").json() == []
+
+        assert not set(first_page) & set(second_page)
+        assert {f"Team {i}" for i in range(5)} <= set(first_page) | set(second_page)
 
     def test_get_team_by_id(self, client: TestClient, db_session: Session, sample_team_data):
         """Test getting a team by ID."""

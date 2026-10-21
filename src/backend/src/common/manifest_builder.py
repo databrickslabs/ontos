@@ -181,7 +181,10 @@ class ManifestBuilder:
         quality: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Sort quality rules by (type, name, rule)."""
-        return sorted(quality, key=lambda q: (q.get("type", ""), q.get("name", ""), q.get("rule", "")))
+        return sorted(
+            quality,
+            key=lambda q: (q.get("type", ""), q.get("name", ""), q.get("rule", "")),
+        )
 
     @staticmethod
     def sort_servers(servers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

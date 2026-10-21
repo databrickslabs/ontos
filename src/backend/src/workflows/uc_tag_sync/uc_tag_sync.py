@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+import time
 import argparse
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from dataclasses import dataclass, field
@@ -179,6 +180,70 @@ class DatasetTagInfo:
     additional_domain_names: List[str] = field(default_factory=list)
 
 
+# Shared tables ---------------------------------------------------------------
+#
+# Several products (or contracts) can use one table, but a UC tag key holds one value.
+# The product, and separately the contract, with the best lifecycle status decides
+# every product (contract) field of the table, so ``{PRODUCT.STATUS}`` and
+# ``{PRODUCT.NAME}`` always describe the same product. Ties are broken by name.
+
+# Precedence on a shared table, 1 wins (PRD "Status values"). A table is only
+# ``deprecated`` when every user is deprecated or retired, only ``retired`` when all are.
+STATUS_PRECEDENCE: Dict[str, int] = {
+    "active": 1,
+    "approved": 2,
+    "under_review": 3,
+    "proposed": 4,
+    "sandbox": 5,
+    "draft": 6,
+    "deprecated": 7,
+    "retired": 8,
+}
+
+
+def status_precedence(status: Optional[str]) -> int:
+    """Rank of a lifecycle status on a shared table; unknown statuses rank last."""
+    return STATUS_PRECEDENCE.get(str(status or "").strip().lower(), len(STATUS_PRECEDENCE) + 1)
+
+
+def _entity_rank(entity_id: Any, name: Any, status: Any) -> Tuple[int, int, str, str]:
+    """Sort key of a product or contract: present first, then status, name and id."""
+    present = bool(entity_id or name)
+    return (0 if present else 1, status_precedence(status), str(name or ""), str(entity_id or ""))
+
+
+def _product_rank(d: DatasetTagInfo) -> Tuple[int, int, str, str]:
+    return _entity_rank(d.product_id, d.product_name, d.product_status)
+
+
+def _contract_rank(d: DatasetTagInfo) -> Tuple[int, int, str, str]:
+    return _entity_rank(d.contract_id, d.contract_name, d.contract_status)
+
+
+def _keep_deciding(obj: Dict[str, Any], candidate: Dict[str, Any], entity: str) -> None:
+    """Take ``candidate``'s ``<entity>_*`` fields when its product/contract ranks first."""
+    def rank(fields: Dict[str, Any]) -> Tuple[int, int, str, str]:
+        return _entity_rank(
+            fields.get(f"{entity}_id"), fields.get(f"{entity}_name"),
+            fields.get(f"{entity}_status"),
+        )
+
+    if rank(candidate) < rank(obj):
+        obj.update(candidate)
+
+
+def _product_fields(r: Dict[str, Any]) -> Dict[str, Any]:
+    """Every ``product_*`` column of a reader row, so the product's domains follow it."""
+    fields = {k: v for k, v in r.items() if k.startswith("product_")}
+    fields["product_name"] = r.get("product_name") or r.get("product_name_from_contract")
+    return fields
+
+
+def _contract_fields(r: Dict[str, Any]) -> Dict[str, Any]:
+    """Every ``contract_*`` column of a reader row."""
+    return {k: v for k, v in r.items() if k.startswith("contract_")}
+
+
 def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     sql = (
         """
@@ -229,6 +294,7 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
          AND pda.is_primary = TRUE
         LEFT JOIN data_domains pd ON pd.id = pda.domain_id
         """
+        + " ORDER BY c.id, o.id, p.id, el.iri"
         + (" LIMIT :limit" if limit else "")
     )
     params = {"limit": int(limit)} if limit else {}
@@ -262,6 +328,9 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
                 "semantic_links": [],
             },
         )
+        # One row per product publishing this object: keep the deciding one, whatever
+        # the row order.
+        _keep_deciding(obj, _product_fields(r), "product")
 
         # Add semantic link if present
         iri = r.get("schema_semantic_iri")
@@ -385,6 +454,7 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
           AND a.status = 'active'
           AND a.location IS NOT NULL
         """
+        + " ORDER BY a.id, er.target_id, p.id, esl.iri"
         + (" LIMIT :limit" if limit else "")
     )
     params = {"limit": int(limit)} if limit else {}
@@ -420,6 +490,9 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
                 "semantic_links": [],
             },
         )
+        # One row per implemented contract and product: keep the deciding ones.
+        _keep_deciding(obj, _contract_fields(r), "contract")
+        _keep_deciding(obj, _product_fields(r), "product")
 
         iri = r.get("asset_semantic_iri")
         if iri:
@@ -474,6 +547,81 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
                 asset_id=str(data.get("asset_id") or "") or None,
                 asset_type_name=str(data.get("asset_type_name") or "") or None,
                 additional_domain_names=[str(n) for n in additional_domains if n],
+            )
+        )
+    return out
+
+
+def read_output_ports_without_contract(
+    engine: Engine, limit: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Read output ports that name a table without a contract, with their product.
+
+    Ports with a contract are reached through ``read_contracts_and_links``. Every product
+    status is read: a deprecated or retired product still tags its tables.
+    """
+    sql = (
+        """
+        SELECT op.id AS port_id,
+               op.asset_identifier AS physical_name,
+               p.id AS product_id,
+               p.name AS product_name,
+               p.version AS product_version,
+               p.status AS product_status,
+               pd.name AS product_domain,
+               (SELECT array_agg(dd.name ORDER BY dd.name)
+                  FROM entity_domain_associations eda3
+                  JOIN data_domains dd ON dd.id = eda3.domain_id
+                 WHERE eda3.entity_type = 'data_product'
+                   AND eda3.entity_id = p.id
+                   AND eda3.is_primary = FALSE) AS product_additional_domains
+        FROM data_product_output_ports op
+        JOIN data_products p ON p.id = op.product_id
+        LEFT JOIN entity_domain_associations pda
+          ON pda.entity_type = 'data_product'
+         AND pda.entity_id = p.id
+         AND pda.is_primary = TRUE
+        LEFT JOIN data_domains pd ON pd.id = pda.domain_id
+        WHERE (op.contract_id IS NULL OR op.contract_id = '')
+          AND op.asset_identifier IS NOT NULL
+          AND (op.asset_type IS NULL OR op.asset_type = ''
+               OR LOWER(op.asset_type) IN ('table', 'view'))
+        ORDER BY op.asset_identifier, p.name, p.id, op.id
+        """
+        + (" LIMIT :limit" if limit else "")
+    )
+    params = {"limit": int(limit)} if limit else {}
+    with engine.connect() as conn:
+        rows = [dict(r._mapping) for r in conn.execute(text(sql), params)]
+    return rows
+
+
+def build_output_port_tag_infos(
+    rows: List[Dict[str, Any]], default_catalog: Optional[str], default_schema: Optional[str]
+) -> List[DatasetTagInfo]:
+    """One DatasetTagInfo per output port row; ``merge_dataset_tag_infos`` combines them."""
+    out: List[DatasetTagInfo] = []
+    for r in rows:
+        qualified = qualify_uc_name(str(r.get("physical_name") or ""), default_catalog,
+                                    default_schema)
+        if not qualified or len(qualified.split(".")) != 3:
+            continue
+        cat, sch, tbl = qualified.split(".")
+        out.append(
+            DatasetTagInfo(
+                fqn=qualified, catalog=cat, schema=sch, table=tbl,
+                contract_id=None, contract_name=None,
+                contract_version=None, contract_status=None,
+                product_id=str(r.get("product_id") or "") or None,
+                product_name=str(r.get("product_name") or "") or None,
+                product_version=str(r.get("product_version") or "") or None,
+                product_status=str(r.get("product_status") or "") or None,
+                domain_id=None,
+                domain_name=str(r.get("product_domain") or "") or None,
+                semantic_links=[],
+                additional_domain_names=[
+                    str(n) for n in (r.get("product_additional_domains") or []) if n
+                ],
             )
         )
     return out
@@ -635,32 +783,42 @@ def merge_dataset_tag_infos(
     """Merge contract-, asset- and direct-link DatasetTagInfo lists, deduplicating by FQN.
 
     When both sources provide an entry for the same FQN, fields from the richer
-    source win per-field, and semantic links are unioned.
+    source win per-field, and semantic links are unioned. The product fields come
+    from the deciding product and the contract fields from the deciding contract
+    (see *Shared tables*), whatever the input order.
     """
     by_fqn: Dict[str, DatasetTagInfo] = {}
+    deciding_product: Dict[str, DatasetTagInfo] = {}
+    deciding_contract: Dict[str, DatasetTagInfo] = {}
+    sources = (list(contract_datasets), list(asset_datasets), list(direct_datasets or []))
 
     # UC names are case-insensitive: key (and parent aggregation) on lower case so the
     # same table reached through differently-cased sources is reconciled once.
-    for d in list(contract_datasets) + list(asset_datasets) + list(direct_datasets or []):
+    for d in sources[0] + sources[1] + sources[2]:
         d.fqn, d.catalog, d.schema, d.table = (
             d.fqn.lower(), d.catalog.lower(), d.schema.lower(), d.table.lower()
         )
 
-    # Contracts first, so their fields win when another source has the same FQN
-    for d in list(contract_datasets) + list(asset_datasets) + list(direct_datasets or []):
+    # Contracts first, so their fields win when another source has the same FQN; within
+    # a source, the deciding contract (then product) first, so the domain doesn't depend
+    # on the row order either.
+    ordered = sorted(
+        ((rank, d) for rank, datasets in enumerate(sources) for d in datasets),
+        key=lambda item: (item[0], _contract_rank(item[1]), _product_rank(item[1])),
+    )
+    for _source_rank, d in ordered:
+        best = deciding_product.get(d.fqn)
+        if best is None or _product_rank(d) < _product_rank(best):
+            deciding_product[d.fqn] = d
+        best = deciding_contract.get(d.fqn)
+        if best is None or _contract_rank(d) < _contract_rank(best):
+            deciding_contract[d.fqn] = d
+
         existing = by_fqn.get(d.fqn)
         if existing is None:
             by_fqn[d.fqn] = d
         else:
             # Merge: prefer non-None values, union semantic links
-            existing.contract_id = existing.contract_id or d.contract_id
-            existing.contract_name = existing.contract_name or d.contract_name
-            existing.contract_version = existing.contract_version or d.contract_version
-            existing.contract_status = existing.contract_status or d.contract_status
-            existing.product_id = existing.product_id or d.product_id
-            existing.product_name = existing.product_name or d.product_name
-            existing.product_version = existing.product_version or d.product_version
-            existing.product_status = existing.product_status or d.product_status
             existing.asset_id = existing.asset_id or d.asset_id
             existing.asset_type_name = existing.asset_type_name or d.asset_type_name
             # Domain: a primary and its additional domains belong to the SAME source.
@@ -682,6 +840,14 @@ def merge_dataset_tag_infos(
             for link in d.semantic_links:
                 if link.iri not in existing_iris:
                     existing.semantic_links.append(link)
+
+    # Product and contract fields come as one block each, from the deciding entity.
+    for fqn, merged in by_fqn.items():
+        p, c = deciding_product[fqn], deciding_contract[fqn]
+        merged.product_id, merged.product_name = p.product_id, p.product_name
+        merged.product_version, merged.product_status = p.product_version, p.product_status
+        merged.contract_id, merged.contract_name = c.contract_id, c.contract_name
+        merged.contract_version, merged.contract_status = c.contract_version, c.contract_status
 
     return list(by_fqn.values())
 
@@ -838,14 +1004,63 @@ def alter_target(object_type: str, object_name: str) -> str:
     return f"{object_type} {object_name}"
 
 
+# Each SET TAGS / UNSET TAGS statement is attempted up to TAG_SQL_ATTEMPTS times, waiting
+# TAG_SQL_BACKOFFS[n] seconds after failed attempt n + 1. Whatever still fails is reported
+# and retried by the next run. TAG_SQL_SLEEP is looked up per call, so tests replace it.
+TAG_SQL_ATTEMPTS = 3
+TAG_SQL_BACKOFFS: Tuple[float, ...] = (2.0, 10.0)
+TAG_SQL_SLEEP = time.sleep
+
+# Errors a retry can't fix, matched against the Spark error class and message:
+_NON_RETRYABLE_TAG_ERRORS = (
+    # The job's identity lacks a privilege on the object, e.g. APPLY TAG.
+    "PERMISSION_DENIED",
+    "INSUFFICIENT_PERMISSIONS",
+    "APPLY TAG",
+    # The table, view or column (or its schema / catalog) doesn't exist.
+    "TABLE_OR_VIEW_NOT_FOUND",
+    "SCHEMA_NOT_FOUND",
+    "CATALOG_NOT_FOUND",
+    "UNRESOLVED_COLUMN",
+)
+
+
+def _is_retryable_tag_error(error: Exception) -> bool:
+    get_error_class = getattr(error, "getErrorClass", None)
+    error_class = get_error_class() if callable(get_error_class) else None
+    text = f"{error_class or ''} {error}".upper()
+    return not any(marker in text for marker in _NON_RETRYABLE_TAG_ERRORS)
+
+
+def _run_tag_sql(spark: SparkSession, sql: str, *, attempts: int,
+                 backoffs: Tuple[float, ...], sleep: Any) -> None:
+    """Run one tag statement, retrying transient errors; the last error is raised."""
+    for attempt in range(1, attempts + 1):
+        try:
+            spark.sql(sql)
+            return
+        except Exception as e:
+            if attempt >= attempts or not _is_retryable_tag_error(e):
+                raise
+            delay = backoffs[min(attempt, len(backoffs)) - 1] if backoffs else 0
+            print(f"[WARN] Attempt {attempt}/{attempts} failed, retrying in {delay}s: {e}")
+            sleep(delay)
+
+
 def assign_tag(spark: SparkSession, object_type: str, object_name: str, key: str, value: Optional[str]) -> None:
     v = value if value is not None else ""
     escaped = v.replace("'", "''")
-    spark.sql(f"ALTER {alter_target(object_type, object_name)} SET TAGS ('{key}' = '{escaped}')")
+    _run_tag_sql(
+        spark, f"ALTER {alter_target(object_type, object_name)} SET TAGS ('{key}' = '{escaped}')",
+        attempts=TAG_SQL_ATTEMPTS, backoffs=TAG_SQL_BACKOFFS, sleep=TAG_SQL_SLEEP,
+    )
 
 
 def unassign_tag(spark: SparkSession, object_type: str, object_name: str, key: str) -> None:
-    spark.sql(f"ALTER {alter_target(object_type, object_name)} UNSET TAGS ('{key}')")
+    _run_tag_sql(
+        spark, f"ALTER {alter_target(object_type, object_name)} UNSET TAGS ('{key}')",
+        attempts=TAG_SQL_ATTEMPTS, backoffs=TAG_SQL_BACKOFFS, sleep=TAG_SQL_SLEEP,
+    )
 
 
 def reconcile_tags(ws: WorkspaceClient, spark: SparkSession, object_type: str, object_name: str, desired: Dict[str, Optional[str]], prefix: str, dry_run: bool = False) -> Tuple[int, int, List[str]]:
@@ -1726,6 +1941,11 @@ def main() -> None:
                                                 default_schema)
     print(f"  Found {len(contract_datasets)} datasets from contracts")
 
+    print("Reading output ports without a contract...")
+    port_rows = read_output_ports_without_contract(engine, limit=limit)
+    port_datasets = build_output_port_tag_infos(port_rows, default_catalog, default_schema)
+    print(f"  Found {len(port_datasets)} datasets from output ports without a contract")
+
     print("Reading asset-based metadata...")
     asset_rows = read_assets_and_links(engine, limit=limit)
     asset_datasets = build_asset_tag_infos(asset_rows, default_catalog,
@@ -1741,7 +1961,7 @@ def main() -> None:
         f"direct links"
     )
 
-    datasets = merge_dataset_tag_infos(contract_datasets, asset_datasets,
+    datasets = merge_dataset_tag_infos(contract_datasets + port_datasets, asset_datasets,
                                        direct.tables)
 
     print("\nReading the previous UC tag delivery state...")

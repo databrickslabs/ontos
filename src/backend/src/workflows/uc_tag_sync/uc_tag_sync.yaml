@@ -94,6 +94,17 @@ configurable_parameters:
         enabled: true
         tag_key_format: "ontos_asset_type"
         tag_value_format: "{ASSET.TYPE}"
+      # Lifecycle status of the product (contract) using the table. On a table used by
+      # several, the best status wins (see "Shared tables" in uc_tag_sync.py). When both
+      # entries are enabled, the later one (the product's) wins the shared key.
+      - entity_type: "data_contract"
+        enabled: false
+        tag_key_format: "ontos_lifecycle_status"
+        tag_value_format: "{CONTRACT.STATUS}"
+      - entity_type: "data_product"
+        enabled: true
+        tag_key_format: "ontos_lifecycle_status"
+        tag_value_format: "{PRODUCT.STATUS}"
 
   - name: "prefix"
     type: "string"

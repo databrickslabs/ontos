@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "Stato Cambiato",
       "statusChangedDescription": "Lo stato del contratto è cambiato da \"{{from}}\" a \"{{to}}\".",
       "submittedTitle": "Richiesta Inviata",
-      "submittedDescription": "La tua richiesta di {{type}} è stata inviata e sarai notificato della decisione."
+      "submittedDescription": "La tua richiesta di {{type}} è stata inviata e sarai notificato della decisione.",
+      "workflowFailedTitle": "Richiesta inviata, ma il suo workflow non è riuscito",
+      "workflowFailedDescription": "Nessuno è stato chiamato a decidere sulla tua richiesta di {{type}}: il workflow \"{{workflow}}\" non è potuto partire. Contatta un amministratore.",
+      "requestTypes": {
+        "access": "accesso",
+        "review": "revisione",
+        "deploy": "distribuzione",
+        "publish": "pubblicazione",
+        "certify": "certificazione",
+        "status_change": "cambio di stato"
+      },
+      "workflowPartiallyFailedTitle": "Alcuni workflow di richiesta non sono riusciti",
+      "workflowPartiallyFailedDescription": "Uno dei workflow di richiesta {{type}} non è riuscito: {{workflows}}. Altre approvazioni potrebbero essere ancora in sospeso."
     },
     "errors": {
       "submitFailed": "Impossibile inviare la richiesta",

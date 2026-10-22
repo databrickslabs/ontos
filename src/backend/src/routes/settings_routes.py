@@ -100,6 +100,11 @@ async def update_settings(
         elif settings_payload.get('git_password_clear'):
             details['git_password'] = 'cleared'
 
+        if 'ontos_instance_id' in settings_payload:
+            details['ontos_instance_id'] = settings_payload.get('ontos_instance_id')
+        if 'ontos_instance_name' in settings_payload:
+            details['ontos_instance_name'] = settings_payload.get('ontos_instance_name')
+
         updated = manager.update_settings(settings_payload)
         success = True
         return updated.to_dict()

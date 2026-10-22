@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { DocViewerSkeleton } from '@/components/common/list-view-skeleton';
 import { type DocFileKeys, docFileKeys, resolveDocHref } from '@/lib/doc-links';
+import { safeDecodeURIComponent } from '@/lib/safe-decode';
 
 // Helper function to slugify text for anchor IDs
 function slugify(text: string): string {
@@ -100,7 +101,7 @@ export default function DocumentationViewer() {
   // A link to a section of another doc: scroll to it once the doc is shown
   useEffect(() => {
     if (loading || !hash) return;
-    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+    document.getElementById(safeDecodeURIComponent(hash.slice(1)))?.scrollIntoView();
   }, [loading, hash, markdown]);
 
   // Build table of contents

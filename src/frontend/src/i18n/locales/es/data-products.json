@@ -685,7 +685,18 @@
       "statusChanged": "Estado cambiado",
       "statusChangedDesc": "El estado del producto cambió de \"{{fromStatus}}\" a \"{{toStatus}}\".",
       "requestSubmitted": "Solicitud enviada",
-      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión."
+      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión.",
+      "workflowFailed": "Solicitud enviada, pero su flujo de trabajo falló",
+      "workflowFailedDesc": "No se pidió a nadie que decidiera sobre su solicitud de {{type}}: el flujo de trabajo \"{{workflow}}\" no pudo iniciarse. Contacte con un administrador.",
+      "requestTypes": {
+        "access": "acceso",
+        "review": "revisión",
+        "publish": "publicación",
+        "certify": "certificación",
+        "status_change": "cambio de estado"
+      },
+      "workflowPartiallyFailed": "Algunos flujos de trabajo de solicitud fallaron",
+      "workflowPartiallyFailedDesc": "Uno de los flujos de trabajo de solicitud de {{type}} falló: {{workflows}}. Otras aprobaciones pueden estar pendientes."
     },
     "labels": {
       "requestType": "Tipo de solicitud",

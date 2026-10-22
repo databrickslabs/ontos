@@ -95,3 +95,33 @@ def test_uc_grant_to_the_requester_goes_to_the_requester():
 
     assert result.data['skipped'] is True
     assert result.data['principal'] == 'requester@example.com'
+
+
+_FALLBACK_LOG = 'using the acting user as the requester'
+
+
+def _fallback_records(caplog):
+    return [r for r in caplog.records if _FALLBACK_LOG in r.getMessage()]
+
+
+def test_fallback_to_the_acting_user_is_logged_once_per_step(db_session, caplog):
+    context = _resumed_context(trigger_context=None, step_id='notify')
+
+    with caplog.at_level('WARNING'):
+        assert _resolve_role_to_users(db_session, 'requester', context) == [
+            ('approver@example.com', None),
+        ]
+        _resolve_role_to_users(db_session, 'trigger_user', context)
+
+    records = _fallback_records(caplog)
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert 'exec-1' in message and 'wf-1' in message and 'notify' in message
+    assert 'approver@example.com' not in message
+
+
+def test_no_fallback_log_when_the_trigger_context_has_the_requester(db_session, caplog):
+    with caplog.at_level('WARNING'):
+        _resolve_role_to_users(db_session, 'requester', _resumed_context())
+
+    assert not _fallback_records(caplog)

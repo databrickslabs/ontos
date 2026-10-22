@@ -685,7 +685,18 @@
       "statusChanged": "Status geändert",
       "statusChangedDesc": "Produktstatus von \"{{fromStatus}}\" auf \"{{toStatus}}\" geändert.",
       "requestSubmitted": "Anfrage gesendet",
-      "requestSubmittedDesc": "Ihre {{type}}-Anfrage wurde gesendet und Sie werden über die Entscheidung benachrichtigt."
+      "requestSubmittedDesc": "Ihre {{type}}-Anfrage wurde gesendet und Sie werden über die Entscheidung benachrichtigt.",
+      "workflowFailed": "Anfrage gesendet, aber ihr Workflow ist fehlgeschlagen",
+      "workflowFailedDesc": "Niemand wurde gebeten, über Ihre {{type}}-Anfrage zu entscheiden: Der Workflow \"{{workflow}}\" konnte nicht gestartet werden. Bitte wenden Sie sich an einen Administrator.",
+      "requestTypes": {
+        "access": "Zugriffs",
+        "review": "Review",
+        "publish": "Veröffentlichungs",
+        "certify": "Zertifizierungs",
+        "status_change": "Statusänderungs"
+      },
+      "workflowPartiallyFailed": "Einige Anfrage-Workflows sind fehlgeschlagen",
+      "workflowPartiallyFailedDesc": "Einer der {{type}}-Anfrage-Workflows ist fehlgeschlagen: {{workflows}}. Andere Genehmigungen stehen möglicherweise noch aus."
     },
     "labels": {
       "requestType": "Anfragetyp",

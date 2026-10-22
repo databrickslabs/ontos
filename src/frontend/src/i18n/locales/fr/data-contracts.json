@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "Statut modifié",
       "statusChangedDescription": "Le statut du contrat est passé de « {{from}} » à « {{to}} ».",
       "submittedTitle": "Demande envoyée",
-      "submittedDescription": "Votre demande de {{type}} a été envoyée et vous serez informé de la décision."
+      "submittedDescription": "Votre demande de {{type}} a été envoyée et vous serez informé de la décision.",
+      "workflowFailedTitle": "Demande envoyée, mais son workflow a échoué",
+      "workflowFailedDescription": "Personne n'a été sollicité pour décider de votre demande de {{type}} : le workflow « {{workflow}} » n'a pas pu démarrer. Contactez un administrateur.",
+      "requestTypes": {
+        "access": "accès",
+        "review": "revue",
+        "deploy": "déploiement",
+        "publish": "publication",
+        "certify": "certification",
+        "status_change": "changement de statut"
+      },
+      "workflowPartiallyFailedTitle": "Certains workflows de demande ont échoué",
+      "workflowPartiallyFailedDescription": "L'un des workflows de demande {{type}} a échoué : {{workflows}}. D'autres approbations peuvent être en attente."
     },
     "errors": {
       "submitFailed": "Échec de l'envoi de la demande",

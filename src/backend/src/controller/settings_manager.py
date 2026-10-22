@@ -11,6 +11,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy import func
 
+from src.common.instance_identity import (
+    INSTANCE_ID_SETTING_KEY,
+    INSTANCE_NAME_SETTING_KEY,
+    validate_instance_id,
+    validate_instance_name,
+)
 from src.common.config import Settings
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
@@ -200,6 +206,32 @@ class SettingsManager:
         # after the initial JobsManager creation above
         self._reinitialize_workspace_deployer()
 
+    def _update_instance_identity(self, settings: dict) -> None:
+        """Validate and persist ontos_instance_id / ontos_instance_name from a settings payload."""
+        # Instance identity: a blank value clears the override and reverts to the
+        # env/derived default; otherwise the value is validated and persisted.
+        if 'ontos_instance_id' in settings:
+            value = validate_instance_id(settings.get('ontos_instance_id'))
+            if value:
+                app_settings_repo.set(self._db, INSTANCE_ID_SETTING_KEY, value)
+                self._settings.ONTOS_INSTANCE_ID = value
+            else:
+                app_settings_repo.delete(self._db, INSTANCE_ID_SETTING_KEY)
+                self._settings.ONTOS_INSTANCE_ID = self._settings.instance_id_default
+            logger.info(f"Updated {INSTANCE_ID_SETTING_KEY} to: {self._settings.ONTOS_INSTANCE_ID}")
+
+        if 'ontos_instance_name' in settings:
+            value = validate_instance_name(settings.get('ontos_instance_name'))
+            if value:
+                app_settings_repo.set(self._db, INSTANCE_NAME_SETTING_KEY, value)
+                self._settings.ONTOS_INSTANCE_NAME = value
+            else:
+                app_settings_repo.delete(self._db, INSTANCE_NAME_SETTING_KEY)
+                self._settings.ONTOS_INSTANCE_NAME = self._settings.instance_name_default
+            logger.info(
+                f"Updated {INSTANCE_NAME_SETTING_KEY} to: {self._settings.ONTOS_INSTANCE_NAME}"
+            )
+
     def _load_persisted_settings(self) -> None:
         """Load persisted settings from database and apply to in-memory Settings."""
         try:
@@ -227,6 +259,28 @@ class SettingsManager:
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid SCHEMA_IMPORT_CHILD_LIMIT in database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
             
+            # Instance identity overrides (win over env and derived defaults)
+            # An invalid stored value (edited by hand in the database) is skipped, as with
+            # the other persisted settings, and the env/derived default stays in effect.
+            if all_settings.get(INSTANCE_ID_SETTING_KEY):
+                try:
+                    self._settings.ONTOS_INSTANCE_ID = (
+                        validate_instance_id(all_settings[INSTANCE_ID_SETTING_KEY], 'stored')
+                        or self._settings.ONTOS_INSTANCE_ID
+                    )
+                    logger.debug(f"Loaded {INSTANCE_ID_SETTING_KEY} from database")
+                except ValueError as e:
+                    logger.error(f"Ignoring the stored {INSTANCE_ID_SETTING_KEY}: {e}")
+            if all_settings.get(INSTANCE_NAME_SETTING_KEY):
+                try:
+                    self._settings.ONTOS_INSTANCE_NAME = (
+                        validate_instance_name(all_settings[INSTANCE_NAME_SETTING_KEY], 'stored')
+                        or self._settings.ONTOS_INSTANCE_NAME
+                    )
+                    logger.debug(f"Loaded {INSTANCE_NAME_SETTING_KEY} from database")
+                except ValueError as e:
+                    logger.error(f"Ignoring the stored {INSTANCE_NAME_SETTING_KEY}: {e}")
+
             # Databricks Unity Catalog settings
             if 'DATABRICKS_CATALOG' in all_settings and all_settings['DATABRICKS_CATALOG']:
                 self._settings.DATABRICKS_CATALOG = all_settings['DATABRICKS_CATALOG']
@@ -1269,6 +1323,11 @@ class SettingsManager:
             'schema_import_async_threshold': self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD,
             # Schema Importer per-path child fetch limit
             'schema_import_child_limit': self._settings.SCHEMA_IMPORT_CHILD_LIMIT,
+            # Instance identity (effective values + the defaults used when no override is set)
+            'ontos_instance_id': self._settings.ONTOS_INSTANCE_ID,
+            'ontos_instance_name': self._settings.ONTOS_INSTANCE_NAME,
+            'ontos_instance_id_default': self._settings.instance_id_default,
+            'ontos_instance_name_default': self._settings.instance_name_default,
             # Databricks Unity Catalog settings
             'databricks_catalog': self._settings.DATABRICKS_CATALOG,
             'databricks_schema': self._settings.DATABRICKS_SCHEMA,
@@ -1505,6 +1564,8 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'SCHEMA_IMPORT_CHILD_LIMIT', str(int_val))
             self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int_val
             logger.info(f"Updated SCHEMA_IMPORT_CHILD_LIMIT to: {int_val}")
+
+        self._update_instance_identity(settings)
 
         # Jobs are reconciled only when the payload carries them: every other
         # settings form (Git, General, UI customization, Delivery) saves only

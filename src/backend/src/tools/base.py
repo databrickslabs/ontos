@@ -11,10 +11,36 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import new_error_id
 from src.common.config import Settings
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# Client-facing failure for an unexpected exception in a tool. The exception's
+# class and text (SQL, parameters, paths, hosts) go to the server log only: a
+# tool result reaches the MCP client and the chat LLM, which may quote it. The
+# message carries an error id, in the same shape as the API's server errors
+# (``src.common.api_errors``), so a user can quote it and the log entry is found.
+TOOL_FAILED_CODE = "tool_failed"
+TOOL_FAILED_MESSAGE = "The tool failed with an unexpected error (error id {error_id})."
+
+
+def tool_failed_message(error_id: str) -> str:
+    return TOOL_FAILED_MESSAGE.format(error_id=error_id)
+
+
+def tool_failure(tag: str, exc: BaseException) -> Dict[str, str]:
+    """Log an unexpected tool failure with an error id and return the client-facing part.
+
+    Spread into ``ToolResult(success=False, **tool_failure("get_domain", e), ...)``.
+    """
+    error_id = new_error_id()
+    logger.error(
+        "[%s] FAILED (error id %s): %s: %s", tag, error_id, type(exc).__name__, exc, exc_info=exc
+    )
+    return {"error": tool_failed_message(error_id), "error_code": TOOL_FAILED_CODE}
 
 
 @dataclass
@@ -44,17 +70,24 @@ class ToolResult:
         success: Whether the tool executed successfully
         data: The result data (dict, list, etc.)
         error: Error message if success is False
+        error_code: Optional stable machine-readable code for the failure
+            (e.g. ``tool_failed``). Additive: clients that only read ``error``
+            keep working.
     """
     success: bool
     data: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    error_code: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         if self.success:
             return self.data
         else:
-            return {"error": self.error, **self.data}
+            out: Dict[str, Any] = {"error": self.error, **self.data}
+            if self.error_code:
+                out["error_code"] = self.error_code
+            return out
 
 
 class BaseTool(ABC):

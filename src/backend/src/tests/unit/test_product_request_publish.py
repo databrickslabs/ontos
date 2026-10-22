@@ -15,6 +15,7 @@ from src.routes import data_product_routes
 
 async def _request_publish(product, registry, scope='organization'):
     manager = SimpleNamespace(_repo=SimpleNamespace(get=lambda db, id: product))
+    registry.on_request_publish.return_value = []  # the executions it ran
     with patch.object(data_product_routes, 'get_trigger_registry', return_value=registry):
         return await data_product_routes.request_publish_product(
             product_id='prod-1',

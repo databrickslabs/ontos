@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -88,8 +88,7 @@ class SearchTagsTool(BaseTool):
             )
 
         except Exception as e:
-            logger.error(f"[search_tags] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"tags": []})
+            return ToolResult(success=False, **tool_failure("search_tags", e), data={"tags": []})
 
 
 class GetTagTool(BaseTool):
@@ -160,8 +159,7 @@ class GetTagTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_tag] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_tag", e))
 
 
 class CreateTagTool(BaseTool):
@@ -265,8 +263,7 @@ class CreateTagTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[create_tag] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("create_tag", e))
 
 
 class UpdateTagTool(BaseTool):
@@ -356,8 +353,7 @@ class UpdateTagTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[update_tag] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("update_tag", e))
 
 
 class DeleteTagTool(BaseTool):
@@ -411,8 +407,7 @@ class DeleteTagTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[delete_tag] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("delete_tag", e))
 
 
 class ListEntityTagsTool(BaseTool):
@@ -479,8 +474,7 @@ class ListEntityTagsTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[list_entity_tags] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}", data={"tags": []})
+            return ToolResult(success=False, **tool_failure("list_entity_tags", e), data={"tags": []})
 
 
 class AssignTagToEntityTool(BaseTool):
@@ -551,8 +545,7 @@ class AssignTagToEntityTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[assign_tag_to_entity] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("assign_tag_to_entity", e))
 
 
 class RemoveTagFromEntityTool(BaseTool):
@@ -621,6 +614,5 @@ class RemoveTagFromEntityTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[remove_tag_from_entity] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("remove_tag_from_entity", e))
 

@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "ステータスを変更しました",
       "statusChangedDescription": "コントラクトのステータスが「{{from}}」から「{{to}}」に変更されました。",
       "submittedTitle": "リクエストを送信しました",
-      "submittedDescription": "{{type}} のリクエストを送信しました。判断結果は通知されます。"
+      "submittedDescription": "{{type}} のリクエストを送信しました。判断結果は通知されます。",
+      "workflowFailedTitle": "リクエストは送信されましたが、ワークフローが失敗しました",
+      "workflowFailedDescription": "{{type}} のリクエストの判断を依頼された人はいません。ワークフロー「{{workflow}}」を開始できませんでした。管理者に連絡してください。",
+      "requestTypes": {
+        "access": "アクセス",
+        "review": "レビュー",
+        "deploy": "デプロイ",
+        "publish": "公開",
+        "certify": "認定",
+        "status_change": "ステータス変更"
+      },
+      "workflowPartiallyFailedTitle": "いくつかのリクエストワークフローが失敗しました",
+      "workflowPartiallyFailedDescription": "{{type}}リクエストワークフローの1つが失敗しました: {{workflows}}。他の承認はまだ保留中である可能性があります。"
     },
     "errors": {
       "submitFailed": "リクエストの送信に失敗しました",

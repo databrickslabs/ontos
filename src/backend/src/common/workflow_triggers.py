@@ -1553,3 +1553,94 @@ def enrich_entity_data_with_data_product(
 
     return entity_data
 
+
+
+def _log_workflow_failure(execution: WorkflowExecution) -> None:
+    """Log a failed workflow execution without exposing sensitive error details to the requester.
+
+    Extracts the error message from the first failed step or the execution error, logs it as
+    a warning for admins/debugging, and does NOT expose it to the requester (who only gets
+    the error code).
+    """
+    step_error = next(
+        (s.error_message for s in execution.step_executions
+         if s.passed is False and s.error_message),
+        None,
+    )
+    logger.warning(
+        f"Request workflow '{execution.workflow_name}' failed (execution {execution.id}): "
+        f"{step_error or execution.error_message}"
+    )
+
+
+def request_workflow_outcome(executions: List[WorkflowExecution]) -> Dict[str, Any]:
+    """Outcome of the workflows a request (review, publish, ...) triggered.
+
+    Returns ``workflow_triggered`` (a workflow took the request and didn't
+    fail), and when a workflow ran, ``execution_id`` and ``workflow_status``.
+    A request workflow runs until it pauses for an approval, so an execution
+    that has already failed means nobody was asked to decide (e.g. no
+    approver could be resolved) and the request goes no further.
+
+    Distinguishes three cases:
+    - Total failure: ALL matching executions failed → workflow_triggered=false, status=failed
+    - Partial failure: ANY paused/succeeded AND at least one failed → workflow_triggered=true,
+      status=partially_failed, plus failed workflow names
+    - No failures: workflow_triggered=true, status=execution's actual status
+
+    The requester gets ``workflow_error_code`` and ``workflow_error_params``
+    only: a step's error can be an exception's text (SQL, identifiers), so it
+    stays in the server log and in the execution, where admins can open it.
+    """
+    if not executions:
+        return {"workflow_triggered": False}
+
+    failed_execs = [e for e in executions if e.status == ExecutionStatus.FAILED]
+    non_failed_execs = [e for e in executions if e.status != ExecutionStatus.FAILED]
+
+    # Total failure: all executions failed
+    if failed_execs and not non_failed_execs:
+        failed = failed_execs[0]
+        _log_workflow_failure(failed)
+        outcome: Dict[str, Any] = {
+            "workflow_triggered": False,
+            "execution_id": failed.id,
+            "workflow_status": failed.status.value,
+            "workflow_error_code": "request_workflow_failed",
+            "workflow_error_params": {"workflow": failed.workflow_name},
+        }
+        return outcome
+
+    # Partial failure: some paused/succeeded AND at least one failed
+    if failed_execs and non_failed_execs:
+        # Log the failures but don't block the request
+        for failed in failed_execs:
+            _log_workflow_failure(failed)
+        failed_names = [e.workflow_name for e in failed_execs]
+        outcome: Dict[str, Any] = {
+            "workflow_triggered": True,
+            "execution_id": non_failed_execs[0].id,
+            "workflow_status": "partially_failed",
+            "workflow_error_code": "request_workflow_partially_failed",
+            "workflow_error_params": {"failed_workflows": failed_names},
+        }
+        return outcome
+
+    # No failures: use the first execution (should be paused or succeeded)
+    execution = executions[0]
+    outcome = {
+        "workflow_triggered": True,
+        "execution_id": execution.id,
+        "workflow_status": execution.status.value,
+    }
+    return outcome
+
+
+def request_submitted_message(request_kind: str, outcome: Dict[str, Any]) -> str:
+    """API message for a submitted request, given its ``request_workflow_outcome``."""
+    if outcome.get("workflow_status") == ExecutionStatus.FAILED.value:
+        return (
+            f"{request_kind} request submitted, but its workflow could not start. "
+            "Please contact an administrator."
+        )
+    return f"{request_kind} request submitted successfully"

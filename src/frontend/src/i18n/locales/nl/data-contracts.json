@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "Status gewijzigd",
       "statusChangedDescription": "Contractstatus gewijzigd van \"{{from}}\" naar \"{{to}}\".",
       "submittedTitle": "Verzoek ingediend",
-      "submittedDescription": "Uw {{type}}-verzoek is ingediend en u wordt op de hoogte gebracht van de beslissing."
+      "submittedDescription": "Uw {{type}}-verzoek is ingediend en u wordt op de hoogte gebracht van de beslissing.",
+      "workflowFailedTitle": "Verzoek verzonden, maar de workflow is mislukt",
+      "workflowFailedDescription": "Niemand is gevraagd te beslissen over uw {{type}}-verzoek: de workflow \"{{workflow}}\" kon niet starten. Neem contact op met een beheerder.",
+      "requestTypes": {
+        "access": "toegangs",
+        "review": "review",
+        "deploy": "implementatie",
+        "publish": "publicatie",
+        "certify": "certificerings",
+        "status_change": "statuswijzigings"
+      },
+      "workflowPartiallyFailedTitle": "Sommige aanvraagworkflows zijn mislukt",
+      "workflowPartiallyFailedDescription": "Een van de {{type}}-aanvraagworkflows is mislukt: {{workflows}}. Andere goedkeuringen kunnen nog in behandeling zijn."
     },
     "errors": {
       "submitFailed": "Indienen van verzoek mislukt",

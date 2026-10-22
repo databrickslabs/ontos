@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Instantie-identiteit",
+      "id": {
+        "label": "Instantie-ID",
+        "help": "Vaste identifier van deze Ontos-instantie, die wordt opgenomen in geëxporteerde entiteiten. Standaard: {{default}}. Maak het veld leeg om de standaardwaarde te herstellen.",
+        "invalid": "Gebruik 1-128 letters, cijfers, \".\", \"_\", \":\" of \"-\", en begin met een letter of cijfer."
+      },
+      "name": {
+        "label": "Instantienaam",
+        "help": "Leesbare naam van deze instantie. Standaard: {{default}}. Maak het veld leeg om de standaardwaarde te herstellen.",
+        "invalid": "Gebruik maximaal 128 tekens, zonder besturingstekens."
+      }
+    },
     "auditLog": {
       "label": "Auditlog Directory",
       "placeholder": "audit_logs",

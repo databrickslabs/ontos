@@ -361,7 +361,32 @@ def _requester_email(context: 'StepContext') -> Optional[str]:
     approver (the user acting now); the requester stays in the trigger context.
     """
     trigger_context = getattr(context, 'trigger_context', None)
-    return getattr(trigger_context, 'user_email', None) or context.user_email
+    requester = getattr(trigger_context, 'user_email', None)
+    if requester:
+        return requester
+    if context.user_email:
+        _log_requester_fallback(context)
+    return context.user_email
+
+
+def _log_requester_fallback(context: 'StepContext') -> None:
+    """Warn, once per step, that the acting user stands in for the requester.
+
+    The trigger context has no requester, so recipients, owner exclusion and
+    requester-sourced grants use the acting user, which may be someone else.
+    Emails are left out of the log; the ids locate the execution.
+    """
+    step_id = getattr(context, 'step_id', None)
+    if getattr(context, '_requester_fallback_step', None) == (step_id,):
+        return
+    context._requester_fallback_step = (step_id,)
+    logger.warning(
+        "No requester in the trigger context (workflow=%s, execution=%s, step=%s); "
+        "using the acting user as the requester",
+        getattr(context, 'workflow_id', None),
+        getattr(context, 'execution_id', None),
+        step_id,
+    )
 
 
 def _entity_owner_emails(db: Session, context: 'StepContext') -> List[str]:

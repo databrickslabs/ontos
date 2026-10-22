@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "Status Alterado",
       "statusChangedDescription": "Status do contrato alterado de \"{{from}}\" para \"{{to}}\".",
       "submittedTitle": "Solicitação Enviada",
-      "submittedDescription": "Sua solicitação de {{type}} foi enviada e você será notificado da decisão."
+      "submittedDescription": "Sua solicitação de {{type}} foi enviada e você será notificado da decisão.",
+      "workflowFailedTitle": "Solicitação enviada, mas o workflow falhou",
+      "workflowFailedDescription": "Ninguém foi acionado para decidir sobre sua solicitação de {{type}}: o workflow \"{{workflow}}\" não pôde ser iniciado. Contate um administrador.",
+      "requestTypes": {
+        "access": "acesso",
+        "review": "revisão",
+        "deploy": "implantação",
+        "publish": "publicação",
+        "certify": "certificação",
+        "status_change": "mudança de status"
+      },
+      "workflowPartiallyFailedTitle": "Alguns workflows de solicitação falharam",
+      "workflowPartiallyFailedDescription": "Um dos workflows de solicitação de {{type}} falhou: {{workflows}}. Outras aprovações podem ainda estar pendentes."
     },
     "errors": {
       "submitFailed": "Falha ao enviar solicitação",

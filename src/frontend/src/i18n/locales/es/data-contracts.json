@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "Estado cambiado",
       "statusChangedDescription": "El estado del contrato cambió de \"{{from}}\" a \"{{to}}\".",
       "submittedTitle": "Solicitud enviada",
-      "submittedDescription": "Tu solicitud de {{type}} se ha enviado y se te notificará la decisión."
+      "submittedDescription": "Tu solicitud de {{type}} se ha enviado y se te notificará la decisión.",
+      "workflowFailedTitle": "Solicitud enviada, pero su flujo de trabajo falló",
+      "workflowFailedDescription": "No se pidió a nadie que decidiera sobre tu solicitud de {{type}}: el flujo de trabajo \"{{workflow}}\" no pudo iniciarse. Contacta con un administrador.",
+      "requestTypes": {
+        "access": "acceso",
+        "review": "revisión",
+        "deploy": "despliegue",
+        "publish": "publicación",
+        "certify": "certificación",
+        "status_change": "cambio de estado"
+      },
+      "workflowPartiallyFailedTitle": "Algunos flujos de trabajo de solicitud fallaron",
+      "workflowPartiallyFailedDescription": "Uno de los flujos de trabajo de solicitud de {{type}} falló: {{workflows}}. Otras aprobaciones pueden estar pendientes."
     },
     "errors": {
       "submitFailed": "Error al enviar la solicitud",

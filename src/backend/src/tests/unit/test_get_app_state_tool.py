@@ -233,7 +233,9 @@ async def test_execute_handles_snapshot_failure_gracefully():
         result = await tool.execute(ctx)
 
     assert result.success is False
-    assert "db down" in (result.error or "")
+    # The exception text stays in the server log, not in the tool result.
+    assert "db down" not in (result.error or "")
+    assert result.error_code == "tool_failed"
 
 
 # ---------------------------------------------------------------------------

@@ -685,7 +685,18 @@
       "statusChanged": "Status Gewijzigd",
       "statusChangedDesc": "Productstatus gewijzigd van \"{{fromStatus}}\" naar \"{{toStatus}}\".",
       "requestSubmitted": "Verzoek Verzonden",
-      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing."
+      "requestSubmittedDesc": "Je {{type}}-verzoek is verzonden en je wordt op de hoogte gebracht van de beslissing.",
+      "workflowFailed": "Verzoek verzonden, maar de workflow is mislukt",
+      "workflowFailedDesc": "Niemand is gevraagd te beslissen over je {{type}}-verzoek: de workflow \"{{workflow}}\" kon niet starten. Neem contact op met een beheerder.",
+      "requestTypes": {
+        "access": "toegangs",
+        "review": "review",
+        "publish": "publicatie",
+        "certify": "certificerings",
+        "status_change": "statuswijzigings"
+      },
+      "workflowPartiallyFailed": "Sommige aanvraagworkflows zijn mislukt",
+      "workflowPartiallyFailedDesc": "Een van de {{type}}-aanvraagworkflows is mislukt: {{workflows}}. Andere goedkeuringen kunnen nog in behandeling zijn."
     },
     "labels": {
       "requestType": "Verzoektype",

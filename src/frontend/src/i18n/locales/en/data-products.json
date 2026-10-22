@@ -685,7 +685,18 @@
       "statusChanged": "Status Changed",
       "statusChangedDesc": "Product status changed from \"{{fromStatus}}\" to \"{{toStatus}}\".",
       "requestSubmitted": "Request Submitted",
-      "requestSubmittedDesc": "Your {{type}} request has been submitted and you will be notified of the decision."
+      "requestSubmittedDesc": "Your {{type}} request has been submitted and you will be notified of the decision.",
+      "workflowFailed": "Request sent, but its workflow failed",
+      "workflowFailedDesc": "Nobody was asked to decide on your {{type}} request: its workflow \"{{workflow}}\" could not start. Please contact an administrator.",
+      "workflowPartiallyFailed": "Some request workflows failed",
+      "workflowPartiallyFailedDesc": "One of the {{type}} request workflows failed: {{workflows}}. Other approvals may still be pending.",
+      "requestTypes": {
+        "access": "access",
+        "review": "review",
+        "publish": "publish",
+        "certify": "certification",
+        "status_change": "status change"
+      }
     },
     "labels": {
       "requestType": "Request Type",

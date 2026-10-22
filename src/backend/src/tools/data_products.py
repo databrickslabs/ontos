@@ -10,8 +10,10 @@ from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
 from src.controller import search_scoring
-from src.tools.base import BaseTool, ToolContext, ToolResult
-from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.controller.lifecycle_fields import (
+    LifecycleFieldError, deprecation_details_from_strings,
+)
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -119,6 +121,11 @@ def _serialize_product(product) -> Dict[str, Any]:
     }
 
 logger = get_logger(__name__)
+
+
+# The update tool's answer to a sunset_date that isn't YYYY-MM-DD
+INVALID_SUNSET_DATE = "Invalid sunset_date: expected YYYY-MM-DD"
+INVALID_SUNSET_DATE_CODE = "sunset_date_invalid"
 
 
 class SearchDataProductsTool(BaseTool):
@@ -249,10 +256,9 @@ class SearchDataProductsTool(BaseTool):
             )
 
         except Exception as e:
-            logger.error(f"[search_data_products] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{e.__class__.__name__}: {str(e)}",
+                **tool_failure("search_data_products", e),
                 data={"products": []},
             )
 
@@ -358,8 +364,7 @@ class CreateDraftDataProductTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[create_draft_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("create_draft_data_product", e))
 
 
 class UpdateDataProductTool(BaseTool):
@@ -449,11 +454,17 @@ class UpdateDataProductTool(BaseTool):
                     )
                 current_status = getattr(current.status, 'value', current.status) or 'draft'
                 if str(current_status).lower() != status.lower():
-                    ctx.data_products_manager.transition_status(
-                        product_id, status,
-                        deprecation=deprecation_details_from_strings(
+                    try:
+                        deprecation = deprecation_details_from_strings(
                             deprecation_reason, sunset_date, replacement_id
-                        ),
+                        )
+                    except ValueError:
+                        return ToolResult(
+                            success=False, error=INVALID_SUNSET_DATE,
+                            error_code=INVALID_SUNSET_DATE_CODE,
+                        )
+                    ctx.data_products_manager.transition_status(
+                        product_id, status, deprecation=deprecation,
                     )
 
             # Update the product
@@ -486,9 +497,13 @@ class UpdateDataProductTool(BaseTool):
                 }
             )
             
+        except LifecycleFieldError as err:
+            # A deprecation the details don't allow: an expected, app-written error
+            # (no SQL or internal text), so its message and code go to the client,
+            # like the API's coded 400. Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code)
         except Exception as e:
-            logger.error(f"[update_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("update_data_product", e))
 
 
 class GetDataProductTool(BaseTool):
@@ -533,8 +548,7 @@ class GetDataProductTool(BaseTool):
             return ToolResult(success=True, data=_serialize_product(product))
 
         except Exception as e:
-            logger.error(f"[get_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_data_product", e))
 
 
 class GetDataProductsBulkTool(BaseTool):
@@ -615,8 +629,7 @@ class GetDataProductsBulkTool(BaseTool):
                 },
             )
         except Exception as e:
-            logger.error(f"[get_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_data_products", e))
 
 
 class ListDataProductsTool(BaseTool):
@@ -727,6 +740,5 @@ class DeleteDataProductTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[delete_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("delete_data_product", e))
 

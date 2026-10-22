@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Identité de l'instance",
+      "id": {
+        "label": "ID de l'instance",
+        "help": "Identifiant stable de cette instance Ontos, apposé sur les entités exportées. Par défaut : {{default}}. Videz le champ pour rétablir la valeur par défaut.",
+        "invalid": "Utilisez 1 à 128 lettres, chiffres, \".\", \"_\", \":\" ou \"-\", en commençant par une lettre ou un chiffre."
+      },
+      "name": {
+        "label": "Nom de l'instance",
+        "help": "Nom lisible de cette instance. Par défaut : {{default}}. Videz le champ pour rétablir la valeur par défaut.",
+        "invalid": "Utilisez 128 caractères au maximum, sans caractères de contrôle."
+      }
+    },
     "auditLog": {
       "label": "Répertoire des journaux d'audit",
       "placeholder": "audit_logs",

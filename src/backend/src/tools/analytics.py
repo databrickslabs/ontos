@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 from src.common.logging import get_logger
 from src.common.sql_validator import SQLValidator, validate_and_prepare_query
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -75,10 +75,9 @@ class GetTableSchemaTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_table_schema] FAILED for {table_fqn}: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(
+                        return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure(f"get_table_schema {table_fqn}", e),
                 data={"table_fqn": table_fqn}
             )
 
@@ -176,8 +175,7 @@ class ExecuteAnalyticsQueryTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[execute_analytics_query] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("execute_analytics_query", e))
 
 
 class ExploreCatalogSchemaTool(BaseTool):
@@ -284,10 +282,9 @@ class ExploreCatalogSchemaTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[explore_catalog_schema] FAILED for {catalog}.{schema}: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(
+                        return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure(f"explore_catalog_schema {catalog}.{schema}", e),
                 data={"catalog": catalog, "schema": schema}
             )
 

@@ -9,7 +9,13 @@ from typing import Any, Dict, List, Optional, Type
 
 from src.common.api_errors import new_error_id
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import (
+    TOOL_FAILED_CODE,
+    BaseTool,
+    ToolContext,
+    ToolResult,
+    tool_failed_message,
+)
 
 logger = get_logger(__name__)
 
@@ -179,7 +185,8 @@ class ToolRegistry:
             )
             return ToolResult(
                 success=False,
-                error=f"The tool failed with an unexpected error (error id {error_id}).",
+                error=tool_failed_message(error_id),
+                error_code=TOOL_FAILED_CODE,
             )
     
     def __len__(self) -> int:

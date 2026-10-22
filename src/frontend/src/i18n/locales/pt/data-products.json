@@ -685,7 +685,18 @@
       "statusChanged": "Status alterado",
       "statusChangedDesc": "O status do produto mudou de \"{{fromStatus}}\" para \"{{toStatus}}\".",
       "requestSubmitted": "Solicitação enviada",
-      "requestSubmittedDesc": "Sua solicitação de {{type}} foi enviada e você será notificado sobre a decisão."
+      "requestSubmittedDesc": "Sua solicitação de {{type}} foi enviada e você será notificado sobre a decisão.",
+      "workflowFailed": "Solicitação enviada, mas o workflow falhou",
+      "workflowFailedDesc": "Ninguém foi acionado para decidir sobre sua solicitação de {{type}}: o workflow \"{{workflow}}\" não pôde ser iniciado. Contate um administrador.",
+      "requestTypes": {
+        "access": "acesso",
+        "review": "revisão",
+        "publish": "publicação",
+        "certify": "certificação",
+        "status_change": "mudança de status"
+      },
+      "workflowPartiallyFailed": "Alguns workflows de solicitação falharam",
+      "workflowPartiallyFailedDesc": "Um dos workflows de solicitação de {{type}} falhou: {{workflows}}. Outras aprovações podem ainda estar pendentes."
     },
     "labels": {
       "requestType": "Tipo de solicitação",

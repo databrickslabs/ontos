@@ -1175,7 +1175,19 @@
       "statusChangedTitle": "Status Changed",
       "statusChangedDescription": "Contract status changed from \"{{from}}\" to \"{{to}}\".",
       "submittedTitle": "Request Submitted",
-      "submittedDescription": "Your {{type}} request has been submitted and you will be notified of the decision."
+      "submittedDescription": "Your {{type}} request has been submitted and you will be notified of the decision.",
+      "workflowFailedTitle": "Request sent, but its workflow failed",
+      "workflowFailedDescription": "Nobody was asked to decide on your {{type}} request: its workflow \"{{workflow}}\" could not start. Please contact an administrator.",
+      "workflowPartiallyFailedTitle": "Some request workflows failed",
+      "workflowPartiallyFailedDescription": "One of the {{type}} request workflows failed: {{workflows}}. Other approvals may still be pending.",
+      "requestTypes": {
+        "access": "access",
+        "review": "review",
+        "deploy": "deploy",
+        "publish": "publish",
+        "certify": "certification",
+        "status_change": "status change"
+      }
     },
     "errors": {
       "submitFailed": "Failed to submit request",

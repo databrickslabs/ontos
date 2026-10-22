@@ -1452,7 +1452,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         """
         from datetime import datetime
         from uuid import uuid4
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
         from src.controller.change_log_manager import change_log_manager
         
@@ -1502,6 +1504,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Log to change_log
         change_log_manager.log_change_with_details(
@@ -1519,20 +1522,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 **requested_deprecation,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change requested from {from_status} to {target_status} by {current_user}",
-                "workflow_triggered": len(executions) > 0,
+                **outcome,
             },
         )
         
         # Build response
         result = {
-            "message": "Status change request submitted successfully",
+            "message": request_submitted_message("Status change", outcome),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
 
@@ -1691,7 +1690,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ValueError: If product not found or invalid status
         """
         from uuid import uuid4
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
         
         product_db = self._repo.get(db=self._db, id=product_id)
@@ -1731,18 +1732,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Build response
+        failed = outcome.get("workflow_status") == "failed"
         result = {
             "status": "success",
-            "message": f"Review request created for product {product_db.name or product_id}",
+            "message": (
+                request_submitted_message("Review", outcome) if failed
+                else f"Review request created for product {product_db.name or product_id}"
+            ),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
 

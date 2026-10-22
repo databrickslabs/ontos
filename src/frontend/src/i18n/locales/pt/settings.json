@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Identidade da instância",
+      "id": {
+        "label": "ID da instância",
+        "help": "Identificador estável desta instância do Ontos, gravado nas entidades exportadas. Padrão: {{default}}. Limpe o campo para restaurar o padrão.",
+        "invalid": "Use de 1 a 128 letras, dígitos, \".\", \"_\", \":\" ou \"-\", começando por letra ou dígito."
+      },
+      "name": {
+        "label": "Nome da instância",
+        "help": "Nome legível desta instância. Padrão: {{default}}. Limpe o campo para restaurar o padrão.",
+        "invalid": "Use no máximo 128 caracteres, sem caracteres de controle."
+      }
+    },
     "auditLog": {
       "label": "Diretório de logs de auditoria",
       "placeholder": "audit_logs",

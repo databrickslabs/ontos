@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Instance Identity",
+      "id": {
+        "label": "Instance ID",
+        "help": "Stable identifier of this Ontos instance, stamped on exported entities. Default: {{default}}. Clear the field to restore the default.",
+        "invalid": "Use 1-128 letters, digits, \".\", \"_\", \":\" or \"-\", starting with a letter or digit."
+      },
+      "name": {
+        "label": "Instance Name",
+        "help": "Human-readable name of this instance. Default: {{default}}. Clear the field to restore the default.",
+        "invalid": "Use at most 128 characters, without control characters."
+      }
+    },
     "auditLog": {
       "label": "Audit Log Directory",
       "placeholder": "audit_logs",

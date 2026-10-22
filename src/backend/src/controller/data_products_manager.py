@@ -902,22 +902,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def delete_product(self, product_id: str, user: Optional[str] = None) -> bool:
         """Delete an ODPS v1.0.0 data product.
 
-        Notifies subscribers before deletion (since deletion cascades remove them).
+        Subscribers are notified only after the deletion is committed, so a
+        failed delete notifies nobody. The recipients are read before the
+        delete, since it cascades the subscription rows.
         """
         try:
             # Get product info and subscribers before deletion
             product_db = self._repo.get(db=self._db, id=product_id)
             product_name = product_db.name if product_db else None
-
-            # Notify subscribers before deletion (deletion cascades remove them)
-            try:
-                self._notify_subscribers_on_delete(
-                    product_id=product_id,
-                    product_name=product_name,
-                    deleted_by=user
+            deletion_notice = (
+                self._collect_deletion_notice(
+                    product_id=product_id, product_name=product_name, deleted_by=user
                 )
-            except Exception as notify_err:
-                logger.warning(f"Failed to notify subscribers of product deletion: {notify_err}")
+                if product_db else None
+            )
 
             entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
@@ -940,14 +938,22 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 except Exception as log_err:
                     logger.warning(f"Failed to log change for product deletion: {log_err}")
 
+                # Persist the deletion before anyone is told about it.
+                self._db.commit()
+
                 self._notify_index_remove(f"product::{product_id}")
+
+                if deletion_notice:
+                    self._notify_subscribers_on_delete(**deletion_notice)
 
             return deleted_obj is not None
         except SQLAlchemyError as e:
             logger.error(f"Database error deleting product {product_id}: {e}")
+            self._db.rollback()
             raise
         except Exception as e:
             logger.error(f"Unexpected error deleting product {product_id}: {e}")
+            self._db.rollback()
             raise
 
     # ==================== Lifecycle Transition Methods ====================
@@ -4429,7 +4435,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         notification_type: str = "INFO",
         link: Optional[str] = None,
         data: Optional[Dict[str, Any]] = None,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        subscriber_emails: Optional[List[str]] = None,
     ) -> int:
         """
         Send a notification to all subscribers of a product.
@@ -4442,6 +4449,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             link: Optional link to include
             data: Optional additional data including i18n keys
             db: Optional database session
+            subscriber_emails: Recipients read beforehand (the deletion notice
+                reads them before the delete cascades the subscription rows);
+                when omitted they are read from the subscriptions now
 
         Returns:
             Number of notifications sent
@@ -4452,11 +4462,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         db_session = db if db is not None else self._db
 
-        # Get all subscriber emails
-        subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
-            db_session,
-            product_id=product_id
-        )
+        if subscriber_emails is None:
+            subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
+                db_session,
+                product_id=product_id
+            )
 
         if not subscriber_emails:
             logger.debug(f"No subscribers to notify for product {product_id}")
@@ -4499,26 +4509,32 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         logger.info(f"Sent {notifications_sent} notifications for product {product_id}")
         return notifications_sent
 
-    def _notify_subscribers_on_delete(
+    def _collect_deletion_notice(
         self,
         product_id: str,
         product_name: Optional[str],
         deleted_by: Optional[str] = None
-    ) -> None:
+    ) -> Optional[Dict[str, Any]]:
         """
-        Notify all subscribers when a product is deleted.
+        Read what the deletion notice needs while the product still exists.
 
-        The notification includes who deleted it, when it happened, and the product
-        name. If the product has a replacement (from #1042), that info is included.
-
-        Called BEFORE deletion since deletion cascades remove the subscription rows.
+        The delete cascades the subscription rows and removes the product, so
+        the recipients, the name and the replacement (from #1042) are read
+        before it. Returns None when there is nobody to notify or the read
+        fails (a failed read never blocks the delete).
 
         Args:
             product_id: ID of the product
             product_name: Name of the product
-            deleted_by: Username or email of who deleted it
+            deleted_by: Username or email of who deletes it
         """
         try:
+            subscriber_emails = subscription_repo.get_subscriber_emails_for_product(
+                self._db, product_id=product_id
+            )
+            if not subscriber_emails:
+                return None
+
             # Get replacement info if available
             product = self.get_product(product_id) if product_id else None
             replacement_id = None
@@ -4534,6 +4550,48 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     except Exception:
                         pass
 
+            return {
+                'product_id': product_id,
+                'product_name': product_name,
+                'deleted_by': deleted_by,
+                'subscriber_emails': subscriber_emails,
+                'replacement_id': replacement_id,
+                'replacement_name': replacement_name,
+            }
+        except Exception as e:
+            # Log but don't raise - notification failure shouldn't block deletion
+            logger.error("Failed to read subscribers of product %s before deletion: %s",
+                         product_id, e)
+            return None
+
+    def _notify_subscribers_on_delete(
+        self,
+        product_id: str,
+        product_name: Optional[str],
+        subscriber_emails: List[str],
+        deleted_by: Optional[str] = None,
+        replacement_id: Optional[str] = None,
+        replacement_name: Optional[str] = None,
+    ) -> None:
+        """
+        Notify the subscribers of a deleted product.
+
+        The notification includes who deleted it, when it happened, and the product
+        name. If the product has a replacement (from #1042), that info is included.
+
+        Called only AFTER the deletion is committed, so a failed delete notifies
+        nobody; the recipients come from ``_collect_deletion_notice`` (read before
+        the delete cascaded the subscription rows).
+
+        Args:
+            product_id: ID of the product
+            product_name: Name of the product
+            subscriber_emails: Recipients read before the delete
+            deleted_by: Username or email of who deleted it
+            replacement_id: Replacement product id, if any
+            replacement_name: Replacement product name, if any
+        """
+        try:
             # Prepare i18n data
             deletion_time = datetime.utcnow().isoformat()
             i18n_params = {
@@ -4564,12 +4622,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 ),
                 notification_type='ACTION_REQUIRED',
                 link="/data-products",
-                data=i18n_data
+                data=i18n_data,
+                subscriber_emails=subscriber_emails,
             )
-            logger.info(f"Notified {count} subscribers about product {product_id} deletion")
+            # The delete is already committed: commit the notices on their own.
+            self._db.commit()
+            logger.info("Notified %s subscribers about product %s deletion", count, product_id)
         except Exception as e:
             # Log but don't raise - notification failure shouldn't block deletion
-            logger.error(f"Failed to notify subscribers of product deletion: {e}")
+            logger.error("Failed to notify subscribers of product %s deletion: %s",
+                         product_id, e)
+            try:
+                self._db.rollback()
+            except Exception:
+                pass
 
     def _log_subscription_change(
         self,

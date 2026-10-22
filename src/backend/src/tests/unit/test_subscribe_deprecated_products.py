@@ -6,6 +6,8 @@ Covers:
   * Active and certified products still accept subscriptions
   * Subscribers get a translatable notification (``data.i18n``) when a product
     is deprecated, retired or deleted, and only those
+  * The deletion notice is sent only after the delete is committed: a failed
+    delete (repository or commit error) notifies nobody
 """
 
 # Set test environment variables BEFORE any app imports
@@ -17,6 +19,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from src.controller.data_products_manager import (
     DataProductsManager,
@@ -45,7 +48,8 @@ def make_product(db_session):
 
 def _sent(notifications_manager):
     """The notifications handed to ``create_notification``."""
-    return [c.kwargs['notification'] for c in notifications_manager.create_notification.call_args_list]
+    calls = notifications_manager.create_notification.call_args_list
+    return [c.kwargs['notification'] for c in calls]
 
 
 class TestSubscribeRefusal:
@@ -125,7 +129,7 @@ class TestSubscriberNotices:
         )
         assert _sent(notifications) == []
 
-    def test_delete_notifies_subscribers_before_the_rows_cascade(
+    def test_delete_notifies_subscribers_read_before_the_rows_cascade(
         self, manager, make_product, db_session, notifications
     ):
         product_id = self._subscribed(manager, make_product, db_session, 'Doomed Product')
@@ -147,3 +151,78 @@ class TestSubscriberNotices:
         product_id = self._subscribed(manager, make_product, db_session)
         notifications.create_notification.side_effect = RuntimeError('boom')
         assert manager.delete_product(product_id) is True
+
+
+class TestDeletionNoticeAfterCommit:
+    """The deletion notice goes out only once the delete is persisted (#1173 review)."""
+
+    @pytest.fixture
+    def notifications(self, manager):
+        notifications_manager = MagicMock()
+        manager._notifications_manager = notifications_manager
+        return notifications_manager
+
+    @pytest.fixture
+    def subscribed(self, manager, make_product, db_session):
+        product_id = make_product('active', 'Doomed Product')
+        manager.subscribe(product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session)
+        return product_id
+
+    def test_failed_repository_delete_sends_no_notice(
+        self, manager, db_session, notifications, subscribed, monkeypatch
+    ):
+        def failing_remove(*args, **kwargs):
+            raise OperationalError('DELETE FROM data_products', {}, Exception('db down'))
+
+        monkeypatch.setattr(manager._repo, 'remove', failing_remove)
+
+        with pytest.raises(OperationalError):
+            manager.delete_product(subscribed, user='admin@example.com')
+
+        assert _sent(notifications) == []
+
+    def test_failed_commit_sends_no_notice(
+        self, manager, db_session, notifications, subscribed, monkeypatch
+    ):
+        def failing_commit():
+            raise OperationalError('COMMIT', {}, Exception('connection lost'))
+
+        monkeypatch.setattr(db_session, 'commit', failing_commit)
+
+        with pytest.raises(OperationalError):
+            manager.delete_product(subscribed, user='admin@example.com')
+
+        assert _sent(notifications) == []
+
+    def test_successful_delete_notifies_once_after_the_commit(
+        self, manager, db_session, notifications, subscribed, monkeypatch
+    ):
+        events = []
+        real_commit = db_session.commit
+        real_remove = manager._repo.remove
+
+        def recording_commit():
+            events.append('commit')
+            real_commit()
+
+        def recording_remove(*args, **kwargs):
+            events.append('remove')
+            return real_remove(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, 'commit', recording_commit)
+        monkeypatch.setattr(manager._repo, 'remove', recording_remove)
+        notifications.create_notification.side_effect = (
+            lambda **kwargs: events.append('notify')
+        )
+
+        assert manager.delete_product(subscribed, user='admin@example.com') is True
+
+        (notification,) = _sent(notifications)
+        assert notification.recipient == SUBSCRIBER
+        assert notification.data['i18n']['params']['productName'] == 'Doomed Product'
+        assert events.count('notify') == 1
+        remove_at, notify_at = events.index('remove'), events.index('notify')
+        assert remove_at < notify_at
+        assert 'commit' in events[remove_at:notify_at], events
+        # The notices are committed too (the delete's commit came before them).
+        assert events[-1] == 'commit', events

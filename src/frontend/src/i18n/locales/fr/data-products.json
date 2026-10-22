@@ -541,7 +541,8 @@
       "failedToSerialize": "Échec de la sérialisation de l'état de l'interface en JSON.",
       "unexpectedError": "Une erreur inattendue s'est produite."
     },
-    "syntaxErrorLabel": "Erreur de syntaxe :"
+    "syntaxErrorLabel": "Erreur de syntaxe :",
+    "statusChangeHint": "Le statut change avec Changer le statut sur la page, qui vérifie la transition et exécute les workflows de changement de statut."
   },
   "import": {
     "title": "Importer un Produit de Données",
@@ -929,7 +930,8 @@
       "createNewContract": "Créer un nouveau contrat",
       "linkContract": "Lier le contrat",
       "linking": "Liaison..."
-    }
+    },
+    "statusFilterNote": "Seuls les contrats au statut « actif » ou « approuvé » sont affichés. Choisissez une version précise : les contrats de même nom affichent leur version à côté."
   },
   "hierarchy": {
     "title": "Hiérarchie des données",
@@ -1086,8 +1088,10 @@
     "versionPlaceholder": "par ex. v1.1, v2.0-beta",
     "createButton": "Créer la version",
     "errors": {
-      "versionEmpty": "La chaîne de version ne peut pas être vide."
-    }
+      "versionEmpty": "La chaîne de version ne peut pas être vide.",
+      "versionFormat": "« {{version}} » n'est pas au format X.Y.Z (par exemple 2.0.0)."
+    },
+    "versionPlaceholderSemver": "p. ex. 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Produit sans nom",

@@ -3,6 +3,7 @@
   "reasons": {
     "waitingForApproval": "esperando aprobación ({{step}})",
     "entityLoadFailed": "no se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
+    "entityNotFound": "no se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla",
     "validationFailed": "la validación del workflow falló",
     "status": {
       "failed": "fallido",
@@ -10,5 +11,10 @@
       "pending": "pendiente",
       "running": "en ejecución"
     }
-  }
+  },
+  "requiresTransition": "Una edición no puede cambiar el estado de {{fromStatus}} a {{toStatus}}. Usa Cambiar estado, que comprueba la transición y ejecuta los workflows de cambio de estado.",
+  "certifiedIsNotAStatus": "Certificado no es un estado: la certificación se establece con Certificar, en una entidad activa.",
+  "invalidStatus": "{{status}} no es un estado del ciclo de vida. Usa uno de: {{allowed}}.",
+  "gateError": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar la compuerta del flujo de trabajo {{workflows}}. Pida a un administrador que revise el flujo de trabajo.",
+  "gateErrorUnnamed": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar una compuerta del flujo de trabajo. Pida a un administrador que revise el flujo de trabajo."
 }

@@ -24,53 +24,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ESTATE_EDIT_PARAM } from '@/lib/estate-paths';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 import { DataTable } from '@/components/ui/data-table';
 import EstateGraphView from '@/components/estates/estate-graph-view';
 
 // --- TypeScript Interfaces corresponding to Pydantic Models ---
-type CloudType = 'aws' | 'azure' | 'gcp';
-type SyncStatus = 'pending' | 'running' | 'success' | 'failed';
-type ConnectionType = 'delta_share' | 'database';
-type SharingResourceType = 'data_product' | 'business_glossary';
-type SharingRuleOperator = 'equals' | 'contains' | 'starts_with' | 'regex';
-
-interface SharingRule {
-  filter_type: string;
-  operator: SharingRuleOperator;
-  filter_value: string;
-}
-
-interface SharingPolicy {
-  id?: string;
-  name: string;
-  description?: string;
-  resource_type: SharingResourceType;
-  rules: SharingRule[];
-  is_enabled: boolean;
-  created_at: string; // ISO datetime string
-  updated_at: string; // ISO datetime string
-}
-
-interface Estate {
-  id: string;
-  name: string;
-  description: string;
-  workspace_url: string;
-  cloud_type: CloudType;
-  metastore_name: string;
-  connection_type: ConnectionType;
-  sharing_policies: SharingPolicy[];
-  is_enabled: boolean;
-  sync_schedule: string;
-  last_sync_time?: string;
-  last_sync_status?: SyncStatus;
-  last_sync_error?: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { CloudType, ConnectionType, Estate } from '@/types/estate';
+import { estateErrorText } from '@/lib/estate-error';
 // --- End TypeScript Interfaces ---
 
 /**
@@ -90,6 +53,7 @@ export default function EstateManager() {
   const { toast } = useToast();
   const { get, post, put, delete: deleteEstateApi } = useApi();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [estates, setEstates] = useState<Estate[]>([]);
@@ -103,7 +67,8 @@ export default function EstateManager() {
     cloud_type: 'aws',
     metastore_name: '',
     connection_type: 'delta_share',
-    sharing_policies: [],
+    export_policies: [],
+    import_policies: [],
     is_enabled: true,
     sync_schedule: '0 0 * * *',
   });
@@ -121,6 +86,18 @@ export default function EstateManager() {
         setDynamicTitle(null);
     };
   }, [setStaticSegments, setDynamicTitle]);
+
+  // The estate page's "Edit Estate" opens this list with ?edit=<id>
+  const editId = searchParams.get(ESTATE_EDIT_PARAM);
+  useEffect(() => {
+    if (!editId || isLoading) return;
+    const estate = estates.find((e) => e.id === editId);
+    if (estate) openDialog(estate);
+    const next = new URLSearchParams(searchParams);
+    next.delete(ESTATE_EDIT_PARAM);
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, isLoading, estates]);
 
   const fetchEstates = async () => {
     try {
@@ -159,7 +136,8 @@ export default function EstateManager() {
         cloud_type: formData.cloud_type!,
         metastore_name: formData.metastore_name!,
         connection_type: formData.connection_type!,
-        sharing_policies: formData.sharing_policies || [],
+        export_policies: formData.export_policies || [],
+        import_policies: formData.import_policies || [],
         is_enabled: formData.is_enabled === undefined ? true : formData.is_enabled,
         sync_schedule: formData.sync_schedule || '0 0 * * *',
         created_at: selectedEstate?.created_at || new Date().toISOString(),
@@ -176,7 +154,7 @@ export default function EstateManager() {
         response = await post<Estate>('/api/estates', createPayload);
       }
       
-      if (response.error) throw new Error(response.error);
+      if (response.error) throw new Error(estateErrorText(response, t));
       if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
         throw new Error(response.data.detail);
       }
@@ -244,7 +222,8 @@ export default function EstateManager() {
       setFormData({
         ...estate,
         connection_type: estate.connection_type || 'delta_share',
-        sharing_policies: estate.sharing_policies || [],
+        export_policies: estate.export_policies || [],
+        import_policies: estate.import_policies || [],
       });
     } else {
       setSelectedEstate(null);
@@ -255,7 +234,8 @@ export default function EstateManager() {
         cloud_type: 'aws',
         metastore_name: '',
         connection_type: 'delta_share',
-        sharing_policies: [],
+        export_policies: [],
+        import_policies: [],
         is_enabled: true,
         sync_schedule: '0 0 * * *',
       });

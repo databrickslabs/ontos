@@ -541,7 +541,8 @@
       "failedToSerialize": "UI の状態を JSON にシリアライズできませんでした。",
       "unexpectedError": "予期しないエラーが発生しました。"
     },
-    "syntaxErrorLabel": "構文エラー:"
+    "syntaxErrorLabel": "構文エラー:",
+    "statusChangeHint": "ステータスはページの「ステータスを変更」で変更します。遷移を確認し、ステータス変更ワークフローを実行します。"
   },
   "import": {
     "title": "データ製品をインポート",
@@ -929,7 +930,8 @@
       "createNewContract": "新しい契約を作成",
       "linkContract": "契約をリンク",
       "linking": "リンク中..."
-    }
+    },
+    "statusFilterNote": "「active」または「approved」ステータスのコントラクトのみ表示されます。特定のバージョンを選んでください。同名のコントラクトにはバージョンが並べて表示されます。"
   },
   "hierarchy": {
     "title": "データ階層",
@@ -1086,8 +1088,10 @@
     "versionPlaceholder": "例: v1.1, v2.0-beta",
     "createButton": "バージョンを作成",
     "errors": {
-      "versionEmpty": "バージョン文字列は空にできません。"
-    }
+      "versionEmpty": "バージョン文字列は空にできません。",
+      "versionFormat": "「{{version}}」は X.Y.Z の形式ではありません（例: 2.0.0）。"
+    },
+    "versionPlaceholderSemver": "例: 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "名前のない製品",

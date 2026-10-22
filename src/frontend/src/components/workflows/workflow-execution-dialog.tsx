@@ -54,14 +54,52 @@ type StepExecutionState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skip
 
 // Step execution results reference the step's row id; a step that ran twice
 // (an approval: paused, then resumed) counts by its last run.
+function isRunOf(
+  se: WorkflowStepExecutionResult,
+  step: Pick<WorkflowStep, 'id' | 'step_id'>
+): boolean {
+  if (se.step_id) return se.step_id === step.id || se.step_id === step.step_id;
+  // The step was removed (no row id): a step added back with its step_id
+  return !!se.step_key && se.step_key === step.step_id;
+}
+
 export function getLastStepRun(
   step: Pick<WorkflowStep, 'id' | 'step_id'>,
   execution: WorkflowExecution
 ): WorkflowStepExecutionResult | undefined {
-  const runs = (execution.step_executions || []).filter(
-    se => se.step_id === step.id || se.step_id === step.step_id
-  );
+  const runs = (execution.step_executions || []).filter(se => isRunOf(se, step));
   return runs[runs.length - 1];
+}
+
+// The last run of each step that ran in the execution and is no longer in the
+// workflow, in the order they ran.
+export function getRemovedStepRuns(
+  steps: Pick<WorkflowStep, 'id' | 'step_id'>[],
+  execution: WorkflowExecution
+): WorkflowStepExecutionResult[] {
+  const last = new Map<string, WorkflowStepExecutionResult>();
+  for (const se of execution.step_executions || []) {
+    if (steps.some(step => isRunOf(se, step))) continue;
+    const key = se.step_key || se.step_id || se.id;
+    last.delete(key);
+    last.set(key, se);
+  }
+  return Array.from(last.values());
+}
+
+// Progress over the workflow's current steps: how many of them completed, and
+// how many steps that ran were removed from the workflow later. The
+// execution's success_count counts the runs of the execution, including steps
+// removed since, so it can't be shown against the current number of steps.
+export function getStepsProgress(
+  steps: Pick<WorkflowStep, 'id' | 'step_id'>[],
+  execution: WorkflowExecution
+): { done: number; total: number; removed: number } {
+  return {
+    done: steps.filter(step => getStepExecutionState(step, execution) === 'succeeded').length,
+    total: steps.length,
+    removed: getRemovedStepRuns(steps, execution).length,
+  };
 }
 
 // A failed step's error, translated when the backend sent a code
@@ -211,6 +249,63 @@ function SimpleWorkflowFlow({
           </div>
         );
       })}
+
+      <RemovedStepRuns steps={workflow.steps} execution={execution} />
+    </div>
+  );
+}
+
+// Steps that ran in the execution and were removed from the workflow later
+function RemovedStepRuns({
+  steps,
+  execution,
+}: {
+  steps: WorkflowStep[];
+  execution: WorkflowExecution;
+}) {
+  const { t } = useTranslation(['workflows', 'common']);
+  const runs = getRemovedStepRuns(steps, execution);
+  if (!runs.length) return null;
+
+  return (
+    <div className="pt-2" data-testid="removed-step-runs">
+      <div className="font-medium text-sm">{t('workflows:execution.removedSteps')}</div>
+      <div className="text-xs text-muted-foreground mb-2">
+        {t('workflows:execution.removedStepsHint')}
+      </div>
+      <div className="space-y-2">
+        {runs.map(run => {
+          const failed = run.status === 'failed' || run.passed === false;
+          const errorText = failed ? getStepErrorText(run, t) : undefined;
+          return (
+            <div
+              key={run.id}
+              className={`flex items-center gap-3 p-3 rounded-lg border-2 border-dashed ${
+                failed ? 'border-red-500/60' : 'border-emerald-500/60'
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm truncate">
+                  {run.step_name || run.step_key || run.step_id}
+                </div>
+                {errorText && (
+                  <div className="text-xs text-destructive mt-1 break-words">{errorText}</div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {failed
+                    ? t('workflows:execution.states.failed')
+                    : t('workflows:execution.states.completed')}
+                </span>
+                {failed
+                  ? <XCircle className="h-4 w-4 text-red-500" />
+                  : <CheckCircle className="h-4 w-4 text-emerald-500" />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -274,7 +369,17 @@ export function WorkflowExecutionDialog({
   };
   
   const statusConfig = statusBadges[execution.status] || statusBadges.pending;
-  
+
+  const shownExecution = stepResults ? { ...execution, step_executions: stepResults } : execution;
+  const progress = workflow?.steps ? getStepsProgress(workflow.steps, shownExecution) : null;
+  // A finished execution has no current step: the backend still reports the last one it stopped at
+  const isActive = execution.status === 'paused' || execution.status === 'running';
+  const progressText = !progress
+    ? t('workflows:execution.stepsProgress', { done: execution.success_count, total: '?' })
+    : progress.removed
+      ? t('workflows:execution.stepsProgressWithRemoved', { ...progress, count: progress.removed })
+      : t('workflows:execution.stepsProgress', progress);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh]">
@@ -324,7 +429,7 @@ export function WorkflowExecutionDialog({
                 {execution.status === 'paused' ? t('workflows:execution.summary.waitingAt') : t('workflows:execution.summary.progress')}
               </div>
               <div className="font-medium text-sm truncate">
-                {execution.current_step_name || t('workflows:execution.stepsProgress', { done: execution.success_count, total: workflow?.steps?.length || '?' })}
+                {isActive ? (execution.current_step_name || progressText) : progressText}
               </div>
             </Card>
           </div>
@@ -352,7 +457,7 @@ export function WorkflowExecutionDialog({
               ) : workflow ? (
                 <SimpleWorkflowFlow
                   workflow={workflow}
-                  execution={stepResults ? { ...execution, step_executions: stepResults } : execution}
+                  execution={shownExecution}
                 />
               ) : (
                 <div className="text-center text-muted-foreground py-8">

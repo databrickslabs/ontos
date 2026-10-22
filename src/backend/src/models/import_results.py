@@ -12,7 +12,7 @@ intentionally part of this contract from the start so the sibling import feature
 (#851 domain reconciliation, #853 UUID-as-PK duplicate handling) can populate them
 without another response-shape change.
 """
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,9 @@ class ImportItemResult(BaseModel):
     entity_id: Optional[str] = Field(None, description="Created Ontos entity id (None when skipped/failed)")
     name: Optional[str] = Field(None, description="Entity name, best-effort")
     status: ImportItemStatus = Field(..., description="created | skipped | failed")
-    message: Optional[str] = Field(None, description="Skip reason or error detail")
+    message: Optional[str] = Field(None, description="Skip reason, error detail or note")
+    code: Optional[str] = Field(None, description="Code of the message, for the UI to translate")
+    params: Optional[Dict[str, Any]] = Field(None, description="Parameters of the coded message")
 
 
 class BatchImportResult(BaseModel):

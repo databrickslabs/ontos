@@ -2,12 +2,14 @@
   "statusChangeNotApplied": {
     "title": "Cambio di stato non applicato",
     "statusChanged": "La richiesta di cambiare lo stato da «{{fromStatus}}» a «{{toStatus}}» è stata approvata, ma ora lo stato è «{{currentStatus}}», quindi la modifica non è stata applicata. Ripeti la richiesta se è ancora necessaria.",
-    "refused": "La tua richiesta di cambiare lo stato in «{{toStatus}}» è stata approvata, ma non è stato possibile applicare la modifica: {{reason}}"
+    "refused": "La tua richiesta di cambiare lo stato in «{{toStatus}}» è stata approvata, ma non è stato possibile applicare la modifica: {{reason}}",
+    "reviewNotApplied": "La revisione del prodotto dati è stata decisa, ma il passaggio a «{{toStatus}}» non è stato applicato: {{reason}}"
   },
   "contractStatusNotChanged": {
     "title": "Stato del contratto non modificato",
     "notUnderReview": "La tua decisione di revisione è stata registrata, ma il contratto non è stato impostato su «{{toStatus}}»: il contratto non è in revisione (stato «{{currentStatus}}»)",
-    "notApplied": "La tua decisione di revisione è stata registrata, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}"
+    "notApplied": "La tua decisione di revisione è stata registrata, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}",
+    "requesterNotApplied": "La revisione del tuo contratto è stata decisa, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}"
   },
   "ui": {
     "tooltip": "Notifiche",

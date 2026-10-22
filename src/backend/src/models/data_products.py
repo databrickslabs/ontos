@@ -12,12 +12,17 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 import json
 
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+# ODPS has no status on an output port; the ODPS export carries Ontos's port status
+# as this port custom property, and imports read it back.
+ONTOS_PORT_STATUS_PROPERTY = "ontosPortStatus"
 
 
 # ============================================================================
@@ -217,6 +222,26 @@ class OutputPort(BaseModel):
     autoApprove: bool = Field(False, alias="auto_approve", description="Auto-approve flag")
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _read_port_status_property(cls, data):
+        # An ODPS export carries the port status as the ontosPortStatus custom
+        # property; a bare `status` (older exports, the API) wins when both are set.
+        if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
+            return data
+        props = data['customProperties']
+        status_props = [
+            cp for cp in props
+            if isinstance(cp, dict) and cp.get('property') == ONTOS_PORT_STATUS_PROPERTY
+        ]
+        if not status_props:
+            return data
+        data = dict(data)
+        if data.get('status') is None:
+            data['status'] = status_props[0].get('value')
+        data['customProperties'] = [cp for cp in props if cp not in status_props] or None
+        return data
 
     @field_validator('deliveryMethodId', mode='before')
     @classmethod

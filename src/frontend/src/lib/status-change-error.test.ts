@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import i18n from '@/i18n/config';
-import { statusChangeErrorText } from './status-change-error';
+import { apiErrorOf, statusChangeErrorText } from './status-change-error';
 
 const MESSAGE = "Status transition from 'deprecated' to 'active' blocked by workflow: "
   + 'Steward Gate: waiting for approval (Steward approval); Owner Gate: Add an owner before activating; '
@@ -70,5 +70,69 @@ describe('statusChangeErrorText', () => {
     // Without the parameters (a backend that doesn't send them) the text is the API's
     expect(statusChangeErrorText({ error: MESSAGE, errorCode: 'status_change_blocked' }, i18n.t, 'data-products'))
       .toBe(MESSAGE);
+  });
+
+  it('translates an edit that tries to change the status', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText({
+      error: "An update can't change the status from 'active' to 'deprecated'. ...",
+      errorCode: 'status_change_requires_transition',
+      errorParams: { fromStatus: 'active', toStatus: 'deprecated' },
+    }, i18n.t, 'data-products')).toBe(
+      'Uma edição não pode mudar o status de Ativo para Obsoleto. Use Alterar status, '
+      + 'que verifica a transição e executa os workflows de mudança de status.',
+    );
+  });
+
+  it('translates a status that is not a lifecycle one', async () => {
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText(
+      { error: "'certified' is not a status", errorCode: 'certified_is_not_a_status' },
+      i18n.t, 'data-contracts',
+    )).toBe('Certificado não é um status: a certificação é definida com Certificar, numa entidade ativa.');
+    expect(statusChangeErrorText({
+      error: "'archived' is not a lifecycle status.",
+      errorCode: 'invalid_status',
+      errorParams: { status: 'archived', allowed: ['draft', 'active'] },
+    }, i18n.t, 'data-contracts')).toBe('archived não é um status do ciclo de vida. Use um destes: Rascunho, Ativo.');
+  });
+
+  it('translates a fail_closed gate that could not be evaluated (#1103)', async () => {
+    const gateError = {
+      error: "Status transition from 'draft' to 'proposed' refused: a workflow gate "
+        + '(Enforcement Gate) could not be evaluated. Ask an administrator to check the workflow.',
+      errorCode: 'status_change_gate_error',
+      errorParams: { fromStatus: 'draft', toStatus: 'proposed', workflows: ['Enforcement Gate'] },
+    };
+    expect(statusChangeErrorText(gateError, i18n.t, 'data-products')).toBe(
+      'The status change from Draft to Proposed was refused: the workflow gate Enforcement Gate '
+      + 'could not be evaluated. Ask an administrator to check the workflow.',
+    );
+
+    await i18n.changeLanguage('pt');
+    expect(statusChangeErrorText(gateError, i18n.t, 'data-products')).toBe(
+      'A mudança de status de Rascunho para Proposto foi recusada: não foi possível avaliar o gate '
+      + 'de workflow Enforcement Gate. Peça a um administrador para verificar o workflow.',
+    );
+    // The gates couldn't be listed: no names
+    expect(statusChangeErrorText(
+      { ...gateError, errorParams: { fromStatus: 'draft', toStatus: 'proposed', workflows: [] } },
+      i18n.t, 'data-contracts',
+    )).toBe(
+      'A mudança de status de Rascunho para Proposto foi recusada: não foi possível avaliar um gate '
+      + 'de workflow. Peça a um administrador para verificar o workflow.',
+    );
+  });
+});
+
+describe('apiErrorOf', () => {
+  it('reads a coded detail, a text detail and anything else', () => {
+    expect(apiErrorOf({ detail: { code: 'invalid_status', message: 'Bad', params: { status: 'x' } } }, 'F'))
+      .toEqual({ error: 'Bad', errorCode: 'invalid_status', errorParams: { status: 'x' } });
+    expect(apiErrorOf({ detail: 'Not found' }, 'F')).toEqual({ error: 'Not found', errorCode: null, errorParams: null });
+    expect(apiErrorOf({ detail: [{ msg: 'field required' }] }, 'F')).toEqual({ error: 'F', errorCode: null, errorParams: null });
+    expect(apiErrorOf(null, 'F')).toEqual({ error: 'F', errorCode: null, errorParams: null });
   });
 });

@@ -76,6 +76,8 @@ export default function ServerConfigFormDialog({ isOpen, onOpenChange, onSubmit,
     setIsSubmitting(true)
     try {
       const serverConfig: ServerConfig = {
+        // Keep the ODCS id of an edited server, so the export still carries it
+        id: initial?.id || undefined,
         server: server.trim(),
         type: type || undefined,
         description: description.trim() || undefined,

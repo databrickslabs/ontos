@@ -3,6 +3,7 @@
   "reasons": {
     "waitingForApproval": "in attesa di approvazione ({{step}})",
     "entityLoadFailed": "impossibile caricare {{entityType}} {{entityId}} per valutare la regola",
+    "entityNotFound": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata",
     "validationFailed": "la convalida del workflow non è riuscita",
     "status": {
       "failed": "non riuscito",
@@ -10,5 +11,10 @@
       "pending": "in attesa",
       "running": "in esecuzione"
     }
-  }
+  },
+  "requiresTransition": "Una modifica non può cambiare lo stato da {{fromStatus}} a {{toStatus}}. Usa Modifica stato, che verifica la transizione ed esegue i workflow di cambio di stato.",
+  "certifiedIsNotAStatus": "Certificato non è uno stato: la certificazione si imposta con Certifica, su un'entità attiva.",
+  "invalidStatus": "{{status}} non è uno stato del ciclo di vita. Usa uno di: {{allowed}}.",
+  "gateError": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare il gate del workflow {{workflows}}. Chiedi a un amministratore di controllare il workflow.",
+  "gateErrorUnnamed": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare un gate del workflow. Chiedi a un amministratore di controllare il workflow."
 }

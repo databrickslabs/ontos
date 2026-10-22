@@ -100,6 +100,34 @@ def test_other_executions_are_left_alone(db_session):
     assert all(_approval_notification(db_session, e).read is False for e in others)
 
 
+def test_an_id_that_contains_the_contract_id_is_not_a_match(db_session):
+    _execution(db_session, entity_id=CONTRACT + '0')
+
+    with patch('src.common.workflow_executor.WorkflowExecutor.resume_workflow') as resume:
+        assert _decide_waiting_review_workflows(db_session, CONTRACT, True, 'sue@example.com') == 0
+
+    resume.assert_not_called()
+
+
+def test_the_trigger_context_as_the_executor_stores_it_is_found(db_session):
+    # The SQL filter matches quoted values in the stored text; the executor
+    # writes it with ``model_dump_json`` (compact separators).
+    from src.models.process_workflows import TriggerContext, TriggerType
+
+    execution = _execution(db_session)
+    execution.trigger_context = TriggerContext(
+        entity_type='data_contract', entity_id=CONTRACT, entity_name='Orders',
+        trigger_type=TriggerType.ON_REQUEST_REVIEW, user_email='pat@example.com',
+        entity_data={'id': CONTRACT, 'status': 'proposed'},
+    ).model_dump_json()
+    db_session.flush()
+
+    with patch('src.common.workflow_executor.WorkflowExecutor.resume_workflow') as resume:
+        assert _decide_waiting_review_workflows(db_session, CONTRACT, True, 'sue@example.com') == 1
+
+    assert resume.call_args.kwargs['execution_id'] == execution.id
+
+
 def test_a_failing_resume_is_logged_and_the_others_still_run(db_session):
     _execution(db_session)
     second = _execution(db_session)

@@ -37,6 +37,9 @@ export function defaultTextKey(i18n: I18n, text: string): string | undefined {
     indexedBundle = bundle;
     collect(bundle, [], index);
   }
+  // Surrounding whitespace is ignored on purpose: it doesn't change what the
+  // user reads, so a shipped text with spaces added around it still counts as
+  // the shipped one and is translated.
   return index.get(text.trim());
 }
 

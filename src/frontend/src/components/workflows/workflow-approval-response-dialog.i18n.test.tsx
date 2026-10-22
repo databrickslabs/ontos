@@ -3,7 +3,7 @@
  * language, and a text an admin changed as written.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import i18n from '@/i18n/config';
@@ -26,7 +26,7 @@ const api = vi.hoisted(() => ({
       steps: [{ step_id: 'enter-reason', name: 'Enter a reason', step_type: 'user_action', config: step.config }],
     },
   }),
-  post: async () => ({ data: {} }),
+  post: vi.fn(async (_url: string, _body: Record<string, unknown>) => ({ data: {} })),
   toast: () => {},
 }));
 
@@ -175,5 +175,32 @@ describe('WorkflowApprovalResponseDialog fallbacks', () => {
     } finally {
       (api as any).get = original;
     }
+  });
+});
+
+describe('WorkflowApprovalResponseDialog decision', () => {
+  it('sends no reason when the approver wrote none', async () => {
+    await i18n.changeLanguage('pt');
+    api.post.mockClear();
+    renderDialog();
+    await screen.findByText('Informe um motivo');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rejeitar' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
+    expect(api.post.mock.calls[0]).toEqual([
+      '/api/workflows/handle-approval', { execution_id: 'e-1', approved: false },
+    ]);
+  });
+
+  it('sends the reason the approver wrote', async () => {
+    api.post.mockClear();
+    renderDialog();
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: '  Not ready  ' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
+    expect(api.post.mock.calls[0][1]).toEqual({ execution_id: 'e-1', approved: false, message: 'Not ready' });
   });
 });

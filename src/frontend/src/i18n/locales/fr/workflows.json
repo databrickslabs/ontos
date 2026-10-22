@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "par ex. brouillon",
       "toStatus": "Vers le statut",
       "toStatusPlaceholder": "par ex. actif",
-      "descriptionPlaceholder": "Description du workflow"
+      "descriptionPlaceholder": "Description du workflow",
+      "failClosed": "Refuser la transition si cette porte ne peut pas être évaluée",
+      "failClosedHint": "Fail closed : si l'évaluation de cette porte lève une erreur (et non un échec normal), le changement de statut est refusé. Désactivé (fail open), le changement a lieu et l'erreur est journalisée et auditée.",
+      "disabledFor": {
+        "title": "Désactivé pour",
+        "hint": "Cette porte ne s'exécute pas pour les domaines, produits de données et contrats de données listés ici (un domaine couvre ses produits et contrats). Chaque contournement est journalisé et audité.",
+        "domains": "Domaines",
+        "dataProducts": "Produits de données",
+        "dataContracts": "Contrats de données",
+        "none": "Aucun",
+        "selectedCount_one": "{{count}} sélectionné",
+        "selectedCount_other": "{{count}} sélectionnés",
+        "search": "Rechercher...",
+        "noResults": "Aucun résultat.",
+        "remove": "Retirer {{name}}",
+        "notFound": "{{id}} (n'existe plus)",
+        "missingOnSave_one": "Le gate est désactivé pour {{count}} élément qui n'existe plus. Retirez-le et enregistrez à nouveau.",
+        "missingOnSave_other": "Le gate est désactivé pour {{count}} éléments qui n'existent plus. Retirez-les et enregistrez à nouveau."
+      }
     },
     "stepConfig": {
       "title": "Configuration de l'étape",
@@ -457,11 +475,17 @@
     "titleFallback": "Exécution du workflow",
     "executionId": "ID d'exécution : {{id}}...",
     "stepsProgress": "{{done}}/{{total}} étapes",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} étapes (+{{count}} supprimée)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} étapes (+{{count}} supprimées)",
     "triggeredBy": "Déclenché par : {{user}}",
     "workflowSteps": "Étapes du workflow",
     "loadDefinitionFailed": "Échec du chargement de la définition du workflow",
+    "removedSteps": "Étapes supprimées",
+    "removedStepsHint": "Ces étapes ont été exécutées dans cette exécution, puis supprimées du workflow.",
     "stepErrors": {
-      "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle"
+      "approval_rejected": "Demande refusée",
+      "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée"
     },
     "states": {
       "pending": "En attente",

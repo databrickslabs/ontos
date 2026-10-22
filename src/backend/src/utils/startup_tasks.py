@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional, Dict, List
 import json # Import json for parsing
+import yaml
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from src.common.health_status import add_health_warning, set_seed_error
 from src.models.settings import AppRoleCreate, AppRole as AppRoleApi
 from src.controller.settings_manager import SettingsManager
 from src.controller.jobs_manager import JobsManager
+from src.repositories.app_settings_repository import app_settings_repo
 
 # Import Managers needed for instantiation
 from src.controller.data_products_manager import DataProductsManager
@@ -131,6 +133,233 @@ def load_demo_data_from_sql() -> bool:
     except Exception as e:
         logger.error(f"Failed to load demo data from SQL: {e}", exc_info=True)
         return False
+
+
+def _count_estates(db: Session) -> int:
+    """Count the number of estates in the database."""
+    from src.db_models.estates import EstateDb
+    return db.query(EstateDb).count()
+
+
+# Exact shipped sample for reliable detection. Extracted from
+# origin/development:src/backend/src/data/estates.yaml and normalized
+# to JSON with sort_keys=True to catch any configuration changes.
+_SHIPPED_SAMPLE_JSON = (
+    '[{"cloud_type":"aws","connection_type":"delta_share","created_at":"2024-01-01T00:00:00Z",'
+    '"description":"Primary production workspace in US West","id":"1","is_enabled":true,'
+    '"last_sync_status":"success","last_sync_time":"2024-03-29T10:00:00Z",'
+    '"metastore_name":"us_prod_metastore","name":"US Production",'
+    '"sharing_policies":[{"created_at":"2024-03-30T10:00:00Z",'
+    '"description":"Shares all active data products from the US Production estate.",'
+    '"id":"policy-us-prod-dp-active","is_enabled":true,'
+    '"name":"Share Active US Data Products","resource_type":"data_product",'
+    '"rules":[{"filter_type":"status","filter_value":"Active","operator":"equals"},'
+    '{"filter_type":"domain","filter_value":"US Operations","operator":"equals"}],'
+    '"updated_at":"2024-03-30T10:00:00Z"}],'
+    '"sync_schedule":"0 0 * * *","updated_at":"2024-03-29T10:00:00Z",'
+    '"workspace_url":"https://us-west.cloud.databricks.com"},'
+    '{"cloud_type":"azure","connection_type":"delta_share","created_at":"2024-01-15T00:00:00Z",'
+    '"description":"Analytics workspace in EU Central","id":"2","is_enabled":true,'
+    '"last_sync_status":"success","last_sync_time":"2024-03-29T12:00:00Z",'
+    '"metastore_name":"eu_analytics_metastore","name":"EU Analytics",'
+    '"sharing_policies":[{"created_at":"2024-03-30T11:00:00Z",'
+    '"description":"Shares all business glossary terms related to Finance.",'
+    '"id":"policy-eu-glossary-finance","is_enabled":true,'
+    '"name":"Share Finance Glossary Terms from EU",'
+    '"resource_type":"business_glossary",'
+    '"rules":[{"filter_type":"tag","filter_value":"finance","operator":"contains"},'
+    '{"filter_type":"domain","filter_value":"EU Analytics","operator":"equals"}],'
+    '"updated_at":"2024-03-30T11:00:00Z"}],'
+    '"sync_schedule":"0 12 * * *","updated_at":"2024-03-29T12:00:00Z",'
+    '"workspace_url":"https://europe-west.cloud.databricks.com"},'
+    '{"cloud_type":"gcp","connection_type":"database","created_at":"2024-02-01T00:00:00Z",'
+    '"description":"Development workspace in APAC","id":"3","is_enabled":false,'
+    '"last_sync_error":"Connection timeout","last_sync_status":"failed",'
+    '"last_sync_time":"2024-03-28T06:00:00Z","metastore_name":"apac_dev_metastore",'
+    '"name":"APAC Development","sharing_policies":[],"sync_schedule":"0 6 * * *",'
+    '"updated_at":"2024-03-28T06:00:00Z",'
+    '"workspace_url":"https://asia-southeast.cloud.databricks.com"}]'
+)
+
+
+def _is_shipped_sample(data: List) -> bool:
+    """Check if data matches the shipped sample estates (never configured).
+
+    Returns True only if this is EXACTLY the shipped sample by normalizing
+    both to JSON and comparing, so deployments that never configured estates
+    stay empty. Catches any configuration changes (rule values, descriptions, etc).
+    """
+    if not isinstance(data, list):
+        return False
+
+    try:
+        # Normalize both to JSON with consistent ordering to detect any changes
+        normalized_data = json.dumps(data, sort_keys=True, separators=(',', ':'))
+        return normalized_data == _SHIPPED_SAMPLE_JSON
+    except (TypeError, ValueError):
+        # If data cannot be serialized, it's not the sample
+        return False
+
+
+def _load_estates_yaml(yaml_path: Optional[Path] = None) -> Optional[List]:
+    """Load and parse the estates YAML file.
+
+    Args:
+        yaml_path: Optional override path. Defaults to data/estates.yaml.
+
+    Returns parsed YAML (list of dicts) or None if not found/invalid.
+    Raises yaml.YAMLError only; caller handles gracefully.
+    """
+    if yaml_path is None:
+        yaml_path = Path(__file__).parent.parent / 'data' / 'estates.yaml'
+
+    if not yaml_path.exists():
+        logger.info("Estates YAML file not found at %s", yaml_path)
+        return None
+
+    with open(yaml_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+
+    if not data:
+        logger.info("Estates YAML file is empty")
+        return None
+
+    if not isinstance(data, list):
+        logger.error("Estates YAML must contain a list at top level, got %s", type(data).__name__)
+        raise ValueError("Estates YAML must be a list")
+
+    logger.info("Loaded estates YAML with %d estate(s)", len(data))
+    return data
+
+
+def import_estates_from_yaml_once(db: Session, yaml_path: Optional[Path] = None) -> bool:
+    """Import estates from YAML on startup if empty (one-time only).
+
+    Detects shipped samples (never configured) and skips them.
+    On malformed YAML: logs a coded warning, does NOT mark done → retry after fix.
+    All estates created in a single transaction for atomicity: on any error,
+    all changes are rolled back and the "done" flag is NOT set, so retry happens
+    on the next startup.
+
+    Args:
+        db: Database session
+        yaml_path: Optional path override for testing
+
+    Returns True if import was performed, False otherwise.
+    """
+    import_key = 'estates_yaml_import_done'
+
+    # Check if import already done
+    if app_settings_repo.get_by_key(db, import_key):
+        logger.debug("Estates YAML import already marked as done")
+        return False
+
+    # Check if table is empty
+    if _count_estates(db) > 0:
+        logger.debug("Estates table not empty; skipping YAML import")
+        return False
+
+    # Load YAML (may raise YAMLError)
+    try:
+        estates_data = _load_estates_yaml(yaml_path)
+    except yaml.YAMLError as e:
+        logger.error("Estates YAML is malformed (code: estates_yaml_import_failed): %s", e)
+        logger.warning("Fix the estates YAML file and restart to retry import")
+        return False  # Do NOT mark done
+
+    if not estates_data:
+        logger.info("No estates YAML found; marking import done")
+        from src.db_models.app_settings import AppSettingDb
+        setting = db.query(AppSettingDb).filter(AppSettingDb.key == import_key).first()
+        if setting:
+            setting.value = 'true'
+        else:
+            setting = AppSettingDb(key=import_key, value='true')
+            db.add(setting)
+        db.commit()
+        return False
+
+    # Check if sample (never configured, should stay empty)
+    if _is_shipped_sample(estates_data):
+        logger.info("Estates YAML contains only shipped sample; skipping import")
+        from src.db_models.app_settings import AppSettingDb
+        setting = db.query(AppSettingDb).filter(AppSettingDb.key == import_key).first()
+        if setting:
+            setting.value = 'true'
+        else:
+            setting = AppSettingDb(key=import_key, value='true')
+            db.add(setting)
+        db.commit()
+        return False
+
+    # Import estates atomically: all or nothing, one transaction
+    from src.controller.estate_manager import EstateManager
+    from src.models.estate import Estate, SharingPolicy, SharingRule
+    from src.db_models.app_settings import AppSettingDb
+
+    estate_manager = EstateManager()
+    imported = 0
+    estate_rows = []
+
+    try:
+        for e_dict in estates_data:
+            policies = e_dict.pop('sharing_policies', []) or []
+            export_policies = e_dict.pop('export_policies', None) or policies
+            import_policies = e_dict.pop('import_policies', [])
+
+            def make_policies(pol_list):
+                return [
+                    SharingPolicy(
+                        id=p.get('id'),
+                        name=p['name'],
+                        description=p.get('description', ''),
+                        resource_type=p['resource_type'].replace('business_glossary', 'business_term'),
+                        rules=[SharingRule(filter_type=r['filter_type'], operator=r.get('operator', 'equals'), filter_value=r['filter_value'])
+                               for r in p.get('rules', [])],
+                        is_enabled=p.get('is_enabled', True),
+                    )
+                    for p in pol_list
+                ]
+
+            estate = Estate(
+                id=e_dict.get('id'),
+                name=e_dict['name'],
+                description=e_dict.get('description', ''),
+                workspace_url=e_dict['workspace_url'],
+                cloud_type=e_dict['cloud_type'],
+                metastore_name=e_dict['metastore_name'],
+                connection_type=e_dict.get('connection_type', 'delta_share'),
+                export_policies=make_policies(export_policies),
+                import_policies=make_policies(import_policies),
+                is_enabled=e_dict.get('is_enabled', True),
+                sync_schedule=e_dict.get('sync_schedule', '0 0 * * *'),
+            )
+            # Use batch method to stage without committing
+            row = estate_manager.create_estate_batch(db, estate, user='system@startup')
+            estate_rows.append(row)
+            imported += 1
+            logger.info("Staged estate for import: %s", estate.name)
+
+        # Mark import as done in the session (not committed yet)
+        # Add directly to session to include in atomic commit
+        setting = db.query(AppSettingDb).filter(AppSettingDb.key == import_key).first()
+        if setting:
+            setting.value = 'true'
+        else:
+            setting = AppSettingDb(key=import_key, value='true')
+            db.add(setting)
+
+        # Commit all estates and the done marker together atomically
+        db.commit()
+        logger.info("Completed estates YAML import: %d imported", imported)
+        return imported > 0
+
+    except Exception as e:
+        # Rollback everything on any error (estates and the done marker)
+        db.rollback()
+        logger.error("Estates YAML import failed (code: estates_yaml_import_failed): %s", e)
+        logger.warning("Fix the estates YAML and restart to retry")
+        return False  # Do NOT mark done; allow retry
 
 
 def initialize_database():
@@ -304,6 +533,8 @@ def initialize_managers(app: FastAPI):
         app.state.business_owners_manager = BusinessOwnersManager()
         from src.controller.delivery_methods_manager import DeliveryMethodsManager
         app.state.delivery_methods_manager = DeliveryMethodsManager()
+        from src.controller.estate_manager import EstateManager
+        app.state.estate_manager = EstateManager()
         logger.info("Reference data managers initialized (Assets, Business Roles, Business Owners, Delivery Methods).")
 
         notifications_manager = getattr(app.state, 'notifications_manager', None)
@@ -545,6 +776,16 @@ async def startup_event_handler(app: FastAPI):
         # Note: Managers themselves should request sessions via DBSessionDep for their operational methods.
         initialize_managers(app) # Pass the app to store managers in app.state
         logger.info("Managers initialization sequence complete.")
+
+        # Step 2b: Import estates from YAML (one-time import on upgrade)
+        try:
+            session_factory = get_session_factory()
+            with session_factory() as db_session:
+                import_estates_from_yaml_once(db_session)
+            logger.info("Estates YAML import check complete.")
+        except Exception as e:
+            logger.warning(f"Failed to import estates from YAML: {e}", exc_info=True)
+            # Don't fail startup if estates import fails
 
         # Step 3: Build the SearchManager
         try:

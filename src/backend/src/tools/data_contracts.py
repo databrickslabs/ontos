@@ -220,7 +220,10 @@ class UpdateDataContractTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "description": "New status (draft, active, deprecated)",
+            "description": (
+                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
+                "only an allowed transition, and status change workflows can block it."
+            ),
             "enum": ["draft", "active", "deprecated"]
         }
     }
@@ -249,22 +252,43 @@ class UpdateDataContractTool(BaseTool):
                 update_data["domain"] = domain
             if description is not None:
                 update_data["description"] = {"purpose": description}
-            if status is not None:
-                update_data["status"] = status
             
-            if not update_data:
+            if not update_data and status is None:
                 return ToolResult(
                     success=False,
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
-            
+
+            # A status change goes through the lifecycle transition (allowed
+            # transitions, before_status_change gates), like the change-status
+            # route; an update can't change it.
+            updated = None
+            if status is not None:
+                from src.repositories.data_contracts_repository import data_contract_repo
+                current = data_contract_repo.get(ctx.db, id=contract_id)
+                if not current:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data contract '{contract_id}' not found"
+                    )
+                if (current.status or 'draft').lower() != status.lower():
+                    updated = ctx.data_contracts_manager.transition_status(
+                        db=ctx.db,
+                        contract_id=contract_id,
+                        new_status=status.lower(),
+                        current_user=None,
+                    )
+                else:
+                    updated = current
+
             # Update the contract
-            updated = ctx.data_contracts_manager.update_contract_with_relations(
-                db=ctx.db,
-                contract_id=contract_id,
-                contract_data=update_data,
-                current_user=None
-            )
+            if update_data:
+                updated = ctx.data_contracts_manager.update_contract_with_relations(
+                    db=ctx.db,
+                    contract_id=contract_id,
+                    contract_data=update_data,
+                    current_user=None
+                )
             
             if not updated:
                 return ToolResult(

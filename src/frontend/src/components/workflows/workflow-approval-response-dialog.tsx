@@ -255,11 +255,11 @@ export default function WorkflowApprovalResponseDialog({
     }
     setSubmitting(true);
     try {
-      const body: Record<string, unknown> = {
-        execution_id: payload.execution_id,
-        approved,
-        message: reason.trim() || (approved ? t('workflows:approvalResponse.approved') : t('workflows:approvalResponse.rejected')),
-      };
+      // Only what the approver wrote: without a reason the backend records a
+      // coded "Request denied" (approval_rejected) that each user sees in
+      // their own language, not the approver's word for it.
+      const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
       if (grantedPermission) body.permission_level = grantedPermission;
       const response = await post('/api/workflows/handle-approval', body);

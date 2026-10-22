@@ -64,4 +64,57 @@ describe('notification text', () => {
       }
     }
   });
+
+  it('translates the statuses and a coded refusal reason (gate blocked a review decision)', async () => {
+    const refused = {
+      title: 'Contract status not changed',
+      description:
+        "Your review decision was recorded, but the contract was not set to 'approved': " +
+        "Status transition from 'proposed' to 'approved' blocked by workflow: Contract Gate: Not yet",
+      data: {
+        i18n: {
+          title: 'notifications:contractStatusNotChanged.title',
+          description: 'notifications:contractStatusNotChanged.notApplied',
+          params: {
+            toStatus: 'approved',
+            reason: "Status transition from 'proposed' to 'approved' blocked by workflow: Contract Gate: Not yet",
+          },
+          statusNamespace: 'data-contracts',
+          error: {
+            code: 'status_change_blocked',
+            message: "Status transition from 'proposed' to 'approved' blocked by workflow: Contract Gate: Not yet",
+            params: {
+              fromStatus: 'proposed',
+              toStatus: 'approved',
+              reasons: [{ workflow: 'Contract Gate', text: 'Not yet' }],
+            },
+          },
+        },
+      },
+    };
+    await i18n.changeLanguage('pt');
+    const text = notificationDescription(refused, t);
+    expect(text).toContain('"Aprovado"');
+    expect(text).toContain('A mudança de status de Proposto para Aprovado foi bloqueada por um workflow: Contract Gate: Not yet');
+    expect(text).not.toContain('Status transition');
+  });
+
+  it('keeps the English reason when the refusal has no code', async () => {
+    const plain = {
+      title: 'Status change not applied',
+      description: "Your request to change the status to 'deprecated' was approved, but ...",
+      data: {
+        i18n: {
+          title: 'notifications:statusChangeNotApplied.title',
+          description: 'notifications:statusChangeNotApplied.refused',
+          params: { toStatus: 'deprecated', reason: 'Invalid transition' },
+          statusNamespace: 'data-products',
+        },
+      },
+    };
+    await i18n.changeLanguage('pt');
+    const text = notificationDescription(plain, t);
+    expect(text).toContain('Invalid transition');
+    expect(text).not.toContain('"deprecated"');
+  });
 });

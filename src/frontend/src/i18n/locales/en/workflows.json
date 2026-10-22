@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "e.g. draft",
       "toStatus": "To Status",
       "toStatusPlaceholder": "e.g. active",
-      "descriptionPlaceholder": "Workflow description"
+      "descriptionPlaceholder": "Workflow description",
+      "failClosed": "Refuse the transition if this gate can't be evaluated",
+      "failClosedHint": "Fail closed: when evaluating this gate raises an error (not a normal failure), the status change is refused. Off (fail open), the change proceeds and the error is logged and audited.",
+      "disabledFor": {
+        "title": "Switched off for",
+        "hint": "This gate doesn't run for the domains, data products and data contracts listed here (a domain covers its products and contracts). Each skip is logged and audited.",
+        "domains": "Domains",
+        "dataProducts": "Data products",
+        "dataContracts": "Data contracts",
+        "none": "None",
+        "selectedCount_one": "{{count}} selected",
+        "selectedCount_other": "{{count}} selected",
+        "search": "Search...",
+        "noResults": "Nothing found.",
+        "remove": "Remove {{name}}",
+        "notFound": "{{id}} (no longer exists)",
+        "missingOnSave_one": "The gate is switched off for {{count}} item that no longer exists. Remove it and save again.",
+        "missingOnSave_other": "The gate is switched off for {{count}} items that no longer exist. Remove them and save again."
+      }
     },
     "stepConfig": {
       "title": "Step Configuration",
@@ -457,11 +475,17 @@
     "titleFallback": "Workflow Execution",
     "executionId": "Execution ID: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} steps",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} steps (+{{count}} removed)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} steps (+{{count}} removed)",
     "triggeredBy": "Triggered by: {{user}}",
     "workflowSteps": "Workflow Steps",
     "loadDefinitionFailed": "Failed to load workflow definition",
+    "removedSteps": "Removed steps",
+    "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
     "stepErrors": {
-      "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule"
+      "approval_rejected": "Request denied",
+      "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated"
     },
     "states": {
       "pending": "Pending",

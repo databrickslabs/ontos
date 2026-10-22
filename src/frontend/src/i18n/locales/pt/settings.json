@@ -985,6 +985,13 @@
         "productName": "Nome do produto",
         "productVersion": "Versão do produto",
         "productStatus": "Status do produto"
+      },
+      "lifecycle": {
+        "title": "Tag de status do ciclo de vida",
+        "descriptionProduct": "Marca cada tabela com o status do ciclo de vida do produto de dados que a usa. Em uma tabela usada por vários produtos, vence o melhor status (active primeiro, retired por último).",
+        "descriptionContract": "Marca cada tabela com o status do ciclo de vida do contrato de dados que a usa. Em uma tabela usada por vários contratos, vence o melhor status (active primeiro, retired por último).",
+        "valueLabel": "Valor da tag:",
+        "sharedKeyHint": "Quando as tags de status do produto e do contrato estão ativadas com a mesma chave, é gravado o status do produto."
       }
     },
     "entityPatterns": {

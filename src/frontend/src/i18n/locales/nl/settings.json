@@ -968,6 +968,13 @@
         "productName": "Productnaam",
         "productVersion": "Productversie",
         "productStatus": "Productstatus"
+      },
+      "lifecycle": {
+        "title": "Levenscyclusstatus-tag",
+        "descriptionProduct": "Geeft elke tabel de levenscyclusstatus van het dataproduct dat de tabel gebruikt. Bij een tabel die door meerdere producten wordt gebruikt, wint de beste status (active eerst, retired laatst).",
+        "descriptionContract": "Geeft elke tabel de levenscyclusstatus van het datacontract dat de tabel gebruikt. Bij een tabel die door meerdere contracten wordt gebruikt, wint de beste status (active eerst, retired laatst).",
+        "valueLabel": "Tagwaarde:",
+        "sharedKeyHint": "Als de statustags van het product en het contract allebei met dezelfde sleutel zijn ingeschakeld, wordt de status van het product geschreven."
       }
     },
     "entityPatterns": {

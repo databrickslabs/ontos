@@ -268,17 +268,32 @@ class AppEntityLoader(EntityLoader):
             error.error_code, error.error_params = 'entities_load_failed', {'entityType': entity_type}
             raise error from e
 
+    def _rows(self, repo, entity_id: Optional[str], **kwargs) -> List[Any]:
+        """The rows load_entities reads: all of them, or the one with ``entity_id``."""
+        if entity_id is None:
+            return repo.get_multi(self.db, limit=1000, **kwargs)
+        # Session.get, not repo.get: the repositories roll the whole
+        # transaction back on an error, past the savepoint of _load.
+        row = self.db.get(repo.model, entity_id)
+        return [row] if row is not None else []
+
+    def load_entity(self, entity_type: str, entity_id: str) -> Optional[Dict[str, Any]]:
+        """One entity as load_entities gives it to a rule, or None if it doesn't exist."""
+        return next(self.load_entities([entity_type], entity_id=entity_id), None)
+
     def load_entities(
         self,
         entity_types: List[str],
-        batch_size: int = 100
+        batch_size: int = 100,
+        entity_id: Optional[str] = None,
     ) -> Iterator[Dict[str, Any]]:
         """Load app entities from database.
 
         NOTE: repositories expose get_multi() (CRUDBase), not list(); the Db
         models carry owner_team_id/domain_id rather than owner/domain/tags
         attributes. Only the types a rule matches are loaded; a type that
-        can't be loaded raises EntityLoadError (see _load).
+        can't be loaded raises EntityLoadError (see _load). With ``entity_id``
+        only that entity is read (a workflow policy check, see load_entity).
         """
         # Data Products
         if 'data_product' in entity_types:
@@ -289,7 +304,7 @@ class AppEntityLoader(EntityLoader):
                 # is_admin: the products repo is fail-closed per caller scope;
                 # compliance evaluates system-wide and its route is already
                 # permission-checked, so it must see every product.
-                products = data_product_repo.get_multi(self.db, limit=1000, is_admin=True)
+                products = self._rows(data_product_repo, entity_id, is_admin=True)
                 # Domain moved to the entity_domain_associations junction; batch-load the
                 # primary domain name per product (the legacy `domain` column was dropped).
                 domains = entity_domain_repo.get_domains_for_entities(
@@ -321,7 +336,7 @@ class AppEntityLoader(EntityLoader):
         if 'data_contract' in entity_types:
             from src.repositories.data_contracts_repository import data_contract_repo
             contracts = self._load(
-                'data_contract', lambda: data_contract_repo.get_multi(self.db, limit=1000)
+                'data_contract', lambda: self._rows(data_contract_repo, entity_id)
             )
             tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
             for contract in contracts:
@@ -342,7 +357,7 @@ class AppEntityLoader(EntityLoader):
         # Domains
         if 'domain' in entity_types:
             from src.repositories.data_domain_repository import data_domain_repo
-            domains = self._load('domain', lambda: data_domain_repo.get_multi(self.db, limit=1000))
+            domains = self._load('domain', lambda: self._rows(data_domain_repo, entity_id))
             tags_map = self._tags_by_entity('data_domain', [str(d.id) for d in domains])
             for domain in domains:
                 yield {
@@ -366,7 +381,7 @@ class AppEntityLoader(EntityLoader):
         # Reviews
         if 'review' in entity_types:
             from src.repositories.data_asset_reviews_repository import data_asset_review_repo
-            reviews = self._load('review', lambda: data_asset_review_repo.get_multi(self.db, limit=1000))
+            reviews = self._load('review', lambda: self._rows(data_asset_review_repo, entity_id))
             for review in reviews:
                 yield {
                     'type': 'review',

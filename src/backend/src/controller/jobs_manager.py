@@ -25,6 +25,40 @@ from src.models.workflow_configurations import WorkflowParameterDefinition, Work
 logger = get_logger(__name__)
 
 
+def add_missing_mapped_entries(
+    configuration: Dict[str, Any], definitions: List[WorkflowParameterDefinition]
+) -> Dict[str, Any]:
+    """Add the YAML default entries with a ``mapping`` id that a saved list lacks.
+
+    A ``tag_sync_configs`` default entry with a ``mapping`` id (for example the
+    ``lifecycle_status`` entries of ``uc_tag_sync``) is a named mapping: a saved list
+    that has no entry with the same ``entity_type`` and ``mapping`` gets a copy of the
+    default appended. So a configuration saved before the mapping existed gets it
+    without a manual edit; an entry kept but disabled stays disabled. Entries without
+    a ``mapping`` id are never added. Returns a new dict; the input isn't changed.
+    """
+    result = dict(configuration)
+    for definition in definitions:
+        if definition.type != 'tag_sync_configs' or not isinstance(definition.default, list):
+            continue
+        saved = result.get(definition.name)
+        if not isinstance(saved, list):
+            continue
+        present = {
+            (entry.get('entity_type'), entry.get('mapping'))
+            for entry in saved
+            if isinstance(entry, dict) and entry.get('mapping')
+        }
+        missing = [
+            dict(entry) for entry in definition.default
+            if isinstance(entry, dict) and entry.get('mapping')
+            and (entry.get('entity_type'), entry.get('mapping')) not in present
+        ]
+        if missing:
+            result[definition.name] = [*saved, *missing]
+    return result
+
+
 class JobsManager:
     def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
@@ -432,9 +466,17 @@ class JobsManager:
             workflow_id: Workflow identifier
             
         Returns:
-            Configuration dict or None if not found
+            Configuration dict or None if not found. Named mappings of the YAML defaults
+            that the saved configuration lacks are added (see add_missing_mapped_entries).
         """
-        return workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
+        saved = workflow_configuration_repo.get_configuration_dict(
+            self._db, workflow_id=workflow_id
+        )
+        if saved is None:
+            return None
+        return add_missing_mapped_entries(
+            saved, self.get_workflow_parameter_definitions(workflow_id)
+        )
     
     def update_workflow_configuration(self, workflow_id: str, configuration: Dict[str, Any]) -> WorkflowConfiguration:
         """Update workflow configuration in database.

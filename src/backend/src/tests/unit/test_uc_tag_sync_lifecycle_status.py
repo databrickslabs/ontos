@@ -107,8 +107,10 @@ def test_default_config_tags_the_product_status(tag_sync, default_configs):
         ("data_contract", False, "{CONTRACT.STATUS}"),
         ("data_product", True, "{PRODUCT.STATUS}"),
     ]
-    # The UI edits the first entry per entity type, so the name entries stay first.
-    first_product = next(c for c in default_configs if c["entity_type"] == "data_product")
+    assert {c.get("mapping") for c in lifecycle} == {"lifecycle_status"}
+    # The dialog's main card edits the first entry without a mapping id: the name entry.
+    first_product = next(c for c in default_configs
+                         if c["entity_type"] == "data_product" and not c.get("mapping"))
     assert first_product["tag_key_format"] == NAME_KEY
 
     desired = _desired_from_contract_rows(

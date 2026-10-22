@@ -109,9 +109,10 @@ def test_a_product_transition_requests_one_run(db_session, jobs_manager, install
 
 def test_the_run_gets_the_saved_tag_sync_configuration(db_session, jobs_manager, installed,
                                                        ws):
-    configs = [{'entity_type': 'data_product', 'enabled': True,
-                'tag_key_format': 'ontos_lifecycle_status',
-                'tag_value_format': '{PRODUCT.STATUS}'}]
+    configs = [{'entity_type': entity_type, 'mapping': 'lifecycle_status', 'enabled': True,
+                'tag_key_format': 'lifecycle', 'tag_value_format': value_format}
+               for entity_type, value_format in (('data_contract', '{CONTRACT.STATUS}'),
+                                                 ('data_product', '{PRODUCT.STATUS}'))]
     workflow_configuration_repo.upsert(db_session, workflow_id='uc_tag_sync',
                                        configuration={'tag_sync_configs': configs})
     product = _product(db_session, 'active')
@@ -120,6 +121,26 @@ def test_the_run_gets_the_saved_tag_sync_configuration(db_session, jobs_manager,
 
     params = ws.jobs.run_now.call_args.kwargs['job_parameters']
     assert json.loads(params['tag_sync_configs']) == configs
+
+
+def test_a_configuration_saved_without_the_mapping_runs_with_it(db_session, jobs_manager,
+                                                                installed, ws):
+    """An upgraded install whose saved list predates the lifecycle entries."""
+    name_entry = {'entity_type': 'data_product', 'enabled': True,
+                  'tag_key_format': 'ontos_product_name', 'tag_value_format': '{PRODUCT.NAME}'}
+    workflow_configuration_repo.upsert(db_session, workflow_id='uc_tag_sync',
+                                       configuration={'tag_sync_configs': [name_entry]})
+    product = _product(db_session, 'active')
+
+    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+
+    params = ws.jobs.run_now.call_args.kwargs['job_parameters']
+    configs = json.loads(params['tag_sync_configs'])
+    assert configs[0] == name_entry
+    assert [(c['entity_type'], c['enabled'], c['tag_value_format']) for c in configs[1:]] == [
+        ('data_contract', False, '{CONTRACT.STATUS}'),
+        ('data_product', True, '{PRODUCT.STATUS}'),
+    ]
 
 
 def test_other_transitions_wait_for_the_scheduled_run(db_session, jobs_manager, installed,

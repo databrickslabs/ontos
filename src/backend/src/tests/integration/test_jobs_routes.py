@@ -48,3 +48,54 @@ class TestJobsRoutes:
         response = client.get("/api/jobs/installation/test-installation-id")
         assert response.status_code in [200, 404]
 
+
+
+class TestTagSyncConfigurationUpgrade:
+    """A uc_tag_sync configuration saved before the lifecycle mapping existed (#998)."""
+
+    NAME_ENTRY = {"entity_type": "data_product", "enabled": True,
+                  "tag_key_format": "ontos_product_name", "tag_value_format": "{PRODUCT.NAME}"}
+    URL = "/api/jobs/workflows/uc_tag_sync/configuration"
+
+    @staticmethod
+    def _lifecycle(configs):
+        return [(c["entity_type"], c["enabled"], c["tag_value_format"])
+                for c in configs if c.get("mapping") == "lifecycle_status"]
+
+    def test_get_adds_the_lifecycle_mapping_to_an_old_saved_list(
+        self, client: TestClient, db_session: Session
+    ):
+        from src.repositories.workflow_configurations_repository import (
+            workflow_configuration_repo,
+        )
+        workflow_configuration_repo.upsert(
+            db_session, workflow_id="uc_tag_sync",
+            configuration={"tag_sync_configs": [self.NAME_ENTRY]},
+        )
+        db_session.flush()
+
+        response = client.get(self.URL)
+
+        assert response.status_code == 200
+        configs = response.json()["configuration"]["tag_sync_configs"]
+        assert configs[0] == self.NAME_ENTRY
+        assert self._lifecycle(configs) == [
+            ("data_contract", False, "{CONTRACT.STATUS}"),
+            ("data_product", True, "{PRODUCT.STATUS}"),
+        ]
+
+    def test_a_disabled_lifecycle_mapping_stays_disabled(
+        self, client: TestClient, db_session: Session
+    ):
+        configs = [self.NAME_ENTRY] + [
+            {"entity_type": entity_type, "mapping": "lifecycle_status", "enabled": False,
+             "tag_key_format": "ontos_lifecycle_status", "tag_value_format": value_format}
+            for entity_type, value_format in (("data_contract", "{CONTRACT.STATUS}"),
+                                              ("data_product", "{PRODUCT.STATUS}"))
+        ]
+
+        put = client.put(self.URL, json={"configuration": {"tag_sync_configs": configs}})
+        response = client.get(self.URL)
+
+        assert put.status_code == 200
+        assert response.json()["configuration"]["tag_sync_configs"] == configs

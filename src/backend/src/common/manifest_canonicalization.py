@@ -57,12 +57,36 @@ def _check_integer_range(value: int, path: str) -> None:
         )
 
 
+def _check_string(value: str, path: str) -> None:
+    """Raise CanonicalizationError if value has a lone surrogate (ADR: rejected)."""
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise CanonicalizationError(
+            "invalid_string",
+            "String contains lone surrogates",
+            path,
+        ) from None
+
+
+def _check_key(key: Any, path: str) -> None:
+    """Object keys must be strings (ADR: "Keys are strings"), checked like values."""
+    if not isinstance(key, str):
+        raise CanonicalizationError(
+            "unsupported_type",
+            f"Object key of type {type(key).__name__} not supported in canonical JSON",
+            path,
+        )
+    _check_string(key, path)
+
+
 def _check_no_floats(obj: Any, path: str = "$") -> None:
     """
     Recursively check that obj contains no floats and no out-of-range integers.
 
-    Raises CanonicalizationError if a float is found, or an integer whose
-    absolute value is 2^53 or more. The error carries the JSON path of the value.
+    Raises CanonicalizationError if a float is found, an integer whose absolute
+    value is 2^53 or more, a non-string object key, or a string (key or value)
+    with a lone surrogate. The error carries the JSON path of the value.
     """
     if isinstance(obj, int) and not isinstance(obj, bool):
         _check_integer_range(obj, path)
@@ -72,12 +96,25 @@ def _check_no_floats(obj: Any, path: str = "$") -> None:
             f"Float value {obj} encountered",
             path,
         )
+    elif isinstance(obj, str):
+        _check_string(obj, path)
     elif isinstance(obj, dict):
         for key, value in obj.items():
+            _check_key(key, path)
             _check_no_floats(value, f"{path}.{key}")
     elif isinstance(obj, list):
         for idx, value in enumerate(obj):
             _check_no_floats(value, f"{path}[{idx}]")
+
+
+def validate_canonical(obj: Any, path: str = "$") -> None:
+    """
+    Check obj against the value rules of canonicalize() without serializing it.
+
+    Raises CanonicalizationError (floats, out-of-range integers, non-string keys,
+    lone surrogates) with the JSON path of the value, prefixed by ``path``.
+    """
+    _check_no_floats(obj, path)
 
 
 def _sort_keys_by_utf16(obj: Dict[str, Any]) -> Dict[str, Any]:
@@ -100,9 +137,12 @@ def _sort_keys_by_utf16(obj: Dict[str, Any]) -> Dict[str, Any]:
     return {k: obj[k] for k in sorted_keys}
 
 
-def _canonical_string(s: str) -> str:
+def _canonical_string(s: str) -> List[str]:
     r"""
-    Escape a string exactly as ECMAScript JSON.stringify.
+    Escape a string exactly as ECMAScript JSON.stringify (pieces, without quotes).
+
+    Used for object keys and string values alike. A lone surrogate raises
+    CanonicalizationError (``invalid_string``).
 
     Per RFC 8785:
     - \" for quotation mark (U+0022)
@@ -136,10 +176,22 @@ def _canonical_string(s: str) -> str:
         elif code < 0x0020:
             # Control characters U+0000 to U+001F
             result.append(f"\\u{code:04x}")
+        elif 0xD800 <= code <= 0xDFFF:
+            # Python strings hold code points, so any surrogate here is a lone one
+            raise CanonicalizationError(
+                "invalid_string",
+                "String contains lone surrogates",
+                "$",
+            )
         else:
             # U+0020 and above, including U+2028 and U+2029
             result.append(ch)
     return result
+
+
+def _quoted(s: str) -> str:
+    """A JSON string literal: quotes around the escaped text (keys and values)."""
+    return '"' + "".join(_canonical_string(s)) + '"'
 
 
 class CanonicalJSONEncoder(json.JSONEncoder):
@@ -166,16 +218,19 @@ class CanonicalJSONEncoder(json.JSONEncoder):
         elif obj is False:
             return "false"
         elif isinstance(obj, str):
-            return '"' + "".join(_canonical_string(obj)) + '"'
+            return _quoted(obj)
         elif isinstance(obj, int):
             # canonicalize() checks the whole tree first, with real paths; this
             # guards direct use of the encoder.
             _check_integer_range(obj, "$")
             return str(obj)
         elif isinstance(obj, dict):
+            for key in obj:
+                _check_key(key, "$")
             sorted_dict = _sort_keys_by_utf16(obj)
+            # Keys are escaped exactly like string values (ADR, Decision 1)
             items = [
-                f'"{k}":{self._encode_value(v)}'
+                f"{_quoted(k)}:{self._encode_value(v)}"
                 for k, v in sorted_dict.items()
             ]
             return "{" + ",".join(items) + "}"

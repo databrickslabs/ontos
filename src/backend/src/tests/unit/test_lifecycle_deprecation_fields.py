@@ -840,6 +840,7 @@ async def test_the_mcp_product_tool_says_a_reason_is_needed(db_session):
 
     assert not result.success
     assert 'reason' in result.error.lower()
+    assert result.error_code == 'deprecation_reason_required'
     db_session.refresh(product)
     assert product.status == 'active'
 
@@ -864,6 +865,24 @@ async def test_the_mcp_contract_tool_deprecates_with_its_details(db_session):
 
 
 @pytest.mark.asyncio
+async def test_the_mcp_contract_tool_says_a_reason_is_needed(db_session):
+    from src.tools.data_contracts import UpdateDataContractTool
+    contract = _contract(db_session)
+    db_session.commit()
+    ctx = _tool_context(
+        db_session, data_contracts_manager=DataContractsManager(data_dir=Path('/tmp')))
+
+    result = await UpdateDataContractTool().execute(
+        ctx, contract_id=contract.id, status='deprecated')
+
+    assert not result.success
+    assert 'reason' in result.error.lower()
+    assert result.error_code == 'deprecation_reason_required'
+    db_session.refresh(contract)
+    assert contract.status != 'deprecated'
+
+
+@pytest.mark.asyncio
 async def test_the_mcp_tools_refuse_a_malformed_sunset_date(db_session):
     from src.tools.data_products import UpdateDataProductTool
     product = _product(db_session)
@@ -877,6 +896,7 @@ async def test_the_mcp_tools_refuse_a_malformed_sunset_date(db_session):
 
     assert not result.success
     assert 'YYYY-MM-DD' in result.error
+    assert result.error_code == 'sunset_date_invalid'
 
 
 # --- A status change request to deprecated can carry a sunset date and a replacement ---

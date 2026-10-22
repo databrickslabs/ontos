@@ -48,6 +48,24 @@ def tool_failure(tag: str, exc: BaseException) -> Dict[str, str]:
     return {"error": tool_failed_message(error_id), "error_code": TOOL_FAILED_CODE}
 
 
+INVALID_TRANSITION_CODE = "invalid_status_transition"
+
+
+def invalid_transition(current: str, new: str, allowed: List[str]) -> Dict[str, str]:
+    """The client-facing part of a status change the lifecycle doesn't allow.
+
+    Checked by the update tools before the manager, whose ValueError would only
+    reach the client as the generic failure. Spread like ``tool_failure``.
+    """
+    return {
+        "error": (
+            f"Invalid status transition from '{current}' to '{new}'. "
+            f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}"
+        ),
+        "error_code": INVALID_TRANSITION_CODE,
+    }
+
+
 @dataclass
 class ToolContext:
     """

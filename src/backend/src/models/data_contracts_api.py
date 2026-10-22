@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
@@ -278,6 +278,8 @@ ODCS_SERVER_TYPES = [
 ]
 
 class ServerConfig(BaseModel):
+    # ODCS StableId of the server (stored as `stable_id`, not the row's primary key)
+    id: Optional[str] = None
     server: Optional[str] = None  # identifier
     type: str  # ODCS server type
     description: Optional[str] = None
@@ -296,6 +298,16 @@ class ServerConfig(BaseModel):
 
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _stable_id_from_orm(cls, data):
+        """Read an ORM server row's ODCS id from ``stable_id``, not its primary key ``id``."""
+        if data is None or isinstance(data, dict) or not hasattr(data, 'stable_id'):
+            return data
+        values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
+        values['id'] = getattr(data, 'stable_id', None)
+        return values
 
     @field_validator('properties', mode='before')
     @classmethod
@@ -493,7 +505,10 @@ class DataContractUpdate(BaseModel):
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None)
     qualityRules: Optional[List[QualityRule]] = Field(None)
     serverConfigs: Optional[List[ServerConfig]] = Field(None)
+    servers: Optional[List[ServerConfig]] = None  # replace-all, as sent by the contract page
     sla: Optional[SLARequirements] = None
+    slaDefaultElement: Optional[str] = None
+    slaProperties: Optional[List[SLAProperty]] = None  # replace-all
     team: Optional[List[TeamMember]] = None  # ODCS team members
     customProperties: Optional[Dict[str, Any]] = None  # Custom properties for team assignment metadata
 
@@ -587,6 +602,19 @@ class DataContractRead(BaseModel):
     publication_scope: str = "none"
     published_at: Optional[str] = None
     published_by: Optional[str] = None
+
+    # Deprecation lifecycle fields (set when the contract moves to `deprecated`)
+    deprecation_reason: Optional[str] = None
+    sunset_date: Optional[str] = None
+    replacement_contract_id: Optional[str] = None
+    deprecated_at: Optional[str] = None
+
+    @field_validator('published_at', 'sunset_date', 'deprecated_at', mode='before')
+    @classmethod
+    def _isoformat_dates(cls, value):
+        # Validating ORM rows (from_attributes, e.g. version history) passes
+        # date / datetime columns, not the strings the builder produces.
+        return value.isoformat() if isinstance(value, (date, datetime)) else value
 
     class Config:
         populate_by_name = True

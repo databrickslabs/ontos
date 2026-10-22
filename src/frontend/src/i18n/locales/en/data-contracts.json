@@ -198,7 +198,8 @@
     "validationErrorTitle": "Validation Error",
     "nameRequired": "Contract name is required",
     "versionRequired": "Version is required",
-    "saveError": "Failed to save contract"
+    "saveError": "Failed to save contract",
+    "statusChangeHint": "The status changes with Change Status on the page, which checks the transition and runs the status change workflows."
   },
   "import": {
     "title": "Import Data Contract",
@@ -345,7 +346,7 @@
       "createProduct": "Create Data Product",
       "noneYet": "No linked data products yet",
       "emptyHint": "Create a data product that uses this contract to govern a deliverable",
-      "statusRequirement": "Contract must be in 'active', 'approved', or 'certified' status",
+      "statusRequirement": "Contract must be in 'active' or 'approved' status",
       "unnamedProduct": "Unnamed Product",
       "deliverables_one": "Deliverable: {{ports}}",
       "deliverables_other": "Deliverables: {{ports}}"
@@ -519,7 +520,9 @@
       "invalidTransition": "The contract is now {{fromStatus}} and can no longer be approved or rejected. Reload the page to see its current status.",
       "approveFailed": "Approve failed",
       "rejectFailed": "Reject failed",
-      "startProfilingFailed": "Failed to start profiling"
+      "startProfilingFailed": "Failed to start profiling",
+      "invalidVersionFormat": "\"{{version}}\" is not a valid version: a new version uses the X.Y.Z form, for example 2.0.0.",
+      "draftVersionFormat": "This contract's version \"{{version}}\" isn't in the X.Y.Z form, so a personal draft can't be made from it. Create a new version (for example 2.0.0) instead."
     }
   },
   "list": {

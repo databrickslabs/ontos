@@ -2405,6 +2405,12 @@ The default workflows are created at startup when they are missing. An existing 
 
 Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
 
+Other changes to plan for when upgrading:
+
+- **Approvals pending at upgrade time.** Approval notifications now record the step they are for, and only the approvers of the step an execution is waiting at can answer it. Notifications created before the upgrade have no step and are still accepted for their execution, as before, so approvals pending at upgrade time can be answered. Once those are answered, every approval is tied to its step.
+- **Owner approvals without another owner.** A `DomainOwner` or `ContractApprover` approval leaves out the requester. When no other owner exists, it goes to the Data Stewards and the admins, who can decide it in the owners' place; the requester can never decide their own request (`403` with `detail.code` `own_owner_approval`), even when they are a steward or an admin.
+- **Errors with a code.** Some API errors now return `detail` as an object, `{"code": ..., "message": ..., "params": {...}}`, instead of a string, so the UI can show them in the user's language: a status change of a data product or data contract blocked by a workflow gate (`status_change_blocked`, with the status code the route already used, `400` or `409`), and an owner approval answered by its requester (`403`, `own_owner_approval`). `detail.message` holds the English text the string used to carry. API and MCP clients that read `detail` as text should read `detail.message` when `detail` is an object.
+
 ### Editing a Default Workflow
 
 Default workflows can be customized:

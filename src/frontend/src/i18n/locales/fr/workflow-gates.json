@@ -3,6 +3,7 @@
   "reasons": {
     "waitingForApproval": "en attente d'approbation ({{step}})",
     "entityLoadFailed": "impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
+    "entityNotFound": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée",
     "validationFailed": "la validation du workflow a échoué",
     "status": {
       "failed": "échoué",
@@ -10,5 +11,10 @@
       "pending": "en attente",
       "running": "en cours"
     }
-  }
+  },
+  "requiresTransition": "Une modification ne peut pas changer le statut de {{fromStatus}} à {{toStatus}}. Utilisez Changer le statut, qui vérifie la transition et exécute les workflows de changement de statut.",
+  "certifiedIsNotAStatus": "Certifié n'est pas un statut : la certification se définit avec Certifier, sur une entité active.",
+  "invalidStatus": "{{status}} n'est pas un statut du cycle de vie. Utilisez l'un de : {{allowed}}.",
+  "gateError": "Le changement de statut de {{fromStatus}} à {{toStatus}} a été refusé : la porte de workflow {{workflows}} n'a pas pu être évaluée. Demandez à un administrateur de vérifier le workflow.",
+  "gateErrorUnnamed": "Le changement de statut de {{fromStatus}} à {{toStatus}} a été refusé : une porte de workflow n'a pas pu être évaluée. Demandez à un administrateur de vérifier le workflow."
 }

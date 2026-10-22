@@ -104,7 +104,7 @@ def test_object_level_quality_keeps_its_id_metric_and_operator(exported):
     _, _, doc = exported
     (rule,) = _object(doc)['quality']
     assert rule['id'] == 'q-rowcount'
-    assert rule['rule'] == 'rowCount'  # `metric` is stored as the rule
+    assert rule['metric'] == 'rowCount'  # a v3.1.0 library rule: `metric` (#295)
     assert rule['mustBeGreaterThan'] == 0
     assert rule['description'] == 'Orders must not be empty'
 

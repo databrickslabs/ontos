@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "z. B. draft",
       "toStatus": "Zu Status",
       "toStatusPlaceholder": "z. B. active",
-      "descriptionPlaceholder": "Workflow-Beschreibung"
+      "descriptionPlaceholder": "Workflow-Beschreibung",
+      "failClosed": "Übergang ablehnen, wenn dieses Gate nicht ausgewertet werden kann",
+      "failClosedHint": "Fail closed: Wenn bei der Auswertung dieses Gates ein Fehler auftritt (kein normales Fehlschlagen), wird die Statusänderung abgelehnt. Aus (fail open) wird die Änderung durchgeführt und der Fehler protokolliert und auditiert.",
+      "disabledFor": {
+        "title": "Deaktiviert für",
+        "hint": "Dieses Gate läuft nicht für die hier aufgeführten Domänen, Datenprodukte und Datenverträge (eine Domäne umfasst ihre Produkte und Verträge). Jedes Überspringen wird protokolliert und auditiert.",
+        "domains": "Domänen",
+        "dataProducts": "Datenprodukte",
+        "dataContracts": "Datenverträge",
+        "none": "Keine",
+        "selectedCount_one": "{{count}} ausgewählt",
+        "selectedCount_other": "{{count}} ausgewählt",
+        "search": "Suchen...",
+        "noResults": "Nichts gefunden.",
+        "remove": "{{name}} entfernen",
+        "notFound": "{{id}} (existiert nicht mehr)",
+        "missingOnSave_one": "Das Gate ist für {{count}} Eintrag abgeschaltet, der nicht mehr existiert. Entfernen Sie ihn und speichern Sie erneut.",
+        "missingOnSave_other": "Das Gate ist für {{count}} Einträge abgeschaltet, die nicht mehr existieren. Entfernen Sie sie und speichern Sie erneut."
+      }
     },
     "stepConfig": {
       "title": "Schritt-Konfiguration",
@@ -457,11 +475,17 @@
     "titleFallback": "Workflow-Ausführung",
     "executionId": "Ausführungs-ID: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} Schritte",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} Schritte (+{{count}} entfernt)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} Schritte (+{{count}} entfernt)",
     "triggeredBy": "Ausgelöst von: {{user}}",
     "workflowSteps": "Workflow-Schritte",
     "loadDefinitionFailed": "Workflow-Definition konnte nicht geladen werden",
+    "removedSteps": "Entfernte Schritte",
+    "removedStepsHint": "Diese Schritte liefen in dieser Ausführung und wurden später aus dem Workflow entfernt.",
     "stepErrors": {
-      "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten"
+      "approval_rejected": "Anfrage abgelehnt",
+      "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden"
     },
     "states": {
       "pending": "Ausstehend",

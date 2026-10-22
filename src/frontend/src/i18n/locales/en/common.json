@@ -755,5 +755,39 @@
     "createdSkipped": "Created: {{created}}, skipped: {{skipped}}.",
     "createdFailed": "Created: {{created}}, failed: {{failed}}.",
     "createdSkippedFailed": "Created: {{created}}, skipped: {{skipped}}, failed: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Deprecation reason",
+    "reasonPlaceholder": "Why is it deprecated? Consumers will see this.",
+    "sunsetDate": "Sunset date",
+    "replacement": "Replacement",
+    "noReplacement": "No replacement",
+    "reasonRequired": "A deprecation reason is required to deprecate.",
+    "requestHint": "The justification becomes the deprecation reason.",
+    "errors": {
+      "deprecation_reason_required": "A deprecation reason is required to deprecate.",
+      "sunset_date_in_past": "The sunset date {{sunsetDate}} is in the past.",
+      "replacement_is_self": "An entity can't be its own replacement.",
+      "replacement_not_found": "The replacement {{replacementId}} was not found.",
+      "replacement_retired": "The replacement {{replacementId}} is retired.",
+      "replacement_deprecated": "The replacement {{replacementId}} is deprecated.",
+      "replacement_deprecated_replaced": "The replacement {{replacementId}} is deprecated; it is replaced by {{replacedBy}}.",
+      "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Invalid {{property}} \"{{value}}\": expected an ISO date.",
+      "replacement_is_self": "The replacement (ontosReplacedBy) can't be the entity itself.",
+      "replacement_leads_back": "The replacement {{replacementId}} leads back to this entity: {{chain}}.",
+      "imported_replacement_dropped": "The replacement {{replacementId}} isn't here, so it was not linked.",
+      "imported_replacement_leads_back": "The replacement {{replacementId}} leads back to this entity ({{chain}}), so it was not linked.",
+      "imported_status_mapped": "'{{status}}' isn't a lifecycle status, so it was imported as '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' is an older status name, so it was imported as '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' is no longer a status, so it was imported as '{{mappedTo}}'. Certification isn't imported: certify the entity in Ontos."
+    },
+    "notice": {
+      "deprecated": "Deprecated",
+      "retired": "Retired",
+      "noReason": "No reason recorded"
+    }
   }
 }

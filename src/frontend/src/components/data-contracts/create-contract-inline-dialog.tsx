@@ -175,7 +175,6 @@ export default function CreateContractInlineDialog({
                 <SelectItem value="under_review">{t('data-contracts:status.under_review', 'Under Review')}</SelectItem>
                 <SelectItem value="active">{t('data-contracts:status.active', 'Active')}</SelectItem>
                 <SelectItem value="approved">{t('data-contracts:status.approved', 'Approved')}</SelectItem>
-                <SelectItem value="certified">{t('data-contracts:status.certified', 'Certified')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

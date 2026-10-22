@@ -23,6 +23,7 @@ from src.controller.comments_manager import CommentsManager
 from src.controller.jobs_manager import JobsManager
 from src.controller.workspace_manager import WorkspaceManager
 from src.controller.change_log_manager import ChangeLogManager
+from src.controller.estate_manager import EstateManager
 from src.controller.delivery_service import DeliveryService
 from src.controller.assets_manager import AssetsManager
 from src.controller.business_roles_manager import BusinessRolesManager
@@ -186,7 +187,14 @@ def get_change_log_manager(request: Request) -> ChangeLogManager:
         logger.info("Initialized ChangeLogManager and stored on app.state.change_log_manager")
     return manager
 
-# Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added
+def get_estate_manager(request: Request) -> EstateManager:
+    manager = getattr(request.app.state, 'estate_manager', None)
+    if not manager:
+        logger.critical("EstateManager not found in application state!")
+        raise HTTPException(status_code=503, detail="Estate service not configured.")
+    return manager
+
+# Add getters for Compliance, MDM, Security, Entitlements, Catalog Commander managers when they are added
 
 def get_assets_manager(request: Request) -> AssetsManager:
     manager = getattr(request.app.state, 'assets_manager', None)

@@ -198,7 +198,8 @@
     "validationErrorTitle": "Errore di Validazione",
     "nameRequired": "Il nome del contratto è obbligatorio",
     "versionRequired": "La versione è obbligatoria",
-    "saveError": "Impossibile salvare il contratto"
+    "saveError": "Impossibile salvare il contratto",
+    "statusChangeHint": "Lo stato si cambia con Cambia Stato nella pagina, che verifica la transizione ed esegue i workflow di cambio di stato."
   },
   "import": {
     "title": "Importa Contratto Dati",
@@ -345,7 +346,7 @@
       "createProduct": "Crea Prodotto Dati",
       "noneYet": "Nessun prodotto dati ancora collegato",
       "emptyHint": "Crea un prodotto dati che usa questo contratto per governare un deliverable",
-      "statusRequirement": "Il contratto deve essere nello stato 'attivo', 'approvato' o 'certificato'",
+      "statusRequirement": "Il contratto deve essere nello stato 'attivo' o 'approvato'",
       "unnamedProduct": "Prodotto Senza Nome",
       "deliverables_one": "Deliverable: {{ports}}",
       "deliverables_other": "Deliverable: {{ports}}"
@@ -519,7 +520,9 @@
       "invalidTransition": "Il contratto ora è {{fromStatus}} e non può più essere approvato né rifiutato. Ricarica la pagina per vedere lo stato attuale.",
       "approveFailed": "Approvazione non riuscita",
       "rejectFailed": "Rifiuto non riuscito",
-      "startProfilingFailed": "Impossibile avviare la profilazione"
+      "startProfilingFailed": "Impossibile avviare la profilazione",
+      "invalidVersionFormat": "\"{{version}}\" non è una versione valida: una nuova versione usa il formato X.Y.Z, per esempio 2.0.0.",
+      "draftVersionFormat": "La versione \"{{version}}\" di questo contratto non è nel formato X.Y.Z, quindi non è possibile crearne una bozza personale. Crea invece una nuova versione (per esempio 2.0.0)."
     }
   },
   "list": {

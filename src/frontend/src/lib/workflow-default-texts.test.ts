@@ -34,6 +34,8 @@ describe('translateDefaultText', () => {
     expect(translateDefaultText(i18n.t, i18n, '')).toBe('');
   });
 
+  // On purpose: whitespace around a text doesn't change what the user reads,
+  // so it isn't treated as an admin's edit.
   it('finds the key of a shipped text, ignoring surrounding spaces', () => {
     expect(defaultTextKey(i18n, '  Request access ')).toBe('requestAccess.title');
     expect(defaultTextKey(i18n, 'Something else')).toBeUndefined();

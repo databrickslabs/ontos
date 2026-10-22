@@ -234,6 +234,8 @@ export type QualityRule = {
 
 // Server configuration (ODCS compliant)
 export type ServerConfig = {
+  /** ODCS id of the server, kept when it is edited */
+  id?: string
   server?: string
   type?: string
   description?: string
@@ -258,6 +260,11 @@ export interface DataContract {
   version: string
   status: string
   name: string
+  // Set when the contract moves to `deprecated`
+  deprecation_reason?: string | null
+  sunset_date?: string | null // YYYY-MM-DD
+  replacement_contract_id?: string | null
+  deprecated_at?: string | null
   tenant?: string
   domain?: string // Primary domain name
   domainId?: string // Legacy single-domain (primary) id

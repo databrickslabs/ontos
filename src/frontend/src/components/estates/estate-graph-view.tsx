@@ -47,7 +47,8 @@ export interface Estate { // Exporting Estate as it's used in EstateNodeData via
   cloud_type: CloudType;
   metastore_name: string;
   connection_type: ConnectionType;
-  sharing_policies: any[]; // Simplified for graph view, assuming full SharingPolicy not needed for node display
+  export_policies: any[]; // Simplified for graph view, assuming full SharingPolicy not needed for node display
+  import_policies: any[];
   is_enabled: boolean;
   sync_schedule: string;
   last_sync_time?: string;
@@ -170,7 +171,8 @@ const EstateGraphView: React.FC<EstateGraphViewProps> = ({ estates, onNodeClick 
       cloud_type: 'aws', // Example
       connection_type: 'delta_share', // Example
       is_enabled: true,
-      sharing_policies: [],
+      export_policies: [],
+      import_policies: [],
       metastore_name: 'local_app_metastore',
       workspace_url: 'N/A',
       sync_schedule: 'N/A',

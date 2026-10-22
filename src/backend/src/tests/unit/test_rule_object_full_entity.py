@@ -129,10 +129,69 @@ def test_other_entity_types_get_the_payload(db_session):
     assert _rule_object(db_session, _context('table', 'main.sales.orders', payload)) == payload
 
 
-def test_unknown_entity_ids_get_the_payload(db_session):
-    payload = {'name': 'p'}
+@pytest.mark.parametrize('entity_type', ['data_product', 'data_contract'])
+def test_an_entity_that_no_longer_exists_raises(db_session, entity_type):
+    # e.g. deleted while the workflow waited for an approval: the payload alone
+    # would let rules on other fields pass vacuously.
+    with pytest.raises(RuntimeError, match=f'{entity_type} missing was not found'):
+        _rule_object(db_session, _context(entity_type, 'missing', {'name': 'p'}))
 
-    assert _rule_object(db_session, _context('data_product', 'missing', payload)) == payload
+
+def test_a_rule_step_fails_when_the_entity_no_longer_exists(db_session):
+    # On the payload alone ({name, status}) this rule passes vacuously.
+    rule = "MATCH (obj:data_product) ASSERT obj.missing_field != 'x'"
+
+    result = _validate(db_session, rule, _context(
+        'data_product', 'missing', {'name': 'p', 'status': 'active'},
+    ))
+
+    assert result.passed is False
+    assert result.error == "data_product missing was not found, so the rule can't be evaluated"
+    assert result.data == {
+        'error_code': 'rule_entity_not_found',
+        'error_params': {'entityType': 'data_product', 'entityId': 'missing'},
+    }
+
+
+def test_before_create_gates_see_the_payload(db_session):
+    from src.models.process_workflows import TriggerContext, TriggerType
+
+    context = _context('data_product', 'not-created-yet', {'name': 'p'})
+    context.trigger_context = TriggerContext(
+        entity_type='data_product', entity_id='not-created-yet',
+        trigger_type=TriggerType.BEFORE_CREATE,
+    )
+
+    assert _rule_object(db_session, context) == {'name': 'p'}
+
+
+def test_on_delete_workflows_see_the_payload(db_session):
+    # on_delete fires after the row is gone: loading it would always fail.
+    from src.models.process_workflows import TriggerContext, TriggerType
+
+    context = _context('data_product', 'deleted-product', {'product_id': 'deleted-product'})
+    context.trigger_context = TriggerContext(
+        entity_type='data_product', entity_id='deleted-product',
+        trigger_type=TriggerType.ON_DELETE,
+    )
+
+    assert _rule_object(db_session, context) == {'product_id': 'deleted-product'}
+
+
+def test_a_rule_step_in_an_on_delete_workflow_runs_on_the_payload(db_session):
+    from src.models.process_workflows import TriggerContext, TriggerType
+
+    rule = "MATCH (obj:data_contract) ASSERT obj.contract_id = 'deleted-contract'"
+    context = _context('data_contract', 'deleted-contract', {'contract_id': 'deleted-contract'})
+    context.trigger_context = TriggerContext(
+        entity_type='data_contract', entity_id='deleted-contract',
+        trigger_type=TriggerType.ON_DELETE,
+    )
+
+    result = _validate(db_session, rule, context)
+
+    assert result.passed is True
+    assert result.data.get('error_code') is None
 
 
 def test_a_failing_entity_load_raises(db_session):
@@ -190,8 +249,9 @@ def test_conditional_and_policy_steps_carry_the_same_error_code(db_session):
 
 
 def test_other_rule_step_errors_have_no_code(db_session):
+    product = _product(db_session)
     result = _validate(db_session, 'MATCH (obj:data_product) ASSERT', _context(
-        'data_product', 'product-1', {'name': 'p'},
+        'data_product', product.id, {'name': 'p'},
     ))
 
     assert result.passed is False

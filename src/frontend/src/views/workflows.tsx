@@ -64,6 +64,7 @@ import type {
 import { getTriggerDisplay, getEntityTypeLabel, getStepTypeLabel } from '@/lib/workflow-labels';
 import { WorkflowExecutionDialog } from '@/components/workflows/workflow-execution-dialog';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
+import { workflowExecutionErrorText } from '@/lib/workflow-execution-error';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { RelativeDate } from '@/components/common/relative-date';
 import { WorkflowRunDialog } from '@/components/workflows/workflow-run-dialog';
@@ -1012,8 +1013,9 @@ export default function Workflows() {
       header: t('workflows:view.columns.error'),
       enableSorting: false,
       cell: ({ row }) => {
-        // A shipped fail step's message is shown in the user's language
-        const errorMessage = defaultWorkflowText(row.original.error_message);
+        // A coded step error or a shipped fail step's message is shown in the
+        // user's language
+        const errorMessage = workflowExecutionErrorText(t, row.original, defaultWorkflowText);
         if (!errorMessage) return null;
         // `truncate` is a no-op on inline spans, so a multi-line stack trace
         // used to expand the row vertically; clamp to 2 lines on a block button

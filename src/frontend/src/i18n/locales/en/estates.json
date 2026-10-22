@@ -13,7 +13,10 @@
     "deletingEstate": "Error Deleting Estate",
     "triggeringSync": "Error Triggering Sync",
     "validationError": "Validation Error",
-    "validationMessage": "Please fill in all required fields: Name, Description, Workspace URL, Metastore Name, Cloud Type, and Connection Type."
+    "validationMessage": "Please fill in all required fields: Name, Description, Workspace URL, Metastore Name, Cloud Type, and Connection Type.",
+    "codes": {
+      "estate_name_conflict": "An estate named \"{{name}}\" already exists."
+    }
   },
   "toast": {
     "estateCreated": "Estate created successfully",
@@ -102,7 +105,6 @@
     "backToEstateManager": "Back to Estate Manager",
     "backToListButton": "Back to List",
     "configureSyncJob": "Configure Sync Job",
-    "editNotImplemented": "Edit Estate functionality to be implemented",
     "syncEnabled": "Sync Enabled",
     "syncDisabled": "Sync Disabled",
     "never": "Never",
@@ -121,15 +123,16 @@
       "noEstateData": "Estate data is not available to add a policy."
     },
     "policies": {
-      "title": "Sharing Policies",
       "add": "Add Policy",
-      "sectionDescription": "Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.",
       "resourceTypeLabel": "Resource Type:",
       "rulesLabel": "Rules ({{count}}):",
-      "filterBy": "Filter by",
-      "whereValue": "where value",
+      "ruleText": {
+        "equals": "Filter by <b>{{filterType}}</b> where the value equals <b>'{{value}}'</b>",
+        "contains": "Filter by <b>{{filterType}}</b> where the value contains <b>'{{value}}'</b>",
+        "starts_with": "Filter by <b>{{filterType}}</b> where the value starts with <b>'{{value}}'</b>",
+        "regex": "Filter by <b>{{filterType}}</b> where the value matches the regular expression <b>'{{value}}'</b>"
+      },
       "noRules": "No rules defined for this policy.",
-      "emptyTitle": "No sharing policies defined for this estate.",
       "emptyHint": "Click \"Add Policy\" to start sharing resources.",
       "editPolicyAlert": "Edit policy: {{name}}",
       "deletePolicyAlert": "Delete policy: {{name}}",
@@ -137,7 +140,17 @@
       "addedDescription": "Sharing policy \"{{name}}\" has been successfully added.",
       "addErrorTitle": "Error Adding Policy",
       "addErrorDescription": "Could not save the new sharing policy. Please try again.",
-      "saveFailedNoData": "Failed to save policy. Server returned no data."
+      "saveFailedNoData": "Failed to save policy. Server returned no data.",
+      "export": {
+        "title": "Export Policies",
+        "sectionDescription": "What this instance shares with this estate.",
+        "emptyTitle": "No export policies defined for this estate."
+      },
+      "import": {
+        "title": "Import Policies",
+        "sectionDescription": "What this instance accepts from this estate.",
+        "emptyTitle": "No import policies defined for this estate."
+      }
     },
     "overview": {
       "title": "Estate Overview",
@@ -181,6 +194,12 @@
       "filterType": "e.g., tag, domain, status",
       "value": "e.g., finance, Active"
     },
+    "operators": {
+      "equals": "Equals",
+      "contains": "Contains",
+      "starts_with": "Starts with",
+      "regex": "Matches regex"
+    },
     "validation": {
       "nameMin": "Policy name must be at least 3 characters",
       "filterTypeRequired": "Filter type is required",
@@ -192,5 +211,12 @@
       "submittedDescription": "Sharing policy \"{{name}}\" is being processed.",
       "addErrorDescription": "Failed to add sharing policy. Check console for details."
     }
+  },
+  "resourceTypes": {
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "business_term": "Business Term",
+    "data_domain": "Data Domain",
+    "concept": "Concept"
   }
 }

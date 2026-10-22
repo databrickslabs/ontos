@@ -148,6 +148,33 @@ describe('step errors', () => {
     }
   });
 
+  it('translates the error of an entity that no longer exists', async () => {
+    await i18n.changeLanguage('pt');
+    try {
+      expect(getStepErrorText({
+        error_message: "data_product p-1 was not found, so the rule can't be evaluated",
+        result_data: {
+          error_code: 'rule_entity_not_found',
+          error_params: { entityType: 'data_product', entityId: 'p-1' },
+        },
+      }, i18n.t)).toBe('data_product p-1 não foi encontrado, então a regra não pode ser avaliada');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('translates an approval rejected without a reason', async () => {
+    await i18n.changeLanguage('pt');
+    try {
+      expect(getStepErrorText({
+        error_message: 'Request denied',
+        result_data: { error_code: 'approval_rejected', error_params: {} },
+      }, i18n.t)).toBe('Solicitação negada');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('shows an error without a code as stored', () => {
     expect(getStepErrorText({ error_message: 'Policy not found: x' }, i18n.t)).toBe(
       'Policy not found: x',
@@ -176,4 +203,38 @@ describe('step errors', () => {
     expect(await screen.findByText('Could not load data_product p-1 to evaluate the rule'))
       .toBeInTheDocument();
   });
+});
+
+describe('WorkflowExecutionDialog progress card', () => {
+  beforeEach(() => get.mockReset());
+  const workflow = { id: 'wf-1', name: 'Data Contract Review Request', steps: STEPS } as unknown as ProcessWorkflow;
+
+  function mockApi(ex: WorkflowExecution) {
+    get.mockImplementation(async (url: string) => (
+      url === '/api/workflows/wf-1' ? { data: workflow } : { data: ex }
+    ));
+  }
+
+  it('names the paused step while the execution waits', async () => {
+    const ex = execution({ current_step_name: 'Request Data Steward Approval' });
+    mockApi(ex);
+    render(<WorkflowExecutionDialog execution={ex} open onOpenChange={vi.fn()} />);
+    expect(await screen.findByText('Waiting At')).toBeTruthy();
+    expect(screen.getAllByText('Request Data Steward Approval').length).toBeGreaterThan(1);
+  });
+
+  it.each(['failed', 'succeeded', 'cancelled'] as const)(
+    'shows the progress, not the last paused step, once the execution is %s', async (status) => {
+      const ex = execution({
+        status, current_step_name: 'Request Data Steward Approval',
+        step_executions: [RUN('row-1'), RUN('row-2')] as any,
+      });
+      mockApi(ex);
+      render(<WorkflowExecutionDialog execution={ex} open onOpenChange={vi.fn()} />);
+      const label = await screen.findByText('Progress');
+      const card = label.parentElement as HTMLElement;
+      expect(card.textContent).not.toContain('Request Data Steward Approval');
+      expect(card.textContent).toMatch(/\d/);
+    },
+  );
 });

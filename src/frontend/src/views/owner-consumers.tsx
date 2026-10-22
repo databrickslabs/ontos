@@ -118,7 +118,7 @@ export default function OwnerConsumersView() {
     );
   }, [selectedData, searchQuery]);
 
-  const activeProducts = products.filter((p) => p.status === 'active' || p.status === 'approved' || p.status === 'certified');
+  const activeProducts = products.filter((p) => p.status === 'active' || p.status === 'approved');
 
   return (
     <div className="space-y-6">

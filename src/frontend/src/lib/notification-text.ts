@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { Notification } from '@/types/notification';
+import { statusChangeErrorText } from '@/lib/status-change-error';
 
 /**
  * i18n keys a notification may carry in `data.i18n` (see the backend's
@@ -16,12 +17,50 @@ export interface NotificationI18n {
   description?: string;
   params?: Record<string, string>;
   descriptionLines?: I18nText[];
+  /**
+   * Namespace whose `status.<status>` keys label the statuses in `params`
+   * (`fromStatus`, `toStatus`, `currentStatus`), e.g. `data-contracts`.
+   */
+  statusNamespace?: string;
+  /**
+   * The coded error of a refused status change. When present, `params.reason`
+   * (its English text) is replaced by the translated error.
+   */
+  error?: { code?: string; message?: string; params?: Record<string, unknown> };
 }
 
 export interface I18nText {
   key?: string;
   params?: Record<string, unknown>;
   text?: string;
+}
+
+const STATUS_PARAMS = ['fromStatus', 'toStatus', 'currentStatus'];
+
+/** The params of the texts, with statuses and a refusal reason in the user's language. */
+function translatedParams(i18n: NotificationI18n | null, t: TFunction): Record<string, string> | undefined {
+  if (!i18n?.params) return i18n?.params;
+  const params = { ...i18n.params };
+  const namespace = i18n.statusNamespace;
+  if (namespace) {
+    for (const name of STATUS_PARAMS) {
+      if (params[name]) {
+        params[name] = t(`${namespace}:status.${params[name]}`, { defaultValue: params[name] }) as string;
+      }
+    }
+  }
+  if (i18n.error?.code && 'reason' in params) {
+    params.reason = statusChangeErrorText(
+      {
+        error: i18n.error.message || params.reason,
+        errorCode: i18n.error.code,
+        errorParams: i18n.error.params ?? null,
+      },
+      t,
+      namespace || 'data-products',
+    );
+  }
+  return params;
 }
 
 type NotificationText = Pick<Notification, 'title' | 'description' | 'message' | 'data'>;
@@ -75,7 +114,7 @@ function translateText(t: TFunction, text: I18nText): string {
 /** The notification's title in the user's language, or its stored text. */
 export function notificationTitle(notification: NotificationText, t: TFunction): string {
   const i18n = notificationI18n(notification);
-  return translate(t, i18n?.title, notification.title, i18n?.params);
+  return translate(t, i18n?.title, notification.title, translatedParams(i18n, t));
 }
 
 /** The notification's description (or message) in the user's language, or its stored text. */
@@ -87,7 +126,7 @@ export function notificationDescription(notification: NotificationText, t: TFunc
       .map(line => (isI18nText(line) ? translateText(t, line) : String(line ?? '')))
       .join('\n');
   }
-  return translate(t, i18n?.description, fallback, i18n?.params);
+  return translate(t, i18n?.description, fallback, translatedParams(i18n, t));
 }
 
 /**

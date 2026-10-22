@@ -198,7 +198,8 @@
     "validationErrorTitle": "検証エラー",
     "nameRequired": "コントラクト名は必須です",
     "versionRequired": "バージョンは必須です",
-    "saveError": "コントラクトの保存に失敗しました"
+    "saveError": "コントラクトの保存に失敗しました",
+    "statusChangeHint": "ステータスはページの「ステータスを変更」で変更します。遷移を確認し、ステータス変更ワークフローを実行します。"
   },
   "import": {
     "title": "データ契約をインポート",
@@ -345,7 +346,7 @@
       "createProduct": "データプロダクトを作成",
       "noneYet": "リンクされたデータプロダクトはまだありません",
       "emptyHint": "このコントラクトを使用して成果物をガバナンスするデータプロダクトを作成します",
-      "statusRequirement": "コントラクトは「active」「approved」または「certified」ステータスである必要があります",
+      "statusRequirement": "コントラクトは「active」または「approved」ステータスである必要があります",
       "unnamedProduct": "名称未設定のプロダクト",
       "deliverables_one": "成果物: {{ports}}",
       "deliverables_other": "成果物: {{ports}}"
@@ -519,7 +520,9 @@
       "invalidTransition": "契約は現在{{fromStatus}}のため、承認も却下もできません。ページを再読み込みして現在のステータスを確認してください。",
       "approveFailed": "承認に失敗しました",
       "rejectFailed": "却下に失敗しました",
-      "startProfilingFailed": "プロファイリングの開始に失敗しました"
+      "startProfilingFailed": "プロファイリングの開始に失敗しました",
+      "invalidVersionFormat": "「{{version}}」は有効なバージョンではありません。新しいバージョンは X.Y.Z の形式です（例: 2.0.0）。",
+      "draftVersionFormat": "この契約のバージョン「{{version}}」は X.Y.Z の形式ではないため、個人用ドラフトを作成できません。代わりに新しいバージョン（例: 2.0.0）を作成してください。"
     }
   },
   "list": {

@@ -34,6 +34,18 @@ from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
 from datetime import datetime
 
 
+def _stored_product(db_session, product_id, name):
+    """A data product in the database: rules evaluate the stored entity, and a
+    rule step on an entity that doesn't exist fails."""
+    from src.db_models.data_products import DataProductDb
+
+    db_session.add(DataProductDb(
+        id=product_id, api_version='v1.0.0', kind='DataProduct', status='approved',
+        name=name, version='1.0.0',
+    ))
+    db_session.flush()
+
+
 def _create_workflow_in_db(db_session, *, trigger_config, steps_config=None, **overrides) -> str:
     """Insert a workflow + steps into the DB. Returns the workflow ID.
 
@@ -285,6 +297,7 @@ class TestStatusGatingFlow:
             ]),
         )
 
+        _stored_product(db_session, "prod-1", "My Product")
         registry = TriggerRegistry(db=db_session)
         all_passed, executions = registry.before_status_change(
             entity_type=EntityType.DATA_PRODUCT,
@@ -332,6 +345,7 @@ class TestStatusGatingFlow:
             ]),
         )
 
+        _stored_product(db_session, "prod-2", "Good Product")
         registry = TriggerRegistry(db=db_session)
         all_passed, executions = registry.before_status_change(
             entity_type=EntityType.DATA_PRODUCT,

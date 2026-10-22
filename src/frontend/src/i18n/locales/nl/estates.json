@@ -13,7 +13,10 @@
     "deletingEstate": "Fout bij Verwijderen Estate",
     "triggeringSync": "Fout bij Starten Sync",
     "validationError": "Validatie Fout",
-    "validationMessage": "Vul alstublieft alle vereiste velden in: Naam, Beschrijving, Workspace URL, Metastore Naam, Cloud Type en Verbindingstype."
+    "validationMessage": "Vul alstublieft alle vereiste velden in: Naam, Beschrijving, Workspace URL, Metastore Naam, Cloud Type en Verbindingstype.",
+    "codes": {
+      "estate_name_conflict": "Er bestaat al een estate met de naam \"{{name}}\"."
+    }
   },
   "toast": {
     "estateCreated": "Estate succesvol aangemaakt",
@@ -102,7 +105,6 @@
     "backToEstateManager": "Terug naar Estate Manager",
     "backToListButton": "Terug naar lijst",
     "configureSyncJob": "Sync-taak configureren",
-    "editNotImplemented": "Functionaliteit voor het bewerken van estates wordt nog geïmplementeerd",
     "syncEnabled": "Sync ingeschakeld",
     "syncDisabled": "Sync uitgeschakeld",
     "never": "Nooit",
@@ -121,15 +123,16 @@
       "noEstateData": "Estate-gegevens zijn niet beschikbaar om een beleid toe te voegen."
     },
     "policies": {
-      "title": "Deelbeleid",
       "add": "Beleid toevoegen",
-      "sectionDescription": "Definieer regels om specifieke dataproducten of semantische modeltermen te delen met deze estate. Gedeelde resources zijn toegankelijk via het geconfigureerde verbindingstype.",
       "resourceTypeLabel": "Resourcetype:",
       "rulesLabel": "Regels ({{count}}):",
-      "filterBy": "Filteren op",
-      "whereValue": "waar waarde",
+      "ruleText": {
+        "equals": "Filteren op <b>{{filterType}}</b> waarbij de waarde gelijk is aan <b>'{{value}}'</b>",
+        "contains": "Filteren op <b>{{filterType}}</b> waarbij de waarde <b>'{{value}}'</b> bevat",
+        "starts_with": "Filteren op <b>{{filterType}}</b> waarbij de waarde begint met <b>'{{value}}'</b>",
+        "regex": "Filteren op <b>{{filterType}}</b> waarbij de waarde overeenkomt met de reguliere expressie <b>'{{value}}'</b>"
+      },
       "noRules": "Geen regels gedefinieerd voor dit beleid.",
-      "emptyTitle": "Geen deelbeleid gedefinieerd voor deze estate.",
       "emptyHint": "Klik op \"Beleid toevoegen\" om te beginnen met het delen van resources.",
       "editPolicyAlert": "Beleid bewerken: {{name}}",
       "deletePolicyAlert": "Beleid verwijderen: {{name}}",
@@ -137,7 +140,17 @@
       "addedDescription": "Deelbeleid \"{{name}}\" is succesvol toegevoegd.",
       "addErrorTitle": "Fout bij toevoegen van beleid",
       "addErrorDescription": "Kon het nieuwe deelbeleid niet opslaan. Probeer het opnieuw.",
-      "saveFailedNoData": "Opslaan van beleid mislukt. De server gaf geen gegevens terug."
+      "saveFailedNoData": "Opslaan van beleid mislukt. De server gaf geen gegevens terug.",
+      "export": {
+        "title": "Exportbeleid",
+        "sectionDescription": "Wat deze instantie met dit estate deelt.",
+        "emptyTitle": "Er is geen exportbeleid gedefinieerd voor dit estate."
+      },
+      "import": {
+        "title": "Importbeleid",
+        "sectionDescription": "Wat deze instantie van dit estate accepteert.",
+        "emptyTitle": "Er is geen importbeleid gedefinieerd voor dit estate."
+      }
     },
     "overview": {
       "title": "Estate Overzicht",
@@ -181,6 +194,12 @@
       "filterType": "bijv. tag, domein, status",
       "value": "bijv. finance, Actief"
     },
+    "operators": {
+      "equals": "Is gelijk aan",
+      "contains": "Bevat",
+      "starts_with": "Begint met",
+      "regex": "Komt overeen met regex"
+    },
     "validation": {
       "nameMin": "Beleidsnaam moet minimaal 3 tekens bevatten",
       "filterTypeRequired": "Filtertype is vereist",
@@ -192,5 +211,12 @@
       "submittedDescription": "Deelbeleid \"{{name}}\" wordt verwerkt.",
       "addErrorDescription": "Toevoegen van deelbeleid mislukt. Controleer de console voor details."
     }
+  },
+  "resourceTypes": {
+    "data_product": "Dataproduct",
+    "data_contract": "Datacontract",
+    "business_term": "Bedrijfsterm",
+    "data_domain": "Datadomein",
+    "concept": "Concept"
   }
 }

@@ -77,6 +77,19 @@ const SKIP_KEYS = new Set([
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
 
+/**
+ * A requested deprecation carries its replacement's name next to its id: the
+ * approver sees the name, and the id only when there is no name. Pure.
+ */
+export function withReplacementName(fullPayload: Record<string, unknown>): Record<string, unknown> {
+  const { replacement_name: name, ...rest } = fullPayload;
+  if (typeof name === 'string' && name && rest.replacement_id) {
+    const { replacement_id: _id, ...others } = rest;
+    return { ...others, replacement_name: name };
+  }
+  return rest;
+}
+
 interface DetailRow {
   label: string;
   value: React.ReactNode;
@@ -165,7 +178,7 @@ function buildDetailRows(
       'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
     ]);
-    for (const [key, val] of Object.entries(payload.full_payload)) {
+    for (const [key, val] of Object.entries(withReplacementName(payload.full_payload))) {
       if (key.startsWith('_')) continue;
       if (SKIP_KEYS.has(key)) continue;
       if (alreadySurfaced.has(key)) continue;
@@ -255,11 +268,11 @@ export default function WorkflowApprovalResponseDialog({
     }
     setSubmitting(true);
     try {
-      const body: Record<string, unknown> = {
-        execution_id: payload.execution_id,
-        approved,
-        message: reason.trim() || (approved ? t('workflows:approvalResponse.approved') : t('workflows:approvalResponse.rejected')),
-      };
+      // Only what the approver wrote: without a reason the backend records a
+      // coded "Request denied" (approval_rejected) that each user sees in
+      // their own language, not the approver's word for it.
+      const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
       if (grantedPermission) body.permission_level = grantedPermission;
       const response = await post('/api/workflows/handle-approval', body);

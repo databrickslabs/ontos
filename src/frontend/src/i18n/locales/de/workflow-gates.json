@@ -3,6 +3,7 @@
   "reasons": {
     "waitingForApproval": "wartet auf Genehmigung ({{step}})",
     "entityLoadFailed": "{{entityType}} {{entityId}} konnte zur Auswertung der Regel nicht geladen werden",
+    "entityNotFound": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
     "validationFailed": "die Workflow-Validierung ist fehlgeschlagen",
     "status": {
       "failed": "fehlgeschlagen",
@@ -10,5 +11,10 @@
       "pending": "ausstehend",
       "running": "läuft"
     }
-  }
+  },
+  "requiresTransition": "Eine Bearbeitung kann den Status nicht von {{fromStatus}} zu {{toStatus}} ändern. Verwenden Sie Status ändern, das den Übergang prüft und die Statusänderungs-Workflows ausführt.",
+  "certifiedIsNotAStatus": "Zertifiziert ist kein Status: Die Zertifizierung wird mit Zertifizieren gesetzt, bei einer aktiven Entität.",
+  "invalidStatus": "{{status}} ist kein Lebenszyklus-Status. Verwenden Sie einen von: {{allowed}}.",
+  "gateError": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde abgelehnt: Das Workflow-Gate {{workflows}} konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen.",
+  "gateErrorUnnamed": "Die Statusänderung von {{fromStatus}} zu {{toStatus}} wurde abgelehnt: Ein Workflow-Gate konnte nicht ausgewertet werden. Bitten Sie einen Administrator, den Workflow zu prüfen."
 }

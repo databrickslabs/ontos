@@ -3,6 +3,7 @@
   "reasons": {
     "waitingForApproval": "承認待ち ({{step}})",
     "entityLoadFailed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
+    "entityNotFound": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません",
     "validationFailed": "ワークフローの検証に失敗しました",
     "status": {
       "failed": "失敗",
@@ -10,5 +11,10 @@
       "pending": "保留中",
       "running": "実行中"
     }
-  }
+  },
+  "requiresTransition": "編集ではステータスを {{fromStatus}} から {{toStatus}} に変更できません。遷移を確認しステータス変更ワークフローを実行する「ステータスを変更」を使用してください。",
+  "certifiedIsNotAStatus": "認定済みはステータスではありません。認定は、アクティブなエンティティで「認定」を使って設定します。",
+  "invalidStatus": "{{status}} はライフサイクルのステータスではありません。次のいずれかを使用してください: {{allowed}}。",
+  "gateError": "{{fromStatus}} から {{toStatus}} へのステータス変更は拒否されました: ワークフローゲート {{workflows}} を評価できませんでした。管理者にワークフローの確認を依頼してください。",
+  "gateErrorUnnamed": "{{fromStatus}} から {{toStatus}} へのステータス変更は拒否されました: ワークフローゲートを評価できませんでした。管理者にワークフローの確認を依頼してください。"
 }

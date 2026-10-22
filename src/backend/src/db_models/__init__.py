@@ -40,6 +40,7 @@ from . import business_owners
 from . import delivery_methods
 from . import entity_relationships
 from . import entity_subscriptions
+from . import estates
 from . import certification_levels
 from . import maturity
 from . import workflow_configurations

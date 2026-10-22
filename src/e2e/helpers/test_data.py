@@ -393,7 +393,8 @@ def make_estate(**overrides) -> Dict[str, Any]:
         "cloud_type": "aws",
         "metastore_name": "e2e_metastore",
         "connection_type": "delta_share",
-        "sharing_policies": [],
+        "export_policies": [],
+        "import_policies": [],
         "is_enabled": True,
         "sync_schedule": "0 0 * * *",
     }

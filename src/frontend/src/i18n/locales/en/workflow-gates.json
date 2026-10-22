@@ -3,6 +3,7 @@
   "reasons": {
     "waitingForApproval": "waiting for approval ({{step}})",
     "entityLoadFailed": "could not load {{entityType}} {{entityId}} to evaluate the rule",
+    "entityNotFound": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated",
     "validationFailed": "the workflow validation failed",
     "status": {
       "failed": "failed",
@@ -10,5 +11,10 @@
       "pending": "pending",
       "running": "running"
     }
-  }
+  },
+  "requiresTransition": "An edit can't change the status from {{fromStatus}} to {{toStatus}}. Use Change Status, which checks the transition and runs the status change workflows.",
+  "certifiedIsNotAStatus": "Certified is not a status: certification is set with Certify, on an active entity.",
+  "invalidStatus": "{{status}} is not a lifecycle status. Use one of: {{allowed}}.",
+  "gateError": "The status change from {{fromStatus}} to {{toStatus}} was refused: the workflow gate {{workflows}} could not be evaluated. Ask an administrator to check the workflow.",
+  "gateErrorUnnamed": "The status change from {{fromStatus}} to {{toStatus}} was refused: a workflow gate could not be evaluated. Ask an administrator to check the workflow."
 }

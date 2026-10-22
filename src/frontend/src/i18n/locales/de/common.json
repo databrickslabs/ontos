@@ -755,5 +755,39 @@
     "createdSkipped": "Erstellt: {{created}}, übersprungen: {{skipped}}.",
     "createdFailed": "Erstellt: {{created}}, fehlgeschlagen: {{failed}}.",
     "createdSkippedFailed": "Erstellt: {{created}}, übersprungen: {{skipped}}, fehlgeschlagen: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Grund der Abkündigung",
+    "reasonPlaceholder": "Warum wird es abgekündigt? Konsumenten sehen diesen Text.",
+    "sunsetDate": "Auslaufdatum",
+    "replacement": "Ersatz",
+    "noReplacement": "Kein Ersatz",
+    "reasonRequired": "Für die Abkündigung ist ein Grund erforderlich.",
+    "requestHint": "Die Begründung wird zum Grund der Abkündigung.",
+    "errors": {
+      "deprecation_reason_required": "Für die Abkündigung ist ein Grund erforderlich.",
+      "sunset_date_in_past": "Das Auslaufdatum {{sunsetDate}} liegt in der Vergangenheit.",
+      "replacement_is_self": "Eine Entität kann nicht ihr eigener Ersatz sein.",
+      "replacement_not_found": "Der Ersatz {{replacementId}} wurde nicht gefunden.",
+      "replacement_retired": "Der Ersatz {{replacementId}} ist stillgelegt.",
+      "replacement_deprecated": "Der Ersatz {{replacementId}} ist veraltet.",
+      "replacement_deprecated_replaced": "Der Ersatz {{replacementId}} ist veraltet; er wird durch {{replacedBy}} ersetzt.",
+      "replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Ungültiges {{property}} \"{{value}}\": ISO-Datum erwartet.",
+      "replacement_is_self": "Der Ersatz (ontosReplacedBy) kann nicht die Entität selbst sein.",
+      "replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück: {{chain}}.",
+      "imported_replacement_dropped": "Der Ersatz {{replacementId}} ist hier nicht vorhanden und wurde daher nicht verknüpft.",
+      "imported_replacement_leads_back": "Der Ersatz {{replacementId}} führt zu dieser Entität zurück ({{chain}}) und wurde daher nicht verknüpft.",
+      "imported_status_mapped": "'{{status}}' ist kein Lebenszyklus-Status und wurde daher als '{{mappedTo}}' importiert.",
+      "imported_legacy_status": "'{{status}}' ist ein älterer Statusname und wurde daher als '{{mappedTo}}' importiert.",
+      "imported_certified_as_active": "'{{status}}' ist kein Status mehr und wurde daher als '{{mappedTo}}' importiert. Die Zertifizierung wird nicht importiert: Zertifizieren Sie die Entität in Ontos."
+    },
+    "notice": {
+      "deprecated": "Veraltet",
+      "retired": "Stillgelegt",
+      "noReason": "Kein Grund angegeben"
+    }
   }
 }

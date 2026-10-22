@@ -198,7 +198,8 @@
     "validationErrorTitle": "Erreur de validation",
     "nameRequired": "Le nom du contrat est obligatoire",
     "versionRequired": "La version est obligatoire",
-    "saveError": "Échec de l'enregistrement du contrat"
+    "saveError": "Échec de l'enregistrement du contrat",
+    "statusChangeHint": "Le statut change avec Modifier le statut sur la page, qui vérifie la transition et exécute les workflows de changement de statut."
   },
   "import": {
     "title": "Importer un Contrat de Données",
@@ -345,7 +346,7 @@
       "createProduct": "Créer un produit de données",
       "noneYet": "Aucun produit de données lié pour le moment",
       "emptyHint": "Créez un produit de données qui utilise ce contrat pour régir un livrable",
-      "statusRequirement": "Le contrat doit être au statut « actif », « approuvé » ou « certifié »",
+      "statusRequirement": "Le contrat doit être au statut « actif » ou « approuvé »",
       "unnamedProduct": "Produit sans nom",
       "deliverables_one": "Livrable : {{ports}}",
       "deliverables_other": "Livrables : {{ports}}"
@@ -519,7 +520,9 @@
       "invalidTransition": "Le contrat est maintenant {{fromStatus}} et ne peut plus être approuvé ni rejeté. Rechargez la page pour voir son statut actuel.",
       "approveFailed": "Échec de l'approbation",
       "rejectFailed": "Échec du rejet",
-      "startProfilingFailed": "Échec du démarrage du profilage"
+      "startProfilingFailed": "Échec du démarrage du profilage",
+      "invalidVersionFormat": "« {{version}} » n'est pas une version valide : une nouvelle version suit le format X.Y.Z, par exemple 2.0.0.",
+      "draftVersionFormat": "La version « {{version}} » de ce contrat n'a pas le format X.Y.Z : impossible d'en créer un brouillon personnel. Créez plutôt une nouvelle version (par exemple 2.0.0)."
     }
   },
   "list": {

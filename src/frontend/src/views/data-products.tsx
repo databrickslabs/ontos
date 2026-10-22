@@ -17,6 +17,7 @@ import { useApi } from '@/hooks/use-api';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
 import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { productUploadSuccessText } from '@/lib/upload-text';
+import { importItemLine, reportedImportItems } from '@/lib/import-item-text';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
@@ -473,28 +474,28 @@ export default function DataProducts() {
       }
 
       const result = response.data;
-      // Surface anything not created: failed entities AND files skipped as the
-      // wrong type (e.g. an ODCS contract dropped here).
-      const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
+      // Surface anything not created (failed entities AND files skipped as the
+      // wrong type, e.g. an ODCS contract dropped here) and the notes on created
+      // ones (e.g. a replacement that isn't here).
+      const reportedItems = result ? reportedImportItems(result) : [];
+      const detail = reportedItems.slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
       const allCreated = !!result && result.failed === 0 && result.skipped === 0;
       if (result && (result.failed > 0 || result.skipped > 0)) {
         // Partial success: surface the truthful summary plus the first issues.
-        const detail = unimportedItems
-          .slice(0, 5)
-          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
-          .join('\n');
         toast({
           title: result.created > 0 ? t('upload.partialSuccess', 'Imported with issues') : t('upload.failed'),
           description: `${summarizeImport(result, t)}${detail ? `\n${detail}` : ''}`,
           variant: result.failed > 0 && result.created === 0 ? 'destructive' : 'default',
           duration: 10000,
         });
-        if (unimportedItems.length > 0) setError(`${summarizeImport(result, t)}\n${detail}`);
+        if (reportedItems.length > 0) setError(`${summarizeImport(result, t)}\n${detail}`);
       } else {
         setUploadDialogOpen(false);
+        const success = productUploadSuccessText(files, result?.created ?? 0, t);
         toast({
           title: t('upload.success'),
-          description: productUploadSuccessText(files, result?.created ?? 0, t),
+          description: detail ? `${success}\n${detail}` : success,
+          ...(detail ? { duration: 10000 } : {}),
         });
       }
       await fetchProducts();

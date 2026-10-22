@@ -12,12 +12,17 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 import json
 
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+# ODPS has no status on an output port; the ODPS export carries Ontos's port status
+# as this port custom property, and imports read it back.
+ONTOS_PORT_STATUS_PROPERTY = "ontosPortStatus"
 
 
 # ============================================================================
@@ -217,6 +222,26 @@ class OutputPort(BaseModel):
     autoApprove: bool = Field(False, alias="auto_approve", description="Auto-approve flag")
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _read_port_status_property(cls, data):
+        # An ODPS export carries the port status as the ontosPortStatus custom
+        # property; a bare `status` (older exports, the API) wins when both are set.
+        if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
+            return data
+        props = data['customProperties']
+        status_props = [
+            cp for cp in props
+            if isinstance(cp, dict) and cp.get('property') == ONTOS_PORT_STATUS_PROPERTY
+        ]
+        if not status_props:
+            return data
+        data = dict(data)
+        if data.get('status') is None:
+            data['status'] = status_props[0].get('value')
+        data['customProperties'] = [cp for cp in props if cp not in status_props] or None
+        return data
 
     @field_validator('deliveryMethodId', mode='before')
     @classmethod
@@ -441,6 +466,12 @@ class DataProduct(BaseModel):
     certified_by: Optional[str] = Field(None, description="Who granted certification")
     certification_expires_at: Optional[datetime] = Field(None, description="When certification expires")
     certification_notes: Optional[str] = Field(None, description="Certification notes")
+
+    # Deprecation lifecycle fields (set when the product moves to `deprecated`)
+    deprecation_reason: Optional[str] = Field(None, description="Why the product was deprecated")
+    sunset_date: Optional[date] = Field(None, description="Date after which it shouldn't be used")
+    replacement_product_id: Optional[str] = Field(None, description="Product replacing this one")
+    deprecated_at: Optional[datetime] = Field(None, description="When the product was deprecated")
 
     # consumer_principals is stored as JSON-encoded TEXT in DB. Decode to a
     # list of dicts at read time so Pydantic can build ConsumerPrincipal
@@ -743,8 +774,26 @@ class SubscribersListResponse(BaseModel):
 # Status Change Request/Response Models
 # ============================================================================
 
-class ChangeStatusPayload(BaseModel):
-    """Payload for direct status change (admin/owner)."""
+class DeprecationPayload(BaseModel):
+    """Deprecation details (deprecation_reason is required to deprecate)."""
+    deprecation_reason: Optional[str] = Field(None, description="Why the entity is deprecated")
+    sunset_date: Optional[date] = Field(None, description="Date after which it should not be used")
+    replacement_id: Optional[str] = Field(None, description="Entity of the same type replacing it")
+
+    def deprecation_details(self):
+        from src.controller.lifecycle_fields import DeprecationDetails
+        return DeprecationDetails(
+            reason=self.deprecation_reason,
+            sunset_date=self.sunset_date,
+            replacement_id=self.replacement_id,
+        )
+
+
+class ChangeStatusPayload(DeprecationPayload):
+    """Payload for direct status change (admin/owner).
+
+    The deprecation fields are used when new_status is ``deprecated``.
+    """
     new_status: str = Field(..., description="Target status")
 
 
@@ -753,6 +802,10 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str = Field(..., description="Requested target status")
     justification: str = Field(..., description="Justification for the status change")
     current_status: Optional[str] = Field(None, description="Current status (for reference)")
+    sunset_date: Optional[str] = Field(
+        None, description="Requested deprecation: sunset date (YYYY-MM-DD, UTC)")
+    replacement_id: Optional[str] = Field(
+        None, description="Requested deprecation: the product replacing this one")
 
 
 class HandleStatusChangePayload(BaseModel):

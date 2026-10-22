@@ -16,16 +16,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  SharingPolicy, SharingResourceType, SharingRuleOperator // SharingRule and Estate removed - unused
-} from '@/views/estate-details';
+  SharingPolicy, SharingRuleOperator, SHARING_RESOURCE_TYPES,
+} from '@/types/estate';
 
 // Define arrays for z.enum
 const sharingRuleOperatorValues: [SharingRuleOperator, ...SharingRuleOperator[]] = [
     'equals', 'contains', 'starts_with', 'regex'
 ];
-const sharingResourceTypeValues: [SharingResourceType, ...SharingResourceType[]] = [
-    'data_product', 'business_glossary'
-];
+const sharingResourceTypeValues = SHARING_RESOURCE_TYPES;
 
 // Zod Schema for Validation (built with translated messages)
 const buildSharingPolicySchema = (t: TFunction) => z.object({
@@ -144,7 +142,7 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
                       <SelectValue placeholder={t('estates:sharingPolicy.placeholders.resourceType')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {sharingResourceTypeValues.map(val => <SelectItem key={val} value={val}>{val.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</SelectItem>)}
+                      {sharingResourceTypeValues.map(val => <SelectItem key={val} value={val}>{t(`estates:resourceTypes.${val}`)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -198,7 +196,7 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
                             <SelectValue placeholder={t('estates:sharingPolicy.placeholders.operator')} />
                           </SelectTrigger>
                           <SelectContent>
-                            {sharingRuleOperatorValues.map(val => <SelectItem key={val} value={val}>{val.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</SelectItem>)}
+                            {sharingRuleOperatorValues.map(val => <SelectItem key={val} value={val}>{t(`estates:sharingPolicy.operators.${val}`, { defaultValue: val })}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       )}

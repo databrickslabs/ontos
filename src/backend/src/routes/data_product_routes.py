@@ -19,6 +19,7 @@ from src.models.data_products import (
     SubscriptionResponse,
     SubscribersListResponse,
     ChangeStatusPayload,
+    DeprecationPayload,
     RequestStatusChangePayload,
     HandleStatusChangePayload,
     CommitDraftRequest,
@@ -31,6 +32,7 @@ from databricks.sdk.errors import PermissionDenied
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
+from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -54,6 +56,19 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Data Products"])
+
+
+# Audit actions for lifecycle moves (see the deprecation lifecycle PRD)
+_STATUS_AUDIT_ACTIONS = {'deprecated': 'DEPRECATE', 'retired': 'RETIRE'}
+
+
+def _deprecation_audit(payload: DeprecationPayload) -> dict:
+    """Deprecation details for the audit log."""
+    return {
+        'deprecation_reason': payload.deprecation_reason,
+        'sunset_date': payload.sunset_date.isoformat() if payload.sunset_date else None,
+        'replacement_id': payload.replacement_id,
+    }
 
 DATA_PRODUCTS_FEATURE_ID = "data-products"
 
@@ -979,15 +994,20 @@ async def deprecate_product(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    payload: DeprecationPayload = Body(default_factory=DeprecationPayload),
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
     Deprecate an active or certified product to signal it will be retired soon.
     ODPS lifecycle: active/certified → deprecated
+    Body: deprecation_reason (required), sunset_date, replacement_id.
     """
     try:
-        updated_product = manager.deprecate_product(product_id, current_user.username if current_user else None)
+        updated_product = manager.deprecate_product(
+            product_id, current_user.username if current_user else None,
+            deprecation=payload.deprecation_details(),
+        )
         
         audit_manager.log_action(
             db=db,
@@ -996,7 +1016,8 @@ async def deprecate_product(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action='DEPRECATE',
             success=True,
-            details={'product_id': product_id, 'status': updated_product.status}
+            details={'product_id': product_id, 'status': updated_product.status,
+                     **_deprecation_audit(payload)},
         )
         
         return {'status': updated_product.status}
@@ -1852,6 +1873,10 @@ async def create_data_product(
         logger.info(f"Successfully created data product with ID: {created_product_response.id if created_product_response else payload.get('id')}")
         return created_product_response
 
+    except CodedValueError as e:
+        # A status that isn't a lifecycle status (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
@@ -2851,17 +2876,20 @@ async def change_product_status(
         updated_product = manager.transition_status(
             product_id=product_id,
             new_status=payload.new_status,
-            current_user=current_user.username
+            current_user=current_user.username,
+            deprecation=payload.deprecation_details(),
         )
         
+        new_status = payload.new_status.lower()
         audit_manager.log_action(
             db=db,
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action='CHANGE_STATUS',
+            action=_STATUS_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
-            details={'product_id': product_id, 'new_status': payload.new_status}
+            details={'product_id': product_id, 'new_status': payload.new_status,
+                     **(_deprecation_audit(payload) if new_status == 'deprecated' else {})},
         )
         return {"message": f"Status changed to {payload.new_status}", "product": updated_product}
         
@@ -2897,7 +2925,9 @@ async def request_status_change(
             target_status=payload.target_status,
             justification=payload.justification,
             requester_email=current_user.username,
-            current_user=current_user.username
+            current_user=current_user.username,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         audit_manager.log_action(

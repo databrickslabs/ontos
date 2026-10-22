@@ -21,7 +21,11 @@ export function subscribeErrorText(detail: unknown, t: TFunction, fallback: stri
  * which carries the parts of the coded `detail` separately.
  */
 export function subscribeResponseErrorText(
-  response: { error?: string | null; errorCode?: string | null; errorParams?: Record<string, unknown> | null },
+  response: {
+    error?: string | null;
+    errorCode?: string | null;
+    errorParams?: Record<string, unknown> | null;
+  },
   t: TFunction,
   fallback: string,
 ): string {

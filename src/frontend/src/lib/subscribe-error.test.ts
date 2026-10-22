@@ -9,7 +9,9 @@ afterEach(async () => {
 
 const detail = {
   code: 'product_not_subscribable',
-  message: "Cannot subscribe to Old Product in status 'deprecated'. Product must be in one of: active, certified",
+  message:
+    "Cannot subscribe to Old Product in status 'deprecated'. "
+    + 'Product must be in one of: active, certified',
   params: { status: 'deprecated', productName: 'Old Product' },
 };
 

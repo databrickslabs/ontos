@@ -29,7 +29,9 @@ async function submitRefused(lng: string) {
     <SubscribeDialog open onOpenChange={vi.fn()} productId="p-1" productName="Old Product" />,
   );
   const buttons = await screen.findAllByRole('button');
-  const submit = buttons.filter(b => /^(Subscribe|Assinar)$/.test(b.textContent?.trim() ?? '')).pop()!;
+  const submit = buttons
+    .filter(b => /^(Subscribe|Assinar)$/.test(b.textContent?.trim() ?? ''))
+    .pop()!;
   fireEvent.click(submit);
   await waitFor(() => expect(mockToast).toHaveBeenCalled());
   return mockToast.mock.calls[0][0];

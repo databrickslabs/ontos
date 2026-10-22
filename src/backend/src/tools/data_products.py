@@ -8,12 +8,13 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller import search_scoring
-from src.controller.lifecycle_fields import (
-    LifecycleFieldError, deprecation_details_from_strings,
+from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.tools.base import (
+    BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
 )
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -453,7 +454,15 @@ class UpdateDataProductTool(BaseTool):
                         error=f"Data product '{product_id}' not found"
                     )
                 current_status = getattr(current.status, 'value', current.status) or 'draft'
-                if str(current_status).lower() != status.lower():
+                current_status = str(current_status).lower()
+                if current_status != status.lower():
+                    from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
+                    allowed = DATA_PRODUCT_TRANSITIONS.get(current_status, [])
+                    if status.lower() not in allowed:
+                        return ToolResult(
+                            success=False,
+                            **invalid_transition(current_status, status.lower(), allowed),
+                        )
                     try:
                         deprecation = deprecation_details_from_strings(
                             deprecation_reason, sunset_date, replacement_id
@@ -497,11 +506,12 @@ class UpdateDataProductTool(BaseTool):
                 }
             )
             
-        except LifecycleFieldError as err:
-            # A deprecation the details don't allow: an expected, app-written error
-            # (no SQL or internal text), so its message and code go to the client,
-            # like the API's coded 400. Anything else stays generic (tool_failure).
-            return ToolResult(success=False, error=str(err), error_code=err.code)
+        except CodedValueError as err:
+            # An expected, app-written error (a deprecation the details don't allow,
+            # a status change a workflow blocks): no SQL or internal text, so its
+            # message and code go to the client, like the API's coded 400.
+            # Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code or None)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("update_data_product", e))
 

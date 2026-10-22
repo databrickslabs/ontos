@@ -7,11 +7,12 @@ Tools for searching, creating, updating, and deleting data contracts.
 import json
 from typing import Any, Dict, List, Optional
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
-from src.controller.lifecycle_fields import (
-    LifecycleFieldError, deprecation_details_from_strings,
+from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.tools.base import (
+    BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
 )
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -294,7 +295,16 @@ class UpdateDataContractTool(BaseTool):
                         success=False,
                         error=f"Data contract '{contract_id}' not found"
                     )
-                if (current.status or 'draft').lower() != status.lower():
+                current_status = (current.status or 'draft').lower()
+                if current_status != status.lower():
+                    from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
+                    allowed = DATA_CONTRACT_TRANSITIONS.get(current_status)
+                    # A status outside the map allows any transition, as in the manager
+                    if allowed is not None and status.lower() not in allowed:
+                        return ToolResult(
+                            success=False,
+                            **invalid_transition(current_status, status.lower(), allowed),
+                        )
                     try:
                         deprecation = deprecation_details_from_strings(
                             deprecation_reason, sunset_date, replacement_id
@@ -344,11 +354,12 @@ class UpdateDataContractTool(BaseTool):
                 }
             )
             
-        except LifecycleFieldError as err:
-            # A deprecation the details don't allow: an expected, app-written error
-            # (no SQL or internal text), so its message and code go to the client,
-            # like the API's coded 400. Anything else stays generic (tool_failure).
-            return ToolResult(success=False, error=str(err), error_code=err.code)
+        except CodedValueError as err:
+            # An expected, app-written error (a deprecation the details don't allow,
+            # a status change a workflow blocks): no SQL or internal text, so its
+            # message and code go to the client, like the API's coded 400.
+            # Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code or None)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("update_data_contract", e))
 

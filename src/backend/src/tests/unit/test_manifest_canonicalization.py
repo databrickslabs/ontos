@@ -8,6 +8,8 @@ Covers:
 - Golden vectors from RFC 8785 Appendix B
 """
 
+import json
+
 import pytest
 from decimal import Decimal
 
@@ -455,3 +457,86 @@ class TestErrorMessages:
         except CanonicalizationError as e:
             assert hasattr(e, "code")
             assert e.code == "float_not_allowed"
+
+
+class TestKeyEscaping:
+    """Object keys are escaped exactly like string values (ADR, Decision 1)."""
+
+    @pytest.mark.parametrize(
+        "key, escaped",
+        [
+            ('a"b', 'a\\"b'),
+            ("a\\b", "a\\\\b"),
+            ("a\bb", "a\\bb"),
+            ("a\fb", "a\\fb"),
+            ("a\nb", "a\\nb"),
+            ("a\rb", "a\\rb"),
+            ("a\tb", "a\\tb"),
+            ("a\x00b", "a\\u0000b"),
+            ("a\x1fb", "a\\u001fb"),
+        ],
+    )
+    def test_key_escaped_like_value(self, key, escaped):
+        """A key with a special character is escaped with the value rules."""
+        assert canonicalize_to_string({key: 1}) == '{"' + escaped + '":1}'
+        assert canonicalize_to_string({key: key}) == (
+            '{"' + escaped + '":"' + escaped + '"}'
+        )
+
+    def test_key_with_several_special_characters(self):
+        """Quote, backslash, control and non-ASCII characters together in one key.
+
+        Non-ASCII (``é``, U+2028) stays literal, as in values.
+        """
+        key = 'q"\\\n\x01é '
+        result = canonicalize({key: "v", "plain": 0})
+        assert result == ('{"plain":0,"q\\"\\\\\\n\\u0001é ":"v"}').encode("utf-8")
+
+    def test_escaped_keys_round_trip(self):
+        """Output with special keys is valid JSON that parses back to the input."""
+        obj = {'"': 1, "\\": 2, "\n": 3, "\x7f": 4, "ü": 5, "\x00": {"\t": 6}}
+        assert json.loads(canonicalize(obj).decode("utf-8")) == obj
+
+    def test_key_cannot_close_its_quote(self):
+        """A key with a quote can't inject a second member."""
+        obj = {'a":1,"b': 2}
+        assert json.loads(canonicalize(obj)) == obj
+
+    def test_non_string_key_rejected(self):
+        """Keys are strings: an integer key isn't converted."""
+        with pytest.raises(CanonicalizationError) as exc:
+            canonicalize({"outer": {1: "a"}})
+        assert exc.value.code == "unsupported_type"
+        assert exc.value.path == "$.outer"
+
+    def test_non_string_key_rejected_by_encoder(self):
+        """The encoder used directly rejects a non-string key too."""
+        with pytest.raises(CanonicalizationError) as exc:
+            CanonicalJSONEncoder().encode({1: "a"})
+        assert exc.value.code == "unsupported_type"
+
+
+class TestLoneSurrogates:
+    """Lone surrogates are rejected in keys and values alike (ADR, Decision 1)."""
+
+    @pytest.mark.parametrize("bad", ["\ud800", "a\udfffb"])
+    def test_lone_surrogate_value_rejected(self, bad):
+        """A value with a lone surrogate raises invalid_string with its path."""
+        for fn in (canonicalize, canonicalize_to_string):
+            with pytest.raises(CanonicalizationError) as exc:
+                fn({"outer": [bad]})
+            assert exc.value.code == "invalid_string"
+            assert exc.value.path == "$.outer[0]"
+
+    def test_lone_surrogate_key_rejected(self):
+        """A key with a lone surrogate raises invalid_string with its path."""
+        with pytest.raises(CanonicalizationError) as exc:
+            canonicalize_to_string({"outer": {"k\ud800": 1}})
+        assert exc.value.code == "invalid_string"
+        assert exc.value.path == "$.outer"
+
+    def test_lone_surrogate_rejected_by_encoder(self):
+        """The encoder used directly rejects a lone surrogate value."""
+        with pytest.raises(CanonicalizationError) as exc:
+            CanonicalJSONEncoder().encode("\udc00")
+        assert exc.value.code == "invalid_string"

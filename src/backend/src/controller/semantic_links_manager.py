@@ -222,16 +222,14 @@ class SemanticLinksManager:
         
         # Incrementally update the in-memory RDF graph via the shared manager on app.state
         try:
-            from fastapi import Request
-            # Access global app.state manager through SQLAlchemy session bind info when available
-            # Fallback: attempt to import a locator util
-            manager = None
-            try:
-                # Preferred path: retrieve from a globally stored application reference
-                from src.common.app_state import get_app_state_manager
-                manager = get_app_state_manager('semantic_models_manager')
-            except Exception:
-                manager = None
+            manager = self._semantic_models_manager
+            if manager is None:
+                try:
+                    # Preferred runtime path: retrieve the shared application manager.
+                    from src.common.app_state import get_app_state_manager
+                    manager = get_app_state_manager('semantic_models_manager')
+                except Exception:
+                    manager = None
             if manager is not None:
                 manager.add_entity_semantic_link_to_graph(payload.entity_type, payload.entity_id, payload.iri, created_by=created_by)
                 # The new triple changes which entities resolve to a concept,
@@ -264,20 +262,22 @@ class SemanticLinksManager:
     def remove(self, link_id: Union[str, UUID], removed_by: Optional[str] = None) -> bool:
         removed = entity_semantic_links_repo.remove(self._db, id=link_id)
         try:
-            manager = None
-            try:
-                from src.common.app_state import get_app_state_manager
-                manager = get_app_state_manager('semantic_models_manager')
-            except Exception:
-                manager = None
-            if removed and manager is not None:
-                manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
-                # Mirror of the add path: the removed triple invalidates
-                # cached concepts/properties/stats and the inferred-link cache.
-                manager._invalidate_cache()
-            else:
-                from src.controller.semantic_models_manager import SemanticModelsManager
-                SemanticModelsManager(db=self._db).on_models_changed()
+            manager = self._semantic_models_manager
+            if manager is None:
+                try:
+                    from src.common.app_state import get_app_state_manager
+                    manager = get_app_state_manager('semantic_models_manager')
+                except Exception:
+                    manager = None
+            if removed:
+                if manager is not None:
+                    manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
+                    # Mirror of the add path: the removed triple invalidates
+                    # cached concepts/properties/stats and the inferred-link cache.
+                    manager._invalidate_cache()
+                else:
+                    from src.controller.semantic_models_manager import SemanticModelsManager
+                    SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
             logger.warning(f"Failed to update KG after link removal: {e}")
         

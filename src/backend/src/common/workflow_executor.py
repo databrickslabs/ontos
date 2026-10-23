@@ -367,7 +367,10 @@ def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     ``description`` / ``tags`` have the request's shape, not the run's.
     Payload keys the loader doesn't have stay. ``before_update`` gates still
     see only the proposed change (see ``_rule_object``), with its values
-    also under the loader's keys; ``before_create`` has no stored entity.
+    also under the loader's keys; ``before_create`` and ``on_delete`` have
+    no stored entity. As in ``_rule_object``, an entity the loader doesn't
+    find raises ``RuleEntityNotFoundError`` (the step fails) instead of
+    falling back to the payload.
     """
     from src.common.compliance_entities import AppEntityLoader
 
@@ -386,7 +389,7 @@ def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     entity_type = (context.entity_type or '').lower()
     entity_type = _COMPLIANCE_TYPES.get(entity_type, entity_type)
     if (
-        trigger_type == 'before_create'
+        trigger_type in ('before_create', 'on_delete')
         or entity_type not in AppEntityLoader.SUPPORTED_TYPES
         or not context.entity_id
     ):
@@ -396,7 +399,10 @@ def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     except Exception as e:
         # As in _rule_object: the cause stays in the server log
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
-    return {**obj, **loaded} if loaded else obj
+    if not loaded:
+        # As in _rule_object: the payload alone could let the rule pass
+        raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
+    return {**obj, **loaded}
 
 
 class ValidationStepHandler(StepHandler):

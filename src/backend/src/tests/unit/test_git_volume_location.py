@@ -51,7 +51,14 @@ def remote(tmp_path: Path) -> str:
     """A bare repository with one commit on main, as file:// URL."""
     bare = tmp_path / 'remote.git'
     seed = tmp_path / 'seed'
-    run = lambda *args, cwd=None: subprocess.run(args, cwd=cwd, check=True, capture_output=True)
+    # An empty hooks directory for these throwaway repos only, so a global
+    # core.hooksPath on the developer's machine doesn't run on the fixture's commits.
+    no_hooks = tmp_path / 'no-hooks'
+    no_hooks.mkdir()
+    run = lambda *args, cwd=None: subprocess.run(
+        ('git', '-c', f'core.hooksPath={no_hooks}', *args[1:]),
+        cwd=cwd, check=True, capture_output=True,
+    )
     run('git', 'init', '--bare', '-b', 'main', str(bare))
     run('git', 'init', '-b', 'main', str(seed))
     (seed / 'README.md').write_text('# gov\n')

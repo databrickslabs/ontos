@@ -80,3 +80,38 @@ def odcs_operators(check: Any) -> Dict[str, Any]:
         if low is not None or high is not None:
             out[odcs_key] = [_as_value(low), _as_value(high)]
     return out
+
+
+def _uses_metric(api_version: Optional[str]) -> bool:
+    """ODCS v3.1.0 renamed a library check's `rule` to `metric` (and requires
+    it); v3.0.x only has `rule`."""
+    parts = (api_version or 'v3.1.0').lstrip('vV').split('.')
+    try:
+        return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0) >= (3, 1)
+    except ValueError:
+        return True
+
+
+# column -> ODCS key, in the order the export writes them
+_CHECK_FIELDS = (
+    ('stable_id', 'id'), ('description', 'description'), ('dimension', 'dimension'),
+    ('business_impact', 'businessImpact'), ('severity', 'severity'), ('method', 'method'),
+    ('schedule', 'schedule'), ('scheduler', 'scheduler'), ('unit', 'unit'), ('tags', 'tags'),
+    ('query', 'query'), ('engine', 'engine'), ('implementation', 'implementation'),
+)
+
+
+def odcs_quality_check(check: Any, api_version: Optional[str]) -> Dict[str, Any]:
+    """A stored quality check in ODCS form. Its name goes out as `name`, and
+    the library metric as `metric` (v3.1.0) or `rule` (v3.0.x)."""
+    out: Dict[str, Any] = {'type': check.type}
+    if check.name:
+        out['name'] = check.name
+    if check.rule:
+        out['metric' if _uses_metric(api_version) else 'rule'] = check.rule
+    for column, key in _CHECK_FIELDS:
+        value = getattr(check, column, None)
+        if value:
+            out[key] = value
+    out.update(odcs_operators(check))
+    return out

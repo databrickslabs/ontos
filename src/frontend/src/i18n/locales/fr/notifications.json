@@ -2,12 +2,14 @@
   "statusChangeNotApplied": {
     "title": "Changement de statut non appliqué",
     "statusChanged": "La demande de changement du statut de « {{fromStatus}} » à « {{toStatus}} » a été approuvée, mais le statut est maintenant « {{currentStatus}} » : le changement n'a donc pas été appliqué. Refaites la demande si elle est toujours nécessaire.",
-    "refused": "Votre demande de changement du statut en « {{toStatus}} » a été approuvée, mais le changement n'a pas pu être appliqué : {{reason}}"
+    "refused": "Votre demande de changement du statut en « {{toStatus}} » a été approuvée, mais le changement n'a pas pu être appliqué : {{reason}}",
+    "reviewNotApplied": "La revue du produit de données a été décidée, mais le passage à « {{toStatus}} » n'a pas pu être appliqué : {{reason}}"
   },
   "contractStatusNotChanged": {
     "title": "Statut du contrat inchangé",
     "notUnderReview": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : le contrat n'est pas en revue (statut « {{currentStatus}} »)",
-    "notApplied": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}"
+    "notApplied": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}",
+    "requesterNotApplied": "La revue de votre contrat a été décidée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}"
   },
   "ui": {
     "tooltip": "Notifications",

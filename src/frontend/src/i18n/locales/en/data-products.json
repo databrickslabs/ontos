@@ -541,7 +541,8 @@
       "failedToSerialize": "Failed to serialize UI state to JSON.",
       "unexpectedError": "An unexpected error occurred."
     },
-    "syntaxErrorLabel": "Syntax Error:"
+    "syntaxErrorLabel": "Syntax Error:",
+    "statusChangeHint": "The status changes with Change Status on the page, which checks the transition and runs the status change workflows."
   },
   "import": {
     "title": "Import Data Product",
@@ -929,7 +930,8 @@
       "createNewContract": "Create New Contract",
       "linkContract": "Link Contract",
       "linking": "Linking..."
-    }
+    },
+    "statusFilterNote": "Only showing contracts with 'active' or 'approved' status. Pick a specific version: same-named contracts show their version inline."
   },
   "hierarchy": {
     "title": "Data Hierarchy",
@@ -1086,8 +1088,10 @@
     "versionPlaceholder": "e.g., v1.1, v2.0-beta",
     "createButton": "Create Version",
     "errors": {
-      "versionEmpty": "Version string cannot be empty."
-    }
+      "versionEmpty": "Version string cannot be empty.",
+      "versionFormat": "\"{{version}}\" is not in the X.Y.Z form (for example 2.0.0)."
+    },
+    "versionPlaceholderSemver": "e.g., 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Unnamed Product",

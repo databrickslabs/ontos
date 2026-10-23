@@ -198,7 +198,8 @@
     "validationErrorTitle": "Error de validación",
     "nameRequired": "El nombre del contrato es obligatorio",
     "versionRequired": "La versión es obligatoria",
-    "saveError": "Error al guardar el contrato"
+    "saveError": "Error al guardar el contrato",
+    "statusChangeHint": "El estado cambia con Cambiar estado en la página, que comprueba la transición y ejecuta los workflows de cambio de estado."
   },
   "import": {
     "title": "Importar Contrato de Datos",
@@ -345,7 +346,7 @@
       "createProduct": "Crear producto de datos",
       "noneYet": "Aún no hay productos de datos vinculados",
       "emptyHint": "Crea un producto de datos que use este contrato para gobernar un entregable",
-      "statusRequirement": "El contrato debe estar en estado 'activo', 'aprobado' o 'certificado'",
+      "statusRequirement": "El contrato debe estar en estado 'activo' o 'aprobado'",
       "unnamedProduct": "Producto sin nombre",
       "deliverables_one": "Entregable: {{ports}}",
       "deliverables_other": "Entregables: {{ports}}"
@@ -519,7 +520,9 @@
       "invalidTransition": "El contrato ahora está en {{fromStatus}} y ya no se puede aprobar ni rechazar. Recargue la página para ver su estado actual.",
       "approveFailed": "Error al aprobar",
       "rejectFailed": "Error al rechazar",
-      "startProfilingFailed": "Error al iniciar el perfilado"
+      "startProfilingFailed": "Error al iniciar el perfilado",
+      "invalidVersionFormat": "\"{{version}}\" no es una versión válida: una nueva versión tiene la forma X.Y.Z, por ejemplo 2.0.0.",
+      "draftVersionFormat": "La versión \"{{version}}\" de este contrato no tiene la forma X.Y.Z, así que no se puede crear un borrador personal a partir de ella. Crea una nueva versión (por ejemplo 2.0.0)."
     }
   },
   "list": {

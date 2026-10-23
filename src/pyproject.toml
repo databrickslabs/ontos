@@ -36,6 +36,7 @@ dependencies = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-asyncio>=0.23",
+    "pytest-xdist>=3.5",
     "ruff>=0.8.0",
     "pre-commit>=3.0.0",
     "fpdf2>=2.8.0",

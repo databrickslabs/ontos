@@ -873,7 +873,7 @@ export default function DataProductDetails() {
   };
 
   // Check if product is subscribable (active or certified)
-  const isSubscribable = product?.status && ['active', 'certified'].includes(product.status.toLowerCase());
+  const isSubscribable = product?.status && product.status.toLowerCase() === 'active';
 
   // Helper function to update product with 409 handling
   const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {

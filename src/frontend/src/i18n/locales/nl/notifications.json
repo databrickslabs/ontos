@@ -2,12 +2,14 @@
   "statusChangeNotApplied": {
     "title": "Statuswijziging niet toegepast",
     "statusChanged": "Het verzoek om de status te wijzigen van '{{fromStatus}}' naar '{{toStatus}}' is goedgekeurd, maar de status is nu '{{currentStatus}}', dus de wijziging is niet toegepast. Dien het verzoek opnieuw in als het nog nodig is.",
-    "refused": "Uw verzoek om de status te wijzigen naar '{{toStatus}}' is goedgekeurd, maar de wijziging kon niet worden toegepast: {{reason}}"
+    "refused": "Uw verzoek om de status te wijzigen naar '{{toStatus}}' is goedgekeurd, maar de wijziging kon niet worden toegepast: {{reason}}",
+    "reviewNotApplied": "Over de review van het dataproduct is beslist, maar de wijziging naar '{{toStatus}}' kon niet worden toegepast: {{reason}}"
   },
   "contractStatusNotChanged": {
     "title": "Contractstatus niet gewijzigd",
     "notUnderReview": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: het contract is niet in review (status '{{currentStatus}}')",
-    "notApplied": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}"
+    "notApplied": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}",
+    "requesterNotApplied": "Over de review van uw contract is beslist, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}"
   },
   "ui": {
     "tooltip": "Meldingen",

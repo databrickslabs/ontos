@@ -11,7 +11,15 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from sqlalchemy.orm import Session
 
-from src.db_models.data_contracts import SchemaObjectCustomPropertyDb, SchemaPropertyCustomPropertyDb
+from src.db_models.data_contracts import (
+    SchemaObjectCustomPropertyDb, SchemaPropertyCustomPropertyDb, SchemaPropertyDb,
+)
+
+# The order of a schema object's columns: the contract's (`position`), then
+# rows stored without one (by name)
+SCHEMA_PROPERTY_ORDER = (
+    SchemaPropertyDb.position.is_(None), SchemaPropertyDb.position, SchemaPropertyDb.name,
+)
 
 
 def property_custom_property_rows(
@@ -39,6 +47,7 @@ def property_custom_property_rows(
             stable_id=entry.get('id') or (previous_ids or {}).get(name),
             property=name,
             value=json.dumps(entry.get('value')),
+            position=len(rows),
         ))
     return rows
 
@@ -59,8 +68,9 @@ def object_custom_property_rows(
             stable_id=entry.get('id'),
             property=entry['property'],
             value=json.dumps(entry.get('value')),
+            position=position,
         )
-        for entry in entries if entry.get('property')
+        for position, entry in enumerate(e for e in entries if e.get('property'))
     ]
 
 
@@ -94,6 +104,7 @@ def custom_properties_by_property(
     rows = (
         db.query(SchemaPropertyCustomPropertyDb)
         .filter(SchemaPropertyCustomPropertyDb.property_id.in_(property_ids))
+        .order_by(SchemaPropertyCustomPropertyDb.position.is_(None), SchemaPropertyCustomPropertyDb.position)
         .all()
     )
     out: Dict[str, Dict[str, Any]] = {}

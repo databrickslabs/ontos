@@ -10,5 +10,10 @@
       "pending": "in afwachting",
       "running": "bezig"
     }
-  }
+  },
+  "requiresTransition": "Een bewerking kan de status niet wijzigen van {{fromStatus}} naar {{toStatus}}. Gebruik Status wijzigen, dat de overgang controleert en de workflows voor statuswijziging uitvoert.",
+  "certifiedIsNotAStatus": "Gecertificeerd is geen status: certificering stel je in met Certificeren, op een actieve entiteit.",
+  "invalidStatus": "{{status}} is geen levenscyclusstatus. Gebruik een van: {{allowed}}.",
+  "gateError": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: de workflowpoort {{workflows}} kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+  "gateErrorUnnamed": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: een workflowpoort kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren."
 }

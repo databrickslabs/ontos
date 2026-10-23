@@ -2,12 +2,14 @@
   "statusChangeNotApplied": {
     "title": "ステータスの変更は適用されませんでした",
     "statusChanged": "ステータスを「{{fromStatus}}」から「{{toStatus}}」に変更するリクエストは承認されましたが、現在のステータスが「{{currentStatus}}」のため、変更は適用されませんでした。まだ必要な場合は、もう一度リクエストしてください。",
-    "refused": "ステータスを「{{toStatus}}」に変更するリクエストは承認されましたが、変更を適用できませんでした: {{reason}}"
+    "refused": "ステータスを「{{toStatus}}」に変更するリクエストは承認されましたが、変更を適用できませんでした: {{reason}}",
+    "reviewNotApplied": "データプロダクトのレビューは決定されましたが、「{{toStatus}}」への変更を適用できませんでした: {{reason}}"
   },
   "contractStatusNotChanged": {
     "title": "契約のステータスは変更されませんでした",
     "notUnderReview": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: 契約はレビュー中ではありません（ステータス「{{currentStatus}}」）",
-    "notApplied": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: {{reason}}"
+    "notApplied": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: {{reason}}",
+    "requesterNotApplied": "契約のレビューは決定されましたが、契約は「{{toStatus}}」に変更されませんでした: {{reason}}"
   },
   "ui": {
     "tooltip": "通知",

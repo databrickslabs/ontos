@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "es. bozza",
       "toStatus": "A stato",
       "toStatusPlaceholder": "es. attivo",
-      "descriptionPlaceholder": "Descrizione del workflow"
+      "descriptionPlaceholder": "Descrizione del workflow",
+      "failClosed": "Rifiuta la transizione se questo gate non può essere valutato",
+      "failClosedHint": "Fail closed: se la valutazione di questo gate genera un errore (non un normale fallimento), il cambio di stato viene rifiutato. Disattivato (fail open), il cambio avviene e l'errore viene registrato e sottoposto ad audit.",
+      "disabledFor": {
+        "title": "Disattivato per",
+        "hint": "Questo gate non viene eseguito per i domini, i prodotti dati e i contratti dati elencati qui (un dominio copre i suoi prodotti e contratti). Ogni salto viene registrato e sottoposto ad audit.",
+        "domains": "Domini",
+        "dataProducts": "Prodotti dati",
+        "dataContracts": "Contratti dati",
+        "none": "Nessuno",
+        "selectedCount_one": "{{count}} selezionato",
+        "selectedCount_other": "{{count}} selezionati",
+        "search": "Cerca...",
+        "noResults": "Nessun risultato.",
+        "remove": "Rimuovi {{name}}",
+        "notFound": "{{id}} (non esiste più)",
+        "missingOnSave_one": "Il gate è disattivato per {{count}} elemento che non esiste più. Rimuovilo e salva di nuovo.",
+        "missingOnSave_other": "Il gate è disattivato per {{count}} elementi che non esistono più. Rimuovili e salva di nuovo."
+      }
     },
     "stepConfig": {
       "title": "Configurazione passaggio",

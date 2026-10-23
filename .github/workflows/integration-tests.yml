@@ -55,4 +55,5 @@ jobs:
           hatch -e dev run pytest backend/src/tests/integration \
             -o addopts="--import-mode=importlib" \
             -o faulthandler_timeout=300 \
+            -n 4 \
             -q -rs

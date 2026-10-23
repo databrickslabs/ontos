@@ -157,6 +157,8 @@ def test_a_request_made_from_another_status_is_not_applied(db_session):
         'title': 'notifications:statusChangeNotApplied.title',
         'description': 'notifications:statusChangeNotApplied.statusChanged',
         'params': {'fromStatus': 'proposed', 'toStatus': 'draft', 'currentStatus': 'sandbox'},
+        # The product status labels translate the three statuses
+        'statusNamespace': 'data-products',
     } for n in notes)
 
 

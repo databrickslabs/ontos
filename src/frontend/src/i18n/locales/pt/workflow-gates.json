@@ -10,5 +10,10 @@
       "pending": "pendente",
       "running": "em execução"
     }
-  }
+  },
+  "requiresTransition": "Uma edição não pode mudar o status de {{fromStatus}} para {{toStatus}}. Use Alterar status, que verifica a transição e executa os workflows de mudança de status.",
+  "certifiedIsNotAStatus": "Certificado não é um status: a certificação é definida com Certificar, numa entidade ativa.",
+  "invalidStatus": "{{status}} não é um status do ciclo de vida. Use um destes: {{allowed}}.",
+  "gateError": "A mudança de status de {{fromStatus}} para {{toStatus}} foi recusada: não foi possível avaliar o gate de workflow {{workflows}}. Peça a um administrador para verificar o workflow.",
+  "gateErrorUnnamed": "A mudança de status de {{fromStatus}} para {{toStatus}} foi recusada: não foi possível avaliar um gate de workflow. Peça a um administrador para verificar o workflow."
 }

@@ -209,6 +209,9 @@ The `trigger_config` JSON defines when the workflow executes:
 }
 ```
 
+A `before_status_change` trigger also has `on_error` (`fail_open`, the default, or
+`fail_closed`); see [When a status gate errors](#when-a-status-gate-errors).
+
 ### Scope Configuration
 
 The `scope_config` JSON restricts workflow applicability:
@@ -274,6 +277,7 @@ The `TriggerRegistry` provides a centralized interface for firing events and exe
 |------|------------|-------------|
 | Before Create | `before_create` | **Pre-creation validation** - blocks creation if workflow fails |
 | Before Update | `before_update` | **Pre-update validation** - blocks update if workflow fails |
+| Before Status Change | `before_status_change` | **Status gate** - blocks a product or contract status transition if workflow fails |
 | On Create | `on_create` | Entity is created (post-creation) |
 | On Update | `on_update` | Entity is modified (post-update) |
 | On Delete | `on_delete` | Entity is deleted |
@@ -372,6 +376,53 @@ if not all_passed:
 ```
 
 > **Important:** The `before_create` and `before_update` triggers execute **synchronously** and return a boolean indicating whether all workflows passed. This enables blocking creation/update operations if validation fails.
+
+#### When a Status Gate Errors
+
+A `before_status_change` workflow (a status gate) runs when a product or contract
+changes status through Change Status or an approved status change request. A gate
+that **fails** (a Fail step, a validation that doesn't hold, an approval it is still
+waiting for) blocks the transition. A gate whose **evaluation raises an error** (the
+database is unreachable, a step handler crashes) is different: it neither passed nor
+failed. What happens then is set per workflow with `on_error` on its trigger
+(Designer: *Refuse the transition if this gate can't be evaluated*):
+
+| `on_error` | When evaluating the gate raises |
+|---|---|
+| `fail_open` (default) | The transition proceeds |
+| `fail_closed` | The transition is refused with `status_change_gate_error` ("a workflow gate could not be evaluated"), translated in the UI |
+
+In both modes the error is logged at error level and written to the audit log
+(feature `process-workflows`, action `GATE_ERROR`, with the entity, the statuses,
+the workflow, its mode and the error). If the gates can't even be listed, the active
+`fail_closed` gates for the entity type are read directly from the workflows table,
+and one of them is enough to refuse the transition; if that fails too, the mode is
+unknown and the transition proceeds (the error is still reported). Use `fail_closed`
+for gates that enforce a policy, such as a certification or enforcement check.
+
+#### Switching a Status Gate Off for a Domain or an Entity
+
+A status gate can be switched off for some domains, data products or data
+contracts with `disabled_for` on its trigger (Designer: *Switched off for*):
+
+```json
+"trigger": {
+  "type": "before_status_change",
+  "entity_types": ["data_product", "data_contract"],
+  "disabled_for": {"domains": ["<domain id>"], "data_products": [], "data_contracts": ["<contract id>"]}
+}
+```
+
+- The gate doesn't run for a listed product or contract, nor for a product or
+  contract assigned to a listed domain (any of its domains, not only the primary).
+- The lists only switch the gate off: there is no way to switch it back on for one
+  entity of a listed domain. Subdomains are not included; list them too.
+- Each skip is logged at info level and written to the audit log (feature
+  `process-workflows`, action `GATE_SKIPPED`, with the entity, the statuses, the
+  workflow and which domain or entity switched it off).
+- It applies to `fail_closed` gates as well, also when the gates can't be listed.
+- Saving a workflow checks the ids exist, and only `before_status_change`
+  workflows accept the setting. Who can edit workflows can change it.
 
 ### TriggerEvent Dataclass
 

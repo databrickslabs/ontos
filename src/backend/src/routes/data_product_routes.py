@@ -31,6 +31,7 @@ from databricks.sdk.errors import PermissionDenied
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
+from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -1852,6 +1853,10 @@ async def create_data_product(
         logger.info(f"Successfully created data product with ID: {created_product_response.id if created_product_response else payload.get('id')}")
         return created_product_response
 
+    except CodedValueError as e:
+        # A status that isn't a lifecycle status (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise

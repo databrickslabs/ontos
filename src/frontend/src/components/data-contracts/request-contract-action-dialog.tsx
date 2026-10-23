@@ -826,8 +826,6 @@ export default function RequestContractActionDialog({
                   <span>→</span>
                   <span className={contractStatus?.toLowerCase() === 'active' ? 'font-bold text-primary' : ''}>active</span>
                   <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'certified' ? 'font-bold text-primary' : ''}>certified</span>
-                  <span>→</span>
                   <span className={contractStatus?.toLowerCase() === 'deprecated' ? 'font-bold text-primary' : ''}>deprecated</span>
                   <span>→</span>
                   <span className={contractStatus?.toLowerCase() === 'retired' ? 'font-bold text-primary' : ''}>retired</span>

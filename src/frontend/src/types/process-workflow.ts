@@ -115,6 +115,16 @@ export type StepExecutionStatus =
   | 'failed'
   | 'skipped';
 
+// What a before_status_change gate does when evaluating it raises
+export type GateErrorMode = 'fail_open' | 'fail_closed';
+
+// Entities a before_status_change gate is switched off for (a domain covers its products and contracts)
+export interface GateExemptions {
+  domains: string[];
+  data_products: string[];
+  data_contracts: string[];
+}
+
 // Trigger configuration
 export interface WorkflowTrigger {
   type: TriggerType;
@@ -122,6 +132,9 @@ export interface WorkflowTrigger {
   from_status?: string;
   to_status?: string;
   schedule?: string;
+  /** before_status_change only; the backend defaults to fail_open */
+  on_error?: GateErrorMode;
+  disabled_for?: GateExemptions;
 }
 
 // Scope configuration

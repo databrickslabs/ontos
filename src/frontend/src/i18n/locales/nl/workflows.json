@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "bijv. concept",
       "toStatus": "Naar Status",
       "toStatusPlaceholder": "bijv. actief",
-      "descriptionPlaceholder": "Workflowbeschrijving"
+      "descriptionPlaceholder": "Workflowbeschrijving",
+      "failClosed": "De overgang weigeren als deze poort niet kan worden geëvalueerd",
+      "failClosedHint": "Fail closed: als het evalueren van deze poort een fout geeft (geen normale mislukking), wordt de statuswijziging geweigerd. Uit (fail open) gaat de wijziging door en wordt de fout gelogd en geaudit.",
+      "disabledFor": {
+        "title": "Uitgeschakeld voor",
+        "hint": "Deze gate draait niet voor de hier vermelde domeinen, dataproducten en datacontracten (een domein omvat zijn producten en contracten). Elke keer dat de gate wordt overgeslagen, wordt dat gelogd en geaudit.",
+        "domains": "Domeinen",
+        "dataProducts": "Dataproducten",
+        "dataContracts": "Datacontracten",
+        "none": "Geen",
+        "selectedCount_one": "{{count}} geselecteerd",
+        "selectedCount_other": "{{count}} geselecteerd",
+        "search": "Zoeken...",
+        "noResults": "Niets gevonden.",
+        "remove": "{{name}} verwijderen",
+        "notFound": "{{id}} (bestaat niet meer)",
+        "missingOnSave_one": "De gate staat uit voor {{count}} item dat niet meer bestaat. Verwijder het en sla opnieuw op.",
+        "missingOnSave_other": "De gate staat uit voor {{count}} items die niet meer bestaan. Verwijder ze en sla opnieuw op."
+      }
     },
     "stepConfig": {
       "title": "Stapconfiguratie",

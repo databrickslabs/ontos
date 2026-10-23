@@ -154,18 +154,57 @@ class StepExecutionStatus(str, Enum):
 
 # --- Trigger Configuration ---
 
+class GateErrorMode(str, Enum):
+    """What a ``before_status_change`` gate does when evaluating it raises."""
+    FAIL_OPEN = "fail_open"  # The transition proceeds (the error is logged and audited)
+    FAIL_CLOSED = "fail_closed"  # The transition is refused
+
+
+class GateExemptions(BaseModel):
+    """Entities a ``before_status_change`` gate is switched off for.
+
+    The gate is skipped for an entity listed here, and for a product or
+    contract assigned to one of the listed domains (any of its domains). An
+    exemption can't be overridden at a lower level: the lists only switch the
+    gate off.
+    """
+    domains: List[str] = Field(default_factory=list, description="Domain ids: the gate is off for their products and contracts")
+    data_products: List[str] = Field(default_factory=list, description="Data product ids the gate is off for")
+    data_contracts: List[str] = Field(default_factory=list, description="Data contract ids the gate is off for")
+
+    def is_empty(self) -> bool:
+        return not (self.domains or self.data_products or self.data_contracts)
+
+
 class WorkflowTrigger(BaseModel):
     """Trigger configuration for a workflow."""
     type: TriggerType = Field(..., description="Type of trigger")
     entity_types: List[EntityType] = Field(default_factory=list, description="Entity types that trigger this workflow")
-    
+
     # For on_status_change
     from_status: Optional[str] = Field(None, description="Status to transition from (for status change triggers)")
     to_status: Optional[str] = Field(None, description="Status to transition to (for status change triggers)")
-    
+
     # For scheduled
     schedule: Optional[str] = Field(None, description="Cron expression for scheduled triggers")
-    
+
+    # For before_status_change
+    on_error: GateErrorMode = Field(
+        GateErrorMode.FAIL_OPEN,
+        description=(
+            "before_status_change only: what happens when evaluating this gate raises. "
+            "fail_open lets the transition proceed, fail_closed refuses it. "
+            "A gate that fails normally blocks in both modes."
+        ),
+    )
+    disabled_for: GateExemptions = Field(
+        default_factory=GateExemptions,
+        description=(
+            "before_status_change only: domains, data products and data contracts "
+            "this gate is switched off for. Skips are logged and audited."
+        ),
+    )
+
     class Config:
         json_schema_extra = {
             "example": {

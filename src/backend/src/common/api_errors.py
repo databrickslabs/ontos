@@ -47,6 +47,12 @@ class CodedValueError(ValueError):
         self.params: Dict[str, Any] = params
 
 
+class InvalidStatusTransitionError(CodedValueError):
+    """A status change that the entity's lifecycle doesn't allow."""
+
+    code = 'invalid_status_transition'
+
+
 def _coded_cause(exc: BaseException) -> Optional[CodedValueError]:
     """The ``CodedValueError`` an HTTP error was raised from, if it carries its message."""
     seen = set()

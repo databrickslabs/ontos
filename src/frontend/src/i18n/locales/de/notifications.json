@@ -2,12 +2,14 @@
   "statusChangeNotApplied": {
     "title": "Statusänderung nicht übernommen",
     "statusChanged": "Die Anfrage, den Status von „{{fromStatus}}“ auf „{{toStatus}}“ zu ändern, wurde genehmigt, aber der Status ist jetzt „{{currentStatus}}“, daher wurde die Änderung nicht übernommen. Stellen Sie die Anfrage erneut, wenn sie noch benötigt wird.",
-    "refused": "Ihre Anfrage, den Status auf „{{toStatus}}“ zu ändern, wurde genehmigt, aber die Änderung konnte nicht übernommen werden: {{reason}}"
+    "refused": "Ihre Anfrage, den Status auf „{{toStatus}}“ zu ändern, wurde genehmigt, aber die Änderung konnte nicht übernommen werden: {{reason}}",
+    "reviewNotApplied": "Über das Review des Datenprodukts wurde entschieden, aber die Änderung auf „{{toStatus}}“ konnte nicht angewendet werden: {{reason}}"
   },
   "contractStatusNotChanged": {
     "title": "Vertragsstatus nicht geändert",
     "notUnderReview": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: Der Vertrag ist nicht in Prüfung (Status „{{currentStatus}}“)",
-    "notApplied": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}"
+    "notApplied": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}",
+    "requesterNotApplied": "Über das Review Ihres Vertrags wurde entschieden, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}"
   },
   "ui": {
     "tooltip": "Benachrichtigungen",

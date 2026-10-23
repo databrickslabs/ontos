@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "ex.: draft",
       "toStatus": "Status de destino",
       "toStatusPlaceholder": "ex.: active",
-      "descriptionPlaceholder": "Descrição do fluxo de trabalho"
+      "descriptionPlaceholder": "Descrição do fluxo de trabalho",
+      "failClosed": "Recusar a transição se este gate não puder ser avaliado",
+      "failClosedHint": "Fail closed: quando a avaliação deste gate gera um erro (e não uma falha normal), a mudança de status é recusada. Desligado (fail open), a mudança acontece e o erro é registrado no log e na auditoria.",
+      "disabledFor": {
+        "title": "Desligado para",
+        "hint": "Este gate não roda para os domínios, produtos de dados e contratos de dados listados aqui (um domínio cobre seus produtos e contratos). Cada vez que ele é pulado, isso fica no log e na auditoria.",
+        "domains": "Domínios",
+        "dataProducts": "Produtos de dados",
+        "dataContracts": "Contratos de dados",
+        "none": "Nenhum",
+        "selectedCount_one": "{{count}} selecionado",
+        "selectedCount_other": "{{count}} selecionados",
+        "search": "Buscar...",
+        "noResults": "Nada encontrado.",
+        "remove": "Remover {{name}}",
+        "notFound": "{{id}} (não existe mais)",
+        "missingOnSave_one": "O gate está desligado para {{count}} item que não existe mais. Remova-o e salve de novo.",
+        "missingOnSave_other": "O gate está desligado para {{count}} itens que não existem mais. Remova-os e salve de novo."
+      }
     },
     "stepConfig": {
       "title": "Configuração da etapa",

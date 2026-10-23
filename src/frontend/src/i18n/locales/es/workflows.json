@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "p. ej., borrador",
       "toStatus": "Al estado",
       "toStatusPlaceholder": "p. ej., activo",
-      "descriptionPlaceholder": "Descripción del flujo de trabajo"
+      "descriptionPlaceholder": "Descripción del flujo de trabajo",
+      "failClosed": "Rechazar la transición si esta compuerta no se puede evaluar",
+      "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), el cambio de estado se rechaza. Desactivado (fail open), el cambio se aplica y el error se registra y se audita.",
+      "disabledFor": {
+        "title": "Desactivado para",
+        "hint": "Esta compuerta no se ejecuta para los dominios, productos de datos y contratos de datos indicados aquí (un dominio cubre sus productos y contratos). Cada omisión se registra y se audita.",
+        "domains": "Dominios",
+        "dataProducts": "Productos de datos",
+        "dataContracts": "Contratos de datos",
+        "none": "Ninguno",
+        "selectedCount_one": "{{count}} seleccionado",
+        "selectedCount_other": "{{count}} seleccionados",
+        "search": "Buscar...",
+        "noResults": "No se encontró nada.",
+        "remove": "Quitar {{name}}",
+        "notFound": "{{id}} (ya no existe)",
+        "missingOnSave_one": "El gate está desactivado para {{count}} elemento que ya no existe. Quítelo y guarde de nuevo.",
+        "missingOnSave_other": "El gate está desactivado para {{count}} elementos que ya no existen. Quítelos y guarde de nuevo."
+      }
     },
     "stepConfig": {
       "title": "Configuración del paso",

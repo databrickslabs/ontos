@@ -541,7 +541,8 @@
       "failedToSerialize": "Serialiseren van UI-status naar JSON mislukt.",
       "unexpectedError": "Er is een onverwachte fout opgetreden."
     },
-    "syntaxErrorLabel": "Syntaxisfout:"
+    "syntaxErrorLabel": "Syntaxisfout:",
+    "statusChangeHint": "De status wijzig je met Status wijzigen op de pagina, dat de overgang controleert en de workflows voor statuswijziging uitvoert."
   },
   "import": {
     "title": "Dataproduct Importeren",
@@ -929,7 +930,8 @@
       "createNewContract": "Nieuw contract aanmaken",
       "linkContract": "Contract koppelen",
       "linking": "Koppelen..."
-    }
+    },
+    "statusFilterNote": "Alleen contracten met de status 'active' of 'approved' worden getoond. Kies een specifieke versie: contracten met dezelfde naam tonen hun versie ernaast."
   },
   "hierarchy": {
     "title": "Datahiërarchie",
@@ -1086,8 +1088,10 @@
     "versionPlaceholder": "bijv. v1.1, v2.0-beta",
     "createButton": "Versie aanmaken",
     "errors": {
-      "versionEmpty": "Versiestring mag niet leeg zijn."
-    }
+      "versionEmpty": "Versiestring mag niet leeg zijn.",
+      "versionFormat": "\"{{version}}\" heeft niet de vorm X.Y.Z (bijvoorbeeld 2.0.0)."
+    },
+    "versionPlaceholderSemver": "bijv. 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Naamloos Product",

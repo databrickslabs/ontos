@@ -9,6 +9,39 @@ from datetime import datetime
 from copy import deepcopy
 
 
+def _stored_fields(row, exclude) -> Dict:
+    """The column values of an ORM row, without the given columns."""
+    from sqlalchemy import inspect as sa_inspect
+    return {
+        attr.key: getattr(row, attr.key)
+        for attr in sa_inspect(type(row)).column_attrs
+        if attr.key not in exclude
+    }
+
+
+def _parents_first(properties: List) -> List:
+    """Properties ordered so a nested property comes after its parent (the
+    parent's row must exist first); otherwise in their stored order."""
+    ids = {p.id for p in properties}
+    placed: set = set()
+    ordered: List = []
+    pending = list(properties)
+    while pending:
+        rest = []
+        for prop in pending:
+            parent = prop.parent_property_id
+            if parent is None or parent not in ids or parent in placed:
+                ordered.append(prop)
+                placed.add(prop.id)
+            else:
+                rest.append(prop)
+        if len(rest) == len(pending):  # a cycle: keep the remaining order
+            ordered.extend(rest)
+            break
+        pending = rest
+    return ordered
+
+
 class ContractCloner:
     """
     Clones data contracts for versioning.
@@ -98,6 +131,10 @@ class ContractCloner:
         """
         Clone schema objects for new contract version.
 
+        Every stored field of a schema object and of its properties is copied
+        (ODCS ids, granularity, keys, examples, logical type options ...),
+        with their quality checks and relationships. Only the row ids change.
+
         Args:
             source_schemas: List of source schema objects
             new_contract_id: ID of the new contract
@@ -110,23 +147,15 @@ class ContractCloner:
         for schema in source_schemas:
             new_schema_id = str(uuid4())
 
-            cloned_schema = {
-                'id': new_schema_id,
-                'contract_id': new_contract_id,
-                'name': schema.name,
-                'logical_type': schema.logical_type,
-                'physical_name': schema.physical_name,
-                'data_granularity_description': schema.data_granularity_description,
-                'business_name': getattr(schema, 'business_name', None),
-                'physical_type': getattr(schema, 'physical_type', None),
-                'tags': getattr(schema, 'tags', None),
-                'description': getattr(schema, 'description', None),
-            }
+            cloned_schema = _stored_fields(schema, exclude={'id', 'contract_id'})
+            cloned_schema.update({'id': new_schema_id, 'contract_id': new_contract_id})
 
-            # Clone properties for this schema
+            # Clone properties for this schema (old row id -> new row id, for
+            # nested properties and property-level quality checks)
+            property_ids: Dict[str, str] = {}
             if hasattr(schema, 'properties') and schema.properties:
                 cloned_schema['properties'] = self.clone_schema_properties(
-                    schema.properties, new_schema_id
+                    schema.properties, new_schema_id, property_ids
                 )
 
             # Clone authoritative definitions for this schema (the relationship
@@ -142,41 +171,59 @@ class ContractCloner:
                 from src.utils.property_custom_properties import odcs_custom_properties
                 cloned_schema['custom_properties'] = odcs_custom_properties(schema.custom_properties)
 
+            # Quality checks: object-level ones and those of its properties
+            checks = []
+            for check in getattr(schema, 'quality_checks', None) or []:
+                if check.property_id is not None and check.property_id not in property_ids:
+                    continue
+                cloned_check = _stored_fields(check, exclude={'id', 'object_id', 'property_id'})
+                cloned_check['property_id'] = property_ids.get(check.property_id)
+                checks.append(cloned_check)
+            if checks:
+                cloned_schema['quality_checks'] = checks
+
+            relationships = [
+                _stored_fields(rel, exclude={'id', 'schema_object_id'})
+                for rel in getattr(schema, 'relationships', None) or []
+            ]
+            if relationships:
+                cloned_schema['relationships'] = relationships
+
             cloned_schemas.append(cloned_schema)
 
         return cloned_schemas
 
-    def clone_schema_properties(self, source_properties: List, new_schema_id: str) -> List[Dict]:
+    def clone_schema_properties(
+        self, source_properties: List, new_schema_id: str,
+        property_ids: Optional[Dict[str, str]] = None,
+    ) -> List[Dict]:
         """
         Clone schema properties.
 
         Args:
             source_properties: List of source properties
             new_schema_id: ID of the new schema
+            property_ids: filled with old row id -> new row id
 
         Returns:
-            List of cloned property dictionaries
+            List of cloned property dictionaries, parents before their
+            nested properties
         """
+        property_ids = {} if property_ids is None else property_ids
+        for prop in source_properties:
+            property_ids[prop.id] = str(uuid4())
+
         cloned_properties = []
 
-        for prop in source_properties:
-            new_prop_id = str(uuid4())
+        for prop in _parents_first(source_properties):
+            new_prop_id = property_ids[prop.id]
 
-            cloned_prop = {
+            cloned_prop = _stored_fields(prop, exclude={'id', 'object_id', 'parent_property_id'})
+            cloned_prop.update({
                 'id': new_prop_id,
                 'object_id': new_schema_id,
-                'name': prop.name,
-                'logical_type': prop.logical_type,
-                'physical_type': prop.physical_type,
-                'required': prop.required,
-                'unique': prop.unique,
-                'business_name': getattr(prop, 'business_name', None),
-                'encrypted_name': getattr(prop, 'encrypted_name', None),
-                'critical_data_element': getattr(prop, 'critical_data_element', None),
-                'transform_logic': getattr(prop, 'transform_logic', None),
-                'transform_source_objects': getattr(prop, 'transform_source_objects', None),
-                'transform_description': getattr(prop, 'transform_description', None),
-            }
+                'parent_property_id': property_ids.get(prop.parent_property_id),
+            })
 
             # Property-level customProperties, in the ODCS list form
             if getattr(prop, 'custom_properties', None):
@@ -189,6 +236,13 @@ class ContractCloner:
                 cloned_prop['authoritative_defs'] = self.clone_authoritative_defs(
                     prop_defs, new_prop_id, 'property'
                 )
+
+            relationships = [
+                _stored_fields(rel, exclude={'id', 'property_id'})
+                for rel in getattr(prop, 'relationships', None) or []
+            ]
+            if relationships:
+                cloned_prop['relationships'] = relationships
 
             cloned_properties.append(cloned_prop)
 
@@ -215,6 +269,7 @@ class ContractCloner:
             cloned_server = {
                 'id': new_server_id,
                 'contract_id': new_contract_id,
+                'stable_id': getattr(server, 'stable_id', None),
                 'server': server.server,
                 'type': server.type,
                 'description': server.description,

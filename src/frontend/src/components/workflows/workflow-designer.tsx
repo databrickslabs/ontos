@@ -116,6 +116,7 @@ import {
   type WorkflowValidationIssue,
 } from './step-config-checks';
 import TemplateVarsInspector from './template-vars-inspector';
+import GateExemptionsField, { EMPTY_GATE_EXEMPTIONS } from './gate-exemptions-field';
 
 import type {
   ProcessWorkflow,
@@ -126,6 +127,8 @@ import type {
   StepType,
   TriggerType,
   EntityType,
+  GateErrorMode,
+  GateExemptions,
   StepTypeSchema,
   CompliancePolicyRef,
   HttpConnectionRef,
@@ -850,6 +853,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [entityTypes, setEntityTypes] = useState<EntityType[]>(['table']);
   const [triggerFromStatus, setTriggerFromStatus] = useState('');
   const [triggerToStatus, setTriggerToStatus] = useState('');
+  const [triggerOnError, setTriggerOnError] = useState<GateErrorMode>('fail_open');
+  const [triggerDisabledFor, setTriggerDisabledFor] = useState<GateExemptions>(EMPTY_GATE_EXEMPTIONS);
+  // Selected exemptions whose entity was deleted: the backend refuses to save them
+  const [missingExemptions, setMissingExemptions] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [steps, setSteps] = useState<WorkflowStepCreate[]>([]);
   const [workflowType, setWorkflowType] = useState<WorkflowTypeValue | null>(isNew ? (initialType || null) : null);
@@ -1100,6 +1107,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setEntityTypes(response.data.trigger.entity_types);
             setTriggerFromStatus(response.data.trigger.from_status || '');
             setTriggerToStatus(response.data.trigger.to_status || '');
+            setTriggerOnError(response.data.trigger.on_error || 'fail_open');
+            setTriggerDisabledFor({ ...EMPTY_GATE_EXEMPTIONS, ...(response.data.trigger.disabled_for || {}) });
             setIsActive(response.data.is_active);
             setWorkflowType((response.data.workflow_type as WorkflowTypeValue) || 'process');
             const loadedSteps = response.data.steps.map(s => ({
@@ -1479,6 +1488,17 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     }
     setInvalidStepId(null);
 
+    if (triggerType === 'before_status_change' && missingExemptions.length > 0) {
+      toast({
+        title: t('workflows:designer.messages.validationError'),
+        description: t('workflows:designer.triggerConfig.disabledFor.missingOnSave', {
+          count: missingExemptions.length,
+        }),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const workflowData: ProcessWorkflowCreate = {
@@ -1489,6 +1509,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           entity_types: entityTypes,
           ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
           ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
+          ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
         },
         workflow_type: workflowType || 'process',
         is_active: isActive,
@@ -1814,6 +1835,33 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           placeholder={t('workflows:designer.triggerConfig.toStatusPlaceholder')}
                         />
                       </div>
+                    </div>
+                  )}
+
+                  {triggerType === 'before_status_change' && (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="trigger-on-error">
+                          {t('workflows:designer.triggerConfig.failClosed')}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {t('workflows:designer.triggerConfig.failClosedHint')}
+                        </p>
+                      </div>
+                      <Switch
+                        id="trigger-on-error"
+                        checked={triggerOnError === 'fail_closed'}
+                        onCheckedChange={(on) => setTriggerOnError(on ? 'fail_closed' : 'fail_open')}
+                      />
+                    </div>
+                  )}
+                  {triggerType === 'before_status_change' && (
+                    <div>
+                      <GateExemptionsField
+                        value={triggerDisabledFor}
+                        onChange={setTriggerDisabledFor}
+                        onMissingChange={setMissingExemptions}
+                      />
                     </div>
                   )}
 

@@ -541,7 +541,8 @@
       "failedToSerialize": "UI-Status konnte nicht in JSON serialisiert werden.",
       "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten."
     },
-    "syntaxErrorLabel": "Syntaxfehler:"
+    "syntaxErrorLabel": "Syntaxfehler:",
+    "statusChangeHint": "Der Status wird mit Status ändern auf der Seite geändert, das den Übergang prüft und die Statusänderungs-Workflows ausführt."
   },
   "import": {
     "title": "Datenprodukt importieren",
@@ -929,7 +930,8 @@
       "createNewContract": "Neuen Vertrag erstellen",
       "linkContract": "Vertrag verknüpfen",
       "linking": "Wird verknüpft..."
-    }
+    },
+    "statusFilterNote": "Es werden nur Verträge mit dem Status 'active' oder 'approved' angezeigt. Wählen Sie eine bestimmte Version: Gleichnamige Verträge zeigen ihre Version daneben."
   },
   "hierarchy": {
     "title": "Datenhierarchie",
@@ -1086,8 +1088,10 @@
     "versionPlaceholder": "z. B. v1.1, v2.0-beta",
     "createButton": "Version erstellen",
     "errors": {
-      "versionEmpty": "Die Versionszeichenkette darf nicht leer sein."
-    }
+      "versionEmpty": "Die Versionszeichenkette darf nicht leer sein.",
+      "versionFormat": "\"{{version}}\" hat nicht die Form X.Y.Z (zum Beispiel 2.0.0)."
+    },
+    "versionPlaceholderSemver": "z. B. 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Unbenanntes Produkt",

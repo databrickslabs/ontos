@@ -198,7 +198,8 @@
     "validationErrorTitle": "Validierungsfehler",
     "nameRequired": "Vertragsname ist erforderlich",
     "versionRequired": "Version ist erforderlich",
-    "saveError": "Vertrag konnte nicht gespeichert werden"
+    "saveError": "Vertrag konnte nicht gespeichert werden",
+    "statusChangeHint": "Der Status wird mit Status ändern auf der Seite geändert, das den Übergang prüft und die Statusänderungs-Workflows ausführt."
   },
   "import": {
     "title": "Datenvertrag importieren",
@@ -345,7 +346,7 @@
       "createProduct": "Datenprodukt erstellen",
       "noneYet": "Noch keine verknüpften Datenprodukte",
       "emptyHint": "Erstellen Sie ein Datenprodukt, das diesen Vertrag zur Steuerung eines Lieferobjekts verwendet",
-      "statusRequirement": "Der Vertrag muss den Status 'active', 'approved' oder 'certified' haben",
+      "statusRequirement": "Der Vertrag muss den Status 'active' oder 'approved' haben",
       "unnamedProduct": "Unbenanntes Produkt",
       "deliverables_one": "Lieferobjekt: {{ports}}",
       "deliverables_other": "Lieferobjekte: {{ports}}"
@@ -519,7 +520,9 @@
       "invalidTransition": "Der Vertrag ist jetzt {{fromStatus}} und kann nicht mehr genehmigt oder abgelehnt werden. Laden Sie die Seite neu, um den aktuellen Status zu sehen.",
       "approveFailed": "Genehmigung fehlgeschlagen",
       "rejectFailed": "Ablehnung fehlgeschlagen",
-      "startProfilingFailed": "Profilierung konnte nicht gestartet werden"
+      "startProfilingFailed": "Profilierung konnte nicht gestartet werden",
+      "invalidVersionFormat": "\"{{version}}\" ist keine gültige Version: Eine neue Version hat die Form X.Y.Z, zum Beispiel 2.0.0.",
+      "draftVersionFormat": "Die Version \"{{version}}\" dieses Vertrags hat nicht die Form X.Y.Z, daher kann kein persönlicher Entwurf daraus erstellt werden. Erstellen Sie stattdessen eine neue Version (zum Beispiel 2.0.0)."
     }
   },
   "list": {

@@ -234,6 +234,8 @@ export type QualityRule = {
 
 // Server configuration (ODCS compliant)
 export type ServerConfig = {
+  /** ODCS id of the server, kept when it is edited */
+  id?: string
   server?: string
   type?: string
   description?: string

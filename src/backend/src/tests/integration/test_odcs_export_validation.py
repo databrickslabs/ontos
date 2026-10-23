@@ -535,7 +535,8 @@ class TestODCSExportValidation:
         assert len(schema['quality']) >= 1
 
         quality = schema['quality'][0]
-        required_quality_fields = ['rule', 'type', 'description', 'dimension', 'severity']
+        # For ODCS v3.1.0, use 'metric' instead of 'rule' (spec change)
+        required_quality_fields = ['metric', 'type', 'description', 'dimension', 'severity']
         for field in required_quality_fields:
             assert field in quality, f"Missing quality field: {field}"
 

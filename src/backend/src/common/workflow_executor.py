@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.db_models.process_workflows import WorkflowStepDb, WorkflowExecutionDb
@@ -197,6 +198,10 @@ class StepHandler(ABC):
             StepResult with execution outcome
         """
         pass
+
+
+class _ReviewStepRefused(Exception):
+    """A lifecycle step of a product review outcome was refused."""
 
 
 class RuleEntityLoadError(RuntimeError):
@@ -3112,13 +3117,41 @@ class WorkflowExecutor:
             )
             self._notify_status_not_changed(
                 trigger_context, target_status, str(e), responded_by,
-                'notApplied', {'reason': str(e)},
+                'notApplied', {'reason': str(e)}, error=e,
+            )
+            # The workflow has already told the requester the review was
+            # decided; say that the contract's status didn't follow.
+            self._notify_status_not_changed(
+                trigger_context, target_status, str(e), trigger_context.user_email,
+                'requesterNotApplied', {'reason': str(e)}, error=e,
+                description=(
+                    f"The review of your contract was decided, but the contract was not "
+                    f"set to '{target_status}': {e}"
+                ),
             )
             return
         logger.info(
             "Data contract %s moved to '%s' after its review was decided",
             contract_id, target_status,
         )
+
+    @staticmethod
+    def _coded_error_i18n(error: Optional[Exception]) -> Dict[str, Any]:
+        """``data.i18n`` entries for the reason a status change was refused.
+
+        A refusal the app raises with a code (a blocking gate, a gate that
+        couldn't be evaluated, an invalid transition) is sent as
+        ``error = {code, message, params}``, so the bell can show the reason in
+        the user's language the same way the status change dialogs do. Any
+        other error keeps only its English text in ``params.reason``.
+        """
+        from src.common.api_errors import CodedValueError
+
+        if not isinstance(error, CodedValueError):
+            return {}
+        return {'error': {
+            'code': error.code, 'message': str(error), 'params': error.params or {},
+        }}
 
     def _notify_status_not_changed(
         self,
@@ -3128,11 +3161,15 @@ class WorkflowExecutor:
         responded_by: Optional[str],
         description_key: str,
         params: Dict[str, str],
+        error: Optional[Exception] = None,
+        description: Optional[str] = None,
     ) -> None:
-        """Warn the approver that their decision didn't change the contract.
+        """Warn ``responded_by`` that a review decision didn't change the contract.
 
         The English texts are stored; ``data.i18n`` carries the keys of the
-        frontend's ``notifications`` namespace so the bell can translate them.
+        frontend's ``notifications`` namespace so the bell can translate them,
+        the namespace of the contract status labels, and the coded error of a
+        refused transition (see ``_coded_error_i18n``).
         """
         if not responded_by:
             return
@@ -3146,7 +3183,7 @@ class WorkflowExecutor:
             type=NotificationType.WARNING,
             title="Contract status not changed",
             subtitle=trigger_context.entity_name or trigger_context.entity_id,
-            description=(
+            description=description or (
                 f"Your review decision was recorded, but the contract was not set to "
                 f"'{target_status}': {reason}"
             ),
@@ -3156,6 +3193,8 @@ class WorkflowExecutor:
                 'title': 'notifications:contractStatusNotChanged.title',
                 'description': f'notifications:contractStatusNotChanged.{description_key}',
                 'params': {'toStatus': target_status, **params},
+                'statusNamespace': 'data-contracts',
+                **self._coded_error_i18n(error),
             }},
         ))
         self._db.commit()
@@ -3238,16 +3277,9 @@ class WorkflowExecutor:
                     
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
-                from src.repositories.data_products_repository import data_product_repo
-                db_product = data_product_repo.get(db=self._db, id=entity_id)
-                if db_product:
-                    if succeeded:
-                        db_product.status = 'active'
-                        logger.info(f"Data product {entity_id} status updated to 'active' after approval")
-                    else:
-                        db_product.status = 'draft'
-                        logger.info(f"Data product {entity_id} status reverted to 'draft' after rejection")
-                    self._db.commit()
+                self._apply_product_review_outcome(
+                    trigger_context, entity_id, succeeded, responded_by
+                )
 
             # Approved status change request: apply the requested transition,
             # with the same validation and gates as a direct status change
@@ -3266,6 +3298,129 @@ class WorkflowExecutor:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    # A reviewed product goes active through the lifecycle steps it still
+    # needs, or back to draft; each step is a transition_status call.
+    _PRODUCT_ACTIVATION_STEPS = {
+        'proposed': ['under_review', 'approved', 'active'],
+        'under_review': ['approved', 'active'],
+        'approved': ['active'],
+    }
+
+    def _apply_product_review_outcome(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        succeeded: bool,
+        responded_by: Optional[str],
+    ) -> None:
+        """Activate a reviewed data product, or return it to draft.
+
+        The outcome is the run's, as before: a succeeded review activates the
+        product, any other ending returns it to draft. Each status step goes
+        through ``transition_status``, so the lifecycle rules and the
+        before_status_change gates apply to each step as for a change from the
+        product page. on_status_change fires once for the whole change (e.g.
+        under_review -> active), not once per step, so a workflow on an
+        intermediate step (approved -> active, like the default Data Product
+        Publish Approval) doesn't start a second approval for a product its
+        review just activated. A product that is no longer in review (changed
+        meanwhile) is left alone. If a step is refused (e.g. a gate blocks),
+        the product stays where it got to (the trigger fires for the part that
+        was applied) and the requester is told, since the workflow has
+        already ended.
+        """
+        from src.common.app_state import get_app_state_manager
+        from src.controller.data_products_manager import DataProductsManager
+        from src.db_models.data_products import DataProductDb
+
+        product = self._db.get(DataProductDb, product_id)
+        if product is None:
+            return
+        current_status = (product.status or 'draft').lower()
+        target_status = 'active' if succeeded else 'draft'
+        if current_status == target_status:
+            return
+        if succeeded:
+            steps = self._PRODUCT_ACTIVATION_STEPS.get(current_status)
+        else:
+            steps = [target_status] if current_status in self._PRODUCT_ACTIVATION_STEPS else None
+        if not steps:
+            logger.warning(
+                "Review outcome of data product %s not applied: it is no longer in review "
+                "(status '%s')",
+                product_id, current_status,
+            )
+            return
+
+        manager = DataProductsManager(
+            db=self._db, notifications_manager=get_app_state_manager('notifications_manager'),
+        )
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager:
+            manager.set_search_manager(search_manager)
+        applied: List[str] = []
+        try:
+            self._run_product_review_steps(
+                manager, trigger_context, product_id, steps, target_status, responded_by, applied,
+            )
+        except _ReviewStepRefused:
+            pass
+        except SQLAlchemyError:
+            # The steps before the failed one are committed; the session must
+            # be usable again to fire their trigger below
+            self._db.rollback()
+            raise
+        finally:
+            # Also after an unexpected error, for the steps already applied
+            reached_status = applied[-1] if applied else current_status
+            if reached_status != current_status:
+                manager.fire_status_change_trigger(
+                    product_id, product.name, current_status, reached_status, responded_by,
+                )
+        if reached_status == target_status:
+            logger.info(
+                "Data product %s moved to '%s' after its review",
+                product_id, target_status,
+            )
+
+    def _run_product_review_steps(
+        self,
+        manager,
+        trigger_context: TriggerContext,
+        product_id: str,
+        steps: List[str],
+        target_status: str,
+        responded_by: Optional[str],
+        applied: List[str],
+    ) -> None:
+        """Apply the review's lifecycle steps without per-step triggers.
+
+        Each applied step is appended to ``applied``. Raises
+        ``_ReviewStepRefused`` when a step is refused, after telling the
+        requester and the approver.
+        """
+        for step in steps:
+            try:
+                manager.transition_status(
+                    product_id, step, responded_by, fire_status_change_trigger=False,
+                )
+                applied.append(step)
+            except ValueError as e:
+                logger.warning(
+                    "Review outcome of data product %s: the change to '%s' was refused: %s",
+                    product_id, step, e,
+                )
+                self._notify_status_change_not_applied(
+                    trigger_context, product_id,
+                    f"The review of the data product was decided, but the change to "
+                    f"'{target_status}' could not be applied: {e}",
+                    recipients=[trigger_context.user_email, responded_by],
+                    description_key='reviewNotApplied',
+                    params={'toStatus': target_status, 'reason': str(e)},
+                    error=e,
+                )
+                raise _ReviewStepRefused() from e
+
     def _apply_requested_status_change(
         self,
         trigger_context: TriggerContext,
@@ -3348,6 +3503,7 @@ class WorkflowExecutor:
                 recipients=[trigger_context.user_email],
                 description_key='refused',
                 params={'toStatus': target_status, 'reason': str(e)},
+                error=e,
             )
             return
         logger.info(
@@ -3363,6 +3519,7 @@ class WorkflowExecutor:
         recipients: List[Optional[str]],
         description_key: str,
         params: Dict[str, Any],
+        error: Optional[Exception] = None,
     ) -> None:
         """Tell the given people that an approved status change was not applied.
 
@@ -3392,6 +3549,8 @@ class WorkflowExecutor:
                     'title': 'notifications:statusChangeNotApplied.title',
                     'description': f'notifications:statusChangeNotApplied.{description_key}',
                     'params': params,
+                    'statusNamespace': 'data-products',
+                    **self._coded_error_i18n(error),
                 }},
             ))
         if sent:

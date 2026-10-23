@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from src.common.api_errors import new_error_id
+from src.common.api_errors import CodedValueError, new_error_id
 from src.common.config import Settings
 from src.common.logging import get_logger
 
@@ -36,6 +36,11 @@ def tool_failure(tag: str, exc: BaseException) -> Dict[str, str]:
 
     Spread into ``ToolResult(success=False, **tool_failure("get_domain", e), ...)``.
     """
+    if isinstance(exc, CodedValueError):
+        # An expected refusal (invalid transition, blocked by a workflow...):
+        # its message is written for the user, so the client gets it with the code.
+        logger.info("[%s] refused: %s: %s", tag, type(exc).__name__, exc)
+        return {"error": f"{type(exc).__name__}: {exc}", "error_code": exc.code or TOOL_FAILED_CODE}
     error_id = new_error_id()
     logger.error(
         "[%s] FAILED (error id %s): %s: %s", tag, error_id, type(exc).__name__, exc, exc_info=exc

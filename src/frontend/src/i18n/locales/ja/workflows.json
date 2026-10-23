@@ -104,7 +104,25 @@
       "fromStatusPlaceholder": "例: draft",
       "toStatus": "変更先ステータス",
       "toStatusPlaceholder": "例: active",
-      "descriptionPlaceholder": "ワークフローの説明"
+      "descriptionPlaceholder": "ワークフローの説明",
+      "failClosed": "このゲートを評価できない場合は遷移を拒否する",
+      "failClosedHint": "Fail closed: このゲートの評価でエラーが発生した場合（通常の失敗ではない場合）、ステータス変更は拒否されます。オフ（fail open）の場合、変更は実行され、エラーはログと監査に記録されます。",
+      "disabledFor": {
+        "title": "無効にする対象",
+        "hint": "このゲートは、ここに挙げたドメイン、データプロダクト、データコントラクトでは実行されません（ドメインはその配下のプロダクトとコントラクトを含みます）。スキップはすべてログと監査に記録されます。",
+        "domains": "ドメイン",
+        "dataProducts": "データプロダクト",
+        "dataContracts": "データコントラクト",
+        "none": "なし",
+        "selectedCount_one": "{{count}} 件選択",
+        "selectedCount_other": "{{count}} 件選択",
+        "search": "検索...",
+        "noResults": "見つかりません。",
+        "remove": "{{name}} を削除",
+        "notFound": "{{id}}（存在しません）",
+        "missingOnSave_one": "このゲートは、存在しなくなった{{count}}件の項目に対してオフになっています。削除してから再度保存してください。",
+        "missingOnSave_other": "このゲートは、存在しなくなった{{count}}件の項目に対してオフになっています。削除してから再度保存してください。"
+      }
     },
     "stepConfig": {
       "title": "ステップ設定",

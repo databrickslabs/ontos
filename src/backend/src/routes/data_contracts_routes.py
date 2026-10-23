@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.data_contracts_manager import DataContractsManager, InvalidVersionFormatError
 from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
@@ -55,7 +55,9 @@ from src.common.odcs_validation import validate_odcs_contract, ODCSValidationErr
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
+from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
+from src.common.lifecycle_status import check_status_unchanged
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.upload_limits import read_uploads_capped
@@ -416,15 +418,8 @@ async def change_contract_status(
     """
     Change contract status. Validates transition is allowed per ODCS lifecycle.
     
-    Valid transitions:
-    - draft → proposed, deprecated
-    - proposed → draft, under_review, deprecated
-    - under_review → draft, approved, deprecated
-    - approved → active, draft, deprecated
-    - active → certified, deprecated
-    - certified → deprecated, active
-    - deprecated → retired, active
-    - retired → (terminal state, no transitions)
+    Valid transitions: ``DATA_CONTRACT_TRANSITIONS`` (src.models.lifecycle).
+    Certification is a separate field (``/certify``), not a status.
     """
     try:
         contract = data_contract_repo.get(db, id=contract_id)
@@ -753,6 +748,10 @@ async def handle_steward_review_response(
         
     except ValueError as e:
         logger.error("Handle review validation error for contract_id=%s: %s", contract_id, e)
+        if isinstance(e, CodedValueError):
+            # e.g. a before_status_change gate refused the decision: send its
+            # code and parameters so the UI can explain it
+            raise HTTPException(status_code=409, detail=str(e))
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
         raise HTTPException(status_code=error_status, detail="Invalid review response")
     except HTTPException:
@@ -1349,6 +1348,10 @@ async def create_contract(
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return manager._build_contract_api_model(db, created_with_relations)
 
+    except CodedValueError as e:
+        # A status that isn't a lifecycle status (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error creating contract: %s", e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
@@ -1399,6 +1402,10 @@ async def update_contract(
         db_obj = data_contract_repo.get(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
+
+        # Before the before_update workflows run: a status change goes through
+        # change-status (the manager checks it again for the other callers).
+        check_status_unchanged(db_obj.status, contract_data.status)
             
         if db_obj.project_id:
             from src.controller.projects_manager import projects_manager
@@ -1514,6 +1521,10 @@ async def update_contract(
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
         return manager._build_contract_api_model(db, updated_with_relations)
 
+    except CodedValueError as e:
+        # A status change sent with the update (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error updating contract %s: %s", contract_id, e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
@@ -1954,6 +1965,7 @@ async def get_schema_properties(
     Use limit=0 to return all properties without pagination (e.g. for the edit dialog).
     """
     from sqlalchemy import func as sa_func
+    from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
 
     schema_obj = (
         db.query(SchemaObjectDb)
@@ -1968,7 +1980,7 @@ async def get_schema_properties(
     query = (
         db.query(SchemaPropertyDb)
         .filter(SchemaPropertyDb.object_id == schema_obj.id)
-        .order_by(SchemaPropertyDb.name)
+        .order_by(*SCHEMA_PROPERTY_ORDER)  # the contract's column order
     )
     if limit > 0:
         query = query.offset(skip).limit(limit)
@@ -1990,7 +2002,8 @@ async def get_schema_properties(
             "physicalType": p.physical_type,
             "required": p.required,
             "unique": p.unique,
-            "primaryKey": p.primary_key,
+            # Rows stored before `primary_key` was set only have the position
+            "primaryKey": bool(p.primary_key) or (p.primary_key_position is not None and p.primary_key_position >= 0),
             "primaryKeyPosition": p.primary_key_position,
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
@@ -3924,6 +3937,9 @@ async def clone_contract_for_new_version(
         from src.models.data_contracts_api import DataContractRead
         return DataContractRead.model_validate(new_contract, from_attributes=True).model_dump()
 
+    except InvalidVersionFormatError as e:
+        # Sent with its code and the version, so the page can say it in the user's language
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error cloning contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid contract data")

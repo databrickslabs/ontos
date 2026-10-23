@@ -119,9 +119,17 @@ from src.models.data_products import (
     SubscriberInfo,
     SubscribersListResponse,
     OnBehalfOf,
+    ONTOS_PORT_STATUS_PROPERTY,
 )
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
+from src.common.api_errors import CodedValueError
+from src.common.lifecycle_status import (
+    PRODUCT_STATUSES,
+    check_status_unchanged,
+    import_status,
+    normalize_new_status,
+)
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
@@ -351,6 +359,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_data.setdefault('apiVersion', 'v1.0.0')
             product_data.setdefault('kind', 'DataProduct')
             product_data.setdefault('status', DataProductStatus.DRAFT.value)
+            # A new product starts in one of the lifecycle statuses; `certified`
+            # is certification_level, set by the certify action.
+            product_data['status'] = normalize_new_status(
+                product_data.get('status'), PRODUCT_STATUSES
+            )
 
             # Stamp the creator as the single-user owner when no other owner is
             # supplied. Without this, a freshly created product has no
@@ -698,6 +711,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.warning(f"Attempted to update non-existent product: {product_id}")
                 return None
 
+            # The status changes only through transition_status (change-status,
+            # request-status-change), which runs the gates; an update may only
+            # repeat it.
+            check_status_unchanged(db_obj.status, product_data_dict.get('status'))
+
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
 
@@ -962,7 +980,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         new_status: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        fire_status_change_trigger: bool = True,
     ) -> DataProductApi:
         """
         Transition product status with validation.
@@ -970,12 +989,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Validates the transition is allowed per ODPS lifecycle rules (aligned with ODCS),
         then updates the product status.
         
-        Lifecycle: draft → [sandbox] → proposed → under_review → approved → active → certified → deprecated → retired
+        Lifecycle: draft → [sandbox] → proposed → under_review → approved → active → deprecated → retired (certification is certification_level)
         
         Args:
             product_id: ID of the product
             new_status: Target status
             current_user: Username for audit trail
+            fire_status_change_trigger: Fire on_status_change for this step.
+                A caller that makes one change in several lifecycle steps (a
+                product review going under_review -> approved -> active)
+                passes False and fires the trigger once for the whole change.
             
         Returns:
             Updated product
@@ -1000,32 +1023,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Validate transition
             allowed = valid_transitions.get(current_status, [])
             if new_status_lower not in allowed:
-                raise ValueError(
+                from src.common.api_errors import InvalidStatusTransitionError
+                raise InvalidStatusTransitionError(
                     f"Invalid status transition from '{current_status}' to '{new_status_lower}'. "
-                    f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}"
+                    f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}",
+                    fromStatus=current_status, toStatus=new_status_lower, allowed=list(allowed),
                 )
             
             # Run before_status_change workflows (gating)
-            try:
-                from src.common.workflow_triggers import get_trigger_registry
-                from src.models.process_workflows import EntityType as WFEntityType
-                trigger_registry = get_trigger_registry(self._db)
-                gate_passed, gate_executions = trigger_registry.before_status_change(
-                    entity_type=WFEntityType.DATA_PRODUCT,
-                    entity_id=product_id,
-                    from_status=current_status,
-                    to_status=new_status_lower,
-                    entity_name=product_db.name,
-                    entity_data={"name": product_db.name, "status": current_status},
-                    user_email=current_user,
-                )
-                if not gate_passed:
-                    from src.common.workflow_triggers import StatusChangeBlockedError
-                    raise StatusChangeBlockedError(current_status, new_status_lower, gate_executions)
-            except ValueError:
-                raise
-            except Exception as e:
-                logger.warning(f"before_status_change trigger error (non-fatal): {e}")
+            # (a gate that errors refuses the transition when it is fail_closed, #1103)
+            from src.common.workflow_triggers import run_status_gates
+            from src.models.process_workflows import EntityType as WFEntityType
+            run_status_gates(
+                self._db,
+                entity_type=WFEntityType.DATA_PRODUCT,
+                entity_id=product_id,
+                from_status=current_status,
+                to_status=new_status_lower,
+                entity_name=product_db.name,
+                entity_data={"name": product_db.name, "status": current_status},
+                user_email=current_user,
+            )
             
             # Update status
             old_status = product_db.status
@@ -1066,18 +1084,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             # Fire on_status_change workflow trigger
-            from src.common.workflow_triggers import fire_trigger_safe
-            from src.models.process_workflows import EntityType
-            fire_trigger_safe(
-                self._db, "on_status_change",
-                entity_type=EntityType.DATA_PRODUCT,
-                entity_id=product_id,
-                from_status=current_status,
-                to_status=new_status_lower,
-                entity_name=product_db.name,
-                entity_data={"name": product_db.name, "status": new_status_lower},
-                user_email=current_user,
-            )
+            if fire_status_change_trigger:
+                self.fire_status_change_trigger(
+                    product_id, product_db.name, current_status, new_status_lower, current_user,
+                )
 
             result = self._load_product_with_tags(product_db)
             self._update_search_index(result)
@@ -1089,6 +1099,28 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except ValueError as e:
             logger.error(f"Validation error transitioning product {product_id}: {e}")
             raise
+
+    def fire_status_change_trigger(
+        self,
+        product_id: str,
+        product_name: Optional[str],
+        from_status: str,
+        to_status: str,
+        current_user: Optional[str] = None,
+    ) -> None:
+        """Fire the on_status_change workflow trigger for a product."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            self._db, "on_status_change",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            from_status=from_status,
+            to_status=to_status,
+            entity_name=product_name,
+            entity_data={"name": product_name, "status": to_status},
+            user_email=current_user,
+        )
 
     def move_to_sandbox(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
@@ -1350,48 +1382,35 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
     def _get_allowed_status_transitions(self, current_status: str) -> List[Dict[str, str]]:
         """Get allowed status transitions for a given status.
-        
+
+        The targets are the lifecycle map's (``DATA_PRODUCT_TRANSITIONS``), the
+        one ``transition_status`` applies, so a request is only accepted for a
+        change that can be applied. Certification isn't a status.
+
         Args:
             current_status: Current product status
-            
+
         Returns:
             List of allowed transitions with target and label
         """
-        transitions = {
-            'draft': [
-                {'target': 'sandbox', 'label': 'Move to Sandbox'},
-                {'target': 'proposed', 'label': 'Submit for Review'},
-            ],
-            'sandbox': [
-                {'target': 'draft', 'label': 'Return to Draft'},
-                {'target': 'proposed', 'label': 'Submit for Review'},
-            ],
-            'proposed': [
-                {'target': 'draft', 'label': 'Return to Draft'},
-                {'target': 'under_review', 'label': 'Start Review'},
-            ],
-            'under_review': [
-                {'target': 'approved', 'label': 'Approve'},
-                {'target': 'draft', 'label': 'Reject (Return to Draft)'},
-            ],
-            'approved': [
-                {'target': 'active', 'label': 'Publish/Activate'},
-                {'target': 'draft', 'label': 'Return to Draft'},
-            ],
-            'active': [
-                {'target': 'certified', 'label': 'Certify'},
-                {'target': 'deprecated', 'label': 'Deprecate'},
-            ],
-            'certified': [
-                {'target': 'deprecated', 'label': 'Deprecate'},
-            ],
-            'deprecated': [
-                {'target': 'retired', 'label': 'Retire'},
-                {'target': 'active', 'label': 'Reactivate'},
-            ],
-            'retired': []  # Terminal state
+        from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
+
+        labels = {
+            'draft': 'Return to Draft',
+            'sandbox': 'Move to Sandbox',
+            'proposed': 'Submit for Review',
+            'under_review': 'Start Review',
+            'approved': 'Approve',
+            'active': 'Publish/Activate',
+            'deprecated': 'Deprecate',
+            'retired': 'Retire',
         }
-        return transitions.get(current_status.lower(), [])
+        current = (current_status or 'draft').lower()
+        targets = DATA_PRODUCT_TRANSITIONS.get(current, [])
+        return [
+            {'target': target, 'label': 'Reactivate' if current == 'deprecated' and target == 'active' else labels[target]}
+            for target in targets
+        ]
 
     def request_status_change(
         self,
@@ -1947,6 +1966,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # old→new map keyed on canon_source and rewrite port.contractId before
                 # calling create_product (#853 review item 4).
                 try:
+                    # A status Ontos doesn't have is imported as draft, with a note
+                    status_value, status_note = import_status(
+                        product_data.get('status'), PRODUCT_STATUSES
+                    )
+                    product_data = {**product_data, 'status': status_value}
                     created = self.create_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
@@ -1955,6 +1979,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
+                        **(status_note or {}),
+                    ))
+                except CodedValueError as e:
+                    # The app's own refusal (e.g. ``certified`` as a status):
+                    # its English message is safe to show, and its code lets
+                    # the UI translate it.
+                    logger.info(
+                        "Refused product at batch index %d (file %s): %s", index, filename, e,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="failed",
+                        message=str(e), code=e.code, params=e.params or None,
                     ))
                 except Exception as e:
                     # Log full detail (may carry SQL/internal text); keep the
@@ -3247,7 +3284,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Data Contract with ID {contract_id} not found")
 
         # Validate contract status
-        valid_statuses = ['active', 'approved', 'certified']
+        valid_statuses = ['active', 'approved']
         if contract_db.status and contract_db.status.lower() not in valid_statuses:
             raise ValueError(
                 f"Cannot create product from contract in status '{contract_db.status}'. "
@@ -3613,7 +3650,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 {k: v for k, v in {
                     "name": p.name, "version": p.version,
                     "contractId": p.contractId,
-                    "status": p.status,
+                    # ODPS has no port status: carried as a custom property.
+                    "customProperties": (
+                        [{"property": ONTOS_PORT_STATUS_PROPERTY, "value": p.status}]
+                        if p.status else None
+                    ),
                 }.items() if v}
                 for p in product.outputPorts
             ]
@@ -3992,7 +4033,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Product {product_id} not found")
 
             # Check if product is in a subscribable status
-            subscribable_statuses = ['active', 'certified']
+            subscribable_statuses = ['active']
             if product.status and product.status.lower() not in subscribable_statuses:
                 # Try to get replacement product info if available (from #1042)
                 replacement_id = None
@@ -4694,7 +4735,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         - Deprecation (deprecated status)
         - Retirement (retired status)
         - Activation (active status from non-active)
-        - New certification (certified status)
 
         Notifications include i18n keys so each subscriber sees their language.
         Deprecation and retirement notifications include reason, sunset date, and
@@ -4738,16 +4778,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 'description_key': 'notifications:lifecycle.activation.description',
                 'notification_type': 'INFO'
             },
-            'certified': {
-                'title': f"Product '{product_name}' has been certified",
-                'description': (
-                    "The data product has achieved certified status, "
-                    "indicating it meets all quality and compliance requirements."
-                ),
-                'title_key': 'notifications:lifecycle.certification.title',
-                'description_key': 'notifications:lifecycle.certification.description',
-                'notification_type': 'SUCCESS'
-            }
         }
 
         # Check if this status change warrants notification

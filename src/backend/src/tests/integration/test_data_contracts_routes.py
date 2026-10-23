@@ -262,23 +262,39 @@ class TestDataContractsRoutes:
         assert response.status_code == 404
 
     def test_update_contract(self, client: TestClient, db_session: Session, sample_contract_data):
-        """Test updating a contract."""
+        """Test updating a contract name without changing status."""
         # Create contract first
         create_response = client.post("/api/data-contracts", json=sample_contract_data)
         contract_id = create_response.json()["id"]
 
-        # Update contract
+        # Update contract name only (no status change)
         update_data = {
-            "name": "Updated Contract",
-            "status": "active"
+            "name": "Updated Contract"
         }
         response = client.put(f"/api/data-contracts/{contract_id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
         assert data["name"] == "Updated Contract"
-        assert data["status"] == "active"
+        assert data["status"] == "draft"  # Status should remain unchanged
         assert data["version"] == "1.0.0"  # Should remain unchanged
+
+    def test_update_contract_status_change_requires_transition(self, client: TestClient, db_session: Session, sample_contract_data):
+        """Test that PUT with status change is rejected with 400 status_change_requires_transition."""
+        # Create contract first
+        create_response = client.post("/api/data-contracts", json=sample_contract_data)
+        contract_id = create_response.json()["id"]
+
+        # Try to change status via PUT (should fail)
+        update_data = {
+            "name": "Updated Contract",
+            "status": "active"
+        }
+        response = client.put(f"/api/data-contracts/{contract_id}", json=update_data)
+        assert response.status_code == 400
+
+        data = response.json()
+        assert data["detail"]["code"] == "status_change_requires_transition"
 
     def test_delete_contract(self, client: TestClient, db_session: Session, sample_contract_data):
         """Test deleting a contract."""

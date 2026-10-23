@@ -380,7 +380,10 @@ class UpdateDataProductTool(BaseTool):
         },
         "status": {
             "type": "string",
-            "description": "New status (draft, active, deprecated)",
+            "description": (
+                "New status (draft, active, deprecated). Applied as a lifecycle transition: "
+                "only an allowed transition, and status change workflows can block it."
+            ),
             "enum": ["draft", "active", "deprecated"]
         }
     }
@@ -409,21 +412,36 @@ class UpdateDataProductTool(BaseTool):
                 update_data["domain"] = domain
             if description is not None:
                 update_data["description"] = {"purpose": description}
-            if status is not None:
-                update_data["status"] = status
             
-            if not update_data:
+            if not update_data and status is None:
                 return ToolResult(
                     success=False,
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
-            
+
+            # A status change goes through the lifecycle transition (allowed
+            # transitions, before_status_change gates), like the change-status
+            # route; an update can't change it.
+            if status is not None:
+                current = ctx.data_products_manager.get_product(product_id)
+                if not current:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data product '{product_id}' not found"
+                    )
+                current_status = getattr(current.status, 'value', current.status) or 'draft'
+                if str(current_status).lower() != status.lower():
+                    ctx.data_products_manager.transition_status(product_id, status)
+
             # Update the product
-            updated = ctx.data_products_manager.update_product(
-                product_id=product_id,
-                product_data_dict=update_data,
-                db=ctx.db
-            )
+            if update_data:
+                updated = ctx.data_products_manager.update_product(
+                    product_id=product_id,
+                    product_data_dict=update_data,
+                    db=ctx.db
+                )
+            else:
+                updated = ctx.data_products_manager.get_product(product_id)
             
             if not updated:
                 return ToolResult(

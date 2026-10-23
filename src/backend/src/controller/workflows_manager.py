@@ -23,6 +23,8 @@ from src.models.process_workflows import (
     WorkflowScope,
     StepType,
     TriggerType,
+    GateErrorMode,
+    GateExemptions,
     EntityType,
     ScopeType,
     WorkflowType,
@@ -44,7 +46,6 @@ logger = get_logger(__name__)
 _DEFAULTS_LOCK_KEY = 7_340_001_016
 
 
-
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
@@ -55,6 +56,7 @@ def _step_issue(step: WorkflowStepCreate, issue: Dict[str, Any]) -> CodedMessage
     """A Conditional / Script check's issue (workflow_step_config), keeping its code."""
     return CodedMessage(f"Step '{step.step_id}': {issue['message']}", issue['code'],
                         **{**(issue.get('params') or {}), 'step': step.step_id})
+
 
 class WorkflowsManager:
     """Manager for process workflow definitions."""
@@ -151,6 +153,8 @@ class WorkflowsManager:
                     from_status=trigger_data.get('from_status'),
                     to_status=trigger_data.get('to_status'),
                     schedule=trigger_data.get('schedule'),
+                    on_error=self._safe_gate_error_mode(trigger_data.get('on_error')),
+                    disabled_for=self._safe_gate_exemptions(trigger_data.get('disabled_for')),
                 )
                 
                 # Parse scope
@@ -343,6 +347,8 @@ class WorkflowsManager:
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
+            on_error=self._safe_gate_error_mode(trigger_config.get('on_error')),
+            disabled_for=self._safe_gate_exemptions(trigger_config.get('disabled_for')),
         )
         
         scope = WorkflowScope(
@@ -417,19 +423,19 @@ class WorkflowsManager:
         """Validate a workflow definition."""
         errors = []
         warnings = []
-        
+
         # Check for required fields
         if not workflow.name or not workflow.name.strip():
             errors.append(CodedMessage("Workflow name is required", 'workflow_name_required'))
-        
+
         if not workflow.steps:
             errors.append(CodedMessage("Workflow must have at least one step", 'workflow_steps_required'))
-        
+
         # Check for duplicate step IDs
         step_ids = [s.step_id for s in workflow.steps]
         if len(step_ids) != len(set(step_ids)):
             errors.append(CodedMessage("Duplicate step IDs found", 'duplicate_step_ids'))
-        
+
         # Check step references
         step_id_set = set(step_ids)
         for step in workflow.steps:
@@ -466,6 +472,8 @@ class WorkflowsManager:
         for step in workflow.steps:
             step_errors = self._validate_step_config(step)
             errors.extend(step_errors)
+
+        errors.extend(self._validate_gate_exemptions(workflow.trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -473,35 +481,66 @@ class WorkflowsManager:
             warnings=warnings,
         )
 
+    def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
+        """``disabled_for`` is for status gates only, and must name existing entities."""
+        exemptions = trigger.disabled_for
+        if exemptions is None or exemptions.is_empty():
+            return []
+        if trigger.type != TriggerType.BEFORE_STATUS_CHANGE:
+            return [CodedMessage(
+                "Only before_status_change workflows can be switched off per domain, "
+                "data product or data contract (disabled_for)",
+                'gate_exemptions_wrong_trigger', triggerType=trigger.type.value,
+            )]
+        from src.db_models.data_domains import DataDomain as DataDomainDb
+        from src.db_models.data_products import DataProductDb
+        from src.db_models.data_contracts import DataContractDb
+
+        errors = []
+        for label, kind, model, ids in (
+            ('domain', 'domain', DataDomainDb, exemptions.domains),
+            ('data product', 'data_product', DataProductDb, exemptions.data_products),
+            ('data contract', 'data_contract', DataContractDb, exemptions.data_contracts),
+        ):
+            if not ids:
+                continue
+            found = {row[0] for row in self._db.query(model.id).filter(model.id.in_(ids)).all()}
+            for missing in [i for i in ids if i not in found]:
+                errors.append(CodedMessage(
+                    f"disabled_for: unknown {label} '{missing}'",
+                    'gate_exemption_not_found', kind=kind, id=missing,
+                ))
+        return errors
+
     def _validate_step_config(self, step: WorkflowStepCreate) -> List[str]:
         """Validate step configuration based on type."""
         errors = []
         config = step.config or {}
-        
+
         if step.step_type == StepType.VALIDATION:
             if not config.get('rule'):
                 errors.append(_missing(step, "Validation step requires 'rule' in config", ['rule']))
-        
+
         elif step.step_type == StepType.APPROVAL:
             if not config.get('approvers'):
                 errors.append(_missing(step, "Approval step requires 'approvers' in config", ['approvers']))
-        
+
         elif step.step_type == StepType.NOTIFICATION:
             if not config.get('recipients'):
                 errors.append(_missing(step, "Notification step requires 'recipients' in config", ['recipients']))
             if not config.get('template'):
                 errors.append(_missing(step, "Notification step requires 'template' in config", ['template']))
-        
+
         elif step.step_type == StepType.ASSIGN_TAG:
             if not config.get('key'):
                 errors.append(_missing(step, "Assign tag step requires 'key' in config", ['key']))
             if not config.get('value') and not config.get('value_source'):
                 errors.append(_missing(step, "Assign tag step requires 'value' or 'value_source' in config", ['value', 'value_source']))
-        
+
         elif step.step_type == StepType.REMOVE_TAG:
             if not config.get('key'):
                 errors.append(_missing(step, "Remove tag step requires 'key' in config", ['key']))
-        
+
         elif step.step_type == StepType.CONDITIONAL:
             issue = check_condition(config.get('condition'))
             if issue:
@@ -510,11 +549,11 @@ class WorkflowsManager:
         elif step.step_type == StepType.SCRIPT:
             for issue in check_script_config(config):
                 errors.append(_step_issue(step, issue))
-        
+
         elif step.step_type == StepType.ENTITY_ACTION:
             if not config.get('action'):
                 errors.append(_missing(step, "Entity action step requires 'action' in config", ['action']))
-        
+
         return errors
 
     def get_step_type_schemas(self) -> List[StepTypeSchema]:
@@ -626,7 +665,7 @@ class WorkflowsManager:
                     "properties": {
                         "language": {"type": "string", "enum": ["python", "sql"], "default": "python"},
                         "code": {"type": "string", "description": "Script code"},
-                        "timeout_seconds": {"type": "integer", "default": 60, "minimum": 1}
+                        "timeout_seconds": {"type": "integer", "default": 60}
                     },
                     "required": ["code"]
                 },
@@ -1302,6 +1341,28 @@ class WorkflowsManager:
             return TriggerType.MANUAL
 
     @staticmethod
+    def _safe_gate_error_mode(value: Optional[str]) -> GateErrorMode:
+        """Parse a gate's ``on_error``, falling back to FAIL_OPEN when unset or unknown."""
+        if not value:
+            return GateErrorMode.FAIL_OPEN
+        try:
+            return GateErrorMode(value)
+        except ValueError:
+            logger.warning("Unknown gate on_error '%s' in DB — treating as fail_open", value)
+            return GateErrorMode.FAIL_OPEN
+
+    @staticmethod
+    def _safe_gate_exemptions(value: Any) -> GateExemptions:
+        """Parse a gate's ``disabled_for``; an unset or unreadable value switches nothing off."""
+        if not value:
+            return GateExemptions()
+        try:
+            return GateExemptions.model_validate(value)
+        except Exception:
+            logger.warning("Unreadable gate disabled_for %r in DB — ignoring it", value)
+            return GateExemptions()
+
+    @staticmethod
     def _safe_entity_type(value: str) -> EntityType:
         """Parse an entity type string, skipping unknown values."""
         try:
@@ -1326,6 +1387,8 @@ class WorkflowsManager:
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
+            on_error=self._safe_gate_error_mode(trigger_config.get('on_error')),
+            disabled_for=self._safe_gate_exemptions(trigger_config.get('disabled_for')),
         )
         
         scope = WorkflowScope(

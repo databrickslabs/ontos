@@ -49,7 +49,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
   const [isLoadingContracts, setIsLoadingContracts] = useState(false);
   const [isCreateContractOpen, setIsCreateContractOpen] = useState(false);
 
-  const activeStatuses = ['active', 'approved', 'certified'];
+  const activeStatuses = ['active', 'approved'];
 
   useEffect(() => {
     if (isOpen) {

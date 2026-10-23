@@ -19,7 +19,11 @@ interface CreateVersionDialogProps {
   currentVersion: string;
   productTitle: string;
   onSubmit: (newVersion: string) => void; // Callback with the new version string
+  /** Accept only an X.Y.Z version (contract versions are cloned, which requires it) */
+  requireSemver?: boolean;
 }
+
+const SEMVER = /^\d+\.\d+\.\d+$/;
 
 const CreateVersionDialog: React.FC<CreateVersionDialogProps> = ({
   isOpen,
@@ -27,15 +31,23 @@ const CreateVersionDialog: React.FC<CreateVersionDialogProps> = ({
   currentVersion,
   productTitle,
   onSubmit,
+  requireSemver = false,
 }) => {
   const { t } = useTranslation(['data-products', 'common']);
   const [newVersion, setNewVersion] = useState<string>(currentVersion); // Pre-fill with current
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  const handleSubmit = (event?: React.MouseEvent) => {
     const trimmedVersion = newVersion.trim();
+    // A refused version keeps the dialog open (the action button closes it otherwise)
     if (!trimmedVersion) {
+      event?.preventDefault();
       setError(t('data-products:createVersion.errors.versionEmpty'));
+      return;
+    }
+    if (requireSemver && !SEMVER.test(trimmedVersion)) {
+      event?.preventDefault();
+      setError(t('data-products:createVersion.errors.versionFormat', { version: trimmedVersion }));
       return;
     }
     setError(null);
@@ -75,7 +87,9 @@ const CreateVersionDialog: React.FC<CreateVersionDialogProps> = ({
             id="new-version-input"
             value={newVersion}
             onChange={(e) => setNewVersion(e.target.value)}
-            placeholder={t('data-products:createVersion.versionPlaceholder')}
+            placeholder={t(requireSemver
+              ? 'data-products:createVersion.versionPlaceholderSemver'
+              : 'data-products:createVersion.versionPlaceholder')}
             className={error ? "border-destructive" : ""}
           />
           {error && <p className="text-sm text-destructive mt-1">{error}</p>}

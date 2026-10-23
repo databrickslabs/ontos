@@ -178,6 +178,8 @@ class DatasetTagInfo:
     asset_type_name: Optional[str] = None
     # Additional (non-primary) domain names for the chosen domain source.
     additional_domain_names: List[str] = field(default_factory=list)
+    # Internal: the domain is the product's (the contract or asset has none of its own).
+    domain_from_product: bool = False
 
 
 # Shared tables ---------------------------------------------------------------
@@ -360,7 +362,8 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
         domain_id = data.get("domain_id")
         domain_name = data.get("domain_name")
         additional_domains = list(data.get("contract_additional_domains") or [])
-        if not domain_name and data.get("product_domain"):
+        domain_from_product = not domain_name and bool(data.get("product_domain"))
+        if domain_from_product:
             domain_name = data.get("product_domain")
             additional_domains = list(data.get("product_additional_domains") or [])
 
@@ -387,6 +390,7 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
                 domain_name=str(domain_name) if domain_name else None,
                 semantic_links=semantic_links,
                 additional_domain_names=[str(n) for n in additional_domains if n],
+                domain_from_product=domain_from_product,
             )
         )
     return out
@@ -518,7 +522,8 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
         domain_id = data.get("domain_id")
         domain_name = data.get("domain_name")
         additional_domains = list(data.get("asset_additional_domains") or [])
-        if not domain_name and data.get("product_domain"):
+        domain_from_product = not domain_name and bool(data.get("product_domain"))
+        if domain_from_product:
             domain_name = data.get("product_domain")
             additional_domains = list(data.get("product_additional_domains") or [])
 
@@ -547,6 +552,7 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
                 asset_id=str(data.get("asset_id") or "") or None,
                 asset_type_name=str(data.get("asset_type_name") or "") or None,
                 additional_domain_names=[str(n) for n in additional_domains if n],
+                domain_from_product=domain_from_product,
             )
         )
     return out
@@ -622,6 +628,7 @@ def build_output_port_tag_infos(
                 additional_domain_names=[
                     str(n) for n in (r.get("product_additional_domains") or []) if n
                 ],
+                domain_from_product=True,
             )
         )
     return out
@@ -785,11 +792,13 @@ def merge_dataset_tag_infos(
     When both sources provide an entry for the same FQN, fields from the richer
     source win per-field, and semantic links are unioned. The product fields come
     from the deciding product and the contract fields from the deciding contract
-    (see *Shared tables*), whatever the input order.
+    (see *Shared tables*), whatever the input order. A domain a contract or asset owns
+    wins; else the domain is the deciding product's.
     """
     by_fqn: Dict[str, DatasetTagInfo] = {}
     deciding_product: Dict[str, DatasetTagInfo] = {}
     deciding_contract: Dict[str, DatasetTagInfo] = {}
+    owned_domain: Dict[str, Tuple[Optional[str], str, List[str]]] = {}
     sources = (list(contract_datasets), list(asset_datasets), list(direct_datasets or []))
 
     # UC names are case-insensitive: key (and parent aggregation) on lower case so the
@@ -814,6 +823,19 @@ def merge_dataset_tag_infos(
         if best is None or _contract_rank(d) < _contract_rank(best):
             deciding_contract[d.fqn] = d
 
+        # Domain: a primary and its additional domains belong to the SAME source.
+        # - no owned primary yet  -> adopt d's primary + its additionals.
+        # - both sources share the same primary -> union the additionals (both are
+        #   legitimate additional domains for this FQN).
+        # - primaries differ -> keep the first; do NOT attach d's additionals to a
+        #   different source's primary.
+        if d.domain_name and not d.domain_from_product:
+            seen = owned_domain.get(d.fqn)
+            if seen is None:
+                owned_domain[d.fqn] = (d.domain_id, d.domain_name, list(d.additional_domain_names))
+            elif d.domain_name == seen[1]:
+                seen[2].extend(n for n in d.additional_domain_names if n not in seen[2])
+
         existing = by_fqn.get(d.fqn)
         if existing is None:
             by_fqn[d.fqn] = d
@@ -821,20 +843,6 @@ def merge_dataset_tag_infos(
             # Merge: prefer non-None values, union semantic links
             existing.asset_id = existing.asset_id or d.asset_id
             existing.asset_type_name = existing.asset_type_name or d.asset_type_name
-            # Domain: a primary and its additional domains belong to the SAME source.
-            # - existing has no primary yet  -> adopt d's primary + its additionals.
-            # - both sources share the same primary -> union the additionals (both are
-            #   legitimate additional domains for this FQN).
-            # - primaries differ -> keep existing's; do NOT attach d's additionals to a
-            #   different source's primary.
-            if not existing.domain_name and d.domain_name:
-                existing.domain_id = d.domain_id
-                existing.domain_name = d.domain_name
-                existing.additional_domain_names = list(d.additional_domain_names)
-            elif existing.domain_name and d.domain_name == existing.domain_name:
-                for name in d.additional_domain_names:
-                    if name not in existing.additional_domain_names:
-                        existing.additional_domain_names.append(name)
             # Union semantic links
             existing_iris = {link.iri for link in existing.semantic_links}
             for link in d.semantic_links:
@@ -848,6 +856,17 @@ def merge_dataset_tag_infos(
         merged.product_version, merged.product_status = p.product_version, p.product_status
         merged.contract_id, merged.contract_name = c.contract_id, c.contract_name
         merged.contract_version, merged.contract_status = c.contract_version, c.contract_status
+        # A domain the contract or asset owns wins; else the deciding product's (if any).
+        if fqn in owned_domain:
+            domain_id, domain_name, additional = owned_domain[fqn]
+        elif p.domain_from_product:
+            domain_id, domain_name = p.domain_id, p.domain_name
+            additional = list(p.additional_domain_names)
+        else:
+            domain_id, domain_name, additional = None, None, []
+        merged.domain_id, merged.domain_name = domain_id, domain_name
+        merged.additional_domain_names = additional
+        merged.domain_from_product = fqn not in owned_domain and p.domain_from_product
 
     return list(by_fqn.values())
 

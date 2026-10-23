@@ -180,9 +180,12 @@ def test_two_products_on_one_table_through_ports_without_contract(
 def test_product_fields_come_from_one_product_across_sources(tag_sync, reverse):
     # Product "beta" reaches the table through a contract, "alpha" through a port
     # without contract; the fields of one product must never mix with the other's.
-    contract = tag_sync.build_dataset_tag_infos(
-        [_contract_row("beta", "deprecated")], None, None)
-    port = tag_sync.build_output_port_tag_infos([_port_row("alpha", "active")], None, None)
+    beta = _contract_row("beta", "deprecated", domain="domain-beta")
+    beta["product_additional_domains"] = ["extra-beta"]
+    alpha = _port_row("alpha", "active", domain="domain-alpha")
+    alpha["product_additional_domains"] = ["extra-alpha"]
+    contract = tag_sync.build_dataset_tag_infos([beta], None, None)
+    port = tag_sync.build_output_port_tag_infos([alpha], None, None)
     contract[0].product_version, port[0].product_version = "9.9", "1.0"
     inputs = port + contract if reverse else contract + port
 
@@ -192,8 +195,57 @@ def test_product_fields_come_from_one_product_across_sources(tag_sync, reverse):
     d = merged[0]
     assert (d.product_id, d.product_name, d.product_version, d.product_status) == (
         "id-alpha", "alpha", "1.0", "active")
+    # The contract has no domain of its own: the domain is the deciding product's too.
+    assert (d.domain_name, d.additional_domain_names) == ("domain-alpha", ["extra-alpha"])
     # The contract fields still come from the contract.
     assert d.contract_id == "c-1"
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_a_contract_domain_wins_over_the_deciding_product_domain(tag_sync, reverse):
+    # The contract's own domain isn't a product field: it stays when another product
+    # decides the product fields of the table.
+    beta = _contract_row("beta", "deprecated", domain="domain-beta")
+    beta["domain_name"], beta["contract_additional_domains"] = "contract-domain", ["c-extra"]
+    port = tag_sync.build_output_port_tag_infos(
+        [_port_row("alpha", "active", domain="domain-alpha")], None, None)
+    contract = tag_sync.build_dataset_tag_infos([beta], None, None)
+    inputs = port + contract if reverse else contract + port
+
+    [d] = tag_sync.merge_dataset_tag_infos(inputs, [])
+
+    assert d.product_name == "alpha"
+    assert (d.domain_name, d.additional_domain_names) == ("contract-domain", ["c-extra"])
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_a_deciding_product_without_domain_takes_no_other_product_domain(tag_sync, reverse):
+    contract = tag_sync.build_dataset_tag_infos(
+        [_contract_row("beta", "deprecated", domain="domain-beta")], None, None)
+    port = tag_sync.build_output_port_tag_infos([_port_row("alpha", "active")], None, None)
+    inputs = port + contract if reverse else contract + port
+
+    [d] = tag_sync.merge_dataset_tag_infos(inputs, [])
+
+    assert (d.product_name, d.domain_name, d.additional_domain_names) == ("alpha", None, [])
+
+
+def test_an_asset_domain_wins_over_a_product_domain_of_a_contract(tag_sync):
+    contract = tag_sync.build_dataset_tag_infos(
+        [_contract_row("beta", "deprecated", domain="domain-beta")], None, None)
+    asset = tag_sync.build_asset_tag_infos([{
+        "asset_id": "a-1", "asset_name": "orders", "physical_name": TABLE,
+        "asset_type_name": "Table", "domain_id": "d-1", "domain_name": "asset-domain",
+        "asset_additional_domains": None, "contract_id": None, "contract_name": None,
+        "contract_version": None, "contract_status": None, "product_id": None,
+        "product_name": None, "product_version": None, "product_status": None,
+        "product_domain": None, "product_additional_domains": None,
+        "asset_semantic_iri": None, "asset_semantic_label": None,
+    }], None, None)
+
+    [d] = tag_sync.merge_dataset_tag_infos(contract, asset)
+
+    assert (d.product_name, d.domain_id, d.domain_name) == ("beta", "d-1", "asset-domain")
 
 
 @pytest.mark.parametrize("reverse", [False, True])

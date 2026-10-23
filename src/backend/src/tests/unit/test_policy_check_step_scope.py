@@ -204,15 +204,99 @@ def test_types_the_loader_does_not_read_are_evaluated_on_the_payload(db_session)
     assert not (bad.data or {}).get('error_code')
 
 
-def test_an_entity_the_loader_does_not_find_is_evaluated_on_the_payload(db_session):
+@pytest.mark.parametrize('entity_type, match_type, loads', [
+    # Products and contracts: _rule_object finds it missing first, no loader read
+    ('data_product', 'data_product', 0),
+    ('data_contract', 'data_contract', 0),
+    # Domains and reviews: only the loader reads them, once
+    ('domain', 'domain', 1),
+    ('data_asset_review', 'review', 1),
+])
+def test_an_entity_that_no_longer_exists_fails_the_step(
+    db_session, entity_type, match_type, loads,
+):
+    # As for the other rule steps: on the payload alone this rule would pass
+    policy = _policy(db_session, f"MATCH (e:{match_type}) ASSERT e.status = 'active'")
+    missing = str(uuid.uuid4())
+
+    with patch.object(
+        AppEntityLoader, 'load_entity', autospec=True, side_effect=AppEntityLoader.load_entity,
+    ) as load_entity:
+        result = _step(db_session, policy, entity_type, missing, {
+            'name': 'e', 'status': 'active',
+        })
+
+    assert result.passed is False
+    assert result.blocking is False
+    assert result.error == (
+        f"{entity_type} {missing} was not found, so the rule can't be evaluated"
+    )
+    assert result.data == {
+        'policy_id': policy.id,
+        'error_code': 'rule_entity_not_found',
+        'error_params': {'entityType': entity_type, 'entityId': missing},
+    }
+    assert load_entity.call_count == loads
+
+
+def test_an_entity_the_loader_no_longer_finds_fails_the_step(db_session):
+    # Deleted between _rule_object's read and the loader's: no payload fallback
+    policy = _policy(db_session, "MATCH (p:data_product) ASSERT p.status = 'active'")
+    product = _product(db_session, 'p')
+
+    with patch.object(AppEntityLoader, 'load_entity', return_value=None):
+        result = _step(db_session, policy, 'data_product', product.id, {'name': 'p'})
+
+    assert result.passed is False
+    assert result.data['error_code'] == 'rule_entity_not_found'
+
+
+def test_a_policy_whose_match_does_not_select_a_missing_entity_does_not_apply(db_session):
+    # MATCH is checked before anything is loaded
+    policy = _policy(db_session, STATUS_RULE)
+
+    with patch.object(AppEntityLoader, 'load_entity') as load_entity:
+        result = _step(db_session, policy, 'data_product', str(uuid.uuid4()), {'name': 'p'})
+
+    assert result.passed is True
+    assert result.data['reason'] == 'match_type'
+    load_entity.assert_not_called()
+
+
+@pytest.mark.parametrize('trigger_type, payload, expected', [
+    # before_create: the entity isn't stored yet
+    (TriggerType.BEFORE_CREATE, {'name': 'p', 'status': 'active'}, True),
+    # on_delete: the entity is gone once the workflow runs
+    (TriggerType.ON_DELETE, {'product_id': 'gone', 'status': 'active'}, True),
+    (TriggerType.ON_DELETE, {'product_id': 'gone', 'status': 'retired'}, False),
+], ids=['before_create', 'on_delete-passes', 'on_delete-fails'])
+def test_triggers_without_a_stored_entity_evaluate_the_payload(
+    db_session, trigger_type, payload, expected,
+):
     policy = _policy(db_session, "MATCH (p:data_product) ASSERT p.status = 'active'")
 
-    result = _step(db_session, policy, 'data_product', str(uuid.uuid4()), {
-        'name': 'p', 'status': 'active',
-    })
+    with patch.object(AppEntityLoader, 'load_entity') as load_entity:
+        result = _step(
+            db_session, policy, 'data_product', str(uuid.uuid4()), payload,
+            trigger_type=trigger_type,
+        )
+
+    assert result.passed is expected
+    assert not (result.data or {}).get('error_code')
+    load_entity.assert_not_called()
+
+
+def test_a_step_without_an_entity_id_evaluates_the_payload(db_session):
+    policy = _policy(db_session, "MATCH (p:data_product) ASSERT p.status = 'active'")
+
+    with patch.object(AppEntityLoader, 'load_entity') as load_entity:
+        result = _step(db_session, policy, 'data_product', None, {
+            'name': 'p', 'status': 'active',
+        })
 
     assert result.passed is True
     assert not (result.data or {}).get('error_code')
+    load_entity.assert_not_called()
 
 
 def _before_update_payload(**fields):
@@ -266,6 +350,24 @@ def test_before_update_gates_see_only_the_proposed_change(db_session):
 
     assert cleared.passed is False
     assert kept.passed is True
+
+
+def test_before_update_needs_no_stored_entity(db_session):
+    # The proposed change is all the rule sees, so nothing is loaded
+    policy = _policy(db_session, PURPOSE_RULE)
+
+    with patch.object(AppEntityLoader, 'load_entity') as load_entity:
+        result = _step(
+            db_session, policy, 'data_contract', str(uuid.uuid4()),
+            _before_update_payload(
+                status='active', description=ContractDescription(purpose=LONG, usage='u'),
+            ),
+            trigger_type=TriggerType.BEFORE_UPDATE,
+        )
+
+    assert result.passed is True
+    assert not (result.data or {}).get('error_code')
+    load_entity.assert_not_called()
 
 
 @pytest.mark.parametrize('name, expected', [('contract', True), ('other', False)])

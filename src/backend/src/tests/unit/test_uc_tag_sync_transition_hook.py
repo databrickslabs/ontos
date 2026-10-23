@@ -216,6 +216,35 @@ def test_no_jobs_manager_no_run(db_session, installed, ws):
     assert _stored_status(db_session, DataProductDb, product.id) == 'deprecated'
 
 
+def test_startup_registers_the_jobs_manager_for_the_hook(monkeypatch):
+    # Without the registration the hook finds no JobsManager and silently does nothing.
+    # Startup runs with mocked managers up to the jobs manager, then stops.
+    from src.utils import startup_tasks
+
+    monkeypatch.setattr(app_state, '_managers_registry', {})
+    jobs = object()
+    for name, mock in {
+        'get_workspace_client': MagicMock(),
+        'get_session_factory': MagicMock(),
+        'get_registry': MagicMock(),
+        'SettingsManager': MagicMock(return_value=MagicMock(_jobs=jobs)),
+        'AuditManager': MagicMock(),
+        'UsersManager': MagicMock(),
+        'AuthorizationManager': MagicMock(),
+        'NotificationsManager': MagicMock(),
+        'DataAssetReviewManager': MagicMock(side_effect=RuntimeError('stop here')),
+    }.items():
+        monkeypatch.setattr(startup_tasks, name, mock)
+    monkeypatch.setattr('src.controller.connections_manager.ConnectionsManager', MagicMock())
+    monkeypatch.setattr('src.controller.workspace_manager.WorkspaceManager', MagicMock())
+    app = SimpleNamespace(state=SimpleNamespace(health={'warnings': []}))
+
+    startup_tasks.initialize_managers(app)
+
+    assert app.state.jobs_manager is jobs
+    assert app_state.get_app_state_manager('jobs_manager') is jobs
+
+
 def test_a_contract_transition_requests_one_run(db_session, jobs_manager, installed, ws):
     contract = _contract(db_session, 'active')
 

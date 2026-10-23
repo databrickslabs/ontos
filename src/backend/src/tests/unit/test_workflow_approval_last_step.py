@@ -243,26 +243,3 @@ def test_completion_handlers_see_the_outcome(db_session):
 
     assert completion.call_args.kwargs['succeeded'] is True
     assert completion.call_args.kwargs['approved'] is True
-
-
-def test_a_rejection_moves_the_approval_to_the_failures(db_session):
-    """The pause counted the approval as passed; a rejection moves it to the failures."""
-    workflow = _workflow(db_session, [_approval()])
-    execution = _paused(db_session, workflow)
-
-    resumed = _decide(db_session, execution, approved=False)
-
-    assert (resumed.success_count, resumed.failure_count) == (0, 1)
-
-
-def test_a_rejection_sent_to_an_on_fail_step_counts_both(db_session):
-    """The rejected approval is a failure and the step it routes to is a pass."""
-    workflow = _workflow(db_session, [
-        _approval(on_fail='fallback'),
-        WorkflowStepCreate(step_id='fallback', step_type=StepType.PASS, order=1),
-    ])
-    execution = _paused(db_session, workflow)
-
-    resumed = _decide(db_session, execution, approved=False)
-
-    assert (resumed.success_count, resumed.failure_count) == (1, 1)

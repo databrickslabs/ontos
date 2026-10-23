@@ -274,3 +274,54 @@ def test_an_approved_product_status_change_request_requests_one_run(db_session,
 
     _assert_one_run_requested(jobs_manager, ws)
     assert _stored_status(db_session, DataProductDb, product.id) == 'deprecated'
+
+
+def test_an_approved_product_status_change_response_requests_one_run(db_session,
+                                                                      jobs_manager,
+                                                                      installed, ws):
+    product = _product(db_session, 'active')
+
+    DataProductsManager(db=db_session).handle_status_change_response(
+        db_session, MagicMock(), product.id, approver_email='a@x.com', decision='approve',
+        target_status='deprecated',
+    )
+
+    _assert_one_run_requested(jobs_manager, ws)
+    assert _stored_status(db_session, DataProductDb, product.id) == 'deprecated'
+
+
+@pytest.mark.parametrize('entity_type', ['data_contract', 'data_product'])
+def test_an_approved_request_asks_with_the_stored_and_the_requested_status(
+        db_session, jobs_manager, installed, ws, monkeypatch, entity_type):
+    # One request per approval, through transition_status, once the new status is written.
+    from src.common import uc_tag_sync_trigger
+    from src.controller import data_contracts_manager, data_products_manager
+
+    stored = {}
+    real = uc_tag_sync_trigger.request_uc_tag_sync_after_transition
+
+    def spy(kind, entity_id, from_status, to_status):
+        model = DataContractDb if kind == 'data_contract' else DataProductDb
+        stored[entity_id] = _stored_status(db_session, model, entity_id)
+        return real(kind, entity_id, from_status, to_status)
+
+    request = MagicMock(side_effect=spy)
+    monkeypatch.setattr(data_contracts_manager, 'request_uc_tag_sync_after_transition', request)
+    monkeypatch.setattr(data_products_manager, 'request_uc_tag_sync_after_transition', request)
+
+    if entity_type == 'data_contract':
+        entity = _contract(db_session, 'active')
+        DataContractsManager(data_dir=Path('/tmp')).handle_status_change_response(
+            db_session, MagicMock(), entity.id, approver_email='a@x.com', decision='approve',
+            target_status='Deprecated', requester_email='r@x.com',
+        )
+    else:
+        entity = _product(db_session, 'active')
+        DataProductsManager(db=db_session).handle_status_change_response(
+            db_session, MagicMock(), entity.id, approver_email='a@x.com', decision='approve',
+            target_status='Deprecated',
+        )
+
+    request.assert_called_once_with(entity_type, entity.id, 'active', 'deprecated')
+    assert stored[entity.id] == 'deprecated'
+    _assert_one_run_requested(jobs_manager, ws)

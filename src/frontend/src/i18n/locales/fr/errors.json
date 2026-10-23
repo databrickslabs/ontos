@@ -26,6 +26,6 @@
   },
   "internalError": "Une erreur inattendue s'est produite. Les détails se trouvent dans le journal du serveur (id de l'erreur {{errorId}}).",
   "subscription": {
-    "productNotSubscribable": "Impossible de s'abonner à « {{productName}} » : son statut est « {{status}} ». Seuls les produits actifs ou certifiés acceptent de nouveaux abonnements."
+    "productNotSubscribable": "Impossible de s'abonner à « {{productName}} » : son statut est « {{status}} ». Seuls les produits actifs acceptent de nouveaux abonnements."
   }
 }

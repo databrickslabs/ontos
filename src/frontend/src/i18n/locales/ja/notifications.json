@@ -222,10 +222,6 @@
     "activation": {
       "title": "プロダクトが有効化されました",
       "description": "データプロダクト「{{productName}}」が有効化され、利用できるようになりました。"
-    },
-    "certification": {
-      "title": "プロダクトが認定されました",
-      "description": "データプロダクト「{{productName}}」は認定ステータスを取得しました。品質とコンプライアンスのすべての要件を満たしています。"
     }
   }
 }

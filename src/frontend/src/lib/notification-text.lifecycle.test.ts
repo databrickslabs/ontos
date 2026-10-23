@@ -42,10 +42,10 @@ describe('lifecycle notifications', () => {
     expect(notificationDescription(n, i18n.t)).toContain("'Vendas' has been retired");
   });
 
-  it('renders an activation and a certification notice in Portuguese', async () => {
+  it('renders an activation notice in Portuguese', async () => {
     await i18n.changeLanguage('pt');
     expect(notificationTitle(notice('activation', 'x'), i18n.t)).toBe('Produto ativado');
-    expect(notificationDescription(notice('certification', 'x'), i18n.t))
-      .toContain("'Vendas' obteve o status certificado");
+    expect(notificationDescription(notice('activation', 'x'), i18n.t))
+      .toContain("'Vendas' foi ativado");
   });
 });

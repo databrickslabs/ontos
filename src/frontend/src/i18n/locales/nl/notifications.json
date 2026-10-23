@@ -222,10 +222,6 @@
     "activation": {
       "title": "Product geactiveerd",
       "description": "Het dataproduct '{{productName}}' is geactiveerd en is nu beschikbaar voor gebruik."
-    },
-    "certification": {
-      "title": "Product gecertificeerd",
-      "description": "Het dataproduct '{{productName}}' heeft de status gecertificeerd gekregen en voldoet aan alle kwaliteits- en compliance-eisen."
     }
   }
 }

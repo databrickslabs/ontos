@@ -222,10 +222,6 @@
     "activation": {
       "title": "Produkt aktiviert",
       "description": "Das Datenprodukt '{{productName}}' wurde aktiviert und steht jetzt zur Verfügung."
-    },
-    "certification": {
-      "title": "Produkt zertifiziert",
-      "description": "Das Datenprodukt '{{productName}}' hat den Status „zertifiziert“ erreicht und erfüllt damit alle Qualitäts- und Compliance-Anforderungen."
     }
   }
 }

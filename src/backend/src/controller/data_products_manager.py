@@ -32,7 +32,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 
 class ProductNotSubscribableError(CodedValueError):
-    """A product is not in a subscribable status (active or certified).
+    """A product is not in a subscribable status (only active is).
 
     ``str()`` is the English message; ``code`` and ``params`` (the status
     and optional replacement product info) let the UI show it in the user's
@@ -50,7 +50,7 @@ class ProductNotSubscribableError(CodedValueError):
     ):
         message = (
             f"Cannot subscribe to {product_name or 'product'} in status "
-            f"'{status}'. Product must be in one of: active, certified"
+            f"'{status}'. Product must be in one of: active"
         )
         super().__init__(
             message,
@@ -4747,7 +4747,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             new_status: New status
         """
         # Define which status changes warrant notifications (per #998 PRD)
-        # Deprecation, retirement, activation and certification notify subscribers
+        # Deprecation, retirement and activation notify subscribers; certification
+        # isn't a status (#1125), so a status change never reaches it
         notification_configs = {
             'deprecated': {
                 'title': f"Product '{product_name}' has been deprecated",

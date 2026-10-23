@@ -26,6 +26,6 @@
   },
   "internalError": "Ein unerwarteter Fehler ist aufgetreten. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}}).",
   "subscription": {
-    "productNotSubscribable": "'{{productName}}' kann nicht abonniert werden: Der Status ist '{{status}}'. Nur aktive oder zertifizierte Produkte nehmen neue Abonnements an."
+    "productNotSubscribable": "'{{productName}}' kann nicht abonniert werden: Der Status ist '{{status}}'. Nur aktive Produkte nehmen neue Abonnements an."
   }
 }

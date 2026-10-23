@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 import { lifecycleStatusLabel } from '@/lib/status-labels';
 
-/** Code of the refusal to subscribe to a product that is not active or certified. */
+/** Code of the refusal to subscribe to a product that is not active. */
 export const PRODUCT_NOT_SUBSCRIBABLE = 'product_not_subscribable';
 
 /**

@@ -11,7 +11,7 @@ const detail = {
   code: 'product_not_subscribable',
   message:
     "Cannot subscribe to Old Product in status 'deprecated'. "
-    + 'Product must be in one of: active, certified',
+    + 'Product must be in one of: active',
   params: { status: 'deprecated', productName: 'Old Product' },
 };
 
@@ -19,7 +19,7 @@ describe('subscribeErrorText', () => {
   it('translates the refusal in English with the status label', () => {
     expect(subscribeErrorText(detail, i18n.t, 'fallback')).toBe(
       "Cannot subscribe to 'Old Product': its status is 'Deprecated'. "
-      + 'Only active or certified products accept new subscriptions.',
+      + 'Only active products accept new subscriptions.',
     );
   });
 

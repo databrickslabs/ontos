@@ -3,9 +3,11 @@
 Covers:
   * Subscribing to a deprecated or retired product is refused with the coded
     error ``product_not_subscribable`` (status and product name as params)
-  * Active and certified products still accept subscriptions
+  * Active products still accept subscriptions (``certified`` is not a status
+    since #1125: certification is ``certification_level``)
   * Subscribers get a translatable notification (``data.i18n``) when a product
-    is deprecated, retired or deleted, and only those
+    is deprecated, retired, activated or deleted, and only those; a status
+    change sends it from ``transition_status``, once
   * The deletion notice is sent only after the delete is committed: a failed
     delete (repository or commit error) notifies nobody
 """
@@ -71,11 +73,8 @@ class TestSubscribeRefusal:
         with pytest.raises(ValueError):
             manager.subscribe(product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session)
 
-    @pytest.mark.parametrize('status', ['active', 'certified'])
-    def test_active_and_certified_accept_subscriptions(
-        self, manager, make_product, db_session, status
-    ):
-        product_id = make_product(status, 'Good Product')
+    def test_active_accepts_subscriptions(self, manager, make_product, db_session):
+        product_id = make_product('active', 'Good Product')
         response = manager.subscribe(
             product_id=product_id, subscriber_email=SUBSCRIBER, db=db_session
         )
@@ -98,7 +97,6 @@ class TestSubscriberNotices:
         ('deprecated', 'deprecation', 'WARNING'),
         ('retired', 'retirement', 'ACTION_REQUIRED'),
         ('active', 'activation', 'INFO'),
-        ('certified', 'certification', 'SUCCESS'),
     ])
     def test_status_change_notifies_with_i18n_keys(
         self, manager, make_product, db_session, notifications, new_status, key, kind
@@ -127,6 +125,42 @@ class TestSubscriberNotices:
             product_id=product_id, product_name='Active Product',
             old_status='deprecated', new_status=new_status,
         )
+        assert _sent(notifications) == []
+
+    @pytest.mark.parametrize('old_status,new_status,key', [
+        ('active', 'deprecated', 'deprecation'),
+        ('deprecated', 'retired', 'retirement'),
+        ('deprecated', 'active', 'activation'),
+        ('approved', 'active', 'activation'),
+    ])
+    def test_a_transition_notifies_subscribers_once(
+        self, manager, make_product, db_session, notifications, old_status, new_status, key
+    ):
+        # The status changes only through transition_status (#1125): its notice
+        # goes out from there, once per transition.
+        product_id = self._subscribed(manager, make_product, db_session)
+        db_session.get(DataProductDb, product_id).status = old_status
+        db_session.commit()
+
+        manager.transition_status(product_id, new_status, current_user='owner@example.com')
+
+        (notification,) = _sent(notifications)
+        assert notification.recipient == SUBSCRIBER
+        assert notification.data['i18n']['title'] == f'notifications:lifecycle.{key}.title'
+
+    @pytest.mark.parametrize('old_status,new_status', [
+        ('draft', 'proposed'), ('proposed', 'under_review'),
+        ('under_review', 'approved'), ('approved', 'draft'),
+    ])
+    def test_other_transitions_do_not_notify(
+        self, manager, make_product, db_session, notifications, old_status, new_status
+    ):
+        product_id = self._subscribed(manager, make_product, db_session)
+        db_session.get(DataProductDb, product_id).status = old_status
+        db_session.commit()
+
+        manager.transition_status(product_id, new_status)
+
         assert _sent(notifications) == []
 
     def test_delete_notifies_subscribers_read_before_the_rows_cascade(

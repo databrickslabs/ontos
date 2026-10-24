@@ -249,6 +249,17 @@ export interface UcGrant {
   implied?: boolean;
   preexisting?: boolean;
   sources?: RuleSource[];
+  /** ABAC policies (securable_type 'abac_policy'): the UC row filter / column mask definition. */
+  spec?: {
+    kind: 'column_mask' | 'row_filter';
+    name: string;
+    on_securable_type: string;
+    on_securable_fullname: string;
+    to_principals: string[];
+    function_name: string;
+    match_condition: string;
+    using?: { alias?: string; constant?: string }[];
+  } | null;
 }
 
 export interface CompileIssue {

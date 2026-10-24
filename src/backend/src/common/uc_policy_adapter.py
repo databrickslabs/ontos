@@ -20,6 +20,7 @@ from src.common import odrl
 from src.common.odrl_compiler import (
     EVERYONE,
     GATE_UNSUPPORTED,
+    SEVERITY_ERROR,
     SEVERITY_WARNING,
     EntitlementPlan,
     GatedRule,
@@ -86,6 +87,8 @@ class UCGrant:
     # Ledger only: the grant already existed on the platform when Ontos first applied it,
     # so Ontos stops tracking it instead of revoking it.
     preexisting: bool = False
+    # ABAC policies (securable_type == ABAC_POLICY): the policy definition to create.
+    spec: Optional[Dict[str, Any]] = None
 
     @property
     def key(self) -> GrantKey:
@@ -97,13 +100,15 @@ class UCGrant:
                "expires_at": self.expires_at, "implied": self.implied, "sources": self.sources}
         if self.preexisting:
             out["preexisting"] = True
+        if self.spec:
+            out["spec"] = self.spec
         return out
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "UCGrant":
         return cls(d["principal"], d["securable_type"], d["securable_name"], d["privilege"],
                    d.get("expires_at"), bool(d.get("implied")), list(d.get("sources") or []),
-                   bool(d.get("preexisting")))
+                   bool(d.get("preexisting")), d.get("spec"))
 
 
 def uc_principal(typed: str) -> str:
@@ -237,6 +242,8 @@ def group_for_apply(grants: Iterable[UCGrant]) -> List[Dict[str, Any]]:
     """Aggregate per (principal, securable) into ``GrantManager.apply_grant/apply_revoke`` payloads."""
     buckets: Dict[Tuple[str, str, str], List[str]] = {}
     for g in grants:
+        if g.securable_type == ABAC_POLICY:
+            continue
         buckets.setdefault((g.principal, g.securable_type, g.securable_name), []).append(g.privilege)
     return [{"principal": p, "securable_type": t, "securable_name": n, "privileges": sorted(privs)}
             for (p, t, n), privs in sorted(buckets.items())]
@@ -254,8 +261,9 @@ def live_diff(managed: Iterable[UCGrant], desired: Iterable[UCGrant],
         # UC resolves principals case-insensitively and may echo a different case.
         return ((key[0] or "").lower(), key[1], key[2], key[3])
 
-    desired_keys = {norm(g.key) for g in desired}
-    managed_keys = {norm(g.key) for g in managed}
+    # ABAC policies aren't visible through grants; only grants are compared here.
+    desired_keys = {norm(g.key) for g in desired if g.securable_type != ABAC_POLICY}
+    managed_keys = {norm(g.key) for g in managed if g.securable_type != ABAC_POLICY}
     live: set = set()
     for (stype, sname), rows in live_by_securable.items():
         for row in rows or []:
@@ -282,14 +290,19 @@ def _sql_privilege(priv: str) -> str:
 
 
 def render_sql(diff: GrantDiff) -> List[str]:
-    """GRANT / REVOKE statements for the manual runbook and Git artifacts."""
-    out: List[str] = []
+    """CREATE POLICY / GRANT / REVOKE / DROP POLICY statements for the runbook and Git artifacts.
+
+    Order is fail-safe: new restrictions (masks, filters) first, then revokes, grants, and only
+    then dropping restrictions that are no longer wanted.
+    """
+    out: List[str] = [abac_create_sql(g.spec) for g in diff.add if g.securable_type == ABAC_POLICY and g.spec]
     for verb, prep, grants in (("REVOKE", "FROM", diff.remove), ("GRANT", "TO", diff.add)):
         for item in group_for_apply(grants):
             privs = ", ".join(_sql_privilege(p) for p in item["privileges"])
             principal = item["principal"].replace("`", "``")
             out.append(f"{verb} {privs} ON {_SQL_KIND[item['securable_type']]} "
                        f"{_quote_name(item['securable_name'])} {prep} `{principal}`;")
+    out.extend(abac_drop_sql(abac_ref(g)) for g in diff.remove if g.securable_type == ABAC_POLICY)
     return out
 
 
@@ -310,3 +323,91 @@ def read_live_grants(securables: Iterable[Tuple[str, str]], get_grants: Callable
         return {}
     with ThreadPoolExecutor(max_workers=min(max_workers, len(items))) as pool:
         return dict(zip(items, pool.map(one, items)))
+
+
+# ------------------------------------------------------------------ ABAC (row filters, column masks)
+
+ABAC_POLICY = "abac_policy"
+ABAC_PRINCIPAL = "(abac)"
+_ABAC_ON = {KIND_CATALOG: "CATALOG", KIND_SCHEMA: "SCHEMA", KIND_TABLE: "TABLE"}
+
+
+def _column_condition(tag_key: str, tag_value: Optional[str]) -> str:
+    esc = lambda v: v.replace("'", "''")  # noqa: E731
+    return f"has_tag_value('{esc(tag_key)}', '{esc(tag_value)}')" if tag_value else f"has_tag('{esc(tag_key)}')"
+
+
+def build_abac(plan: EntitlementPlan, abac: Any,
+               resolve_object_kind: Optional[ObjectKindResolver] = None) -> List[UCGrant]:
+    """IR ABAC rules → one UC ABAC policy per (rule, securable), as ledger-shaped rows.
+
+    Names are deterministic over the definition, so a changed rule is a new policy (old one
+    dropped) and an unchanged one is left alone.
+    """
+    import hashlib
+    import json
+
+    rows: Dict[GrantKey, UCGrant] = {}
+    for rule in plan.abac:
+        function = abac.mask_function if rule.kind == "column_mask" else abac.row_filter_function
+        principals = sorted({uc_principal(p) for p in rule.principals})
+        if not function or not principals:
+            continue
+        for securable in rule.securables:
+            name = securable[len(odrl.UC_PREFIX):]
+            kind = securable_kind(name, resolve_object_kind)
+            if kind not in _ABAC_ON:
+                # The rule relied on this restriction (a mask replaced a deny, a filter narrows a
+                # grant): not being able to build it must block the release, never fail open.
+                plan.issue(SEVERITY_ERROR, "abac_unsupported_target",
+                           f"{rule.source.label() if rule.source else rule.kind}: ABAC policies apply to "
+                           f"tables, not to a {kind} ({name})", rule.source)
+                continue
+            on_type = _ABAC_ON[kind]
+            spec: Dict[str, Any] = {
+                "kind": rule.kind, "on_securable_type": on_type, "on_securable_fullname": name,
+                "to_principals": principals, "function_name": function,
+                "match_condition": _column_condition(rule.tag_key or abac.spatial_tag, rule.tag_value),
+                "alias": "c",
+            }
+            if rule.kind == "row_filter":
+                spec["using"] = [{"alias": "c"}, {"constant": rule.value}]
+            else:
+                spec["using"] = []
+            digest = hashlib.sha1(json.dumps(spec, sort_keys=True).encode()).hexdigest()[:12]
+            spec["name"] = f"ontos_{rule.kind}_{digest}"
+            spec["comment"] = f"Ontos Access Policies: {rule.source.label() if rule.source else rule.kind}"
+            row = UCGrant(ABAC_PRINCIPAL, ABAC_POLICY, f"{on_type}:{name}:{spec['name']}", rule.kind.upper(),
+                          None, False, [rule.source.to_dict()] if rule.source else [], False, spec)
+            existing = rows.get(row.key)
+            if existing and rule.source and rule.source.to_dict() not in existing.sources:
+                existing.sources.append(rule.source.to_dict())
+            else:
+                rows.setdefault(row.key, row)
+    return sorted(rows.values(), key=lambda g: g.key)
+
+
+def abac_ref(g: UCGrant) -> Dict[str, str]:
+    """What identifies an ABAC policy for dropping it: (on type, on name, policy name)."""
+    on_type, rest = g.securable_name.split(":", 1)
+    on_name, _, name = rest.rpartition(":")
+    return {"on_securable_type": on_type, "on_securable_fullname": on_name, "name": name}
+
+
+def abac_create_sql(spec: Dict[str, Any]) -> str:
+    to = ", ".join(f"`{p.replace('`', '``')}`" for p in spec["to_principals"])
+    on = f"{spec['on_securable_type']} {_quote_name(spec['on_securable_fullname'])}"
+    comment = spec.get("comment", "").replace("'", "''")
+    if spec["kind"] == "column_mask":
+        body = (f"COLUMN MASK {_quote_name(spec['function_name'])} TO {to} FOR TABLES "
+                f"MATCH COLUMNS {spec['match_condition']} AS c ON COLUMN c")
+    else:
+        value = str(spec["using"][1]["constant"]).replace("'", "''")
+        body = (f"ROW FILTER {_quote_name(spec['function_name'])} TO {to} FOR TABLES "
+                f"MATCH COLUMNS {spec['match_condition']} AS c USING COLUMNS (c, '{value}')")
+    return f"CREATE POLICY `{spec['name']}` ON {on} COMMENT '{comment}' {body};"
+
+
+def abac_drop_sql(ref: Dict[str, str]) -> str:
+    return (f"DROP POLICY `{ref['name']}` ON {ref['on_securable_type']} "
+            f"{_quote_name(ref['on_securable_fullname'])};")

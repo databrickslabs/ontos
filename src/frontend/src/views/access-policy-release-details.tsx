@@ -63,7 +63,31 @@ function GrantTable({ grants, empty }: { grants: UcGrant[]; empty: string }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {grants.map((g) => (
+        {grants.map((g) =>
+          g.securable_type === 'abac_policy' && g.spec ? (
+            <TableRow key={`${g.securable_name}|${g.privilege}`}>
+              <TableCell className="text-sm">{g.spec.to_principals.join(', ')}</TableCell>
+              <TableCell className="font-mono text-xs">
+                <Badge variant="outline" className="mr-1 text-[10px]">
+                  {g.spec.on_securable_type.toLowerCase()}
+                </Badge>
+                {g.spec.on_securable_fullname}
+              </TableCell>
+              <TableCell className="text-xs">
+                <Badge variant="secondary" className="mr-1 text-[10px]">
+                  {t(`access-policies:releases.abacKind.${g.spec.kind}`)}
+                </Badge>
+                <span className="font-mono">{g.spec.match_condition}</span>
+                {g.spec.using?.find((u) => u.constant) && (
+                  <span className="text-muted-foreground"> = {g.spec.using.find((u) => u.constant)?.constant}</span>
+                )}
+              </TableCell>
+              <TableCell className="text-xs">—</TableCell>
+              <TableCell className="text-xs text-muted-foreground">
+                {(g.sources || []).map((s) => `${s.policy_name} · ${s.rule_kind} #${s.rule_index + 1}`).join('; ')}
+              </TableCell>
+            </TableRow>
+          ) : (
           <TableRow key={`${g.principal}|${g.securable_type}|${g.securable_name}|${g.privilege}`}>
             <TableCell className="text-sm">{g.principal}</TableCell>
             <TableCell className="font-mono text-xs">
@@ -85,7 +109,8 @@ function GrantTable({ grants, empty }: { grants: UcGrant[]; empty: string }) {
               {(g.sources || []).map((s) => `${s.policy_name} · ${s.rule_kind} #${s.rule_index + 1}`).join('; ')}
             </TableCell>
           </TableRow>
-        ))}
+          ),
+        )}
       </TableBody>
     </Table>
   );

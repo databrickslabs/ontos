@@ -11,10 +11,9 @@ from typing import Any, Dict, List, Optional
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import (
-    Privilege,
-    PrivilegeAssignment,
-    SecurableType,
     PermissionsChange,
+    Privilege,
+    SecurableType,
 )
 
 from src.common.config import Settings, get_settings
@@ -358,6 +357,35 @@ class GrantManager:
                 "securable_name": securable_name,
             }
     
+    def apply_abac_policy(self, spec: Dict[str, Any], dry_run: bool = False) -> Dict[str, Any]:
+        """Create a UC ABAC row filter / column mask policy (Access Policy releases; ABAC beta)."""
+        if not self._ws:
+            return {"success": False, "error": "Workspace client not available"}
+        if dry_run:
+            return {"success": True, "dry_run": True, "message": f"Would create ABAC policy {spec['name']}"}
+        try:
+            self._ws.policies.create_policy(_abac_policy_info(spec))
+            return {"success": True, "message": f"Created ABAC policy {spec['name']}"}
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                return {"success": True, "message": f"ABAC policy {spec['name']} already exists"}
+            logger.error("Failed to create ABAC policy %s: %s", spec.get("name"), e, exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    def drop_abac_policy(self, ref: Dict[str, str], dry_run: bool = False) -> Dict[str, Any]:
+        if not self._ws:
+            return {"success": False, "error": "Workspace client not available"}
+        if dry_run:
+            return {"success": True, "dry_run": True, "message": f"Would drop ABAC policy {ref['name']}"}
+        try:
+            self._ws.policies.delete_policy(ref["on_securable_type"], ref["on_securable_fullname"], ref["name"])
+            return {"success": True, "message": f"Dropped ABAC policy {ref['name']}"}
+        except Exception as e:
+            if "does not exist" in str(e).lower() or "not found" in str(e).lower():
+                return {"success": True, "message": f"ABAC policy {ref['name']} already gone"}
+            logger.error("Failed to drop ABAC policy %s: %s", ref.get("name"), e, exc_info=True)
+            return {"success": False, "error": str(e)}
+
     def get_grants(
         self,
         securable_type: str,
@@ -406,6 +434,39 @@ class GrantManager:
                 "success": False,
                 "error": str(e),
             }
+
+
+def _abac_policy_info(spec: Dict[str, Any]) -> Any:
+    from databricks.sdk.service.catalog import (
+        ColumnMaskOptions,
+        FunctionArgument,
+        MatchColumn,
+        PolicyInfo,
+        PolicyType,
+        RowFilterOptions,
+    )
+
+    using = [FunctionArgument(alias=u.get("alias"), constant=u.get("constant")) for u in spec.get("using") or []]
+    alias = spec.get("alias", "c")
+    kwargs: Dict[str, Any] = {}
+    if spec["kind"] == "column_mask":
+        policy_type = PolicyType.POLICY_TYPE_COLUMN_MASK
+        kwargs["column_mask"] = ColumnMaskOptions(function_name=spec["function_name"], on_column=alias,
+                                                  using=using or None)
+    else:
+        policy_type = PolicyType.POLICY_TYPE_ROW_FILTER
+        kwargs["row_filter"] = RowFilterOptions(function_name=spec["function_name"], using=using or None)
+    return PolicyInfo(
+        name=spec["name"], comment=spec.get("comment"), policy_type=policy_type,
+        on_securable_type=SecurableType(spec["on_securable_type"]),
+        on_securable_fullname=spec["on_securable_fullname"],
+        for_securable_type=SecurableType.TABLE,
+        to_principals=list(spec["to_principals"]),
+        match_columns=[MatchColumn(alias=alias, condition=spec["match_condition"])],
+        **kwargs,
+    )
+
+
 
 
 # Global grant manager instance

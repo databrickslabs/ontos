@@ -208,6 +208,15 @@ class Settings(BaseSettings):
     # Revoking / expiring an Access Grant ships its Agreement's revocation right away (only grants
     # Ontos applied, per the Grant Ledger, can be revoked — safe even if Agreements were never delivered).
     ACCESS_AGREEMENTS_AUTO_REVOKE: bool = Field(True, env='ACCESS_AGREEMENTS_AUTO_REVOKE')
+    # UC ABAC strategy for Access Policies (the ABAC beta must be enabled on the workspace). Off
+    # unless the UDF is configured (fully qualified catalog.schema.function):
+    # - mask function fn(col) → masked value: prohibitions conditioned on ontos:columnTag compile
+    #   to column masks instead of blocking the whole securable;
+    # - row filter function fn(col, value) → BOOLEAN: permissions conditioned on `spatial` compile to
+    #   a grant plus a row filter on columns carrying ACCESS_POLICIES_SPATIAL_COLUMN_TAG.
+    ACCESS_POLICIES_ABAC_MASK_FUNCTION: Optional[str] = Field(None, env='ACCESS_POLICIES_ABAC_MASK_FUNCTION')
+    ACCESS_POLICIES_ABAC_ROW_FILTER_FUNCTION: Optional[str] = Field(None, env='ACCESS_POLICIES_ABAC_ROW_FILTER_FUNCTION')
+    ACCESS_POLICIES_SPATIAL_COLUMN_TAG: str = Field('region', env='ACCESS_POLICIES_SPATIAL_COLUMN_TAG')
 
     # UI Customization settings
     UI_I18N_ENABLED: bool = Field(True, env='UI_I18N_ENABLED')  # Enable/disable internationalization (disable forces English)

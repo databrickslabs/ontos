@@ -347,7 +347,11 @@
     "deliveryHistory": "Delivery history",
     "itemsFailed": "{{count}} items failed",
     "untrack": "No longer tracked",
-    "untrackHint": "These grants already existed on the platform before Ontos applied them. Ontos stops tracking them and does not revoke them."
+    "untrackHint": "These grants already existed on the platform before Ontos applied them. Ontos stops tracking them and does not revoke them.",
+    "abacKind": {
+      "column_mask": "Column mask",
+      "row_filter": "Row filter"
+    }
   },
   "ledger": {
     "hint": "Grants Ontos applied through releases and tracks — the basis for time-bound (GDPR) revocation. Grants created outside Ontos are not listed.",

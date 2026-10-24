@@ -86,6 +86,8 @@ class Entitlement:
     expires_at: Optional[str] = None  # ISO 8601 (from dateTime lt/lteq)
     advisories: List[str] = field(default_factory=list)
     source: Optional[RuleRef] = None
+    # Region a row filter restricts this grant to (spatial permission under the ABAC strategy).
+    row_filter: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {"principal": self.principal, "action": self.action, "securable": self.securable,
@@ -108,9 +110,47 @@ class GatedRule:
         return {"source": self.source.to_dict(), "gate": self.gate, "reason": self.reason}
 
 
+@dataclass(frozen=True)
+class AbacConfig:
+    """Which attribute-based constructs the target can enforce (UC ABAC row filters / column masks).
+
+    A strategy is enabled only when its UDF is configured: the function's signature and return
+    types depend on the customer's columns, so Ontos never guesses one.
+    """
+    mask_function: Optional[str] = None  # catalog.schema.fn(col) -> masked value
+    row_filter_function: Optional[str] = None  # catalog.schema.fn(col, value) -> BOOLEAN
+    spatial_tag: str = "region"  # governed column tag carrying the region for ``spatial``
+    # table full name -> True if it has a column carrying ``spatial_tag`` (None = can't tell).
+    # A row filter only restricts tables with such a column, so without a confirmed column the
+    # permission stays gated (fail closed) instead of becoming an unfiltered grant.
+    has_tagged_column: Optional[Callable[[str, str], Optional[bool]]] = field(default=None, compare=False)
+
+
+@dataclass
+class AbacRule:
+    """A content restriction the platform enforces at query time."""
+    kind: str  # column_mask | row_filter
+    principals: List[str]  # typed principals the policy applies TO
+    securables: List[str]  # uc refs the policy is attached ON
+    tag_key: str
+    tag_value: Optional[str] = None
+    value: Optional[str] = None  # row filter: the allowed value (e.g. the region)
+    source: Optional[RuleRef] = None
+    conflict: str = "prohibit"  # the source policy's conflict strategy
+
+    def to_dict(self) -> Dict[str, Any]:
+        out = {"kind": self.kind, "principals": list(self.principals), "securables": list(self.securables),
+               "tag_key": self.tag_key, "tag_value": self.tag_value, "value": self.value,
+               "enforcement": odrl.ENFORCEMENT_PLATFORM}
+        if self.source:
+            out["source"] = self.source.to_dict()
+        return out
+
+
 @dataclass
 class EntitlementPlan:
     entitlements: List[Entitlement] = field(default_factory=list)
+    abac: List[AbacRule] = field(default_factory=list)
     gated: List[GatedRule] = field(default_factory=list)
     obligations: List[Dict[str, Any]] = field(default_factory=list)
     issues: List[CompileIssue] = field(default_factory=list)
@@ -127,6 +167,7 @@ class EntitlementPlan:
         return {
             "compiled_at": self.compiled_at,
             "entitlements": [e.to_dict() for e in self.entitlements],
+            "abac": [a.to_dict() for a in self.abac],
             "gated": [g.to_dict() for g in self.gated],
             "obligations": list(self.obligations),
             "issues": [i.to_dict() for i in self.issues],
@@ -408,6 +449,7 @@ def compile_policies(
     asset_collections: Optional[Dict[str, odrl.CollectionDef]] = None,
     directory: Optional[PrincipalDirectory] = None,
     now: Optional[datetime] = None,
+    abac: Optional[AbacConfig] = None,
 ) -> EntitlementPlan:
     """Active policies → :class:`EntitlementPlan` (see the module docstring for the semantics)."""
     now = now or datetime.now(timezone.utc)
@@ -431,14 +473,14 @@ def compile_policies(
                 # Offered terms entitle nobody; access comes from the Agreement concluded on them.
                 plan.gated.append(GatedRule(src, GATE_WORKFLOW, "offered — granted through an Agreement"))
                 continue
-            candidates.extend(_compile_permission(rule, src, parties, assets, now, plan, p.fulfilled_duties))
+            candidates.extend(_compile_permission(rule, src, parties, assets, now, plan, p.fulfilled_duties, abac))
         for i, rule in enumerate(norm.get("prohibition") or []):
             src = _rule_ref(p, uid, "prohibition", i, rule)
             if is_offer and rule.get("assignee") is None:
                 # A product's terms bind its consumers through their Agreements (snapshotted there).
                 plan.issue(SEVERITY_INFO, "offer_term", f"{src.label()} binds consumers via their Agreements", src)
                 continue
-            pro = _compile_prohibition(rule, src, conflict, parties, assets, now, plan)
+            pro = _compile_prohibition(rule, src, conflict, parties, assets, now, plan, abac)
             if pro:
                 prohibitions.append(pro)
         for i, rule in enumerate(norm.get("obligation") or []):
@@ -493,8 +535,59 @@ def compile_policies(
             break
         if not denied:
             kept.append(e)
-    plan.entitlements = kept
+    plan.entitlements = _apply_abac_semantics(plan, kept, candidates, invalid_policies)
     return plan
+
+
+def _apply_abac_semantics(plan: EntitlementPlan, kept: List[Entitlement], candidates: List[Entitlement],
+                          invalid: Set[str]) -> List[Entitlement]:
+    """Give ABAC rules the semantics the rules they come from have.
+
+    * Masks of void policies vanish; under ``perm`` a policy's own permission overrides its mask.
+    * Row filters exist only for grants that survived the prohibition pass. ODRL permissions add
+      up: an unconditional permission for the same principal on the same (or a parent) securable
+      makes the filter moot. Several regions for one principal on one table can't be expressed by
+      a single-value filter — those grants are withheld (fail closed), never left unfiltered.
+    """
+    masks: List[AbacRule] = []
+    for rule in plan.abac:
+        if rule.kind != "column_mask" or (rule.source and rule.source.policy_uid in invalid):
+            continue
+        if rule.conflict == "perm" and rule.source and any(
+                e.source and e.source.policy_uid == rule.source.policy_uid
+                and principal_key(e.principal) in {principal_key(p) for p in rule.principals}
+                and any(securable_covers(s, e.securable) or securable_covers(e.securable, s) for s in rule.securables)
+                for e in candidates):
+            plan.issue(SEVERITY_INFO, "mask_overridden",
+                       f"{rule.source.label()}: the policy's own permission overrides the mask (conflict=perm)", rule.source)
+            continue
+        masks.append(rule)
+
+    unconditional = [e for e in kept if e.row_filter is None]
+    by_cell: Dict[Tuple[str, str], List[Entitlement]] = {}
+    for e in kept:
+        if e.row_filter is not None:
+            by_cell.setdefault((principal_key(e.principal), e.securable), []).append(e)
+    out = list(unconditional)
+    filters: List[AbacRule] = []
+    for (pkey, securable), items in sorted(by_cell.items()):
+        if any(principal_key(u.principal) == pkey and securable_covers(u.securable, securable) and
+               odrl.action_covers(u.action, items[0].action) for u in unconditional):
+            for e in items:
+                out.append(Entitlement(e.principal, e.action, e.securable, e.expires_at, e.advisories, e.source))
+            continue  # Unfiltered access already granted: no filter (permissions add up).
+        regions = sorted({e.row_filter for e in items})
+        if len(regions) > 1:
+            for e in items:
+                if e.source:
+                    plan.gated.append(GatedRule(e.source, GATE_ABAC, f"several regions ({', '.join(regions)}) for "
+                                                f"{e.principal} on {e.securable} can't be one row filter"))
+            continue  # Withheld: never an unfiltered grant.
+        out.extend(items)
+        first = items[0]
+        filters.append(AbacRule("row_filter", [first.principal], [securable], "", None, regions[0], first.source))
+    plan.abac = masks + filters
+    return out
 
 
 def _rule_ref(p: PolicyInput, uid: str, kind: str, i: int, rule: Dict[str, Any]) -> RuleRef:
@@ -503,7 +596,8 @@ def _rule_ref(p: PolicyInput, uid: str, kind: str, i: int, rule: Dict[str, Any])
 
 def _compile_permission(rule: Dict[str, Any], src: RuleRef, parties: _Parties, assets: _Assets,
                         now: datetime, plan: EntitlementPlan,
-                        fulfilled: Optional[Set[str]] = None) -> List[Entitlement]:
+                        fulfilled: Optional[Set[str]] = None,
+                        abac: Optional[AbacConfig] = None) -> List[Entitlement]:
     action = rule.get("action")
     if not action:
         plan.gated.append(GatedRule(src, GATE_UNSUPPORTED, "rule has no action"))
@@ -517,6 +611,13 @@ def _compile_permission(rule: Dict[str, Any], src: RuleRef, parties: _Parties, a
         plan.gated.append(GatedRule(src, GATE_ABAC, "action refinement can't be expressed as a static grant"))
         return []
     start, end, rest = _time_window(rule.get("constraint") or [])
+    region = _single_eq(rest, "spatial") if abac and abac.row_filter_function else None
+    if region is not None:
+        problem = _row_filter_problem(assets.resolve(rule.get("target")), abac)
+        if problem:
+            plan.gated.append(GatedRule(src, GATE_ABAC, problem))
+            return []
+        rest = []  # Enforced by a row filter on the granted table (below).
     advisories, gate = _classify(rest)
     if gate:
         plan.gated.append(GatedRule(src, gate[0], gate[1]))
@@ -545,12 +646,40 @@ def _compile_permission(rule: Dict[str, Any], src: RuleRef, parties: _Parties, a
     out: List[Entitlement] = []
     for principal in principals:
         for securable in sorted(asset.securables):
-            out.append(Entitlement(principal, action, securable, _iso(end), list(advisories), src))
+            out.append(Entitlement(principal, action, securable, _iso(end), list(advisories), src,
+                                   str(region) if region is not None else None))
     return out
 
 
+def _row_filter_problem(asset: "AssetSet", abac: AbacConfig) -> Optional[str]:
+    """Why a spatial permission can't become grant + row filter (None if it can)."""
+    if asset.inexact or asset.foreign or not asset.securables:
+        return "a row filter needs concrete Unity Catalog tables"
+    for s in asset.securables:
+        name = s[len(odrl.UC_PREFIX):]
+        if len(name.split(".")) != 3:
+            return f"a row filter needs table targets ({name} is a catalog/schema)"
+        verdict = abac.has_tagged_column(name, abac.spatial_tag) if abac.has_tagged_column else None
+        if verdict is not True:
+            return (f"{name} has no column tagged '{abac.spatial_tag}'" if verdict is False else
+                    f"can't verify that {name} has a column tagged '{abac.spatial_tag}'") + " — kept gated"
+    return None
+
+
+def _single_eq(constraints: List[Dict[str, Any]], operand: str) -> Optional[Any]:
+    """The value if ``constraints`` is exactly one ``operand eq value`` constraint, else None."""
+    if len(constraints) != 1:
+        return None
+    c = constraints[0]
+    if c.get("logical") or c.get("leftOperand") != operand or c.get("operator") != "eq":
+        return None
+    value = c.get("rightOperand")
+    return value if isinstance(value, (str, int, float)) and str(value).strip() else None
+
+
 def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, parties: _Parties, assets: _Assets,
-                         now: datetime, plan: EntitlementPlan) -> Optional[_Prohibition]:
+                         now: datetime, plan: EntitlementPlan,
+                         abac: Optional[AbacConfig] = None) -> Optional[_Prohibition]:
     action = rule.get("action")
     if not action:
         return None
@@ -562,6 +691,25 @@ def _compile_prohibition(rule: Dict[str, Any], src: RuleRef, conflict: str, part
     if scheduled is not None:
         plan.issue(SEVERITY_INFO, "prohibition_scheduled",
                    f"{src.label()} takes effect at {_iso(scheduled)} — overlapping grants expire then", src)
+    column_tag = _single_eq(rest, "ontos:columnTag") if abac and abac.mask_function else None
+    # Only an exact read prohibition becomes a mask: a broader one (``use``) still denies the other
+    # actions it covers, so it keeps the fail-closed treatment below.
+    if column_tag is not None and not rule.get("action_refinement") and action == "read":
+        party = parties.resolve(rule.get("assignee"))
+        asset = assets.resolve(rule.get("target"))
+        if party.inexact or asset.inexact or party.everyone:
+            reason = party.inexact or asset.inexact or "a column mask for everyone needs explicit principals"
+            plan.issue(SEVERITY_ERROR, "prohibition_inexact",
+                       f"{src.label()}: {reason}; a column mask must name its principals and securables", src)
+            return None
+        key, _, value = str(column_tag).partition("=")
+        plan.abac.append(AbacRule("column_mask", sorted(party.principals), sorted(asset.securables),
+                                  key.strip(), value.strip() or None, None, src, conflict))
+        scheduled = start if start is not None and start > now else None
+        plan.issue(SEVERITY_INFO, "column_mask",
+                   f"{src.label()} is enforced as a column mask"
+                   + (f" (applied now — a mask can't wait for its start at {_iso(scheduled)})" if scheduled else ""), src)
+        return None  # Masks the matching columns instead of denying the whole securable.
     if rest or rule.get("action_refinement"):
         # Fail closed: an unenforceable condition never lets a prohibition lapse.
         plan.issue(SEVERITY_WARNING, "prohibition_unconditional",

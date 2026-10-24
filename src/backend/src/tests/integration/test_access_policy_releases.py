@@ -319,3 +319,37 @@ def test_manual_delivery_does_not_commit_the_request(policies, rm, db_session: S
     r = rm.deliver(db_session, release.id, ADMIN, svc)
     assert r.status == "delivered" and commits == []
     assert r.delivery_results[-1]["results"][0]["success"] is True
+
+
+# ------------------------------------------------------------ UC ABAC (P3d)
+
+class AbacGrants(FakeGrants):
+    def apply_abac_policy(self, spec, dry_run=False):
+        self.calls.append(("abac_create", spec["name"], spec["on_securable_fullname"], ()))
+        return {"success": True}
+
+    def drop_abac_policy(self, ref, dry_run=False):
+        self.calls.append(("abac_drop", ref["name"], ref["on_securable_fullname"], ()))
+        return {"success": True}
+
+
+def test_abac_policies_are_delivered_tracked_and_dropped(policies, rm, db_session: Session, monkeypatch):
+    from src.common.config import get_settings
+    st = get_settings()
+    monkeypatch.setattr(st, "ACCESS_POLICIES_ABAC_ROW_FILTER_FUNCTION", "gov.abac.region_eq", raising=False)
+    import src.controller.access_policy_releases_manager as arm
+    monkeypatch.setattr(arm, "column_tag_checker", lambda settings: (lambda table, tag: True))
+    p = _active_policy(policies, db_session, {"permission": [{
+        "target": "uc:main.sales.orders", "action": "read", "assignee": "group:eu",
+        "constraint": [{"leftOperand": "spatial", "operator": "eq", "rightOperand": "EU"}]}]})
+    grants = AbacGrants()
+    r = rm.deliver(db_session, _approved_release(rm, db_session).id, ADMIN, Delivery([DeliveryMode.DIRECT], grants))
+    assert r.status == "applied" and grants.calls[0][0] == "abac_create"
+    abac_rows = [x for x in rm.ledger(db_session, "uc") if x["securable_type"] == "abac_policy"]
+    assert abac_rows
+    assert "ABAC policies to create" in rm._summary(r)
+    assert any(s.startswith("CREATE POLICY") for s in r.changes["sql"])
+    policies.change_status(db_session, KIND_POLICY, p.id, "deprecated", AUTHOR)
+    grants.calls.clear()
+    rm.deliver(db_session, _approved_release(rm, db_session).id, ADMIN, Delivery([DeliveryMode.DIRECT], grants))
+    assert grants.calls[-1][0] == "abac_drop" and rm.ledger(db_session, "uc") == []

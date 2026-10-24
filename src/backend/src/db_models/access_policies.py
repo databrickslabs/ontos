@@ -214,6 +214,8 @@ class AccessGrantLedgerDb(Base):
     preexisting = Column(Boolean, nullable=False, default=False)
     expires_at = Column(String, nullable=True, index=True)  # ISO 8601 UTC ("...Z"), compared lexically
     sources = Column(JSON, nullable=False, default=list)
+    # ABAC policy rows: the policy definition (for display and re-creation).
+    spec = Column(JSON, nullable=True)
     # Legal basis / originating agreement for GDPR tracking (Agreements, Phase 3).
     legal_basis = Column(String, nullable=True)
     status = Column(String, nullable=False, default="active", index=True)  # active | revoked | released

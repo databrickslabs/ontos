@@ -9,7 +9,7 @@ Updated: 2026-01-24 14:47
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from src.common.config import Settings, get_settings
 from src.common.logging import get_logger
@@ -335,13 +335,22 @@ class DeliveryService:
         revoke carries explicit privileges (an empty list would revoke everything).
         """
         items: List[Dict[str, Any]] = []
-        for op, entries in (("revoke", data.get("revoke") or []), ("grant", data.get("grant") or [])):
+        # Fail-safe order: new restrictions (ABAC masks / filters) first, then revokes, grants,
+        # and dropping restrictions last.
+        for op, entries in (("abac_create", data.get("abac_create") or []), ("revoke", data.get("revoke") or []),
+                            ("grant", data.get("grant") or []), ("abac_drop", data.get("abac_drop") or [])):
             for entry in entries:
                 if op == "revoke" and not entry.get("privileges"):
                     items.append({"op": op, **entry, "success": False, "error": "Refusing revoke without privileges"})
                     continue
-                fn = self._grant_manager.apply_revoke if op == "revoke" else self._grant_manager.apply_grant
-                res = fn(entry, dry_run=dry_run)
+                if op == "grant" and any(i["op"] == "abac_create" and not i["success"] for i in items):
+                    # A grant may rely on a restriction (mask / row filter) that failed: withhold it.
+                    items.append({"op": op, **entry, "success": False,
+                                  "error": "Withheld: an ABAC restriction in this release failed"})
+                    continue
+                method = {"revoke": "apply_revoke", "grant": "apply_grant",
+                          "abac_create": "apply_abac_policy", "abac_drop": "drop_abac_policy"}[op]
+                res = getattr(self._grant_manager, method)(entry, dry_run=dry_run)
                 items.append({"op": op, **entry, "success": bool(res.get("success")), "error": res.get("error")})
         return {"success": all(i["success"] for i in items), "items": items,
                 "applied": sum(1 for i in items if i["success"]), "failed": sum(1 for i in items if not i["success"])}

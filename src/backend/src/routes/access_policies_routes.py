@@ -68,6 +68,39 @@ async def _is_admin(request: Request, user: Any) -> bool:
         return False
 
 
+async def _subject_guard(request: Request, db: Any, user: Any) -> Any:
+    """Who may make an Offer the terms of a Data Product: an Access Policies admin, or the
+    product's owners — a member of its owner team or of its project (membership-based, no
+    substring-admin shortcut)."""
+    email = _email(user)
+    is_admin = await _is_admin(request, user)
+    try:
+        groups = await get_user_groups(email, request) if email else []
+    except Exception:  # pragma: no cover - auth backends vary per env
+        groups = []
+
+    def can_manage(product: Any) -> bool:
+        if is_admin:
+            return True
+        if not email:
+            return False
+        try:
+            from src.controller.teams_manager import teams_manager
+            if product.owner_team_id and any(str(getattr(t, "id", "")) == str(product.owner_team_id)
+                                             for t in teams_manager.get_teams_for_user(db, email, groups)):
+                return True
+            if product.project_id:
+                from src.common.config import get_settings
+                from src.controller.projects_manager import projects_manager
+                return bool(projects_manager.is_user_project_member(
+                    db=db, user_identifier=email, user_groups=groups or [],
+                    project_id=str(product.project_id), settings=get_settings()))
+        except Exception:  # pragma: no cover - fail closed
+            logger.exception("Ownership check for Offer subject failed")
+        return False
+    return can_manage
+
+
 # ------------------------------------------------------------------ profile
 
 @router.get("/profile")
@@ -122,6 +155,19 @@ async def policy_validation(entity_id: str, request: Request, db: DBSessionDep, 
         "issues": issues,
         "activation_problems": manager.activation_problems(db, KIND_POLICY, row),
     }
+
+
+@router.get("/offers")
+async def offers_for_entity(request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                            entity_type: str = Query(..., description="data_product"),
+                            entity_id: str = Query(...),
+                            include_inactive: bool = Query(False), _: bool = _READ):
+    """Offers (terms of use) stated for an entity, e.g. a Data Product's access terms."""
+    is_admin = await _is_admin(request, current_user)
+    rows = [r for r in manager.offers_for(db, entity_type, entity_id, active_only=not include_inactive)
+            if manager._visible(r, _email(current_user), is_admin)]
+    manager.prefetch_subject_names(db, rows)
+    return [manager.to_read_dict(db, KIND_POLICY, r) for r in rows]
 
 
 # ------------------------------------------------- releases & ledger (Phase 2)
@@ -284,6 +330,8 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
         is_admin = await _is_admin(request, current_user)
         rows = manager.list(db, kind, include_history=include_history, status=status,
                             viewer=_email(current_user), is_admin=is_admin)
+        if kind == KIND_POLICY:
+            manager.prefetch_subject_names(db, rows)
         return [manager.to_read_dict(db, kind, r) for r in rows]
 
     async def get_entity(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
@@ -294,10 +342,11 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
             raise _http(e)
         return manager.to_read_dict(db, kind, row)
 
-    async def create_entity(db: DBSessionDep, current_user: AuditCurrentUserDep,
+    async def create_entity(request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
                             payload: create_model = Body(...), _: bool = _WRITE):  # type: ignore[valid-type]
         try:
-            row = manager.create(db, kind, payload, _email(current_user))
+            guard = await _subject_guard(request, db, current_user) if kind == KIND_POLICY else None
+            row = manager.create(db, kind, payload, _email(current_user), can_manage_subject=guard)
         except AccessPolicyError as e:
             raise _http(e)
         return manager.to_read_dict(db, kind, row)
@@ -306,7 +355,8 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
                             payload: update_model = Body(...), _: bool = _WRITE):  # type: ignore[valid-type]
         try:
             await _visible_row(request, db, current_user, entity_id)
-            row = manager.update(db, kind, entity_id, payload, _email(current_user))
+            guard = await _subject_guard(request, db, current_user) if kind == KIND_POLICY else None
+            row = manager.update(db, kind, entity_id, payload, _email(current_user), can_manage_subject=guard)
         except AccessPolicyError as e:
             raise _http(e)
         return manager.to_read_dict(db, kind, row)

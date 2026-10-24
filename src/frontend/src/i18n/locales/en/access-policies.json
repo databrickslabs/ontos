@@ -124,7 +124,10 @@
     "created": "Created",
     "updated": "Saved",
     "saveFailed": "Could not save",
-    "incompleteRules": "Some rules are incomplete"
+    "incompleteRules": "Some rules are incomplete",
+    "offerFor": "Terms for data product",
+    "offerForNone": "Not linked to a product",
+    "offerForHint": "Every Agreement concluded for this product (approved access request) inherits this Offer's prohibitions and obligations. An Offer itself grants nobody access."
   },
   "rules": {
     "empty": "No rules yet.",
@@ -241,7 +244,9 @@
     "noTags": "No tags",
     "linkedConcepts": "Linked concepts",
     "linkFailed": "Could not update concept link",
-    "fromAccessGrant": "Recorded from an approved Access Grant"
+    "fromAccessGrant": "Recorded from an approved Access Grant",
+    "offerFor": "Terms of use (Offer) for data product",
+    "subjectMissing": "(product no longer exists)"
   },
   "releases": {
     "hint": "A release compiles all active policies for a target into concrete grants, diffs them against the Grant Ledger and ships the change through the Delivery Modes after review.",

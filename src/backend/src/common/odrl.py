@@ -352,13 +352,66 @@ def normalize_policy(doc: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _own_assignees(child: Dict[str, Any]) -> List[Any]:
+    out: List[Any] = []
+    for r in child.get("permission") or []:
+        if r.get("assignee") is not None and r["assignee"] not in out:
+            out.append(r["assignee"])
+    return out
+
+
+def _inherited_rules(parent: Dict[str, Any], child: Dict[str, Any], kind: str,
+                     assignees: List[Any]) -> List[Dict[str, Any]]:
+    """Rules a child takes over from ``parent``.
+
+    An Offer proposes terms: a non-Offer child (Set / Agreement) inherits its prohibitions and
+    obligations — bound to the child's *own* assignees (``assignees``, taken from the child before
+    any merge, so the result doesn't depend on parent order) when the term names none — but never
+    its permissions, which would otherwise entitle everyone. The child states what it grants; the
+    Offer's permission duties are attached to it by :func:`_attach_offer_duties`.
+    """
+    rules = [dict(r) for r in parent.get(kind) or []]
+    child_type = term_key(child.get("type") or child.get("@type")) or "Set"
+    if term_key(parent.get("type") or parent.get("@type")) != "Offer" or child_type == "Offer":
+        return rules
+    if kind == "permission":
+        return []
+    out: List[Dict[str, Any]] = []
+    for r in rules:
+        if r.get("assignee") is not None or not assignees:
+            out.append(r)  # Unbound term with nobody to bind it to: applies to everyone (fail-safe).
+        else:
+            out.extend({**r, "assignee": a} for a in assignees)
+    return out
+
+
+def _attach_offer_duties(offer: Dict[str, Any], merged: Dict[str, Any]) -> None:
+    """An Offer's permission duties (attribution, acknowledging terms…) are the conditions of use:
+    they bind every permission of the child that the offered permission covers (target + action)."""
+    for op in offer.get("permission") or []:
+        duties = [dict(d) for d in op.get("duty") or []]
+        target, action = op.get("target"), op.get("action")
+        if not duties or not action:
+            continue
+        for cp in merged.get("permission") or []:
+            ct = cp.get("target")
+            covers = target is None or (isinstance(target, str) and isinstance(ct, str) and _asset_ref_matches(target, ct))
+            if covers and cp.get("action") and action_covers(action, cp["action"]):
+                existing = cp.setdefault("duty", [])
+                for d in duties:
+                    if all(d.get("action") != e.get("action") for e in existing):
+                        existing.append(d)
+
+
 def resolve_inheritance(
     doc: Dict[str, Any], lookup: Callable[[str], Optional[Dict[str, Any]]]
 ) -> Tuple[Dict[str, Any], List[str]]:
     """Merge parent policies into a normalized child (§2.9). Returns (merged, errors)."""
     errors: List[str] = []
-    merged = {k: (list(v) if isinstance(v, list) else v) for k, v in doc.items()}
+    merged = {k: ([dict(x) if isinstance(x, dict) else x for x in v] if isinstance(v, list) else v)
+              for k, v in doc.items()}
     conflicts = [doc["conflict"]] if doc.get("conflict") else []
+    own_assignees = _own_assignees(doc)
 
     def walk(policy: Dict[str, Any], seen: Tuple[str, ...]) -> None:
         for parent_uid in policy.get("inheritFrom") or []:
@@ -371,7 +424,10 @@ def resolve_inheritance(
                 continue
             parent = normalize_policy(parent) if "permission" not in parent or "type" not in parent else parent
             for kind in RULE_KINDS:
-                merged[kind] = list(merged.get(kind) or []) + [dict(r) for r in parent.get(kind) or []]
+                merged[kind] = list(merged.get(kind) or []) + _inherited_rules(parent, merged, kind, own_assignees)
+            if (term_key(parent.get("type") or parent.get("@type")) == "Offer"
+                    and term_key(merged.get("type") or merged.get("@type")) != "Offer"):
+                _attach_offer_duties(parent, merged)
             for p in parent.get("profile") or []:
                 if p not in merged["profile"]:
                     merged["profile"].append(p)
@@ -870,6 +926,8 @@ def evaluate(
         prohibits: List[RuleMatch] = []
         for kind in ("permission", "prohibition"):
             for idx, rule in enumerate(pol.get(kind) or []):
+                if is_offer and kind == "prohibition" and rule.get("assignee") is None:
+                    continue  # A product's terms bind its consumers through their Agreements.
                 act = rule.get("action")
                 if not act or not action_covers(act, request.action):
                     continue

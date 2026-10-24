@@ -94,6 +94,10 @@ export interface AccessPolicy extends AccessEntityBase {
   rule_counts: Record<RuleKind, number>;
   /** Agreements: the approved Access Grant this odrl:Agreement records. */
   access_grant_id?: string | null;
+  /** The entity the policy is about, e.g. the Data Product an Offer states the terms for. */
+  subject_entity_type?: 'data_product' | null;
+  subject_entity_id?: string | null;
+  subject_name?: string | null;
 }
 
 export interface UsedByRef {

@@ -31,8 +31,14 @@ class GovernedEntityUpdate(BaseModel):
     change_summary: Optional[str] = None
 
 
+SUBJECT_ENTITY_TYPES = ("data_product",)
+
+
 class AccessPolicyCreate(GovernedEntityInput):
     policy_type: str = Field("Set", description="ODRL policy subclass: Set | Offer | Agreement")
+    # The entity the policy is about, e.g. the Data Product an Offer states the terms for.
+    subject_entity_type: Optional[str] = Field(None, description="data_product")
+    subject_entity_id: Optional[str] = None
     conflict: str = Field("prohibit", description="ODRL conflict strategy: perm | prohibit | invalid")
     inherit_from: List[str] = Field(default_factory=list, description="Parent policy IRIs (inheritFrom)")
     # Rules in ODRL JSON (compact or atomic): {"permission": [...], "prohibition": [...], "obligation": [...]}
@@ -41,6 +47,8 @@ class AccessPolicyCreate(GovernedEntityInput):
 
 class AccessPolicyUpdate(GovernedEntityUpdate):
     policy_type: Optional[str] = None
+    subject_entity_type: Optional[str] = None
+    subject_entity_id: Optional[str] = None
     conflict: Optional[str] = None
     inherit_from: Optional[List[str]] = None
     rules: Optional[Dict[str, Any]] = None

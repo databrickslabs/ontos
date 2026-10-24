@@ -22,7 +22,7 @@ it as an Access Policy makes it part of the one permission model:
 Everything here is best-effort from the Access Grants flow's point of view: a
 failure is logged and never blocks approving or revoking a grant.
 """
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -110,12 +110,42 @@ class AgreementService:
             for t in targets for a in actions
         ]}
         label = grant.entity_name or grant.entity_id
+        # The product's terms (its active Offers) bind this consumer. An Agreement records the deal as
+        # concluded, so the terms are snapshotted (ODRL inheritance resolved once, Offer-aware: the
+        # Offers' prohibitions / obligations bound to the grantee, never their permissions) — a later
+        # Offer change or retirement doesn't silently rewrite existing Agreements.
+        offers = self.policies.offers_for(db, grant.entity_type, grant.entity_id)
+        body = self.policies._normalize_rules("Agreement", odrl.DEFAULT_AUTHORED_CONFLICT, [], rules)
+        conflict = odrl.DEFAULT_AUTHORED_CONFLICT
+        notes: List[str] = []
+        if offers:
+            # Each Offer as compiled (its own inheritFrom resolved), so inherited baseline terms count too.
+            by_uid: Dict[str, Dict[str, Any]] = {}
+            for o in offers:
+                doc, errs = self.policies._policy_doc(db, o)
+                notes.extend(f"{o.name}: {e}" for e in errs)
+                by_uid[o.uid] = {**doc, "type": "Offer", "inheritFrom": []}
+            merged, errors = odrl.resolve_inheritance(
+                {"uid": "urn:ontos:policy:new", "type": "Agreement", "conflict": None,
+                 "profile": [odrl.ONTOS_PROFILE], "inheritFrom": list(by_uid), **body}, by_uid.get)
+            notes.extend(errors)
+            # Keep the terms' meaning: the Offers' conflict strategy (spec rules for differing ones).
+            conflict = merged.get("conflict") or odrl.DEFAULT_AUTHORED_CONFLICT
+            body = {k: merged.get(k) or [] for k in odrl.RULE_KINDS}
+            for perm in body["permission"]:
+                # The access-request approval is the approval the terms ask for.
+                if any(d.get("action") == "ontos:obtainApproval" for d in perm.get("duty") or []):
+                    perm["duty"] = [d for d in perm["duty"] if d.get("action") != "ontos:obtainApproval"]
+                    notes.append("ontos:obtainApproval fulfilled by the Access Grant approval")
+            if any(p.get("duty") for p in body["permission"]):
+                notes.append("open duties from the product's terms — access is granted once they are fulfilled")
+        terms = "; terms from " + ", ".join(f"{o.name} v{o.version}" for o in offers) if offers else ""
         row = AccessPolicyDb(
             name=f"Agreement: {grant.grantee_email} → {label}",
             description=f"Access Grant {grant.id}: {grant.permission_level} on {grant.entity_type} '{label}'"
-                        + (f" until {expires}" if expires else ""),
-            status=STATUS_ACTIVE, policy_type="Agreement", conflict=odrl.DEFAULT_AUTHORED_CONFLICT,
-            inherit_from=[], body=self.policies._normalize_rules("Agreement", odrl.DEFAULT_AUTHORED_CONFLICT, [], rules),
+                        + (f" until {expires}" if expires else "") + terms,
+            status=STATUS_ACTIVE, policy_type="Agreement", conflict=conflict,
+            inherit_from=[], body=body,
             access_grant_id=str(grant.id),
             created_by=approved_by, submitted_by=requested_by, approved_by=approved_by,
         )
@@ -123,7 +153,8 @@ class AgreementService:
         db.flush()
         self.policies._rebuild_index(db, row)
         self.policies._log_timeline(db, KIND_POLICY, row.id,
-                                    f"Agreement recorded from approved Access Grant {grant.id}", approved_by)
+                                    f"Agreement recorded from approved Access Grant {grant.id}"
+                                    + (" — " + "; ".join(dict.fromkeys(notes)) if notes else ""), approved_by)
         return row
 
     def retire_for_grant(self, db: Session, grant_id: Any, user: Optional[str], reason: str) -> List[AccessPolicyDb]:

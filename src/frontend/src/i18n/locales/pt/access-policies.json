@@ -124,7 +124,10 @@
     "created": "__TODO__ Created",
     "updated": "__TODO__ Saved",
     "saveFailed": "__TODO__ Could not save",
-    "incompleteRules": "__TODO__ Some rules are incomplete"
+    "incompleteRules": "__TODO__ Some rules are incomplete",
+    "offerFor": "__TODO__ Terms for data product",
+    "offerForNone": "__TODO__ Not linked to a product",
+    "offerForHint": "__TODO__ Every Agreement concluded for this product (approved access request) inherits this Offer's prohibitions and obligations. An Offer itself grants nobody access."
   },
   "rules": {
     "empty": "__TODO__ No rules yet.",
@@ -241,7 +244,9 @@
     "noTags": "__TODO__ No tags",
     "linkedConcepts": "__TODO__ Linked concepts",
     "linkFailed": "__TODO__ Could not update concept link",
-    "fromAccessGrant": "__TODO__ Recorded from an approved Access Grant"
+    "fromAccessGrant": "__TODO__ Recorded from an approved Access Grant",
+    "offerFor": "__TODO__ Terms of use (Offer) for data product",
+    "subjectMissing": "__TODO__ (product no longer exists)"
   },
   "releases": {
     "hint": "__TODO__ A release compiles all active policies for a target into concrete grants, diffs them against the Grant Ledger and ships the change through the Delivery Modes after review.",

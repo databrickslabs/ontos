@@ -80,6 +80,10 @@ class AccessPolicyDb(GovernedEntityMixin, Base):
     body = Column(JSON, nullable=False, default=dict)
     # Agreements only: the approved Access Grant this odrl:Agreement records.
     access_grant_id = Column(String, nullable=True, index=True)
+    # The Ontos entity the policy is about — e.g. a Data Product's Offer (its terms of use),
+    # which every Agreement for that product inherits (odrl:hasPolicy on the product).
+    subject_entity_type = Column(String, nullable=True, index=True)
+    subject_entity_id = Column(String, nullable=True, index=True)
 
     def __repr__(self):
         return f"<AccessPolicyDb(id='{self.id}', name='{self.name}', status='{self.status}')>"

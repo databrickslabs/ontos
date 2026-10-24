@@ -73,6 +73,9 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
   const [policyType, setPolicyType] = useState<OdrlPolicyType>('Set');
   const [conflict, setConflict] = useState<OdrlConflict>('prohibit');
   const [inheritFrom, setInheritFrom] = useState('');
+  // Offers: the Data Product whose terms of use this policy states.
+  const [subjectProductId, setSubjectProductId] = useState('');
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
   const [rules, setRules] = useState<FormRule[]>([]);
   const [rulesTab, setRulesTab] = useState<'builder' | 'json'>('builder');
   const [rulesJson, setRulesJson] = useState('{}');
@@ -83,6 +86,13 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
   const [refinement, setRefinement] = useState<FormConstraint[]>([]);
   const [refinementUnsupported, setRefinementUnsupported] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || kind !== 'policy' || policyType !== 'Offer' || products.length) return;
+    get<{ id: string; name: string }[]>('/api/data-products').then((res) => {
+      if (Array.isArray(res.data)) setProducts(res.data.map((p) => ({ id: p.id, name: p.name })));
+    });
+  }, [open, kind, policyType, products.length, get]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,6 +113,7 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
       setPolicyType(p?.policy_type || 'Set');
       setConflict(p?.conflict || 'prohibit');
       setInheritFrom((p?.inherit_from || [])[0] || '');
+      setSubjectProductId(p?.subject_entity_type === 'data_product' ? p.subject_entity_id || '' : '');
       const stored: OdrlRules = p?.rules || {};
       const form = rulesToForm(stored);
       setRules(form ?? []);
@@ -194,7 +205,14 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
         }
         const r = currentRules();
         if (!r) return;
-        Object.assign(base, { policy_type: policyType, conflict, inherit_from: inheritFrom ? [inheritFrom] : [], rules: r });
+        Object.assign(base, {
+          policy_type: policyType,
+          conflict,
+          inherit_from: inheritFrom ? [inheritFrom] : [],
+          rules: r,
+          subject_entity_type: policyType === 'Offer' && subjectProductId ? 'data_product' : null,
+          subject_entity_id: policyType === 'Offer' && subjectProductId ? subjectProductId : null,
+        });
       } else {
         if (refinementUnsupported) {
           // Keep the stored (logical) refinement untouched; only members are editable in the form.
@@ -356,6 +374,30 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
                   </datalist>
                 </div>
               </div>
+
+              {policyType === 'Offer' && (
+                <div className="space-y-1">
+                  <Label>{t('access-policies:form.offerFor')}</Label>
+                  <Select
+                    value={subjectProductId || '__none__'}
+                    disabled={contentLocked}
+                    onValueChange={(v) => setSubjectProductId(v === '__none__' ? '' : v)}
+                  >
+                    <SelectTrigger aria-label={t('access-policies:form.offerFor')}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t('access-policies:form.offerForNone')}</SelectItem>
+                      {products.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{t('access-policies:form.offerForHint')}</p>
+                </div>
+              )}
 
               <Tabs value={rulesTab} onValueChange={switchTab}>
                 <div className="flex items-center justify-between">

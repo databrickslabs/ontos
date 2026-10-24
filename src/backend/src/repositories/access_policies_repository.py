@@ -44,6 +44,15 @@ class GovernedEntityRepository(CRUDBase[Any, Dict[str, Any], Dict[str, Any]]):
         stmt = select(self.model).where(self.model.uid == uid, self.model.status == "active")
         return db.execute(stmt).scalars().first()
 
+    def list_offers_for(self, db: Session, entity_type: str, entity_id: str, *, active_only: bool = True) -> List[Any]:
+        """Offers whose subject is the given entity (policies only)."""
+        stmt = select(self.model).where(self.model.policy_type == "Offer",
+                                        self.model.subject_entity_type == entity_type,
+                                        self.model.subject_entity_id == str(entity_id))
+        if active_only:
+            stmt = stmt.where(self.model.status == "active")
+        return list(db.execute(stmt.order_by(self.model.created_at)).scalars().all())
+
 
 class AccessPolicyIndexRepository(CRUDBase[AccessPolicyIndexDb, Dict[str, Any], Dict[str, Any]]):
     def __init__(self):

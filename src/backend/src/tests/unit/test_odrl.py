@@ -290,3 +290,18 @@ def test_offer_permission_is_conditional_not_allow():
                                                    "assigner": "user:owner@x.com"}]})
     d = odrl.evaluate([offer], odrl.AccessRequest(principal="ana@x.com", action="read", asset="uc:main.sales.t"))
     assert d.verdict == odrl.VERDICT_CONDITIONAL and d.pending_duties == [odrl.OFFER_DUTY]
+
+
+
+def test_inheriting_from_an_offer_takes_terms_not_entitlements():
+    offer = {"@type": "Offer", "uid": "urn:ontos:policy:offer", "conflict": "prohibit",
+             "permission": [{"target": "uc:main.sales", "action": "read", "assigner": "user:o@x.com"}],
+             "prohibition": [{"target": "uc:main.sales", "action": "distribute", "assigner": "user:o@x.com"}]}
+    child = odrl.normalize_policy({"@type": "Agreement", "uid": "urn:ontos:policy:a", "conflict": "prohibit",
+                                   "inheritFrom": ["urn:ontos:policy:offer"],
+                                   "permission": [{"target": "uc:main.sales.orders", "action": "read",
+                                                   "assignee": "user:ana@x.com", "assigner": "user:o@x.com"}]})
+    merged, errors = odrl.resolve_inheritance(child, lambda uid: offer if uid == offer["uid"] else None)
+    assert not errors
+    assert [r["target"] for r in merged["permission"]] == ["uc:main.sales.orders"]  # the Offer's read isn't inherited
+    assert [(r["action"], r["assignee"]) for r in merged["prohibition"]] == [("distribute", "user:ana@x.com")]

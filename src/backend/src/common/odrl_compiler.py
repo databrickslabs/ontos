@@ -432,6 +432,10 @@ def compile_policies(
             candidates.extend(_compile_permission(rule, src, parties, assets, now, plan))
         for i, rule in enumerate(norm.get("prohibition") or []):
             src = _rule_ref(p, uid, "prohibition", i, rule)
+            if is_offer and rule.get("assignee") is None:
+                # A product's terms bind its consumers through their Agreements (snapshotted there).
+                plan.issue(SEVERITY_INFO, "offer_term", f"{src.label()} binds consumers via their Agreements", src)
+                continue
             pro = _compile_prohibition(rule, src, conflict, parties, assets, now, plan)
             if pro:
                 prohibitions.append(pro)

@@ -385,6 +385,21 @@ export default function AccessPolicyDetails() {
         </div>
       </div>
 
+      {entity.kind === 'policy' && (entity as AccessPolicy).subject_entity_type === 'data_product' && (
+        <Alert className="border-indigo-300 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950">
+          <AlertCircle className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <AlertDescription className="text-indigo-800 dark:text-indigo-200">
+            {t('access-policies:details.offerFor')}{' '}
+            {(entity as AccessPolicy).subject_name ? (
+              <Link className="font-medium underline" to={`/data-products/${(entity as AccessPolicy).subject_entity_id}`}>
+                {(entity as AccessPolicy).subject_name}
+              </Link>
+            ) : (
+              <span className="font-medium">{t('access-policies:details.subjectMissing')}</span>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       {entity.kind === 'policy' && (entity as AccessPolicy).access_grant_id && (
         <Alert className="border-indigo-300 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950">
           <AlertCircle className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />

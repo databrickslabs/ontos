@@ -81,7 +81,8 @@ KINDS: Dict[str, KindSpec] = {
 
 _LIFECYCLE_COPY = ("name", "description", "owner_team_id", "project_id", "uid")
 _KIND_COPY = {
-    KIND_POLICY: ("policy_type", "conflict", "inherit_from", "body", "access_grant_id"),
+    KIND_POLICY: ("policy_type", "conflict", "inherit_from", "body", "access_grant_id",
+                  "subject_entity_type", "subject_entity_id"),
     KIND_AUDIENCE: ("members", "refinement"),
     KIND_ASSET_COLLECTION: ("members", "refinement"),
 }
@@ -275,7 +276,8 @@ class AccessPoliciesManager:
 
     # ------------------------------------------------------------------- CRUD
 
-    def create(self, db: Session, kind: str, payload: Any, current_user: Optional[str]) -> Any:
+    def create(self, db: Session, kind: str, payload: Any, current_user: Optional[str],
+               can_manage_subject: Optional[Callable[[Any], bool]] = None) -> Any:
         spec = self.spec(kind)
         data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
         fields: Dict[str, Any] = {
@@ -296,6 +298,8 @@ class AccessPoliciesManager:
             conflict = data.get("conflict") or odrl.DEFAULT_AUTHORED_CONFLICT
             if conflict not in odrl.CONFLICT_TERMS:
                 raise AccessPolicyError(f"Unknown conflict strategy '{conflict}'")
+            fields.update(self._subject(db, ptype, data.get("subject_entity_type"), data.get("subject_entity_id"),
+                                        can_manage_subject))
             fields.update({
                 "policy_type": ptype, "conflict": conflict,
                 "inherit_from": data.get("inherit_from") or [],
@@ -312,6 +316,32 @@ class AccessPoliciesManager:
         self._log_timeline(db, kind, row.id, f"{spec.label} created (version {row.version}, draft).", current_user)
         db.flush()
         return row
+
+    @staticmethod
+    def _subject(db: Session, policy_type: Optional[str], entity_type: Optional[str], entity_id: Optional[str],
+                 can_manage: Optional[Callable[[Any], bool]] = None) -> Dict[str, Optional[str]]:
+        """Validate the entity a policy is about: Offers only, the entity must exist, and the caller
+        must be allowed to state its terms (``can_manage(product)``; omitted = not re-checked)."""
+        if not entity_type and not entity_id:
+            return {"subject_entity_type": None, "subject_entity_id": None}
+        from src.models.access_policies import SUBJECT_ENTITY_TYPES
+        if policy_type != "Offer":
+            raise AccessPolicyError("Only an Offer can state the terms for an entity")
+        if entity_type not in SUBJECT_ENTITY_TYPES or not entity_id:
+            raise AccessPolicyError(f"A policy subject needs a type ({', '.join(SUBJECT_ENTITY_TYPES)}) and an id")
+        from src.repositories.data_products_repository import data_product_repo
+        product = data_product_repo.get(db, entity_id)
+        if product is None:
+            raise AccessPolicyError(f"Data product '{entity_id}' not found", 404)
+        if can_manage is not None and not can_manage(product):
+            raise AccessPolicyError("Only the product's owners (owner team / project) or an admin can state its "
+                                    "terms of use", 403)
+        return {"subject_entity_type": entity_type, "subject_entity_id": entity_id}
+
+    def offers_for(self, db: Session, entity_type: str, entity_id: str, *, active_only: bool = True) -> List[AccessPolicyDb]:
+        """Offers (terms of use) stated for an entity; with inactive ones, one row per version family."""
+        rows = repo_for(KIND_POLICY).list_offers_for(db, entity_type, entity_id, active_only=active_only)
+        return rows if active_only else collapse_by_family(rows, elevated_family_ids=set(), is_admin=True)
 
     def get(self, db: Session, kind: str, entity_id: str) -> Optional[Any]:
         return repo_for(kind).get(db, entity_id)
@@ -342,10 +372,12 @@ class AccessPoliciesManager:
             r._version_count = counts.get(r.version_family_id or r.id, 1)
         return collapsed
 
-    def update(self, db: Session, kind: str, entity_id: str, payload: Any, current_user: Optional[str]) -> Any:
+    def update(self, db: Session, kind: str, entity_id: str, payload: Any, current_user: Optional[str],
+               can_manage_subject: Optional[Callable[[Any], bool]] = None) -> Any:
         row = self.require(db, kind, entity_id)
         data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else dict(payload)
-        content_keys = {"rules", "policy_type", "conflict", "inherit_from", "members", "refinement"}
+        content_keys = {"rules", "policy_type", "conflict", "inherit_from", "members", "refinement",
+                        "subject_entity_type", "subject_entity_id"}
         if content_keys & set(data) and row.status not in EDITABLE_STATUSES:
             raise AccessPolicyError(
                 f"A {row.status} {self.spec(kind).label.lower()} can't be edited — create a new version instead.", 409)
@@ -363,6 +395,14 @@ class AccessPoliciesManager:
                 row.conflict = data["conflict"]
             if "inherit_from" in data and data["inherit_from"] is not None:
                 row.inherit_from = data["inherit_from"]
+            if {"subject_entity_type", "subject_entity_id", "policy_type"} & set(data):
+                new_type, new_id = (data.get("subject_entity_type", row.subject_entity_type),
+                                    data.get("subject_entity_id", row.subject_entity_id))
+                if row.policy_type != "Offer":
+                    new_type = new_id = None  # Only Offers state terms for an entity.
+                changed = (new_type, new_id) != (row.subject_entity_type, row.subject_entity_id)
+                subj = self._subject(db, row.policy_type, new_type, new_id, can_manage_subject if changed else None)
+                row.subject_entity_type, row.subject_entity_id = subj["subject_entity_type"], subj["subject_entity_id"]
             if "rules" in data and data["rules"] is not None:
                 row.body = self._normalize_rules(row.policy_type, row.conflict, row.inherit_from or [], data["rules"])
             self._rebuild_index(db, row)
@@ -669,6 +709,27 @@ class AccessPoliciesManager:
 
     # ------------------------------------------------------------ read model
 
+    @staticmethod
+    def prefetch_subject_names(db: Session, rows: List[Any]) -> None:
+        """One query for the subject names of many rows (list views), cached on the rows."""
+        from src.db_models.data_products import DataProductDb
+        ids = {r.subject_entity_id for r in rows
+               if getattr(r, "subject_entity_type", None) == "data_product" and r.subject_entity_id}
+        names = dict(db.query(DataProductDb.id, DataProductDb.name).filter(DataProductDb.id.in_(ids)).all()) if ids else {}
+        for r in rows:
+            if hasattr(r, "subject_entity_id"):
+                r._subject_name = names.get(r.subject_entity_id)
+
+    @staticmethod
+    def _subject_name(db: Session, row: Any) -> Optional[str]:
+        if row.subject_entity_type != "data_product" or not row.subject_entity_id:
+            return None
+        if hasattr(row, "_subject_name"):
+            return row._subject_name
+        from src.repositories.data_products_repository import data_product_repo
+        dp = data_product_repo.get(db, row.subject_entity_id)
+        return dp.name if dp else None
+
     def to_read_dict(self, db: Session, kind: str, row: Any) -> Dict[str, Any]:
         spec = self.spec(kind)
         domains = entity_domain_repo.get_domains_for_entity(db, entity_type=spec.entity_type, entity_id=row.id)
@@ -701,6 +762,8 @@ class AccessPoliciesManager:
             out.update({
                 "policy_type": row.policy_type, "conflict": row.conflict,
                 "access_grant_id": row.access_grant_id,
+                "subject_entity_type": row.subject_entity_type, "subject_entity_id": row.subject_entity_id,
+                "subject_name": self._subject_name(db, row),
                 "inherit_from": row.inherit_from or [], "rules": body,
                 "rule_counts": {k: len(body.get(k) or []) for k in odrl.RULE_KINDS},
             })

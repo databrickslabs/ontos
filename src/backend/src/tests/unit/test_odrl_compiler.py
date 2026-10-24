@@ -246,11 +246,17 @@ def test_live_diff_ignores_principal_case():
 
 
 
-def test_offer_permissions_are_gated_but_offer_prohibitions_apply():
+def test_offer_permissions_are_gated_and_only_assigned_offer_prohibitions_apply():
     offer = PolicyInput(doc={"uid": "urn:ontos:policy:o", "type": "Offer", "conflict": "prohibit",
                              "permission": [{"target": "uc:main.sales", "action": "read", "assigner": "user:o@x.com"}],
-                             "prohibition": [{"target": "uc:main.sales.pii", "action": "use", "assigner": "user:o@x.com"}]},
+                             "prohibition": [
+                                 # Unbound product term: binds consumers via their Agreements, not everyone.
+                                 {"target": "uc:main.sales.pii", "action": "use", "assigner": "user:o@x.com"},
+                                 {"target": "uc:main.sales.pii", "action": "use", "assigner": "user:o@x.com",
+                                  "assignee": "user:banned@x.com"}]},
                         id="o", name="Offer", version="1.0.0")
-    other = _policy({"permission": [{"target": "uc:main.sales.pii", "action": "read", "assignee": "group:g"}]})
+    other = _policy({"permission": [{"target": "uc:main.sales.pii", "action": "read", "assignee": "user:ok@x.com"},
+                                    {"target": "uc:main.sales.pii", "action": "read", "assignee": "user:banned@x.com"}]})
     plan = _compile(offer, other)
-    assert plan.entitlements == [] and [g.gate for g in plan.gated] == ["workflow"]
+    assert [e.principal for e in plan.entitlements] == ["user:ok@x.com"]
+    assert [g.gate for g in plan.gated] == ["workflow"]

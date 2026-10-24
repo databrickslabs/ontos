@@ -149,6 +149,9 @@ class DatabricksConnector(AssetConnector):
             can_get_statistics=True,
             can_get_lineage=False,  # Would need separate lineage API
             can_get_permissions=True,
+            can_read_grants=True,
+            can_apply_grants=True,
+            can_apply_abac=False,  # Phase 3: governed-tag policies, row filters, column masks
             can_create_assets=False,
             can_update_assets=False,
             can_delete_assets=False,

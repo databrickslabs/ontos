@@ -11,6 +11,7 @@ from .data_products import DataProductFileModel
 from .data_domains import DataDomainFileModel
 from .roles import RoleFileModel
 from .tags import TagFileModel
+from .access_policies import AccessPolicyReleaseFileModel
 
 __all__ = [
     'FileModel',
@@ -20,5 +21,6 @@ __all__ = [
     'DataDomainFileModel',
     'RoleFileModel',
     'TagFileModel',
+    'AccessPolicyReleaseFileModel',
 ]
 

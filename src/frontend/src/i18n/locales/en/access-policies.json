@@ -1,11 +1,13 @@
 {
   "title": "Access Policies",
-  "subtitle": "Define who may do what on which data as W3C ODRL policies. Audiences describe who, asset collections describe what; active policies are evaluated deterministically and later compiled for connected platforms.",
+  "subtitle": "Define who may do what on which data as W3C ODRL policies. Audiences describe who, asset collections describe what; active policies are evaluated deterministically and compiled into reviewed releases for connected platforms.",
   "tabs": {
     "policies": "Policies",
     "audiences": "Audiences",
     "assetCollections": "Asset Collections",
-    "check": "Check Access"
+    "check": "Check Access",
+    "releases": "Releases",
+    "ledger": "Grant Ledger"
   },
   "status": {
     "draft": "Draft",
@@ -239,5 +241,127 @@
     "noTags": "No tags",
     "linkedConcepts": "Linked concepts",
     "linkFailed": "Could not update concept link"
+  },
+  "releases": {
+    "hint": "A release compiles all active policies for a target into concrete grants, diffs them against the Grant Ledger and ships the change through the Delivery Modes after review.",
+    "compile": "Compile release",
+    "createFailed": "Could not compile a release",
+    "changes": "Changes",
+    "delivery": "Delivery",
+    "created": "Created",
+    "errorCount": "{{count}} errors",
+    "kind": {
+      "policy": "Policy release",
+      "revocation": "Revocation"
+    },
+    "status": {
+      "draft": "Draft",
+      "under_review": "Under review",
+      "approved": "Approved",
+      "delivered": "Delivered",
+      "applied": "Applied",
+      "failed": "Failed",
+      "superseded": "Superseded",
+      "discarded": "Discarded"
+    },
+    "transition": {
+      "under_review": "Submit for review",
+      "approved": "Approve",
+      "draft": "Send back to draft",
+      "discarded": "Discard"
+    },
+    "modes": {
+      "direct": "Direct",
+      "indirect": "Indirect (Git)",
+      "manual": "Manual"
+    },
+    "modeHint": {
+      "direct": "Apply GRANT / REVOKE now via the Databricks SDK; the ledger updates per applied item.",
+      "indirect": "Write the release as Ontos YAML to the Git repository for your CI to apply.",
+      "manual": "Notify admins with a SQL runbook to run by hand."
+    },
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Info"
+    },
+    "gate": {
+      "workflow": "Workflow",
+      "abac": "ABAC",
+      "unsupported": "Unsupported"
+    },
+    "notFound": "Release not found.",
+    "actionFailed": "Action failed",
+    "recompile": "Recompile",
+    "recompiled": "Release recompiled",
+    "deliver": "Deliver",
+    "deliverTitle": "Deliver release",
+    "deliverDescription": "Choose the Delivery Modes to use. Only modes enabled in Settings → Delivery are available.",
+    "noModes": "No Delivery Mode is enabled. Enable one in Settings → Delivery.",
+    "delivered": "Release delivered",
+    "confirmApplied": "Confirm applied",
+    "confirmDescription": "Confirm the release was applied on the target (e.g. the Git change was merged and run, or the SQL runbook was executed). The Grant Ledger is updated accordingly.",
+    "appliedDone": "Release marked as applied",
+    "statusChanged": "Status updated",
+    "statusDialog": "Change the status of {{name}}.",
+    "awaitingConfirmation": "Delivered via Indirect / Manual mode. Confirm once the change was applied on the target — until then the Grant Ledger is unchanged.",
+    "liveDiff": "Check live state",
+    "liveDiffFailed": "Could not read live grants",
+    "liveState": "Live state",
+    "inSync": "In sync",
+    "drift": "Drift",
+    "liveHint": "{{count}} securables checked at {{at}} (report-only).",
+    "liveMissing": "Desired but not granted on the platform",
+    "liveStale": "Granted by Ontos but no longer desired",
+    "liveUnmanaged": "Granted outside Ontos (not touched)",
+    "description": "Compiled desired state of all active Access Policies for this target.",
+    "target": "Target",
+    "changeSummary": "+{{add}} / −{{remove}} / ~{{update}}",
+    "desiredGrants": "Desired grants",
+    "compiledAt": "Compiled",
+    "createdBy": "Compiled by",
+    "submittedBy": "Submitted by",
+    "approvedBy": "Approved by",
+    "deliveredVia": "Delivered via",
+    "applied": "Applied",
+    "sourcePolicies": "Source policies",
+    "issues": "Compile issues",
+    "errorsBlock": "Errors block review — fix the policies and recompile.",
+    "changesHint": "Diff against the Grant Ledger; {{unchanged}} grants unchanged. Grants Ontos didn't apply are never revoked.",
+    "toGrant": "To grant",
+    "toRevoke": "To revoke",
+    "expiryUpdates": "Expiry updates",
+    "sql": "SQL runbook",
+    "copySql": "Copy SQL",
+    "sqlCopied": "SQL copied",
+    "none": "None",
+    "gated": "Not compiled into grants",
+    "gatedHint": "These permissions need a workflow (duties, purpose) or attribute-based enforcement and are never granted unconditionally.",
+    "deliveryHistory": "Delivery history",
+    "itemsFailed": "{{count}} items failed",
+    "untrack": "No longer tracked",
+    "untrackHint": "These grants already existed on the platform before Ontos applied them. Ontos stops tracking them and does not revoke them."
+  },
+  "ledger": {
+    "hint": "Grants Ontos applied through releases and tracks — the basis for time-bound (GDPR) revocation. Grants created outside Ontos are not listed.",
+    "principal": "Principal",
+    "securable": "Securable",
+    "privilege": "Privilege",
+    "expires": "Expires",
+    "expired": "expired",
+    "sources": "From policies",
+    "release": "Release",
+    "viewRelease": "View release",
+    "implied": "implied",
+    "impliedTitle": "Parent privilege (USE CATALOG / USE SCHEMA) required to reach the granted object",
+    "statusActive": "Active",
+    "statusRevoked": "Revoked",
+    "revokeExpired": "Revoke expired ({{count}})",
+    "revokeFailed": "Could not revoke expired grants",
+    "revokeDone": "Revocation release for {{count}} grants: {{status}}",
+    "nothingExpired": "No expired grants",
+    "statusReleased": "No longer tracked",
+    "preexisting": "pre-existing",
+    "preexistingTitle": "Already on the platform when Ontos applied it — Ontos never revokes it"
   }
 }

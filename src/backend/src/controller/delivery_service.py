@@ -55,6 +55,8 @@ class DeliveryChangeType(str, Enum):
     TAG_CREATE = "tag_create"            # Create tag namespace
     TAG_UPDATE = "tag_update"            # Update tag namespace
     TAG_DELETE = "tag_delete"            # Delete tag namespace
+    # Access Policies
+    POLICY_RELEASE = "policy_release"    # Apply a compiled Access Policy release (grants + revokes)
 
 
 @dataclass
@@ -66,6 +68,8 @@ class DeliveryPayload:
     data: Dict[str, Any] = field(default_factory=dict)
     user: Optional[str] = None
     timestamp: Optional[datetime] = None
+    # Optional DB session: lets Manual mode persist a real admin notification.
+    db: Optional[Any] = field(default=None, repr=False, compare=False)
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -162,6 +166,11 @@ class DeliveryService:
     def set_grant_manager(self, grant_manager: 'GrantManager') -> None:
         """Set the grant manager for direct mode."""
         self._grant_manager = grant_manager
+
+    @property
+    def grant_manager(self) -> Optional['GrantManager']:
+        """Grant manager for direct mode (also used to read live grants)."""
+        return self._grant_manager
     
     def set_notifications_manager(self, notifications_manager: 'NotificationsManager') -> None:
         """Set the notifications manager for manual mode."""
@@ -284,6 +293,8 @@ class DeliveryService:
                     payload.data,
                     dry_run=is_dry_run
                 )
+            elif payload.change_type == DeliveryChangeType.POLICY_RELEASE:
+                result = self._apply_release(payload.data, is_dry_run)
             else:
                 # Other change types not directly applicable
                 return DeliveryResult(
@@ -317,6 +328,24 @@ class DeliveryService:
                 error=str(e)
             )
     
+    def _apply_release(self, data: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
+        """Apply a policy release item by item: revokes first, then grants.
+
+        ``data["revoke"]`` / ``data["grant"]`` hold ``GrantManager`` payloads; every
+        revoke carries explicit privileges (an empty list would revoke everything).
+        """
+        items: List[Dict[str, Any]] = []
+        for op, entries in (("revoke", data.get("revoke") or []), ("grant", data.get("grant") or [])):
+            for entry in entries:
+                if op == "revoke" and not entry.get("privileges"):
+                    items.append({"op": op, **entry, "success": False, "error": "Refusing revoke without privileges"})
+                    continue
+                fn = self._grant_manager.apply_revoke if op == "revoke" else self._grant_manager.apply_grant
+                res = fn(entry, dry_run=dry_run)
+                items.append({"op": op, **entry, "success": bool(res.get("success")), "error": res.get("error")})
+        return {"success": all(i["success"] for i in items), "items": items,
+                "applied": sum(1 for i in items if i["success"]), "failed": sum(1 for i in items if not i["success"])}
+
     def _deliver_indirect(self, payload: DeliveryPayload) -> DeliveryResult:
         """Deliver change to Git repository as YAML.
         
@@ -443,8 +472,36 @@ class DeliveryService:
             title = self._build_manual_notification_title(payload)
             message = self._build_manual_notification_message(payload)
             
-            # TODO: Create notification for admins - requires DB session
-            # For now, just log the manual action
+            if payload.db is not None:
+                notification = self._notifications_manager.create_delivery_notification(
+                    payload.db,
+                    change_type=payload.change_type.value,
+                    entity_type=payload.entity_type,
+                    entity_id=payload.entity_id,
+                    # ``entity`` (an ORM object for Indirect mode) isn't JSON-serializable.
+                    data={k: v for k, v in payload.data.items() if k != 'entity'},
+                    source_user=payload.user,
+                )
+                if notification is None:
+                    return DeliveryResult(
+                        success=False,
+                        mode=DeliveryMode.MANUAL,
+                        change_type=payload.change_type,
+                        entity_type=payload.entity_type,
+                        entity_id=payload.entity_id,
+                        error="Could not create the admin notification",
+                    )
+                return DeliveryResult(
+                    success=True,
+                    mode=DeliveryMode.MANUAL,
+                    change_type=payload.change_type,
+                    entity_type=payload.entity_type,
+                    entity_id=payload.entity_id,
+                    message="Admin notification created",
+                    details={"title": title, "notification_id": notification.id},
+                )
+
+            # No DB session supplied by the caller: log the manual action only.
             logger.info(f"Manual delivery requested: {title} - {message}")
             
             return DeliveryResult(
@@ -478,6 +535,7 @@ class DeliveryService:
             DeliveryChangeType.CONTRACT_UPDATE: "Update Data Contract",
             DeliveryChangeType.PRODUCT_UPDATE: "Update Data Product",
             DeliveryChangeType.ROLE_UPDATE: "Update Role Permissions",
+            DeliveryChangeType.POLICY_RELEASE: "Apply Access Policy Release",
         }
         return titles.get(payload.change_type, f"Action Required: {payload.change_type.value}")
     

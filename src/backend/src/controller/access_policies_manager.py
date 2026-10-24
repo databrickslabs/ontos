@@ -106,6 +106,14 @@ class PrincipalAttributeSource:
     def attributes(self, db: Session, principal: str) -> Dict[str, List[str]]:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def principals(self, db: Session) -> List[str]:
+        """Principals this source knows (compile-time expansion of attribute-refined Audiences)."""
+        return []
+
+    def all_attributes(self, db: Session) -> Dict[str, Dict[str, List[str]]]:
+        """Attributes of every known principal; override with a single query to avoid N+1."""
+        return {p: self.attributes(db, p) for p in self.principals(db)}
+
 
 class BusinessRoleAttributeSource(PrincipalAttributeSource):
     """v1 source: the Ontos Business Roles a principal actively holds (via business owners)."""
@@ -125,6 +133,26 @@ class BusinessRoleAttributeSource(PrincipalAttributeSource):
         )
         return {"ontos:businessRole": sorted({r[0] for r in rows if r[0]})}
 
+    def principals(self, db: Session) -> List[str]:
+        return sorted(self.all_attributes(db))
+
+    def all_attributes(self, db: Session) -> Dict[str, Dict[str, List[str]]]:
+        from src.db_models.business_owners import BusinessOwnerDb
+        from src.db_models.business_roles import BusinessRoleDb
+
+        rows = (
+            db.query(BusinessOwnerDb.user_email, BusinessRoleDb.name)
+            .join(BusinessRoleDb, BusinessOwnerDb.role_id == BusinessRoleDb.id)
+            .filter(BusinessOwnerDb.is_active.is_(True))
+            .distinct()
+            .all()
+        )
+        out: Dict[str, set] = {}
+        for email, role in rows:
+            if email:
+                out.setdefault(email.lower(), set()).update([role] if role else [])
+        return {p: {"ontos:businessRole": sorted(r)} for p, r in out.items()}
+
 
 class DirectoryAttributeSource(PrincipalAttributeSource):
     """Stub: principal attributes from an external directory (Entra ID / IdP via REST
@@ -143,6 +171,24 @@ class DirectoryAttributeSource(PrincipalAttributeSource):
 DEFAULT_ATTRIBUTE_SOURCES: List[PrincipalAttributeSource] = [BusinessRoleAttributeSource()]
 
 
+def log_timeline(db: Session, entity_type: str, entity_id: str, message: str, user: Optional[str] = None) -> None:
+    """Best-effort timeline (Comments) entry that never commits the caller's transaction.
+
+    ``CommentsManager.create_comment`` commits; the repository only flushes, and the savepoint
+    keeps a failing insert from poisoning the request's session.
+    """
+    try:
+        from src.models.comments import CommentCreate
+        from src.repositories.comments_repository import comments_repo
+        with db.begin_nested():
+            comments_repo.create_with_audience(
+                db, obj_in=CommentCreate(entity_type=entity_type, entity_id=entity_id, comment=message),
+                created_by=user or "system@ontos",
+            )
+    except Exception as e:  # pragma: no cover - timeline logging is best-effort
+        logger.warning(f"Could not write timeline comment for {entity_type} {entity_id}: {e}")
+
+
 # ------------------------------------------------------------------- the manager
 
 class AccessPoliciesManager:
@@ -159,17 +205,7 @@ class AccessPoliciesManager:
 
     def _log_timeline(self, db: Session, kind: str, entity_id: str, message: str, user: Optional[str] = None) -> None:
         """Best-effort: append a system comment to the entity's Comments timeline."""
-        try:
-            from src.controller.comments_manager import CommentsManager
-            from src.models.comments import CommentCreate
-            CommentsManager().create_comment(
-                db,
-                data=CommentCreate(entity_type=self.spec(kind).entity_type, entity_id=entity_id, comment=message),
-                user_email=user or "system@ontos",
-                is_admin=True,
-            )
-        except Exception as e:  # pragma: no cover - timeline logging is best-effort
-            logger.warning(f"Could not write timeline comment for {kind} {entity_id}: {e}")
+        log_timeline(db, self.spec(kind).entity_type, entity_id, message, user)
 
     def _set_tags(self, db: Session, kind: str, entity_id: str, tags: Optional[List[Any]], user: Optional[str]) -> None:
         if tags is None:
@@ -575,6 +611,20 @@ class AccessPoliciesManager:
             except Exception as e:  # pragma: no cover - a failing source never breaks evaluation
                 logger.warning(f"Principal attribute source {source.name} failed: {e}")
         return attrs
+
+    def known_principals(self, db: Session) -> List[Tuple[str, Dict[str, List[str]]]]:
+        """Every principal any attribute source knows, with its resolved attributes."""
+        merged: Dict[str, Dict[str, List[str]]] = {}
+        for source in self.attribute_sources:
+            try:
+                for p, attrs in (source.all_attributes(db) or {}).items():
+                    target = merged.setdefault(p.lower(), {})
+                    for k, v in attrs.items():
+                        target.setdefault(k, [])
+                        target[k].extend(x for x in v if x not in target[k])
+            except Exception as e:  # pragma: no cover - a failing source never breaks compilation
+                logger.warning(f"Principal attribute source {source.name} failed to enumerate: {e}")
+        return sorted(merged.items())
 
     def check_access(self, db: Session, request: Any, *, viewer: Optional[str] = None, is_admin: bool = True) -> Dict[str, Any]:
         what_if = bool(request.policy_ids)

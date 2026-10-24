@@ -83,6 +83,11 @@ class ConnectorCapabilities:
     can_create_assets: bool = False
     can_update_assets: bool = False
     can_delete_assets: bool = False
+
+    # Access Policy targets (compiled ODRL policies → platform grants)
+    can_read_grants: bool = False   # live grants for drift / live diff
+    can_apply_grants: bool = False  # RBAC GRANT / REVOKE
+    can_apply_abac: bool = False    # tag-based policies, row filters, column masks
     
     # Supported asset types
     supported_asset_types: List[UnifiedAssetType] = field(default_factory=list)

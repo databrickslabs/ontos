@@ -37,6 +37,7 @@ import SecurityFeatures from './views/security-features';
 import Entitlements from './views/entitlements';
 import AccessPolicies from './views/access-policies';
 import AccessPolicyDetails from './views/access-policy-details';
+import AccessPolicyReleaseDetails from './views/access-policy-release-details';
 import EntitlementsSync from './views/entitlements-sync';
 import DataAssetReviews from './views/data-asset-reviews';
 import DataAssetReviewDetails from './views/data-asset-review-details';
@@ -243,6 +244,7 @@ export default function App() {
               {/* Security */}
               <Route path="/security-features" element={<SecurityFeatures />} />
               <Route path="/access-policies" element={<AccessPolicies />} />
+              <Route path="/access-policies/releases/:releaseId" element={<AccessPolicyReleaseDetails />} />
               <Route path="/access-policies/:segment/:entityId" element={<AccessPolicyDetails />} />
               <Route path="/entitlements" element={<Entitlements />} />
               <Route path="/entitlements-sync" element={<EntitlementsSync />} />

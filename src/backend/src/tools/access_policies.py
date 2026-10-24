@@ -130,3 +130,65 @@ class GetOdrlProfileTool(BaseTool):
 
     async def execute(self, ctx: ToolContext, **_: Any) -> ToolResult:
         return ToolResult(success=True, data=odrl.profile_vocabulary())
+
+
+class PreviewAccessReleaseTool(BaseTool):
+    """Compile the active Access Policies for a target and show what would change."""
+
+    name = "preview_access_release"
+    category = "governance"
+    description = (
+        "Compile all ACTIVE Access Policies for a target platform (currently 'uc' = Unity Catalog) and "
+        "return the desired grants, the diff against the Grant Ledger (grants to add / revoke), the SQL "
+        "runbook, rules that are gated (need workflow/ABAC and are not granted) and compile issues. "
+        "Read-only: nothing is saved or delivered."
+    )
+    parameters = {
+        "target": {"type": "string", "description": "Target platform key (default 'uc')."},
+    }
+    required_params: List[str] = []
+    required_scope = "access-policies:read"
+
+    async def execute(self, ctx: ToolContext, target: str = "uc", **_: Any) -> ToolResult:
+        from src.controller.access_policy_releases_manager import PolicyReleaseManager, uc_object_kind_resolver
+        try:
+            resolver = None
+            try:
+                from src.controller.grant_manager import get_grant_manager
+                ws = get_grant_manager().workspace_client
+                resolver = uc_object_kind_resolver(ws) if ws else None
+            except RuntimeError:
+                pass  # No grant manager (e.g. tests): 3-part names default to tables, like the routes.
+            out = PolicyReleaseManager(_manager()).compile(ctx.db, target or "uc", resolve_object_kind=resolver)
+            return ToolResult(success=True, data={k: out[k] for k in ("target", "changes", "issues", "has_errors",
+                                                                      "source_policies")}
+                              | {"gated": out["plan"]["gated"], "grant_count": len(out["plan"]["grants"])})
+        except Exception as e:
+            return ToolResult(success=False, **tool_failure("preview_access_release", e))
+
+
+class ListAccessGrantsTool(BaseTool):
+    """Grants Ontos applied and tracks (the Grant Ledger)."""
+
+    name = "list_access_grants"
+    category = "governance"
+    description = (
+        "List grants that Ontos applied through Access Policy releases and tracks in the Grant Ledger, "
+        "with expiry (time-bound access) and the policies they come from. Filter by principal or status."
+    )
+    parameters = {
+        "target": {"type": "string", "description": "Target platform key (default 'uc')."},
+        "principal": {"type": "string", "description": "Optional principal (email / group / SP id)."},
+        "status": {"type": "string", "description": "active (default) or revoked."},
+    }
+    required_params: List[str] = []
+    required_scope = "access-policies:read"
+
+    async def execute(self, ctx: ToolContext, target: str = "uc", principal: Optional[str] = None,
+                      status: str = "active", **_: Any) -> ToolResult:
+        from src.controller.access_policy_releases_manager import PolicyReleaseManager
+        try:
+            rows = PolicyReleaseManager(_manager()).ledger(ctx.db, target or "uc", status or None, principal)
+            return ToolResult(success=True, data={"grants": rows, "count": len(rows)})
+        except Exception as e:
+            return ToolResult(success=False, **tool_failure("list_access_grants", e))

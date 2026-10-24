@@ -123,6 +123,10 @@ class GrantManager:
     def set_workspace_client(self, ws_client: WorkspaceClient) -> None:
         """Set the workspace client."""
         self._ws = ws_client
+
+    @property
+    def workspace_client(self) -> Optional[WorkspaceClient]:
+        return self._ws
     
     def _get_securable_type(self, type_str: str) -> SecurableType:
         """Convert string type to SDK SecurableType enum."""

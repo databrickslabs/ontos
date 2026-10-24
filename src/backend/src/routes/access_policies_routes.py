@@ -15,6 +15,8 @@ from src.controller.access_policies_manager import (
     AccessPoliciesManager,
     AccessPolicyError,
 )
+from src.common.manager_dependencies import get_delivery_service
+from src.controller.access_policy_releases_manager import TARGETS, PolicyReleaseManager, uc_object_kind_resolver
 from src.models.access_policies import (
     AccessPolicyCreate,
     AccessPolicyUpdate,
@@ -24,6 +26,11 @@ from src.models.access_policies import (
     NewVersionRequest,
     PolicyImportRequest,
     PolicyValidateRequest,
+    ReleaseConfirmRequest,
+    ReleaseCreateRequest,
+    ReleaseDeliverRequest,
+    ReleasePreviewRequest,
+    RevokeExpiredRequest,
     StatusChangeRequest,
 )
 
@@ -31,10 +38,13 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/access-policies", tags=["Access Policies"])
 manager = AccessPoliciesManager()
+releases = PolicyReleaseManager(manager)
 
 FEATURE_ID = "access-policies"
 _READ = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 _WRITE = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+# Delivering grants to a platform is an administrative action.
+_ADMIN = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.ADMIN))
 
 def _email(user: Any) -> Optional[str]:
     return (getattr(user, "email", None) or getattr(user, "username", None)) if user else None
@@ -112,6 +122,149 @@ async def policy_validation(entity_id: str, request: Request, db: DBSessionDep, 
         "issues": issues,
         "activation_problems": manager.activation_problems(db, KIND_POLICY, row),
     }
+
+
+# ------------------------------------------------- releases & ledger (Phase 2)
+
+def _grant_manager(delivery_service: Any) -> Any:
+    gm = delivery_service.grant_manager if delivery_service else None
+    if gm is None:
+        try:
+            from src.controller.grant_manager import get_grant_manager
+            gm = get_grant_manager()
+        except RuntimeError:
+            return None
+    return gm
+
+
+def _kind_resolver(delivery_service: Any) -> Any:
+    gm = _grant_manager(delivery_service)
+    ws = getattr(gm, "workspace_client", None) if gm else None
+    return uc_object_kind_resolver(ws) if ws else None
+
+
+@router.get("/targets")
+async def list_targets(delivery_service: Any = Depends(get_delivery_service), _: bool = _READ):
+    """Compile targets and the Delivery Modes currently enabled in Settings."""
+    modes = [m.value for m in delivery_service.get_active_modes()] if delivery_service else []
+    return {"targets": [{"key": t, "label": "Unity Catalog"} for t in TARGETS], "delivery_modes": modes}
+
+
+# Endpoints below that call the Databricks SDK (grants, object-kind lookups) are plain ``def``
+# so FastAPI runs them in the threadpool instead of blocking the event loop.
+@router.post("/releases/preview")
+def preview_release(db: DBSessionDep, payload: ReleasePreviewRequest = Body(...),
+                          delivery_service: Any = Depends(get_delivery_service), _: bool = _READ):
+    """Compile active policies for a target and diff against the Grant Ledger, without saving."""
+    try:
+        return releases.compile(db, payload.target, resolve_object_kind=_kind_resolver(delivery_service))
+    except AccessPolicyError as e:
+        raise _http(e)
+
+
+@router.get("/releases")
+async def list_releases(db: DBSessionDep, target: Optional[str] = Query(None), status: Optional[str] = Query(None),
+                        _: bool = _READ):
+    return [releases.to_read_dict(r) for r in releases.list(db, target, status)]
+
+
+@router.post("/releases", status_code=201)
+def create_release(db: DBSessionDep, current_user: AuditCurrentUserDep,
+                         payload: ReleaseCreateRequest = Body(...),
+                         delivery_service: Any = Depends(get_delivery_service), _: bool = _WRITE):
+    try:
+        row = releases.create_release(db, payload.target, _email(current_user), payload.notes,
+                                      resolve_object_kind=_kind_resolver(delivery_service))
+    except AccessPolicyError as e:
+        raise _http(e)
+    return releases.to_read_dict(row)
+
+
+@router.get("/releases/{release_id}")
+async def get_release(release_id: str, db: DBSessionDep, _: bool = _READ):
+    try:
+        return releases.to_read_dict(releases.require(db, release_id))
+    except AccessPolicyError as e:
+        raise _http(e)
+
+
+@router.post("/releases/{release_id}/recompile")
+def recompile_release(release_id: str, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                            delivery_service: Any = Depends(get_delivery_service), _: bool = _WRITE):
+    try:
+        row = releases.recompile(db, release_id, _email(current_user), resolve_object_kind=_kind_resolver(delivery_service))
+    except AccessPolicyError as e:
+        raise _http(e)
+    return releases.to_read_dict(row)
+
+
+@router.post("/releases/{release_id}/status")
+async def change_release_status(release_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                                payload: StatusChangeRequest = Body(...), _: bool = _WRITE):
+    try:
+        row = releases.change_status(db, release_id, payload.status, _email(current_user), payload.comment,
+                                     is_admin=await _is_admin(request, current_user))
+    except AccessPolicyError as e:
+        raise _http(e)
+    return releases.to_read_dict(row)
+
+
+@router.post("/releases/{release_id}/deliver")
+def deliver_release(release_id: str, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                          payload: ReleaseDeliverRequest = Body(default_factory=ReleaseDeliverRequest),
+                          delivery_service: Any = Depends(get_delivery_service), _: bool = _ADMIN):
+    """Ship an approved release through the chosen Delivery Modes."""
+    try:
+        row = releases.deliver(db, release_id, _email(current_user), delivery_service, payload.modes)
+    except (AccessPolicyError, ValueError) as e:
+        raise _http(e if isinstance(e, AccessPolicyError) else AccessPolicyError(str(e)))
+    return releases.to_read_dict(row)
+
+
+@router.post("/releases/{release_id}/confirm-applied")
+def confirm_release_applied(release_id: str, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                                  payload: ReleaseConfirmRequest = Body(default_factory=ReleaseConfirmRequest),
+                                  _: bool = _ADMIN):
+    """Confirm an Indirect / Manual release was applied on the target; updates the Grant Ledger."""
+    try:
+        row = releases.confirm_applied(db, release_id, _email(current_user), payload.comment)
+    except AccessPolicyError as e:
+        raise _http(e)
+    return releases.to_read_dict(row)
+
+
+@router.post("/releases/{release_id}/live-diff")
+def release_live_diff(release_id: str, db: DBSessionDep,
+                            delivery_service: Any = Depends(get_delivery_service), _: bool = _WRITE):
+    """Compare the release's desired grants with live Unity Catalog grants (report-only)."""
+    gm = _grant_manager(delivery_service)
+    if gm is None:
+        raise HTTPException(status_code=503, detail="Grant manager is not configured")
+    try:
+        return releases.live_diff(db, release_id, gm.get_grants)
+    except AccessPolicyError as e:
+        raise _http(e)
+
+
+@router.get("/ledger")
+async def get_ledger(db: DBSessionDep, target: Optional[str] = Query(None),
+                     status: Optional[str] = Query("active", description="active | revoked; empty for all"),
+                     principal: Optional[str] = Query(None), _: bool = _READ):
+    """Grants Ontos has applied and tracks (including expiry for time-bound access)."""
+    return releases.ledger(db, target, status or None, principal)
+
+
+@router.post("/ledger/revoke-expired")
+def revoke_expired(db: DBSessionDep, current_user: AuditCurrentUserDep,
+                         payload: RevokeExpiredRequest = Body(default_factory=RevokeExpiredRequest),
+                         delivery_service: Any = Depends(get_delivery_service), _: bool = _ADMIN):
+    """Create and deliver a revocation release for every expired ledger grant (schedule this as a job)."""
+    try:
+        row = releases.revoke_expired(db, payload.target, _email(current_user), delivery_service)
+    except AccessPolicyError as e:
+        raise _http(e)
+    return {"release": releases.to_read_dict(row) if row else None,
+            "revoked": (row.changes or {}).get("remove", []) if row else []}
 
 
 # ------------------------------------------------- generic per-kind CRUD

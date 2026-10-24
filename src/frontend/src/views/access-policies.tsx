@@ -18,11 +18,13 @@ import { FeatureAccessLevel } from '@/types/settings';
 import AccessEntityFormDialog from '@/components/access-policies/access-entity-form-dialog';
 import AccessStatusBadge from '@/components/access-policies/access-status-badge';
 import CheckAccessPanel from '@/components/access-policies/check-access-panel';
+import GrantLedgerPanel from '@/components/access-policies/grant-ledger-panel';
+import ReleasesPanel from '@/components/access-policies/releases-panel';
 import type { AccessCollection, AccessEntity, AccessKind, AccessPolicy } from '@/types/access-policy';
 import { KIND_SEGMENT } from '@/types/access-policy';
 
 const FEATURE_ID = 'access-policies';
-const TABS = ['policies', 'audiences', 'asset-collections', 'check'] as const;
+const TABS = ['policies', 'audiences', 'asset-collections', 'check', 'releases', 'ledger'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AccessPolicies() {
@@ -32,6 +34,7 @@ export default function AccessPolicies() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+  const canAdmin = hasPermission(FEATURE_ID, FeatureAccessLevel.ADMIN);
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
   const [params, setParams] = useSearchParams();
@@ -218,6 +221,8 @@ export default function AccessPolicies() {
             {t('access-policies:tabs.assetCollections')} ({collections.length})
           </TabsTrigger>
           <TabsTrigger value="check">{t('access-policies:tabs.check')}</TabsTrigger>
+          <TabsTrigger value="releases">{t('access-policies:tabs.releases')}</TabsTrigger>
+          <TabsTrigger value="ledger">{t('access-policies:tabs.ledger')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="policies" className="pt-4">
@@ -266,6 +271,12 @@ export default function AccessPolicies() {
         </TabsContent>
         <TabsContent value="check" className="pt-4">
           <CheckAccessPanel />
+        </TabsContent>
+        <TabsContent value="releases" className="pt-4">
+          <ReleasesPanel canWrite={canWrite} />
+        </TabsContent>
+        <TabsContent value="ledger" className="pt-4">
+          <GrantLedgerPanel canAdmin={canAdmin} />
         </TabsContent>
       </Tabs>
 

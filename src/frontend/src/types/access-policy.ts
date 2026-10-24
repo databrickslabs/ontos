@@ -209,3 +209,136 @@ export const KIND_ENTITY_TYPE: Record<AccessKind, AccessEntityType> = {
 
 export const AUDIENCE_IRI_PREFIX = 'urn:ontos:audience:';
 export const ASSET_COLLECTION_IRI_PREFIX = 'urn:ontos:asset-collection:';
+
+// ------------------------------------------------------------ releases (Phase 2)
+
+export type ReleaseStatus =
+  | 'draft'
+  | 'under_review'
+  | 'approved'
+  | 'delivered'
+  | 'applied'
+  | 'failed'
+  | 'superseded'
+  | 'discarded';
+
+export type DeliveryModeKey = 'direct' | 'indirect' | 'manual';
+
+export interface RuleSource {
+  policy_uid: string;
+  policy_id?: string;
+  policy_name: string;
+  policy_version?: string;
+  rule_kind: RuleKind;
+  rule_index: number;
+  rule_uid?: string;
+}
+
+export interface UcGrant {
+  principal: string;
+  securable_type: string;
+  securable_name: string;
+  privilege: string;
+  expires_at?: string | null;
+  implied?: boolean;
+  preexisting?: boolean;
+  sources?: RuleSource[];
+}
+
+export interface CompileIssue {
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+  message: string;
+  source?: RuleSource;
+}
+
+export interface GatedRule {
+  source: RuleSource;
+  gate: 'workflow' | 'abac' | 'unsupported';
+  reason: string;
+}
+
+export interface ReleaseChanges {
+  add: UcGrant[];
+  remove: UcGrant[];
+  update: UcGrant[];
+  /** Pre-existing platform grants no longer desired: dropped from the ledger, never revoked. */
+  untrack: UcGrant[];
+  unchanged: number;
+  sql: string[];
+}
+
+export interface DeliveryAttempt {
+  at: string;
+  by?: string;
+  results: { success: boolean; mode: DeliveryModeKey; message?: string; error?: string; details?: Record<string, any> }[];
+}
+
+export interface LiveDiffReport {
+  missing: UcGrant[];
+  unmanaged: UcGrant[];
+  stale: UcGrant[];
+  in_sync: boolean;
+  checked_at: string;
+  securables_checked: number;
+  truncated: boolean;
+  errors: string[];
+}
+
+export interface AccessRelease {
+  id: string;
+  entity_type: 'access_policy_release';
+  target: string;
+  sequence: number;
+  name: string;
+  release_kind: 'policy' | 'revocation';
+  status: ReleaseStatus;
+  notes?: string | null;
+  allowed_transitions: ReleaseStatus[];
+  deliverable: boolean;
+  confirmable: boolean;
+  counts: {
+    add: number;
+    remove: number;
+    update: number;
+    untrack: number;
+    unchanged: number;
+    grants: number;
+    gated: number;
+    errors: number;
+    warnings: number;
+  };
+  plan: { grants?: UcGrant[]; gated?: GatedRule[]; obligations?: { source: RuleSource; action: string }[]; compiled_at?: string };
+  changes: ReleaseChanges;
+  issues: CompileIssue[];
+  source_policies: { id: string; uid: string; name: string; version: string }[];
+  delivery_modes: DeliveryModeKey[];
+  delivery_results: DeliveryAttempt[];
+  live_diff?: LiveDiffReport | null;
+  created_by?: string;
+  submitted_by?: string;
+  approved_by?: string;
+  delivered_by?: string;
+  delivered_at?: string;
+  applied_by?: string;
+  applied_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LedgerEntry extends UcGrant {
+  id: string;
+  target: string;
+  expired: boolean;
+  legal_basis?: string | null;
+  status: 'active' | 'revoked' | 'released';
+  granted_release_id?: string | null;
+  revoked_release_id?: string | null;
+  granted_at: string;
+  revoked_at?: string | null;
+}
+
+export interface ReleaseTargets {
+  targets: { key: string; label: string }[];
+  delivery_modes: DeliveryModeKey[];
+}

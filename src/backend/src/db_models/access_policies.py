@@ -14,7 +14,7 @@ Domains, tags, comments and metadata attach polymorphically by entity type.
 """
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, event, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, event, func
 from sqlalchemy.orm import declared_attr
 
 from src.common.database import Base
@@ -135,3 +135,79 @@ def _seed_family(_mapper, _connection, target):
 
 for _model in UID_PREFIXES:
     event.listen(_model, "before_insert", _seed_family)
+
+
+# ------------------------------------------------------------- delivery (Phase 2)
+
+ENTITY_TYPE_RELEASE = "access_policy_release"
+
+
+class AccessPolicyReleaseDb(Base):
+    """A compiled, reviewable deployment of all active policies to one target.
+
+    Immutable once delivered. ``plan`` is the full desired state (target-native
+    grants), ``changes`` the diff against the Grant Ledger at compile time; the
+    ``ledger_fingerprint`` detects a ledger that moved on before delivery.
+    Lifecycle: draft → under_review → approved → delivered → applied
+    (or failed / superseded / discarded); approval needs separation of duties.
+    """
+    __tablename__ = "access_policy_releases"
+    __table_args__ = (UniqueConstraint("target", "sequence", name="uq_access_policy_release_seq"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    target = Column(String, nullable=False, index=True)  # uc (snowflake later)
+    sequence = Column(Integer, nullable=False)
+    # policy (compiled from active policies) | revocation (expired-grant sweep)
+    release_kind = Column(String, nullable=False, default="policy")
+    status = Column(String, nullable=False, default="draft", index=True)
+    notes = Column(Text, nullable=True)
+
+    plan = Column(JSON, nullable=False, default=dict)  # {"grants": [...], "ir": {...}}
+    changes = Column(JSON, nullable=False, default=dict)  # {"add": [...], "remove": [...], "update": [...]}
+    issues = Column(JSON, nullable=False, default=list)
+    source_policies = Column(JSON, nullable=False, default=list)
+    ledger_fingerprint = Column(String, nullable=True)
+
+    delivery_modes = Column(JSON, nullable=True)
+    delivery_results = Column(JSON, nullable=True)
+    live_diff = Column(JSON, nullable=True)
+
+    created_by = Column(String, nullable=True)
+    submitted_by = Column(String, nullable=True)
+    approved_by = Column(String, nullable=True)
+    delivered_by = Column(String, nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    applied_by = Column(String, nullable=True)
+    applied_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AccessGrantLedgerDb(Base):
+    """What Ontos believes is applied on a target: one row per (principal, securable, privilege).
+
+    Rows are written only when a release is confirmed applied (Direct mode success,
+    or an admin confirming an Indirect / Manual release). Time-bound rows
+    (``expires_at``) are revoked by the expiry sweep. Unmanaged platform grants
+    never enter the ledger, so Ontos never revokes what it didn't grant.
+    """
+    __tablename__ = "access_grant_ledger"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    target = Column(String, nullable=False, index=True)
+    principal = Column(String, nullable=False, index=True)
+    securable_type = Column(String, nullable=False)
+    securable_name = Column(String, nullable=False, index=True)
+    privilege = Column(String, nullable=False)
+    implied = Column(Boolean, nullable=False, default=False)
+    # Already on the platform when Ontos applied it → Ontos stops tracking it but never revokes it.
+    preexisting = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(String, nullable=True, index=True)  # ISO 8601 UTC ("...Z"), compared lexically
+    sources = Column(JSON, nullable=False, default=list)
+    # Legal basis / originating agreement for GDPR tracking (Agreements, Phase 3).
+    legal_basis = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="active", index=True)  # active | revoked | released
+    granted_release_id = Column(String, ForeignKey("access_policy_releases.id", ondelete="SET NULL"), nullable=True)
+    revoked_release_id = Column(String, ForeignKey("access_policy_releases.id", ondelete="SET NULL"), nullable=True)
+    granted_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)

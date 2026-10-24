@@ -98,3 +98,27 @@ class CheckAccessRequest(BaseModel):
     policy_ids: Optional[List[str]] = None
     # Resolve Ontos Business Roles of the principal as ontos:businessRole (default on).
     resolve_business_roles: bool = True
+
+
+# ------------------------------------------------------------- releases (Phase 2)
+
+class ReleaseCreateRequest(BaseModel):
+    target: str = Field("uc", description="Target platform (uc)")
+    notes: Optional[str] = None
+
+
+class ReleasePreviewRequest(BaseModel):
+    target: str = "uc"
+
+
+class ReleaseDeliverRequest(BaseModel):
+    # Subset of the Delivery Modes enabled in Settings (direct | indirect | manual); default = all enabled.
+    modes: Optional[List[str]] = None
+
+
+class ReleaseConfirmRequest(BaseModel):
+    comment: Optional[str] = None
+
+
+class RevokeExpiredRequest(BaseModel):
+    target: str = "uc"

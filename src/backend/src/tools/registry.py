@@ -276,6 +276,8 @@ def create_default_registry() -> ToolRegistry:
         ListAccessPoliciesTool,
         GetAccessPolicyTool,
         GetOdrlProfileTool,
+        PreviewAccessReleaseTool,
+        ListAccessGrantsTool,
     )
     from src.tools.unity_catalog import (
         GetCurrentUserTool,
@@ -309,6 +311,8 @@ def create_default_registry() -> ToolRegistry:
     registry.register(ListAccessPoliciesTool())
     registry.register(GetAccessPolicyTool())
     registry.register(GetOdrlProfileTool())
+    registry.register(PreviewAccessReleaseTool())
+    registry.register(ListAccessGrantsTool())
 
     # Domains tools (full CRUD)
     registry.register(SearchDomainsTool())

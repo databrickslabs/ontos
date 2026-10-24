@@ -528,7 +528,14 @@
     "countBadge": "{{entities}} エンティティ、{{relationships}} 関係",
     "failedLoadRelationships": "関係の読み込みに失敗しました: {{status}}",
     "failedLoadLineage": "リネージの読み込みに失敗しました: {{status}}",
-    "failedLoadGraph": "グラフの読み込みに失敗しました"
+    "failedLoadGraph": "グラフの読み込みに失敗しました",
+    "layers": {
+      "business": "ビジネス",
+      "delivery": "提供",
+      "logical": "論理",
+      "physical": "物理",
+      "other": "その他"
+    }
   },
   "lifecycleDialogs": {
     "certifyTitle": "認定",

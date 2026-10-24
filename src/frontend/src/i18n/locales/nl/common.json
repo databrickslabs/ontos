@@ -528,7 +528,14 @@
     "countBadge": "{{entities}} entiteiten, {{relationships}} relaties",
     "failedLoadRelationships": "Laden van relaties mislukt: {{status}}",
     "failedLoadLineage": "Laden van lineage mislukt: {{status}}",
-    "failedLoadGraph": "Laden van grafiek mislukt"
+    "failedLoadGraph": "Laden van grafiek mislukt",
+    "layers": {
+      "business": "Business",
+      "delivery": "Levering",
+      "logical": "Logisch",
+      "physical": "Fysiek",
+      "other": "Overig"
+    }
   },
   "lifecycleDialogs": {
     "certifyTitle": "Certificeren",

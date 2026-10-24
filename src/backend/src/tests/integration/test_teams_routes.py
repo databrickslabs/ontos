@@ -19,9 +19,9 @@ class TestTeamsRoutes:
     def sample_team_member_data(self):
         """Sample team member data for testing."""
         return {
+            "member_type": "user",
             "member_identifier": "test.member@example.com",
-            "role": "Developer",
-            "start_date": "2024-01-01"
+            "app_role_override": "Data Producer",
         }
 
     # Team CRUD Tests
@@ -77,8 +77,10 @@ class TestTeamsRoutes:
         assert response.status_code == 200
 
         data = response.json()
-        assert len(data) > 0
-        assert data[0]["name"] == "Test Team"
+        # The app's startup also creates the Admin Team.
+        test_team = next((team for team in data if team["name"] == "Test Team"), None)
+        assert test_team is not None
+        assert test_team["description"] == "A test team for unit testing"
 
     def test_get_teams_pagination(self, client: TestClient, db_session: Session):
         """Test team listing with pagination."""
@@ -89,17 +91,24 @@ class TestTeamsRoutes:
                 "description": f"Description {i}"
             })
 
+        # The app's startup also creates the Admin Team: 6 teams in all.
         # Test first page
         response = client.get("/api/teams?skip=0&limit=3")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 3
+        first_page = [team["name"] for team in response.json()]
+        assert len(first_page) == 3
 
         # Test second page
         response = client.get("/api/teams?skip=3&limit=3")
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
+        second_page = [team["name"] for team in response.json()]
+        assert len(second_page) == 3
+
+        # Past the end
+        assert client.get("/api/teams?skip=6&limit=3").json() == []
+
+        assert not set(first_page) & set(second_page)
+        assert {f"Team {i}" for i in range(5)} <= set(first_page) | set(second_page)
 
     def test_get_team_by_id(self, client: TestClient, db_session: Session, sample_team_data):
         """Test getting a team by ID."""
@@ -199,7 +208,8 @@ class TestTeamsRoutes:
 
         data = response.json()
         assert data["member_identifier"] == "test.member@example.com"
-        assert data["role"] == "Developer"
+        assert data["member_type"] == "user"
+        assert data["app_role_override"] == "Data Producer"
         assert "id" in data
 
     def test_add_team_member_duplicate(self, client: TestClient, db_session: Session, sample_team_data, sample_team_member_data):
@@ -245,12 +255,12 @@ class TestTeamsRoutes:
         member_id = member_response.json()["id"]
 
         # Update member
-        update_data = {"role": "Senior Developer"}
+        update_data = {"app_role_override": "Data Steward"}
         response = client.put(f"/api/teams/{team_id}/members/{member_id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
-        assert data["role"] == "Senior Developer"
+        assert data["app_role_override"] == "Data Steward"
 
     def test_update_team_member_not_found(self, client: TestClient, db_session: Session, sample_team_data):
         """Test updating non-existent team member."""
@@ -259,7 +269,7 @@ class TestTeamsRoutes:
         team_id = create_response.json()["id"]
 
         # Try to update non-existent member
-        update_data = {"role": "New Role"}
+        update_data = {"app_role_override": "Data Steward"}
         response = client.put(f"/api/teams/{team_id}/members/non-existent-id", json=update_data)
         assert response.status_code == 404
 
@@ -311,26 +321,31 @@ class TestTeamsRoutes:
 
     def test_get_teams_filtered_by_domain(self, client: TestClient, db_session: Session):
         """Test getting teams filtered by domain ID."""
+        from src.db_models.data_domains import DataDomain
+
+        domain = DataDomain(name="Teams Filter Domain", created_by="test@example.com")
+        db_session.add(domain)
+        db_session.flush()
+        domain_id = domain.id
+
         # Create team with domain
-        domain_id = "test-domain-id"
-        client.post("/api/teams", json={
+        created = client.post("/api/teams", json={
             "name": "Domain Team",
             "description": "Belongs to domain",
-            "domain_id": domain_id
+            "domain_ids": [domain_id],
         })
+        assert created.status_code == 201, created.text
 
         # Create standalone team
         client.post("/api/teams", json={
             "name": "Standalone Team",
             "description": "No domain",
-            "domain_id": None
         })
 
         # Filter by domain
         response = client.get(f"/api/teams?domain_id={domain_id}")
         assert response.status_code == 200
-
         data = response.json()
         assert len(data) == 1
         assert data[0]["name"] == "Domain Team"
-        assert data[0]["domain_id"] == domain_id
+        assert data[0]["domain_ids"] == [domain_id]

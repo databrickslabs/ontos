@@ -559,12 +559,12 @@ class TestODCSExportValidation:
 
         # Test team member structure
         team_member = odcs_data['team'][0]
-        required_team_fields = ['email', 'role']  # Note: using 'email' not 'username' per ODCS spec
+        required_team_fields = ['username', 'role']  # ODCS v3 team members carry `username`
         for field in required_team_fields:
             assert field in team_member, f"Missing team field: {field}"
 
         # Test specific team member data
-        ceastwood = next((m for m in odcs_data['team'] if m['email'] == 'ceastwood'), None)
+        ceastwood = next((m for m in odcs_data['team'] if m['username'] == 'ceastwood'), None)
         assert ceastwood is not None
         assert ceastwood['role'] == "Data Scientist"
         assert 'dateIn' in ceastwood
@@ -724,10 +724,9 @@ class TestODCSExportValidation:
         assert isinstance(odcs_data['tags'], list)
         assert "transactions" in odcs_data['tags']
 
-        # Test custom properties
+        # Test custom properties (ODCS v3: a list of {property, value})
         assert 'customProperties' in odcs_data
-        custom_props = odcs_data['customProperties']
-        assert 'refRulesetName' in custom_props
+        custom_props = {p['property']: p['value'] for p in odcs_data['customProperties']}
         assert custom_props['refRulesetName'] == "gcsc.ruleset.name"
 
     def test_odcs_export_field_ordering_matches_spec(self, client: TestClient, db_session: Session, comprehensive_contract_db):

@@ -267,6 +267,9 @@ class TestSemanticUploadIntegration:
     def test_upload_with_mixed_authoritative_definitions(self, client, db_session: Session):
         """Test that only semantic assignment types create semantic links, others are preserved."""
         contract_with_mixed_auth_defs = {
+            # Without kind/apiVersion the upload skips the file as not an ODCS contract
+            "kind": "DataContract",
+            "apiVersion": "v3.1.0",
             "name": "mixed-auth-defs-contract",
             "version": "1.0.0",
             "status": "draft",

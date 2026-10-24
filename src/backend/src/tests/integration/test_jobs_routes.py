@@ -10,9 +10,23 @@ class TestJobsRoutes:
     """Integration tests for jobs API endpoints."""
 
     def test_get_workflow_installations(self, client: TestClient, db_session: Session):
-        """Test getting workflow installations."""
-        response = client.get("/api/jobs/installations")
+        """Test getting workflow installations (GET /api/jobs/workflows/statuses)."""
+        from src.db_models.workflow_installations import WorkflowInstallationDb
+
+        db_session.add_all([
+            WorkflowInstallationDb(workflow_id="compliance_checks", name="Compliance", job_id=101),
+            WorkflowInstallationDb(workflow_id="uninstalled_wf", name="Gone", job_id=102,
+                                   status="failed"),
+        ])
+        db_session.flush()
+
+        response = client.get("/api/jobs/workflows/statuses")
         assert response.status_code == 200
+        data = response.json()
+        assert set(data) == {"compliance_checks"}
+        assert data["compliance_checks"]["installed"] is True
+        assert data["compliance_checks"]["job_id"] == 101
+        assert data["compliance_checks"]["is_running"] is False
 
     def test_get_workflow_runs(self, client: TestClient, db_session: Session):
         """Test getting workflow runs."""

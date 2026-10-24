@@ -407,48 +407,6 @@ async def require_ontos_admin(
     return user_details
 
 
-async def get_user_groups(user_email: str, request: Optional[Request] = None) -> List[str]:
-    """Get user groups for the given user email.
-
-    When ``request`` is provided and a valid test-user override header is
-    present, the override's groups are returned (mirrors
-    :func:`get_user_details_from_sdk`).
-    """
-    # Get settings directly instead of using dependency injection
-    settings = get_settings()
-
-    # Per-request test override (only when caller threaded the request through).
-    if request is not None:
-        try:
-            override = _try_resolve_test_override(
-                request, settings, manager=None, real_ip=request.headers.get("X-Real-Ip")
-            )
-            if override is not None and override.email == user_email:
-                return list(override.groups or [])
-        except HTTPException:
-            # A 400 here means the caller meant to override but did it wrong.
-            # Surface it rather than masking with an empty group list.
-            raise
-
-    if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
-        # Return mock groups for local/mock development honoring overrides
-        if settings.MOCK_USER_GROUPS:
-            try:
-                import json as _json
-                parsed = _json.loads(settings.MOCK_USER_GROUPS)
-                if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
-                    return parsed
-            except Exception:
-                csv = [g.strip() for g in settings.MOCK_USER_GROUPS.split(',') if g.strip()]
-                if csv:
-                    return csv
-        return LOCAL_DEV_USER.groups
-
-    # In production, you would get groups from the user details
-    # For now, returning empty list as fallback
-    return []
-
-
 async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
     """Get the highest team role override for a user."""
     try:

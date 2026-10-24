@@ -52,7 +52,7 @@ async def create_cost_item(
             raise HTTPException(status_code=400, detail="Entity path does not match body")
         result = manager.create(db, data=payload, user_email=current_user.email)
         success = True
-        details["cost_item_id"] = result.id
+        details["cost_item_id"] = str(result.id)
         return result
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}

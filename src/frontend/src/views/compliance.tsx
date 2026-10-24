@@ -32,6 +32,7 @@ import {
   StatCardsSkeleton,
 } from '@/components/common/list-view-skeleton';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
+import { complianceSaveErrorText } from '@/lib/compliance-save-error';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -157,7 +158,9 @@ export default function Compliance() {
       }
       
       if (response.error || !response.data) {
-        throw new Error(response.error || t('compliance:errors.saveNoDataReturned'));
+        throw new Error(
+          complianceSaveErrorText(t, response, t('compliance:errors.saveNoDataReturned')),
+        );
       }
       
       const warnings = response.data.warnings ?? [];

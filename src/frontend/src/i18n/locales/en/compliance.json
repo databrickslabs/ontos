@@ -175,5 +175,11 @@
     "rule_parse_failed": "The rule could not be parsed: {{detail}}",
     "workspace_client_unavailable": "The Databricks workspace isn't available, and this rule checks Unity Catalog objects, so it could not run.",
     "tags_load_failed": "The tags of the {{entityType}} entities could not be loaded, so the rule could not be evaluated."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "The rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). Everything from there on would be ignored, so the rule would check less than it says. Remove it or fix the syntax."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it."
   }
 }

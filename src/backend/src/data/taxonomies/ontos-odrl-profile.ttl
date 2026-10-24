@@ -1,0 +1,130 @@
+# Ontos ODRL Profile (v1) — generated from src/common/odrl.py; keep in sync (see test_odrl_profile_ttl).
+# ODRL 2.2 §3.3 profile mechanism: new Actions are includedIn odrl:use, new LeftOperands are
+# odrl:LeftOperand instances; every new term is also a skos:Concept with label + definition.
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix ontos: <http://ontos.app/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+
+<http://ontos.app/odrl/profile/v1> a owl:Ontology, skos:ConceptScheme ;
+    rdfs:label "Ontos ODRL Profile"@en ;
+    dct:description "Actions and constraint operands Ontos Access Policies may use, with the enforcement class each operand compiles to (platform, workflow or advisory)."@en ;
+    owl:imports <http://www.w3.org/ns/odrl/2/> .
+
+ontos:enforcement a owl:DatatypeProperty ; rdfs:label "enforcement class"@en ;
+    skos:definition "Where a constraint on this left operand is enforced once compiled: platform, workflow or advisory."@en .
+
+ontos:browse a odrl:Action, skos:Concept ;
+    rdfs:label "Browse"@en ;
+    skos:definition "See metadata without reading data (UC BROWSE)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    odrl:includedIn odrl:use .
+
+ontos:create a odrl:Action, skos:Concept ;
+    rdfs:label "Create"@en ;
+    skos:definition "Create child objects (UC CREATE TABLE/VIEW/FUNCTION/VOLUME)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    odrl:includedIn odrl:use .
+
+ontos:manage a odrl:Action, skos:Concept ;
+    rdfs:label "Manage"@en ;
+    skos:definition "Manage grants and properties (UC MANAGE)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    odrl:includedIn odrl:use .
+
+ontos:acknowledgeTerms a odrl:Action, skos:Concept ;
+    rdfs:label "Acknowledge terms"@en ;
+    skos:definition "Accept the asset's terms of use (workflow)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    odrl:includedIn odrl:use .
+
+ontos:obtainApproval a odrl:Action, skos:Concept ;
+    rdfs:label "Obtain approval"@en ;
+    skos:definition "Obtain an approval or authority decision (workflow)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    odrl:includedIn odrl:use .
+
+ontos:recertify a odrl:Action, skos:Concept ;
+    rdfs:label "Re-certify access"@en ;
+    skos:definition "Periodically re-confirm the need for access (workflow)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    odrl:includedIn odrl:use .
+
+ontos:classification a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Classification"@en ;
+    skos:definition "Asset data classification; compiles to tag-based ABAC where supported."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:tag a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Tag"@en ;
+    skos:definition "Asset tag (namespace/key[=value]); compiles to tag-based ABAC where supported."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:domain a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Domain"@en ;
+    skos:definition "Ontos domain of the asset; materialized into concrete grants."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:dataProduct a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Data product"@en ;
+    skos:definition "Data product the asset belongs to; materialized into concrete grants."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:columnTag a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Column tag"@en ;
+    skos:definition "Column-level tag; compiles to a column mask where supported."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:rowCondition a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Row condition"@en ;
+    skos:definition "Row-level predicate; compiles to a row filter where supported."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:businessRole a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Business role"@en ;
+    skos:definition "Ontos Business Role of the principal (Audience refinement)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:group a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Group"@en ;
+    skos:definition "Identity-provider group membership of the principal."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:principalAttribute a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Principal attribute"@en ;
+    skos:definition "Directory attribute of the principal (stub: future IdP/Lakebase sources)."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "platform" .
+
+ontos:remark a odrl:LeftOperand, skos:Concept ;
+    rdfs:label "Remark"@en ;
+    skos:definition "Free-text condition shown to consumers; not enforced."@en ;
+    skos:inScheme <http://ontos.app/odrl/profile/v1> ;
+    ontos:enforcement "advisory" .
+
+# Core/common ODRL terms adopted by the profile (annotated with their Ontos enforcement class).
+odrl:dateTime skos:inScheme <http://ontos.app/odrl/profile/v1> ; ontos:enforcement "platform" .
+odrl:elapsedTime skos:inScheme <http://ontos.app/odrl/profile/v1> ; ontos:enforcement "platform" .
+odrl:purpose skos:inScheme <http://ontos.app/odrl/profile/v1> ; ontos:enforcement "workflow" .
+odrl:recipient skos:inScheme <http://ontos.app/odrl/profile/v1> ; ontos:enforcement "workflow" .
+odrl:spatial skos:inScheme <http://ontos.app/odrl/profile/v1> ; ontos:enforcement "platform" .
+odrl:use skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:transfer skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:read skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:modify skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:distribute skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:derive skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:aggregate skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:delete skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:anonymize skos:inScheme <http://ontos.app/odrl/profile/v1> .
+odrl:inform skos:inScheme <http://ontos.app/odrl/profile/v1> .

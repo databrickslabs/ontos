@@ -170,6 +170,10 @@
         "notify-denied": "Ihre Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt.",
         "notify-invalid": "Die Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt: Nur genehmigte Datenverträge und aktive Datenprodukte können veröffentlicht werden.",
         "notify-error": "Beim Veröffentlichen von '{{entity_name}}' ist ein Fehler aufgetreten."
+      },
+      "access-policy-review-request": {
+        "notify-requester": "Ihre Prüfanfrage für die Zugriffsrichtlinie wurde eingereicht. Ein Data Steward wird sie in Kürze prüfen.",
+        "notify-stewards": "Ein Element der Zugriffsrichtlinien wurde zur Prüfung eingereicht. Öffnen Sie Zugriffsrichtlinien, um es zu genehmigen oder zurückzusenden."
       }
     },
     "approval": {

@@ -131,6 +131,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': ADMIN_ONLY_LEVELS,  # Likely admin only
         'group': GROUP_GOVERN,
     },
+    'access-policies': {
+        'name': 'Access Policies',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Stewards author ODRL policies, audiences, asset collections
+        'group': GROUP_GOVERN,
+    },
     'entitlements': {
         'name': 'Entitlements',
         'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages personas/groups

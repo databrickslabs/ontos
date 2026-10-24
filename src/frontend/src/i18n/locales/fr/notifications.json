@@ -170,6 +170,10 @@
         "notify-denied": "Votre demande de publication de « {{entity_name}} » a été refusée.",
         "notify-invalid": "La demande de publication de « {{entity_name}} » a été rejetée : seuls les contrats de données approuvés et les produits de données actifs peuvent être publiés.",
         "notify-error": "Une erreur s'est produite lors de la publication de « {{entity_name}} »."
+      },
+      "access-policy-review-request": {
+        "notify-requester": "Votre demande de revue de la politique d'accès a été soumise. Un data steward l'examinera prochainement.",
+        "notify-stewards": "Un élément des politiques d'accès a été soumis pour revue. Ouvrez Politiques d'accès pour l'approuver ou le renvoyer."
       }
     },
     "approval": {

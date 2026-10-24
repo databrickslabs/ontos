@@ -35,6 +35,7 @@ from src.routes import (
     data_domains_routes,
     data_product_routes,
     entitlements_routes,
+    access_policies_routes,
     entitlements_sync_routes,
     estate_manager_routes,
     industry_ontology_routes,
@@ -460,6 +461,7 @@ catalog_commander_routes.register_routes(app)
 # Security - Access control and security features
 security_features_routes.register_routes(app)
 entitlements_routes.register_routes(app)
+access_policies_routes.register_routes(app)
 entitlements_sync_routes.register_routes(app)
 access_grants_routes.register_routes(app)
 

@@ -4,7 +4,10 @@ export type OwnerObjectType =
   | 'data_domain'
   | 'business_term'
   | 'asset'
-  | 'tag';
+  | 'tag'
+  | 'access_policy'
+  | 'access_audience'
+  | 'access_asset_collection';
 
 export interface BusinessOwnerRead {
   id: string;

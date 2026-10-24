@@ -1,0 +1,243 @@
+{
+  "title": "Access Policies",
+  "subtitle": "Define who may do what on which data as W3C ODRL policies. Audiences describe who, asset collections describe what; active policies are evaluated deterministically and later compiled for connected platforms.",
+  "tabs": {
+    "policies": "Policies",
+    "audiences": "Audiences",
+    "assetCollections": "Asset Collections",
+    "check": "Check Access"
+  },
+  "status": {
+    "draft": "Draft",
+    "under_review": "Under review",
+    "approved": "Approved",
+    "active": "Active",
+    "needs_review": "Needs review",
+    "deprecated": "Deprecated",
+    "retired": "Retired"
+  },
+  "transitions": {
+    "draft": "Send back to draft",
+    "under_review": "Request review",
+    "approved": "Approve",
+    "active": "Activate",
+    "needs_review": "Flag for review",
+    "deprecated": "Deprecate",
+    "retired": "Retire"
+  },
+  "policyTypes": {
+    "Set": "Set",
+    "Offer": "Offer",
+    "Agreement": "Agreement"
+  },
+  "conflicts": {
+    "prohibit": "Prohibitions win (prohibit)",
+    "perm": "Permissions win (perm)",
+    "invalid": "Conflict voids the policy (invalid)"
+  },
+  "ruleKinds": {
+    "permission": "Permission",
+    "prohibition": "Prohibition",
+    "obligation": "Obligation"
+  },
+  "enforcement": {
+    "platform": "Platform-enforced",
+    "workflow": "Workflow",
+    "advisory": "Advisory"
+  },
+  "verdict": {
+    "allow": "Allowed",
+    "deny": "Denied",
+    "conditional": "Allowed once duties are fulfilled",
+    "not_applicable": "No applicable permission (denied)"
+  },
+  "effect": {
+    "permit": "permits",
+    "prohibit": "prohibits",
+    "pending_duties": "duties pending",
+    "constraint_unmet": "constraint not met"
+  },
+  "list": {
+    "new": {
+      "policy": "New Policy",
+      "audience": "New Audience",
+      "asset_collection": "New Asset Collection"
+    },
+    "import": "Import ODRL",
+    "type": "Type",
+    "rules": "Rules",
+    "domains": "Domains",
+    "membership": "Definition",
+    "membershipSummary": "{{members}} members · {{refinements}} refinements",
+    "usedBy": "Used by",
+    "versionsTitle": "Versions in this family",
+    "personalDraft": "Personal draft",
+    "audiencesHint": "Audiences (ODRL PartyCollections) are reusable groups of principals: explicit users/groups, refined by attributes such as Ontos Business Roles. They are independent of Ontos Teams.",
+    "collectionsHint": "Asset collections (ODRL AssetCollections) are reusable sets of data assets: explicit UC securables, refined by classification, tag or domain."
+  },
+  "form": {
+    "title": {
+      "create": {
+        "policy": "New Access Policy",
+        "audience": "New Audience",
+        "asset_collection": "New Asset Collection"
+      },
+      "edit": {
+        "policy": "Edit Access Policy",
+        "audience": "Edit Audience",
+        "asset_collection": "Edit Asset Collection"
+      }
+    },
+    "description": {
+      "policy": "An ODRL policy: permissions, prohibitions and obligations on assets for audiences or principals.",
+      "audience": "An ODRL PartyCollection: listed principals, narrowed by the refinement (all must hold). With no principals listed, the refinement selects from all principals; with neither, the audience is empty.",
+      "asset_collection": "An ODRL AssetCollection: listed assets (a catalog or schema covers its children), narrowed by the refinement."
+    },
+    "ownerTeam": "Owner team",
+    "project": "Project",
+    "domains": "Domains",
+    "tags": "Tags",
+    "version": "Version",
+    "personalDraft": "Create as personal draft (only visible to me)",
+    "none": "None",
+    "policyType": "Policy type",
+    "conflict": "Conflict strategy",
+    "inheritFrom": "Inherit from (policy IRI)",
+    "builder": "Rule builder",
+    "json": "ODRL JSON",
+    "jsonHint": "Rules in ODRL JSON: {\"permission\": [...], \"prohibition\": [...], \"obligation\": [...]}. Compact rules are expanded to atomic rules on save.",
+    "builderUnsupported": "These rules use constructs the builder can't show (logical or inline collections). Keep editing them as JSON.",
+    "validate": "Validate",
+    "valid": "Valid against ODRL 2.2 and the Ontos profile.",
+    "principals": "Principals",
+    "principalsHint": "One per line: group:<name>, user:<email> or sp:<id>. Leave empty to select purely by the refinement.",
+    "assets": "Assets",
+    "assetsHint": "One per line, e.g. uc:catalog.schema or uc:catalog.schema.table. A catalog or schema covers its children.",
+    "refinement": "Refinement",
+    "audienceRefinementHint": "Members must also satisfy these conditions (e.g. Business role = Analyst).",
+    "assetRefinementHint": "Assets must also satisfy these conditions (e.g. Classification = pii).",
+    "refinementUnsupported": "This refinement uses logical constraints; it is kept as-is.",
+    "contentLocked": "This version is {{status}} — rules and membership are locked. Send it back to draft (while under review) or create a new version to change them; name, ownership, domains and tags stay editable.",
+    "nameRequired": "Name is required",
+    "created": "Created",
+    "updated": "Saved",
+    "saveFailed": "Could not save",
+    "incompleteRules": "Some rules are incomplete"
+  },
+  "rules": {
+    "empty": "No rules yet.",
+    "kind": "Rule",
+    "action": "Action",
+    "remove": "Remove rule",
+    "target": "Target",
+    "targetMode": "Target type",
+    "targetAsset": "Asset",
+    "targetCollection": "Asset collection",
+    "targetRef": "Target asset",
+    "pickCollection": "Pick an asset collection",
+    "assignee": "Assignee",
+    "assigneeMode": "Assignee type",
+    "assigneeAudience": "Audience",
+    "assigneePrincipal": "Principal",
+    "assigneeEveryone": "Everyone",
+    "assigneeRef": "Assignee",
+    "pickAudience": "Pick an audience",
+    "constraints": "Constraints (all must hold)",
+    "duties": "Duties (must be fulfilled first)",
+    "remedies": "Remedies (if infringed)"
+  },
+  "constraints": {
+    "none": "No constraints.",
+    "and": "AND",
+    "leftOperand": "Operand",
+    "operator": "Operator",
+    "value": "Value",
+    "listPlaceholder": "a, b, c",
+    "add": "Add condition",
+    "remove": "Remove condition"
+  },
+  "check": {
+    "title": "Check access",
+    "descriptionAll": "Evaluate a request against all active policies and see exactly why it is allowed or denied.",
+    "descriptionPolicy": "Evaluate a request against this policy (what-if, any status) or against all active policies.",
+    "principal": "Principal",
+    "groups": "Groups (comma-separated)",
+    "action": "Action",
+    "asset": "Asset",
+    "assetAttributes": "Asset attributes",
+    "context": "Context",
+    "fulfilledDuties": "Fulfilled duties:",
+    "onlyThisPolicy": "Only this policy (what-if)",
+    "run": "Evaluate",
+    "failed": "Evaluation failed",
+    "modeWhatIf": "What-if",
+    "modeActive": "Active policies",
+    "evaluated": "{{count}} policies evaluated",
+    "resolvedAttributes": "Resolved principal attributes:",
+    "matchedRules": "Matching rules",
+    "notPlatformEnforced": "Not platform-enforced"
+  },
+  "import": {
+    "title": "Import ODRL policy (JSON-LD)",
+    "description": "Paste a W3C ODRL 2.2 policy. It is imported as a new draft; its declared conflict strategy is kept (the spec default is 'invalid').",
+    "submit": "Import",
+    "done": "Policy imported",
+    "failed": "Import failed",
+    "invalidJson": "Not valid JSON"
+  },
+  "details": {
+    "back": "Back to Access Policies",
+    "notFound": "Not found",
+    "overview": "Overview",
+    "iri": "ODRL IRI",
+    "copyIri": "Copy IRI",
+    "createdBy": "Created by {{user}}",
+    "changeSummary": "Change summary",
+    "rules": "Rules",
+    "rulesHint": "Atomic ODRL rules. Prohibitions vs. permissions are resolved by the conflict strategy.",
+    "everyone": "Everyone",
+    "verb": {
+      "permission": "may",
+      "prohibition": "may not",
+      "obligation": "must"
+    },
+    "on": "on",
+    "when": "when",
+    "duty": "Duty",
+    "remedy": "Remedy",
+    "validation": "Validation",
+    "readyToActivate": "Valid — ready to activate.",
+    "audienceDefinition": "Audience definition",
+    "audienceSemantics": "A principal is a member if it is one of the listed principals (or any principal, if none are listed) and it satisfies the refinement. An audience with neither matches nobody.",
+    "collectionDefinition": "Asset collection definition",
+    "collectionSemantics": "An asset is a member if it is (below) one of the listed assets (or any asset, if none are listed) and it satisfies the refinement. A collection with neither matches nothing.",
+    "allPrincipals": "All principals (selected by the refinement)",
+    "allAssets": "All assets (selected by the refinement)",
+    "usedBy": "Used by policies",
+    "notUsed": "Not referenced by any policy.",
+    "jsonld": "ODRL JSON-LD",
+    "jsonldHint": "The policy as a W3C ODRL 2.2 document (Ontos profile).",
+    "download": "Download",
+    "newVersion": "New version",
+    "newVersionHint": "Creates a draft copy of v{{version}}. The current version stays in effect until the new one is activated.",
+    "versionCreated": "Version {{version}} created",
+    "versionFailed": "Could not create version",
+    "statusConfirm": "Move from {{from}} to {{to}}?",
+    "statusComment": "Comment (added to the timeline)",
+    "statusChanged": "Status set to {{status}}",
+    "statusFailed": "Status change failed",
+    "confirm": "Confirm",
+    "deleteTitle": "Delete",
+    "deleteConfirm": "Delete {{name}} v{{version}}? This cannot be undone.",
+    "deleted": "Deleted",
+    "deleteFailed": "Could not delete",
+    "personalDraftMessage": "Only you (and admins) can see this personal draft until it is activated.",
+    "noDescription": "No description.",
+    "versionsInFamily": "{{count}} versions",
+    "created": "Created",
+    "updated": "Updated",
+    "noTags": "No tags",
+    "linkedConcepts": "Linked concepts",
+    "linkFailed": "Could not update concept link"
+  }
+}

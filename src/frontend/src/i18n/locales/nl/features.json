@@ -67,6 +67,10 @@
     "name": "Beveiligingsfuncties",
     "description": "Schakel geavanceerde beveiliging in zoals differential privacy."
   },
+  "access-policies": {
+    "name": "__TODO__ Access Policies",
+    "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
+  },
   "entitlements": {
     "name": "Rechten",
     "description": "Beheer toegangsprivileges via persona's en groepen."

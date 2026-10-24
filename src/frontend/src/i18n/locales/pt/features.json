@@ -67,6 +67,10 @@
     "name": "Recursos de Segurança",
     "description": "Habilite segurança avançada, como privacidade diferencial."
   },
+  "access-policies": {
+    "name": "__TODO__ Access Policies",
+    "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
+  },
   "entitlements": {
     "name": "Direitos de Acesso",
     "description": "Gerencie privilégios de acesso por meio de personas e grupos."

@@ -170,6 +170,10 @@
         "notify-denied": "La tua richiesta di pubblicazione per '{{entity_name}}' è stata negata.",
         "notify-invalid": "La richiesta di pubblicazione per '{{entity_name}}' è stata rifiutata: si possono pubblicare solo contratti dati approvati e prodotti dati attivi.",
         "notify-error": "Si è verificato un errore durante la pubblicazione di '{{entity_name}}'."
+      },
+      "access-policy-review-request": {
+        "notify-requester": "La richiesta di revisione della policy di accesso è stata inviata. Un data steward la esaminerà a breve.",
+        "notify-stewards": "Un elemento delle policy di accesso è stato inviato per la revisione. Apri Policy di accesso per approvarlo o rimandarlo indietro."
       }
     },
     "approval": {

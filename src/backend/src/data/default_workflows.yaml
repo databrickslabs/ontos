@@ -451,6 +451,43 @@ workflows:
         config:
           message: "Data contract review request was rejected"
 
+  # Access Policy Review Request (ODRL policies, audiences, asset collections).
+  # Approval itself happens through the entity's status transitions
+  # (under_review -> approved -> active); this workflow only notifies.
+  - id: "access-policy-review-request"
+    name: "Access Policy Review Request"
+    description: "Notifies data stewards when an access policy, audience or asset collection is submitted for review."
+    trigger:
+      type: "on_request_review"
+      entity_types:
+        - "access_policy"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your access policy review request has been submitted. A data steward will review it shortly."
+        on_pass: "notify-stewards"
+
+      - id: "notify-stewards"
+        name: "Notify Data Stewards"
+        type: "notification"
+        config:
+          recipients: "data_stewards"
+          template: "request_submitted"
+          custom_message: "An access policy entity was submitted for review. Open Access Policies to approve or send it back."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Review Requested"
+        type: "pass"
+
   # Data Contract Deploy Request (publication requests are handled by
   # Publication Request Review)
   - id: "contract-deploy-request"

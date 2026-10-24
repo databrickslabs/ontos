@@ -486,6 +486,8 @@
     "removedStepsHint": "Deze stappen zijn in deze uitvoering uitgevoerd en later uit de workflow verwijderd.",
     "stepErrors": {
       "approval_rejected": "Verzoek afgewezen",
+      "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
+      "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
       "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd"
     },

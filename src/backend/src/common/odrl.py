@@ -43,6 +43,20 @@ POLICY_IRI_PREFIX = "urn:ontos:policy:"
 # Unity Catalog securables: ``uc:<catalog>[.<schema>[.<object>]]``. A UC target
 # covers its descendants (UC privilege inheritance), see :func:`_asset_ref_matches`.
 UC_PREFIX = "uc:"
+# Snowflake securables: ``snowflake:<database>[.<schema>[.<object>]]`` — same Ontos semantics
+# (a container covers its children); the adapter realises it with ALL + FUTURE grants.
+SNOWFLAKE_PREFIX = "snowflake:"
+# Hierarchical (dotted, up to 3 levels) securable namespaces the compiler understands.
+SECURABLE_PREFIXES = (UC_PREFIX, SNOWFLAKE_PREFIX)
+
+
+def securable_prefix(ref: Any) -> Optional[str]:
+    """The namespace prefix of a hierarchical securable ref, or None."""
+    if isinstance(ref, str):
+        for p in SECURABLE_PREFIXES:
+            if ref.startswith(p):
+                return p
+    return None
 
 POLICY_TYPES = ("Set", "Offer", "Agreement")
 RULE_KINDS = ("permission", "prohibition", "obligation")
@@ -686,20 +700,21 @@ def _eval_one(c: Dict[str, Any], env: Dict[str, Any], res: ConstraintResult) -> 
     return ok
 
 
-def _uc_covers(target: str, asset: str) -> bool:
-    if not (target.startswith(UC_PREFIX) and asset.startswith(UC_PREFIX)):
+def _securable_covers(target: str, asset: str) -> bool:
+    prefix = securable_prefix(target)
+    if prefix is None or not asset.startswith(prefix):
         return False
-    t = target[len(UC_PREFIX):].lower().split(".")
-    a = asset[len(UC_PREFIX):].lower().split(".")
+    t = target[len(prefix):].lower().split(".")
+    a = asset[len(prefix):].lower().split(".")
     return len(t) <= len(a) and a[: len(t)] == t
 
 
 def _asset_ref_matches(ref: str, asset: str) -> bool:
     if ref == asset:
         return True
-    if ref.endswith(".*") and ref.startswith(UC_PREFIX):
-        return _uc_covers(ref[:-2], asset)
-    return _uc_covers(ref, asset)
+    if ref.endswith(".*") and securable_prefix(ref):
+        return _securable_covers(ref[:-2], asset)
+    return _securable_covers(ref, asset)
 
 
 def strip_principal_prefix(value: str) -> str:

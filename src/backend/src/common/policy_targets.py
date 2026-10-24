@@ -65,6 +65,8 @@ class TargetAdapter:
     capabilities: FrozenSet[str] = frozenset()
     # Max segments of a securable name (catalog.schema.object = 3).
     name_depth: int = 3
+    # Parent privileges that only exist to reach a child securable.
+    implied_privileges: tuple = IMPLIED_PRIVILEGES
 
     def owns(self, ref: str) -> bool:
         return isinstance(ref, str) and ref.startswith(self.asset_prefix)
@@ -76,17 +78,28 @@ class TargetAdapter:
         bad = [s for s in scope if not 1 <= len(s.split(".")) <= self.name_depth or "" in s.split(".")]
         return [f"Scope entry '{s}' is not a {self.label} securable name" for s in bad]
 
+    def own_plan(self, plan: EntitlementPlan) -> None:
+        """Keep only this platform's IR (in place): the compile covers every platform's refs."""
+        plan.entitlements = [e for e in plan.entitlements if self.owns(e.securable)]
+        kept = []
+        for rule in plan.abac:
+            rule.securables = [s for s in rule.securables if self.owns(s)]
+            if rule.securables:
+                kept.append(rule)
+        plan.abac = kept
+
     def restrict_plan(self, plan: EntitlementPlan, scope: Sequence[str]) -> int:
         """Drop IR outside ``scope`` (in place); returns how many entitlements were dropped.
 
         A restriction (mask / filter) attached above the scope can't be built without managing
         securables this target doesn't own; it blocks the release instead of silently vanishing.
         """
+        self.own_plan(plan)
         if not scope:
             return 0
         before = len(plan.entitlements)
         plan.entitlements = [e for e in plan.entitlements
-                             if self.owns(e.securable) and any(inside(self.native_name(e.securable), s) for s in scope)]
+                             if any(inside(self.native_name(e.securable), s) for s in scope)]
         kept = []
         for rule in plan.abac:
             names = [self.native_name(s) for s in rule.securables]
@@ -101,11 +114,26 @@ class TargetAdapter:
         plan.abac = kept
         return before - len(plan.entitlements)
 
+    def scope_name(self, grant: uc.UCGrant) -> Optional[str]:
+        """The securable a ledger row is about, for scope checks (None = always in scope)."""
+        return grant.securable_name
+
     def grant_in_scope(self, grant: uc.UCGrant, scope: Sequence[str]) -> bool:
-        return not scope or any(inside(grant.securable_name, s) for s in scope)
+        name = self.scope_name(grant)
+        if not scope or name is None:
+            return True
+        if any(inside(name, s) for s in scope):
+            return True
+        # A parent privilege that only reaches an in-scope child (USE CATALOG / USAGE).
+        return grant.privilege in self.implied_privileges and any(inside(s, name) for s in scope)
+
+    def assume_preexisting(self, grant: uc.UCGrant) -> bool:
+        """Without a live read: does a grant to add probably exist already (→ never revoked later)?"""
+        return grant.implied
 
     # ---- hooks
-    def build(self, plan: EntitlementPlan, abac: Any, resolve_object_kind: Any = None) -> List[uc.UCGrant]:
+    def build(self, plan: EntitlementPlan, abac: Any, resolve_object_kind: Any = None,
+              target: Optional["ResolvedTarget"] = None) -> List[uc.UCGrant]:
         raise NotImplementedError
 
     def render_sql(self, diff: uc.GrantDiff) -> List[str]:
@@ -122,17 +150,13 @@ class UnityCatalogAdapter(TargetAdapter):
     asset_prefix = odrl.UC_PREFIX
     capabilities = frozenset({CAP_APPLY_GRANTS, CAP_READ_GRANTS, CAP_ABAC})
 
-    def grant_in_scope(self, grant: uc.UCGrant, scope: Sequence[str]) -> bool:
-        if not scope:
-            return True
-        name = uc.abac_ref(grant)["on_securable_fullname"] if grant.securable_type == uc.ABAC_POLICY \
-            else grant.securable_name
-        if any(inside(name, s) for s in scope):
-            return True
-        # USE CATALOG / USE SCHEMA on a parent is what reaches an in-scope child.
-        return grant.privilege in IMPLIED_PRIVILEGES and any(inside(s, name) for s in scope)
+    def scope_name(self, grant: uc.UCGrant) -> Optional[str]:
+        if grant.securable_type == uc.ABAC_POLICY:
+            return uc.abac_ref(grant)["on_securable_fullname"]
+        return grant.securable_name
 
-    def build(self, plan: EntitlementPlan, abac: Any, resolve_object_kind: Any = None) -> List[uc.UCGrant]:
+    def build(self, plan: EntitlementPlan, abac: Any, resolve_object_kind: Any = None,
+              target: Optional["ResolvedTarget"] = None) -> List[uc.UCGrant]:
         return uc.build_grants(plan, resolve_object_kind) + uc.build_abac(plan, abac, resolve_object_kind)
 
     def render_sql(self, diff: uc.GrantDiff) -> List[str]:
@@ -148,14 +172,32 @@ def register_adapter(adapter: TargetAdapter) -> TargetAdapter:
 
 
 def get_adapter(system: str) -> Optional[TargetAdapter]:
+    _ensure_builtin_adapters()
     return _ADAPTERS.get(system)
 
 
 def adapters() -> List[TargetAdapter]:
+    _ensure_builtin_adapters()
     return [_ADAPTERS[k] for k in sorted(_ADAPTERS)]
 
 
+def adapter_for_ref(ref: str) -> Optional[TargetAdapter]:
+    return next((a for a in adapters() if a.owns(ref)), None)
+
+
 register_adapter(UnityCatalogAdapter())
+_builtins_loaded = False
+
+
+def _ensure_builtin_adapters() -> None:
+    """Register the adapters living in their own modules — lazily, so they can import this one."""
+    global _builtins_loaded
+    if _builtins_loaded:
+        return
+    _builtins_loaded = True
+    from src.common.snowflake_policy_adapter import SnowflakeAdapter
+    if SnowflakeAdapter.system not in _ADAPTERS:
+        register_adapter(SnowflakeAdapter())
 
 
 @dataclass
@@ -171,6 +213,8 @@ class ResolvedTarget:
     drift_policy: str = DRIFT_REPORT
     entity_id: Optional[str] = None
     builtin: bool = False
+    # Non-secret adapter settings (e.g. Snowflake ``views``: object names to grant as views).
+    connection: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {"key": self.key, "label": self.label, "system": self.adapter.system,

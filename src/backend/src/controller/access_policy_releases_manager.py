@@ -186,7 +186,7 @@ class PolicyReleaseManager:
             out.append(pt.ResolvedTarget(
                 key=key, label=t.name, adapter=adapter, scope=list(t.scope or []),
                 delivery_modes=list(t.delivery_modes or []), reconcile_schedule=t.reconcile_schedule,
-                drift_policy=t.drift_policy or pt.DRIFT_REPORT, entity_id=t.id))
+                drift_policy=t.drift_policy or pt.DRIFT_REPORT, entity_id=t.id, connection=dict(t.connection or {})))
         # The unscoped built-in only stands in while no UC target exists at all: a deprecated one
         # still owns its securables, and bringing back "everything, any mode" would bypass it.
         if not any(t.system == pt.BUILTIN_UC.adapter.system for t in rows):
@@ -267,18 +267,22 @@ class PolicyReleaseManager:
             directory=lambda: self.policies.known_principals(db),
             now=now,
             abac=abac,
+            owns=adapter.owns,
         )
         for w in warnings:
             plan.issue("error", "inheritance", w)
+        self._note_untargeted(db, plan)
         pt.restrict(plan, resolved)
-        grants = adapter.build(plan, abac, resolve_object_kind)
+        # The object-kind resolver reads Unity Catalog: only meaningful for UC names.
+        grants = adapter.build(plan, abac, resolve_object_kind if adapter.system == pt.BUILTIN_UC.adapter.system
+                               else None, target=resolved)
         tracked = [_ledger_grant(r) for r in self.active_ledger(db, target)]
         desired = {g.key for g in grants}
         outside = [g for g in tracked if not adapter.grant_in_scope(g, resolved.scope)]
         # A parent USE grant that an out-of-scope grant of the same principal still needs isn't
         # revoked either — unless the in-scope compile wants it anyway (then it stays tracked).
         below = {(g.principal, g.securable_name) for g in outside}
-        outside += [g for g in tracked if g.privilege in pt.IMPLIED_PRIVILEGES and g.key not in desired
+        outside += [g for g in tracked if g.privilege in adapter.implied_privileges and g.key not in desired
                     and adapter.grant_in_scope(g, resolved.scope)
                     and any(p == g.principal and pt.inside(n, g.securable_name) for p, n in below)]
         expiring = [g for g in outside if g.expires_at]
@@ -307,6 +311,16 @@ class PolicyReleaseManager:
             "source_policies": sources,
             "ledger_fingerprint": self._fingerprint(db, target),
         }
+
+    def _note_untargeted(self, db: Session, plan: Any) -> None:
+        """Warn when policies target a platform no active target compiles for (nothing would ship them)."""
+        covered = {t.adapter.system for t in self.targets(db)}
+        lost = sorted(ref for ref in plan.elsewhere
+                      if (a := pt.adapter_for_ref(ref)) is None or a.system not in covered)
+        if lost:
+            plan.issue("warning", "no_target",
+                       f"No active target compiles {', '.join(lost[:5])}{' …' if len(lost) > 5 else ''} — "
+                       "configure an Access Target for that platform")
 
     @staticmethod
     def _insert(db: Session, row: AccessPolicyReleaseDb, attempts: int = 5) -> AccessPolicyReleaseDb:
@@ -403,7 +417,8 @@ class PolicyReleaseManager:
         return adds, removes, untracks
 
     @staticmethod
-    def _preexisting(adds: List[uc.UCGrant], get_grants: Optional[Callable[[str, str], Dict[str, Any]]]) -> Tuple[List[str], bool]:
+    def _preexisting(adds: List[uc.UCGrant], get_grants: Optional[Callable[[str, str], Dict[str, Any]]],
+                     adapter: Optional[pt.TargetAdapter] = None) -> Tuple[List[str], bool]:
         """Which grants to add already exist on the platform (→ never revoked by Ontos later).
 
         Securables whose live grants can't be read fall back to the conservative rule: implied
@@ -421,18 +436,24 @@ class PolicyReleaseManager:
         for g in adds:
             granted = live.get((g.securable_type, g.securable_name))
             known = granted is not None
-            if (known and f"{g.principal.lower()}|{g.privilege}" in granted) or (not known and g.implied):
+            assumed = adapter.assume_preexisting(g) if adapter is not None else g.implied
+            if (known and f"{g.principal.lower()}|{g.privilege}" in granted) or (not known and assumed):
                 out.append("|".join(g.key))
         return out, bool(live) and len(live) == len(securables)
 
     @staticmethod
     def _delivery_modes(delivery_service: Any, modes: Optional[List[str]],
-                        allowed: Optional[List[str]] = None) -> List[Any]:
+                        allowed: Optional[List[str]] = None, adapter: Optional[pt.TargetAdapter] = None) -> List[Any]:
         from src.controller.delivery_service import DeliveryMode
 
         if delivery_service is None:
             raise AccessPolicyError("Delivery service is not configured", 503)
         active = delivery_service.get_active_modes()
+        if adapter is not None and pt.CAP_APPLY_GRANTS not in adapter.capabilities:
+            # Direct applies through the Databricks SDK: never for a platform it can't reach.
+            if modes and DeliveryMode.DIRECT.value in modes:
+                raise AccessPolicyError(f"{adapter.label} targets can't be delivered directly — use Indirect or Manual", 400)
+            active = [m for m in active if m != DeliveryMode.DIRECT]
         if allowed:
             # The target restricts how its releases may ship (e.g. Indirect only: Git + CI apply).
             if modes and (bad := [m for m in modes if m not in allowed]):
@@ -469,12 +490,14 @@ class PolicyReleaseManager:
         resolved = self.resolve(db, row.target, include_deprecated=True)
         if row.status == R_APPROVED:
             self._rebase_if_stale(db, row, user)
-        chosen = self._delivery_modes(delivery_service, modes, resolved.delivery_modes)
-        if get_grants is None:
+        chosen = self._delivery_modes(delivery_service, modes, resolved.delivery_modes, resolved.adapter)
+        if pt.CAP_READ_GRANTS not in resolved.adapter.capabilities:
+            get_grants = None  # live grants are only readable from Unity Catalog
+        elif get_grants is None:
             get_grants = getattr(getattr(delivery_service, "grant_manager", None), "get_grants", None)
 
         adds, removes, untracks = self._remaining(db, row)
-        preexisting, live_checked = self._preexisting(adds, get_grants)
+        preexisting, live_checked = self._preexisting(adds, get_grants, resolved.adapter)
         diff = uc.GrantDiff(add=adds, remove=removes, untrack=untracks)
         changes = diff.to_dict()
         changes["sql"] = resolved.adapter.render_sql(diff)
@@ -646,7 +669,7 @@ class PolicyReleaseManager:
         if not expired:
             return None
         # Validate delivery before writing anything, so a misconfiguration leaves no orphaned release.
-        self._delivery_modes(delivery_service, None, resolved.delivery_modes)
+        self._delivery_modes(delivery_service, None, resolved.delivery_modes, resolved.adapter)
         open_revocations = (db.query(AccessPolicyReleaseDb)
                             .filter(AccessPolicyReleaseDb.target == target,
                                     # Agreement revocations awaiting confirmation cover grants too.
@@ -688,6 +711,9 @@ class PolicyReleaseManager:
     def live_diff(self, db: Session, release_id: str, get_grants: Callable[[str, str], Dict[str, Any]]) -> Dict[str, Any]:
         """Report-only comparison of the release's desired grants with live UC grants."""
         row = self.require(db, release_id)
+        adapter = self.resolve(db, row.target, include_deprecated=True).adapter
+        if pt.CAP_READ_GRANTS not in adapter.capabilities:
+            raise AccessPolicyError(f"Live grants can't be read from {adapter.label} yet", 409)
         desired = [uc.UCGrant.from_dict(d) for d in (row.plan or {}).get("grants") or []]
         managed = [_ledger_grant(r) for r in self.active_ledger(db, row.target)]
         securables = sorted({(g.securable_type, g.securable_name) for g in desired + managed

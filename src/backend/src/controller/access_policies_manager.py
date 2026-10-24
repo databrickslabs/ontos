@@ -590,6 +590,8 @@ class AccessPoliciesManager:
         from src.controller.delivery_service import DeliveryMode
         valid = {m.value for m in DeliveryMode}
         problems += [f"Unknown delivery mode '{m}'" for m in row.delivery_modes or [] if m not in valid]
+        if DeliveryMode.DIRECT.value in (row.delivery_modes or []) and targets_mod.CAP_APPLY_GRANTS not in adapter.capabilities:
+            problems.append(f"{adapter.label} targets can't be delivered directly — allow Indirect or Manual")
         if (row.drift_policy or targets_mod.DRIFT_REPORT) not in targets_mod.DRIFT_POLICIES:
             problems.append(f"Drift policy '{row.drift_policy}' is not supported (report only)")
         if (cron := targets_mod.cron_problem(row.reconcile_schedule)):

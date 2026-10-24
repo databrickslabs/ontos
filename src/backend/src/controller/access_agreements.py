@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from src.common import odrl
+from src.common import policy_targets as pt
 from src.common import uc_policy_adapter as uc
 from src.common.config import get_settings
 from src.common.logging import get_logger
@@ -186,19 +187,21 @@ class AgreementService:
         if not uids:
             return []
         rm = PolicyReleaseManager(self.policies)
-        names = list(dict.fromkeys(
-            t[len(odrl.UC_PREFIX):] for a in agreements for r in (a.body or {}).get("permission") or []
-            for t in [r.get("target")] if isinstance(t, str) and t.startswith(odrl.UC_PREFIX)))
+        refs = list(dict.fromkeys(
+            t for a in agreements for r in (a.body or {}).get("permission") or []
+            for t in [r.get("target")] if isinstance(t, str) and odrl.securable_prefix(t)))
         targets: Dict[str, Any] = {}
         uncovered = []
-        for name in names:
-            target = rm.target_for(db, uc.TARGET_UC, name, include_deprecated=revoke)
+        for ref in refs:
+            adapter = pt.adapter_for_ref(ref)
+            target = rm.target_for(db, adapter.system, adapter.native_name(ref).lower(),
+                                   include_deprecated=revoke) if adapter else None
             if target is None:
-                uncovered.append(name)
+                uncovered.append(ref)
             else:
                 targets.setdefault(target.key, target)
         if uncovered:
-            logger.warning("No Unity Catalog target covers %s — not delivered", ", ".join(uncovered))
+            logger.warning("No target covers %s — not delivered", ", ".join(uncovered))
         rows = []
         for target in targets.values():
             row = self._prepare_for(db, rm, target, agreements, uids, user, revoke)

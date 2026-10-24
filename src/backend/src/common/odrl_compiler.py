@@ -154,6 +154,8 @@ class EntitlementPlan:
     gated: List[GatedRule] = field(default_factory=list)
     obligations: List[Dict[str, Any]] = field(default_factory=list)
     issues: List[CompileIssue] = field(default_factory=list)
+    # Securables of other platforms this compile skipped (see ``compile_policies(owns=...)``).
+    elsewhere: Set[str] = field(default_factory=set)
     compiled_at: str = ""
 
     @property
@@ -319,34 +321,47 @@ class _Parties:
 @dataclass
 class AssetSet:
     securables: Set[str] = field(default_factory=set)
-    # Refs the UC compile can't target (non-UC IRIs).
+    # Refs no target can compile (not a hierarchical securable IRI).
     foreign: Set[str] = field(default_factory=set)
+    # Securables of another platform than the one being compiled.
+    elsewhere: Set[str] = field(default_factory=set)
     inexact: Optional[str] = None
 
 
 def canonical_securable(ref: str) -> Optional[str]:
-    """``uc:Main.Sales.*`` → ``uc:main.sales``; non-UC refs → None."""
-    if not isinstance(ref, str) or not ref.startswith(odrl.UC_PREFIX):
+    """``uc:Main.Sales.*`` → ``uc:main.sales`` (same for ``snowflake:``); other refs → None."""
+    prefix = odrl.securable_prefix(ref)
+    if prefix is None:
         return None
-    name = ref[len(odrl.UC_PREFIX):].strip()
+    name = ref[len(prefix):].strip()
     if name.endswith(".*"):
         name = name[:-2]
     parts = [p for p in name.split(".") if p]
     if not parts or len(parts) > 3:
         return None
-    return odrl.UC_PREFIX + ".".join(p.lower() for p in parts)
+    return prefix + ".".join(p.lower() for p in parts)
 
 
 def securable_covers(outer: str, inner: str) -> bool:
-    """UC privilege inheritance: a grant on ``outer`` reaches ``inner``."""
-    o = outer[len(odrl.UC_PREFIX):].split(".")
-    i = inner[len(odrl.UC_PREFIX):].split(".")
+    """Container semantics: a grant on ``outer`` reaches ``inner`` (same platform only)."""
+    prefix = odrl.securable_prefix(outer)
+    if prefix is None or not inner.startswith(prefix):
+        return False
+    o = outer[len(prefix):].split(".")
+    i = inner[len(prefix):].split(".")
     return len(o) <= len(i) and i[: len(o)] == o
 
 
 class _Assets:
-    def __init__(self, collections: Dict[str, odrl.CollectionDef]):
+    def __init__(self, collections: Dict[str, odrl.CollectionDef], owns: Optional[Callable[[str], bool]] = None):
         self.collections = collections
+        self.owns = owns
+
+    def only_elsewhere(self, ref: Any, plan: "EntitlementPlan") -> bool:
+        """The rule targets only another platform's securables: not this compile's business."""
+        a = self.resolve(ref)
+        plan.elsewhere |= a.elsewhere
+        return bool(a.elsewhere) and not (a.securables or a.foreign or a.inexact)
 
     def resolve(self, ref: Any, depth: int = 0) -> AssetSet:
         if ref is None:
@@ -374,12 +389,13 @@ class _Assets:
             return AssetSet(inexact=f"asset collection {ref} has no active version")
         return self._members([ref])
 
-    @staticmethod
-    def _members(members: List[str]) -> AssetSet:
+    def _members(self, members: List[str]) -> AssetSet:
         out = AssetSet()
         for m in members:
             c = canonical_securable(m)
-            if c:
+            if c and self.owns is not None and not self.owns(c):
+                out.elsewhere.add(c)
+            elif c:
                 out.securables.add(c)
             else:
                 out.foreign.add(m)
@@ -450,12 +466,17 @@ def compile_policies(
     directory: Optional[PrincipalDirectory] = None,
     now: Optional[datetime] = None,
     abac: Optional[AbacConfig] = None,
+    owns: Optional[Callable[[str], bool]] = None,
 ) -> EntitlementPlan:
-    """Active policies → :class:`EntitlementPlan` (see the module docstring for the semantics)."""
+    """Active policies → :class:`EntitlementPlan` (see the module docstring for the semantics).
+
+    ``owns`` limits the compile to one platform's securables: rules that only target another
+    platform are skipped entirely, so their issues never block this platform's release.
+    """
     now = now or datetime.now(timezone.utc)
     plan = EntitlementPlan(compiled_at=_iso(now) or "")
     parties = _Parties(audiences or {}, directory)
-    assets = _Assets(asset_collections or {})
+    assets = _Assets(asset_collections or {}, owns)
 
     candidates: List[Entitlement] = []
     prohibitions: List[_Prohibition] = []
@@ -469,6 +490,8 @@ def compile_policies(
         is_offer = norm.get("type") == "Offer"
         for i, rule in enumerate(norm.get("permission") or []):
             src = _rule_ref(p, uid, "permission", i, rule)
+            if owns is not None and assets.only_elsewhere(rule.get("target"), plan):
+                continue
             if is_offer:
                 # Offered terms entitle nobody; access comes from the Agreement concluded on them.
                 plan.gated.append(GatedRule(src, GATE_WORKFLOW, "offered — granted through an Agreement"))
@@ -476,6 +499,8 @@ def compile_policies(
             candidates.extend(_compile_permission(rule, src, parties, assets, now, plan, p.fulfilled_duties, abac))
         for i, rule in enumerate(norm.get("prohibition") or []):
             src = _rule_ref(p, uid, "prohibition", i, rule)
+            if owns is not None and assets.only_elsewhere(rule.get("target"), plan):
+                continue
             if is_offer and rule.get("assignee") is None:
                 # A product's terms bind its consumers through their Agreements (snapshotted there).
                 plan.issue(SEVERITY_INFO, "offer_term", f"{src.label()} binds consumers via their Agreements", src)
@@ -638,7 +663,7 @@ def _compile_permission(rule: Dict[str, Any], src: RuleRef, parties: _Parties, a
         plan.gated.append(GatedRule(src, GATE_ABAC, asset.inexact))
         return []
     for f in sorted(asset.foreign):
-        plan.issue(SEVERITY_WARNING, "foreign_target", f"{src.label()}: {f} is not a Unity Catalog securable — skipped", src)
+        plan.issue(SEVERITY_WARNING, "foreign_target", f"{src.label()}: {f} is not a Unity Catalog or Snowflake securable — skipped", src)
 
     principals = [EVERYONE] if party.everyone else sorted(party.principals)
     if not principals and not party.inexact:
@@ -655,6 +680,8 @@ def _row_filter_problem(asset: "AssetSet", abac: AbacConfig) -> Optional[str]:
     """Why a spatial permission can't become grant + row filter (None if it can)."""
     if asset.inexact or asset.foreign or not asset.securables:
         return "a row filter needs concrete Unity Catalog tables"
+    if any(not s.startswith(odrl.UC_PREFIX) for s in asset.securables):
+        return "row filters are only supported on Unity Catalog tables"
     for s in asset.securables:
         name = s[len(odrl.UC_PREFIX):]
         if len(name.split(".")) != 3:

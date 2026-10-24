@@ -269,3 +269,40 @@ def test_agreement_revocation_goes_through_a_deprecated_target(policies, rm, pro
     grants = FakeGrants()
     out = svc.deliver(db_session, [agreement], ADMIN, Delivery([DeliveryMode.DIRECT], grants), revoke=True)
     assert out is not None and out.status == "applied" and ("revoke", "ana@example.com", "main.sales.orders") in grants.calls
+
+
+# ------------------------------------------------------------ Snowflake (P4b)
+
+def test_snowflake_target_compiles_its_refs_and_never_ships_directly(policies, rm, db_session: Session):
+    _policy(policies, db_session, {"permission": [
+        {"target": "snowflake:analytics.sales.orders", "action": "read", "assignee": "group:analysts"},
+        {"target": "uc:main.sales.orders", "action": "read", "assignee": "group:analysts"}]}, "Both")
+    _target(policies, db_session, "sf-prod", system="snowflake")
+    assert {t.key for t in rm.targets(db_session)} == {"uc", "sf-prod"}  # no UC target: builtin stays
+    compiled = rm.compile(db_session, "sf-prod")
+    assert {g["securable_name"] for g in compiled["plan"]["grants"]} == {
+        "analytics", "analytics.sales", "analytics.sales.orders"}
+    assert 'GRANT SELECT ON TABLE "ANALYTICS"."SALES"."ORDERS" TO ROLE "ANALYSTS";' in compiled["changes"]["sql"]
+    # The UC compile ignores the Snowflake refs.
+    assert all(g["securable_name"].startswith("main") for g in rm.compile(db_session, "uc")["plan"]["grants"])
+
+    r = rm.create_release(db_session, "sf-prod", AUTHOR)
+    rm.change_status(db_session, r.id, "under_review", AUTHOR)
+    rm.change_status(db_session, r.id, "approved", APPROVER)
+    with pytest.raises(AccessPolicyError):
+        rm.deliver(db_session, r.id, ADMIN, Delivery([DeliveryMode.DIRECT, DeliveryMode.MANUAL]), modes=["direct"])
+    grants = FakeGrants()
+    out = rm.deliver(db_session, r.id, ADMIN, Delivery([DeliveryMode.DIRECT, DeliveryMode.MANUAL], grants))
+    # Direct is dropped for a platform the SDK can't reach (Manual itself needs the notifications manager).
+    assert out.delivery_modes == ["manual"] and grants.calls == []
+    with pytest.raises(AccessPolicyError):
+        rm.live_diff(db_session, r.id, lambda *a: {"success": True, "grants": []})
+
+
+def test_snowflake_target_rejects_direct_and_untargeted_platforms_are_reported(policies, rm, db_session: Session):
+    bad = _target(policies, db_session, "sf", system="snowflake", modes=["direct"], activate=False)
+    assert any("directly" in p for p in policies.activation_problems(db_session, KIND_TARGET, bad))
+    _policy(policies, db_session, {"permission": [
+        {"target": "snowflake:db.s.t", "action": "read", "assignee": "group:g"}]}, "SF only")
+    issues = rm.compile(db_session, "uc")["issues"]
+    assert any(i["code"] == "no_target" for i in issues)

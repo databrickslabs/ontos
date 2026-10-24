@@ -148,21 +148,36 @@ def _merge_expiry(a: Optional[str], b: Optional[str]) -> Optional[str]:
     return a if pa >= pb else b
 
 
-def build_grants(plan: EntitlementPlan, resolve_object_kind: Optional[ObjectKindResolver] = None) -> List[UCGrant]:
-    """IR → aggregated UC grants (including implied parent USE privileges). Mutates ``plan`` with gated/issues."""
-    grants: Dict[GrantKey, UCGrant] = {}
+class GrantAccumulator:
+    """Merges grants by key across entitlements (shared by every target adapter).
 
-    def add(principal: str, kind: str, name: str, privilege: str, expires: Optional[str], implied: bool,
+    The same grant from several rules keeps the latest expiry, stays ``implied`` only if every
+    contribution was implied, and lists each source once.
+    """
+
+    def __init__(self) -> None:
+        self.grants: Dict[GrantKey, UCGrant] = {}
+
+    def add(self, principal: str, kind: str, name: str, privilege: str, expires: Optional[str], implied: bool,
             source: Optional[Dict[str, Any]]) -> None:
         key = (principal, kind, name, privilege)
-        g = grants.get(key)
+        g = self.grants.get(key)
         if g is None:
-            grants[key] = UCGrant(principal, kind, name, privilege, expires, implied, [source] if source else [])
+            self.grants[key] = UCGrant(principal, kind, name, privilege, expires, implied, [source] if source else [])
             return
         g.expires_at = _merge_expiry(g.expires_at, expires)
         g.implied = g.implied and implied
         if source and source not in g.sources:
             g.sources.append(source)
+
+    def sorted(self) -> List[UCGrant]:
+        return sorted(self.grants.values(), key=lambda g: g.key)
+
+
+def build_grants(plan: EntitlementPlan, resolve_object_kind: Optional[ObjectKindResolver] = None) -> List[UCGrant]:
+    """IR → aggregated UC grants (including implied parent USE privileges). Mutates ``plan`` with gated/issues."""
+    acc = GrantAccumulator()
+    add = acc.add
 
     broad_warned = set()
     for e in plan.entitlements:
@@ -188,7 +203,7 @@ def build_grants(plan: EntitlementPlan, resolve_object_kind: Optional[ObjectKind
         if len(parts) == 3:
             add(principal, KIND_SCHEMA, ".".join(parts[:2]), "USE_SCHEMA", e.expires_at, True, src)
     # An explicit grant subsumes the same privilege implied elsewhere (already merged by key).
-    return sorted(grants.values(), key=lambda g: g.key)
+    return acc.sorted()
 
 
 # ------------------------------------------------------------------ diff

@@ -1068,7 +1068,25 @@ def to_jsonld(
     for kind in RULE_KINDS:
         if rules.get(kind):
             doc[kind] = [_rule_to_jsonld(r) for r in rules[kind]]
+    _distinct_rule_uids(doc)
     return doc
+
+
+def _distinct_rule_uids(doc: Dict[str, Any]) -> None:
+    """Atomized rules keep their source rule's uid; in RDF (uid = @id) they'd merge into one node.
+    Give each atom of a shared uid its own: ``<uid>#1``, ``<uid>#2``, …"""
+    counts: Dict[str, int] = {}
+    for kind in RULE_KINDS:
+        for r in doc.get(kind) or []:
+            if r.get("uid"):
+                counts[r["uid"]] = counts.get(r["uid"], 0) + 1
+    seen: Dict[str, int] = {}
+    for kind in RULE_KINDS:
+        for r in doc.get(kind) or []:
+            uid = r.get("uid")
+            if uid and counts[uid] > 1:
+                seen[uid] = seen.get(uid, 0) + 1
+                r["uid"] = f"{uid}#{seen[uid]}"
 
 
 def _constraint_to_jsonld(c: Dict[str, Any]) -> Dict[str, Any]:

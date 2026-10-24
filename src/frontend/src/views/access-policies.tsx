@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ColumnDef } from '@tanstack/react-table';
-import { FileUp, Plus, ShieldCheck } from 'lucide-react';
+import { FileDown, FileUp, Plus, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -273,6 +273,11 @@ export default function AccessPolicies() {
             onRowClick={(row) => openDetail('policy', row.original.id)}
             toolbarActions={
               <div className="flex gap-2">
+                <Button size="sm" variant="outline" asChild>
+                  <a href="/api/access-policies/profile/shacl" download="ontos-odrl-shapes.ttl" title={t('access-policies:list.shaclHint')}>
+                    <FileDown className="mr-1 h-4 w-4" /> {t('access-policies:list.shacl')}
+                  </a>
+                </Button>
                 {canWrite && (
                   <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
                     <FileUp className="mr-1 h-4 w-4" /> {t('access-policies:list.import')}

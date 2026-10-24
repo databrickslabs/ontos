@@ -1,0 +1,123 @@
+# Ontos Access Policies — SHACL shapes (v1). Generated from src/common/odrl_shacl.py; keep in sync
+# (see test_odrl_shapes_ttl_in_sync). Validates ODRL 2.2 policies against the Ontos profile.
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+@prefix ontos: <http://ontos.app/ontology#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+<http://ontos.app/odrl/shapes/v1> a owl:Ontology ;
+    rdfs:label "Ontos Access Policies SHACL shapes"@en ;
+    owl:imports <http://ontos.app/odrl/profile/v1> .
+
+ontos:PolicyShape a sh:NodeShape ;
+    sh:targetClass odrl:Policy, odrl:Set, odrl:Offer, odrl:Agreement ;
+    sh:nodeKind sh:IRI ;
+    sh:property [ sh:path odrl:profile ; sh:minCount 1 ;
+        sh:hasValue <http://ontos.app/odrl/profile/v1> ;
+        sh:message "An Ontos access policy declares the Ontos ODRL profile" ] ;
+    sh:property [ sh:path odrl:conflict ; sh:maxCount 1 ; sh:in ( odrl:perm odrl:prohibit odrl:invalid ) ] ;
+    sh:property [ sh:path odrl:inheritFrom ; sh:nodeKind sh:IRI ] ;
+    sh:property [ sh:path odrl:permission ; sh:node ontos:PermissionShape ] ;
+    sh:property [ sh:path odrl:prohibition ; sh:node ontos:ProhibitionShape ] ;
+    sh:property [ sh:path odrl:obligation ; sh:node ontos:ObligationShape ] ;
+    sh:or ( [ sh:path odrl:permission ; sh:minCount 1 ] [ sh:path odrl:prohibition ; sh:minCount 1 ] [ sh:path odrl:obligation ; sh:minCount 1 ] ) .
+
+ontos:ActionShape a sh:NodeShape ;
+    rdfs:comment "A profile action, or a refined action whose rdf:value is one."@en ;
+    sh:or ( [ sh:in ( odrl:aggregate odrl:anonymize odrl:delete odrl:derive odrl:distribute odrl:inform odrl:modify ontos:acknowledgeTerms ontos:browse ontos:create ontos:manage ontos:obtainApproval ontos:recertify odrl:read odrl:transfer odrl:use ) ]
+            [ sh:property [ sh:path rdf:value ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( odrl:aggregate odrl:anonymize odrl:delete odrl:derive odrl:distribute odrl:inform odrl:modify ontos:acknowledgeTerms ontos:browse ontos:create ontos:manage ontos:obtainApproval ontos:recertify odrl:read odrl:transfer odrl:use ) ] ;
+              sh:property [ sh:path odrl:refinement ; sh:node ontos:ConstraintShape ] ] ) .
+
+ontos:CollectionRefShape a sh:NodeShape ;
+    rdfs:comment "A party / asset (collection); a refined collection points at its members with odrl:source."@en ;
+    sh:property [ sh:path odrl:refinement ; sh:node ontos:ConstraintShape ] ;
+    sh:or ( [ sh:path odrl:refinement ; sh:maxCount 0 ] [ sh:path odrl:source ; sh:minCount 1 ] ) .
+
+ontos:RuleCoreShape a sh:NodeShape ;
+    sh:property [ sh:path odrl:action ; sh:minCount 1 ; sh:maxCount 1 ; sh:node ontos:ActionShape ] ;
+    sh:property [ sh:path odrl:constraint ; sh:node ontos:ConstraintShape ] ;
+    sh:property [ sh:path odrl:target ; sh:node ontos:CollectionRefShape ] ;
+    sh:property [ sh:path odrl:assignee ; sh:node ontos:CollectionRefShape ] ;
+    sh:property [ sh:path odrl:assigner ; sh:node ontos:CollectionRefShape ] .
+
+ontos:PermissionShape a sh:NodeShape ;
+    sh:node ontos:RuleCoreShape ;
+    sh:property [ sh:path odrl:target ; sh:minCount 1 ; sh:message "A permission names its target asset" ] ;
+    sh:property [ sh:path odrl:duty ; sh:node ontos:DutyShape ] ;
+    sh:property [ sh:path odrl:remedy ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:consequence ; sh:maxCount 0 ] .
+
+ontos:ProhibitionShape a sh:NodeShape ;
+    sh:node ontos:RuleCoreShape ;
+    sh:property [ sh:path odrl:target ; sh:minCount 1 ; sh:message "A prohibition names its target asset" ] ;
+    sh:property [ sh:path odrl:duty ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:remedy ; sh:node ontos:DutyShape ] ;
+    sh:property [ sh:path odrl:consequence ; sh:maxCount 0 ] .
+
+ontos:ObligationShape a sh:NodeShape ;
+    sh:node ontos:RuleCoreShape ;
+    sh:property [ sh:path odrl:duty ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:remedy ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:consequence ; sh:node ontos:ConsequenceShape ] .
+
+ontos:DutyShape a sh:NodeShape ;
+    sh:node ontos:RuleCoreShape ;
+    sh:property [ sh:path odrl:duty ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:remedy ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:consequence ; sh:node ontos:ConsequenceShape ] .
+
+ontos:ConsequenceShape a sh:NodeShape ;
+    sh:node ontos:RuleCoreShape ;
+    sh:property [ sh:path odrl:duty ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:remedy ; sh:maxCount 0 ] ;
+    sh:property [ sh:path odrl:consequence ; sh:maxCount 0 ] .
+
+ontos:ConstraintShape a sh:NodeShape ;
+    sh:xone ( ontos:AtomicConstraintShape ontos:LogicalConstraintShape ) .
+
+ontos:AtomicConstraintShape a sh:NodeShape ;
+    sh:property [ sh:path odrl:leftOperand ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( odrl:dateTime odrl:elapsedTime ontos:businessRole ontos:classification ontos:columnTag ontos:dataProduct ontos:domain ontos:group ontos:principalAttribute ontos:remark ontos:rowCondition ontos:tag odrl:purpose odrl:recipient odrl:spatial ) ] ;
+    sh:property [ sh:path odrl:operator ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( odrl:eq odrl:gt odrl:gteq odrl:hasPart odrl:isA odrl:isAllOf odrl:isAnyOf odrl:isNoneOf odrl:isPartOf odrl:lt odrl:lteq odrl:neq ) ] ;
+    sh:xone ( [ sh:path odrl:rightOperand ; sh:minCount 1 ]
+              [ sh:path odrl:rightOperandReference ; sh:minCount 1 ] ) .
+
+ontos:LogicalConstraintShape a sh:NodeShape ;
+    sh:xone ( [ sh:path odrl:and ; sh:minCount 1 ]
+              [ sh:path odrl:or ; sh:minCount 1 ]
+              [ sh:path odrl:xone ; sh:minCount 1 ]
+              [ sh:path odrl:andSequence ; sh:minCount 1 ] ) ;
+    sh:property [ sh:path odrl:and ; sh:maxCount 1 ; sh:not [ sh:hasValue rdf:nil ] ] ;
+    sh:property [ sh:path odrl:or ; sh:maxCount 1 ; sh:not [ sh:hasValue rdf:nil ] ] ;
+    sh:property [ sh:path odrl:xone ; sh:maxCount 1 ; sh:not [ sh:hasValue rdf:nil ] ] ;
+    sh:property [ sh:path odrl:andSequence ; sh:maxCount 1 ; sh:not [ sh:hasValue rdf:nil ] ] ;
+    sh:property [ sh:path ( odrl:and [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ; sh:node ontos:MemberConstraintShape ] ;
+    sh:property [ sh:path ( odrl:or [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ; sh:node ontos:MemberConstraintShape ] ;
+    sh:property [ sh:path ( odrl:xone [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ; sh:node ontos:MemberConstraintShape ] ;
+    sh:property [ sh:path ( odrl:andSequence [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ; sh:node ontos:MemberConstraintShape ] ;
+    sh:property [ sh:path odrl:leftOperand ; sh:maxCount 0 ] .
+
+ontos:MemberConstraintShape a sh:NodeShape ;
+    rdfs:comment "A member of a logical constraint: atomic, or itself logical (one level checked)."@en ;
+    sh:xone ( ontos:AtomicConstraintShape
+              [ sh:or ( [ sh:path odrl:and ; sh:minCount 1 ] [ sh:path odrl:or ; sh:minCount 1 ] [ sh:path odrl:xone ; sh:minCount 1 ] [ sh:path odrl:andSequence ; sh:minCount 1 ] ) ] ) .
+
+ontos:OfferShape a sh:NodeShape ;
+    sh:targetClass odrl:Offer ;
+    sh:property [ sh:path odrl:permission ; sh:node ontos:OfferRuleShape ] ;
+    sh:property [ sh:path odrl:prohibition ; sh:node ontos:OfferRuleShape ] ;
+    sh:property [ sh:path odrl:obligation ; sh:node ontos:OfferRuleShape ] .
+
+ontos:OfferRuleShape a sh:NodeShape ;
+    sh:property [ sh:path odrl:assigner ; sh:minCount 1 ; sh:message "An Offer names its assigner on every rule" ] .
+
+ontos:AgreementShape a sh:NodeShape ;
+    sh:targetClass odrl:Agreement ;
+    sh:property [ sh:path odrl:permission ; sh:node ontos:AgreementRuleShape ] ;
+    sh:property [ sh:path odrl:prohibition ; sh:node ontos:AgreementRuleShape ] ;
+    sh:property [ sh:path odrl:obligation ; sh:node ontos:AgreementRuleShape ] .
+
+ontos:AgreementRuleShape a sh:NodeShape ;
+    sh:property [ sh:path odrl:assigner ; sh:minCount 1 ; sh:message "An Agreement names its assigner on every rule" ] ;
+    sh:property [ sh:path odrl:assignee ; sh:minCount 1 ; sh:message "An Agreement names its assignee on every rule" ] .

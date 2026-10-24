@@ -77,7 +77,9 @@
     "versionsTitle": "__TODO__ Versions in this family",
     "personalDraft": "__TODO__ Personal draft",
     "audiencesHint": "__TODO__ Audiences (ODRL PartyCollections) are reusable groups of principals: explicit users/groups, refined by attributes such as Ontos Business Roles. They are independent of Ontos Teams.",
-    "collectionsHint": "__TODO__ Asset collections (ODRL AssetCollections) are reusable sets of data assets: explicit UC securables, refined by classification, tag or domain."
+    "collectionsHint": "__TODO__ Asset collections (ODRL AssetCollections) are reusable sets of data assets: explicit UC securables, refined by classification, tag or domain.",
+    "shacl": "__TODO__ SHACL shapes",
+    "shaclHint": "__TODO__ Download SHACL shapes that validate ODRL policies against the Ontos profile (any SHACL engine)"
   },
   "form": {
     "title": {

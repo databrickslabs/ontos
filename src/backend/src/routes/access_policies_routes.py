@@ -2,8 +2,10 @@
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from src.common import odrl
+from src.common.odrl_shacl import shapes_turtle
 from src.common import policy_targets as pt
 from src.common.authorization import (
     PermissionChecker,
@@ -120,6 +122,13 @@ async def _subject_guard(request: Request, db: Any, user: Any) -> Any:
 async def get_profile(_: bool = _READ):
     """The Ontos ODRL profile vocabulary (actions, left operands, operators)."""
     return odrl.profile_vocabulary()
+
+
+@router.get("/profile/shacl")
+async def get_profile_shacl(_: bool = _READ):
+    """SHACL shapes (Turtle) that validate ODRL policies against the Ontos profile in any SHACL engine."""
+    return Response(shapes_turtle(), media_type="text/turtle",
+                    headers={"Content-Disposition": 'attachment; filename="ontos-odrl-shapes.ttl"'})
 
 
 @router.post("/validate")

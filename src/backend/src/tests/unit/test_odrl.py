@@ -305,3 +305,76 @@ def test_inheriting_from_an_offer_takes_terms_not_entitlements():
     assert not errors
     assert [r["target"] for r in merged["permission"]] == ["uc:main.sales.orders"]  # the Offer's read isn't inherited
     assert [(r["action"], r["assignee"]) for r in merged["prohibition"]] == [("distribute", "user:ana@x.com")]
+
+
+def test_odrl_shapes_ttl_in_sync():
+    """data/shapes/ontos-odrl-shapes.ttl is the generated SHACL and lists every profile term."""
+    from pathlib import Path
+
+    import rdflib
+    from rdflib.collection import Collection
+
+    from src.common.odrl_shacl import shapes_turtle
+
+    path = Path(__file__).resolve().parents[2] / "data" / "shapes" / "ontos-odrl-shapes.ttl"
+    assert path.read_text() == shapes_turtle(), "regenerate with src.common.odrl_shacl.shapes_turtle()"
+    g = rdflib.Graph()
+    g.parse(data=shapes_turtle(), format="turtle")
+    SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    ODRL = rdflib.Namespace(odrl.ODRL_NS)
+
+    def listed(path_term):
+        for prop in g.subjects(SH.path, path_term):
+            for lst in g.objects(prop, SH["in"]):
+                return {str(x) for x in Collection(g, lst)}
+        return set()
+
+    def iri(key):
+        return odrl.ONTOS_NS + key.split(":", 1)[1] if key.startswith("ontos:") else odrl.ODRL_NS + key
+
+    assert listed(ODRL.leftOperand) == {iri(k) for k in odrl.LEFT_OPERANDS}
+    assert listed(ODRL.operator) == {odrl.ODRL_NS + k for k in odrl.OPERATORS}
+    assert listed(rdflib.RDF.value) == {iri(k) for k in odrl.ACTIONS}
+
+
+# The parts of the W3C ODRL JSON-LD context the export uses (offline: no fetch in tests).
+_ODRL_CONTEXT = {
+    "odrl": odrl.ODRL_NS, "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "uid": "@id", "type": "@type", "Set": "odrl:Set", "Offer": "odrl:Offer", "Agreement": "odrl:Agreement",
+    "profile": {"@type": "@id", "@id": "odrl:profile"}, "conflict": {"@type": "@vocab", "@id": "odrl:conflict"},
+    "perm": "odrl:perm", "prohibit": "odrl:prohibit", "invalid": "odrl:invalid",
+    "permission": {"@type": "@id", "@id": "odrl:permission"}, "prohibition": {"@type": "@id", "@id": "odrl:prohibition"},
+    "obligation": {"@type": "@id", "@id": "odrl:obligation"}, "duty": {"@type": "@id", "@id": "odrl:duty"},
+    "action": {"@type": "@vocab", "@id": "odrl:action"}, "read": "odrl:read", "modify": "odrl:modify",
+    "target": {"@type": "@id", "@id": "odrl:target"}, "assignee": {"@type": "@id", "@id": "odrl:assignee"},
+    "assigner": {"@type": "@id", "@id": "odrl:assigner"}, "constraint": {"@type": "@id", "@id": "odrl:constraint"},
+    "refinement": {"@type": "@id", "@id": "odrl:refinement"},
+    "leftOperand": {"@type": "@vocab", "@id": "odrl:leftOperand"}, "operator": {"@type": "@vocab", "@id": "odrl:operator"},
+    "rightOperand": "odrl:rightOperand", "dateTime": "odrl:dateTime", "eq": "odrl:eq", "lteq": "odrl:lteq",
+    "or": {"@type": "@id", "@id": "odrl:or"},
+}
+
+
+def test_jsonld_export_expands_as_the_shapes_assume():
+    """uid → node IRI, one action per (atomized) rule, rdf:value refined actions, rdf:List logical members."""
+    import json
+
+    import rdflib
+
+    rules = odrl.normalize_policy({"uid": "urn:p", "@type": "Set", "conflict": "prohibit", "permission": [
+        {"uid": "urn:r1", "action": ["read", "modify"], "target": "uc:main.s", "assignee": "group:g",
+         "constraint": [{"or": [{"leftOperand": "dateTime", "operator": "lteq", "rightOperand": "2099-01-01"},
+                                {"leftOperand": "ontos:tag", "operator": "eq", "rightOperand": "pii"}]}]},
+    ]})
+    doc = odrl.to_jsonld(uid="urn:p", policy_type="Set", conflict="prohibit",
+                         rules={k: rules.get(k) or [] for k in odrl.RULE_KINDS})
+    doc["@context"] = [_ODRL_CONTEXT, doc["@context"][1]]
+    g = rdflib.Graph()
+    g.parse(data=json.dumps(doc), format="json-ld")
+    O = rdflib.Namespace(odrl.ODRL_NS)
+    perms = list(g.objects(rdflib.URIRef("urn:p"), O.permission))
+    assert sorted(str(p) for p in perms) == ["urn:r1#1", "urn:r1#2"]
+    assert all(len(list(g.objects(p, O.action))) == 1 for p in perms)  # sh:maxCount 1 holds
+    assert (rdflib.URIRef("urn:p"), O.profile, rdflib.URIRef(odrl.ONTOS_PROFILE)) in g
+    heads = list(g.objects(None, O["or"]))
+    assert heads and all(len(list(rdflib.collection.Collection(g, h))) == 2 for h in heads)

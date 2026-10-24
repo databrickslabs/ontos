@@ -420,5 +420,24 @@
     "tracked": "__TODO__ Tracked grants",
     "definition": "__TODO__ Target",
     "semantics": "__TODO__ Releases for this target compile only the securables in its scope and ship through its allowed delivery modes."
+  },
+  "drift": {
+    "title": "__TODO__ Drift",
+    "hint": "__TODO__ Report only: the Grant Ledger compared with the live grants. Nothing is granted or revoked. The hourly job checks each target when its reconcile schedule is due.",
+    "unreadable": "__TODO__ Live grants can't be read from this platform yet — no drift check.",
+    "run": "__TODO__ Check now",
+    "none": "__TODO__ No drift report yet.",
+    "failed": "__TODO__ Drift check failed",
+    "status": {
+      "in_sync": "__TODO__ In sync",
+      "drift": "__TODO__ Drift",
+      "error": "__TODO__ Unreadable",
+      "partial": "__TODO__ Partly checked"
+    },
+    "counts": "__TODO__ {{missing}} missing · {{unmanaged}} unmanaged · {{tracked}} tracked",
+    "missing": "__TODO__ Tracked by Ontos, not on the platform",
+    "unmanaged": "__TODO__ On the platform, not tracked by Ontos",
+    "truncated": "__TODO__ Only the first securables were checked.",
+    "history": "__TODO__ Earlier"
   }
 }

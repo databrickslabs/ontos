@@ -1,0 +1,76 @@
+name: "Access Policy Drift Reconcile"
+description: "Report-only: compare each Access Target's Grant Ledger with live Unity Catalog grants"
+format: "MULTI_TASK"
+deploy_backend_source: true
+environments:
+  - environment_key: "access-reconcile-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.81.0"
+        - "databricks-sql-connector"
+        - "alembic"
+        - "fastapi"
+        - "gitpython"
+        - "pydantic[email]"
+        - "pydantic-settings"
+        - "pyyaml"
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "access_policy_reconcile"
+    spark_python_task:
+      python_file: "access_policy_reconcile.py"
+      parameters:
+        - "--targets"
+        - "{{job.parameters.targets}}"
+        - "--backend_source_path"
+        - "{{job.parameters.backend_source_path}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+        - "--product_name"
+        - "{{job.parameters.product_name}}"
+        - "--product_version"
+        - "{{job.parameters.product_version}}"
+    environment_key: "access-reconcile-env"
+
+# The job wakes up hourly and reconciles the Access Targets whose own reconcile schedule
+# (cron) fired since their last report — or the targets listed in the "targets" parameter.
+schedule:
+  quartz_cron_expression: "0 0 * * * ?"  # Hourly; each target's cron decides whether it is due
+  timezone_id: "UTC"
+  pause_status: "PAUSED"
+
+parameters:
+  targets: "scheduled"
+  backend_source_path: ""
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+  product_name: "ontos"
+  product_version: "0.0.0"
+
+configurable_parameters:
+  - name: "targets"
+    type: "string"
+    description: "'scheduled' = targets whose reconcile schedule is due; or comma-separated target keys"
+    required: true
+    default: "scheduled"
+
+timeout_seconds: 3600
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "governance"
+  workflow_type: "access_policies"
+  owner: "ontos"

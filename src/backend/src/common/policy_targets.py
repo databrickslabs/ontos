@@ -15,7 +15,7 @@ Pure module: no DB, no SDK.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 from src.common import odrl
 from src.common import uc_policy_adapter as uc
@@ -131,6 +131,10 @@ class TargetAdapter:
         """Without a live read: does a grant to add probably exist already (→ never revoked later)?"""
         return grant.implied
 
+    def grant_reader(self, grant_manager: Any) -> Optional[Any]:
+        """``(securable_type, name) -> {"success", "grants"}`` for this platform, or None if unreadable."""
+        return None
+
     # ---- hooks
     def build(self, plan: EntitlementPlan, abac: Any, resolve_object_kind: Any = None,
               target: Optional["ResolvedTarget"] = None) -> List[uc.UCGrant]:
@@ -154,6 +158,9 @@ class UnityCatalogAdapter(TargetAdapter):
         if grant.securable_type == uc.ABAC_POLICY:
             return uc.abac_ref(grant)["on_securable_fullname"]
         return grant.securable_name
+
+    def grant_reader(self, grant_manager: Any) -> Optional[Any]:
+        return getattr(grant_manager, "get_grants", None) if grant_manager is not None else None
 
     def build(self, plan: EntitlementPlan, abac: Any, resolve_object_kind: Any = None,
               target: Optional["ResolvedTarget"] = None) -> List[uc.UCGrant]:
@@ -227,14 +234,103 @@ class ResolvedTarget:
 BUILTIN_UC = ResolvedTarget(key=uc.TARGET_UC, label="Unity Catalog", adapter=_ADAPTERS[uc.TARGET_UC], builtin=True)
 
 
+_DOW_NAMES = {n: i for i, n in enumerate(("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))}
+_MON_NAMES = {n: i + 1 for i, n in enumerate(("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                                              "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"))}
+
+
+def _cron_fields(expr: str) -> List[str]:
+    """Normalize to 5 fields (minute hour day-of-month month day-of-week, Sunday = 0).
+
+    Quartz (Databricks jobs: seconds first, optional year, ``?``, Sunday = 1) and plain cron
+    are both accepted. Raises ValueError for what the matcher doesn't support.
+    """
+    parts = expr.split()
+    if len(parts) == 5:
+        mi, h, dom, mon, dow = parts
+        quartz = False
+    elif len(parts) in (6, 7):
+        _, mi, h, dom, mon, dow = parts[:6]
+        quartz = True
+    else:
+        raise ValueError("expected 5–7 fields")
+    if any(c in expr for c in "LW#"):
+        raise ValueError("L, W and # aren't supported")
+    dom, dow = ("*" if f == "?" else f for f in (dom, dow))
+    if quartz and dow != "*":
+        # Quartz numbers Sunday = 1 … Saturday = 7.
+        dow = ",".join(_shift_dow(item) for item in dow.split(","))
+    return [mi, h, dom, mon, dow]
+
+
+def _shift_dow(item: str) -> str:
+    def one(v: str) -> str:
+        return v if v.upper() in _DOW_NAMES or not v.isdigit() else str((int(v) - 1) % 7)
+    base, _, step = item.partition("/")
+    lo, _, hi = base.partition("-")
+    out = one(lo) + (f"-{one(hi)}" if hi else "")
+    return out + (f"/{step}" if step else "")
+
+
+def _field_values(field_: str, lo: int, hi: int, names: Dict[str, int]) -> set:
+    out: set = set()
+    for item in field_.split(","):
+        base, _, step = item.partition("/")
+        if base == "*":
+            a, b = lo, hi
+        else:
+            x, _, y = base.partition("-")
+            a = names.get(x.upper(), None) if not x.isdigit() else int(x)
+            b = (names.get(y.upper()) if not y.isdigit() else int(y)) if y else (hi if step else a)
+            if a is None or b is None:
+                raise ValueError(f"bad value '{item}'")
+        if not (lo <= a <= hi and lo <= b <= hi):
+            raise ValueError(f"'{item}' out of range")
+        out.update(range(a, b + 1, int(step) if step else 1))
+    return out
+
+
+def _cron_sets(expr: str) -> Tuple[set, set, set, set, set, Tuple[bool, bool]]:
+    mi, h, dom, mon, dow = _cron_fields(expr)
+    return (_field_values(mi, 0, 59, {}), _field_values(h, 0, 23, {}), _field_values(dom, 1, 31, {}),
+            _field_values(mon, 1, 12, _MON_NAMES), _field_values(dow, 0, 6, _DOW_NAMES), (dom == "*", dow == "*"))
+
+
 def cron_problem(expr: Optional[str]) -> Optional[str]:
-    """Quartz (Databricks jobs) or 5-field cron — structural check only."""
+    """Quartz (Databricks jobs) or 5-field cron, as far as :func:`cron_due` understands it."""
     if not expr:
         return None
-    parts = expr.split()
-    if len(parts) not in (5, 6, 7):
-        return f"'{expr}' is not a cron expression (expected 5–7 fields)"
+    try:
+        _cron_sets(expr)
+    except ValueError as e:
+        return f"'{expr}' is not a supported cron expression ({e})"
     return None
+
+
+def cron_due(expr: str, last: Optional[Any], now: Any, max_days: int = 31) -> bool:
+    """Has a scheduled minute passed since ``last`` (exclusive) up to ``now``? (UTC datetimes)
+
+    Never run → due. Older than ``max_days`` → due (no need to walk further back).
+    """
+    from datetime import timedelta
+
+    if last is None:
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=now.tzinfo)
+    if now - last > timedelta(days=max_days):
+        return True
+    mins, hours, doms, mons, dows, (dom_any, dow_any) = _cron_sets(expr)
+    t = last.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    while t <= now:
+        if t.minute in mins and t.hour in hours and t.month in mons:
+            dom_ok, dow_ok = t.day in doms, (t.isoweekday() % 7) in dows
+            # Classic cron: when both day fields are restricted, either may match.
+            day_ok = dom_ok and dow_ok if (dom_any or dow_any) else dom_ok or dow_ok
+            if day_ok:
+                return True
+        t += timedelta(minutes=1)
+    return False
 
 
 def restrict(plan: EntitlementPlan, target: ResolvedTarget) -> None:

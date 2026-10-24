@@ -853,6 +853,7 @@ class AccessPoliciesManager:
             out.update({f: getattr(row, f) for f in TARGET_FIELDS})
             adapter = targets_mod.get_adapter(row.system or "")
             out["system_label"] = adapter.label if adapter else row.system
+            out["capabilities"] = sorted(adapter.capabilities) if adapter else []
             cached = getattr(row, "_tracked_grants", None)  # set in bulk by list views
             out["tracked_grants"] = cached if cached is not None else self.tracked_grants(db, row.key)
         else:

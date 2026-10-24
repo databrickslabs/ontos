@@ -248,3 +248,23 @@ class AccessGrantLedgerDb(Base):
     revoked_release_id = Column(String, ForeignKey("access_policy_releases.id", ondelete="SET NULL"), nullable=True)
     granted_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+# ------------------------------------------------------------- drift (Phase 4)
+
+class AccessDriftReportDb(Base):
+    """A report-only comparison of a target's Grant Ledger with the live platform grants.
+
+    ``missing`` = tracked by Ontos but not on the platform (revoked out of band); ``unmanaged`` =
+    on a tracked securable but unknown to Ontos (granted out of band). Nothing is changed.
+    """
+    __tablename__ = "access_drift_reports"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    target = Column(String, nullable=False, index=True)
+    # in_sync | drift | error
+    status = Column(String, nullable=False)
+    checked_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    checked_by = Column(String, nullable=True)
+    counts = Column(JSON, nullable=False, default=dict)
+    report = Column(JSON, nullable=False, default=dict)

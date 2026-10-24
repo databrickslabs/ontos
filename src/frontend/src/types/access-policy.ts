@@ -120,6 +120,7 @@ export interface AccessTarget extends AccessEntityBase {
   key: string;
   system: string;
   system_label: string;
+  capabilities: string[];
   connection: Record<string, unknown>;
   scope: string[];
   delivery_modes: DeliveryModeKey[];
@@ -424,4 +425,30 @@ export interface AgreementForParty {
   prohibitions: { action: string; target: OdrlRef; constraint: OdrlConstraint[] }[];
   obligations: { action: string; target: OdrlRef; constraint: OdrlConstraint[] }[];
   duties: DutyStatus[];
+}
+
+// ------------------------------------------------------------ drift (Phase 4)
+
+export interface DriftGrant {
+  principal: string;
+  securable_type: string;
+  securable_name: string;
+  privilege: string;
+}
+
+export interface DriftReport {
+  id: string;
+  target: string;
+  status: 'in_sync' | 'drift' | 'partial' | 'error';
+  checked_at: string;
+  checked_by: string | null;
+  counts: { missing?: number; unmanaged?: number; tracked?: number; errors?: number };
+  report?: {
+    missing: DriftGrant[];
+    unmanaged: DriftGrant[];
+    errors: string[];
+    securables_checked: number;
+    securables_tracked: number;
+    truncated: boolean;
+  };
 }

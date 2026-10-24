@@ -396,6 +396,35 @@ def revoke_expired(db: DBSessionDep, current_user: AuditCurrentUserDep,
             "revoked": (row.changes or {}).get("remove", []) if row else []}
 
 
+# ------------------------------------------------- drift (report only, Phase 4)
+
+@router.get("/drift-reports")
+async def list_drift_reports(db: DBSessionDep, target: Optional[str] = Query(None),
+                             limit: int = Query(50, ge=1, le=500), _: bool = _READ):
+    return [releases.drift_to_dict(r) for r in releases.drift_reports(db, target, limit)]
+
+
+@router.get("/drift-reports/{report_id}")
+async def get_drift_report(report_id: str, db: DBSessionDep, _: bool = _READ):
+    try:
+        return releases.drift_to_dict(releases.drift_report(db, report_id), full=True)
+    except AccessPolicyError as e:
+        raise _http(e)
+
+
+@router.post("/drift-reports", status_code=201)
+def reconcile_target(db: DBSessionDep, current_user: AuditCurrentUserDep,
+                     payload: RevokeExpiredRequest = Body(default_factory=RevokeExpiredRequest),
+                     delivery_service: Any = Depends(get_delivery_service), _: bool = _ADMIN):
+    """Read live grants for a target's ledger and store a drift report (changes nothing)."""
+    try:
+        # The target's adapter picks the reader (UC: the GrantManager) — never UC for another platform.
+        row = releases.reconcile(db, payload.target, _grant_manager(delivery_service), _email(current_user))
+    except AccessPolicyError as e:
+        raise _http(e)
+    return releases.drift_to_dict(row, full=True)
+
+
 # ------------------------------------------------- generic per-kind CRUD
 
 def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any, write: Any = _WRITE) -> None:

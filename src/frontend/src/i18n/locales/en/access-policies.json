@@ -420,5 +420,24 @@
     "tracked": "Tracked grants",
     "definition": "Target",
     "semantics": "Releases for this target compile only the securables in its scope and ship through its allowed delivery modes."
+  },
+  "drift": {
+    "title": "Drift",
+    "hint": "Report only: the Grant Ledger compared with the live grants. Nothing is granted or revoked. The hourly job checks each target when its reconcile schedule is due.",
+    "unreadable": "Live grants can't be read from this platform yet — no drift check.",
+    "run": "Check now",
+    "none": "No drift report yet.",
+    "failed": "Drift check failed",
+    "status": {
+      "in_sync": "In sync",
+      "drift": "Drift",
+      "error": "Unreadable",
+      "partial": "Partly checked"
+    },
+    "counts": "{{missing}} missing · {{unmanaged}} unmanaged · {{tracked}} tracked",
+    "missing": "Tracked by Ontos, not on the platform",
+    "unmanaged": "On the platform, not tracked by Ontos",
+    "truncated": "Only the first securables were checked.",
+    "history": "Earlier"
   }
 }

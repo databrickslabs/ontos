@@ -46,6 +46,7 @@ import AccessEntityFormDialog from '@/components/access-policies/access-entity-f
 import AccessStatusBadge from '@/components/access-policies/access-status-badge';
 import CheckAccessPanel from '@/components/access-policies/check-access-panel';
 import DutiesPanel from '@/components/access-policies/duties-panel';
+import DriftPanel from '@/components/access-policies/drift-panel';
 import { ENFORCEMENT_VARIANT } from '@/components/access-policies/constraint-editor';
 import { RULE_KINDS, describeConstraint, describeRef } from '@/components/access-policies/odrl-helpers';
 import type {
@@ -751,6 +752,10 @@ export default function AccessPolicyDetails() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {target && target.status !== 'draft' && (
+        <DriftPanel targetKey={target.key} canRun={canWrite} readable={(target.capabilities || []).includes('read_grants')} />
       )}
 
       {policy && <CheckAccessPanel policyId={policy.id} />}

@@ -151,6 +151,7 @@ class ReleaseConfirmRequest(BaseModel):
 
 
 class RevokeExpiredRequest(BaseModel):
+    """A target key (revoke-expired sweep, drift reconcile)."""
     target: str = "uc"
 
 

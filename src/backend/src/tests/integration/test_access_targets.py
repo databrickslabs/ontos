@@ -306,3 +306,102 @@ def test_snowflake_target_rejects_direct_and_untargeted_platforms_are_reported(p
         {"target": "snowflake:db.s.t", "action": "read", "assignee": "group:g"}]}, "SF only")
     issues = rm.compile(db_session, "uc")["issues"]
     assert any(i["code"] == "no_target" for i in issues)
+
+
+# ------------------------------------------------------------ drift reconcile (P4c)
+
+from datetime import datetime as _dt, timezone as _tz  # noqa: E402
+
+
+class _Live:
+    """GrantManager fake over {(type, name): [(principal, privilege)]}; ``fail`` = unreadable securables."""
+
+    def __init__(self, grants, fail=()):
+        self.grants, self.fail = grants, set(fail)
+
+    def get_grants(self, stype, name):
+        if (stype, name) in self.fail:
+            return {"success": False, "error": "PERMISSION_DENIED"}
+        rows = self.grants.get((stype, name), [])
+        return {"success": True, "grants": [{"principal": p, "privileges": [v]} for p, v in rows]}
+
+
+IN_SYNC = {("catalog", "main"): [("analysts", "USE_CATALOG")],
+           ("schema", "main.sales"): [("analysts", "USE_SCHEMA")],
+           ("table", "main.sales.orders"): [("ANALYSTS", "SELECT")]}
+
+
+def _shipped(policies, rm, db, **target):
+    _policy(policies, db, SALES, "Sales")
+    if target:
+        _target(policies, db, "uc", **target)
+    _ship(rm, db, "uc", Delivery([DeliveryMode.DIRECT], FakeGrants()))
+
+
+def test_reconcile_reports_missing_and_unmanaged_and_changes_nothing(policies, rm, db_session: Session):
+    _shipped(policies, rm, db_session, reconcile_schedule="0 0 5 * * ?")
+    before = rm.ledger(db_session, "uc")
+    live = _Live({("catalog", "main"): [("analysts", "USE_CATALOG"), ("account users", "USE_CATALOG")],
+                  ("schema", "main.sales"): [("analysts", "USE_SCHEMA"), ("owners", "ALL_PRIVILEGES")],
+                  # SELECT revoked out of band; someone else got MODIFY on the table.
+                  ("table", "main.sales.orders"): [("Mallory@x.com", "MODIFY")]})
+    reports = rm.reconcile_scheduled(db_session, live, "job")
+    assert [r.status for r in reports] == ["drift"]
+    r = reports[0]
+    # Grants of others on the shared catalog / schema (implied-only for Ontos) aren't drift.
+    assert r.counts["missing"] == 1 and r.counts["unmanaged"] == 1
+    assert r.report["missing"][0]["privilege"] == "SELECT" and "in_sync" not in r.report
+    assert rm.ledger(db_session, "uc") == before  # report only
+
+
+def test_partly_unreadable_is_never_in_sync(policies, rm, db_session: Session):
+    _shipped(policies, rm, db_session)
+    live = _Live(IN_SYNC, fail=[("table", "main.sales.orders")])
+    assert rm.reconcile(db_session, "uc", live, ADMIN).status == "partial"
+    assert rm.reconcile(db_session, "uc", _Live(IN_SYNC), ADMIN).status == "in_sync"
+
+
+def test_drift_notifications_follow_the_drift_not_the_ledger(policies, rm, db_session: Session, monkeypatch):
+    _shipped(policies, rm, db_session)
+    sent = []
+    monkeypatch.setattr(PolicyReleaseManager, "_notify_drift", staticmethod(lambda db, t, row: sent.append(row.id)))
+    gone = _Live({**IN_SYNC, ("table", "main.sales.orders"): []})
+    rm.reconcile(db_session, "uc", gone, ADMIN)
+    rm.reconcile(db_session, "uc", gone, ADMIN)  # same drift → no repeat
+    assert len(sent) == 1
+    other = _Live({**IN_SYNC, ("schema", "main.sales"): []})  # a different grant is missing now
+    rm.reconcile(db_session, "uc", other, ADMIN)
+    assert len(sent) == 2
+
+
+def test_reconcile_not_for_unreadable_platforms_and_due_by_cron(policies, rm, db_session: Session):
+    _shipped(policies, rm, db_session, reconcile_schedule="0 0 6 * * ?")
+    _target(policies, db_session, "sf", system="snowflake", modes=["manual"])
+    with pytest.raises(AccessPolicyError):
+        rm.reconcile(db_session, "sf", _Live(IN_SYNC), ADMIN)
+    morning = _dt(2026, 10, 24, 6, 30, tzinfo=_tz.utc)
+    assert [t.key for t in rm.due_targets(db_session, now=morning)] == ["uc"]  # never checked
+    rm.reconcile_scheduled(db_session, _Live(IN_SYNC), "job", now=morning)
+    rm.drift_reports(db_session, "uc")[0].checked_at = morning
+    assert rm.due_targets(db_session, now=morning.replace(hour=12)) == []  # 06:00 already covered
+    assert [t.key for t in rm.due_targets(db_session, now=morning.replace(day=25, hour=6, minute=1))] == ["uc"]
+    assert len(rm.reconcile_scheduled(db_session, _Live(IN_SYNC), "job", ["uc"])) == 1
+
+
+def test_one_failing_target_does_not_lose_the_others(policies, rm, db_session: Session, monkeypatch):
+    _shipped(policies, rm, db_session, reconcile_schedule="* * * * *")
+    monkeypatch.setattr(PolicyReleaseManager, "reconcile", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    reports = rm.reconcile_scheduled(db_session, _Live(IN_SYNC), "job")
+    assert [r.status for r in reports] == ["error"]
+
+
+def test_cron_matcher():
+    assert pt.cron_problem("0 0 6 * * ?") is None and pt.cron_problem("0 0 6 L * ?")
+    assert pt.cron_problem("61 * * * *")
+    last = _dt(2026, 10, 23, 6, 0, tzinfo=_tz.utc)  # a Friday
+    assert pt.cron_due("0 0 6 * * ?", last, last.replace(day=24, hour=6))
+    assert not pt.cron_due("0 0 6 * * ?", last, last.replace(hour=23))
+    # Quartz day-of-week: 2 = Monday.
+    assert not pt.cron_due("0 0 6 ? * 2", last, last.replace(day=25, hour=7))
+    assert pt.cron_due("0 0 6 ? * 2", last, last.replace(day=26, hour=6))
+    assert pt.cron_due("0 6 * * MON", last, last.replace(day=26, hour=6))

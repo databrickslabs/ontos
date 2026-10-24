@@ -310,6 +310,7 @@
       "duplicateStepIds": "Duas etapas têm o mesmo ID.",
       "stepUnknownReference": "A etapa \"{{step}}\" aponta o ramo de {{branch}} para \"{{target}}\", que não está no workflow.",
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
+      "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
@@ -529,6 +530,7 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nenhuma política selecionada",
+    "policyHint": "Sugerida: {{name}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Não definido",
     "connectionLabel": "Conexão: {{name}}",

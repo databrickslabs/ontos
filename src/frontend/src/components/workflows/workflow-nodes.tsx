@@ -770,7 +770,7 @@ export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Badge variant="outline" className="text-xs dark:border-indigo-400/50 dark:text-indigo-200">policy_check</Badge>
-        {policyName && (
+        {policyName && policyId && (
           <div className={nodeTextStyles.description + " mt-1"}>
             {t('workflows:nodes.policyLabel', { name: policyName })}
           </div>
@@ -780,10 +780,17 @@ export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
             {t('workflows:nodes.idLabel', { id: policyId.slice(0, 8) })}...
           </div>
         )}
-        {!policyName && !policyId && (
-          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-            {t('workflows:nodes.noPolicySelected')}
-          </div>
+        {!policyId && (
+          <>
+            <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              {t('workflows:nodes.noPolicySelected')}
+            </div>
+            {policyName && (
+              <div className={nodeTextStyles.description}>
+                {t('workflows:nodes.policyHint', { name: policyName })}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
       <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />

@@ -310,6 +310,7 @@
       "duplicateStepIds": "Due passaggi hanno lo stesso ID.",
       "stepUnknownReference": "Il passaggio \"{{step}}\" indirizza il ramo di {{branch}} a \"{{target}}\", che non è nel workflow.",
       "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
+      "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
       "branch": {
         "on_pass": "successo",
         "on_fail": "errore"
@@ -529,6 +530,7 @@
     "policyLabel": "Criterio: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nessun criterio selezionato",
+    "policyHint": "Suggerito: {{name}}",
     "reviewerLabel": "Revisore:",
     "notSet": "Non impostato",
     "connectionLabel": "Connessione: {{name}}",

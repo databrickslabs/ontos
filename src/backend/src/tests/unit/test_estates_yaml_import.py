@@ -456,6 +456,34 @@ def test_empty_file_marks_done(db_session, clean_app_settings):
         assert app_settings_repo.get_by_key(db_session, 'estates_yaml_import_done') == 'true'
 
 
+def test_missing_file_does_not_mark_done(db_session, clean_app_settings):
+    """A missing file leaves the marker unset so a restored file is imported later."""
+    from src.db_models.estates import EstateDb
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = Path(tmpdir) / 'estates.yaml'
+
+        assert import_estates_from_yaml_once(db_session, yaml_path=yaml_path) is False
+        assert app_settings_repo.get_by_key(db_session, 'estates_yaml_import_done') is None
+        assert db_session.query(EstateDb).count() == 0
+
+        # The file appears later (e.g. a customised copy is put back): next call imports it
+        yaml_path.write_text(yaml.dump([
+            {
+                'name': 'Restored Estate',
+                'description': 'Put back after upgrade',
+                'workspace_url': 'https://restored.com',
+                'cloud_type': 'aws',
+                'metastore_name': 'restored',
+            }
+        ]))
+
+        assert import_estates_from_yaml_once(db_session, yaml_path=yaml_path) is True
+        assert app_settings_repo.get_by_key(db_session, 'estates_yaml_import_done') == 'true'
+        estates = EstateManager().list_estates(db_session)
+        assert [e.name for e in estates] == ['Restored Estate']
+
+
 def test_legacy_sharing_policies_converted(db_session, clean_app_settings):
     """Legacy sharing_policies and business_glossary converted."""
     with tempfile.TemporaryDirectory() as tmpdir:

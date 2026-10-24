@@ -73,16 +73,6 @@
     "security": [
       "• Abilita funzionalità di sicurezza avanzate (ad es. privacy differenziale) sugli asset."
     ],
-    "entitlements": [
-      "• Definisci persona riutilizzabili (ad es. Analista, Ingegnere).",
-      "• Assegna le persona ai gruppi Databricks.",
-      "• Semplifica la gestione dei privilegi su larga scala."
-    ],
-    "entitlements-sync": [
-      "• Mantieni gli entitlement allineati con i sistemi esterni (ad es. IDP).",
-      "• Rileva e risolvi i conflitti di sincronizzazione.",
-      "• Mantieni i log di audit di tutte le modifiche."
-    ],
     "catalog-commander": [
       "• Explorer a doppio riquadro ispirato a Norton Commander per gestire gli asset del catalogo.",
       "• Copia/sposta tabelle e schemi con facilità."

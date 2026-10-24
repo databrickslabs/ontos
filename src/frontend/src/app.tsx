@@ -34,11 +34,9 @@ import EstateManager from './views/estate-manager';
 import EstateDetailsView from './views/estate-details';
 import MasterDataManagement from './views/master-data-management';
 import SecurityFeatures from './views/security-features';
-import Entitlements from './views/entitlements';
 import AccessPolicies from './views/access-policies';
 import AccessPolicyDetails from './views/access-policy-details';
 import AccessPolicyReleaseDetails from './views/access-policy-release-details';
-import EntitlementsSync from './views/entitlements-sync';
 import DataAssetReviews from './views/data-asset-reviews';
 import DataAssetReviewDetails from './views/data-asset-review-details';
 import DataCatalog from './views/data-catalog';
@@ -248,8 +246,9 @@ export default function App() {
               <Route path="/access-policies" element={<AccessPolicies />} />
               <Route path="/access-policies/releases/:releaseId" element={<AccessPolicyReleaseDetails />} />
               <Route path="/access-policies/:segment/:entityId" element={<AccessPolicyDetails />} />
-              <Route path="/entitlements" element={<Entitlements />} />
-              <Route path="/entitlements-sync" element={<EntitlementsSync />} />
+              {/* Retired mockups: Access Policies (audiences, targets) replace them. */}
+              <Route path="/entitlements" element={<Navigate to="/access-policies?tab=audiences" replace />} />
+              <Route path="/entitlements-sync" element={<Navigate to="/access-policies?tab=targets" replace />} />
 
               {/* Settings - sidebar layout with nested routes */}
               <Route path="/settings" element={<SettingsLayout />}>

@@ -122,7 +122,7 @@ Ontos supports role-based access control with predefined roles:
 | **Data Steward** | Review and approve contracts/products |
 | **Data Producer** | Create and manage data products |
 | **Data Consumer** | Discover and use data products |
-| **Security Officer** | Security and entitlements management |
+| **Security Officer** | Security features and Access Policies |
 
 ## Project Structure
 

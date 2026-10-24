@@ -61,16 +61,6 @@
     "security": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
     ],
-    "entitlements": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ],
-    "entitlements-sync": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
-    ],
     "catalog-commander": [
       "• Norton Commander-inspired dual-pane explorer for managing catalog assets.",
       "• Copy/move tables and schemas easily."

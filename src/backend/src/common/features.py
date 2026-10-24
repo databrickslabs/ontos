@@ -136,16 +136,6 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Stewards author ODRL policies, audiences, asset collections
         'group': GROUP_GOVERN,
     },
-    'entitlements': {
-        'name': 'Entitlements',
-        'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages personas/groups
-        'group': GROUP_GOVERN,
-    },
-    'entitlements-sync': {
-        'name': 'Entitlements Sync',
-        'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages sync jobs
-        'group': GROUP_GOVERN,
-    },
     'process-workflows': {
         # Cross-cutting: process workflows are surfaced inline (notifications
         # for approvals, status badges on entities) — there is no dedicated

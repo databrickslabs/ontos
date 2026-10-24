@@ -277,7 +277,7 @@ On first startup, if no roles exist, the application creates default roles:
 | **Data Steward** | Read/Write access to data governance features (Products, Contracts, Glossary). |
 | **Data Consumer** | Read-only access to data discovery features. |
 | **Data Producer** | Read-only generally, with write access to create/manage Data Products and Contracts. |
-| **Security Officer** | Administrative access to security and entitlements features. |
+| **Security Officer** | Administrative access to security features and Access Policies. |
 
 These roles can be viewed and modified in **Settings → RBAC** after initial startup.
 

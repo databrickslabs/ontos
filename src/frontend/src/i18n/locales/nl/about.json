@@ -73,16 +73,6 @@
     "security": [
       "• Schakel geavanceerde beveiligingsfuncties (bijv. differentiële privacy) in op assets."
     ],
-    "entitlements": [
-      "• Definieer herbruikbare persona's (bijv. Analist, Engineer).",
-      "• Wijs persona's toe aan Databricks-groepen.",
-      "• Vereenvoudig het beheer van rechten op schaal."
-    ],
-    "entitlements-sync": [
-      "• Houd entitlements afgestemd op externe systemen (bijv. IDP).",
-      "• Detecteer en los synchronisatieconflicten op.",
-      "• Houd auditlogboeken bij van alle wijzigingen."
-    ],
     "catalog-commander": [
       "• Door Norton Commander geïnspireerde verkenner met twee panelen voor het beheren van catalogusassets.",
       "• Kopieer/verplaats tabellen en schema's eenvoudig."

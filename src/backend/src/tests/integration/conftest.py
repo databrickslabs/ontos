@@ -189,24 +189,6 @@ def no_workspace_network(monkeypatch, mock_workspace_client):
     yield mock_workspace_client
 
 
-@pytest.fixture(autouse=True)
-def entitlements_file_copy(monkeypatch, tmp_path):
-    """Keep the entitlements routes from rewriting the repo's entitlements.yaml.
-
-    Their module-level manager saves every change to the file it loaded.
-    """
-    import shutil
-
-    from src.routes import entitlements_routes
-
-    manager = entitlements_routes.entitlements_manager
-    if manager._yaml_path:
-        copy = tmp_path / 'entitlements.yaml'
-        shutil.copy(manager._yaml_path, copy)
-        monkeypatch.setattr(manager, '_yaml_path', str(copy))
-    yield
-
-
 def _build_search_index():
     """Set up the SearchManager as the app's startup does after the managers."""
     from src.common.search_interfaces import SearchableAsset

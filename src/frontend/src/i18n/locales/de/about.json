@@ -73,16 +73,6 @@
     "security": [
       "• Erweiterte Sicherheitsfunktionen (z. B. Differential Privacy) für Assets aktivieren."
     ],
-    "entitlements": [
-      "• Wiederverwendbare Personas definieren (z. B. Analyst, Engineer).",
-      "• Personas Databricks-Gruppen zuweisen.",
-      "• Berechtigungsverwaltung im großen Maßstab vereinfachen."
-    ],
-    "entitlements-sync": [
-      "• Entitlements mit externen Systemen (z. B. IDP) synchron halten.",
-      "• Synchronisierungskonflikte erkennen und beheben.",
-      "• Audit-Logs aller Änderungen führen."
-    ],
     "catalog-commander": [
       "• Von Norton Commander inspirierter Dual-Pane-Explorer zur Verwaltung von Katalog-Assets.",
       "• Tabellen und Schemas einfach kopieren/verschieben."

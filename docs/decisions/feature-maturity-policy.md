@@ -27,7 +27,7 @@ the sidebar (`navigation.tsx`) and on the About cards (`about.tsx`).
 |---|---|
 | **GA** | Marketplace, Search, Data Catalog, Assets, Concepts, Contracts, Products, My Products, My Requests |
 | **Beta** | Compliance, Master Data Management, Asset Reviews |
-| **Alpha** | Security Features, Entitlements, Entitlements Sync, Estate Manager, Catalog Commander |
+| **Alpha** | Security Features, Estate Manager, Catalog Commander |
 
 ## Maturity is NOT the permission registry
 

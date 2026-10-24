@@ -6,8 +6,6 @@ from . import data_asset_reviews_routes
 from . import data_contracts_routes
 from . import data_domains_routes
 from . import data_product_routes
-from . import entitlements_routes
-from . import entitlements_sync_routes
 from . import estate_manager_routes
 from . import mdm_routes
 from . import metadata_routes

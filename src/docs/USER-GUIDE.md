@@ -2787,7 +2787,7 @@ Ontos uses Role-Based Access Control (RBAC) to manage permissions.
 **Purpose**: Security and access control
 
 **Permissions**:
-- Entitlements: Read/Write
+- Access Policies: Admin
 - Compliance (security policies): Read/Write
 - Audit trail: Read Only
 - Asset reviews (security): Read/Write

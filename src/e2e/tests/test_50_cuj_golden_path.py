@@ -72,15 +72,11 @@ class TestCUJGoldenPath:
         )
 
     # ONT-CUJ-002
-    def test_CUJ_002_entitlement_roles(self, admin_api, url):
-        """Admin: at least 4 default role mappings visible in entitlements."""
-        resp = admin_api.get(url("/api/entitlements/personas"))
+    def test_CUJ_002_access_policy_audiences(self, admin_api, url):
+        """Admin: Access Policies audiences (who may access data) are listable."""
+        resp = admin_api.get(url("/api/access-policies/audiences"))
         assert resp.status_code == 200, f"CUJ-002: {resp.status_code} {resp.text[:300]}"
-        personas = resp.json()
-        assert len(personas) >= 4, (
-            f"CUJ-002: expected >=4 default role mappings, got {len(personas)}: "
-            f"{[p.get('name') for p in personas]}"
-        )
+        assert isinstance(resp.json(), list), f"CUJ-002: expected a list: {resp.text[:300]}"
 
     # ONT-CUJ-003
     def test_CUJ_003_load_retail_demo_data(self, admin_api, url):

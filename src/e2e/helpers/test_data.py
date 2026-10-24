@@ -352,27 +352,6 @@ def make_dataset_instance(**overrides) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Entitlements Personas
-# ---------------------------------------------------------------------------
-def make_persona(**overrides) -> Dict[str, Any]:
-    defaults = {
-        "name": f"{E2E_PREFIX}persona-{_uid()}",
-        "description": "E2E persona created by automated tests",
-        "privileges": [],
-        "groups": [],
-    }
-    defaults.update(overrides)
-    return defaults
-
-
-def mutate_persona(original: Dict[str, Any]) -> Dict[str, Any]:
-    m = deepcopy(original)
-    m["name"] = f"{E2E_PREFIX}persona-{_uid()}"
-    m["description"] = "Updated by E2E test"
-    return m
-
-
-# ---------------------------------------------------------------------------
 # Security Features (extended)
 # ---------------------------------------------------------------------------
 def mutate_security_feature(original: Dict[str, Any]) -> Dict[str, Any]:

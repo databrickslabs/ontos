@@ -42,7 +42,7 @@ Below are the primary use cases for leveraging Ontos. While this list is not exh
 
 :bulb: **Compliance Auditing:** Continuously monitor and score data assets against defined compliance rules with automated notifications for violations
 
-:bulb: **Entitlement Management:** Combine access privileges into personas and assign them to directory groups for streamlined permission management
+:bulb: **Access Policies:** Author access rules once as W3C ODRL policies for audiences and assets, then compile and deliver them to Unity Catalog (and other platforms) with tracked, time-bound grants
 
 ## How Ontos works
 

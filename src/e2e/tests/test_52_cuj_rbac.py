@@ -312,18 +312,19 @@ class TestCUJRBACMatrix:
         assert resp.status_code < 500, f"RBAC-023: 5xx on audit: {resp.status_code}"
 
     # ONT-RBAC-024
-    def test_RBAC_024_admin_manage_entitlements(self, admin_api, url):
-        """Admin: entitlements/personas accessible."""
-        resp = admin_api.get(url("/api/entitlements/personas"))
-        assert resp.status_code in (200, 403), f"RBAC-024: {resp.status_code}"
+    def test_RBAC_024_admin_manage_access_targets(self, admin_api, url):
+        """Admin: Access Policy targets (where grants are pushed) accessible."""
+        resp = admin_api.get(url("/api/access-policies/targets"))
+        assert resp.status_code == 200, f"RBAC-024: {resp.status_code}"
 
     # ONT-RBAC-025
     @pytest.mark.requires_persona("producer")
-    def test_RBAC_025_producer_denied_entitlements(self, producer_api, url):
-        """Producer: entitlements/personas → 403."""
-        resp = producer_api.get(url("/api/entitlements/personas"))
-        assert resp.status_code in (403, 404), (
-            f"RBAC-025: producer entitlements should be denied, got {resp.status_code}"
+    def test_RBAC_025_producer_denied_access_targets(self, producer_api, url):
+        """Producer: creating an Access Target (admin-only) → 403."""
+        resp = producer_api.post(url("/api/access-policies/targets"),
+                                 json={"name": "rbac-025", "key": "rbac-025", "system": "uc"})
+        assert resp.status_code == 403, (
+            f"RBAC-025: producer must not configure access targets, got {resp.status_code}"
         )
 
     # ONT-RBAC-026

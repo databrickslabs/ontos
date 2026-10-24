@@ -55,7 +55,7 @@ export const AUDIT_FEATURES = {
   SEMANTIC_MODELS: 'semantic-models',
   COMPLIANCE: 'compliance',
   DATA_ASSET_REVIEWS: 'data-asset-reviews',
-  ENTITLEMENTS: 'entitlements',
+  ACCESS_POLICIES: 'access-policies',
   AUDIT: 'audit',
 } as const;
 

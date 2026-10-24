@@ -142,7 +142,7 @@ After seeding they are editable like any other role.
 | [Data Steward](#data-steward) | You curate a slice — usually a domain. You're the gatekeeper at two moments: contract approval and product certification. Outside those gates, you maintain glossary terms and triage reviews. |
 | [Data Producer](#data-producer) | You build products and contracts. You spend your time on the detail pages — composing deliverables, drafting schemas, wiring quality checks. Lifecycle promotion is your day job; certification is somebody else's. |
 | [Data Consumer](#data-consumer) | You find products and request access. You don't draft anything — you subscribe, sign agreements, provide feedback. |
-| [Security Officer](#security-officer) | You configure security features, entitlements, access classifications. You're consulted on contract approvals involving PII or restricted data. You sign off on the security side of certification. |
+| [Security Officer](#security-officer) | You configure security features, access policies and targets, access classifications. You're consulted on contract approvals involving PII or restricted data. You sign off on the security side of certification. |
 
 #### Admin {#admin}
 
@@ -183,8 +183,7 @@ Cross-cutting governance authority.
 | estate-manager | Admin |
 | master-data | Admin |
 | security-features | Admin |
-| entitlements | Admin |
-| entitlements-sync | Admin |
+| access-policies | Admin |
 | data-asset-reviews | Admin |
 | catalog-commander | Full |
 | process-workflows | Read-only |
@@ -247,13 +246,12 @@ Read-only access for discovery, subscription, and commenting.
 
 #### Security Officer {#security-officer}
 
-Focused on security configuration and entitlements.
+Focused on security configuration and access policies.
 
 | Feature | Level |
 |---|---|
 | security-features | Admin |
-| entitlements | Admin |
-| entitlements-sync | Admin |
+| access-policies | Admin |
 | compliance | Read/Write |
 | process-workflows | Read-only |
 | data-asset-reviews | Read-only |

@@ -71,14 +71,6 @@
     "name": "Access Policies",
     "description": "Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
   },
-  "entitlements": {
-    "name": "Entitlements",
-    "description": "Manage access privileges through personas and groups."
-  },
-  "entitlements-sync": {
-    "name": "Entitlements Sync",
-    "description": "Synchronize entitlements with external systems."
-  },
   "search": {
     "name": "Search",
     "description": "Search across data products, contracts, and knowledge graph."

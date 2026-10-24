@@ -44,8 +44,6 @@ roles:
       estate-manager: Admin
       master-data: Admin
       security-features: Admin
-      entitlements: Admin
-      entitlements-sync: Admin
       data-asset-reviews: Admin
       catalog-commander: Full
       comments: Read/Write
@@ -164,8 +162,6 @@ roles:
       - security-officers
     feature_permissions:
       security-features: Admin
-      entitlements: Admin
-      entitlements-sync: Admin
       compliance: Read/Write
       access-policies: Admin
       data-asset-reviews: Read-only

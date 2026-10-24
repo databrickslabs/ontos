@@ -186,7 +186,7 @@ def get_change_log_manager(request: Request) -> ChangeLogManager:
         logger.info("Initialized ChangeLogManager and stored on app.state.change_log_manager")
     return manager
 
-# Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added
+# Add getters for Compliance, Estate, MDM, Security, Catalog Commander managers when they are added
 
 def get_assets_manager(request: Request) -> AssetsManager:
     manager = getattr(request.app.state, 'assets_manager', None)

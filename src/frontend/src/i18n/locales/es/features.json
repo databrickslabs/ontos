@@ -71,14 +71,6 @@
     "name": "__TODO__ Access Policies",
     "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
   },
-  "entitlements": {
-    "name": "Derechos",
-    "description": "Gestiona privilegios de acceso mediante personas y grupos."
-  },
-  "entitlements-sync": {
-    "name": "Sincronización de derechos",
-    "description": "Sincroniza derechos con sistemas externos."
-  },
   "search": {
     "name": "Búsqueda",
     "description": "Busca entre productos de datos, contratos y grafo de conceptos."

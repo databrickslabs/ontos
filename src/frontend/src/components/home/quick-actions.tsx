@@ -44,7 +44,7 @@ export default function QuickActions() {
 
       // Govern
       { featureId: 'data-asset-reviews', requiredLevel: FeatureAccessLevel.READ_ONLY, action: 'review' },
-      { featureId: 'entitlements', requiredLevel: FeatureAccessLevel.READ_ONLY, action: 'manage' },
+      { featureId: 'access-policies', requiredLevel: FeatureAccessLevel.READ_ONLY, action: 'manage' },
       { featureId: 'compliance', requiredLevel: FeatureAccessLevel.READ_ONLY, action: 'monitor' },
 
       // Deploy

@@ -644,7 +644,7 @@ interface SplitPaneSkeletonProps {
 
 /**
  * Skeleton for split-pane layouts (sidebar + main content). Used by
- * asset-explorer, entitlements, master-data-management, catalog-commander,
+ * asset-explorer, master-data-management, catalog-commander,
  * collections, hierarchy-browser, ontology-generator, schema-importer.
  */
 export function SplitPaneSkeleton({

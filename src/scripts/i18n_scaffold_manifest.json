@@ -9500,20 +9500,8 @@
   {
     "language": "de",
     "namespace": "settings",
-    "key": "personaNav.entitlements",
-    "en": "Entitlements"
-  },
-  {
-    "language": "de",
-    "namespace": "settings",
     "key": "personaNav.securityFeatures",
     "en": "Security Features"
-  },
-  {
-    "language": "de",
-    "namespace": "settings",
-    "key": "personaNav.entitlementsSync",
-    "en": "Entitlements Sync"
   },
   {
     "language": "de",
@@ -24834,26 +24822,6 @@
     "key": "details.security",
     "en": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
-    ]
-  },
-  {
-    "language": "de",
-    "namespace": "about",
-    "key": "details.entitlements",
-    "en": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ]
-  },
-  {
-    "language": "de",
-    "namespace": "about",
-    "key": "details.entitlements-sync",
-    "en": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
     ]
   },
   {
@@ -40669,20 +40637,8 @@
   {
     "language": "es",
     "namespace": "settings",
-    "key": "personaNav.entitlements",
-    "en": "Entitlements"
-  },
-  {
-    "language": "es",
-    "namespace": "settings",
     "key": "personaNav.securityFeatures",
     "en": "Security Features"
-  },
-  {
-    "language": "es",
-    "namespace": "settings",
-    "key": "personaNav.entitlementsSync",
-    "en": "Entitlements Sync"
   },
   {
     "language": "es",
@@ -56237,26 +56193,6 @@
     "key": "details.security",
     "en": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
-    ]
-  },
-  {
-    "language": "es",
-    "namespace": "about",
-    "key": "details.entitlements",
-    "en": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ]
-  },
-  {
-    "language": "es",
-    "namespace": "about",
-    "key": "details.entitlements-sync",
-    "en": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
     ]
   },
   {
@@ -72072,20 +72008,8 @@
   {
     "language": "fr",
     "namespace": "settings",
-    "key": "personaNav.entitlements",
-    "en": "Entitlements"
-  },
-  {
-    "language": "fr",
-    "namespace": "settings",
     "key": "personaNav.securityFeatures",
     "en": "Security Features"
-  },
-  {
-    "language": "fr",
-    "namespace": "settings",
-    "key": "personaNav.entitlementsSync",
-    "en": "Entitlements Sync"
   },
   {
     "language": "fr",
@@ -87640,26 +87564,6 @@
     "key": "details.security",
     "en": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
-    ]
-  },
-  {
-    "language": "fr",
-    "namespace": "about",
-    "key": "details.entitlements",
-    "en": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ]
-  },
-  {
-    "language": "fr",
-    "namespace": "about",
-    "key": "details.entitlements-sync",
-    "en": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
     ]
   },
   {
@@ -103475,20 +103379,8 @@
   {
     "language": "it",
     "namespace": "settings",
-    "key": "personaNav.entitlements",
-    "en": "Entitlements"
-  },
-  {
-    "language": "it",
-    "namespace": "settings",
     "key": "personaNav.securityFeatures",
     "en": "Security Features"
-  },
-  {
-    "language": "it",
-    "namespace": "settings",
-    "key": "personaNav.entitlementsSync",
-    "en": "Entitlements Sync"
   },
   {
     "language": "it",
@@ -119043,26 +118935,6 @@
     "key": "details.security",
     "en": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
-    ]
-  },
-  {
-    "language": "it",
-    "namespace": "about",
-    "key": "details.entitlements",
-    "en": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ]
-  },
-  {
-    "language": "it",
-    "namespace": "about",
-    "key": "details.entitlements-sync",
-    "en": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
     ]
   },
   {
@@ -134878,20 +134750,8 @@
   {
     "language": "ja",
     "namespace": "settings",
-    "key": "personaNav.entitlements",
-    "en": "Entitlements"
-  },
-  {
-    "language": "ja",
-    "namespace": "settings",
     "key": "personaNav.securityFeatures",
     "en": "Security Features"
-  },
-  {
-    "language": "ja",
-    "namespace": "settings",
-    "key": "personaNav.entitlementsSync",
-    "en": "Entitlements Sync"
   },
   {
     "language": "ja",
@@ -150446,26 +150306,6 @@
     "key": "details.security",
     "en": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
-    ]
-  },
-  {
-    "language": "ja",
-    "namespace": "about",
-    "key": "details.entitlements",
-    "en": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ]
-  },
-  {
-    "language": "ja",
-    "namespace": "about",
-    "key": "details.entitlements-sync",
-    "en": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
     ]
   },
   {
@@ -166203,20 +166043,8 @@
   {
     "language": "nl",
     "namespace": "settings",
-    "key": "personaNav.entitlements",
-    "en": "Entitlements"
-  },
-  {
-    "language": "nl",
-    "namespace": "settings",
     "key": "personaNav.securityFeatures",
     "en": "Security Features"
-  },
-  {
-    "language": "nl",
-    "namespace": "settings",
-    "key": "personaNav.entitlementsSync",
-    "en": "Entitlements Sync"
   },
   {
     "language": "nl",
@@ -181465,26 +181293,6 @@
     "key": "details.security",
     "en": [
       "• Enable advanced security features (e.g., differential privacy) on assets."
-    ]
-  },
-  {
-    "language": "nl",
-    "namespace": "about",
-    "key": "details.entitlements",
-    "en": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
-    ]
-  },
-  {
-    "language": "nl",
-    "namespace": "about",
-    "key": "details.entitlements-sync",
-    "en": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
     ]
   },
   {

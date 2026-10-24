@@ -10,7 +10,6 @@ Feature groups covered:
   - Jobs / Workflow runs
   - Master Data Management (MDM)
   - LLM Search
-  - Entitlements Sync
   - Industry Ontologies
   - Data Catalog (column dictionary, tables, lineage)
   - Data Asset Reviews (list + minimal create)
@@ -208,43 +207,6 @@ class TestLlmSearchSmoke:
     def test_llm_search_session_nonexistent(self, api, url):
         """GET /api/llm-search/sessions/{id} — 404 for unknown session."""
         resp = api.get(url("/api/llm-search/sessions/nonexistent-session-id"))
-        _ws_check(resp)
-
-
-# ===========================================================================
-# Entitlements Sync
-# ===========================================================================
-
-class TestEntitlementsSyncSmoke:
-    """Smoke tests for Entitlements Sync endpoints.
-
-    This feature requires ADMIN-level permission, so 403 is the expected
-    response for most test credentials.
-    """
-
-    @pytest.mark.readonly
-    def test_list_entitlements_sync_configs(self, api, url):
-        """GET /api/entitlements-sync/configs — list all sync configurations."""
-        resp = api.get(url("/api/entitlements-sync/configs"))
-        # ADMIN-only: 403 is very likely for non-admin test credentials
-        _ws_check(resp)
-
-    @pytest.mark.readonly
-    def test_get_entitlements_sync_config_nonexistent(self, api, url):
-        """GET /api/entitlements-sync/configs/{id} — 404 or 403."""
-        resp = api.get(url("/api/entitlements-sync/configs/nonexistent-id"))
-        _ws_check(resp)
-
-    @pytest.mark.readonly
-    def test_get_entitlements_sync_connections(self, api, url):
-        """GET /api/entitlements-sync/connections — lists UC connections (Databricks call)."""
-        resp = api.get(url("/api/entitlements-sync/connections"))
-        _ws_check(resp)
-
-    @pytest.mark.readonly
-    def test_get_entitlements_sync_catalogs(self, api, url):
-        """GET /api/entitlements-sync/catalogs — lists UC catalogs (Databricks call)."""
-        resp = api.get(url("/api/entitlements-sync/catalogs"))
         _ws_check(resp)
 
 
@@ -691,64 +653,6 @@ class TestDataAssetReviewsCrud:
         assert del_resp.status_code in (200, 204), (
             f"Unexpected delete status {del_resp.status_code}: {del_resp.text[:300]}"
         )
-
-
-# ===========================================================================
-# Entitlements Sync Config CRUD — happy-path
-# ===========================================================================
-
-class TestEntitlementsSyncCrud:
-    """Happy-path CRUD tests for Entitlements Sync configurations.
-
-    This feature is ADMIN-only.  403 is the expected result in most test
-    environments and causes a skip.
-    """
-
-    @pytest.mark.crud
-    def test_entitlements_sync_config_crud(self, api, url):
-        """POST → PUT → DELETE for an entitlements sync config."""
-        import uuid
-
-        name = f"e2e-sync-{uuid.uuid4().hex[:8]}"
-        payload = {
-            "name": name,
-            "catalog_name": "e2e_catalog",
-            "sync_type": "full",
-        }
-
-        # Create
-        resp = api.post(url("/api/entitlements-sync/configs"), json=payload)
-        _ws_check(resp)
-        if resp.status_code in (400, 403, 422, 503):
-            pytest.skip(
-                f"POST /api/entitlements-sync/configs rejected with {resp.status_code} — "
-                "insufficient permissions or feature not configured"
-            )
-        assert resp.status_code in (200, 201), (
-            f"Unexpected create status {resp.status_code}: {resp.text[:300]}"
-        )
-
-        data = resp.json()
-        config_id = data.get("id") or data.get("config_id")
-        assert config_id, f"Response missing id field: {data}"
-
-        try:
-            # Update — add a description
-            update_payload = {**payload, "description": "E2E entitlements sync — updated"}
-            put_resp = api.put(
-                url(f"/api/entitlements-sync/configs/{config_id}"), json=update_payload
-            )
-            _ws_check(put_resp)
-            assert put_resp.status_code in (200, 204), (
-                f"Unexpected update status {put_resp.status_code}: {put_resp.text[:300]}"
-            )
-        finally:
-            # Always attempt cleanup
-            del_resp = api.delete(url(f"/api/entitlements-sync/configs/{config_id}"))
-            if del_resp.status_code not in (500,):
-                assert del_resp.status_code in (200, 204), (
-                    f"Unexpected delete status {del_resp.status_code}: {del_resp.text[:300]}"
-                )
 
 
 # ===========================================================================

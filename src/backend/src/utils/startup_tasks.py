@@ -307,7 +307,7 @@ def initialize_managers(app: FastAPI):
         logger.info("Reference data managers initialized (Assets, Business Roles, Business Owners, Delivery Methods).")
 
         notifications_manager = getattr(app.state, 'notifications_manager', None)
-        # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
+        # Add other managers: Compliance, Estate, MDM, Security, Catalog Commander...
 
         # (moved) SearchManager initialization now happens AFTER all feature managers are constructed
 

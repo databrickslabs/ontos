@@ -2,7 +2,7 @@
 ONT-FEAT-001 through ONT-FEAT-032 — Feature Coverage Tests.
 
 Exercises discrete features that are not fully covered by the golden path:
-glossary, catalog commander, estate manager, MDM, compliance, entitlements,
+glossary, catalog commander, estate manager, MDM, compliance, access policies,
 security features, search, MCP tokens, workflows, git sync, settings CRUD,
 background jobs, and data catalog.
 
@@ -132,30 +132,22 @@ class TestCUJFeatureCoverage:
         )
 
     # ONT-FEAT-012
-    def test_FEAT_012_entitlement_custom_role(self, admin_api, url):
-        """Admin: create and delete a custom entitlements persona."""
-        resp = admin_api.post(url("/api/entitlements/personas"), json={
-            "name": f"{E2E_PREFIX}role-{_uid()}",
-            "description": "FEAT-012 test role",
-            "privileges": [],
-            "groups": [],
+    def test_FEAT_012_access_audience(self, admin_api, url):
+        """Admin: create and delete an Access Policies audience (draft)."""
+        resp = admin_api.post(url("/api/access-policies/audiences"), json={
+            "name": f"{E2E_PREFIX}audience-{_uid()}",
+            "description": "FEAT-012 test audience",
+            "members": ["group:e2e-feat-012"],
         })
-        if resp.status_code in (200, 201):
-            rid = resp.json().get("id")
-            if rid:
-                admin_api.delete(url(f"/api/entitlements/personas/{rid}"))
-        assert resp.status_code in (200, 201, 403, 422), (
-            f"FEAT-012: create persona: {resp.status_code}"
-        )
+        assert resp.status_code == 201, f"FEAT-012: create audience: {resp.status_code} {resp.text[:300]}"
+        admin_api.delete(url(f"/api/access-policies/audiences/{resp.json()['id']}"))
 
     # ONT-FEAT-013
-    def test_FEAT_013_entitlement_sync(self, admin_api, url):
-        """Admin: entitlement sync endpoint accessible."""
-        for path in ("/api/entitlements-sync", "/api/entitlements/sync"):
-            resp = admin_api.get(url(path))
-            if resp.status_code != 404:
-                break
-        assert resp.status_code < 500, f"FEAT-013: entitlements sync: {resp.status_code}"
+    def test_FEAT_013_access_compile_targets(self, admin_api, url):
+        """Admin: compile targets (Access Targets / built-in UC) listable."""
+        resp = admin_api.get(url("/api/access-policies/compile-targets"))
+        assert resp.status_code == 200, f"FEAT-013: compile targets: {resp.status_code}"
+        assert "targets" in resp.json()
 
     # ONT-FEAT-014
     def test_FEAT_014_security_masking_policy(self, admin_api, url):

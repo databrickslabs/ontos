@@ -58,7 +58,7 @@ Asset Reviews queue, the Glossary across all collections.
   domain?"
 
 A DGO answer often spans multiple entity types and benefits from
-links into the compliance and entitlements features.
+links into the compliance and access policy features.
 
 ### Data Steward {#data-steward}
 
@@ -144,26 +144,25 @@ the request-access wizard.
 
 ### Security Officer {#security-officer}
 
-**What you do.** You configure security features, entitlement sync,
-and access classifications. You're consulted on contract approvals
+**What you do.** You configure security features, Access Policies
+(audiences, targets, releases) and access classifications. You're consulted on contract approvals
 when PII or restricted data is involved. You don't certify products;
 you sign off on the security side of the certification.
 
-**Where you spend time.** Settings → Security Features, Settings →
-Entitlements, Settings → Entitlements Sync, the Compliance dashboard,
+**Where you spend time.** Settings → Security Features, Access
+Policies (releases, Grant Ledger, drift), the Compliance dashboard,
 sometimes contract approval queues for sensitive data.
 
 **Typical questions for Ask Ontos:**
 
-- "Which entitlement personas have admin on `security-features`?"
-- "What sync jobs are configured for entitlements, and when did they
-  last run?"
+- "Which audiences can read `main.sales`, and through which policy?"
+- "Which Access Targets report drift, and since when?"
 - "Which contracts mark fields with `RESTRICTED` classification?"
 - "What does the on_first_access disclaimer workflow look like?"
 
 Security Officer questions often cross into Admin territory; answers
 should respect the persona's `Admin`-level access to
-security-features, entitlements, and entitlements-sync, with
+security-features and access-policies, with
 `Read-only` on data-asset-reviews.
 
 ### Knowledge Engineer / Data Architect {#knowledge-engineer}

@@ -19,7 +19,7 @@ The project implements a web application designed to run as a **Databricks App**
 - **Tagging System:** Unified tagging via `EntityTagAssociationDb` for ALL entity types. See `03-system-components-and-requirements.mdc` for details.
 - **Business Glossaries:** Hierarchical glossaries per organizational unit (company, LOB, department, team, project). Merged bottom-up for users, allowing overrides. Terms have tags, markdown descriptions, lifecycle status, assigned assets. Managed by `BusinessGlossariesManager`.
 - **Master Data Management (MDM):** Integrates with Zingg.ai for MDM capabilities. Managed by `MasterDataManagementManager`.
-- **Entitlements:** Combines access privileges into personas (roles) and assigns them to directory groups. Managed by `EntitlementsManager`.
+- **Access Policies:** W3C ODRL policies (audiences, asset collections, offers, agreements) compiled per Access Target (Unity Catalog, Snowflake) and shipped through the Delivery Modes; Grant Ledger + report-only drift. Managed by `AccessPoliciesManager` / `PolicyReleaseManager`.
 - **Security:** Enables advanced security features (e.g., differential privacy) on assets. Managed by `SecurityFeaturesManager`.
 - **Compliance:** Define and verify compliance rules, calculating an overall score. Managed by `ComplianceManager`.
 - **Catalog Commander:** Norton Commander-inspired dual-pane explorer for managing catalog assets (copy/move tables/schemas). Managed by `CatalogCommanderManager`.

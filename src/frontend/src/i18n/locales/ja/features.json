@@ -71,14 +71,6 @@
     "name": "__TODO__ Access Policies",
     "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
   },
-  "entitlements": {
-    "name": "エンタイトルメント",
-    "description": "ペルソナとグループを通じてアクセス権限を管理します。"
-  },
-  "entitlements-sync": {
-    "name": "エンタイトルメント同期",
-    "description": "エンタイトルメントを外部システムと同期します。"
-  },
   "search": {
     "name": "検索",
     "description": "データ製品、契約、コンセプトグラフを横断検索します。"

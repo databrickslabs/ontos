@@ -55,7 +55,7 @@ personas:
     label: "Security Officer"
     email: security@test.local
     groups: ["security-officers"]
-    description: "Security features, entitlements, compliance review"
+    description: "Security features, access policies, compliance review"
 
   - id: anon
     label: "No groups"

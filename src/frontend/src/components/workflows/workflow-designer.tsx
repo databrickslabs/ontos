@@ -154,6 +154,14 @@ import {
   splitRoleAndPrincipals,
 } from '@/lib/workflow-principals';
 
+interface WorkflowActivationConflict {
+  id: string;
+  name: string;
+  trigger_type: string;
+  entity_types: string[];
+  scope_type: string;
+}
+
 // -------------------------------------------------------------------------
 // KeyValueEditor — explicit add/edit editor for Record<string, string>
 // config fields. Used by the webhook step config panel for
@@ -841,6 +849,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
+  const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
   // the workflow has been persisted (we need its id to fetch the snapshot),
   // and only for approval-type workflows.
@@ -1453,7 +1463,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   };
 
   // Save workflow
-  const handleSave = async () => {
+  const handleSave = async (confirmOverlap = false) => {
     if (!workflowType) {
       toast({
         title: t('workflows:designer.messages.validationError'),
@@ -1517,13 +1527,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       };
 
       let response;
+      const overlapQuery = confirmOverlap ? '?confirm_overlap=true' : '';
       if (isNew) {
-        response = await post<ProcessWorkflow>('/api/workflows', workflowData);
+        response = await post<ProcessWorkflow>(`/api/workflows${overlapQuery}`, workflowData);
       } else {
-        response = await put<ProcessWorkflow>(`/api/workflows/${id}`, workflowData as ProcessWorkflowUpdate);
+        response = await put<ProcessWorkflow>(`/api/workflows/${id}${overlapQuery}`, workflowData as ProcessWorkflowUpdate);
       }
 
       if (response.error) {
+        if (response.errorCode === 'workflow_activation_overlap') {
+          const conflicts = response.errorParams?.conflicts;
+          setActivationConflicts(Array.isArray(conflicts) ? conflicts as WorkflowActivationConflict[] : []);
+          setShowOverlapDialog(true);
+          return;
+        }
         const issues = response.errorCode === 'workflow_invalid' && Array.isArray(response.errorParams?.issues)
           ? (response.errorParams.issues as WorkflowValidationIssue[])
           : null;
@@ -1651,7 +1668,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <span className="text-sm">{isActive ? t('common:labels.active') : t('common:labels.inactive')}</span>
           </div>
-          <Button onClick={handleSave} disabled={isSaving} size="sm" className={isDirty ? 'ring-2 ring-amber-500/50' : ''}>
+          <Button onClick={() => handleSave()} disabled={isSaving} size="sm" className={isDirty ? 'ring-2 ring-amber-500/50' : ''}>
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
             {t('common:actions.save')}{isDirty ? ' *' : ''}
           </Button>
@@ -1769,6 +1786,37 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 {t('workflows:designer.discard.confirm')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={showOverlapDialog} onOpenChange={setShowOverlapDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('workflows:view.dialogs.activationOverlapTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('workflows:view.dialogs.activationOverlapDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2">
+              {activationConflicts.map(conflict => (
+                <div key={conflict.id} className="rounded-md border p-3">
+                  <div className="font-medium">{conflict.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {t('workflows:view.dialogs.activationOverlapDetails', {
+                      trigger: conflict.trigger_type,
+                      entities: conflict.entity_types.join(', ') || t('workflows:view.dialogs.allEntities'),
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                setShowOverlapDialog(false);
+                void handleSave(true);
+              }}>
+                {t('workflows:view.dialogs.activateAnyway')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

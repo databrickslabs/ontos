@@ -703,7 +703,12 @@
       "duplicateTitle": "Duplicar fluxo de trabalho",
       "duplicateDescription": "Criar uma cópia de \"{{name}}\" com um novo nome.",
       "deleteExecutionTitle": "Excluir execução",
-      "deleteExecutionDescription": "Tem certeza de que deseja excluir esta execução de fluxo de trabalho? Esta ação não pode ser desfeita."
+      "deleteExecutionDescription": "Tem certeza de que deseja excluir esta execução de fluxo de trabalho? Esta ação não pode ser desfeita.",
+      "activationOverlapTitle": "Outro workflow corresponde ao mesmo evento",
+      "activationOverlapDescription": "A ativação pode solicitar a mesma aprovação mais de uma vez. Revise os workflows sobrepostos e cancele ou ative mesmo assim.",
+      "activationOverlapDetails": "Gatilho: {{trigger}} · Entidades: {{entities}}",
+      "allEntities": "todas as entidades",
+      "activateAnyway": "Ativar mesmo assim"
     },
     "placeholders": {
       "newWorkflowName": "Nome do novo fluxo de trabalho"

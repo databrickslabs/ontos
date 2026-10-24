@@ -703,7 +703,12 @@
       "duplicateTitle": "Duplicar flujo de trabajo",
       "duplicateDescription": "Crea una copia de \"{{name}}\" con un nombre nuevo.",
       "deleteExecutionTitle": "Eliminar ejecución",
-      "deleteExecutionDescription": "¿Seguro que quieres eliminar esta ejecución del flujo de trabajo? Esta acción no se puede deshacer."
+      "deleteExecutionDescription": "¿Seguro que quieres eliminar esta ejecución del flujo de trabajo? Esta acción no se puede deshacer.",
+      "activationOverlapTitle": "Otro flujo de trabajo coincide con el mismo evento",
+      "activationOverlapDescription": "La activación puede solicitar la misma aprobación más de una vez. Revisa los flujos superpuestos y cancela o activa de todos modos.",
+      "activationOverlapDetails": "Disparador: {{trigger}} · Entidades: {{entities}}",
+      "allEntities": "todas las entidades",
+      "activateAnyway": "Activar de todos modos"
     },
     "placeholders": {
       "newWorkflowName": "Nombre del nuevo flujo de trabajo"

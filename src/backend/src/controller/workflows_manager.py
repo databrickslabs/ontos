@@ -320,6 +320,85 @@ class WorkflowsManager:
             return None
         return self._db_to_model(db_workflow)
 
+    @staticmethod
+    def _activation_scopes_overlap(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+        """Whether two workflow scopes can select the same entity."""
+        left_type = left.get('type', 'all')
+        right_type = right.get('type', 'all')
+        if left_type == 'all' or right_type == 'all':
+            return True
+        if left_type != right_type:
+            return False
+        left_ids = set(left.get('ids') or [])
+        right_ids = set(right.get('ids') or [])
+        # An empty scoped list is treated as unrestricted by the runtime.
+        return not left_ids or not right_ids or bool(left_ids & right_ids)
+
+    def activation_conflicts_for(
+        self,
+        trigger: WorkflowTrigger | Dict[str, Any],
+        scope: WorkflowScope | Dict[str, Any],
+        *,
+        exclude_workflow_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Active workflows that can match the supplied trigger and scope.
+
+        Empty entity type lists and status filters are wildcards, matching the
+        trigger runtime. Scope overlap is deliberately conservative: only
+        global scopes or intersecting scopes of the same type are definite.
+        """
+        target_trigger = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
+        target_scope = scope.model_dump(mode='json') if isinstance(scope, WorkflowScope) else scope
+
+        conflicts = []
+        query = self._db.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.is_active.is_(True))
+        if exclude_workflow_id:
+            query = query.filter(ProcessWorkflowDb.id != exclude_workflow_id)
+        candidates = query.all()
+        for candidate in candidates:
+            try:
+                trigger = json.loads(candidate.trigger_config or '{}')
+                scope = json.loads(candidate.scope_config or '{}')
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if trigger.get('type') != target_trigger.get('type'):
+                continue
+            target_entities = set(target_trigger.get('entity_types') or [])
+            entities = set(trigger.get('entity_types') or [])
+            if target_entities and entities and not target_entities & entities:
+                continue
+            if not self._activation_scopes_overlap(target_scope, scope):
+                continue
+            if any(
+                target_trigger.get(field) and trigger.get(field)
+                and target_trigger[field] != trigger[field]
+                for field in ('from_status', 'to_status')
+            ):
+                continue
+            conflicts.append({
+                'id': candidate.id,
+                'name': candidate.name,
+                'trigger_type': trigger.get('type'),
+                'entity_types': sorted(target_entities & entities) if target_entities and entities
+                    else sorted(target_entities or entities),
+                'scope_type': scope.get('type', 'all'),
+            })
+        return conflicts
+
+    def activation_conflicts(self, workflow_id: str) -> List[Dict[str, Any]]:
+        """Active workflows that can match the same event as ``workflow_id``."""
+        target = process_workflow_repo.get(self._db, workflow_id)
+        if not target:
+            return []
+        try:
+            trigger = json.loads(target.trigger_config or '{}')
+            scope = json.loads(target.scope_config or '{}')
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return self.activation_conflicts_for(
+            trigger, scope, exclude_workflow_id=workflow_id,
+        )
+
     def duplicate_workflow(
         self,
         workflow_id: str,

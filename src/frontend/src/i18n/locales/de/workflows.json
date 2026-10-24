@@ -703,7 +703,12 @@
       "duplicateTitle": "Workflow duplizieren",
       "duplicateDescription": "Erstellen Sie eine Kopie von \"{{name}}\" mit einem neuen Namen.",
       "deleteExecutionTitle": "Ausführung löschen",
-      "deleteExecutionDescription": "Möchten Sie diese Workflow-Ausführung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+      "deleteExecutionDescription": "Möchten Sie diese Workflow-Ausführung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "activationOverlapTitle": "Ein anderer Workflow reagiert auf dasselbe Ereignis",
+      "activationOverlapDescription": "Die Aktivierung kann dieselbe Genehmigung mehrfach anfordern. Prüfen Sie die überlappenden Workflows und brechen Sie ab oder aktivieren Sie trotzdem.",
+      "activationOverlapDetails": "Auslöser: {{trigger}} · Entitäten: {{entities}}",
+      "allEntities": "alle Entitäten",
+      "activateAnyway": "Trotzdem aktivieren"
     },
     "placeholders": {
       "newWorkflowName": "Neuer Workflow-Name"

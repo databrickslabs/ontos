@@ -74,6 +74,14 @@ interface WorkflowExecutionsResponse {
   total: number;
 }
 
+interface WorkflowActivationConflict {
+  id: string;
+  name: string;
+  trigger_type: string;
+  entity_types: string[];
+  scope_type: string;
+}
+
 // Helper to get step type icon
 const getStepTypeIcon = (stepType: string) => {
   switch (stepType) {
@@ -132,6 +140,9 @@ export default function Workflows() {
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<ProcessWorkflow | null>(null);
   const [duplicateName, setDuplicateName] = useState('');
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [overlapWorkflow, setOverlapWorkflow] = useState<ProcessWorkflow | null>(null);
+  const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
+  const [isConfirmingOverlap, setIsConfirmingOverlap] = useState(false);
   
   // Executions state
   const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
@@ -210,6 +221,23 @@ export default function Workflows() {
   }, [loadWorkflows, loadExecutions, loadApprovalSessions]);
 
   // Workflow handlers
+  const toggleWorkflowActive = async (workflow: ProcessWorkflow, confirmOverlap = false) => {
+    const activating = !workflow.is_active;
+    const url = `/api/workflows/${workflow.id}/toggle-active?is_active=${activating}`
+      + (confirmOverlap ? '&confirm_overlap=true' : '');
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (response.status === 409) {
+      const body = await response.json();
+      if (body?.detail?.code === 'workflow_activation_overlap') {
+        setOverlapWorkflow(workflow);
+        setActivationConflicts(body.detail.conflicts || []);
+        return null;
+      }
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json() as ProcessWorkflow;
+  };
+
   const handleToggleWorkflowActive = async (workflow: ProcessWorkflow) => {
     if (!canEdit) {
       toast({
@@ -221,17 +249,14 @@ export default function Workflows() {
     }
     
     try {
-      const response = await apiPost<ProcessWorkflow>(
-        `/api/workflows/${workflow.id}/toggle-active?is_active=${!workflow.is_active}`,
-        {}
-      );
-      if (response.data) {
+      const updated = await toggleWorkflowActive(workflow);
+      if (updated) {
         setWorkflows(prev => 
-          prev.map(w => w.id === workflow.id ? response.data! : w)
+          prev.map(w => w.id === workflow.id ? updated : w)
         );
         toast({
           title: t('common:toast.success'),
-          description: response.data.is_active
+          description: updated.is_active
             ? t('workflows:view.messages.workflowEnabled')
             : t('workflows:view.messages.workflowDisabled'),
         });
@@ -242,6 +267,24 @@ export default function Workflows() {
         description: t('workflows:view.messages.updateStatusFailed'),
         variant: 'destructive',
       });
+    }
+  };
+
+  const confirmOverlappingActivation = async () => {
+    if (!overlapWorkflow) return;
+    setIsConfirmingOverlap(true);
+    try {
+      const updated = await toggleWorkflowActive(overlapWorkflow, true);
+      if (updated) {
+        setWorkflows(prev => prev.map(w => w.id === updated.id ? updated : w));
+        setOverlapWorkflow(null);
+        setActivationConflicts([]);
+        toast({ title: t('common:toast.success'), description: t('workflows:view.messages.workflowEnabled') });
+      }
+    } catch {
+      toast({ title: t('common:toast.error'), description: t('workflows:view.messages.updateStatusFailed'), variant: 'destructive' });
+    } finally {
+      setIsConfirmingOverlap(false);
     }
   };
 
@@ -529,13 +572,19 @@ export default function Workflows() {
     }
 
     try {
-      const results = await Promise.allSettled(
-        toUpdate.map(w => 
-          apiPost<ProcessWorkflow>(`/api/workflows/${w.id}/toggle-active?is_active=${enable}`, {})
-        )
-      );
-      const successes = results.filter(r => r.status === 'fulfilled').length;
-      const failures = results.filter(r => r.status === 'rejected').length;
+      let successes = 0;
+      let failures = 0;
+      // Run activation sequentially: an overlap requires an explicit decision
+      // and must not be hidden inside Promise.allSettled as a "successful" call.
+      for (const workflow of toUpdate) {
+        try {
+          const updated = await toggleWorkflowActive(workflow);
+          if (updated) successes += 1;
+          else failures += 1;
+        } catch {
+          failures += 1;
+        }
+      }
 
       if (successes > 0) {
         toast({
@@ -1532,6 +1581,37 @@ export default function Workflows() {
             <Button onClick={handleDuplicateWorkflow} disabled={isDuplicating || !duplicateName.trim()}>
               {isDuplicating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {t('workflows:view.actions.duplicate')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!overlapWorkflow} onOpenChange={(open) => {
+        if (!open) { setOverlapWorkflow(null); setActivationConflicts([]); }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('workflows:view.dialogs.activationOverlapTitle')}</DialogTitle>
+            <DialogDescription>{t('workflows:view.dialogs.activationOverlapDescription')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {activationConflicts.map(conflict => (
+              <div key={conflict.id} className="rounded-md border p-3">
+                <div className="font-medium">{conflict.name}</div>
+                <div className="text-sm text-muted-foreground">
+                  {t('workflows:view.dialogs.activationOverlapDetails', {
+                    trigger: conflict.trigger_type,
+                    entities: conflict.entity_types.join(', ') || t('workflows:view.dialogs.allEntities'),
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOverlapWorkflow(null)}>{t('common:actions.cancel')}</Button>
+            <Button onClick={confirmOverlappingActivation} disabled={isConfirmingOverlap}>
+              {isConfirmingOverlap && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {t('workflows:view.dialogs.activateAnyway')}
             </Button>
           </DialogFooter>
         </DialogContent>

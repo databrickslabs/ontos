@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from src.common.api_errors import new_error_id
 from src.common.config import Settings, get_settings
+from src.common.llm_content import block_types, coerce_message_text
 from src.common.logging import get_logger
 from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
@@ -52,7 +53,24 @@ CHAT_ERROR_MESSAGES: Dict[str, str] = {
         "I encountered an error while processing your request. Please try rephrasing your "
         "question or try again. The details are in the server log (error id {errorId})."
     ),
+    "chat_empty_answer": (
+        "The model didn't return an answer to this request. Please try again or rephrase "
+        "your question (error id {errorId})."
+    ),
 }
+
+
+class EmptyLLMAnswerError(RuntimeError):
+    """The model's final message held no answer text (reasoning-only or blank).
+
+    The message carries diagnostics only (iteration, block types, finish
+    reason), never the model's content.
+    """
+
+
+def _strip_asterisk_runs(text: str) -> str:
+    """Drop ``****`` (4+) runs: the system prompt forbids them and CommonMark has none."""
+    return re.sub(r"\*{4,}", "", text)
 
 
 def chat_error_code(exc: BaseException) -> str:
@@ -61,6 +79,8 @@ def chat_error_code(exc: BaseException) -> str:
     The text match at the end only covers client libraries whose timeout and
     connection errors don't derive from the standard types.
     """
+    if isinstance(exc, EmptyLLMAnswerError):
+        return "chat_empty_answer"
     try:
         import openai
 
@@ -107,50 +127,6 @@ _CITATION_COMMENT_RE = re.compile(r"<!--\s*ref:\s*([^>]+?)\s*-->")
 _CONFIDENCE_LABEL_RE = re.compile(r"\s*\[(Confirmed|Documented|Inferred)\]")
 
 
-def _block_text(block: Any) -> str:
-    """Extract user-facing text from one content block, or "" if it carries none.
-
-    Reasoning / thinking blocks are deliberately dropped: they are the model's
-    internal scratchpad, not part of the answer shown to the user.
-    """
-    # dict-shaped block (raw JSON from the serving shim)
-    if isinstance(block, dict):
-        if block.get("type") in ("reasoning", "thinking"):
-            return ""
-        text = block.get("text")
-        return text if isinstance(text, str) else ""
-    # object-shaped block (OpenAI SDK / pydantic)
-    if getattr(block, "type", None) in ("reasoning", "thinking"):
-        return ""
-    text = getattr(block, "text", None)
-    if isinstance(text, str):
-        return text
-    if isinstance(block, str):
-        return block
-    return ""
-
-
-def _coerce_message_text(content: Any) -> str:
-    """Normalise an LLM message's ``content`` to a plain string.
-
-    Databricks' OpenAI-compatible serving shim returns ``content`` as a *list*
-    of structured blocks for reasoning-capable models (Claude Sonnet/Opus 5,
-    Claude Haiku 5.5, gpt-oss, and similar), e.g.
-    ``[{"type": "reasoning", ...}, {"type": "text", "text": "..."}]``. Older
-    models return a plain string. Downstream code (citation stripping, UI
-    rendering) assumes a string, so collapse any block list down to its
-    user-facing text here, keeping only text blocks and joining them.
-    """
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, (list, tuple)):
-        return "".join(_block_text(b) for b in content)
-    # Unknown scalar: prefer an embedded text field, else best-effort stringify.
-    return _block_text(content) or str(content)
-
-
 def _strip_internal_citations(text: Any) -> Tuple[str, List[str], List[str]]:
     """Remove internal grounding markers from the response.
 
@@ -159,7 +135,7 @@ def _strip_internal_citations(text: Any) -> Tuple[str, List[str], List[str]]:
     collapsed back to doubles. ``text`` is coerced to a string first so that
     structured (list) content from reasoning-capable models is handled safely.
     """
-    text = _coerce_message_text(text)
+    text = coerce_message_text(text)
     if not text:
         return text, [], []
     citations = [m.strip() for m in _CITATION_COMMENT_RE.findall(text)]
@@ -574,13 +550,6 @@ class LLMSearchManager:
                 session, collect_debug=debug
             )
 
-            # Sanitize orphan asterisk runs. The system prompt forbids
-            # ``****``/``*****`` as visual markers, but the LLM still
-            # emits them occasionally. ``****`` (4+) is never valid
-            # CommonMark, so stripping it is safe.
-            if response_content:
-                response_content = re.sub(r"\*{4,}", "", response_content)
-
             # Add assistant response to database
             assistant_msg = self._session_store.add_message(
                 self._db, session.id, MessageRole.ASSISTANT, content=response_content
@@ -775,7 +744,7 @@ class LLMSearchManager:
                     "has_tool_calls": bool(assistant_message.tool_calls),
                     "tool_calls": [],
                     "response_preview": (
-                        _coerce_message_text(assistant_message.content)[:200]
+                        coerce_message_text(assistant_message.content)[:200]
                         if not assistant_message.tool_calls
                         else None
                     ),
@@ -852,6 +821,19 @@ class LLMSearchManager:
                 cleaned_content, citations, confidence_labels = _strip_internal_citations(
                     assistant_message.content or ""
                 )
+                # Sanitize orphan asterisk runs. The system prompt forbids
+                # ``****``/``*****`` as visual markers, but the LLM still
+                # emits them occasionally. ``****`` (4+) is never valid
+                # CommonMark, so stripping it is safe.
+                cleaned_content = _strip_asterisk_runs(cleaned_content)
+                if not cleaned_content.strip():
+                    # Reasoning-only or blank content: fail the turn with a code
+                    # instead of storing an empty reply.
+                    raise EmptyLLMAnswerError(
+                        f"LLM returned no answer text (iteration {iteration + 1}, "
+                        f"block types: {block_types(assistant_message.content)}, "
+                        f"finish_reason={getattr(response.choices[0], 'finish_reason', None)})"
+                    )
                 if debug_info is not None:
                     if iter_debug is not None:
                         debug_info["iterations"].append(iter_debug)

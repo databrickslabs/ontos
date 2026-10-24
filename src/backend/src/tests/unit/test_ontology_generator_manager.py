@@ -183,6 +183,44 @@ class TestOntologyGeneratorManager:
         assert "endpoint" in result.error.lower()
 
     @patch("src.common.llm_client.create_openai_client")
+    def test_turtle_with_leading_reasoning_block(self, mock_create_client):
+        """Reasoning models return a block list; only the text block is Turtle."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _FakeResponse(
+            choices=[_FakeChoice(message=_FakeMessage(content=[
+                {"type": "reasoning", "summary": [{"type": "summary_text", "text": "plan"}]},
+                {"type": "text", "text": GENERATED_TURTLE},
+            ]))]
+        )
+        mock_create_client.return_value = mock_client
+
+        result = OntologyGeneratorManager(_make_settings()).generate_ontology(SAMPLE_METADATA)
+
+        assert result.success
+        assert result.owl_content.lstrip().startswith("@prefix")
+        assert "plan" not in result.owl_content
+
+    @patch("src.common.llm_client.create_openai_client")
+    @pytest.mark.parametrize(
+        "content",
+        [[{"type": "reasoning", "summary": []}], "   ", None],
+        ids=["reasoning-only", "blank", "none"],
+    )
+    def test_empty_final_message_is_a_failure(self, mock_create_client, content, caplog):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _FakeResponse(
+            choices=[_FakeChoice(message=_FakeMessage(content=content))]
+        )
+        mock_create_client.return_value = mock_client
+
+        with caplog.at_level("WARNING"):
+            result = OntologyGeneratorManager(_make_settings()).generate_ontology(SAMPLE_METADATA)
+
+        assert not result.success
+        assert "no Turtle content" in result.error
+        assert any("block types" in r.getMessage() for r in caplog.records)
+
+    @patch("src.common.llm_client.create_openai_client")
     def test_direct_turtle_output(self, mock_create_client):
         """LLM directly outputs Turtle without tool calls."""
         mock_client = MagicMock()

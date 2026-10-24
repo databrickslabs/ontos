@@ -236,6 +236,7 @@
     "chat_validation_failed": "Não consegui processar os dados desta solicitação. Tente reformular a pergunta. Os detalhes estão no log do servidor (id do erro {{errorId}}).",
     "chat_timeout": "A solicitação excedeu o tempo limite. Tente uma pergunta mais simples ou tente novamente mais tarde (id do erro {{errorId}}).",
     "chat_connection_failed": "Tive problemas para me conectar a um serviço necessário. Tente novamente em instantes (id do erro {{errorId}}).",
-    "chat_failed": "Ocorreu um erro ao processar sua solicitação. Tente reformular a pergunta ou tente novamente. Os detalhes estão no log do servidor (id do erro {{errorId}})."
+    "chat_failed": "Ocorreu um erro ao processar sua solicitação. Tente reformular a pergunta ou tente novamente. Os detalhes estão no log do servidor (id do erro {{errorId}}).",
+    "chat_empty_answer": "O modelo não retornou uma resposta para esta solicitação. Tente novamente ou reformule sua pergunta (id do erro {{errorId}})."
   }
 }

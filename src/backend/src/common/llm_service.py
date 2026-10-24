@@ -13,6 +13,7 @@ from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
 from src.common.config import Settings, get_settings
+from src.common.llm_content import block_types, coerce_message_text
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -97,12 +98,23 @@ class LLMService:
             )
 
             # Extract content from OpenAI response
+            raw_content = None
+            finish_reason = None
             if response.choices and len(response.choices) > 0:
-                content = response.choices[0].message.content
+                choice = response.choices[0]
+                raw_content = choice.message.content
+                finish_reason = getattr(choice, "finish_reason", None)
+                # Reasoning models return a block list; keep only the text
+                # blocks so an all-reasoning response counts as "no content".
+                content = coerce_message_text(raw_content).strip()
                 if content:
-                    return str(content).strip()
+                    return content
 
-            logger.warning(f"LLM returned no content in response")
+            logger.warning(
+                "LLM returned no content in response (finish_reason=%s, block types: %s)",
+                finish_reason,
+                block_types(raw_content),
+            )
             return None
 
         except Exception as e:

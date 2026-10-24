@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from src.common.config import Settings
+from src.common.llm_content import block_types, coerce_message_text
 from src.common.logging import get_logger
 from src.owl.owl_parser import OntologyParser
 
@@ -569,7 +570,20 @@ class OntologyGeneratorManager:
                     })
             else:
                 # Agent produced a text response — should be Turtle
-                content = assistant_message.content or ""
+                content = coerce_message_text(assistant_message.content)
+                if not content.strip():
+                    # Reasoning-only or blank reply: there is no ontology to keep.
+                    logger.warning(
+                        "Iteration %d: final message has no text (block types: %s, "
+                        "finish_reason=%s)",
+                        iteration + 1,
+                        block_types(assistant_message.content),
+                        getattr(response.choices[0], "finish_reason", None),
+                    )
+                    result.error = "Agent returned no Turtle content"
+                    result.iterations = iteration + 1
+                    result.usage = total_usage
+                    return result
 
                 # Strip preamble text that LLMs often include before the actual Turtle
                 content = self._extract_turtle(content)

@@ -236,6 +236,7 @@
     "chat_validation_failed": "I couldn't process the data of this request. Please try rephrasing your question. The details are in the server log (error id {{errorId}}).",
     "chat_timeout": "The request timed out. Please try a simpler question or try again later (error id {{errorId}}).",
     "chat_connection_failed": "I had trouble connecting to a required service. Please try again in a moment (error id {{errorId}}).",
-    "chat_failed": "I encountered an error while processing your request. Please try rephrasing your question or try again. The details are in the server log (error id {{errorId}})."
+    "chat_failed": "I encountered an error while processing your request. Please try rephrasing your question or try again. The details are in the server log (error id {{errorId}}).",
+    "chat_empty_answer": "The model didn't return an answer to this request. Please try again or rephrase your question (error id {{errorId}})."
   }
 }

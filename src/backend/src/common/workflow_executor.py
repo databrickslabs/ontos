@@ -1698,7 +1698,7 @@ class PolicyCheckStepHandler(StepHandler):
         try:
             return bool(Evaluator(rule_object).evaluate(where))
         except Exception:
-            logger.exception(f"Failed to evaluate the WHERE clause of policy {policy.id}")
+            logger.exception("Failed to evaluate the WHERE clause of policy %s", policy.id)
             return False
 
     @staticmethod

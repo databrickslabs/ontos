@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from src.common.api_errors import new_error_id
 from src.common.config import Settings, get_settings
+from src.common.llm_content import coerce_message_text
 from src.common.logging import get_logger
 from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
@@ -107,50 +108,6 @@ _CITATION_COMMENT_RE = re.compile(r"<!--\s*ref:\s*([^>]+?)\s*-->")
 _CONFIDENCE_LABEL_RE = re.compile(r"\s*\[(Confirmed|Documented|Inferred)\]")
 
 
-def _block_text(block: Any) -> str:
-    """Extract user-facing text from one content block, or "" if it carries none.
-
-    Reasoning / thinking blocks are deliberately dropped: they are the model's
-    internal scratchpad, not part of the answer shown to the user.
-    """
-    # dict-shaped block (raw JSON from the serving shim)
-    if isinstance(block, dict):
-        if block.get("type") in ("reasoning", "thinking"):
-            return ""
-        text = block.get("text")
-        return text if isinstance(text, str) else ""
-    # object-shaped block (OpenAI SDK / pydantic)
-    if getattr(block, "type", None) in ("reasoning", "thinking"):
-        return ""
-    text = getattr(block, "text", None)
-    if isinstance(text, str):
-        return text
-    if isinstance(block, str):
-        return block
-    return ""
-
-
-def _coerce_message_text(content: Any) -> str:
-    """Normalise an LLM message's ``content`` to a plain string.
-
-    Databricks' OpenAI-compatible serving shim returns ``content`` as a *list*
-    of structured blocks for reasoning-capable models (Claude Sonnet/Opus 5,
-    Claude Haiku 5.5, gpt-oss, and similar), e.g.
-    ``[{"type": "reasoning", ...}, {"type": "text", "text": "..."}]``. Older
-    models return a plain string. Downstream code (citation stripping, UI
-    rendering) assumes a string, so collapse any block list down to its
-    user-facing text here, keeping only text blocks and joining them.
-    """
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, (list, tuple)):
-        return "".join(_block_text(b) for b in content)
-    # Unknown scalar: prefer an embedded text field, else best-effort stringify.
-    return _block_text(content) or str(content)
-
-
 def _strip_internal_citations(text: Any) -> Tuple[str, List[str], List[str]]:
     """Remove internal grounding markers from the response.
 
@@ -159,7 +116,7 @@ def _strip_internal_citations(text: Any) -> Tuple[str, List[str], List[str]]:
     collapsed back to doubles. ``text`` is coerced to a string first so that
     structured (list) content from reasoning-capable models is handled safely.
     """
-    text = _coerce_message_text(text)
+    text = coerce_message_text(text)
     if not text:
         return text, [], []
     citations = [m.strip() for m in _CITATION_COMMENT_RE.findall(text)]
@@ -775,7 +732,7 @@ class LLMSearchManager:
                     "has_tool_calls": bool(assistant_message.tool_calls),
                     "tool_calls": [],
                     "response_preview": (
-                        _coerce_message_text(assistant_message.content)[:200]
+                        coerce_message_text(assistant_message.content)[:200]
                         if not assistant_message.tool_calls
                         else None
                     ),

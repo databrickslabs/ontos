@@ -18,11 +18,8 @@ in the content-normalisation helpers that keep the text, drop the reasoning
 block, and leave string/None handling unchanged.
 """
 
-from src.controller.llm_search_manager import (
-    _block_text,
-    _coerce_message_text,
-    _strip_internal_citations,
-)
+from src.common.llm_content import block_text, coerce_message_text
+from src.controller.llm_search_manager import _strip_internal_citations
 
 
 class _Block:
@@ -33,31 +30,31 @@ class _Block:
 
 
 # ---------------------------------------------------------------------------
-# _block_text
+# block_text
 # ---------------------------------------------------------------------------
 
 
 def test_block_text_keeps_text_block_drops_reasoning():
-    assert _block_text({"type": "text", "text": "hello"}) == "hello"
-    assert _block_text({"type": "reasoning", "text": "scratchpad"}) == ""
-    assert _block_text({"type": "thinking", "text": "scratchpad"}) == ""
+    assert block_text({"type": "text", "text": "hello"}) == "hello"
+    assert block_text({"type": "reasoning", "text": "scratchpad"}) == ""
+    assert block_text({"type": "thinking", "text": "scratchpad"}) == ""
 
 
 def test_block_text_handles_objects_and_raw_strings():
-    assert _block_text(_Block(type="text", text="hi")) == "hi"
-    assert _block_text(_Block(type="reasoning", text=None)) == ""
-    assert _block_text("raw string") == "raw string"
-    assert _block_text(123) == ""
+    assert block_text(_Block(type="text", text="hi")) == "hi"
+    assert block_text(_Block(type="reasoning", text=None)) == ""
+    assert block_text("raw string") == "raw string"
+    assert block_text(123) == ""
 
 
 # ---------------------------------------------------------------------------
-# _coerce_message_text
+# coerce_message_text
 # ---------------------------------------------------------------------------
 
 
 def test_coerce_passthrough_string_and_none():
-    assert _coerce_message_text("already text") == "already text"
-    assert _coerce_message_text(None) == ""
+    assert coerce_message_text("already text") == "already text"
+    assert coerce_message_text(None) == ""
 
 
 def test_coerce_joins_text_blocks_and_drops_reasoning():
@@ -66,12 +63,19 @@ def test_coerce_joins_text_blocks_and_drops_reasoning():
         {"type": "text", "text": "A data product is "},
         {"type": "text", "text": "a curated asset."},
     ]
-    assert _coerce_message_text(content) == "A data product is a curated asset."
+    assert coerce_message_text(content) == "A data product is a curated asset."
+
+
+def test_coerce_bare_object_with_text_but_no_type():
+    class _TextOnly:
+        text = "plain answer"
+
+    assert coerce_message_text(_TextOnly()) == "plain answer"
 
 
 def test_coerce_handles_object_blocks():
     content = [_Block(type="reasoning", text=None), _Block(type="text", text="answer")]
-    assert _coerce_message_text(content) == "answer"
+    assert coerce_message_text(content) == "answer"
 
 
 # ---------------------------------------------------------------------------
@@ -123,3 +127,4 @@ def test_strip_none_and_empty_return_empty():
     assert _strip_internal_citations(None) == ("", [], [])
     assert _strip_internal_citations("") == ("", [], [])
     assert _strip_internal_citations([]) == ("", [], [])
+

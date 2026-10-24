@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from src.common.api_errors import new_error_id
 from src.common.config import Settings, get_settings
-from src.common.llm_content import coerce_message_text
+from src.common.llm_content import block_types, coerce_message_text
 from src.common.logging import get_logger
 from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
@@ -53,7 +53,24 @@ CHAT_ERROR_MESSAGES: Dict[str, str] = {
         "I encountered an error while processing your request. Please try rephrasing your "
         "question or try again. The details are in the server log (error id {errorId})."
     ),
+    "chat_empty_answer": (
+        "The model didn't return an answer to this request. Please try again or rephrase "
+        "your question (error id {errorId})."
+    ),
 }
+
+
+class EmptyLLMAnswerError(RuntimeError):
+    """The model's final message held no answer text (reasoning-only or blank).
+
+    The message carries diagnostics only (iteration, block types, finish
+    reason), never the model's content.
+    """
+
+
+def _strip_asterisk_runs(text: str) -> str:
+    """Drop ``****`` (4+) runs: the system prompt forbids them and CommonMark has none."""
+    return re.sub(r"\*{4,}", "", text)
 
 
 def chat_error_code(exc: BaseException) -> str:
@@ -62,6 +79,8 @@ def chat_error_code(exc: BaseException) -> str:
     The text match at the end only covers client libraries whose timeout and
     connection errors don't derive from the standard types.
     """
+    if isinstance(exc, EmptyLLMAnswerError):
+        return "chat_empty_answer"
     try:
         import openai
 
@@ -531,13 +550,6 @@ class LLMSearchManager:
                 session, collect_debug=debug
             )
 
-            # Sanitize orphan asterisk runs. The system prompt forbids
-            # ``****``/``*****`` as visual markers, but the LLM still
-            # emits them occasionally. ``****`` (4+) is never valid
-            # CommonMark, so stripping it is safe.
-            if response_content:
-                response_content = re.sub(r"\*{4,}", "", response_content)
-
             # Add assistant response to database
             assistant_msg = self._session_store.add_message(
                 self._db, session.id, MessageRole.ASSISTANT, content=response_content
@@ -809,6 +821,19 @@ class LLMSearchManager:
                 cleaned_content, citations, confidence_labels = _strip_internal_citations(
                     assistant_message.content or ""
                 )
+                # Sanitize orphan asterisk runs. The system prompt forbids
+                # ``****``/``*****`` as visual markers, but the LLM still
+                # emits them occasionally. ``****`` (4+) is never valid
+                # CommonMark, so stripping it is safe.
+                cleaned_content = _strip_asterisk_runs(cleaned_content)
+                if not cleaned_content.strip():
+                    # Reasoning-only or blank content: fail the turn with a code
+                    # instead of storing an empty reply.
+                    raise EmptyLLMAnswerError(
+                        f"LLM returned no answer text (iteration {iteration + 1}, "
+                        f"block types: {block_types(assistant_message.content)}, "
+                        f"finish_reason={getattr(response.choices[0], 'finish_reason', None)})"
+                    )
                 if debug_info is not None:
                     if iter_debug is not None:
                         debug_info["iterations"].append(iter_debug)

@@ -236,6 +236,7 @@
     "chat_validation_failed": "Ik kon de gegevens van dit verzoek niet verwerken. Probeer je vraag anders te formuleren. De details staan in het serverlogboek (fout-id {{errorId}}).",
     "chat_timeout": "Het verzoek duurde te lang. Probeer een eenvoudigere vraag of probeer het later opnieuw (fout-id {{errorId}}).",
     "chat_connection_failed": "Ik kon geen verbinding maken met een benodigde dienst. Probeer het zo meteen opnieuw (fout-id {{errorId}}).",
-    "chat_failed": "Er is een fout opgetreden bij het verwerken van je verzoek. Probeer je vraag anders te formuleren of probeer het opnieuw. De details staan in het serverlogboek (fout-id {{errorId}})."
+    "chat_failed": "Er is een fout opgetreden bij het verwerken van je verzoek. Probeer je vraag anders te formuleren of probeer het opnieuw. De details staan in het serverlogboek (fout-id {{errorId}}).",
+    "chat_empty_answer": "Het model heeft geen antwoord op dit verzoek teruggegeven. Probeer het opnieuw of formuleer je vraag anders (fout-id {{errorId}})."
   }
 }

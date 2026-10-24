@@ -18,7 +18,9 @@ in the content-normalisation helpers that keep the text, drop the reasoning
 block, and leave string/None handling unchanged.
 """
 
-from src.common.llm_content import block_text, coerce_message_text
+import pytest
+
+from src.common.llm_content import block_text, block_types, coerce_message_text
 from src.controller.llm_search_manager import _strip_internal_citations
 
 
@@ -64,6 +66,24 @@ def test_coerce_joins_text_blocks_and_drops_reasoning():
         {"type": "text", "text": "a curated asset."},
     ]
     assert coerce_message_text(content) == "A data product is a curated asset."
+
+
+def test_block_text_is_an_allowlist():
+    assert block_text({"text": "untyped"}) == "untyped"
+    assert block_text({"type": None, "text": "untyped"}) == "untyped"
+    assert block_text({"type": "output_text", "text": "out"}) == "out"
+    for kind in ("summary_text", "redacted_thinking", "tool_use", "reasoning", "image"):
+        assert block_text({"type": kind, "text": "UNSAFE"}) == ""
+        assert block_text(_Block(type=kind, text="UNSAFE")) == ""
+
+
+def test_coerce_bare_block_never_falls_back_to_repr():
+    reasoning = {"type": "reasoning", "text": "secret", "summary": []}
+    assert coerce_message_text(reasoning) == ""
+    assert coerce_message_text(_Block(type="reasoning", text="secret")) == ""
+    assert coerce_message_text({"type": "text", "text": "ok"}) == "ok"
+    assert coerce_message_text(_Block(type="text", text="ok")) == "ok"
+    assert coerce_message_text(42) == "42"
 
 
 def test_coerce_bare_object_with_text_but_no_type():
@@ -128,3 +148,84 @@ def test_strip_none_and_empty_return_empty():
     assert _strip_internal_citations("") == ("", [], [])
     assert _strip_internal_citations([]) == ("", [], [])
 
+
+# ---------------------------------------------------------------------------
+# block_types (log helper) and the empty-answer fallback in the agent loop
+# ---------------------------------------------------------------------------
+
+
+def test_block_types_lists_types_without_content():
+    content = [{"type": "reasoning", "text": "secret"}, _Block(type="text", text="x"), "raw"]
+    assert block_types(content) == ["reasoning", "text", "str"]
+    assert block_types("plain") == []
+    assert block_types(None) == []
+
+
+@pytest.fixture
+def chat_manager(db_session):
+    from types import SimpleNamespace
+
+    from src.controller.llm_search_manager import LLMSearchManager
+
+    return LLMSearchManager(
+        db=db_session,
+        settings=SimpleNamespace(LLM_ENABLED=True, LLM_ENDPOINT="ep", LLM_SYSTEM_PROMPT=None),
+    )
+
+
+def _final_answer_client(content):
+    from types import SimpleNamespace as NS
+    from unittest.mock import MagicMock
+
+    client = MagicMock()
+    client.chat.completions.create.return_value = NS(
+        choices=[NS(message=NS(content=content, tool_calls=None), finish_reason="length")],
+        usage=None,
+    )
+    return client
+
+
+async def _chat(manager, content):
+    from unittest.mock import patch
+
+    client = _final_answer_client(content)
+    with patch.object(manager, "_get_openai_client", return_value=client), patch(
+        "src.tools.app_state.get_adoption_snapshot", return_value={}
+    ):
+        return await manager.chat("hi", user_id="u@example.com")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content",
+    [
+        [{"type": "reasoning", "summary": [{"type": "summary_text", "text": "hidden"}]}],
+        "   ",
+        "*****",
+        [{"type": "text", "text": "****"}],
+    ],
+    ids=["reasoning-only", "blank", "asterisks", "asterisks-block"],
+)
+async def test_empty_answer_is_a_coded_error(chat_manager, caplog, content):
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        response = await _chat(chat_manager, content)
+    message = response.message
+    assert message.error_code == "chat_empty_answer"
+    error_id = message.error_params["errorId"]
+    assert error_id in message.content
+    assert "hidden" not in message.content
+    logged = "\n".join(r.getMessage() + (r.exc_text or "") for r in caplog.records)
+    assert error_id in logged
+    assert "hidden" not in logged
+    assert "finish_reason" in logged
+
+
+@pytest.mark.asyncio
+async def test_normal_answer_is_unchanged(chat_manager):
+    response = await _chat(
+        chat_manager, [{"type": "reasoning"}, {"type": "text", "text": "Real answer."}]
+    )
+    assert response.message.content == "Real answer."
+    assert response.message.error_code is None

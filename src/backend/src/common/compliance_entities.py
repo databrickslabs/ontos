@@ -321,8 +321,9 @@ class AppEntityLoader(EntityLoader):
                     'type': 'data_product',
                     'id': product.id,
                     'name': product.name,
-                    'description': getattr(product, 'description_purpose', None)
-                                   or getattr(product, 'description', None),
+                    # As for contracts, the purpose text (description is the
+                    # ODPS description row, None when the product has none)
+                    'description': getattr(product.description, 'purpose', None),
                     'domain': primary_domain,
                     'status': product.status,
                     'version': getattr(product, 'version', None),
@@ -386,11 +387,12 @@ class AppEntityLoader(EntityLoader):
                 yield {
                     'type': 'review',
                     'id': review.id,
-                    'asset_id': getattr(review, 'asset_id', None),
-                    'asset_type': getattr(review, 'asset_type', None),
+                    # No asset_id / asset_type: a review covers many assets
+                    # (review.assets), and a key that is always None would
+                    # hide a workflow payload value of the same name.
                     'status': review.status,
-                    'reviewer': getattr(review, 'reviewer', None),
-                    'requester': getattr(review, 'requester', None),
+                    'reviewer': review.reviewer_email,
+                    'requester': review.requester_email,
                     'created_at': getattr(review, 'created_at', None),
                     'updated_at': getattr(review, 'updated_at', None),
                 }

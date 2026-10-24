@@ -527,7 +527,8 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     """Check a policy rule before it is saved.
 
     Raises:
-        ValueError: The rule does not parse.
+        ValueError: The rule does not parse, or has trailing input after its
+            last clause (a ``CodedValueError`` with the position).
 
     Returns:
         Warnings for rules that parse but cannot work as written, each with a
@@ -536,9 +537,9 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     """
     from src.common.compliance_dsl import parse_rule
 
-    parsed = parse_rule(rule)
+    parsed = parse_rule(rule, strict=True)
     warnings: List[Dict[str, Any]] = []
-    entity_filter = parse_entity_filter(rule)
+    entity_filter = parse_entity_filter(rule, parsed=parsed)
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
     # A rule without MATCH is valid: maturity gates and workflow policy checks
     # evaluate it against one given entity.

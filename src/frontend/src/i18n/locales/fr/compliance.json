@@ -175,5 +175,11 @@
     "rule_parse_failed": "La règle n'a pas pu être analysée : {{detail}}",
     "workspace_client_unavailable": "L'espace de travail Databricks n'est pas disponible et cette règle vérifie des objets Unity Catalog ; elle n'a donc pas pu s'exécuter.",
     "tags_load_failed": "Les tags des entités {{entityType}} n'ont pas pu être chargés ; la règle n'a donc pas pu être évaluée."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "La règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Tout ce qui suit serait ignoré, et la règle vérifierait moins que ce qu'elle indique. Supprimez-le ou corrigez la syntaxe."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Cette règle contient un fragment non valide, à partir de la ligne {{line}}, colonne {{column}} ('{{text}}'). Il est ignoré à l'exécution, donc la règle peut vérifier moins que ce qu'elle indique. Modifiez la règle pour le corriger."
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
-import type { AccessCollection, OdrlProfile } from '@/types/access-policy';
+import type { AccessCollection, OdrlProfile, ReleaseTargets } from '@/types/access-policy';
 
 let profileCache: OdrlProfile | null = null;
 
@@ -52,4 +52,22 @@ export function useAccessCollections() {
   );
 
   return { audiences, assetCollections, nameForIri, reload };
+}
+
+/** Targets releases can compile for (active Access Targets or the built-in UC target) + Delivery Modes. */
+export function useCompileTargets() {
+  const { get } = useApi();
+  const [data, setData] = useState<ReleaseTargets | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    get<ReleaseTargets>('/api/access-policies/compile-targets').then((res) => {
+      if (!cancelled && res.data && !res.error) setData(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [get]);
+
+  return data;
 }

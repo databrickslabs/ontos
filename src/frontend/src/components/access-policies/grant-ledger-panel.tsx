@@ -9,6 +9,8 @@ import { DataTable } from '@/components/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import TargetSelect from '@/components/access-policies/target-select';
+import { useCompileTargets } from '@/hooks/use-access-policies';
 import type { AccessRelease, LedgerEntry } from '@/types/access-policy';
 
 /** Grant Ledger tab: what Ontos applied and tracks, incl. expiry of time-bound grants. */
@@ -20,13 +22,20 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
   const [status, setStatus] = useState<LedgerEntry['status']>('active');
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState(false);
+  const compileTargets = useCompileTargets();
+  const targets = compileTargets?.targets || [];
+  const [target, setTarget] = useState('');
+  const chosen = target || targets[0]?.key || '';
 
   const load = useCallback(async () => {
+    if (!chosen) return; // wait for the targets: the ledger is per target
     setLoading(true);
-    const res = await get<LedgerEntry[]>(`/api/access-policies/ledger?status=${status}`);
+    const res = await get<LedgerEntry[]>(
+      `/api/access-policies/ledger?status=${status}&target=${encodeURIComponent(chosen)}`,
+    );
     setRows(Array.isArray(res.data) ? res.data : []);
     setLoading(false);
-  }, [get, status]);
+  }, [get, status, chosen]);
 
   useEffect(() => {
     load();
@@ -38,7 +47,7 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
     setRevoking(true);
     const res = await post<{ release: AccessRelease | null; revoked: unknown[] }>(
       '/api/access-policies/ledger/revoke-expired',
-      { target: 'uc' },
+      { target: chosen },
     );
     setRevoking(false);
     if (res.error || !res.data) {
@@ -137,6 +146,7 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
         storageKey="access-grant-ledger-list"
         toolbarActions={
           <div className="flex items-center gap-2">
+            <TargetSelect targets={targets} value={chosen} onChange={setTarget} />
             <Select value={status} onValueChange={(v) => setStatus(v as LedgerEntry['status'])}>
               <SelectTrigger className="h-8 w-[140px]" aria-label={t('common:labels.status')}>
                 <SelectValue />
@@ -148,7 +158,7 @@ export default function GrantLedgerPanel({ canAdmin }: { canAdmin: boolean }) {
               </SelectContent>
             </Select>
             {canAdmin && status === 'active' && (
-              <Button size="sm" variant={expiredCount ? 'destructive' : 'outline'} onClick={revokeExpired} disabled={revoking}>
+              <Button size="sm" variant={expiredCount ? 'destructive' : 'outline'} onClick={revokeExpired} disabled={revoking || !chosen}>
                 <TimerOff className="mr-1 h-4 w-4" /> {t('access-policies:ledger.revokeExpired', { count: expiredCount })}
               </Button>
             )}

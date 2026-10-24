@@ -7,7 +7,8 @@
     "assetCollections": "Asset Collections",
     "check": "Check Access",
     "releases": "Releases",
-    "ledger": "Grant Ledger"
+    "ledger": "Grant Ledger",
+    "targets": "Targets"
   },
   "status": {
     "draft": "Draft",
@@ -63,7 +64,8 @@
     "new": {
       "policy": "New Policy",
       "audience": "New Audience",
-      "asset_collection": "New Asset Collection"
+      "asset_collection": "New Asset Collection",
+      "target": "New Target"
     },
     "import": "Import ODRL",
     "type": "Type",
@@ -82,18 +84,21 @@
       "create": {
         "policy": "New Access Policy",
         "audience": "New Audience",
-        "asset_collection": "New Asset Collection"
+        "asset_collection": "New Asset Collection",
+        "target": "New Target"
       },
       "edit": {
         "policy": "Edit Access Policy",
         "audience": "Edit Audience",
-        "asset_collection": "Edit Asset Collection"
+        "asset_collection": "Edit Asset Collection",
+        "target": "Edit Target"
       }
     },
     "description": {
       "policy": "An ODRL policy: permissions, prohibitions and obligations on assets for audiences or principals.",
       "audience": "An ODRL PartyCollection: listed principals, narrowed by the refinement (all must hold). With no principals listed, the refinement selects from all principals; with neither, the audience is empty.",
-      "asset_collection": "An ODRL AssetCollection: listed assets (a catalog or schema covers its children), narrowed by the refinement."
+      "asset_collection": "An ODRL AssetCollection: listed assets (a catalog or schema covers its children), narrowed by the refinement.",
+      "target": "Where compiled policies ship: a platform, the securables it manages, and how releases may be delivered."
     },
     "ownerTeam": "Owner team",
     "project": "Project",
@@ -396,5 +401,24 @@
     "grants": "Your access",
     "prohibitions": "Not permitted",
     "obligations": "Obligations"
+  },
+  "targets": {
+    "target": "Target",
+    "hint": "Targets decide where releases compile to. While no Unity Catalog target is active, the built-in 'uc' target covers all of Unity Catalog. Two active targets of one system may not overlap.",
+    "key": "Key",
+    "keyHint": "Stable identifier releases and the Grant Ledger use (e.g. uc, uc-prod). Fixed once the target has more than one version.",
+    "system": "System",
+    "scope": "Scope",
+    "scopeAll": "Everything",
+    "scopeHint": "Securable prefixes this target manages, one per line (catalog or catalog.schema). Empty = everything in the system. Narrowing the scope stops tracking grants outside it; they are never revoked.",
+    "deliveryModes": "Allowed delivery modes",
+    "deliveryModesHint": "None selected = any mode enabled in Settings.",
+    "allModes": "Any enabled mode",
+    "schedule": "Drift reconciliation schedule",
+    "scheduleHint": "Cron expression (Quartz or 5-field). Drift is reported, never auto-fixed.",
+    "driftReportOnly": "Drift policy: report only",
+    "tracked": "Tracked grants",
+    "definition": "Target",
+    "semantics": "Releases for this target compile only the securables in its scope and ship through its allowed delivery modes."
   }
 }

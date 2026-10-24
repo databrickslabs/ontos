@@ -113,7 +113,7 @@ def test_agreement_scoped_release_ships_only_its_grants_and_revokes_them(product
 
 def test_auto_deliver_is_opt_in(product, db_session: Session, monkeypatch):
     called = []
-    monkeypatch.setattr(AgreementService, "prepare_release", lambda *a, **k: called.append(1))
+    monkeypatch.setattr(AgreementService, "prepare_releases", lambda *a, **k: called.append(1))
     access_agreements.auto_deliver(db_session, [object()], ADMIN, revoke=False)
     assert called == []
     from src.common.config import get_settings

@@ -11,6 +11,7 @@ import {
   GitBranch,
   Layers,
   Pencil,
+  Send,
   ShieldCheck,
   Trash2,
   Users,
@@ -53,6 +54,7 @@ import type {
   AccessKind,
   AccessPolicy,
   AccessStatus,
+  AccessTarget,
   OdrlConstraint,
   OdrlRule,
   PolicyValidation,
@@ -67,7 +69,13 @@ function bumpMinor(v: string): string {
   return m ? `${m[1]}.${Number(m[2]) + 1}.0` : `${v}-next`;
 }
 
-const KIND_ICON = { policy: ShieldCheck, audience: Users, asset_collection: Layers } as const;
+const KIND_ICON = { policy: ShieldCheck, audience: Users, asset_collection: Layers, target: Send } as const;
+const KIND_TAB: Record<AccessKind, string> = {
+  policy: 'policies',
+  audience: 'audiences',
+  asset_collection: 'assetCollections',
+  target: 'targets',
+};
 
 function InfoItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -88,7 +96,11 @@ export default function AccessPolicyDetails() {
   const { get, post, delete: del } = useApi();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-  const canWrite = hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+  // Targets decide where grants get pushed: changing them is admin-only (mirrors the API).
+  const canWrite = hasPermission(
+    FEATURE_ID,
+    kind === 'target' ? FeatureAccessLevel.ADMIN : FeatureAccessLevel.READ_WRITE,
+  );
   const { teams } = useTeams();
   const { availableProjects, fetchUserProjects } = useProjectContext();
   const profile = useOdrlProfile();
@@ -156,7 +168,7 @@ export default function AccessPolicyDetails() {
     fetchUserProjects();
     setStaticSegments([
       { label: t('access-policies:title'), path: '/access-policies' },
-      { label: t(`access-policies:tabs.${kind === 'asset_collection' ? 'assetCollections' : kind === 'audience' ? 'audiences' : 'policies'}`), path: `/access-policies?tab=${KIND_SEGMENT[kind]}` },
+      { label: t(`access-policies:tabs.${KIND_TAB[kind]}`), path: `/access-policies?tab=${KIND_SEGMENT[kind]}` },
     ]);
     load();
     return () => {
@@ -275,7 +287,8 @@ export default function AccessPolicyDetails() {
   }
 
   const policy = kind === 'policy' ? (entity as AccessPolicy) : null;
-  const collection = kind !== 'policy' ? (entity as AccessCollection) : null;
+  const collection = kind === 'audience' || kind === 'asset_collection' ? (entity as AccessCollection) : null;
+  const target = kind === 'target' ? (entity as AccessTarget) : null;
   const canDelete = canWrite && (entity.status === 'draft' || entity.status === 'retired');
   const KindIcon = KIND_ICON[kind];
 
@@ -685,6 +698,56 @@ export default function AccessPolicyDetails() {
               ) : (
                 <div className="text-muted-foreground">{t('access-policies:details.notUsed')}</div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {target && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('access-policies:targets.definition')}</CardTitle>
+            <CardDescription>{t('access-policies:targets.semantics')}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm md:grid-cols-2" data-testid="target-definition">
+            <div>
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.key')}</div>
+              <code>{target.key}</code>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.system')}</div>
+              {target.system_label}
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.scope')}</div>
+              {target.scope.length ? (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {target.scope.map((s) => (
+                    <Badge key={s} variant="secondary" className="font-mono text-xs">
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground">{t('access-policies:targets.scopeAll')}</div>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.deliveryModes')}</div>
+              {target.delivery_modes.length
+                ? target.delivery_modes.map((m) => t(`access-policies:releases.modes.${m}`)).join(', ')
+                : t('access-policies:targets.allModes')}
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.schedule')}</div>
+              {target.reconcile_schedule ? <code>{target.reconcile_schedule}</code> : t('access-policies:form.none')}
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.driftReportOnly')}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">{t('access-policies:targets.tracked')}</div>
+              <Link to={`/access-policies?tab=ledger`} className="text-primary hover:underline">
+                {target.tracked_grants}
+              </Link>
             </div>
           </CardContent>
         </Card>

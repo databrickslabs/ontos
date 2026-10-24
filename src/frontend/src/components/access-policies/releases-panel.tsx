@@ -9,6 +9,8 @@ import { DataTable } from '@/components/ui/data-table';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import ReleaseStatusBadge from '@/components/access-policies/release-status-badge';
+import TargetSelect from '@/components/access-policies/target-select';
+import { useCompileTargets } from '@/hooks/use-access-policies';
 import type { AccessRelease } from '@/types/access-policy';
 
 /** Releases tab: compiled deployments of all active policies to a target, newest first. */
@@ -20,6 +22,11 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
   const [rows, setRows] = useState<AccessRelease[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const compileTargets = useCompileTargets();
+  const targets = compileTargets?.targets || [];
+  const [target, setTarget] = useState('');
+  // No fallback key: until the targets load there is nothing valid to compile for.
+  const chosen = target || targets[0]?.key || '';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,7 +41,7 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
 
   const create = async () => {
     setCreating(true);
-    const res = await post<AccessRelease>('/api/access-policies/releases', { target: 'uc' });
+    const res = await post<AccessRelease>('/api/access-policies/releases', { target: chosen });
     setCreating(false);
     if (res.error || !res.data) {
       toast({ title: t('access-policies:releases.createFailed'), description: res.error || '', variant: 'destructive' });
@@ -59,6 +66,11 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
         accessorKey: 'status',
         header: t('common:labels.status'),
         cell: ({ row }) => <ReleaseStatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: 'target',
+        header: t('access-policies:targets.target'),
+        cell: ({ row }) => <code className="text-xs">{row.original.target}</code>,
       },
       {
         accessorKey: 'release_kind',
@@ -118,9 +130,12 @@ export default function ReleasesPanel({ canWrite }: { canWrite: boolean }) {
         onRowClick={(row) => navigate(`/access-policies/releases/${row.original.id}`)}
         toolbarActions={
           canWrite ? (
-            <Button size="sm" onClick={create} disabled={creating}>
-              <PackagePlus className="mr-1 h-4 w-4" /> {t('access-policies:releases.compile')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <TargetSelect targets={targets} value={chosen} onChange={setTarget} />
+              <Button size="sm" onClick={create} disabled={creating || !chosen}>
+                <PackagePlus className="mr-1 h-4 w-4" /> {t('access-policies:releases.compile')}
+              </Button>
+            </div>
           ) : null
         }
       />

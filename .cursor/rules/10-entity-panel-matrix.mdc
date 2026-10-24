@@ -34,7 +34,7 @@ These tables use an `entity_type` + `entity_id` pattern to link to any entity.
 | `entity_relationships` | Typed relationships between any two entities |
 | `entity_subscriptions` | User subscriptions / notifications |
 | `entity_tag_associations` | Tag assignments |
-| `entity_domain_associations` | Data domain assignments — multi-domain with one `is_primary` per entity (`entity_type` ∈ {`team`, `data_contract`, `data_product`, `asset`, `access_policy`, `access_audience`, `access_asset_collection`}). Primary feeds single-value integrations (ODCS/ODPS `domain`, UC `data_domain` tag); additional domains ride extension fields and any-of discovery. See `docs/prds/prd-multi-domain-assignment.md`. |
+| `entity_domain_associations` | Data domain assignments — multi-domain with one `is_primary` per entity (`entity_type` ∈ {`team`, `data_contract`, `data_product`, `asset`, `access_policy`, `access_audience`, `access_asset_collection`, `access_target`}). Primary feeds single-value integrations (ODCS/ODPS `domain`, UC `data_domain` tag); additional domains ride extension fields and any-of discovery. See `docs/prds/prd-multi-domain-assignment.md`. |
 | `entity_semantic_links` | Links to ontology concepts/properties (`entity_type` ∈ {`data_domain`, `data_product`, `data_contract`, `data_contract_schema`, `data_contract_property`, `asset`, `uc_catalog`, `uc_schema`, `uc_table`, `uc_column`, `dataset` _(legacy)_}) |
 | `rich_text_metadata` | Rich-text notes |
 | `link_metadata` | External link bookmarks |
@@ -73,7 +73,7 @@ Dedicated entities have their own DB tables and detail views.
 
 Legend: **Y** = yes, show/support | **—** = no, hide/skip | **Σ** = show summary/aggregate only (no direct items)
 
-| Panel / Table | DataDomain | DataProduct | DataContract | CompliancePolicy | Concept | Collection | AccessPolicy / Audience / AssetCollection |
+| Panel / Table | DataDomain | DataProduct | DataContract | CompliancePolicy | Concept | Collection | AccessPolicy / Audience / AssetCollection / AccessTarget |
 |---|---|---|---|---|---|---|---|
 | **Costs** | Σ | Y | Y | — | — | — | — |
 | **Quality** | Σ | Y | Y | — | — | — | — |
@@ -106,6 +106,9 @@ Legend: **Y** = yes, show/support | **—** = no, hide/skip | **Σ** = show summ
   owner team + project (columns, like Data Products), and version families
   (`version_family_id` + `parent_id`, version picker on the detail view). The Comments
   timeline doubles as the change log (status changes and new versions are logged there).
+- **AccessTarget** (`access_target`; same shared detail view): the same governed set as
+  policies. A target is where releases compile to (adapter `system`, `scope`, allowed
+  Delivery Modes, reconcile cron); creating/editing one needs feature ADMIN.
 - **AccessPolicyRelease** (`access_policy_release`; `views/access-policy-release-details.tsx`):
   a compiled, immutable deployment record — comments/timeline (doubles as the delivery log)
   and metadata only. No versions (releases are sequenced per target), no tags, domains,

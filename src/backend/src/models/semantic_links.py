@@ -8,7 +8,7 @@ from typing import Optional, Literal
 EntityType = Literal[
     'data_domain', 'data_product', 'data_contract', 'data_contract_schema', 'data_contract_property',
     'dataset', 'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column',
-    'access_policy', 'access_audience', 'access_asset_collection',
+    'access_policy', 'access_audience', 'access_asset_collection', 'access_target',
 ]
 
 

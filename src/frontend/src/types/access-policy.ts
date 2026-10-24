@@ -1,11 +1,11 @@
 /**
- * Access Policies (W3C ODRL 2.2) — policies, audiences (odrl:PartyCollection)
- * and asset collections (odrl:AssetCollection).
+ * Access Policies (W3C ODRL 2.2) — policies, audiences (odrl:PartyCollection),
+ * asset collections (odrl:AssetCollection) and targets (where releases ship).
  */
 import type { AssignedTag } from '@/components/ui/tag-chip';
 
-export type AccessKind = 'policy' | 'audience' | 'asset_collection';
-export type AccessEntityType = 'access_policy' | 'access_audience' | 'access_asset_collection';
+export type AccessKind = 'policy' | 'audience' | 'asset_collection' | 'target';
+export type AccessEntityType = 'access_policy' | 'access_audience' | 'access_asset_collection' | 'access_target';
 export type AccessStatus =
   | 'draft'
   | 'under_review'
@@ -114,7 +114,21 @@ export interface AccessCollection extends AccessEntityBase {
   used_by: UsedByRef[];
 }
 
-export type AccessEntity = AccessPolicy | AccessCollection;
+/** A compile + delivery target (Phase 4). */
+export interface AccessTarget extends AccessEntityBase {
+  kind: 'target';
+  key: string;
+  system: string;
+  system_label: string;
+  connection: Record<string, unknown>;
+  scope: string[];
+  delivery_modes: DeliveryModeKey[];
+  reconcile_schedule: string | null;
+  drift_policy: 'report';
+  tracked_grants: number;
+}
+
+export type AccessEntity = AccessPolicy | AccessCollection | AccessTarget;
 
 export interface VersionRow {
   id: string;
@@ -199,18 +213,21 @@ export const KIND_SEGMENT: Record<AccessKind, string> = {
   policy: 'policies',
   audience: 'audiences',
   asset_collection: 'asset-collections',
+  target: 'targets',
 };
 
 export const SEGMENT_KIND: Record<string, AccessKind> = {
   policies: 'policy',
   audiences: 'audience',
   'asset-collections': 'asset_collection',
+  targets: 'target',
 };
 
 export const KIND_ENTITY_TYPE: Record<AccessKind, AccessEntityType> = {
   policy: 'access_policy',
   audience: 'access_audience',
   asset_collection: 'access_asset_collection',
+  target: 'access_target',
 };
 
 export const AUDIENCE_IRI_PREFIX = 'urn:ontos:audience:';
@@ -355,8 +372,30 @@ export interface LedgerEntry extends UcGrant {
   revoked_at?: string | null;
 }
 
+export interface CompileTarget {
+  key: string;
+  label: string;
+  system: string;
+  system_label: string;
+  scope: string[];
+  delivery_modes: DeliveryModeKey[];
+  reconcile_schedule: string | null;
+  drift_policy: string;
+  entity_id: string | null;
+  builtin: boolean;
+  capabilities: string[];
+}
+
+export interface TargetSystem {
+  system: string;
+  label: string;
+  asset_prefix: string;
+  capabilities: string[];
+}
+
 export interface ReleaseTargets {
-  targets: { key: string; label: string }[];
+  targets: CompileTarget[];
+  systems: TargetSystem[];
   delivery_modes: DeliveryModeKey[];
 }
 

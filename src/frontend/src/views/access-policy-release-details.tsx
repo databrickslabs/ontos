@@ -181,8 +181,10 @@ export default function AccessPolicyReleaseDetails() {
   };
 
   const openDeliver = async () => {
-    const res = await get<ReleaseTargets>('/api/access-policies/targets');
-    const enabled = res.data?.delivery_modes || [];
+    const res = await get<ReleaseTargets>('/api/access-policies/compile-targets');
+    const allowed = res.data?.targets.find((tg) => tg.key === release?.target)?.delivery_modes || [];
+    // The target may restrict how its releases ship (e.g. Indirect only).
+    const enabled = (res.data?.delivery_modes || []).filter((m) => !allowed.length || allowed.includes(m));
     setEnabledModes(enabled);
     setModes(enabled);
     setDeliverOpen(true);
@@ -285,7 +287,7 @@ export default function AccessPolicyReleaseDetails() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <KV label={t('access-policies:releases.target')} value="Unity Catalog" />
+            <KV label={t('access-policies:releases.target')} value={release.target} />
             <KV
               label={t('access-policies:releases.changes')}
               value={t('access-policies:releases.changeSummary', {

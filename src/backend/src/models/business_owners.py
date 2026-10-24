@@ -18,6 +18,7 @@ class OwnerObjectType(str, Enum):
     ACCESS_POLICY = "access_policy"
     ACCESS_AUDIENCE = "access_audience"
     ACCESS_ASSET_COLLECTION = "access_asset_collection"
+    ACCESS_TARGET = "access_target"
 
 
 # --- Business Owner Models ---

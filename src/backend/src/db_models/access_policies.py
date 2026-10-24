@@ -6,8 +6,10 @@
   ("which policies touch asset X / principal Y").
 * :class:`AccessAudienceDb` — a named ``odrl:PartyCollection``: who.
 * :class:`AccessAssetCollectionDb` — a named ``odrl:AssetCollection``: what.
+* :class:`AccessTargetDb` — where compiled policies ship (Phase 4): a platform
+  adapter, the securables it manages, allowed Delivery Modes, reconcile schedule.
 
-All three are first-class governed entities and share the lifecycle columns in
+All four are first-class governed entities and share the lifecycle columns in
 :class:`GovernedEntityMixin` (status, semantic version family, ownership via
 team/project/draft owner, maturity cache) — the same shape as Data Products.
 Domains, tags, comments and metadata attach polymorphically by entity type.
@@ -22,6 +24,7 @@ from src.common.database import Base
 ENTITY_TYPE_POLICY = "access_policy"
 ENTITY_TYPE_AUDIENCE = "access_audience"
 ENTITY_TYPE_ASSET_COLLECTION = "access_asset_collection"
+ENTITY_TYPE_TARGET = "access_target"
 
 
 class GovernedEntityMixin:
@@ -126,10 +129,32 @@ class AccessAssetCollectionDb(GovernedEntityMixin, Base):
     refinement = Column(JSON, nullable=False, default=list)
 
 
+class AccessTargetDb(GovernedEntityMixin, Base):
+    """A compile + delivery target (replaces the Entitlements Sync configs).
+
+    ``key`` is what releases and Grant Ledger rows reference; it stays the same across
+    versions. ``system`` picks the adapter (``uc``, ...). ``scope`` = securable prefixes
+    this target manages (empty = all of the system). ``connection`` holds non-secret
+    connection settings only — credentials stay in secret scopes / app config.
+    """
+    __tablename__ = "access_targets"
+
+    key = Column(String, nullable=False, index=True)
+    system = Column(String, nullable=False)
+    connection = Column(JSON, nullable=False, default=dict)
+    scope = Column(JSON, nullable=False, default=list)
+    # Allowed Delivery Modes (values); empty = whatever is enabled in Settings.
+    delivery_modes = Column(JSON, nullable=False, default=list)
+    # Drift reconciliation schedule (cron) and what to do with drift (report only).
+    reconcile_schedule = Column(String, nullable=True)
+    drift_policy = Column(String, nullable=False, default="report")
+
+
 UID_PREFIXES = {
     AccessPolicyDb: "urn:ontos:policy:",
     AccessAudienceDb: "urn:ontos:audience:",
     AccessAssetCollectionDb: "urn:ontos:asset-collection:",
+    AccessTargetDb: "urn:ontos:target:",
 }
 
 

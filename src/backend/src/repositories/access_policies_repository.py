@@ -10,6 +10,7 @@ from src.db_models.access_policies import (
     AccessAudienceDb,
     AccessPolicyDb,
     AccessPolicyIndexDb,
+    AccessTargetDb,
 )
 
 
@@ -73,12 +74,14 @@ class AccessPolicyIndexRepository(CRUDBase[AccessPolicyIndexDb, Dict[str, Any], 
 access_policy_repo = GovernedEntityRepository(AccessPolicyDb)
 access_audience_repo = GovernedEntityRepository(AccessAudienceDb)
 access_asset_collection_repo = GovernedEntityRepository(AccessAssetCollectionDb)
+access_target_repo = GovernedEntityRepository(AccessTargetDb)
 access_policy_index_repo = AccessPolicyIndexRepository()
 
 _BY_KIND = {
     "policy": access_policy_repo,
     "audience": access_audience_repo,
     "asset_collection": access_asset_collection_repo,
+    "target": access_target_repo,
 }
 
 

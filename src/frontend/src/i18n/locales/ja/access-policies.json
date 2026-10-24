@@ -7,7 +7,8 @@
     "assetCollections": "__TODO__ Asset Collections",
     "check": "__TODO__ Check Access",
     "releases": "__TODO__ Releases",
-    "ledger": "__TODO__ Grant Ledger"
+    "ledger": "__TODO__ Grant Ledger",
+    "targets": "__TODO__ Targets"
   },
   "status": {
     "draft": "__TODO__ Draft",
@@ -63,7 +64,8 @@
     "new": {
       "policy": "__TODO__ New Policy",
       "audience": "__TODO__ New Audience",
-      "asset_collection": "__TODO__ New Asset Collection"
+      "asset_collection": "__TODO__ New Asset Collection",
+      "target": "__TODO__ New Target"
     },
     "import": "__TODO__ Import ODRL",
     "type": "__TODO__ Type",
@@ -82,18 +84,21 @@
       "create": {
         "policy": "__TODO__ New Access Policy",
         "audience": "__TODO__ New Audience",
-        "asset_collection": "__TODO__ New Asset Collection"
+        "asset_collection": "__TODO__ New Asset Collection",
+        "target": "__TODO__ New Target"
       },
       "edit": {
         "policy": "__TODO__ Edit Access Policy",
         "audience": "__TODO__ Edit Audience",
-        "asset_collection": "__TODO__ Edit Asset Collection"
+        "asset_collection": "__TODO__ Edit Asset Collection",
+        "target": "__TODO__ Edit Target"
       }
     },
     "description": {
       "policy": "__TODO__ An ODRL policy: permissions, prohibitions and obligations on assets for audiences or principals.",
       "audience": "__TODO__ An ODRL PartyCollection: listed principals, narrowed by the refinement (all must hold). With no principals listed, the refinement selects from all principals; with neither, the audience is empty.",
-      "asset_collection": "__TODO__ An ODRL AssetCollection: listed assets (a catalog or schema covers its children), narrowed by the refinement."
+      "asset_collection": "__TODO__ An ODRL AssetCollection: listed assets (a catalog or schema covers its children), narrowed by the refinement.",
+      "target": "__TODO__ Where compiled policies ship: a platform, the securables it manages, and how releases may be delivered."
     },
     "ownerTeam": "__TODO__ Owner team",
     "project": "__TODO__ Project",
@@ -396,5 +401,24 @@
     "grants": "__TODO__ Your access",
     "prohibitions": "__TODO__ Not permitted",
     "obligations": "__TODO__ Obligations"
+  },
+  "targets": {
+    "target": "__TODO__ Target",
+    "hint": "__TODO__ Targets decide where releases compile to. While no Unity Catalog target is active, the built-in 'uc' target covers all of Unity Catalog. Two active targets of one system may not overlap.",
+    "key": "__TODO__ Key",
+    "keyHint": "__TODO__ Stable identifier releases and the Grant Ledger use (e.g. uc, uc-prod). Fixed once the target has more than one version.",
+    "system": "__TODO__ System",
+    "scope": "__TODO__ Scope",
+    "scopeAll": "__TODO__ Everything",
+    "scopeHint": "__TODO__ Securable prefixes this target manages, one per line (catalog or catalog.schema). Empty = everything in the system. Narrowing the scope stops tracking grants outside it; they are never revoked.",
+    "deliveryModes": "__TODO__ Allowed delivery modes",
+    "deliveryModesHint": "__TODO__ None selected = any mode enabled in Settings.",
+    "allModes": "__TODO__ Any enabled mode",
+    "schedule": "__TODO__ Drift reconciliation schedule",
+    "scheduleHint": "__TODO__ Cron expression (Quartz or 5-field). Drift is reported, never auto-fixed.",
+    "driftReportOnly": "__TODO__ Drift policy: report only",
+    "tracked": "__TODO__ Tracked grants",
+    "definition": "__TODO__ Target",
+    "semantics": "__TODO__ Releases for this target compile only the securables in its scope and ship through its allowed delivery modes."
   }
 }

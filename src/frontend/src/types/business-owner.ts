@@ -7,7 +7,8 @@ export type OwnerObjectType =
   | 'tag'
   | 'access_policy'
   | 'access_audience'
-  | 'access_asset_collection';
+  | 'access_asset_collection'
+  | 'access_target';
 
 export interface BusinessOwnerRead {
   id: string;

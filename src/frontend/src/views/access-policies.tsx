@@ -20,11 +20,11 @@ import AccessStatusBadge from '@/components/access-policies/access-status-badge'
 import CheckAccessPanel from '@/components/access-policies/check-access-panel';
 import GrantLedgerPanel from '@/components/access-policies/grant-ledger-panel';
 import ReleasesPanel from '@/components/access-policies/releases-panel';
-import type { AccessCollection, AccessEntity, AccessKind, AccessPolicy } from '@/types/access-policy';
+import type { AccessCollection, AccessEntity, AccessKind, AccessPolicy, AccessTarget } from '@/types/access-policy';
 import { KIND_SEGMENT } from '@/types/access-policy';
 
 const FEATURE_ID = 'access-policies';
-const TABS = ['policies', 'audiences', 'asset-collections', 'check', 'releases', 'ledger'] as const;
+const TABS = ['policies', 'audiences', 'asset-collections', 'check', 'releases', 'ledger', 'targets'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AccessPolicies() {
@@ -43,6 +43,7 @@ export default function AccessPolicies() {
   const [policies, setPolicies] = useState<AccessPolicy[]>([]);
   const [audiences, setAudiences] = useState<AccessCollection[]>([]);
   const [collections, setCollections] = useState<AccessCollection[]>([]);
+  const [targets, setTargets] = useState<AccessTarget[]>([]);
   const [loading, setLoading] = useState(true);
   const [createKind, setCreateKind] = useState<AccessKind | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -56,14 +57,16 @@ export default function AccessPolicies() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [p, a, c] = await Promise.all([
+    const [p, a, c, tg] = await Promise.all([
       get<AccessPolicy[]>('/api/access-policies/policies'),
       get<AccessCollection[]>('/api/access-policies/audiences'),
       get<AccessCollection[]>('/api/access-policies/asset-collections'),
+      get<AccessTarget[]>('/api/access-policies/targets'),
     ]);
     setPolicies(Array.isArray(p.data) ? p.data : []);
     setAudiences(Array.isArray(a.data) ? a.data : []);
     setCollections(Array.isArray(c.data) ? c.data : []);
+    setTargets(Array.isArray(tg.data) ? tg.data : []);
     setLoading(false);
   }, [get]);
 
@@ -170,6 +173,37 @@ export default function AccessPolicies() {
     [commonColumns, t],
   );
 
+  const targetColumns = useMemo<ColumnDef<AccessTarget>[]>(
+    () => [
+      ...commonColumns<AccessTarget>().slice(0, 3),
+      {
+        accessorKey: 'key',
+        header: t('access-policies:targets.key'),
+        cell: ({ row }) => <code className="text-xs">{row.original.key}</code>,
+      },
+      {
+        accessorKey: 'system',
+        header: t('access-policies:targets.system'),
+        cell: ({ row }) => <Badge variant="outline">{row.original.system_label}</Badge>,
+      },
+      {
+        id: 'scope',
+        header: t('access-policies:targets.scope'),
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">
+            {row.original.scope.length ? row.original.scope.join(', ') : t('access-policies:targets.scopeAll')}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'tracked_grants',
+        header: t('access-policies:targets.tracked'),
+        cell: ({ row }) => <span className="text-xs">{row.original.tracked_grants}</span>,
+      },
+    ],
+    [commonColumns, t],
+  );
+
   const openDetail = (kind: AccessKind, id: string) => navigate(`/access-policies/${KIND_SEGMENT[kind]}/${id}`);
 
   const doImport = async () => {
@@ -191,8 +225,9 @@ export default function AccessPolicies() {
     openDetail('policy', res.data.id);
   };
 
+  // Targets decide where grants get pushed: admin only (mirrors the API).
   const newButton = (kind: AccessKind) =>
-    canWrite ? (
+    (kind === 'target' ? canAdmin : canWrite) ? (
       <Button size="sm" onClick={() => setCreateKind(kind)}>
         <Plus className="mr-1 h-4 w-4" /> {t(`access-policies:list.new.${kind}`)}
       </Button>
@@ -223,6 +258,9 @@ export default function AccessPolicies() {
           <TabsTrigger value="check">{t('access-policies:tabs.check')}</TabsTrigger>
           <TabsTrigger value="releases">{t('access-policies:tabs.releases')}</TabsTrigger>
           <TabsTrigger value="ledger">{t('access-policies:tabs.ledger')}</TabsTrigger>
+          <TabsTrigger value="targets">
+            {t('access-policies:tabs.targets')} ({targets.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="policies" className="pt-4">
@@ -277,6 +315,18 @@ export default function AccessPolicies() {
         </TabsContent>
         <TabsContent value="ledger" className="pt-4">
           <GrantLedgerPanel canAdmin={canAdmin} />
+        </TabsContent>
+        <TabsContent value="targets" className="pt-4">
+          <p className="mb-3 text-sm text-muted-foreground">{t('access-policies:targets.hint')}</p>
+          <DataTable
+            columns={targetColumns}
+            data={targets}
+            searchColumn="name"
+            isLoading={loading}
+            storageKey="access-targets-list"
+            onRowClick={(row) => openDetail('target', row.original.id)}
+            toolbarActions={newButton('target')}
+          />
         </TabsContent>
       </Tabs>
 

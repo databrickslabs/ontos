@@ -22,10 +22,14 @@ import type {
   AccessEntity,
   AccessKind,
   AccessPolicy,
+  AccessTarget,
+  DeliveryModeKey,
   OdrlConflict,
   OdrlPolicyType,
   OdrlRules,
   PolicyValidation,
+  ReleaseTargets,
+  TargetSystem,
 } from '@/types/access-policy';
 import { KIND_SEGMENT } from '@/types/access-policy';
 import ConstraintEditor from './constraint-editor';
@@ -42,6 +46,7 @@ interface Props {
 }
 
 const NONE = '__none__';
+const DELIVERY_MODES: DeliveryModeKey[] = ['direct', 'indirect', 'manual'];
 
 function normalizeTags(tags: (string | AssignedTag)[]) {
   return tags.map((tag) =>
@@ -85,7 +90,21 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
   const [members, setMembers] = useState('');
   const [refinement, setRefinement] = useState<FormConstraint[]>([]);
   const [refinementUnsupported, setRefinementUnsupported] = useState(false);
+  // Targets
+  const [targetKey, setTargetKey] = useState('');
+  const [system, setSystem] = useState('uc');
+  const [systems, setSystems] = useState<TargetSystem[]>([]);
+  const [scope, setScope] = useState('');
+  const [deliveryModes, setDeliveryModes] = useState<DeliveryModeKey[]>([]);
+  const [schedule, setSchedule] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || kind !== 'target' || systems.length) return;
+    get<ReleaseTargets>('/api/access-policies/compile-targets').then((res) => {
+      if (res.data?.systems) setSystems(res.data.systems);
+    });
+  }, [open, kind, systems.length, get]);
 
   useEffect(() => {
     if (!open || kind !== 'policy' || policyType !== 'Offer' || products.length) return;
@@ -119,6 +138,13 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
       setRules(form ?? []);
       setRulesJson(JSON.stringify(stored, null, 2));
       setRulesTab(form === null ? 'json' : 'builder');
+    } else if (kind === 'target') {
+      const tg = entity as AccessTarget | undefined;
+      setTargetKey(tg?.key || '');
+      setSystem(tg?.system || 'uc');
+      setScope((tg?.scope || []).join('\n'));
+      setDeliveryModes(tg?.delivery_modes || []);
+      setSchedule(tg?.reconcile_schedule || '');
     } else {
       const c = entity as AccessCollection | undefined;
       setMembers((c?.members || []).join('\n'));
@@ -212,6 +238,14 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
           rules: r,
           subject_entity_type: policyType === 'Offer' && subjectProductId ? 'data_product' : null,
           subject_entity_id: policyType === 'Offer' && subjectProductId ? subjectProductId : null,
+        });
+      } else if (kind === 'target') {
+        Object.assign(base, {
+          key: targetKey.trim(),
+          system,
+          scope: scope.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
+          delivery_modes: deliveryModes,
+          reconcile_schedule: schedule.trim() || null,
         });
       } else {
         if (refinementUnsupported) {
@@ -448,6 +482,81 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
                   )}
                 </div>
               )}
+            </div>
+          ) : kind === 'target' ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="ap-target-key">{t('access-policies:targets.key')}</Label>
+                <Input
+                  id="ap-target-key"
+                  value={targetKey}
+                  disabled={contentLocked}
+                  placeholder="uc-prod"
+                  className="font-mono"
+                  onChange={(e) => setTargetKey(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t('access-policies:targets.keyHint')}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>{t('access-policies:targets.system')}</Label>
+                <Select value={system} disabled={contentLocked} onValueChange={setSystem}>
+                  <SelectTrigger aria-label={t('access-policies:targets.system')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(systems.length ? systems : [{ system: 'uc', label: 'Unity Catalog' } as TargetSystem]).map((sy) => (
+                      <SelectItem key={sy.system} value={sy.system}>
+                        {sy.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ap-target-scope">{t('access-policies:targets.scope')}</Label>
+                <Textarea
+                  id="ap-target-scope"
+                  rows={4}
+                  disabled={contentLocked}
+                  className="font-mono text-xs"
+                  placeholder={'main.sales\nfinance'}
+                  value={scope}
+                  onChange={(e) => setScope(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t('access-policies:targets.scopeHint')}</p>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>{t('access-policies:targets.deliveryModes')}</Label>
+                  <div className="flex flex-wrap gap-4">
+                    {DELIVERY_MODES.map((m) => (
+                      <label key={m} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={deliveryModes.includes(m)}
+                          disabled={contentLocked}
+                          onCheckedChange={(v) =>
+                            setDeliveryModes((cur) => (v ? [...cur, m] : cur.filter((x) => x !== m)))
+                          }
+                        />
+                        {t(`access-policies:releases.modes.${m}`)}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('access-policies:targets.deliveryModesHint')}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="ap-target-schedule">{t('access-policies:targets.schedule')}</Label>
+                  <Input
+                    id="ap-target-schedule"
+                    value={schedule}
+                    disabled={contentLocked}
+                    placeholder="0 0 6 * * ?"
+                    className="font-mono"
+                    onChange={(e) => setSchedule(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('access-policies:targets.scheduleHint')}</p>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">

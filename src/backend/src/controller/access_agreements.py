@@ -171,21 +171,52 @@ class AgreementService:
 
     # ------------------------------------------------------------ delivery
 
-    def prepare_release(self, db: Session, agreements: List[AccessPolicyDb], user: Optional[str], *,
-                        revoke: bool = False) -> Optional[AccessPolicyReleaseDb]:
-        """An auto-approved release with only these Agreements' changes (None if there is nothing to ship).
+    def prepare_releases(self, db: Session, agreements: List[AccessPolicyDb], user: Optional[str], *,
+                         revoke: bool = False) -> List[AccessPolicyReleaseDb]:
+        """Auto-approved releases with only these Agreements' changes — one per target their assets fall in.
 
         Uses the regular compile-vs-ledger diff and keeps the entries whose provenance includes one
         of the Agreements: grants to add (or expiry updates, e.g. a renewal) when provisioning; grants
-        to revoke / stop tracking when revoking.
+        to revoke / stop tracking when revoking. Revocations also go through deprecated targets:
+        they still track (and must revoke) what they granted.
         """
-        from src.controller.access_policy_releases_manager import R_APPROVED, PolicyReleaseManager
+        from src.controller.access_policy_releases_manager import PolicyReleaseManager
 
         uids = {a.uid for a in agreements}
         if not uids:
-            return None
+            return []
         rm = PolicyReleaseManager(self.policies)
-        compiled = rm.compile(db, uc.TARGET_UC)
+        names = list(dict.fromkeys(
+            t[len(odrl.UC_PREFIX):] for a in agreements for r in (a.body or {}).get("permission") or []
+            for t in [r.get("target")] if isinstance(t, str) and t.startswith(odrl.UC_PREFIX)))
+        targets: Dict[str, Any] = {}
+        uncovered = []
+        for name in names:
+            target = rm.target_for(db, uc.TARGET_UC, name, include_deprecated=revoke)
+            if target is None:
+                uncovered.append(name)
+            else:
+                targets.setdefault(target.key, target)
+        if uncovered:
+            logger.warning("No Unity Catalog target covers %s — not delivered", ", ".join(uncovered))
+        rows = []
+        for target in targets.values():
+            row = self._prepare_for(db, rm, target, agreements, uids, user, revoke)
+            if row is not None:
+                rows.append(row)
+        return rows
+
+    def prepare_release(self, db: Session, agreements: List[AccessPolicyDb], user: Optional[str], *,
+                        revoke: bool = False) -> Optional[AccessPolicyReleaseDb]:
+        """The first of :meth:`prepare_releases` (single-target callers / tests)."""
+        rows = self.prepare_releases(db, agreements, user, revoke=revoke)
+        return rows[0] if rows else None
+
+    def _prepare_for(self, db: Session, rm: Any, target: Any, agreements: List[AccessPolicyDb], uids: set,
+                     user: Optional[str], revoke: bool) -> Optional[AccessPolicyReleaseDb]:
+        from src.controller.access_policy_releases_manager import R_APPROVED
+
+        compiled = rm.compile(db, target.key, include_deprecated=revoke)
         changes = compiled["changes"]
 
         def mine(cat: str) -> List[uc.UCGrant]:
@@ -200,10 +231,10 @@ class AgreementService:
         if scoped.empty:
             return None
         out = scoped.to_dict()
-        out["sql"] = uc.render_sql(scoped)
+        out["sql"] = target.adapter.render_sql(scoped)
         names = ", ".join(a.name for a in agreements)
         row = rm._insert(db, AccessPolicyReleaseDb(
-            target=uc.TARGET_UC, release_kind=KIND_AGREEMENT_RELEASE, status=R_APPROVED,
+            target=target.key, release_kind=KIND_AGREEMENT_RELEASE, status=R_APPROVED,
             notes=f"{'Revocation of' if revoke else 'Provisioning'} {names}",
             plan={"compiled_at": compiled["plan"]["compiled_at"]},
             changes=out, issues=[], ledger_fingerprint=compiled["ledger_fingerprint"],
@@ -215,11 +246,13 @@ class AgreementService:
 
     def deliver(self, db: Session, agreements: List[AccessPolicyDb], user: Optional[str], delivery_service: Any, *,
                 revoke: bool = False) -> Optional[AccessPolicyReleaseDb]:
-        """Prepare and deliver in one transaction (tests / callers that own the commit)."""
+        """Prepare and deliver in one transaction (tests / callers that own the commit); returns the first release."""
         from src.controller.access_policy_releases_manager import PolicyReleaseManager
 
-        row = self.prepare_release(db, agreements, user, revoke=revoke)
-        return PolicyReleaseManager(self.policies).deliver(db, row.id, user, delivery_service) if row else None
+        rm = PolicyReleaseManager(self.policies)
+        delivered = [rm.deliver(db, row.id, user, delivery_service)
+                     for row in self.prepare_releases(db, agreements, user, revoke=revoke)]
+        return delivered[0] if delivered else None
 
 
 # ---------------------------------------------------------------- duties
@@ -371,8 +404,6 @@ def auto_deliver(db: Session, agreements: List[AccessPolicyDb], user: Optional[s
     enabled = settings.ACCESS_AGREEMENTS_AUTO_REVOKE if revoke else settings.ACCESS_AGREEMENTS_AUTO_DELIVER
     if not agreements or not enabled:
         return
-    from src.controller.access_policy_releases_manager import R_FAILED, PolicyReleaseManager
-
     service = _delivery_service()
     if service is None or not service.get_active_modes():
         what = "revocation" if revoke else "provisioning"
@@ -383,15 +414,19 @@ def auto_deliver(db: Session, agreements: List[AccessPolicyDb], user: Optional[s
         logger.warning("Agreement %s not delivered: no Delivery Mode available — a policy release is needed", what)
         return
     try:
-        row = AgreementService().prepare_release(db, agreements, user, revoke=revoke)
+        release_ids = [r.id for r in AgreementService().prepare_releases(db, agreements, user, revoke=revoke)]
         db.commit()
     except Exception as e:
         db.rollback()
         logger.error("Could not prepare the agreement release: %s", e, exc_info=True)
         return
-    if row is None:
-        return
-    release_id = row.id
+    for release_id in release_ids:
+        _deliver_one(db, release_id, user, service)
+
+
+def _deliver_one(db: Session, release_id: str, user: Optional[str], service: Any) -> None:
+    from src.controller.access_policy_releases_manager import R_FAILED, PolicyReleaseManager
+
     try:
         PolicyReleaseManager().deliver(db, release_id, user, service)
         db.commit()

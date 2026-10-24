@@ -1,8 +1,9 @@
 """Access Policies manager (W3C ODRL 2.2).
 
-Owns the governed lifecycle of the three Access Policy entity kinds — policies
-(``odrl:Set``/``Offer``/``Agreement``), Audiences (``odrl:PartyCollection``) and
-Asset Collections (``odrl:AssetCollection``) — and the policy-level operations:
+Owns the governed lifecycle of the Access Policy entity kinds — policies
+(``odrl:Set``/``Offer``/``Agreement``), Audiences (``odrl:PartyCollection``),
+Asset Collections (``odrl:AssetCollection``) and Targets (where compiled policies
+ship, see ``src.common.policy_targets``) — and the policy-level operations:
 validation, JSON-LD import/export and access evaluation ("can P do A on T?").
 
 Design notes:
@@ -16,21 +17,26 @@ Design notes:
   policy keeps pointing at "the Analysts audience" across audience versions;
   evaluation resolves each IRI to the family's active version.
 """
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
 from sqlalchemy.orm import Session
 
 from src.common import odrl
+from src.common import policy_targets as targets_mod
 from src.common.logging import get_logger
 from src.common.version_visibility import collapse_by_family, family_counts
 from src.db_models.access_policies import (
     ENTITY_TYPE_ASSET_COLLECTION,
     ENTITY_TYPE_AUDIENCE,
     ENTITY_TYPE_POLICY,
+    ENTITY_TYPE_TARGET,
     AccessAssetCollectionDb,
     AccessAudienceDb,
+    AccessGrantLedgerDb,
     AccessPolicyDb,
+    AccessTargetDb,
 )
 from src.repositories.access_policies_repository import access_policy_index_repo, repo_for
 from src.repositories.entity_domain_association_repository import entity_domain_repo
@@ -40,6 +46,7 @@ logger = get_logger(__name__)
 KIND_POLICY = "policy"
 KIND_AUDIENCE = "audience"
 KIND_ASSET_COLLECTION = "asset_collection"
+KIND_TARGET = "target"
 
 STATUS_DRAFT = "draft"
 STATUS_UNDER_REVIEW = "under_review"
@@ -49,7 +56,7 @@ STATUS_NEEDS_REVIEW = "needs_review"
 STATUS_DEPRECATED = "deprecated"
 STATUS_RETIRED = "retired"
 
-# Allowed lifecycle transitions (same for all three kinds).
+# Allowed lifecycle transitions (same for every kind).
 TRANSITIONS: Dict[str, Tuple[str, ...]] = {
     STATUS_DRAFT: (STATUS_UNDER_REVIEW,),
     STATUS_UNDER_REVIEW: (STATUS_APPROVED, STATUS_DRAFT),
@@ -77,7 +84,10 @@ KINDS: Dict[str, KindSpec] = {
     KIND_POLICY: KindSpec(KIND_POLICY, AccessPolicyDb, ENTITY_TYPE_POLICY, "Access Policy"),
     KIND_AUDIENCE: KindSpec(KIND_AUDIENCE, AccessAudienceDb, ENTITY_TYPE_AUDIENCE, "Audience"),
     KIND_ASSET_COLLECTION: KindSpec(KIND_ASSET_COLLECTION, AccessAssetCollectionDb, ENTITY_TYPE_ASSET_COLLECTION, "Asset Collection"),
+    KIND_TARGET: KindSpec(KIND_TARGET, AccessTargetDb, ENTITY_TYPE_TARGET, "Target"),
 }
+# Kinds that are collections referenced from policy bodies (not targets).
+COLLECTION_KINDS = (KIND_AUDIENCE, KIND_ASSET_COLLECTION)
 
 _LIFECYCLE_COPY = ("name", "description", "owner_team_id", "project_id", "uid")
 _KIND_COPY = {
@@ -85,7 +95,10 @@ _KIND_COPY = {
                   "subject_entity_type", "subject_entity_id"),
     KIND_AUDIENCE: ("members", "refinement"),
     KIND_ASSET_COLLECTION: ("members", "refinement"),
+    KIND_TARGET: ("key", "system", "connection", "scope", "delivery_modes", "reconcile_schedule", "drift_policy"),
 }
+TARGET_FIELDS = _KIND_COPY[KIND_TARGET]
+_TARGET_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,39}$")
 
 
 class AccessPolicyError(ValueError):
@@ -305,6 +318,8 @@ class AccessPoliciesManager:
                 "inherit_from": data.get("inherit_from") or [],
                 "body": self._normalize_rules(ptype, conflict, data.get("inherit_from") or [], data.get("rules") or {}),
             })
+        elif kind == KIND_TARGET:
+            fields.update(_target_fields(data, partial=False))
         else:
             fields.update({"members": _clean_members(data.get("members")),
                            "refinement": [odrl.normalize_constraint(c) for c in data.get("refinement") or []]})
@@ -377,7 +392,7 @@ class AccessPoliciesManager:
         row = self.require(db, kind, entity_id)
         data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else dict(payload)
         content_keys = {"rules", "policy_type", "conflict", "inherit_from", "members", "refinement",
-                        "subject_entity_type", "subject_entity_id"}
+                        "subject_entity_type", "subject_entity_id", *TARGET_FIELDS}
         if content_keys & set(data) and row.status not in EDITABLE_STATUSES:
             raise AccessPolicyError(
                 f"A {row.status} {self.spec(kind).label.lower()} can't be edited — create a new version instead.", 409)
@@ -406,6 +421,14 @@ class AccessPoliciesManager:
             if "rules" in data and data["rules"] is not None:
                 row.body = self._normalize_rules(row.policy_type, row.conflict, row.inherit_from or [], data["rules"])
             self._rebuild_index(db, row)
+        elif kind == KIND_TARGET:
+            changes = _target_fields(data, partial=True)
+            if "key" in changes and changes["key"] != row.key and len(
+                    repo_for(kind).get_family_versions(db, family_id=row.version_family_id)) > 1:
+                # Releases and the Grant Ledger reference the key: renaming it would orphan tracked grants.
+                raise AccessPolicyError("The key of a target with several versions can't change", 409)
+            for f, v in changes.items():
+                setattr(row, f, v)
         else:
             if "members" in data and data["members"] is not None:
                 row.members = _clean_members(data["members"])
@@ -424,7 +447,7 @@ class AccessPoliciesManager:
         if row.status not in DELETABLE_STATUSES:
             raise AccessPolicyError(
                 f"Only draft or retired versions can be deleted (this one is {row.status}).", 409)
-        if kind != KIND_POLICY:
+        if kind in COLLECTION_KINDS:
             users = self.policies_referencing(db, row.uid)
             live = [p for p in users if p.status not in (STATUS_RETIRED,)]
             if live and len(repo_for(kind).get_family_versions(db, family_id=row.version_family_id)) <= 1:
@@ -501,7 +524,13 @@ class AccessPoliciesManager:
             problems = self.activation_problems(db, kind, row)
             if problems:
                 raise AccessPolicyError("Not ready to activate: " + "; ".join(problems), 409, details=problems)
-        if new_status in (STATUS_DEPRECATED, STATUS_RETIRED) and kind != KIND_POLICY:
+        if new_status == STATUS_RETIRED and kind == KIND_TARGET and not self._other_active_version(db, kind, row):
+            # A retired target is never compiled or swept again: whatever it still tracks would never be revoked.
+            tracked = self.tracked_grants(db, row.key)
+            if tracked:
+                raise AccessPolicyError(f"Target '{row.key}' still tracks {tracked} grant(s) — revoke them or "
+                                        "release them from tracking first", 409)
+        if new_status in (STATUS_DEPRECATED, STATUS_RETIRED) and kind in COLLECTION_KINDS:
             # Taking an audience/collection out of service silently disables every rule that uses it.
             live = [p for p in self.policies_referencing(db, row.uid) if p.status == STATUS_ACTIVE]
             if live and not self._other_active_version(db, kind, row):
@@ -537,7 +566,55 @@ class AccessPoliciesManager:
         return any(v.id != row.id and v.status == STATUS_ACTIVE
                    for v in repo_for(kind).get_family_versions(db, family_id=row.version_family_id))
 
+    @staticmethod
+    def tracked_counts(db: Session) -> Dict[str, int]:
+        from sqlalchemy import func
+        rows = (db.query(AccessGrantLedgerDb.target, func.count(AccessGrantLedgerDb.id))
+                .filter(AccessGrantLedgerDb.status == "active").group_by(AccessGrantLedgerDb.target).all())
+        return {k: n for k, n in rows}
+
+    @staticmethod
+    def tracked_grants(db: Session, target_key: str) -> int:
+        return (db.query(AccessGrantLedgerDb)
+                .filter(AccessGrantLedgerDb.target == target_key, AccessGrantLedgerDb.status == "active").count())
+
+    def _target_problems(self, db: Session, row: Any) -> List[str]:
+        adapter = targets_mod.get_adapter(row.system or "")
+        if adapter is None:
+            names = ", ".join(a.system for a in targets_mod.adapters())
+            return [f"Unknown system '{row.system}' (available: {names})"]
+        problems: List[str] = []
+        if not _TARGET_KEY_RE.match(row.key or ""):
+            problems.append("The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter")
+        problems += adapter.scope_problems(row.scope or [])
+        from src.controller.delivery_service import DeliveryMode
+        valid = {m.value for m in DeliveryMode}
+        problems += [f"Unknown delivery mode '{m}'" for m in row.delivery_modes or [] if m not in valid]
+        if (row.drift_policy or targets_mod.DRIFT_REPORT) not in targets_mod.DRIFT_POLICIES:
+            problems.append(f"Drift policy '{row.drift_policy}' is not supported (report only)")
+        if (cron := targets_mod.cron_problem(row.reconcile_schedule)):
+            problems.append(cron)
+        # Deprecated targets still deliver pending releases and revoke what they track: they count.
+        others = [t for t in repo_for(KIND_TARGET).list_all(db) if t.version_family_id != row.version_family_id
+                  and t.status in (STATUS_ACTIVE, STATUS_NEEDS_REVIEW, STATUS_DEPRECATED)]
+        if any(t.key == row.key for t in others):
+            problems.append(f"Another target (active or deprecated) already uses the key '{row.key}'")
+        clash = [t.name for t in others if t.system == row.system
+                 and targets_mod.scopes_overlap(row.scope or [], t.scope or [])]
+        if clash:
+            # One securable, one tracking target: otherwise two ledgers would grant and revoke the same thing.
+            problems.append(f"Scope overlaps active or deprecated {adapter.label} target(s): {', '.join(clash)} "
+                            "— retire them first")
+        builtin = targets_mod.BUILTIN_UC.key
+        if (row.system == builtin and row.key != builtin and not any(t.system == builtin for t in others)
+                and self.tracked_grants(db, builtin)):
+            problems.append(f"Grants tracked by the built-in '{builtin}' target would be orphaned — "
+                            f"use the key '{builtin}' for the first Unity Catalog target to adopt them")
+        return problems
+
     def activation_problems(self, db: Session, kind: str, row: Any) -> List[str]:
+        if kind == KIND_TARGET:
+            return self._target_problems(db, row)
         if kind != KIND_POLICY:
             if kind == KIND_AUDIENCE and not row.members and not row.refinement:
                 return ["An audience needs members or a refinement (an empty audience means everyone)"]
@@ -770,11 +847,41 @@ class AccessPoliciesManager:
                 "inherit_from": row.inherit_from or [], "rules": body,
                 "rule_counts": {k: len(body.get(k) or []) for k in odrl.RULE_KINDS},
             })
+        elif kind == KIND_TARGET:
+            out.update({f: getattr(row, f) for f in TARGET_FIELDS})
+            adapter = targets_mod.get_adapter(row.system or "")
+            out["system_label"] = adapter.label if adapter else row.system
+            cached = getattr(row, "_tracked_grants", None)  # set in bulk by list views
+            out["tracked_grants"] = cached if cached is not None else self.tracked_grants(db, row.key)
         else:
             out.update({"members": row.members or [], "refinement": row.refinement or []})
             out["used_by"] = [{"id": p.id, "name": p.name, "version": p.version, "status": p.status}
                               for p in self.policies_referencing(db, row.uid)]
         return out
+
+
+def _target_fields(data: Dict[str, Any], *, partial: bool) -> Dict[str, Any]:
+    """Validate + normalize the target fields present in ``data`` (all of them on create)."""
+    out: Dict[str, Any] = {}
+    if not partial or "key" in data:
+        out["key"] = (data.get("key") or "").strip().lower()
+    if not partial or "system" in data:
+        system = (data.get("system") or "").strip()
+        if not targets_mod.get_adapter(system):
+            names = ", ".join(a.system for a in targets_mod.adapters())
+            raise AccessPolicyError(f"Unknown system '{system}' (available: {names})")
+        out["system"] = system
+    if not partial or "connection" in data:
+        out["connection"] = dict(data.get("connection") or {})
+    if not partial or "scope" in data:
+        out["scope"] = targets_mod.normalize_scope(data.get("scope"))
+    if not partial or "delivery_modes" in data:
+        out["delivery_modes"] = [m for m in dict.fromkeys(data.get("delivery_modes") or []) if m]
+    if not partial or "reconcile_schedule" in data:
+        out["reconcile_schedule"] = (data.get("reconcile_schedule") or "").strip() or None
+    if not partial or "drift_policy" in data:
+        out["drift_policy"] = data.get("drift_policy") or targets_mod.DRIFT_REPORT
+    return out
 
 
 def _clean_members(members: Optional[List[str]]) -> List[str]:

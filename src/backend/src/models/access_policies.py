@@ -1,4 +1,4 @@
-"""API models for Access Policies (W3C ODRL 2.2): policies, audiences, asset collections."""
+"""API models for Access Policies (W3C ODRL 2.2): policies, audiences, asset collections, targets."""
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -63,6 +63,28 @@ class CollectionCreate(GovernedEntityInput):
 class CollectionUpdate(GovernedEntityUpdate):
     members: Optional[List[str]] = None
     refinement: Optional[List[Dict[str, Any]]] = None
+
+
+class TargetCreate(GovernedEntityInput):
+    """A compile + delivery target (Phase 4)."""
+    key: str = Field(..., description="Stable key releases and the Grant Ledger reference (e.g. uc, uc-prod)")
+    system: str = Field("uc", description="Adapter: uc (Unity Catalog)")
+    # Non-secret connection settings only (credentials stay in secret scopes / app config).
+    connection: Dict[str, Any] = Field(default_factory=dict)
+    scope: List[str] = Field(default_factory=list, description="Securable prefixes managed; empty = all")
+    delivery_modes: List[str] = Field(default_factory=list, description="Allowed Delivery Modes; empty = all enabled")
+    reconcile_schedule: Optional[str] = Field(None, description="Drift reconciliation cron (report only)")
+    drift_policy: str = "report"
+
+
+class TargetUpdate(GovernedEntityUpdate):
+    key: Optional[str] = None
+    system: Optional[str] = None
+    connection: Optional[Dict[str, Any]] = None
+    scope: Optional[List[str]] = None
+    delivery_modes: Optional[List[str]] = None
+    reconcile_schedule: Optional[str] = None
+    drift_policy: Optional[str] = None
 
 
 class NewVersionRequest(BaseModel):

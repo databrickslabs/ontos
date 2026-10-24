@@ -1,9 +1,10 @@
-"""API routes for Access Policies (W3C ODRL 2.2): policies, audiences, asset collections."""
+"""API routes for Access Policies (W3C ODRL 2.2): policies, audiences, asset collections, targets."""
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from src.common import odrl
+from src.common import policy_targets as pt
 from src.common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
@@ -18,11 +19,11 @@ from src.controller.access_policies_manager import (
     KIND_ASSET_COLLECTION,
     KIND_AUDIENCE,
     KIND_POLICY,
+    KIND_TARGET,
     AccessPoliciesManager,
     AccessPolicyError,
 )
 from src.controller.access_policy_releases_manager import (
-    TARGETS,
     PolicyReleaseManager,
     uc_object_kind_resolver,
 )
@@ -42,6 +43,8 @@ from src.models.access_policies import (
     ReleasePreviewRequest,
     RevokeExpiredRequest,
     StatusChangeRequest,
+    TargetCreate,
+    TargetUpdate,
 )
 
 logger = get_logger(__name__)
@@ -267,11 +270,13 @@ def _kind_resolver(delivery_service: Any) -> Any:
     return uc_object_kind_resolver(ws) if ws else None
 
 
-@router.get("/targets")
-async def list_targets(delivery_service: Any = Depends(get_delivery_service), _: bool = _READ):
-    """Compile targets and the Delivery Modes currently enabled in Settings."""
+@router.get("/compile-targets")
+async def list_compile_targets(db: DBSessionDep, delivery_service: Any = Depends(get_delivery_service),
+                               _: bool = _READ):
+    """Targets releases can compile for, the available adapters, and the Delivery Modes enabled in Settings."""
     modes = [m.value for m in delivery_service.get_active_modes()] if delivery_service else []
-    return {"targets": [{"key": t, "label": "Unity Catalog"} for t in TARGETS], "delivery_modes": modes}
+    return {"targets": [t.to_dict() for t in releases.targets(db)],
+            "systems": [a.describe() for a in pt.adapters()], "delivery_modes": modes}
 
 
 # Endpoints below that call the Databricks SDK (grants, object-kind lookups) are plain ``def``
@@ -393,8 +398,8 @@ def revoke_expired(db: DBSessionDep, current_user: AuditCurrentUserDep,
 
 # ------------------------------------------------- generic per-kind CRUD
 
-def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any) -> None:
-    """Register list/get/create/update/delete/versions/status for one entity kind."""
+def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any, write: Any = _WRITE) -> None:
+    """Register list/get/create/update/delete/versions/status for one entity kind (``write`` guards changes)."""
 
     async def _visible_row(request: Request, db: Any, current_user: Any, entity_id: str) -> Any:
         return manager.require_visible(db, kind, entity_id, _email(current_user), await _is_admin(request, current_user))
@@ -410,6 +415,10 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
                             viewer=_email(current_user), is_admin=is_admin)
         if kind == KIND_POLICY:
             manager.prefetch_subject_names(db, rows)
+        elif kind == KIND_TARGET:
+            counts = manager.tracked_counts(db)
+            for r in rows:
+                r._tracked_grants = counts.get(r.key, 0)
         return [manager.to_read_dict(db, kind, r) for r in rows]
 
     async def get_entity(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
@@ -421,7 +430,7 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
         return manager.to_read_dict(db, kind, row)
 
     async def create_entity(request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
-                            payload: create_model = Body(...), _: bool = _WRITE):  # type: ignore[valid-type]
+                            payload: create_model = Body(...), _: bool = write):  # type: ignore[valid-type]
         try:
             guard = await _subject_guard(request, db, current_user) if kind == KIND_POLICY else None
             row = manager.create(db, kind, payload, _email(current_user), can_manage_subject=guard)
@@ -430,7 +439,7 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
         return manager.to_read_dict(db, kind, row)
 
     async def update_entity(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
-                            payload: update_model = Body(...), _: bool = _WRITE):  # type: ignore[valid-type]
+                            payload: update_model = Body(...), _: bool = write):  # type: ignore[valid-type]
         try:
             await _visible_row(request, db, current_user, entity_id)
             guard = await _subject_guard(request, db, current_user) if kind == KIND_POLICY else None
@@ -440,7 +449,7 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
         return manager.to_read_dict(db, kind, row)
 
     async def delete_entity(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
-                            _: bool = _WRITE):
+                            _: bool = write):
         try:
             await _visible_row(request, db, current_user, entity_id)
             manager.delete(db, kind, entity_id, _email(current_user))
@@ -468,7 +477,7 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
         ]
 
     async def new_version(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
-                          payload: NewVersionRequest = Body(...), _: bool = _WRITE):
+                          payload: NewVersionRequest = Body(...), _: bool = write):
         try:
             await _visible_row(request, db, current_user, entity_id)
             row = manager.create_new_version(db, kind, entity_id, payload.new_version,
@@ -478,7 +487,7 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
         return manager.to_read_dict(db, kind, row)
 
     async def change_status(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
-                            payload: StatusChangeRequest = Body(...), _: bool = _WRITE):
+                            payload: StatusChangeRequest = Body(...), _: bool = write):
         try:
             await _visible_row(request, db, current_user, entity_id)
             row = manager.change_status(db, kind, entity_id, payload.status, _email(current_user), payload.comment,
@@ -510,6 +519,8 @@ def _register_kind(segment: str, kind: str, create_model: Any, update_model: Any
 _register_kind("policies", KIND_POLICY, AccessPolicyCreate, AccessPolicyUpdate)
 _register_kind("audiences", KIND_AUDIENCE, CollectionCreate, CollectionUpdate)
 _register_kind("asset-collections", KIND_ASSET_COLLECTION, CollectionCreate, CollectionUpdate)
+# Where grants get pushed is an administrative decision.
+_register_kind("targets", KIND_TARGET, TargetCreate, TargetUpdate, write=_ADMIN)
 
 
 def register_routes(app):

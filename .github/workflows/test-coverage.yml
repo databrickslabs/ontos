@@ -33,7 +33,7 @@ jobs:
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         working-directory: ./src
@@ -323,7 +323,7 @@ jobs:
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
-          python-version: '3.10'
+          python-version: '3.11'
           installer: uv
           cache: ''
 
@@ -418,7 +418,7 @@ jobs:
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install backend deps (for alembic)
         working-directory: ./src

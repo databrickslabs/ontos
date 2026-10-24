@@ -44,6 +44,7 @@ import { FeatureAccessLevel } from '@/types/settings';
 import AccessEntityFormDialog from '@/components/access-policies/access-entity-form-dialog';
 import AccessStatusBadge from '@/components/access-policies/access-status-badge';
 import CheckAccessPanel from '@/components/access-policies/check-access-panel';
+import DutiesPanel from '@/components/access-policies/duties-panel';
 import { ENFORCEMENT_VARIANT } from '@/components/access-policies/constraint-editor';
 import { RULE_KINDS, describeConstraint, describeRef } from '@/components/access-policies/odrl-helpers';
 import type {
@@ -709,6 +710,8 @@ export default function AccessPolicyDetails() {
           </CardContent>
         </Card>
       )}
+
+      {kind === 'policy' && (entity as AccessPolicy).policy_type === 'Agreement' && <DutiesPanel agreementId={entity.id} />}
 
       <EntityMetadataPanel entityId={entity.id} entityType={KIND_ENTITY_TYPE[kind]} />
 

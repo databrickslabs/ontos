@@ -348,3 +348,30 @@ export interface ReleaseTargets {
   targets: { key: string; label: string }[];
   delivery_modes: DeliveryModeKey[];
 }
+
+// ------------------------------------------------------------ duties (Phase 3)
+
+export interface DutyStatus {
+  action: string;
+  /** Profile label, resolved server-side (consumers may not read the profile endpoint). */
+  label: string;
+  fulfilled: boolean;
+  fulfilled_by?: string | null;
+  fulfilled_at?: string | null;
+  note?: string | null;
+  can_fulfill: boolean;
+  fulfilled_by_assignee_only: boolean;
+}
+
+export interface AgreementForParty {
+  id: string;
+  name: string;
+  description?: string | null;
+  status: AccessStatus;
+  policy_type: OdrlPolicyType;
+  access_grant_id?: string | null;
+  permissions: { action: string; target: OdrlRef; constraint: OdrlConstraint[] }[];
+  prohibitions: { action: string; target: OdrlRef; constraint: OdrlConstraint[] }[];
+  obligations: { action: string; target: OdrlRef; constraint: OdrlConstraint[] }[];
+  duties: DutyStatus[];
+}

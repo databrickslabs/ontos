@@ -950,8 +950,8 @@ def evaluate(
                     m.effect = "prohibit"
                     prohibits.append(m)
                 else:
-                    unmet = [d.get("action") for d in rule.get("duty") or []
-                             if d.get("action") not in request.fulfilled_duties]
+                    done = set(request.fulfilled_duties) | set(pol.get("fulfilledDuties") or [])
+                    unmet = [d.get("action") for d in rule.get("duty") or [] if d.get("action") not in done]
                     if is_offer:
                         unmet.append(OFFER_DUTY)
                         trail.append(f"offered by '{name}' — access needs an Agreement (request access)")

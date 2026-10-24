@@ -187,7 +187,7 @@ def log_timeline(db: Session, entity_type: str, entity_id: str, message: str, us
                 created_by=user or "system@ontos",
             )
     except Exception as e:  # pragma: no cover - timeline logging is best-effort
-        logger.warning(f"Could not write timeline comment for {entity_type} {entity_id}: {e}")
+        logger.warning("Could not write timeline comment for %s %s: %s", entity_type, entity_id, e)
 
 
 # ------------------------------------------------------------------- the manager
@@ -217,7 +217,7 @@ class AccessPoliciesManager:
                 db, entity_id=entity_id, entity_type=self.spec(kind).entity_type, tags=list(tags), user_email=user,
             )
         except Exception as e:  # pragma: no cover - tag write is best-effort
-            logger.warning(f"Could not set tags for {kind} {entity_id}: {e}")
+            logger.warning("Could not set tags for %s %s: %s", kind, entity_id, e)
 
     def _set_domains(self, db: Session, kind: str, entity_id: str, domain_ids: Optional[List[str]],
                      primary_domain_id: Optional[str], user: Optional[str]) -> None:
@@ -474,7 +474,7 @@ class AccessPoliciesManager:
                     db, entity_id=row.id, entity_type=self.spec(kind).entity_type, user_email=current_user,
                     tags=[AssignedTagCreate(tag_id=t.tag_id, assigned_value=t.assigned_value) for t in tags])
         except Exception as e:  # pragma: no cover - best-effort
-            logger.warning(f"Could not copy tags to new version {row.id}: {e}")
+            logger.warning("Could not copy tags to new version %s: %s", row.id, e)
         self._log_timeline(db, kind, row.id, f"Version {new_version} created from {src.version}."
                            + (f" {change_summary}" if change_summary else ""), current_user)
         self._log_timeline(db, kind, src.id, f"New version {new_version} drafted.", current_user)
@@ -567,7 +567,7 @@ class AccessPoliciesManager:
                 blocking=False,
             )
         except Exception as e:  # pragma: no cover - env dependent
-            logger.warning(f"Could not fire review trigger for {kind} {row.id}: {e}")
+            logger.warning("Could not fire review trigger for %s %s: %s", kind, row.id, e)
 
     # ---------------------------------------------------------------- JSON-LD
 
@@ -629,7 +629,9 @@ class AccessPoliciesManager:
     def _policy_doc(self, db: Session, policy: AccessPolicyDb) -> Tuple[Dict[str, Any], List[str]]:
         doc = {"uid": policy.uid, "name": f"{policy.name} v{policy.version}", "type": policy.policy_type,
                "conflict": policy.conflict, "profile": [odrl.ONTOS_PROFILE],
-               "inheritFrom": policy.inherit_from or [], **(policy.body or {})}
+               "inheritFrom": policy.inherit_from or [], **(policy.body or {}),
+               "fulfilledDuties": sorted({odrl.term_key(d.get("action")) or d.get("action")
+                                          for d in policy.fulfilled_duties or [] if d.get("action")})}
         if not doc["inheritFrom"]:
             return doc, []
 
@@ -649,7 +651,7 @@ class AccessPoliciesManager:
                     attrs.setdefault(k, [])
                     attrs[k].extend(x for x in v if x not in attrs[k])
             except Exception as e:  # pragma: no cover - a failing source never breaks evaluation
-                logger.warning(f"Principal attribute source {source.name} failed: {e}")
+                logger.warning("Principal attribute source %s failed: %s", source.name, e)
         return attrs
 
     def known_principals(self, db: Session) -> List[Tuple[str, Dict[str, List[str]]]]:
@@ -663,7 +665,7 @@ class AccessPoliciesManager:
                         target.setdefault(k, [])
                         target[k].extend(x for x in v if x not in target[k])
             except Exception as e:  # pragma: no cover - a failing source never breaks compilation
-                logger.warning(f"Principal attribute source {source.name} failed to enumerate: {e}")
+                logger.warning("Principal attribute source %s failed to enumerate: %s", source.name, e)
         return sorted(merged.items())
 
     def check_access(self, db: Session, request: Any, *, viewer: Optional[str] = None, is_admin: bool = True) -> Dict[str, Any]:
@@ -739,7 +741,7 @@ class AccessPoliciesManager:
             for t in TagsManager().list_assigned_tags(db, entity_id=row.id, entity_type=spec.entity_type):
                 tags.append(t.model_dump(mode="json") if hasattr(t, "model_dump") else dict(t))
         except Exception as e:  # pragma: no cover - best-effort
-            logger.warning(f"Could not read tags for {kind} {row.id}: {e}")
+            logger.warning("Could not read tags for %s %s: %s", kind, row.id, e)
         out: Dict[str, Any] = {
             "id": row.id, "kind": kind, "entity_type": spec.entity_type, "uid": row.uid,
             "name": row.name, "description": row.description, "status": row.status,
@@ -762,6 +764,7 @@ class AccessPoliciesManager:
             out.update({
                 "policy_type": row.policy_type, "conflict": row.conflict,
                 "access_grant_id": row.access_grant_id,
+                "fulfilled_duties": row.fulfilled_duties or [],
                 "subject_entity_type": row.subject_entity_type, "subject_entity_id": row.subject_entity_id,
                 "subject_name": self._subject_name(db, row),
                 "inherit_from": row.inherit_from or [], "rules": body,

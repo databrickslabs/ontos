@@ -69,6 +69,7 @@ import DeliveryMethodsView from './views/delivery-methods';
 import BusinessOwnersView from './views/business-owners';
 import MyProducts from './views/my-products';
 import MyRequests from './views/my-requests';
+import AccessTerms from './views/access-terms';
 import OntologySearchView from './views/ontology-search';
 import OntologyHomeView from './views/ontology-home';
 import CollectionsView from './views/collections';
@@ -188,6 +189,7 @@ export default function App() {
               <Route path="/my-products" element={<MyProducts />} />
               <Route path="/my-products/:productId" element={<DataProductDetails />} />
               <Route path="/my-requests" element={<MyRequests />} />
+              <Route path="/access-terms/:agreementId" element={<AccessTerms />} />
               <Route path="/marketplace" element={<MarketplaceView />} />
               <Route path="/owner-consumers" element={<OwnerConsumersView />} />
               <Route path="/teams" element={<Navigate to="/settings/teams" replace />} />

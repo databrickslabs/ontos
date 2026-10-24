@@ -140,6 +140,8 @@ class PolicyInput:
     id: Optional[str] = None
     name: str = ""
     version: Optional[str] = None
+    # Duty actions recorded as fulfilled on this policy (Agreements).
+    fulfilled_duties: Set[str] = field(default_factory=set)
 
 
 # A principal directory enumerates known principals with their attributes, for
@@ -429,7 +431,7 @@ def compile_policies(
                 # Offered terms entitle nobody; access comes from the Agreement concluded on them.
                 plan.gated.append(GatedRule(src, GATE_WORKFLOW, "offered — granted through an Agreement"))
                 continue
-            candidates.extend(_compile_permission(rule, src, parties, assets, now, plan))
+            candidates.extend(_compile_permission(rule, src, parties, assets, now, plan, p.fulfilled_duties))
         for i, rule in enumerate(norm.get("prohibition") or []):
             src = _rule_ref(p, uid, "prohibition", i, rule)
             if is_offer and rule.get("assignee") is None:
@@ -500,14 +502,16 @@ def _rule_ref(p: PolicyInput, uid: str, kind: str, i: int, rule: Dict[str, Any])
 
 
 def _compile_permission(rule: Dict[str, Any], src: RuleRef, parties: _Parties, assets: _Assets,
-                        now: datetime, plan: EntitlementPlan) -> List[Entitlement]:
+                        now: datetime, plan: EntitlementPlan,
+                        fulfilled: Optional[Set[str]] = None) -> List[Entitlement]:
     action = rule.get("action")
     if not action:
         plan.gated.append(GatedRule(src, GATE_UNSUPPORTED, "rule has no action"))
         return []
-    if rule.get("duty"):
-        duties = ", ".join(d.get("action") or "?" for d in rule["duty"])
-        plan.gated.append(GatedRule(src, GATE_WORKFLOW, f"conditional on duties ({duties}) — granted through an Agreement"))
+    open_duties = [d.get("action") or "?" for d in rule.get("duty") or [] if d.get("action") not in (fulfilled or set())]
+    if open_duties:
+        plan.gated.append(GatedRule(src, GATE_WORKFLOW,
+                                    f"conditional on duties ({', '.join(open_duties)}) — granted once fulfilled"))
         return []
     if rule.get("action_refinement"):
         plan.gated.append(GatedRule(src, GATE_ABAC, "action refinement can't be expressed as a static grant"))

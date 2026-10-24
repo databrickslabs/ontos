@@ -4,10 +4,16 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from src.common import odrl
-from src.common.authorization import PermissionChecker, get_user_groups, is_user_feature_admin
+from src.common.authorization import (
+    PermissionChecker,
+    enforce_feature_permission,
+    get_user_groups,
+    is_user_feature_admin,
+)
 from src.common.dependencies import AuditCurrentUserDep, DBSessionDep
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
+from src.common.manager_dependencies import get_delivery_service
 from src.controller.access_policies_manager import (
     KIND_ASSET_COLLECTION,
     KIND_AUDIENCE,
@@ -15,14 +21,18 @@ from src.controller.access_policies_manager import (
     AccessPoliciesManager,
     AccessPolicyError,
 )
-from src.common.manager_dependencies import get_delivery_service
-from src.controller.access_policy_releases_manager import TARGETS, PolicyReleaseManager, uc_object_kind_resolver
+from src.controller.access_policy_releases_manager import (
+    TARGETS,
+    PolicyReleaseManager,
+    uc_object_kind_resolver,
+)
 from src.models.access_policies import (
     AccessPolicyCreate,
     AccessPolicyUpdate,
     CheckAccessRequest,
     CollectionCreate,
     CollectionUpdate,
+    DutyFulfillRequest,
     NewVersionRequest,
     PolicyImportRequest,
     PolicyValidateRequest,
@@ -155,6 +165,74 @@ async def policy_validation(entity_id: str, request: Request, db: DBSessionDep, 
         "issues": issues,
         "activation_problems": manager.activation_problems(db, KIND_POLICY, row),
     }
+
+
+@router.get("/agreements/{entity_id}")
+async def agreement_for_party(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep):
+    """An Agreement as its party sees it: what it grants, the terms it binds, and the open duties."""
+    from src.controller import access_agreements
+    is_admin = await _is_admin(request, current_user)
+    row = await _agreement_for_party(request, db, current_user, entity_id, is_admin)
+    body = row.body or {}
+
+    def brief(rules: List[Any]) -> List[Any]:
+        return [{"action": r.get("action"), "target": r.get("target"),
+                 "constraint": r.get("constraint") or []} for r in rules or []]
+    return {
+        "id": row.id, "name": row.name, "description": row.description, "status": row.status,
+        "policy_type": row.policy_type, "access_grant_id": row.access_grant_id,
+        "permissions": brief(body.get("permission")), "prohibitions": brief(body.get("prohibition")),
+        "obligations": brief(body.get("obligation")),
+        "duties": access_agreements.duty_status(row, _email(current_user), is_admin),
+    }
+
+
+@router.get("/policies/{entity_id}/duties")
+async def agreement_duties(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep):
+    """Duties on an Agreement: which are fulfilled, and which the caller may fulfil.
+
+    Readable by the Agreement's own assignee (consumers usually lack the Access Policies feature)
+    or with Access Policies read access."""
+    from src.controller import access_agreements
+    is_admin = await _is_admin(request, current_user)
+    row = await _agreement_for_party(request, db, current_user, entity_id, is_admin)
+    return access_agreements.duty_status(row, _email(current_user), is_admin)
+
+
+async def _agreement_for_party(request: Request, db: Any, user: Any, entity_id: str, is_admin: bool) -> Any:
+    """The Agreement if the caller is its assignee or may read Access Policies; 404 otherwise."""
+    from src.controller import access_agreements
+    from src.db_models.access_policies import AccessPolicyDb
+    row = db.get(AccessPolicyDb, entity_id)
+    email = (_email(user) or "").lower()
+    if row is not None and row.policy_type == "Agreement" and email in access_agreements._assignee_emails(row):
+        return row
+    try:
+        await enforce_feature_permission(FEATURE_ID, FeatureAccessLevel.READ_ONLY, user, request)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Access Policy not found") from None
+    try:
+        return manager.require_visible(db, KIND_POLICY, entity_id, _email(user), is_admin)
+    except AccessPolicyError as e:
+        raise _http(e) from None
+
+
+@router.post("/policies/{entity_id}/duties/fulfill")
+async def fulfill_agreement_duty(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                                 payload: DutyFulfillRequest = Body(...)):
+    """Fulfil a duty: the grantee accepts the terms (read access is enough — it's their own deal);
+    other duties need an Access Policies admin. With auto-delivery on, now-unconditional grants ship."""
+    from src.controller import access_agreements
+    is_admin = await _is_admin(request, current_user)
+    try:
+        row = await _agreement_for_party(request, db, current_user, entity_id, is_admin)
+        row = access_agreements.fulfill_duty(db, row, payload.action, _email(current_user), is_admin, payload.note)
+        db.commit()
+    except AccessPolicyError as e:
+        raise _http(e)
+    if not access_agreements.open_duties(row):
+        access_agreements.auto_deliver(db, [row], _email(current_user), revoke=False)
+    return access_agreements.duty_status(row, _email(current_user), is_admin)
 
 
 @router.get("/offers")

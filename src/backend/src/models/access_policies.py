@@ -130,3 +130,8 @@ class ReleaseConfirmRequest(BaseModel):
 
 class RevokeExpiredRequest(BaseModel):
     target: str = "uc"
+
+
+class DutyFulfillRequest(BaseModel):
+    action: str = Field(..., description="Duty action, e.g. ontos:acknowledgeTerms")
+    note: Optional[str] = None

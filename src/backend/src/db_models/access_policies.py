@@ -84,6 +84,10 @@ class AccessPolicyDb(GovernedEntityMixin, Base):
     # which every Agreement for that product inherits (odrl:hasPolicy on the product).
     subject_entity_type = Column(String, nullable=True, index=True)
     subject_entity_id = Column(String, nullable=True, index=True)
+    # Agreements: duties the assignee / an approver fulfilled —
+    # [{"action", "fulfilled_by", "fulfilled_at", "note"}]. A permission whose duties are all
+    # fulfilled is no longer conditional (ODRL §2.6: a duty is a precondition of the permission).
+    fulfilled_duties = Column(JSON, nullable=True)
 
     def __repr__(self):
         return f"<AccessPolicyDb(id='{self.id}', name='{self.name}', status='{self.status}')>"

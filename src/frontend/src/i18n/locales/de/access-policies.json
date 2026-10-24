@@ -370,5 +370,27 @@
     "statusReleased": "__TODO__ No longer tracked",
     "preexisting": "__TODO__ pre-existing",
     "preexistingTitle": "__TODO__ Already on the platform when Ontos applied it — Ontos never revokes it"
+  },
+  "duties": {
+    "title": "__TODO__ Duties",
+    "openHint": "__TODO__ {{count}} open — the access is granted once every duty is fulfilled.",
+    "allDone": "__TODO__ All duties are fulfilled.",
+    "fulfilledBy": "__TODO__ Fulfilled by {{who}} on {{at}}",
+    "byGrantee": "__TODO__ To be accepted by the grantee",
+    "byAdmin": "__TODO__ To be fulfilled by an Access Policies admin",
+    "accept": "__TODO__ Accept the terms",
+    "markFulfilled": "__TODO__ Mark as fulfilled",
+    "open": "__TODO__ Open",
+    "note": "__TODO__ Note (optional)",
+    "failed": "__TODO__ Could not fulfil the duty",
+    "done": "__TODO__ {{duty}} fulfilled"
+  },
+  "terms": {
+    "title": "__TODO__ Terms of use",
+    "myRequests": "__TODO__ My requests",
+    "notFound": "__TODO__ Agreement not found, or you are not its party.",
+    "grants": "__TODO__ Your access",
+    "prohibitions": "__TODO__ Not permitted",
+    "obligations": "__TODO__ Obligations"
   }
 }

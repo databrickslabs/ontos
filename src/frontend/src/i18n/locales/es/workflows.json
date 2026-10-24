@@ -312,6 +312,7 @@
       "duplicateStepIds": "Dos pasos tienen el mismo ID.",
       "stepUnknownReference": "El paso \"{{step}}\" dirige su rama de {{branch}} a \"{{target}}\", que no está en el workflow.",
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
+      "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"
@@ -531,6 +532,7 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Ninguna política seleccionada",
+    "policyHint": "Sugerida: {{name}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Sin establecer",
     "connectionLabel": "Conexión: {{name}}",

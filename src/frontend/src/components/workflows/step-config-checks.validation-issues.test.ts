@@ -35,6 +35,23 @@ describe('workflowValidationIssueText', () => {
     )).toBe('Etapa "check": Informe uma condição.');
   });
 
+  it('translates a policy check step without an existing policy', async () => {
+    const issue = {
+      code: 'policy_check_policy_missing',
+      message: "Step 'naming-check': the policy to check is not selected",
+      params: { step: 'naming-check', policyId: '' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "naming-check" needs an existing compliance policy. '
+      + 'Select one in the step\'s settings.',
+    );
+    await i18n.changeLanguage('pt');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'A etapa "naming-check" precisa de uma política de conformidade existente. '
+      + 'Selecione uma nas configurações da etapa.',
+    );
+  });
+
   it('shows the English text of an error it has no text for', () => {
     const message = "disabled_for: unknown domain 'nope'";
     expect(workflowValidationIssueText(

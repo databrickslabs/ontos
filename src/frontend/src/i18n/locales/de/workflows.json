@@ -312,6 +312,7 @@
       "duplicateStepIds": "Zwei Schritte haben dieselbe ID.",
       "stepUnknownReference": "Schritt \"{{step}}\" verweist mit seinem {{branch}}-Zweig auf \"{{target}}\", der nicht im Workflow ist.",
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
+      "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
@@ -531,6 +532,7 @@
     "policyLabel": "Richtlinie: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Keine Richtlinie ausgewählt",
+    "policyHint": "Vorschlag: {{name}}",
     "reviewerLabel": "Prüfer:",
     "notSet": "Nicht festgelegt",
     "connectionLabel": "Verbindung: {{name}}",

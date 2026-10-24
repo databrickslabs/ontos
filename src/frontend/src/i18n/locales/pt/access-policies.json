@@ -240,7 +240,8 @@
     "updated": "__TODO__ Updated",
     "noTags": "__TODO__ No tags",
     "linkedConcepts": "__TODO__ Linked concepts",
-    "linkFailed": "__TODO__ Could not update concept link"
+    "linkFailed": "__TODO__ Could not update concept link",
+    "fromAccessGrant": "__TODO__ Recorded from an approved Access Grant"
   },
   "releases": {
     "hint": "__TODO__ A release compiles all active policies for a target into concrete grants, diffs them against the Grant Ledger and ships the change through the Delivery Modes after review.",
@@ -252,7 +253,8 @@
     "errorCount": "__TODO__ {{count}} errors",
     "kind": {
       "policy": "__TODO__ Policy release",
-      "revocation": "__TODO__ Revocation"
+      "revocation": "__TODO__ Revocation",
+      "agreement": "__TODO__ Agreement"
     },
     "status": {
       "draft": "__TODO__ Draft",

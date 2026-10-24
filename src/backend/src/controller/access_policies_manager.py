@@ -81,7 +81,7 @@ KINDS: Dict[str, KindSpec] = {
 
 _LIFECYCLE_COPY = ("name", "description", "owner_team_id", "project_id", "uid")
 _KIND_COPY = {
-    KIND_POLICY: ("policy_type", "conflict", "inherit_from", "body"),
+    KIND_POLICY: ("policy_type", "conflict", "inherit_from", "body", "access_grant_id"),
     KIND_AUDIENCE: ("members", "refinement"),
     KIND_ASSET_COLLECTION: ("members", "refinement"),
 }
@@ -700,6 +700,7 @@ class AccessPoliciesManager:
             body = row.body or {}
             out.update({
                 "policy_type": row.policy_type, "conflict": row.conflict,
+                "access_grant_id": row.access_grant_id,
                 "inherit_from": row.inherit_from or [], "rules": body,
                 "rule_counts": {k: len(body.get(k) or []) for k in odrl.RULE_KINDS},
             })

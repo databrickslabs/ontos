@@ -92,6 +92,8 @@ export interface AccessPolicy extends AccessEntityBase {
   inherit_from: string[];
   rules: OdrlRules;
   rule_counts: Record<RuleKind, number>;
+  /** Agreements: the approved Access Grant this odrl:Agreement records. */
+  access_grant_id?: string | null;
 }
 
 export interface UsedByRef {
@@ -291,7 +293,7 @@ export interface AccessRelease {
   target: string;
   sequence: number;
   name: string;
-  release_kind: 'policy' | 'revocation';
+  release_kind: 'policy' | 'revocation' | 'agreement';
   status: ReleaseStatus;
   notes?: string | null;
   allowed_transitions: ReleaseStatus[];

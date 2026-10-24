@@ -50,6 +50,7 @@ TARGETS = (uc.TARGET_UC,)
 
 KIND_POLICY_RELEASE = "policy"
 KIND_REVOCATION = "revocation"
+KIND_AGREEMENT = "agreement"
 
 R_DRAFT = "draft"
 R_UNDER_REVIEW = "under_review"
@@ -236,9 +237,7 @@ class PolicyReleaseManager:
         if new_status == R_APPROVED:
             if not is_admin and user and user.lower() in {(row.created_by or "").lower(), (row.submitted_by or "").lower()}:
                 raise AccessPolicyError("Separation of duties: the author or submitter can't approve this release", 403)
-            if row.ledger_fingerprint != self._fingerprint(db, row.target):
-                raise AccessPolicyError("The Grant Ledger changed since this release was compiled — send it back to "
-                                        "draft and recompile", 409)
+            self._rebase_if_stale(db, row, user)
             row.approved_by = user
         if new_status == R_DRAFT:
             row.approved_by = None
@@ -325,11 +324,10 @@ class PolicyReleaseManager:
         row = self.require(db, release_id)
         if row.status not in DELIVERABLE_STATUSES:
             raise AccessPolicyError(f"Only approved, delivered or failed releases can be delivered; this one is '{row.status}'", 409)
-        # Revocation releases are computed against the ledger at delivery time (``_remaining``), so a
-        # moved ledger never makes them stale; policy releases need a recompile.
-        if (row.status == R_APPROVED and row.release_kind == KIND_POLICY_RELEASE
-                and row.ledger_fingerprint != self._fingerprint(db, row.target)):
-            raise AccessPolicyError("The Grant Ledger changed since this release was compiled — recompile it", 409)
+        # Revocation / agreement releases are computed against the ledger at delivery time
+        # (``_remaining``), so a moved ledger never makes them stale; policy releases are re-based.
+        if row.status == R_APPROVED:
+            self._rebase_if_stale(db, row, user)
         chosen = self._delivery_modes(delivery_service, modes)
         if get_grants is None:
             get_grants = getattr(getattr(delivery_service, "grant_manager", None), "get_grants", None)
@@ -416,9 +414,35 @@ class PolicyReleaseManager:
         db.flush()
         return row
 
+    def _rebase_if_stale(self, db: Session, row: AccessPolicyReleaseDb, user: Optional[str]) -> None:
+        """A policy release diffed against an older ledger (e.g. an Agreement was applied since).
+
+        Recompute the diff against the current ledger; keep the review only if nothing new would
+        ship (every change is one that was already reviewed). Otherwise a recompile + review is needed.
+        """
+        if row.release_kind != KIND_POLICY_RELEASE or row.ledger_fingerprint == self._fingerprint(db, row.target):
+            return
+        compiled = self.compile(db, row.target)
+        old, new = row.changes or {}, compiled["changes"]
+
+        def keys(ch: Dict[str, Any], cat: str) -> set:
+            return {(g["principal"], g["securable_type"], g["securable_name"], g["privilege"],
+                     g.get("expires_at") if cat == "update" else None) for g in ch.get(cat) or []}
+
+        if any(not keys(new, cat) <= keys(old, cat) for cat in ("add", "remove", "update", "untrack")):
+            raise AccessPolicyError("The Grant Ledger changed since this release was compiled and the release "
+                                    "would now ship unreviewed changes — send it back to draft and recompile", 409)
+        row.plan, row.changes = compiled["plan"], new
+        row.ledger_fingerprint = compiled["ledger_fingerprint"]
+        self._log_timeline(db, row, f"Re-based onto the current Grant Ledger (subset of the reviewed changes): "
+                                    f"{self._summary(row)}", user)
+
     def _mark_applied(self, db: Session, row: AccessPolicyReleaseDb, user: Optional[str], how: str) -> None:
         row.status, row.applied_by, row.applied_at = R_APPLIED, user, _now()
-        for other in (db.query(AccessPolicyReleaseDb)
+        # Only a full policy release replaces other open ones; agreement / revocation releases
+        # ship their own changes and leave reviewed policy releases alone.
+        supersedes = row.release_kind == KIND_POLICY_RELEASE
+        for other in [] if not supersedes else (db.query(AccessPolicyReleaseDb)
                       .filter(AccessPolicyReleaseDb.target == row.target, AccessPolicyReleaseDb.id != row.id,
                               AccessPolicyReleaseDb.release_kind == KIND_POLICY_RELEASE,
                               AccessPolicyReleaseDb.status.in_(SUPERSEDABLE_STATUSES)).all()):
@@ -444,8 +468,13 @@ class PolicyReleaseManager:
                                         preexisting="|".join(g.key) in preexisting, granted_release_id=row.id)
             db.add(entry)
             active[g.key] = entry
-        # Ledger-only refresh (expiry, provenance) for every desired grant that is applied.
-        for d in (row.plan or {}).get("grants") or []:
+        if row.release_kind == KIND_POLICY_RELEASE:
+            # Ledger-only refresh (expiry, provenance) for every desired grant of the reviewed state.
+            refresh = (row.plan or {}).get("grants") or []
+        else:
+            # Scoped releases only touch their own expiry updates — never unreleased policy edits.
+            refresh = (row.changes or {}).get("update") or []
+        for d in refresh:
             g = uc.UCGrant.from_dict(d)
             r = active.get(g.key)
             if r is not None:
@@ -470,10 +499,12 @@ class PolicyReleaseManager:
         self._delivery_modes(delivery_service, None)
         open_revocations = (db.query(AccessPolicyReleaseDb)
                             .filter(AccessPolicyReleaseDb.target == target,
-                                    AccessPolicyReleaseDb.release_kind == KIND_REVOCATION,
+                                    # Agreement revocations awaiting confirmation cover grants too.
+                                    AccessPolicyReleaseDb.release_kind.in_((KIND_REVOCATION, KIND_AGREEMENT)),
                                     AccessPolicyReleaseDb.status.in_((R_APPROVED, R_DELIVERED, R_FAILED)))
                             .order_by(AccessPolicyReleaseDb.sequence.desc()).all())
-        retry = next((r for r in open_revocations if r.status in (R_APPROVED, R_FAILED)), None)
+        retry = next((r for r in open_revocations
+                      if r.release_kind == KIND_REVOCATION and r.status in (R_APPROVED, R_FAILED)), None)
         if retry is not None:
             # Finish the undelivered / failed one first; the next sweep covers anything newer.
             return self.deliver(db, retry.id, user, delivery_service)

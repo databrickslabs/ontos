@@ -240,7 +240,8 @@
     "updated": "Updated",
     "noTags": "No tags",
     "linkedConcepts": "Linked concepts",
-    "linkFailed": "Could not update concept link"
+    "linkFailed": "Could not update concept link",
+    "fromAccessGrant": "Recorded from an approved Access Grant"
   },
   "releases": {
     "hint": "A release compiles all active policies for a target into concrete grants, diffs them against the Grant Ledger and ships the change through the Delivery Modes after review.",
@@ -252,7 +253,8 @@
     "errorCount": "{{count}} errors",
     "kind": {
       "policy": "Policy release",
-      "revocation": "Revocation"
+      "revocation": "Revocation",
+      "agreement": "Agreement"
     },
     "status": {
       "draft": "Draft",

@@ -78,6 +78,8 @@ class AccessPolicyDb(GovernedEntityMixin, Base):
     inherit_from = Column(JSON, nullable=True)
     # Normalized atomic rules: {"permission": [...], "prohibition": [...], "obligation": [...]}.
     body = Column(JSON, nullable=False, default=dict)
+    # Agreements only: the approved Access Grant this odrl:Agreement records.
+    access_grant_id = Column(String, nullable=True, index=True)
 
     def __repr__(self):
         return f"<AccessPolicyDb(id='{self.id}', name='{self.name}', status='{self.status}')>"

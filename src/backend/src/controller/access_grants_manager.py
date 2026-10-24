@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from src.controller import access_agreements
 from src.common.logging import get_logger
 from src.db_models.access_grants import (
     AccessGrantDb,
@@ -308,6 +309,7 @@ class AccessGrantsManager:
             raise ValueError(f"Request {payload.request_id} is not pending (status: {request.status})")
         
         grant = None
+        agreement = None
         
         if payload.approved:
             # Create the grant
@@ -326,6 +328,8 @@ class AccessGrantsManager:
                 expires_at=expires_at,
                 granted_by=admin_email
             )
+            # Record the deal as an ODRL Agreement (Access Policies); best-effort, never blocks approval.
+            agreement = access_agreements.on_grant_approved(db, grant_db, request.requester_email, admin_email)
             
             # Update request status
             self._request_repo.update_status(
@@ -374,6 +378,7 @@ class AccessGrantsManager:
         # Refresh request
         db.refresh(request)
         request_response = AccessGrantRequestResponse.model_validate(request)
+        access_agreements.auto_deliver(db, [agreement] if agreement else [], admin_email, revoke=False)
         
         return request_response, grant
     
@@ -513,8 +518,10 @@ class AccessGrantsManager:
         grant = self._grant_repo.revoke(db, grant_id, revoked_by, reason)
         if not grant:
             raise ValueError(f"Grant {grant_id} not found")
+        ended = access_agreements.on_grant_ended(db, grant.id, revoked_by, reason or "Access Grant revoked")
         
         db.commit()
+        access_agreements.auto_deliver(db, ended, revoked_by, revoke=True)
         
         # Notify the grantee
         self._notify_grant_revoked(db, grant, reason)
@@ -661,8 +668,10 @@ class AccessGrantsManager:
         
         # Mark expired grants
         expired = self._grant_repo.get_expired(db)
+        ended_agreements = []
         for grant in expired:
             self._grant_repo.mark_expired(db, grant.id)
+            ended_agreements += access_agreements.on_grant_ended(db, grant.id, "system", "Access Grant expired")
             self._trigger_expiry_workflow(db, grant)
             results["expired_marked"] += 1
             results["workflows_triggered"] += 1
@@ -679,6 +688,7 @@ class AccessGrantsManager:
                 results["warnings_sent"] += 1
         
         db.commit()
+        access_agreements.auto_deliver(db, ended_agreements, "system", revoke=True)
         
         logger.info(
             f"Expiration check complete: {results['expired_marked']} expired, "

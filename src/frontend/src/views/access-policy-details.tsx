@@ -385,6 +385,14 @@ export default function AccessPolicyDetails() {
         </div>
       </div>
 
+      {entity.kind === 'policy' && (entity as AccessPolicy).access_grant_id && (
+        <Alert className="border-indigo-300 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950">
+          <AlertCircle className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <AlertDescription className="text-indigo-800 dark:text-indigo-200">
+            {t('access-policies:details.fromAccessGrant')} ({(entity as AccessPolicy).access_grant_id})
+          </AlertDescription>
+        </Alert>
+      )}
       {entity.draft_owner_id && (
         <Alert className="border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
           <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />

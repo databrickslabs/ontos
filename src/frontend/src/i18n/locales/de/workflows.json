@@ -355,7 +355,9 @@
       "data_domain": "Datendomäne",
       "data_asset_review": "Prüfung von Daten-Assets",
       "access_grant": "Zugriffsberechtigung",
-      "asset": "Asset"
+      "asset": "Asset",
+      "ontology_concept": "Konzept",
+      "concept": "Konzept"
     },
     "fields": {
       "product_id": "Produkt-ID",

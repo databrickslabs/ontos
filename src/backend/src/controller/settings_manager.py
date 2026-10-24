@@ -94,6 +94,10 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_ONLY,
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.ADMIN,
+        # Concepts (Concept Browser) + Enrich (Term Mapping). The DGO is the
+        # concept APPROVER/certifier, so ADMIN on both.
+        'semantic-models': FeatureAccessLevel.ADMIN,
+        'term-mapping': FeatureAccessLevel.ADMIN,
         'compliance': FeatureAccessLevel.ADMIN,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'estate-manager': FeatureAccessLevel.ADMIN,
@@ -113,6 +117,12 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_ONLY,
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_WRITE,
+        # Concepts (Concept Browser) + Enrich (Term Mapping). The Data Steward is
+        # the concept CURATOR/AUTHOR: create, edit, submit for review, map to
+        # assets. READ_WRITE (not ADMIN) so they can't certify or bypass the
+        # review gate — that's the DGO/Admin's job.
+        'semantic-models': FeatureAccessLevel.READ_WRITE,
+        'term-mapping': FeatureAccessLevel.READ_WRITE,
         'compliance': FeatureAccessLevel.READ_ONLY,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'data-asset-reviews': FeatureAccessLevel.READ_WRITE,
@@ -127,6 +137,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_ONLY,
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_ONLY,
+        # Consumers browse concepts read-only.
+        'semantic-models': FeatureAccessLevel.READ_ONLY,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
@@ -139,6 +151,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_WRITE,
         'projects': FeatureAccessLevel.READ_WRITE,
         'business-glossary': FeatureAccessLevel.READ_ONLY,
+        # Producers reference concepts when building products — browse read-only.
+        'semantic-models': FeatureAccessLevel.READ_ONLY,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment

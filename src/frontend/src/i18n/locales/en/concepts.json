@@ -1,10 +1,28 @@
 {
   "title": "Concepts",
+  "sections": {
+    "label": "Concept sections",
+    "define": "Define",
+    "explore": "Explore",
+    "enrich": "Enrich"
+  },
+  "explore": {
+    "viewLabel": "Explore views",
+    "viewList": "List",
+    "viewTree": "Tree",
+    "viewGraph": "Graph",
+    "createConcept": "New Concept",
+    "createScheme": "New Concept Scheme"
+  },
   "nav": {
     "collections": "Collections",
     "browser": "Concepts",
     "search": "Search",
+    "searchSparql": "Search / SPARQL",
     "graph": "Graph",
-    "hierarchy": "Hierarchy"
+    "hierarchy": "Hierarchy",
+    "generator": "Generator",
+    "import": "Import",
+    "mapping": "Mapping"
   }
 }

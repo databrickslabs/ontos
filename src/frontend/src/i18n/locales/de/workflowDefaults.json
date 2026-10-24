@@ -92,6 +92,9 @@
     },
     "publicationRequestReview": {
       "end": "Der Veröffentlichungs-Workflow ist fehlgeschlagen"
+    },
+    "conceptReviewRequest": {
+      "rejected": "Die Begriffsprüfung wurde nicht genehmigt"
     }
   },
   "workflowNames": {

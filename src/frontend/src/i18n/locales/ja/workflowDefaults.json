@@ -92,6 +92,9 @@
     },
     "publicationRequestReview": {
       "end": "公開ワークフローが失敗しました"
+    },
+    "conceptReviewRequest": {
+      "rejected": "概念のレビューは承認されませんでした"
     }
   },
   "workflowNames": {

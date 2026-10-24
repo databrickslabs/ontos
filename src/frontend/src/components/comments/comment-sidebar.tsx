@@ -83,6 +83,32 @@ interface TimelineResponse {
   filter_type: string;
 }
 
+/**
+ * Build an entity comments/timeline API URL.
+ *
+ * IRI entity ids (anything containing '/', e.g. ontology concept IRIs) cannot
+ * travel as a path segment (the server decodes %2F before routing), so they use
+ * the `/by-iri/` variants with `?entity_id=`. Plain ids keep the path form.
+ */
+export function buildEntityCommentsUrl(
+  entityType: string,
+  entityId: string,
+  resource: 'comments' | 'timeline' | 'timeline/count',
+  query?: Record<string, string | null | undefined>,
+): string {
+  const params = new URLSearchParams();
+  const isIri = entityId.includes('/');
+  if (isIri) params.set('entity_id', entityId);
+  Object.entries(query ?? {}).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== '') params.set(k, v);
+  });
+  const qs = params.toString();
+  const base = isIri
+    ? `/api/entities/${entityType}/by-iri/${resource}`
+    : `/api/entities/${entityType}/${entityId}/${resource}`;
+  return qs ? `${base}?${qs}` : base;
+}
+
 const CommentSidebar: React.FC<CommentSidebarProps> = ({
   entityType,
   entityId,
@@ -181,9 +207,11 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
     console.debug(`CommentSidebar: Fetching count for ${entityType}/${entityId}`);
 
-    const projectParam = currentProject?.id ? `&project_id=${currentProject.id}` : '';
     const response = await get<TimelineResponse>(
-      `/api/entities/${entityType}/${entityId}/timeline/count?filter_type=all${projectParam}`
+      buildEntityCommentsUrl(entityType, entityId, 'timeline/count', {
+        filter_type: 'all',
+        project_id: currentProject?.id,
+      })
     );
 
     if (response.error) {
@@ -203,9 +231,11 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   }, [entityType, entityId, get]);
 
   const fetchTimeline = async () => {
-    const projectParam = currentProject?.id ? `&project_id=${currentProject.id}` : '';
     const response = await get<TimelineResponse>(
-      `/api/entities/${entityType}/${entityId}/timeline?filter_type=${filterType}${projectParam}`
+      buildEntityCommentsUrl(entityType, entityId, 'timeline', {
+        filter_type: filterType,
+        project_id: currentProject?.id,
+      })
     );
     
     if (response.error) {
@@ -283,7 +313,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       };
       
       const response = await post<Comment>(
-        `/api/entities/${entityType}/${entityId}/comments`,
+        buildEntityCommentsUrl(entityType, entityId, 'comments'),
         createData
       );
       

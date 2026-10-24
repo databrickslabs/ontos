@@ -355,7 +355,9 @@
       "data_domain": "Domínio de dados",
       "data_asset_review": "Revisão de ativos de dados",
       "access_grant": "Concessão de acesso",
-      "asset": "Ativo"
+      "asset": "Ativo",
+      "ontology_concept": "Conceito",
+      "concept": "Conceito"
     },
     "fields": {
       "product_id": "ID do produto",

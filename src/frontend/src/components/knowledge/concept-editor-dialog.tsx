@@ -22,11 +22,14 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ConceptModeSwitch, useConceptMode } from '@/components/concepts/mode-switch';
+import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import {
   OntologyConcept,
   ConceptCreate,
   ConceptUpdate,
   ConceptStatus,
+  CollectionType,
   KnowledgeCollection,
 } from '@/types/ontology';
 import {
@@ -52,6 +55,40 @@ interface ConceptEditorDialogProps {
   onPromote?: (concept: OntologyConcept) => void;
   onViewHistory?: (concept: OntologyConcept) => void;
   readOnly?: boolean;
+  /** Create mode only: preset concept type (e.g. from the Explore Create menu).
+   *  Still validated against the target scheme via allowedConceptTypes. */
+  initialConceptType?: EditorConceptType;
+}
+
+export type EditorConceptType = 'class' | 'concept' | 'property' | 'individual' | 'term';
+
+// Concept types a collection of each kind may hold. Glossaries carry terms and
+// SKOS concepts, taxonomies only SKOS concepts, ontologies the OWL-ish kinds.
+const ALLOWED_TYPES_BY_COLLECTION: Record<CollectionType, EditorConceptType[]> = {
+  glossary: ['concept', 'term'],
+  taxonomy: ['concept'],
+  ontology: ['concept', 'class', 'property', 'individual'],
+};
+
+const ALL_CONCEPT_TYPES: EditorConceptType[] = ['concept', 'class', 'property', 'individual', 'term'];
+
+// Types offered for a target collection type. Unknown / missing type -> all.
+export function allowedConceptTypes(collectionType?: string | null): EditorConceptType[] {
+  return (collectionType && ALLOWED_TYPES_BY_COLLECTION[collectionType as CollectionType]) || ALL_CONCEPT_TYPES;
+}
+
+// Label for the Parent (broader) field, by concept type.
+export function parentFieldLabelKey(conceptType: EditorConceptType): { key: string; defaultLabel: string } {
+  if (conceptType === 'class') return { key: 'semantic-models:conceptEditor.parentClass', defaultLabel: 'Parent Class' };
+  if (conceptType === 'property') return { key: 'semantic-models:conceptEditor.parentProperty', defaultLabel: 'Parent Property' };
+  return { key: 'semantic-models:conceptEditor.parentConcept', defaultLabel: 'Parent Concept' };
+}
+
+// Short display name for an IRI (local name after # or the last /).
+function iriLocalName(iri: string): string {
+  const hash = iri.lastIndexOf('#');
+  const tail = hash >= 0 ? iri.slice(hash + 1) : iri.slice(iri.lastIndexOf('/') + 1);
+  return tail || iri;
 }
 
 const statusColors: Record<ConceptStatus, string> = {
@@ -74,8 +111,11 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   onPromote,
   onViewHistory,
   readOnly = false,
+  initialConceptType,
 }) => {
-  const { t } = useTranslation(['semantic-models', 'common']);
+  const { t } = useTranslation();
+  const [mode] = useConceptMode();
+  const advanced = mode === 'advanced';
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     collection_iri: '',
@@ -107,10 +147,37 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   ];
   const [newSynonym, setNewSynonym] = useState('');
   const [newExample, setNewExample] = useState('');
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
 
   const isNew = !concept;
   const canEdit = !readOnly && (!concept?.status || concept.status === 'draft');
   const editableCollections = collections.filter((c) => c.is_editable);
+
+  // The collection the concept will live in: the picked collection_iri (create)
+  // or the concept's source_context (edit). source_context may be a short
+  // `prefix:name` form, so also accept a suffix match like the concepts list.
+  const targetCollection = (() => {
+    const iri = formData.collection_iri;
+    if (!iri) return collection;
+    const pool = collection ? [collection, ...collections] : collections;
+    return pool.find((c) => c.iri === iri || c.iri.endsWith(`:${iri}`));
+  })();
+  const allowedTypes = allowedConceptTypes(targetCollection?.collection_type);
+  // Never hide an existing concept's own type (the selector is read-only then).
+  const visibleConceptTypes = conceptTypes.filter(
+    (type) =>
+      allowedTypes.includes(type.value as EditorConceptType) ||
+      (!isNew && type.value === formData.concept_type),
+  );
+
+  // Changing the target collection (create mode) can invalidate the chosen
+  // type — fall back to a plain concept, which every collection kind allows.
+  useEffect(() => {
+    if (isNew && !allowedTypes.includes(formData.concept_type)) {
+      setFormData((prev) => ({ ...prev, concept_type: 'concept' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, allowedTypes.join('|'), formData.concept_type]);
 
   useEffect(() => {
     if (concept) {
@@ -133,7 +200,9 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
         collection_iri: collection?.iri || '',
         label: '',
         definition: '',
-        concept_type: 'concept',
+        // Preset from the caller; the allowed-type effect above resets it to
+        // 'concept' if the target scheme does not accept it.
+        concept_type: initialConceptType || 'concept',
         property_type: 'object',
         domain: '',
         range: '',
@@ -144,7 +213,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
         related_iris: [],
       });
     }
-  }, [concept, collection, open]);
+  }, [concept, collection, open, initialConceptType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,19 +301,24 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isNew ? t('semantic-models:actions.createConcept') : t('semantic-models:conceptEditor.editTitle')}
-            {concept?.status && (
-              <Badge className={statusColors[concept.status as ConceptStatus]}>
-                {concept.status}
-              </Badge>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {isNew
-              ? t('semantic-models:conceptEditor.createDescription')
-              : concept?.iri}
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                {isNew ? t('Create Concept') : t('Edit Concept')}
+                {concept?.status && (
+                  <Badge className={statusColors[concept.status as ConceptStatus]}>
+                    {concept.status}
+                  </Badge>
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                {isNew
+                  ? t('Create a new term or concept in the collection.')
+                  : concept?.iri}
+              </DialogDescription>
+            </div>
+            <ConceptModeSwitch tipLeft />
+          </div>
         </DialogHeader>
 
         <ScrollArea className="max-h-[60vh] px-1">
@@ -275,33 +349,55 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                 </div>
               )}
 
-              {/* Type Selector */}
-              <div className="grid gap-2">
-                <Label>{t('common:labels.type')}</Label>
-                <Select
-                  value={formData.concept_type}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, concept_type: value as any }))
-                  }
-                  disabled={!canEdit || !isNew} // Can only set type on creation
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('semantic-models:conceptEditor.selectTypePlaceholder')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conceptTypes.map((type) => (
-                      <SelectItem
-                        key={type.value}
-                        value={type.value}
-                        displayValue={type.label}
-                        description={type.description}
-                      >
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Type Selector — ontology layer, Advanced view only. In Simple
+                  mode a new concept defaults to skos:Concept; the raw type is
+                  hidden. Existing concepts still show their type in Advanced. */}
+              {advanced && (
+                <div className="grid gap-2">
+                  <Label>{t('Type')}</Label>
+                  <Select
+                    value={formData.concept_type}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, concept_type: value as any }))
+                    }
+                    disabled={!canEdit || !isNew} // Can only set type on creation
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('Select type...')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleConceptTypes.map((type) => (
+                        <SelectItem
+                          key={type.value}
+                          value={type.value}
+                          displayValue={type.label}
+                          description={type.description}
+                        >
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Simple mode: the Type selector is hidden, so name a non-default
+                  (preset) type and point properties at the Advanced fields. */}
+              {!advanced && formData.concept_type !== 'concept' && (
+                <div className="grid gap-1" data-testid="simple-type-hint">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">{t('Type')}:</span>
+                    <Badge variant="outline">
+                      {conceptTypes.find((ct) => ct.value === formData.concept_type)?.label ?? formData.concept_type}
+                    </Badge>
+                  </div>
+                  {formData.concept_type === 'property' && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('semantic-models:conceptEditor.domainRangeInAdvanced', 'Domain and range are set in Advanced view.')}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Label */}
               <div className="grid gap-2">
@@ -333,8 +429,50 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                 />
               </div>
 
-              {/* Property-specific fields */}
-              {formData.concept_type === 'property' && (
+              {/* Parent (broader): shown in Simple and Advanced. Saved as
+                  broader_iris; the backend picks the predicate by type
+                  (skos:broader / rdfs:subClassOf / rdfs:subPropertyOf). */}
+              <div className="grid gap-2" data-testid="parent-field">
+                <Label>
+                  {t(parentFieldLabelKey(formData.concept_type).key, parentFieldLabelKey(formData.concept_type).defaultLabel)}
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {formData.broader_iris.map((iri) => (
+                    <Badge key={iri} variant="secondary" className="flex items-center gap-1" title={iri}>
+                      {iriLocalName(iri)}
+                      {canEdit && (
+                        <button
+                          type="button"
+                          aria-label={t('semantic-models:conceptEditor.removeParent', { defaultValue: 'Remove {{name}}', name: iriLocalName(iri) })}
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              broader_iris: prev.broader_iris.filter((p) => p !== iri),
+                            }))
+                          }
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </Badge>
+                  ))}
+                  {formData.broader_iris.length === 0 && !canEdit && (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )}
+                </div>
+                {canEdit && (
+                  <div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setParentPickerOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      {t('semantic-models:conceptEditor.addParent', 'Add Parent')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Property-specific fields — ontology layer, Advanced only. */}
+              {advanced && formData.concept_type === 'property' && (
                 <>
                   <Separator />
                   <div className="space-y-4 bg-muted/30 rounded-lg p-4">
@@ -589,6 +727,22 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           )}
         </DialogFooter>
       </DialogContent>
+      {/* Mounted only while open: the picker fetches on mount. */}
+      {parentPickerOpen && (
+        <ConceptSelectDialog
+          isOpen={parentPickerOpen}
+          onOpenChange={setParentPickerOpen}
+          entityType={formData.concept_type === 'property' ? 'property' : 'class'}
+          onSelect={(iri) => {
+            setFormData((prev) =>
+              prev.broader_iris.includes(iri) || iri === concept?.iri
+                ? prev
+                : { ...prev, broader_iris: [...prev.broader_iris, iri] },
+            );
+            setParentPickerOpen(false);
+          }}
+        />
+      )}
     </Dialog>
   );
 };

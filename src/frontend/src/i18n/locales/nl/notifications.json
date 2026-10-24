@@ -170,6 +170,10 @@
         "notify-denied": "Uw publicatieaanvraag voor '{{entity_name}}' is geweigerd.",
         "notify-invalid": "De publicatieaanvraag voor '{{entity_name}}' is afgewezen: alleen goedgekeurde datacontracten en actieve dataproducten kunnen worden gepubliceerd.",
         "notify-error": "Er is een fout opgetreden bij het publiceren van '{{entity_name}}'."
+      },
+      "concept-review-approval": {
+        "notify-approved": "Je concept '{{entity_name}}' is goedgekeurd.",
+        "notify-rejected": "Je concept '{{entity_name}}' is teruggestuurd voor wijzigingen. Lees de opmerking van de reviewer en dien het opnieuw in."
       }
     },
     "approval": {
@@ -194,7 +198,10 @@
         "data_asset_review": "Data-assetbeoordeling",
         "access_grant": "Toegangsverlening",
         "asset": "Asset",
-        "entity": "Entiteit"
+        "entity": "Entiteit",
+        "ontology_concept": "Concept",
+        "ontology_collection": "Conceptschema",
+        "concept_changeset": "Conceptwijzigingenset"
       }
     },
     "approvalMessages": {

@@ -33,6 +33,11 @@ interface ConceptRelationsPanelProps {
   maxVisibleRows?: number
   // Optional cap on how many neighbours to fetch from the backend.
   fetchLimit?: number
+  // When true, render ONLY the relations list body (no collapsible card/header).
+  // Used when embedded inside a shared "Relations / Graph" block that owns its
+  // own header + view switch (concept detail). Default false keeps the
+  // standalone card behaviour unchanged.
+  embedded?: boolean
 }
 
 // Predicates whose values are already surfaced elsewhere on the page
@@ -49,6 +54,16 @@ const PREDICATES_TO_HIDE = new Set<string>([
   'http://www.w3.org/2004/02/skos/core#example',
   'http://www.w3.org/2004/02/skos/core#notation',
 ])
+
+// Predicate NAMESPACES to hide wholesale. The ontos:* namespace is internal
+// GOVERNANCE / PROVENANCE metadata (status, version, createdAt/By, publishedAt,
+// ownership, conceptType, …) — none of it is a semantic relationship between
+// concepts, and surfacing it here confused stewards (e.g. a raw "version →
+// 1.0.0" or "status → draft" row that duplicates — and can contradict — the
+// header badge + version-history panel). Status/version/ownership each have
+// their own dedicated surface; the Relations panel stays focused on real
+// broader/narrower/related/domain/range/lineage links.
+const PREDICATE_NAMESPACES_TO_HIDE = ['http://ontos.app/ontology#']
 
 // Friendly colour scheme by relationship family. Falls back to neutral.
 const PREDICATE_COLORS: Array<[RegExp, string]> = [
@@ -98,6 +113,7 @@ export default function ConceptRelationsPanel({
   onNavigate,
   maxVisibleRows,
   fetchLimit = 500,
+  embedded = false,
 }: ConceptRelationsPanelProps) {
   const { get } = useApi()
   const { t } = useTranslation(['semantic-models', 'common'])
@@ -151,6 +167,7 @@ export default function ConceptRelationsPanel({
       // other side, so we ignore them here to avoid double-counting.
       if (n.direction === 'predicate') continue
       if (PREDICATES_TO_HIDE.has(n.predicate)) continue
+      if (PREDICATE_NAMESPACES_TO_HIDE.some((ns) => n.predicate.startsWith(ns))) continue
       // A literal whose predicate we hid still shouldn't appear; literals
       // we keep are domain-specific annotations (e.g. dc:identifier).
 
@@ -247,6 +264,37 @@ export default function ConceptRelationsPanel({
     [onNavigate, t],
   )
 
+  // Just the relations list body — reused by both the standalone card and the
+  // embedded (shared Relations/Graph block) mode.
+  const listBody = (
+    <div
+      className={`px-2 py-1 ${maxVisibleRows ? 'overflow-y-auto' : ''}`}
+      style={listMaxHeight}
+      data-testid="concept-relations-list"
+    >
+      {isLoading && relations.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {t('semantic-models:relations.loading', { defaultValue: 'Loading relations...' })}
+        </div>
+      ) : relations.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2 px-2">
+          {t('semantic-models:relations.empty', {
+            defaultValue:
+              'No concept-to-concept relations yet. Add broader / narrower / related links, or see the Linked Objects panel for assets and products linked to this concept.',
+          })}
+        </p>
+      ) : (
+        relations.map(renderRow)
+      )}
+    </div>
+  )
+
+  // Embedded: no card/header/collapsible — the parent block owns those.
+  if (embedded) {
+    return listBody
+  }
+
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="border rounded-lg">
@@ -282,28 +330,7 @@ export default function ConceptRelationsPanel({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div
-            className={`border-t px-2 py-1 ${maxVisibleRows ? 'overflow-y-auto' : ''}`}
-            style={listMaxHeight}
-            data-testid="concept-relations-list"
-          >
-            {isLoading && relations.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('semantic-models:relations.loading', {
-                  defaultValue: 'Loading relations...',
-                })}
-              </div>
-            ) : relations.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2 px-2">
-                {t('semantic-models:relations.empty', {
-                  defaultValue: 'No relations found.',
-                })}
-              </p>
-            ) : (
-              relations.map(renderRow)
-            )}
-          </div>
+          <div className="border-t">{listBody}</div>
         </CollapsibleContent>
       </div>
     </Collapsible>

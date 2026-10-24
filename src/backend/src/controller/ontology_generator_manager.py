@@ -19,7 +19,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -30,6 +30,8 @@ from src.owl.owl_parser import OntologyParser
 logger = get_logger(__name__)
 
 MAX_ITERATIONS = 10
+MAX_REPAIR_ATTEMPTS = 2
+MAX_CONTINUATIONS = 6
 _MAX_TABLES_IN_METADATA = 50
 _MAX_COLUMNS_PER_TABLE = 80
 
@@ -61,6 +63,10 @@ class AgentResult:
     iterations: int = 0
     error: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
+    tables_resolved: int = 0
+    tables_used: int = 0
+    caps_hit: bool = False
+    caps_note: str = ""
 
 
 # =====================================================================
@@ -268,6 +274,25 @@ class OntologyGeneratorManager:
             return json.dumps({"error": f"Tool execution failed: {exc}"})
 
     @staticmethod
+    def _is_usable_turtle(content: str) -> Tuple[bool, Optional[str]]:
+        """Check if content is valid parseable Turtle with at least 1 class or property.
+
+        Returns:
+            (is_usable, error_reason) where is_usable=True only if parse succeeds
+            and yields ≥1 class OR ≥1 property.
+        """
+        try:
+            parser = OntologyParser(content)
+            classes = parser.get_classes()
+            properties = parser.get_properties()
+            if len(classes) > 0 or len(properties) > 0:
+                return True, None
+            else:
+                return False, "ontology contains no classes or properties"
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
     def _extract_turtle(content: str) -> str:
         """Extract Turtle content from LLM output that may contain preamble text.
 
@@ -423,6 +448,24 @@ class OntologyGeneratorManager:
                 working_metadata = {**metadata, "tables": filtered}
                 logger.info("Filtered metadata to %d/%d selected tables", len(filtered), len(metadata["tables"]))
 
+        # (Fix 4) Track table caps
+        total_tables_resolved = len(metadata.get("tables", []))
+        tables_after_cap = len(working_metadata.get("tables", []))
+        tables_sent_to_model = min(tables_after_cap, _MAX_TABLES_IN_METADATA)
+
+        result.tables_resolved = total_tables_resolved
+        result.tables_used = tables_sent_to_model
+
+        if tables_after_cap > _MAX_TABLES_IN_METADATA or total_tables_resolved > tables_after_cap:
+            result.caps_hit = True
+            result.caps_note = (
+                f"Resolved {total_tables_resolved} table(s); this generator processes up to "
+                f"{_MAX_TABLES_IN_METADATA} per run and does not yet support large-estate "
+                f"(multi-hundred-table) generation."
+            )
+            logger.info("Cap indicators: tables_resolved=%d, tables_used=%d, cap_note=%s",
+                        result.tables_resolved, result.tables_used, result.caps_note)
+
         user_prompt = self._build_user_prompt(
             guidelines=guidelines,
             options=options,
@@ -574,9 +617,55 @@ class OntologyGeneratorManager:
                 # Strip preamble text that LLMs often include before the actual Turtle
                 content = self._extract_turtle(content)
 
+                # Check finish_reason for truncation (Fix 2)
+                finish_reason = response.choices[0].finish_reason
+                continuation_counter = 0
+                accumulated_content = content
+
+                # Handle truncation: keep asking for continuation until done
+                while finish_reason == "length" and continuation_counter < MAX_CONTINUATIONS:
+                    logger.warning("Iteration %d: output truncated (finish_reason='length'); requesting continuation",
+                                   iteration + 1)
+                    notify("Output truncated; requesting continuation…")
+
+                    # Append partial content as assistant message, then ask for continuation
+                    messages.append({
+                        "role": "assistant",
+                        "content": accumulated_content,
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": "Continue the Turtle output exactly where you left off. Do not repeat earlier lines. Output only the continuation.",
+                    })
+
+                    continuation_counter += 1
+                    logger.info("Continuation iteration %d/%d", continuation_counter, MAX_CONTINUATIONS)
+
+                    try:
+                        cont_response = client.chat.completions.create(
+                            model=endpoint,
+                            messages=messages,
+                            max_tokens=4096,
+                            temperature=0.1,
+                        )
+                        cont_usage = cont_response.usage
+                        if cont_usage:
+                            total_usage["prompt_tokens"] += cont_usage.prompt_tokens or 0
+                            total_usage["completion_tokens"] += cont_usage.completion_tokens or 0
+
+                        cont_message = cont_response.choices[0].message
+                        cont_content = cont_message.content or ""
+                        cont_content = self._extract_turtle(cont_content)
+                        accumulated_content += "\n" + cont_content
+                        finish_reason = cont_response.choices[0].finish_reason
+                    except Exception as exc:
+                        logger.error("Continuation request failed: %s", exc)
+                        break
+
+                content = accumulated_content
                 starts_with_prefix = content.strip().startswith("@prefix")
-                logger.info("Iteration %d: final text output — %d chars, starts_with_@prefix=%s",
-                            iteration + 1, len(content), starts_with_prefix)
+                logger.info("Iteration %d: final text output — %d chars, starts_with_@prefix=%s, truncated=%s",
+                            iteration + 1, len(content), starts_with_prefix, finish_reason == "length")
 
                 result.steps.append(AgentStep(
                     step_type="output",
@@ -584,6 +673,71 @@ class OntologyGeneratorManager:
                     duration_ms=elapsed_ms,
                 ))
 
+                # Fix 1: Check if the Turtle is usable before committing success
+                is_usable, usable_error = self._is_usable_turtle(content)
+
+                if not is_usable:
+                    # Not valid Turtle or no classes/properties — attempt repair if iterations remain
+                    repair_attempts = 0
+                    while not is_usable and repair_attempts < MAX_REPAIR_ATTEMPTS and iteration < MAX_ITERATIONS - 1:
+                        repair_attempts += 1
+                        logger.warning("Iteration %d: non-usable output (error: %s), repair attempt %d/%d",
+                                       iteration + 1, usable_error, repair_attempts, MAX_REPAIR_ATTEMPTS)
+                        notify(f"Correcting output (attempt {repair_attempts})…")
+
+                        # Append the bad assistant message to history for coherence
+                        messages.append({"role": "assistant", "content": content})
+
+                        # Send corrective instruction
+                        corrective_msg = (
+                            "Your previous response was not valid OWL Turtle (parse error: "
+                            + (usable_error if usable_error else "no @prefix / not Turtle") +
+                            "). Do NOT call tools now. Output ONLY the complete ontology as valid Turtle "
+                            "starting with @prefix declarations — no prose, no markdown fences, no tool calls."
+                        )
+                        messages.append({"role": "user", "content": corrective_msg})
+
+                        try:
+                            repair_response = client.chat.completions.create(
+                                model=endpoint,
+                                messages=messages,
+                                max_tokens=4096,
+                                temperature=0.1,
+                            )
+                            repair_usage = repair_response.usage
+                            if repair_usage:
+                                total_usage["prompt_tokens"] += repair_usage.prompt_tokens or 0
+                                total_usage["completion_tokens"] += repair_usage.completion_tokens or 0
+
+                            repair_message = repair_response.choices[0].message
+                            repair_content = repair_message.content or ""
+                            repair_content = self._extract_turtle(repair_content)
+
+                            is_usable, usable_error = self._is_usable_turtle(repair_content)
+                            if is_usable:
+                                content = repair_content
+                                logger.info("Repair attempt %d succeeded", repair_attempts)
+                                notify("Output corrected!")
+                            else:
+                                logger.warning("Repair attempt %d failed (still non-usable)", repair_attempts)
+                        except Exception as exc:
+                            logger.error("Repair attempt %d raised exception: %s", repair_attempts, exc)
+
+                    if not is_usable:
+                        # Failed all repair attempts
+                        result.success = False
+                        result.error = (
+                            f"Model did not return valid Turtle after {repair_attempts} repair attempt(s). "
+                            f"Last error: {usable_error}"
+                        )
+                        result.iterations = iteration + 1
+                        result.usage = total_usage
+                        result.owl_content = ""
+                        logger.error("Agent failed: %s", result.error)
+                        notify("Generation failed: model output was not valid Turtle.")
+                        return result
+
+                # (Fix 3) Set success=True only after usable Turtle is confirmed
                 result.success = True
                 result.owl_content = content
                 result.iterations = iteration + 1
@@ -600,6 +754,7 @@ class OntologyGeneratorManager:
                     logger.info("Parsed ontology: %d classes, %d properties",
                                 len(result.classes), len(result.properties))
                 except Exception as parse_exc:
+                    # Should not reach here after _is_usable_turtle passed, but be defensive
                     logger.warning("Failed to parse generated Turtle: %s", parse_exc)
                     result.error = f"Generated content could not be parsed: {parse_exc}"
 
@@ -834,4 +989,8 @@ class OntologyGeneratorManager:
             "iterations": result.iterations,
             "error": result.error,
             "usage": result.usage,
+            "tables_resolved": result.tables_resolved,
+            "tables_used": result.tables_used,
+            "caps_hit": result.caps_hit,
+            "caps_note": result.caps_note,
         }

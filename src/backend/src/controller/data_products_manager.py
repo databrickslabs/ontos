@@ -1186,45 +1186,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         return self.transition_status(product_id, 'draft', current_user)
 
     def _validate_output_port_contracts(self, product_db, db=None) -> None:
-        """Raise ValueError unless every output port has an approved / active contract."""
-        db = db or self._db
-        if not product_db.output_ports:
-            return
-        ports_without_contracts = [
-            port.name for port in product_db.output_ports
-            if not port.contract_id
-        ]
-        if ports_without_contracts:
-            raise ValueError(
-                f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} "
-                f"must have data contracts assigned"
-            )
+        """Raise ``OutputPortContractsError`` unless every port has an approved contract."""
+        from src.common.output_port_contracts import validate_output_port_contracts
 
-        # Validate that all linked contracts are in an approved status
-        from src.repositories.data_contracts_repository import data_contract_repo
-
-        valid_contract_statuses = ['approved', 'active']
-        contracts_not_approved = []
-
-        for port in product_db.output_ports:
-            if port.contract_id:
-                contract = data_contract_repo.get(db=db, id=port.contract_id)
-                if not contract:
-                    contracts_not_approved.append(
-                        f"{port.name} -> {port.contract_id} (contract not found)"
-                    )
-                    continue
-                contract_status = (contract.status or '').lower()
-                if contract_status not in valid_contract_statuses:
-                    contracts_not_approved.append(
-                        f"{port.name} -> {contract.name} (status: {contract.status})"
-                    )
-
-        if contracts_not_approved:
-            raise ValueError(
-                f"Cannot publish product: These output ports have unapproved contracts: "
-                f"{', '.join(contracts_not_approved)}. Contracts must be approved first."
-            )
+        validate_output_port_contracts(product_db, db or self._db)
 
     def set_publication_scope(self, product_id: str, scope: str,
                               current_user: Optional[str] = None, db=None):
@@ -1257,8 +1222,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 )
             self._validate_output_port_contracts(product_db, db)
             product_db.publication_scope = scope
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = current_user
+            if not was_published:
+                # A scope change keeps who published it and when
+                product_db.published_at = datetime.now(timezone.utc)
+                product_db.published_by = current_user
         else:
             product_db.publication_scope = 'none'
             product_db.published_at = None

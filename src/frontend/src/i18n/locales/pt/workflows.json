@@ -486,6 +486,8 @@
     "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
     "stepErrors": {
       "approval_rejected": "Solicitação negada",
+      "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
+      "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",
       "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
       "rule_entity_not_found": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada"
     },

@@ -5682,8 +5682,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     f"Current status: {contract_db.status}"
                 )
             contract_db.publication_scope = scope
-            contract_db.published_at = datetime.now(timezone.utc)
-            contract_db.published_by = current_user
+            if not was_published:
+                # A scope change keeps who published it and when
+                contract_db.published_at = datetime.now(timezone.utc)
+                contract_db.published_by = current_user
         else:
             contract_db.publication_scope = "none"
             contract_db.published_at = None

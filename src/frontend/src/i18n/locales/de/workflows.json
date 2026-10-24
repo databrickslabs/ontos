@@ -488,6 +488,8 @@
     "removedStepsHint": "Diese Schritte liefen in dieser Ausführung und wurden später aus dem Workflow entfernt.",
     "stepErrors": {
       "approval_rejected": "Anfrage abgelehnt",
+      "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
+      "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
       "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden"
     },

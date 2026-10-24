@@ -488,6 +488,8 @@
     "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
     "stepErrors": {
       "approval_rejected": "リクエストが却下されました",
+      "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
+      "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
       "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません"
     },

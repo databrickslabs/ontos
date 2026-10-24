@@ -1592,19 +1592,28 @@ async def retry_execution(
         if not workflow:
             raise HTTPException(status_code=404, detail="Associated workflow not found")
         
-        # Get trigger context to re-execute
-        trigger_context = json.loads(reset_result.trigger_context) if reset_result.trigger_context else {}
-        
+        # Rebuild the trigger context as resume_workflow does: the steps need
+        # its trigger type too (an on_delete entity is gone, a before_create
+        # one isn't stored yet), not only its entity fields.
+        trigger_context = None
+        if reset_result.trigger_context:
+            try:
+                trigger_context = TriggerContext(**json.loads(reset_result.trigger_context))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        trigger_data = trigger_context.model_dump() if trigger_context else {}
+
         # Get entity data from trigger context
-        entity_data = trigger_context.get('entity_data', {}) or {}
-        
+        entity_data = trigger_data.get('entity_data', {}) or {}
+
         result = executor.execute_workflow(
             workflow,
             entity_data,  # positional argument
-            entity_type=trigger_context.get('entity_type', 'unknown'),
-            entity_id=trigger_context.get('entity_id', ''),
-            entity_name=trigger_context.get('entity_name'),
-            user_email=trigger_context.get('user_email'),
+            entity_type=trigger_data.get('entity_type', 'unknown'),
+            entity_id=trigger_data.get('entity_id', ''),
+            entity_name=trigger_data.get('entity_name'),
+            user_email=trigger_data.get('user_email'),
+            trigger_context=trigger_context,
             execution_id=execution_id,  # Reuse the same execution record
         )
         

@@ -205,5 +205,23 @@
         "approval-gate": "{{entity_type}}「{{entity_name}}」の公開リクエストを確認してください。"
       }
     }
+  },
+  "lifecycle": {
+    "deprecation": {
+      "title": "プロダクトが非推奨になりました",
+      "description": "データプロダクト「{{productName}}」は非推奨に設定されました。代替への移行を計画するか、オーナーにお問い合わせください。"
+    },
+    "retirement": {
+      "title": "プロダクトが廃止されました",
+      "description": "データプロダクト「{{productName}}」は廃止され、利用できなくなりました。ご利用中の場合は、直ちに代替へ移行してください。"
+    },
+    "deletion": {
+      "title": "プロダクトが削除されました",
+      "description": "データプロダクト「{{productName}}」は削除されました。"
+    },
+    "activation": {
+      "title": "プロダクトが有効化されました",
+      "description": "データプロダクト「{{productName}}」が有効化され、利用できるようになりました。"
+    }
   }
 }

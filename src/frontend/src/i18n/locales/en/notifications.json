@@ -205,5 +205,23 @@
         "approval-gate": "Please review the publication request for {{entity_type}} '{{entity_name}}'."
       }
     }
+  },
+  "lifecycle": {
+    "deprecation": {
+      "title": "Product deprecated",
+      "description": "The data product '{{productName}}' has been marked as deprecated. Please plan your migration to an alternative or contact the owner."
+    },
+    "retirement": {
+      "title": "Product retired",
+      "description": "The data product '{{productName}}' has been retired and is no longer available. If you were using it, please migrate to an alternative immediately."
+    },
+    "deletion": {
+      "title": "Product deleted",
+      "description": "The data product '{{productName}}' has been deleted."
+    },
+    "activation": {
+      "title": "Product activated",
+      "description": "The data product '{{productName}}' has been activated and is now available for use."
+    }
   }
 }

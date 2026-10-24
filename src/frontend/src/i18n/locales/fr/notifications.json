@@ -205,5 +205,23 @@
         "approval-gate": "Veuillez examiner la demande de publication pour {{entity_type}} « {{entity_name}} »."
       }
     }
+  },
+  "lifecycle": {
+    "deprecation": {
+      "title": "Produit obsolète",
+      "description": "Le produit de données « {{productName}} » a été marqué comme obsolète. Prévoyez la migration vers une alternative ou contactez le responsable."
+    },
+    "retirement": {
+      "title": "Produit retiré",
+      "description": "Le produit de données « {{productName}} » a été retiré et n'est plus disponible. Si vous l'utilisiez, migrez immédiatement vers une alternative."
+    },
+    "deletion": {
+      "title": "Produit supprimé",
+      "description": "Le produit de données « {{productName}} » a été supprimé."
+    },
+    "activation": {
+      "title": "Produit activé",
+      "description": "Le produit de données « {{productName}} » a été activé et est maintenant disponible."
+    }
   }
 }

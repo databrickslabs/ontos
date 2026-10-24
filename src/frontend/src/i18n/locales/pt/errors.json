@@ -24,5 +24,8 @@
     "message": "Ocorreu um erro inesperado.",
     "retry": "Tentar novamente"
   },
-  "internalError": "Ocorreu um erro inesperado. Os detalhes estão no log do servidor (id do erro {{errorId}})."
+  "internalError": "Ocorreu um erro inesperado. Os detalhes estão no log do servidor (id do erro {{errorId}}).",
+  "subscription": {
+    "productNotSubscribable": "Não é possível assinar '{{productName}}': o status é '{{status}}'. Apenas produtos ativos aceitam novas assinaturas."
+  }
 }

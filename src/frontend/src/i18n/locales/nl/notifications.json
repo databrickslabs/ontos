@@ -205,5 +205,23 @@
         "approval-gate": "Beoordeel de publicatieaanvraag voor {{entity_type}} '{{entity_name}}'."
       }
     }
+  },
+  "lifecycle": {
+    "deprecation": {
+      "title": "Product verouderd",
+      "description": "Het dataproduct '{{productName}}' is als verouderd gemarkeerd. Plan de migratie naar een alternatief of neem contact op met de eigenaar."
+    },
+    "retirement": {
+      "title": "Product buiten gebruik gesteld",
+      "description": "Het dataproduct '{{productName}}' is buiten gebruik gesteld en niet meer beschikbaar. Als u het gebruikte, stap dan direct over op een alternatief."
+    },
+    "deletion": {
+      "title": "Product verwijderd",
+      "description": "Het dataproduct '{{productName}}' is verwijderd."
+    },
+    "activation": {
+      "title": "Product geactiveerd",
+      "description": "Het dataproduct '{{productName}}' is geactiveerd en is nu beschikbaar voor gebruik."
+    }
   }
 }

@@ -24,5 +24,8 @@
     "message": "Er is een onverwachte fout opgetreden.",
     "retry": "Opnieuw Proberen"
   },
-  "internalError": "Er is een onverwachte fout opgetreden. De details staan in het serverlogboek (fout-id {{errorId}})."
+  "internalError": "Er is een onverwachte fout opgetreden. De details staan in het serverlogboek (fout-id {{errorId}}).",
+  "subscription": {
+    "productNotSubscribable": "U kunt zich niet abonneren op '{{productName}}': de status is '{{status}}'. Alleen actieve producten accepteren nieuwe abonnementen."
+  }
 }

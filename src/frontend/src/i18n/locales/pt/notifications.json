@@ -205,5 +205,23 @@
         "approval-gate": "Revise a solicitação de publicação de {{entity_type}} '{{entity_name}}'."
       }
     }
+  },
+  "lifecycle": {
+    "deprecation": {
+      "title": "Produto obsoleto",
+      "description": "O produto de dados '{{productName}}' foi marcado como obsoleto. Planeje a migração para uma alternativa ou fale com o responsável."
+    },
+    "retirement": {
+      "title": "Produto aposentado",
+      "description": "O produto de dados '{{productName}}' foi aposentado e não está mais disponível. Se você o utilizava, migre imediatamente para uma alternativa."
+    },
+    "deletion": {
+      "title": "Produto excluído",
+      "description": "O produto de dados '{{productName}}' foi excluído."
+    },
+    "activation": {
+      "title": "Produto ativado",
+      "description": "O produto de dados '{{productName}}' foi ativado e já está disponível para uso."
+    }
   }
 }

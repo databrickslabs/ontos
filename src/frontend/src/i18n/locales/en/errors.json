@@ -24,6 +24,8 @@
     "message": "An unexpected error occurred.",
     "retry": "Try Again"
   },
-  "internalError": "An unexpected error occurred. The details are in the server log (error id {{errorId}})."
+  "internalError": "An unexpected error occurred. The details are in the server log (error id {{errorId}}).",
+  "subscription": {
+    "productNotSubscribable": "Cannot subscribe to '{{productName}}': its status is '{{status}}'. Only active products accept new subscriptions."
+  }
 }
-

@@ -24,5 +24,8 @@
     "message": "Si è verificato un errore imprevisto.",
     "retry": "Riprova"
   },
-  "internalError": "Si è verificato un errore imprevisto. I dettagli sono nel log del server (id dell'errore {{errorId}})."
+  "internalError": "Si è verificato un errore imprevisto. I dettagli sono nel log del server (id dell'errore {{errorId}}).",
+  "subscription": {
+    "productNotSubscribable": "Impossibile sottoscrivere '{{productName}}': il suo stato è '{{status}}'. Solo i prodotti attivi accettano nuove sottoscrizioni."
+  }
 }

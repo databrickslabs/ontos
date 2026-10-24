@@ -986,6 +986,13 @@
         "productName": "Product name",
         "productVersion": "Product version",
         "productStatus": "Product status"
+      },
+      "lifecycle": {
+        "title": "Lifecycle status tag",
+        "descriptionProduct": "Tags each table with the lifecycle status of the data product that uses it. On a table used by several products, the best status wins (active first, retired last).",
+        "descriptionContract": "Tags each table with the lifecycle status of the data contract that uses it. On a table used by several contracts, the best status wins (active first, retired last).",
+        "valueLabel": "Tag value:",
+        "sharedKeyHint": "When the product and contract status tags are both enabled with the same key, the product's status is written."
       }
     },
     "entityPatterns": {

@@ -99,6 +99,7 @@ from src.common.lifecycle_status import (
 )
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
+from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.domain_export_adapter import (
@@ -1002,6 +1003,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.info(
                 f"Product {product_id} status transitioned: {old_status} → {new_status_lower}"
                 + (f" by {current_user}" if current_user else "")
+            )
+            # After the commit; never raises, so the transition stands whatever happens.
+            request_uc_tag_sync_after_transition(
+                "data_product", product_id, current_status, new_status_lower
             )
             
             # Log to change log for timeline

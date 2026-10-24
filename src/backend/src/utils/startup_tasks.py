@@ -261,6 +261,8 @@ def initialize_managers(app: FastAPI):
         app.state.settings_manager.set_notifications_manager(app.state.notifications_manager)
         # Make jobs_manager accessible via app.state
         app.state.jobs_manager = app.state.settings_manager._jobs
+        # For the uc_tag_sync run requested after lifecycle transitions
+        set_app_state_manager('jobs_manager', app.state.jobs_manager)
 
         # Feature Managers
         app.state.data_asset_review_manager = DataAssetReviewManager(

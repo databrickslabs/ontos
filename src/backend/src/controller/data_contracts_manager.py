@@ -88,6 +88,7 @@ from src.common.logging import get_logger
 from src.common.database import get_session_factory
 from src.common.api_errors import CodedValueError
 from src.common.errors import ConflictError
+from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
 from src.db_models.data_contracts import (
     DataContractDb,
     DataContractTagDb,
@@ -4244,12 +4245,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 entity_data={"name": contract.name, "status": new_status},
                 user_email=current_user,
             )
-
-            return updated
         except Exception as e:
             db.rollback()
             logger.error(f"Error transitioning contract status: {e}", exc_info=True)
             raise
+
+        # Outside the try above, whose rollback must not follow a committed transition.
+        request_uc_tag_sync_after_transition(
+            "data_contract", contract_id, current_status, new_status
+        )
+        return updated
 
     # --- DQX Profiling Methods ---
     

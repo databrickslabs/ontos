@@ -968,6 +968,13 @@
         "productName": "Produktname",
         "productVersion": "Produktversion",
         "productStatus": "Produktstatus"
+      },
+      "lifecycle": {
+        "title": "Lebenszyklus-Status-Tag",
+        "descriptionProduct": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenprodukts, das sie verwendet. Bei einer Tabelle, die mehrere Produkte verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
+        "descriptionContract": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenvertrags, der sie verwendet. Bei einer Tabelle, die mehrere Verträge verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
+        "valueLabel": "Tag-Wert:",
+        "sharedKeyHint": "Sind die Status-Tags von Produkt und Vertrag beide mit demselben Schlüssel aktiviert, wird der Status des Produkts geschrieben."
       }
     },
     "entityPatterns": {

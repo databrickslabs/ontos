@@ -770,6 +770,40 @@ async def get_workflow(
     return workflow
 
 
+def _with_policy_errors(
+    manager: WorkflowsManager, validation: WorkflowValidationResult, steps, is_active: bool,
+) -> WorkflowValidationResult:
+    """The validation plus an error for each policy_check step with no existing policy.
+
+    Only for an active workflow: it would fail on every event it handles.
+    """
+    errors = manager.policy_reference_errors(steps) if is_active else []
+    if not errors:
+        return validation
+    # ``errors`` of an existing result are plain strings: pass ``issues`` too, or the
+    # earlier errors would lose their codes
+    added = WorkflowValidationResult(valid=False, errors=errors)
+    return WorkflowValidationResult(
+        valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
+        issues=[*validation.issues, *added.issues],
+    )
+
+
+def _refuse_unrunnable_policy_steps(
+    manager: WorkflowsManager, existing: ProcessWorkflow,
+) -> None:
+    """400 when a stored workflow has policy_check steps with no existing policy.
+
+    Called before the overlap check: a workflow that can't run is refused outright
+    instead of offering an "activate anyway" that would then fail.
+    """
+    validation = _with_policy_errors(
+        manager, WorkflowValidationResult(valid=True), existing.steps, True,
+    )
+    if not validation.valid:
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
+
+
 def _invalid_workflow_detail(validation: WorkflowValidationResult) -> dict:
     """400 detail of a workflow that failed validation.
 
@@ -810,6 +844,7 @@ async def create_workflow(
     
     # Validate workflow
     validation = manager.validate_workflow(workflow)
+    validation = _with_policy_errors(manager, validation, workflow.steps, workflow.is_active)
     if not validation.valid:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
 
@@ -856,6 +891,9 @@ async def update_workflow(
     existing = manager.get_workflow(workflow_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    if workflow.steps is None and workflow.is_active:
+        # Activating without touching the steps: the stored steps must be able to run
+        _refuse_unrunnable_policy_steps(manager, existing)
     
     # Validate if steps are being updated
     if workflow.steps is not None:
@@ -869,6 +907,9 @@ async def update_workflow(
             steps=workflow.steps,
         )
         validation = manager.validate_workflow(full_workflow)
+        validation = _with_policy_errors(
+            manager, validation, full_workflow.steps, full_workflow.is_active,
+        )
         if not validation.valid:
             raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
 
@@ -974,6 +1015,9 @@ async def toggle_workflow_active(
     existing = manager.get_workflow(workflow_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    if is_active:
+        # A workflow whose policy_check steps point at missing policies would fail on every event
+        _refuse_unrunnable_policy_steps(manager, existing)
     conflicts = manager.activation_conflicts(workflow_id) if is_active and not existing.is_active else []
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))

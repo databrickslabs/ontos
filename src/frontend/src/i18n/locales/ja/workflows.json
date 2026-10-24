@@ -310,6 +310,7 @@
       "duplicateStepIds": "2つのステップのIDが同じです。",
       "stepUnknownReference": "ステップ「{{step}}」の{{branch}}の分岐先「{{target}}」はワークフロー内にありません。",
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
+      "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
@@ -529,6 +530,7 @@
     "policyLabel": "ポリシー: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "ポリシーが選択されていません",
+    "policyHint": "推奨: {{name}}",
     "reviewerLabel": "レビュー担当者:",
     "notSet": "未設定",
     "connectionLabel": "接続: {{name}}",

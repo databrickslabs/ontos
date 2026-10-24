@@ -310,6 +310,7 @@
       "duplicateStepIds": "Twee stappen hebben dezelfde ID.",
       "stepUnknownReference": "Stap \"{{step}}\" laat zijn {{branch}}-tak wijzen naar \"{{target}}\", die niet in de workflow staat.",
       "stepConfigMissing": "Stap \"{{step}}\" mist verplichte instellingen: {{fields}}.",
+      "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
       "branch": {
         "on_pass": "succes",
         "on_fail": "fout"
@@ -529,6 +530,7 @@
     "policyLabel": "Beleid: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Geen beleid geselecteerd",
+    "policyHint": "Suggestie: {{name}}",
     "reviewerLabel": "Beoordelaar:",
     "notSet": "Niet ingesteld",
     "connectionLabel": "Verbinding: {{name}}",

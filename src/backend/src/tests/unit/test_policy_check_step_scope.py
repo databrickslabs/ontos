@@ -19,7 +19,7 @@ from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_domains import DataDomain
-from src.db_models.data_products import DataProductDb
+from src.db_models.data_products import DataProductDb, DescriptionDb
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 from src.models.data_contracts_api import ContractDescription, DataContractUpdate
 from src.models.process_workflows import TriggerContext, TriggerType
@@ -515,6 +515,65 @@ def test_a_review_policy_applies_to_a_data_asset_review(db_session):
     db_session.flush()
 
     # The status comes from the stored review: the payload doesn't carry it
+    result = _step(db_session, policy, 'data_asset_review', review.id, {'id': review.id})
+
+    assert result.passed is True
+    assert 'not_applicable' not in result.data
+
+
+def _described_product(db, purpose):
+    product = _product(db, 'described')
+    db.add(DescriptionDb(product_id=product.id, purpose=purpose, usage='u'))
+    db.flush()
+    db.expire(product)
+    return product
+
+
+@pytest.mark.parametrize('purpose', [LONG, None], ids=['with-description', 'without'])
+def test_the_loader_gives_a_products_description_purpose(db_session, purpose):
+    # As for contracts: the purpose text, not the ODPS description row
+    product = _described_product(db_session, purpose) if purpose else _product(db_session, 'p')
+
+    loaded = AppEntityLoader(db_session).load_entity('data_product', product.id)
+
+    assert loaded['description'] == purpose
+
+
+@pytest.mark.parametrize(
+    'purpose, expected', [(LONG, True), ('Short.', False)], ids=['long', 'short'],
+)
+def test_a_product_purpose_rule_agrees_with_a_compliance_run(db_session, purpose, expected):
+    policy = _policy(
+        db_session, "MATCH (p:data_product) ASSERT LENGTH(p.description) >= 70",
+    )
+    product = _described_product(db_session, purpose)
+
+    run = _run(db_session, policy)
+    result = _step(db_session, policy, 'data_product', product.id, {'name': product.name})
+
+    assert run[product.id] is expected
+    assert result.passed is expected
+    # Decided by the ASSERT, not by an error evaluating it
+    assert 'DSL evaluation error' not in (result.message or '')
+    assert not (result.data or {}).get('error_code')
+
+
+def test_the_loader_gives_a_reviews_reviewer_and_requester(db_session):
+    review = _review(db_session)
+
+    loaded = AppEntityLoader(db_session).load_entity('review', review.id)
+
+    assert loaded['reviewer'] == 's@example.com'
+    assert loaded['requester'] == 'r@example.com'
+    # A review has many assets and no asset id: no key that is always None
+    # and would hide a payload value of the same name
+    assert 'asset_id' not in loaded and 'asset_type' not in loaded
+
+
+def test_a_review_rule_sees_the_stored_reviewer(db_session):
+    policy = _policy(db_session, "MATCH (r:review) ASSERT r.reviewer IS NOT NULL")
+    review = _review(db_session)
+
     result = _step(db_session, policy, 'data_asset_review', review.id, {'id': review.id})
 
     assert result.passed is True

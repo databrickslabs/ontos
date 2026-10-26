@@ -46,16 +46,18 @@ Stewards start a **Generation Run** over a selection of UC catalogs, schemas or 
 - Manual "Submit for review" from the run page, plus an opt-in auto-submit on completion. One Data Asset Review per submission (normally one per run; suggestions sent back for clarification can be submitted again). The reviewer is picked at submit time, or defaults to a member of the `DataSteward` role other than the requester (resolved like the workflow's `create_asset_review` step). Nobody reviews their own run.
 - New `AssetType.METADATA_SUGGESTION` with FQN `metagen://{run_id}/{suggestion_id}`. It follows the Concept Mapper's review-spawn pattern: suggestion ↔ ReviewedAsset back-pointers, and a `/decisions` endpoint that forward-syncs ReviewedAsset status.
 - A `MetadataSuggestionReview` editor component in the AR UI provides the diff and editing.
-- New `EntityType.METADATA_GENERATION_RUN` and default workflow `metadata-generation-review` (trigger `on_request_review`): notify requester → `approval` by the assigned reviewer (approver token `reviewer`) → notify the outcome; slice 3 adds `entity_action: apply_metadata_suggestions` and the summary notification. Ontos creates the Data Asset Review itself, because the workflow's `create_asset_review` step can't take a list of suggestions; the generic data asset review workflow is not run for it, so the reviewer doesn't get a second approval request. The reviewer gets a notification linking the review.
+- New `EntityType.METADATA_GENERATION_RUN` and default workflow `metadata-generation-review` (trigger `on_request_review`): notify requester → `approval` by the assigned reviewer (approver token `reviewer`) → `entity_action: apply_metadata_suggestions` → notify the outcome (a failed apply step tells the requester to apply from the run page). Ontos creates the Data Asset Review itself, because the workflow's `create_asset_review` step can't take a list of suggestions; the generic data asset review workflow is not run for it, so the reviewer doesn't get a second approval request. The reviewer gets a notification linking the review.
 - Decisions are made by the review's reviewer (or a feature admin) under the `data-asset-reviews` permissions; the reviewer can edit the text, and leaves an optional comment that the run page shows.
 - Per-item outcomes: approved → applied; rejected → closed; needs clarification → back to pending, resubmittable. If the overall approval is rejected, nothing is applied.
+- The overall outcome closes the review (Data Asset Review status approved / denied); a closed review takes no more decisions, and suggestions nobody decided leave it, so they can be submitted again.
 
 **Apply**
-- Executed as the app SP (the workflow authorizes it): `COMMENT ON TABLE` / `ALTER TABLE … ALTER COLUMN … COMMENT`. The description is mirrored to the Ontos Asset when one exists for the FQN. Data contracts are not touched.
-- A pre-flight writability check at run start marks non-writable objects as not applicable.
+- Only accepted suggestions of approved reviews are applied. Executed as the app SP on the app's SQL warehouse (the workflow authorizes it): `COMMENT ON TABLE` / `COMMENT ON COLUMN` (tables and views). The reviewer's edit, if any, is what gets written. The description is mirrored to the Ontos Assets located at the FQN (columns: `table.column`). Data contracts are not touched.
+- Not applicable: the table or column is gone, or the app SP may not change it (UC permission error on write). Any other failure leaves the suggestion accepted with its error; applying again retries it. (#1188 adds a pre-flight writability check at run start.)
 - Conflict check: the UC description is re-read before writing, and a mismatch with the base text marks the suggestion **Conflict** and skips it. Conflicts can be regenerated, or force-applied by an admin.
-- Before/after/approver goes into the audit log and the asset change log. Undo is deferred, but the before text is stored.
-- A manual "Apply approved" action on the run page serves as fallback and retry.
+- Each applied suggestion goes into the change log (on the run, and on the mirrored Asset) with before/after, approver, applier and whether it was forced; each apply is in the audit log with its counts. Undo is deferred, but the before text is in the change log.
+- A summary notification (applied / conflicts / not applicable / failed) goes to the run's owner, linking the run.
+- A manual "Apply approved" action on the run page serves as fallback and retry; admins also get "Force-apply conflicts".
 
 **Data model** (new Alembic revision, single head)
 - `metagen_runs`: user, status, selection, options, Databricks job run id, token usage, error, timestamps.

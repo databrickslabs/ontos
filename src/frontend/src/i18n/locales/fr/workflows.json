@@ -150,7 +150,8 @@
       "scopeDomain": "Domaine",
       "scopeOrganization": "Organisation",
       "scopeExternal": "Externe",
-      "help": "Exécute une action de cycle de vie sur l'entité ayant déclenché ce workflow (après approbation lorsqu'il est utilisé avec des déclencheurs de demande)."
+      "help": "Exécute une action de cycle de vie sur l'entité ayant déclenché ce workflow (après approbation lorsqu'il est utilisé avec des déclencheurs de demande).",
+      "applyMetadataSuggestions": "Appliquer les descriptions générées"
     },
     "userAction": {
       "title": "Titre",

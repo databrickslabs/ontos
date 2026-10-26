@@ -215,3 +215,53 @@ describe('MetadataGenerationRunDetails review', () => {
     expect(screen.getByText('r@x.com: shorter')).toBeInTheDocument();
   });
 });
+
+describe('MetadataGenerationRunDetails apply', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+    api.post.mockReset();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const applied = { ...SUGGESTIONS[0], status: 'applied', applied_by: 'r@x.com', applied_at: '2026-10-26T10:00:00Z' };
+  const conflict = { ...SUGGESTIONS[1], status: 'conflict', error: 'The description in Unity Catalog changed since it was generated' };
+
+  it('applies the approved suggestions and shows the outcome per suggestion', async () => {
+    let state: Record<string, unknown> = { ...run('completed'), counts: { accepted: 2 }, applicable: 2 };
+    let suggestions: Record<string, unknown>[] = SUGGESTIONS.map((s) => ({ ...s, status: 'accepted' }));
+    api.get.mockImplementation(async (url: string) =>
+      url.includes('/suggestions') ? { data: { suggestions, total: 2 } } : { data: state },
+    );
+    api.post.mockImplementation(async () => {
+      state = { ...run('completed'), counts: { applied: 1, conflict: 1 }, applicable: 0 };
+      suggestions = [applied, conflict];
+      return { data: { applied: 1, conflict: 1, not_applicable: 0, failed: 0, errors: [] } };
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Apply 2 approved/ }));
+
+    expect(api.post).toHaveBeenCalledWith('/api/metadata-generation/runs/run-1/apply', { force: false });
+    expect(await screen.findByText(/Applied by r@x.com/)).toBeInTheDocument();
+    expect(screen.getByText(/changed since it was generated/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approved/ })).not.toBeInTheDocument();
+  });
+
+  it('lets admins force-apply conflicts after confirming', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    api.get.mockImplementation(async (url: string) =>
+      url.includes('/suggestions')
+        ? { data: { suggestions: [conflict], total: 1 } }
+        : { data: { ...run('completed'), counts: { conflict: 1 }, applicable: 0 } },
+    );
+    api.post.mockResolvedValue({ data: { applied: 1, conflict: 0, not_applicable: 0, failed: 0, errors: [] } });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Force-apply 1 conflict' }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(api.post).toHaveBeenCalledWith('/api/metadata-generation/runs/run-1/apply', { force: true });
+  });
+});

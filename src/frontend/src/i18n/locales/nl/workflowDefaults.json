@@ -94,7 +94,8 @@
       "end": "De publicatieworkflow is mislukt"
     },
     "metadataGenerationReview": {
-      "rejected": "Gegenereerde beschrijvingen zijn afgewezen"
+      "rejected": "Gegenereerde beschrijvingen zijn afgewezen",
+      "notApplied": "Goedgekeurde beschrijvingen konden niet worden toegepast"
     }
   },
   "workflowNames": {

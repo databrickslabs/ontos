@@ -108,6 +108,7 @@ class DescriptionSuggestion(BaseModel):
     review_comment: Optional[str] = None
     applied_by: Optional[str] = None
     applied_at: Optional[datetime] = None
+    applied_text: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -117,6 +118,8 @@ class GenerationRunDetail(GenerationRunSummary):
     unsubmitted: int = 0
     # Asset Reviews holding the run's suggestions
     review_request_ids: List[str] = Field(default_factory=list)
+    # Accepted suggestions in approved reviews, ready to be applied to UC
+    applicable: int = 0
 
 
 class RunListResponse(BaseModel):
@@ -165,3 +168,26 @@ class SuggestionDecisionResult(BaseModel):
     clarify: int = 0
     skipped: int = 0
     errors: List[str] = Field(default_factory=list)
+
+
+class ApplyRequest(BaseModel):
+    """POST /runs/{run_id}/apply: write accepted, approved suggestions to UC.
+
+    ``force`` (feature admins only) also applies Conflicts, overwriting the
+    description that changed in UC since generation.
+    """
+    force: bool = False
+    # Limit to these suggestions; defaults to all the run's applicable ones
+    suggestion_ids: Optional[List[str]] = Field(None, max_length=5000)
+
+
+class ApplyResult(BaseModel):
+    applied: int = 0
+    conflict: int = 0
+    not_applicable: int = 0
+    failed: int = 0
+    errors: List[str] = Field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        return self.applied + self.conflict + self.not_applicable + self.failed

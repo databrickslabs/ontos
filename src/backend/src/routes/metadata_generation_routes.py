@@ -7,6 +7,10 @@ flight, so the UI's polling drives completion and ingest.
 POST /runs/{run_id}/review puts the pending suggestions up for Asset Review;
 the review's reviewer reads them (GET .../suggestions/{id}) and decides
 (POST .../decisions) under the data-asset-reviews feature permissions.
+
+POST /runs/{run_id}/apply writes accepted suggestions of approved reviews to
+UC (normally the review workflow does this); feature admins can force
+Conflicts.
 """
 
 from typing import Optional
@@ -20,6 +24,8 @@ from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.controller.metadata_generation_manager import ActiveRunLimitError, MetadataGenerationManager
 from src.models.metadata_generation import (
+    ApplyRequest,
+    ApplyResult,
     DescriptionSuggestion,
     GenerationRunDetail,
     GenerationRunStatus,
@@ -183,12 +189,13 @@ async def get_run(
         logger.warning("Failed to refresh metadata generation run %s", run_id, exc_info=True)
         db.rollback()
     summary = _to_summary(run)
-    unsubmitted, review_request_ids = manager.review_summary(db, run.id)
+    unsubmitted, review_request_ids, applicable = manager.review_summary(db, run.id)
     return GenerationRunDetail(
         **summary.model_dump(),
         counts=SuggestionCounts(**manager.counts(db, run.id)),
         unsubmitted=unsubmitted,
         review_request_ids=review_request_ids,
+        applicable=applicable,
     )
 
 
@@ -405,6 +412,62 @@ async def decide_suggestions(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID,
             action="DECIDE_METADATA_SUGGESTIONS",
+            success=success,
+            details=details,
+        )
+
+
+@router.post(
+    "/runs/{run_id}/apply",
+    response_model=ApplyResult,
+    summary="Apply a run's accepted, approved Description Suggestions to Unity Catalog",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+async def apply_suggestions(
+    run_id: str,
+    body: ApplyRequest,
+    request: Request,
+    db: DBSessionDep = None,
+    audit_manager: AuditManagerDep = None,
+    current_user: AuditCurrentUserDep = None,
+):
+    manager = _get_manager(request)
+    run = await _get_visible_run(request, db, current_user, manager, run_id)
+    success = False
+    details = {"run_id": run_id, "source": "manual", "force": body.force}
+    try:
+        if body.force and not await is_user_feature_admin(
+            current_user.email, current_user.groups, FEATURE_ID, request
+        ):
+            raise HTTPException(status_code=403, detail="Only administrators can force-apply conflicts")
+        # One UC read and write per object: keep it off the event loop
+        result = await run_in_threadpool(
+            manager.apply_suggestions,
+            db,
+            run,
+            applied_by=current_user.email or _user_id(current_user),
+            suggestion_ids=body.suggestion_ids,
+            force=body.force,
+        )
+        success = result.failed == 0
+        details.update(
+            applied=result.applied, conflict=result.conflict,
+            not_applicable=result.not_applicable, failed=result.failed,
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to apply descriptions of metadata generation run %s", run_id)
+        details["exception"] = {"type": type(e).__name__}
+        raise HTTPException(status_code=500, detail="Failed to apply the descriptions")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID,
+            action="APPLY_METADATA_SUGGESTIONS",
             success=success,
             details=details,
         )

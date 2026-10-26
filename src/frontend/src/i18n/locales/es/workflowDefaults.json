@@ -94,7 +94,8 @@
       "end": "El flujo de trabajo de publicación falló"
     },
     "metadataGenerationReview": {
-      "rejected": "Las descripciones generadas fueron rechazadas"
+      "rejected": "Las descripciones generadas fueron rechazadas",
+      "notApplied": "No se pudieron aplicar las descripciones aprobadas"
     }
   },
   "workflowNames": {

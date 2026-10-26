@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Ban, ClipboardCheck, Columns3, ExternalLink, Layout, Loader2, MessageSquare, Table as TableIcon, Trash2 } from 'lucide-react';
+import { AlertCircle, Ban, ClipboardCheck, Columns3, DatabaseZap, ExternalLink, Layout, Loader2, MessageSquare, Table as TableIcon, Trash2 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,8 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import {
   TERMINAL_RUN_STATUSES,
+  type ApplyRequest,
+  type ApplyResult,
   type DescriptionSuggestion,
   type GenerationRunDetail,
   type SubmitReviewResponse,
@@ -46,6 +48,7 @@ export default function MetadataGenerationRunDetails() {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+  const isAdmin = hasPermission(FEATURE_ID, FeatureAccessLevel.ADMIN);
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
@@ -162,6 +165,34 @@ export default function MetadataGenerationRunDetails() {
     navigate('/metadata-generation');
   };
 
+  const handleApply = async (force: boolean) => {
+    if (!run) return;
+    if (force && !confirm(t('confirm.forceApply', { count: run.counts?.conflict ?? 0 }))) return;
+    setActionPending(true);
+    const body: ApplyRequest = { force };
+    const res = await post<ApplyResult>(`/api/metadata-generation/runs/${run.run_id}/apply`, body);
+    setActionPending(false);
+    if (res.error || !res.data) {
+      toast({ title: t('apply.failed'), description: res.error ?? undefined, variant: 'destructive' });
+      return;
+    }
+    const result = res.data;
+    const clean = result.conflict + result.not_applicable + result.failed === 0;
+    toast({
+      title: t('apply.done', { count: result.applied }),
+      description: clean
+        ? undefined
+        : t('apply.summary', {
+            conflict: result.conflict,
+            notApplicable: result.not_applicable,
+            failed: result.failed,
+          }),
+      variant: result.failed > 0 ? 'destructive' : undefined,
+    });
+    void fetchRun();
+    void fetchSuggestions();
+  };
+
   const handleSubmitted = (result: SubmitReviewResponse) => {
     toast({
       title: t('review.toast.submitted', { count: result.suggestion_count }),
@@ -207,6 +238,16 @@ export default function MetadataGenerationRunDetails() {
                 {run.status === 'completed' && (run.unsubmitted ?? 0) > 0 && (
                   <Button size="sm" onClick={() => setSubmitOpen(true)} disabled={actionPending}>
                     <ClipboardCheck className="h-4 w-4 mr-1" /> {t('review.submitButton', { count: run.unsubmitted })}
+                  </Button>
+                )}
+                {(run.applicable ?? 0) > 0 && (
+                  <Button size="sm" onClick={() => void handleApply(false)} disabled={actionPending}>
+                    <DatabaseZap className="h-4 w-4 mr-1" /> {t('apply.button', { count: run.applicable })}
+                  </Button>
+                )}
+                {isAdmin && (run.counts?.conflict ?? 0) > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => void handleApply(true)} disabled={actionPending}>
+                    {t('apply.forceButton', { count: run.counts.conflict })}
                   </Button>
                 )}
                 {isActive ? (
@@ -373,9 +414,26 @@ function SuggestionRow({ suggestion }: { suggestion: DescriptionSuggestion }) {
             {t('detail.proposed')}
             {suggestion.edited_text && <span className="ml-2 text-amber-600">{t('review.editedByReviewer')}</span>}
           </div>
-          <p>{suggestion.edited_text || suggestion.proposed_text}</p>
+          <p>{suggestion.applied_text || suggestion.edited_text || suggestion.proposed_text}</p>
         </div>
       </div>
+      {suggestion.error && suggestion.status !== 'applied' && (
+        <p className="text-xs text-amber-700 dark:text-amber-500 flex items-start gap-1">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{suggestion.error}</span>
+        </p>
+      )}
+      {suggestion.status === 'applied' && suggestion.applied_by && (
+        <p className="text-xs text-muted-foreground">
+          {t('apply.appliedBy', { user: suggestion.applied_by })}
+          {suggestion.applied_at && (
+            <>
+              {' · '}
+              <RelativeDate date={suggestion.applied_at} />
+            </>
+          )}
+        </p>
+      )}
       {suggestion.review_comment && (
         <p className="text-xs text-muted-foreground flex items-start gap-1">
           <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" />

@@ -14,6 +14,12 @@ A run's pending suggestions are reviewed in one Data Asset Review (one
 ReviewedAsset per suggestion, FQN ``metagen://{run_id}/{suggestion_id}``);
 the ``metadata_generation_run`` review workflow handles notifications and
 the overall approval. Reviewers' decisions come back through ``decide``.
+
+Once the review is approved, the workflow's ``apply_metadata_suggestions``
+step writes the accepted descriptions to UC as the app's service principal
+(``apply_review``); "Apply approved" on the run page retries or catches up
+(``apply_suggestions``). A target whose UC description changed since
+generation is a Conflict and is left alone unless an admin forces it.
 """
 
 import threading
@@ -23,18 +29,20 @@ from concurrent.futures import Executor, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from src.common.config import Settings, resolve_volume
 from src.common.errors import ConflictError
 from src.common.logging import get_logger
 from src.common.notification_i18n import notification_i18n_data
+from src.db_models.assets import AssetDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 from src.db_models.metadata_generation import DescriptionSuggestionDb, MetadataGenerationRunDb
-from src.models.data_asset_reviews import DataAssetReviewRequestCreate, ReviewedAssetStatus
+from src.models.data_asset_reviews import DataAssetReviewRequestCreate, ReviewedAssetStatus, ReviewRequestStatus
 from src.models.metadata_generation import (
     TERMINAL_RUN_STATUSES,
+    ApplyResult,
     GenerationRunStatus,
     StartRunRequest,
     SubmitReviewResponse,
@@ -81,6 +89,32 @@ _DECIDABLE_STATUSES = (
     SuggestionStatus.ACCEPTED.value,
     SuggestionStatus.REJECTED.value,
 )
+# Review statuses after which its suggestions can't be decided any more
+_CLOSED_REVIEW_STATUSES = (
+    ReviewRequestStatus.APPROVED.value,
+    ReviewRequestStatus.DENIED.value,
+    ReviewRequestStatus.CANCELLED.value,
+)
+FEATURE_ID = "metadata-generation"
+# UC SQL errors that mean the app's service principal may not change the object
+_PERMISSION_ERRORS = ("PERMISSION_DENIED", "INSUFFICIENT_PERMISSIONS", "does not have MODIFY", "is not the owner")
+
+
+class StatementError(RuntimeError):
+    """A SQL statement did not succeed."""
+
+
+def _normalized(text: Optional[str]) -> Optional[str]:
+    return (text or "").strip() or None
+
+
+def _quote_identifier(name: str) -> str:
+    return "`" + name.replace("`", "``") + "`"
+
+
+def _string_literal(text: str) -> str:
+    """A Databricks SQL string literal (backslash escapes are on by default)."""
+    return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 class ActiveRunLimitError(ValueError):
@@ -120,8 +154,10 @@ class MetadataGenerationManager:
         ingest_executor: Optional[Executor] = None,
         reviews_manager: Any = None,
         notifications_manager: Any = None,
+        audit_manager: Any = None,
     ):
         self._settings = settings
+        self._audit = audit_manager
         self._jobs = jobs_manager
         self._ws_factory = workspace_client_factory
         self._reviews = reviews_manager
@@ -633,11 +669,7 @@ class MetadataGenerationManager:
         Paged (stable order + LIMIT/OFFSET) so no single response gets near
         the statement API's inline result limit.
         """
-        ws = self._ws_factory() if self._ws_factory else None
-        if ws is None:
-            from src.common.workspace_client import get_workspace_client
-            ws = get_workspace_client()
-
+        ws = self._workspace()
         table = ".".join(f"`{part}`" for part in (*self._output_schema(), RESULTS_TABLE))
         rows: List[Dict[str, Optional[str]]] = []
         while True:
@@ -648,29 +680,47 @@ class MetadataGenerationManager:
             if len(page) < RESULTS_PAGE_SIZE:
                 return rows
 
-    def _fetch_results_page(self, ws: Any, table: str, run_id: str, *, offset: int) -> List[Dict[str, Optional[str]]]:
+    def _workspace(self) -> Any:
+        """The app's (service principal's) workspace client."""
+        ws = self._ws_factory() if self._ws_factory else None
+        if ws is None:
+            from src.common.workspace_client import get_workspace_client
+            ws = get_workspace_client()
+        return ws
+
+    def _execute_statement(self, ws: Any, statement: str, parameters: Optional[Dict[str, str]] = None) -> Any:
+        """Run a statement on the app's SQL warehouse and wait for it; StatementError unless it succeeded."""
         from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 
         resp = ws.statement_execution.execute_statement(
-            statement=(
-                f"SELECT object_type, table_fqn, column_name, base_text, proposed_text "
-                f"FROM {table} WHERE ontos_run_id = :run_id "
-                f"ORDER BY table_fqn, column_name NULLS FIRST "
-                f"LIMIT {int(RESULTS_PAGE_SIZE)} OFFSET {int(offset)}"
-            ),
+            statement=statement,
             warehouse_id=self._settings.DATABRICKS_WAREHOUSE_ID,
-            parameters=[StatementParameterListItem(name="run_id", value=run_id)],
+            parameters=[StatementParameterListItem(name=k, value=v) for k, v in (parameters or {}).items()] or None,
             wait_timeout="50s",
         )
         deadline = time.monotonic() + 600
         while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
             if time.monotonic() > deadline:
-                raise TimeoutError("Timed out reading metadata generation results")
+                raise TimeoutError("Timed out waiting for a SQL statement")
             time.sleep(2)
             resp = ws.statement_execution.get_statement(resp.statement_id)
         if not resp.status or resp.status.state != StatementState.SUCCEEDED:
             message = resp.status.error.message if resp.status and resp.status.error else "unknown error"
-            raise RuntimeError(f"Results query did not succeed: {message}")
+            raise StatementError(message)
+        return resp
+
+    def _fetch_results_page(self, ws: Any, table: str, run_id: str, *, offset: int) -> List[Dict[str, Optional[str]]]:
+        try:
+            resp = self._execute_statement(
+                ws,
+                f"SELECT object_type, table_fqn, column_name, base_text, proposed_text "
+                f"FROM {table} WHERE ontos_run_id = :run_id "
+                f"ORDER BY table_fqn, column_name NULLS FIRST "
+                f"LIMIT {int(RESULTS_PAGE_SIZE)} OFFSET {int(offset)}",
+                {"run_id": run_id},
+            )
+        except StatementError as e:
+            raise RuntimeError(f"Results query did not succeed: {e}") from e
 
         columns = [c.name for c in resp.manifest.schema.columns]
         data = list((resp.result.data_array if resp.result else None) or [])
@@ -858,13 +908,14 @@ class MetadataGenerationManager:
         """Record reviewers' decisions on suggestions in a review of ``run``.
 
         Only the review's reviewer (or a feature admin) decides. Accepted and
-        rejected suggestions can be decided again until they are applied; a
+        rejected suggestions can be decided again until they are applied or
+        the review is closed (approved or rejected as a whole); a
         suggestion sent back for clarification leaves its review and is
         pending again. The ReviewedAsset mirrors each decision.
         """
         result = SuggestionDecisionResult()
         now = _now()
-        reviewers: Dict[str, Optional[str]] = {}
+        reviews: Dict[str, Optional[DataAssetReviewRequestDb]] = {}
         for decision in batch.decisions:
             suggestion = db.get(DescriptionSuggestionDb, decision.id)
             if suggestion is None or suggestion.run_id != run.id:
@@ -875,9 +926,14 @@ class MetadataGenerationManager:
                 result.skipped += 1
                 result.errors.append(f"Suggestion {decision.id} is not in review")
                 continue
-            if suggestion.review_request_id not in reviewers:
-                reviewers[suggestion.review_request_id] = self.get_review_assignees(db, suggestion.review_request_id)[1]
-            reviewer = reviewers[suggestion.review_request_id]
+            if suggestion.review_request_id not in reviews:
+                reviews[suggestion.review_request_id] = db.get(DataAssetReviewRequestDb, suggestion.review_request_id)
+            review = reviews[suggestion.review_request_id]
+            if review is not None and review.status in _CLOSED_REVIEW_STATUSES:
+                result.skipped += 1
+                result.errors.append(f"Suggestion {decision.id} is in a closed review")
+                continue
+            reviewer = review.reviewer_email if review is not None else None
             if not is_admin and (reviewer or "").lower() != decided_by.lower():
                 result.skipped += 1
                 result.errors.append(f"Suggestion {decision.id} is assigned to another reviewer")
@@ -917,6 +973,274 @@ class MetadataGenerationManager:
         db.commit()
         return result
 
+
+    # ------------------------------------------------------------------
+    # Close the review / apply to UC
+    # ------------------------------------------------------------------
+    def close_review(self, db: Session, review_request_id: str, *, approved: bool) -> None:
+        """Record the overall outcome of a run's review (workflow approval or rejection).
+
+        Suggestions nobody decided leave the closed review, so they can be
+        submitted again. Idempotent: an already closed review keeps its outcome.
+        """
+        review = db.get(DataAssetReviewRequestDb, review_request_id)
+        if review is None:
+            return
+        if review.status not in _CLOSED_REVIEW_STATUSES:
+            review.status = (ReviewRequestStatus.APPROVED if approved else ReviewRequestStatus.DENIED).value
+            review.updated_at = _now()
+        released = metagen_suggestions_repo.release_undecided(db, review_request_id)
+        db.commit()
+        logger.info(
+            "Review %s of generated descriptions closed (%s); %d undecided suggestions released",
+            review_request_id, review.status, released,
+        )
+
+    def apply_review(
+        self, db: Session, run: MetadataGenerationRunDb, review_request_id: str, *, applied_by: Optional[str],
+    ) -> ApplyResult:
+        """Workflow step after the reviewer's approval: close the review as approved and apply it."""
+        self.close_review(db, review_request_id, approved=True)
+        result = self.apply_suggestions(
+            db, run, applied_by=applied_by or run.user_id, review_request_id=review_request_id,
+        )
+        self._audit_apply(applied_by or run.user_id, run, result, source="workflow", force=False)
+        return result
+
+    def apply_suggestions(
+        self,
+        db: Session,
+        run: MetadataGenerationRunDb,
+        *,
+        applied_by: str,
+        review_request_id: Optional[str] = None,
+        suggestion_ids: Optional[List[str]] = None,
+        force: bool = False,
+    ) -> ApplyResult:
+        """Write the run's accepted suggestions in approved reviews to UC.
+
+        Runs as the app's service principal. Per target, the current UC
+        description is read first: if it no longer is the one the suggestion
+        was generated against, the suggestion becomes a Conflict and is left
+        alone, unless ``force`` (which also retries earlier Conflicts). A
+        target that is gone, or that the app may not change, is Not
+        applicable; any other failure leaves the suggestion accepted with its
+        error, so applying again retries it. Applied text is mirrored into the
+        Ontos Asset for the target and recorded in the change log.
+        """
+        statuses = [SuggestionStatus.ACCEPTED.value]
+        if force:
+            statuses.append(SuggestionStatus.CONFLICT.value)
+        query = metagen_suggestions_repo.applicable_query(
+            db, run.id, statuses=statuses, review_request_id=review_request_id,
+        )
+        if suggestion_ids is not None:
+            query = query.filter(DescriptionSuggestionDb.id.in_(suggestion_ids))
+        candidates = query.order_by(DescriptionSuggestionDb.table_fqn, DescriptionSuggestionDb.column_name).all()
+
+        result = ApplyResult()
+        if not candidates:
+            return result
+        ws = self._workspace()
+        by_table: Dict[str, List[DescriptionSuggestionDb]] = {}
+        for suggestion in candidates:
+            by_table.setdefault(suggestion.table_fqn, []).append(suggestion)
+        for table_fqn, suggestions in by_table.items():
+            self._apply_table(db, ws, run, table_fqn, suggestions, result, applied_by=applied_by, force=force)
+            db.commit()
+        logger.info(
+            "Applied descriptions of run %s: %d applied, %d conflicts, %d not applicable, %d failed",
+            run.id, result.applied, result.conflict, result.not_applicable, result.failed,
+        )
+        self._notify_applied(db, run, result)
+        return result
+
+    def _apply_table(
+        self,
+        db: Session,
+        ws: Any,
+        run: MetadataGenerationRunDb,
+        table_fqn: str,
+        suggestions: List[DescriptionSuggestionDb],
+        result: ApplyResult,
+        *,
+        applied_by: str,
+        force: bool,
+    ) -> None:
+        from databricks.sdk.errors import NotFound, PermissionDenied
+
+        if table_fqn.count(".") != 2:
+            for s in suggestions:
+                self._mark(s, SuggestionStatus.NOT_APPLICABLE, result, f"'{table_fqn}' is not a table name")
+            return
+        try:
+            info = ws.tables.get(full_name=table_fqn)
+        except NotFound:
+            for s in suggestions:
+                self._mark(s, SuggestionStatus.NOT_APPLICABLE, result, "The table no longer exists")
+            return
+        except PermissionDenied:
+            for s in suggestions:
+                self._mark(s, SuggestionStatus.NOT_APPLICABLE, result, "The app may not read this table")
+            return
+        except Exception:
+            logger.warning("Failed to read the descriptions of %s", table_fqn, exc_info=True)
+            for s in suggestions:
+                self._mark(s, None, result, "Failed to read the current description")
+            return
+
+        column_comments = {(c.name or "").lower(): _normalized(c.comment) for c in (info.columns or [])}
+        for s in suggestions:
+            if s.column_name and s.column_name.lower() not in column_comments:
+                self._mark(s, SuggestionStatus.NOT_APPLICABLE, result, "The column no longer exists")
+                continue
+            current = column_comments[s.column_name.lower()] if s.column_name else _normalized(info.comment)
+            if not force and current != _normalized(s.base_text):
+                self._mark(s, SuggestionStatus.CONFLICT, result, "The description in Unity Catalog changed since it was generated")
+                continue
+            text = (s.edited_text or s.proposed_text).strip()
+            if current != text:
+                try:
+                    self._write_comment(ws, s, text)
+                except StatementError as e:
+                    if any(marker in str(e) for marker in _PERMISSION_ERRORS):
+                        self._mark(s, SuggestionStatus.NOT_APPLICABLE, result, "The app may not change this object's description")
+                    else:
+                        logger.warning("Failed to write the description of %s: %s", self._target(s), e)
+                        self._mark(s, None, result, "Failed to write the description")
+                    continue
+                except Exception:
+                    logger.warning("Failed to write the description of %s", self._target(s), exc_info=True)
+                    self._mark(s, None, result, "Failed to write the description")
+                    continue
+            self._applied(db, run, s, text, before=current, applied_by=applied_by, forced=force and current != _normalized(s.base_text))
+            result.applied += 1
+
+    @staticmethod
+    def _target(s: DescriptionSuggestionDb) -> str:
+        return f"{s.table_fqn}.{s.column_name}" if s.column_name else s.table_fqn
+
+    @staticmethod
+    def _mark(
+        s: DescriptionSuggestionDb, status: Optional[SuggestionStatus], result: ApplyResult, error: str,
+    ) -> None:
+        """Record why a suggestion wasn't applied; ``status`` None keeps it as is (retryable)."""
+        if status is not None:
+            s.status = status.value
+        s.error = error
+        if status == SuggestionStatus.CONFLICT:
+            result.conflict += 1
+        elif status == SuggestionStatus.NOT_APPLICABLE:
+            result.not_applicable += 1
+        else:
+            result.failed += 1
+            result.errors.append(f"{s.table_fqn}{'.' + s.column_name if s.column_name else ''}: {error}")
+
+    def _write_comment(self, ws: Any, s: DescriptionSuggestionDb, text: str) -> None:
+        table = ".".join(_quote_identifier(part) for part in s.table_fqn.split("."))
+        if s.column_name:
+            statement = f"COMMENT ON COLUMN {table}.{_quote_identifier(s.column_name)} IS {_string_literal(text)}"
+        else:
+            statement = f"COMMENT ON TABLE {table} IS {_string_literal(text)}"
+        self._execute_statement(ws, statement)
+
+    def _applied(
+        self,
+        db: Session,
+        run: MetadataGenerationRunDb,
+        s: DescriptionSuggestionDb,
+        text: str,
+        *,
+        before: Optional[str],
+        applied_by: str,
+        forced: bool,
+    ) -> None:
+        s.status = SuggestionStatus.APPLIED.value
+        s.applied_by = applied_by
+        s.applied_at = _now()
+        s.applied_text = text
+        s.error = None
+        # The description is in UC now: record that before the secondary bookkeeping
+        db.commit()
+        details = {
+            "run_id": run.id,
+            "suggestion_id": s.id,
+            "target": self._target(s),
+            "before": before,
+            "after": text,
+            "approved_by": s.decided_by,
+            "applied_by": applied_by,
+            "forced": forced,
+        }
+        from src.controller.change_log_manager import change_log_manager
+        try:
+            # Assets for UC objects are located by their full name (columns: table.column)
+            assets = db.query(AssetDb).filter(func.lower(AssetDb.location) == self._target(s).lower()).all()
+            for asset in assets:
+                asset.description = text
+            db.flush()
+            for asset in assets:
+                change_log_manager.log_change_with_details(
+                    db, entity_type="asset", entity_id=str(asset.id), action="description_applied",
+                    username=applied_by, details=details,
+                )
+            change_log_manager.log_change_with_details(
+                db, entity_type="metadata_generation_run", entity_id=run.id, action="description_applied",
+                username=applied_by, details=details,
+            )
+        except Exception:
+            # The description is in UC already; the mirror and change log are secondary
+            logger.warning("Failed to record the applied description of %s", self._target(s), exc_info=True)
+            db.rollback()
+
+    def _audit_apply(self, username: str, run: MetadataGenerationRunDb, result: ApplyResult, *, source: str, force: bool) -> None:
+        if self._audit is None:
+            return
+        self._audit.log_action(
+            db=None,
+            username=username,
+            ip_address=None,
+            feature=FEATURE_ID,
+            action="APPLY_METADATA_SUGGESTIONS",
+            success=result.failed == 0,
+            details={
+                "run_id": run.id, "source": source, "force": force,
+                "applied": result.applied, "conflict": result.conflict,
+                "not_applicable": result.not_applicable, "failed": result.failed,
+            },
+        )
+
+    def _notify_applied(self, db: Session, run: MetadataGenerationRunDb, result: ApplyResult) -> None:
+        """Tell the run's owner what was applied. Best effort."""
+        if self._notifications is None or not result.total:
+            return
+        clean = result.conflict == 0 and result.not_applicable == 0 and result.failed == 0
+        selection = self._selection_label(run)
+        try:
+            self._notifications.create_notification(
+                Notification(
+                    id=str(uuid.uuid4()),
+                    recipient=run.user_id,
+                    type=NotificationType.SUCCESS if clean else NotificationType.WARNING,
+                    title="Generated descriptions applied",
+                    description=(
+                        f"Written to Unity Catalog for {selection}: {result.applied}. Conflicts: {result.conflict}, "
+                        f"not applicable: {result.not_applicable}, failed: {result.failed}."
+                    ),
+                    link=f"/metadata-generation/runs/{run.id}",
+                    created_at=_now(),
+                    data=notification_i18n_data(
+                        "notifications:metadataGeneration.applied.title",
+                        "notifications:metadataGeneration.applied.description",
+                        selection=selection, applied=result.applied, conflict=result.conflict,
+                        not_applicable=result.not_applicable, failed=result.failed,
+                    ),
+                ),
+                db,
+            )
+        except Exception:
+            logger.warning("Failed to notify the owner of run %s about applied descriptions", run.id, exc_info=True)
+
     # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
@@ -931,11 +1255,12 @@ class MetadataGenerationManager:
     def counts(self, db: Session, run_id: str) -> Dict[str, int]:
         return metagen_suggestions_repo.counts_by_status(db, run_id)
 
-    def review_summary(self, db: Session, run_id: str) -> Tuple[int, List[str]]:
-        """(pending suggestions not yet submitted, ids of the reviews the run is in)."""
+    def review_summary(self, db: Session, run_id: str) -> Tuple[int, List[str], int]:
+        """(pending suggestions not yet submitted, ids of the reviews the run is in, applicable suggestions)."""
         return (
             metagen_suggestions_repo.count_unsubmitted(db, run_id),
             metagen_suggestions_repo.review_request_ids(db, run_id),
+            metagen_suggestions_repo.count_applicable(db, run_id),
         )
 
     def list_suggestions(

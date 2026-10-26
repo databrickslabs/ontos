@@ -173,8 +173,9 @@
       },
       "metadata-generation-review": {
         "notify-requester": "Ihre generierten Beschreibungen wurden zur Prüfung eingereicht.",
-        "notify-approved": "Der Prüfer hat Ihre generierten Beschreibungen genehmigt.",
-        "notify-rejected": "Der Prüfer hat Ihre generierten Beschreibungen abgelehnt. Die Kommentare finden Sie in der Prüfung."
+        "notify-approved": "Der Prüfer hat Ihre generierten Beschreibungen genehmigt; die akzeptierten wurden in Unity Catalog übernommen.",
+        "notify-rejected": "Der Prüfer hat Ihre generierten Beschreibungen abgelehnt. Die Kommentare finden Sie in der Prüfung.",
+        "notify-apply-failed": "Der Prüfer hat Ihre generierten Beschreibungen genehmigt, sie konnten aber nicht in Unity Catalog übernommen werden. Wenden Sie sie auf der Seite des Generierungslaufs an."
       }
     },
     "approval": {
@@ -216,6 +217,10 @@
     "reviewAssigned": {
       "title": "Generierte Beschreibungen zu prüfen",
       "description": "{{requester}} bittet Sie, {{count}} generierte Beschreibungen für {{selection}} zu prüfen."
+    },
+    "applied": {
+      "title": "Generierte Beschreibungen angewendet",
+      "description": "In Unity Catalog geschrieben für {{selection}}: {{applied}}. Konflikte: {{conflict}}, nicht anwendbar: {{not_applicable}}, fehlgeschlagen: {{failed}}."
     }
   }
 }

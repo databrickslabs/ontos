@@ -173,8 +173,9 @@
       },
       "metadata-generation-review": {
         "notify-requester": "Uw gegenereerde beschrijvingen zijn ter beoordeling ingediend.",
-        "notify-approved": "De beoordelaar heeft uw gegenereerde beschrijvingen goedgekeurd.",
-        "notify-rejected": "De beoordelaar heeft uw gegenereerde beschrijvingen afgewezen. Zie de beoordeling voor opmerkingen."
+        "notify-approved": "De beoordelaar heeft je gegenereerde beschrijvingen goedgekeurd; de geaccepteerde zijn toegepast in Unity Catalog.",
+        "notify-rejected": "De beoordelaar heeft uw gegenereerde beschrijvingen afgewezen. Zie de beoordeling voor opmerkingen.",
+        "notify-apply-failed": "De beoordelaar heeft je gegenereerde beschrijvingen goedgekeurd, maar ze konden niet in Unity Catalog worden toegepast. Pas ze toe vanaf de pagina van de generatierun."
       }
     },
     "approval": {
@@ -216,6 +217,10 @@
     "reviewAssigned": {
       "title": "Gegenereerde beschrijvingen om te beoordelen",
       "description": "{{requester}} vraagt u {{count}} gegenereerde beschrijvingen voor {{selection}} te beoordelen."
+    },
+    "applied": {
+      "title": "Gegenereerde beschrijvingen toegepast",
+      "description": "Naar Unity Catalog geschreven voor {{selection}}: {{applied}}. Conflicten: {{conflict}}, niet van toepassing: {{not_applicable}}, mislukt: {{failed}}."
     }
   }
 }

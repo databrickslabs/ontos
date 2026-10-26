@@ -94,7 +94,8 @@
       "end": "Der Veröffentlichungs-Workflow ist fehlgeschlagen"
     },
     "metadataGenerationReview": {
-      "rejected": "Generierte Beschreibungen wurden abgelehnt"
+      "rejected": "Generierte Beschreibungen wurden abgelehnt",
+      "notApplied": "Genehmigte Beschreibungen konnten nicht angewendet werden"
     }
   },
   "workflowNames": {

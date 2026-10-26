@@ -118,6 +118,39 @@ class DescriptionSuggestionsRepository:
             .scalar()
         ) or 0
 
+    def applicable_query(
+        self, db: Session, run_id: str, *, statuses=('accepted',), review_request_id: Optional[str] = None,
+    ):
+        """Suggestions of ``statuses`` whose review was approved."""
+        from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
+
+        approved = db.query(DataAssetReviewRequestDb.id).filter(DataAssetReviewRequestDb.status == 'approved')
+        query = db.query(DescriptionSuggestionDb).filter(
+            DescriptionSuggestionDb.run_id == run_id,
+            DescriptionSuggestionDb.status.in_(statuses),
+            DescriptionSuggestionDb.review_request_id.in_(approved),
+        )
+        if review_request_id:
+            query = query.filter(DescriptionSuggestionDb.review_request_id == review_request_id)
+        return query
+
+    def count_applicable(self, db: Session, run_id: str) -> int:
+        return self.applicable_query(db, run_id).count()
+
+    def release_undecided(self, db: Session, review_request_id: str) -> int:
+        """Take a closed review's undecided (pending) suggestions out of it."""
+        return (
+            db.query(DescriptionSuggestionDb)
+            .filter(
+                DescriptionSuggestionDb.review_request_id == review_request_id,
+                DescriptionSuggestionDb.status == 'pending',
+            )
+            .update(
+                {DescriptionSuggestionDb.review_request_id: None, DescriptionSuggestionDb.reviewed_asset_id: None},
+                synchronize_session=False,
+            )
+        )
+
     def review_request_ids(self, db: Session, run_id: str) -> List[str]:
         """The reviews the run's suggestions are in, oldest suggestion first."""
         rows = (

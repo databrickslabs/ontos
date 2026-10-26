@@ -150,7 +150,8 @@
       "scopeDomain": "Domäne",
       "scopeOrganization": "Organisation",
       "scopeExternal": "Extern",
-      "help": "Führt eine Lifecycle-Aktion für die Entität aus, die diesen Workflow ausgelöst hat (bei Verwendung mit Anfrage-Triggern nach der Genehmigung)."
+      "help": "Führt eine Lifecycle-Aktion für die Entität aus, die diesen Workflow ausgelöst hat (bei Verwendung mit Anfrage-Triggern nach der Genehmigung).",
+      "applyMetadataSuggestions": "Generierte Beschreibungen anwenden"
     },
     "userAction": {
       "title": "Titel",

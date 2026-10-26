@@ -62,6 +62,8 @@ export interface GenerationRunDetail extends GenerationRunSummary {
   unsubmitted: number;
   /** Asset Reviews holding the run's suggestions */
   review_request_ids: string[];
+  /** Accepted suggestions in approved reviews, ready to be applied to UC */
+  applicable: number;
 }
 
 export interface DescriptionSuggestion {
@@ -82,6 +84,7 @@ export interface DescriptionSuggestion {
   review_comment?: string | null;
   applied_by?: string | null;
   applied_at?: string | null;
+  applied_text?: string | null;
   error?: string | null;
 }
 
@@ -120,3 +123,17 @@ export interface SuggestionDecisionResult {
 }
 
 export const TERMINAL_RUN_STATUSES: GenerationRunStatus[] = ['completed', 'failed', 'cancelled'];
+
+export interface ApplyRequest {
+  /** Admins only: also apply Conflicts, overwriting the changed UC description */
+  force?: boolean;
+  suggestion_ids?: string[] | null;
+}
+
+export interface ApplyResult {
+  applied: number;
+  conflict: number;
+  not_applicable: number;
+  failed: number;
+  errors: string[];
+}

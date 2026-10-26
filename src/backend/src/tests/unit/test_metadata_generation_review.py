@@ -346,6 +346,11 @@ def test_default_review_workflow_targets_generation_runs_and_the_reviewer():
     assert workflow["trigger"] == {"type": "on_request_review", "entity_types": ["metadata_generation_run"]}
     approval = next(s for s in workflow["steps"] if s["type"] == "approval")
     assert approval["config"]["approvers"] == "reviewer"
+    # Approval applies the accepted descriptions; a rejection applies nothing
+    steps = {s["id"]: s for s in workflow["steps"]}
+    apply_step = steps[approval["on_pass"]]
+    assert (apply_step["type"], apply_step["config"]["action"]) == ("entity_action", "apply_metadata_suggestions")
+    assert not any(s["type"] == "entity_action" for s in workflow["steps"] if s["id"] == approval["on_fail"])
     # Ontos creates the review itself: the workflow must not create another
     assert not any(s["type"] == "create_asset_review" for s in workflow["steps"])
 
@@ -364,9 +369,10 @@ def test_review_summary_counts_unsubmitted_and_lists_reviews(db_session, manager
     _suggestion(db_session, run, "later")
     _suggestion(db_session, run, "gone", status="superseded")
 
-    unsubmitted, reviews = manager.review_summary(db_session, run.id)
+    unsubmitted, reviews, applicable = manager.review_summary(db_session, run.id)
     assert unsubmitted == 1
     assert reviews == [first.review_request_id]
+    assert applicable == 0  # nothing accepted in an approved review
 
 
 def _steward_role(db_session, members):

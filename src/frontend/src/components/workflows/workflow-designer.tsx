@@ -1920,6 +1920,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectItem value="decertify">{t('workflows:designer.entityAction.decertify')}</SelectItem>
                             <SelectItem value="publish">{t('workflows:designer.entityAction.publish')}</SelectItem>
                             <SelectItem value="unpublish">{t('workflows:designer.entityAction.unpublish')}</SelectItem>
+                            <SelectItem value="apply_metadata_suggestions">{t('workflows:designer.entityAction.applyMetadataSuggestions')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

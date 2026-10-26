@@ -173,8 +173,9 @@
       },
       "metadata-generation-review": {
         "notify-requester": "生成された説明がレビューに提出されました。",
-        "notify-approved": "レビュー担当者が生成された説明を承認しました。",
-        "notify-rejected": "レビュー担当者が生成された説明を却下しました。コメントはレビューで確認してください。"
+        "notify-approved": "レビュー担当者が生成された説明を承認しました。承認された説明は Unity Catalog に適用されました。",
+        "notify-rejected": "レビュー担当者が生成された説明を却下しました。コメントはレビューで確認してください。",
+        "notify-apply-failed": "レビュー担当者が生成された説明を承認しましたが、Unity Catalog に適用できませんでした。生成実行のページから適用してください。"
       }
     },
     "approval": {
@@ -216,6 +217,10 @@
     "reviewAssigned": {
       "title": "レビュー待ちの生成された説明",
       "description": "{{requester}} から {{selection}} の生成された説明 {{count}} 件のレビュー依頼が届いています。"
+    },
+    "applied": {
+      "title": "生成された説明を適用しました",
+      "description": "{{selection}} について Unity Catalog に書き込み: {{applied}} 件。競合: {{conflict}} 件、適用不可: {{not_applicable}} 件、失敗: {{failed}} 件。"
     }
   }
 }

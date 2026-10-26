@@ -150,7 +150,8 @@
       "scopeDomain": "Dominio",
       "scopeOrganization": "Organizzazione",
       "scopeExternal": "Esterno",
-      "help": "Esegue un'azione del ciclo di vita sull'entità che ha attivato questo workflow (dopo l'approvazione quando usato con trigger di richiesta)."
+      "help": "Esegue un'azione del ciclo di vita sull'entità che ha attivato questo workflow (dopo l'approvazione quando usato con trigger di richiesta).",
+      "applyMetadataSuggestions": "Applica descrizioni generate"
     },
     "userAction": {
       "title": "Titolo",

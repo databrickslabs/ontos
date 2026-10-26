@@ -94,7 +94,8 @@
       "end": "Il workflow di pubblicazione non è riuscito"
     },
     "metadataGenerationReview": {
-      "rejected": "Le descrizioni generate sono state rifiutate"
+      "rejected": "Le descrizioni generate sono state rifiutate",
+      "notApplied": "Impossibile applicare le descrizioni approvate"
     }
   },
   "workflowNames": {

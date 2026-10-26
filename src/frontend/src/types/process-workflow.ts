@@ -211,7 +211,7 @@ export interface WebhookStepConfig {
   retry_count?: number;        // Number of retries on failure (default: 0)
 }
 
-export type EntityActionKind = 'certify' | 'decertify' | 'publish' | 'unpublish';
+export type EntityActionKind = 'certify' | 'decertify' | 'publish' | 'unpublish' | 'apply_metadata_suggestions';
 
 export type EntityActionLevelSource = 'from_request' | 'fixed' | 'from_approval';
 

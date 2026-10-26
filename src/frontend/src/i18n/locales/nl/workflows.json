@@ -150,7 +150,8 @@
       "scopeDomain": "Domein",
       "scopeOrganization": "Organisatie",
       "scopeExternal": "Extern",
-      "help": "Voert een levenscyclusactie uit op de entiteit die deze workflow heeft geactiveerd (na goedkeuring bij gebruik met verzoektriggers)."
+      "help": "Voert een levenscyclusactie uit op de entiteit die deze workflow heeft geactiveerd (na goedkeuring bij gebruik met verzoektriggers).",
+      "applyMetadataSuggestions": "Gegenereerde beschrijvingen toepassen"
     },
     "userAction": {
       "title": "Titel",

@@ -400,7 +400,11 @@ def initialize_managers(app: FastAPI):
                 workspace_client_factory=lambda: ws_client,
                 reviews_manager=getattr(app.state, 'data_asset_review_manager', None),
                 notifications_manager=getattr(app.state, 'notifications_manager', None),
+                audit_manager=getattr(app.state, 'audit_manager', None),
             )
+            # The workflow's apply_metadata_suggestions step reaches it from here
+            from src.common.app_state import set_app_state_manager
+            set_app_state_manager('metadata_generation_manager', app.state.metadata_generation_manager)
             logger.info("MetadataGenerationManager initialized.")
         except Exception as e:
             logger.error(f"Failed to initialize MetadataGenerationManager: {e}", exc_info=True)

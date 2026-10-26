@@ -150,7 +150,8 @@
       "scopeDomain": "Domain",
       "scopeOrganization": "Organization",
       "scopeExternal": "External",
-      "help": "Runs a lifecycle action on the entity that triggered this workflow (after approval when used with request triggers)."
+      "help": "Runs a lifecycle action on the entity that triggered this workflow (after approval when used with request triggers).",
+      "applyMetadataSuggestions": "Apply generated descriptions"
     },
     "userAction": {
       "title": "Title",

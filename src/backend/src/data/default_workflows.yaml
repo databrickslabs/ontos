@@ -771,7 +771,7 @@ workflows:
   # overall approval of the reviewed descriptions
   - id: "metadata-generation-review"
     name: "Metadata Generation Review"
-    description: "Notifies the requester of a Generation Run review and asks the assigned reviewer to approve the reviewed descriptions."
+    description: "Notifies the requester of a Generation Run review, asks the assigned reviewer to approve the reviewed descriptions, and applies the accepted ones to Unity Catalog."
     trigger:
       type: "on_request_review"
       entity_types:
@@ -797,8 +797,16 @@ workflows:
           approvers: "reviewer"
           timeout_days: 7
           require_all: false
-        on_pass: "notify-approved"
+        on_pass: "apply-descriptions"
         on_fail: "notify-rejected"
+
+      - id: "apply-descriptions"
+        name: "Apply Descriptions to Unity Catalog"
+        type: "entity_action"
+        config:
+          action: "apply_metadata_suggestions"
+        on_pass: "notify-approved"
+        on_fail: "notify-apply-failed"
 
       - id: "notify-approved"
         name: "Notify Descriptions Approved"
@@ -806,8 +814,17 @@ workflows:
         config:
           recipients: "requester"
           template: "request_approved"
-          custom_message: "The reviewer approved your generated descriptions."
+          custom_message: "The reviewer approved your generated descriptions; the accepted ones were applied to Unity Catalog."
         on_pass: "success"
+
+      - id: "notify-apply-failed"
+        name: "Notify Apply Failed"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "The reviewer approved your generated descriptions, but they could not be applied to Unity Catalog. Apply them from the Generation Run page."
+        on_pass: "fail-apply"
 
       - id: "notify-rejected"
         name: "Notify Descriptions Rejected"
@@ -827,6 +844,12 @@ workflows:
         type: "fail"
         config:
           message: "Generated descriptions were rejected"
+
+      - id: "fail-apply"
+        name: "Descriptions Not Applied"
+        type: "fail"
+        config:
+          message: "Approved descriptions could not be applied"
 
   # =========================================================================
   # Project Access Request Workflow

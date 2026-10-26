@@ -150,7 +150,8 @@
       "scopeDomain": "Domínio",
       "scopeOrganization": "Organização",
       "scopeExternal": "Externo",
-      "help": "Executa uma ação de ciclo de vida na entidade que acionou este fluxo de trabalho (após a aprovação, quando usado com gatilhos de solicitação)."
+      "help": "Executa uma ação de ciclo de vida na entidade que acionou este fluxo de trabalho (após a aprovação, quando usado com gatilhos de solicitação).",
+      "applyMetadataSuggestions": "Aplicar descrições geradas"
     },
     "userAction": {
       "title": "Título",

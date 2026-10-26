@@ -2228,6 +2228,8 @@ class EntityActionStepHandler(StepHandler):
 
     Config:
         action: certify | decertify | publish | unpublish | set_publication_scope
+                | apply_metadata_suggestions  (metadata_generation_run: write the
+                  approved review's descriptions to UC)
         level_source: from_request | fixed | from_approval  (certify only)
         fixed_level: int  (when level_source == fixed)
         scope_source: from_request | fixed | from_approval  (publish only)
@@ -2257,11 +2259,40 @@ class EntityActionStepHandler(StepHandler):
                 return self._handle_publication(entity_type, entity_id, context)
             elif action == 'unpublish':
                 return self._handle_unpublish(entity_type, entity_id, context)
+            elif action == 'apply_metadata_suggestions':
+                return self._handle_apply_metadata_suggestions(entity_type, entity_id, context)
             else:
                 return StepResult(passed=False, error=f"Unknown entity_action: {action}")
         except Exception as e:
             logger.exception(f"entity_action step failed: {e}")
             return StepResult(passed=False, error=str(e))
+
+    def _handle_apply_metadata_suggestions(self, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
+        """Apply the descriptions accepted in the run's (now approved) review to UC."""
+        from src.common.app_state import get_app_state_manager
+
+        if entity_type != 'metadata_generation_run':
+            return StepResult(passed=False, error=f"apply_metadata_suggestions does not apply to {entity_type}")
+        manager = get_app_state_manager('metadata_generation_manager')
+        if manager is None:
+            return StepResult(passed=False, error="Metadata Generation is not available")
+        run = manager.get_run(self._db, entity_id)
+        review_request_id = (context.entity or {}).get('review_request_id')
+        if run is None or not review_request_id:
+            return StepResult(passed=False, error=f"Generation Run {entity_id} or its review not found")
+        result = manager.apply_review(self._db, run, review_request_id, applied_by=context.user_email)
+        # Failed writes stay accepted for a retry from the run page: take the
+        # failure path so the requester is told. Conflicts and not applicable
+        # targets are outcomes, not failures (the summary notification lists them).
+        return StepResult(
+            passed=result.failed == 0,
+            error=None if result.failed == 0 else f"{result.failed} descriptions could not be applied",
+            message=(
+                f"Applied {result.applied} descriptions ({result.conflict} conflicts, "
+                f"{result.not_applicable} not applicable, {result.failed} failed)"
+            ),
+            data=result.model_dump(),
+        )
 
     def _resolve_level(self, context: StepContext) -> Optional[int]:
         source = self._config.get('level_source', 'from_request')
@@ -3407,6 +3438,19 @@ class WorkflowExecutor:
                     execution_id=execution_id,
                 )
                     
+            # Generation Run review: record the overall outcome on its Asset
+            # Review (an approval is closed by the apply step already). A
+            # workflow without an approval step approves by succeeding.
+            elif (entity_type == 'metadata_generation_run'
+                  and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW')):
+                from src.common.app_state import get_app_state_manager
+                manager = get_app_state_manager('metadata_generation_manager')
+                review_request_id = (trigger_context.entity_data or {}).get('review_request_id')
+                if manager is not None and review_request_id:
+                    manager.close_review(
+                        self._db, review_request_id, approved=succeeded if approved is None else approved,
+                    )
+
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
                 self._apply_product_review_outcome(

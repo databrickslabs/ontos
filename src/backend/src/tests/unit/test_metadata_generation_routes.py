@@ -45,7 +45,7 @@ def _manager(run=None):
     manager.refresh_run.side_effect = lambda db, r, **kwargs: r
     manager.cancel_run.side_effect = lambda db, r: r
     manager.counts.return_value = {}
-    manager.review_summary.return_value = (0, [])
+    manager.review_summary.return_value = (0, [], 0)
     manager.list_suggestions.return_value = []
     manager.count_suggestions.return_value = 0
     return manager
@@ -305,3 +305,52 @@ async def test_decisions_on_an_unknown_run_are_404():
         await routes.decide_suggestions("run-1", batch, _request(manager), db=MagicMock(),
                                         audit_manager=MagicMock(), current_user=REVIEWER)
     assert exc.value.status_code == 404
+
+
+# ----------------------------------------------------------------------
+# Apply
+# ----------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_owner_applies_approved_suggestions_and_it_is_audited():
+    from src.models.metadata_generation import ApplyRequest, ApplyResult
+
+    manager = _manager()
+    manager.apply_suggestions.return_value = ApplyResult(applied=2, conflict=1)
+    audit = MagicMock()
+    with _admin(False):
+        result = await routes.apply_suggestions(
+            "run-1", ApplyRequest(), _request(manager), db=MagicMock(), audit_manager=audit, current_user=OWNER,
+        )
+    assert result.applied == 2
+    kwargs = manager.apply_suggestions.call_args.kwargs
+    assert (kwargs["applied_by"], kwargs["force"]) == ("owner@x.com", False)
+    details = audit.log_action.call_args.kwargs["details"]
+    assert (details["applied"], details["conflict"], details["source"]) == (2, 1, "manual")
+
+
+@pytest.mark.asyncio
+async def test_only_admins_force_apply():
+    from src.models.metadata_generation import ApplyRequest
+
+    manager = _manager()
+    audit = MagicMock()
+    with _admin(False), pytest.raises(HTTPException) as exc:
+        await routes.apply_suggestions(
+            "run-1", ApplyRequest(force=True), _request(manager), db=MagicMock(), audit_manager=audit, current_user=OWNER,
+        )
+    assert exc.value.status_code == 403
+    manager.apply_suggestions.assert_not_called()
+    assert audit.log_action.call_args.kwargs["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_others_cannot_apply_someone_elses_run():
+    from src.models.metadata_generation import ApplyRequest
+
+    manager = _manager()
+    with _admin(False), pytest.raises(HTTPException) as exc:
+        await routes.apply_suggestions(
+            "run-1", ApplyRequest(), _request(manager), db=MagicMock(), audit_manager=MagicMock(), current_user=OTHER,
+        )
+    assert exc.value.status_code == 404
+    manager.apply_suggestions.assert_not_called()

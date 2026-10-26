@@ -94,7 +94,8 @@
       "end": "公開ワークフローが失敗しました"
     },
     "metadataGenerationReview": {
-      "rejected": "生成された説明が却下されました"
+      "rejected": "生成された説明が却下されました",
+      "notApplied": "承認された説明を適用できませんでした"
     }
   },
   "workflowNames": {

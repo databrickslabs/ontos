@@ -83,7 +83,9 @@
   },
   "confirm": {
     "cancel": "Cancel this Generation Run?",
-    "delete": "Delete this Generation Run and its suggestions?"
+    "delete": "Delete this Generation Run and its suggestions?",
+    "forceApply_one": "Overwrite the description changed in Unity Catalog for {{count}} conflict?",
+    "forceApply_other": "Overwrite the descriptions changed in Unity Catalog for {{count}} conflicts?"
   },
   "toast": {
     "cancelFailed": "Failed to cancel the run",
@@ -129,5 +131,15 @@
     "openReview": "Review {{number}}",
     "inReview": "In review",
     "editedByReviewer": "Edited by reviewer"
+  },
+  "apply": {
+    "button": "Apply {{count}} approved",
+    "summary": "Conflicts: {{conflict}} · Not applicable: {{notApplicable}} · Failed: {{failed}}",
+    "failed": "Failed to apply the descriptions",
+    "appliedBy": "Applied by {{user}}",
+    "forceButton_one": "Force-apply {{count}} conflict",
+    "forceButton_other": "Force-apply {{count}} conflicts",
+    "done_one": "{{count}} description applied to Unity Catalog",
+    "done_other": "{{count}} descriptions applied to Unity Catalog"
   }
 }

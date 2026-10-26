@@ -173,8 +173,9 @@
       },
       "metadata-generation-review": {
         "notify-requester": "Suas descrições geradas foram enviadas para revisão.",
-        "notify-approved": "O revisor aprovou suas descrições geradas.",
-        "notify-rejected": "O revisor rejeitou suas descrições geradas. Veja os comentários na revisão."
+        "notify-approved": "O revisor aprovou suas descrições geradas; as aceitas foram aplicadas no Unity Catalog.",
+        "notify-rejected": "O revisor rejeitou suas descrições geradas. Veja os comentários na revisão.",
+        "notify-apply-failed": "O revisor aprovou suas descrições geradas, mas elas não puderam ser aplicadas no Unity Catalog. Aplique-as na página da execução de geração."
       }
     },
     "approval": {
@@ -216,6 +217,10 @@
     "reviewAssigned": {
       "title": "Descrições geradas para revisar",
       "description": "{{requester}} pede que você revise {{count}} descrições geradas para {{selection}}."
+    },
+    "applied": {
+      "title": "Descrições geradas aplicadas",
+      "description": "Gravadas no Unity Catalog para {{selection}}: {{applied}}. Conflitos: {{conflict}}, não aplicáveis: {{not_applicable}}, com falha: {{failed}}."
     }
   }
 }

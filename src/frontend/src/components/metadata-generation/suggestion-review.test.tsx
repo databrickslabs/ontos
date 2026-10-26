@@ -107,4 +107,12 @@ describe('MetadataSuggestionReview', () => {
     expect(screen.getByText(/Not a Metadata Generation suggestion/)).toBeInTheDocument();
     expect(api.get).not.toHaveBeenCalled();
   });
+  it('takes no decisions once the review is closed', async () => {
+    api.get.mockResolvedValue({ data: suggestion({ status: 'accepted' }) });
+    render(<MetadataSuggestionReview assetFqn={FQN} reviewClosed />);
+
+    expect(await screen.findByText(/This review is closed/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByLabelText(/Proposed/)).toBeDisabled();
+  });
 });

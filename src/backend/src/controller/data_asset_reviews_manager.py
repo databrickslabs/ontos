@@ -321,6 +321,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 api_obj = DataAssetReviewRequestApi.from_orm(request_db)
                 if not (api_obj.title and api_obj.title.strip()):
                     api_obj.title = derive_review_title(api_obj)
+                self._add_display_names(api_obj.assets or [])
                 return api_obj
             return None
         except SQLAlchemyError as e:
@@ -332,6 +333,25 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         except Exception as e:
             logger.error(f"Unexpected error getting review request {request_id}: {e}")
             raise
+
+    def _add_display_names(self, assets: List[ReviewedAssetApi]) -> None:
+        """Name Description Suggestions by their target (``table`` or ``table.column``)."""
+        by_suggestion = {
+            a.asset_fqn.rsplit("/", 1)[-1]: a
+            for a in assets
+            if a.asset_type == AssetType.METADATA_SUGGESTION and a.asset_fqn.startswith("metagen://")
+        }
+        if not by_suggestion:
+            return
+        from src.db_models.metadata_generation import DescriptionSuggestionDb
+
+        rows = (
+            self._db.query(DescriptionSuggestionDb.id, DescriptionSuggestionDb.table_fqn, DescriptionSuggestionDb.column_name)
+            .filter(DescriptionSuggestionDb.id.in_(list(by_suggestion)))
+            .all()
+        )
+        for suggestion_id, table_fqn, column_name in rows:
+            by_suggestion[suggestion_id].display_name = f"{table_fqn}.{column_name}" if column_name else table_fqn
 
     def list_review_requests(self, skip: int = 0, limit: int = 100) -> List[DataAssetReviewRequestApi]:
         """Lists all review requests."""
@@ -543,7 +563,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             asset_db = self._repo.get_asset(db=self._db, request_id=request_id, asset_id=asset_id)
             if asset_db:
-                return ReviewedAssetApi.from_orm(asset_db)
+                asset = ReviewedAssetApi.from_orm(asset_db)
+                self._add_display_names([asset])
+                return asset
             return None
         except SQLAlchemyError as e:
             logger.error(f"Database error getting reviewed asset {asset_id} for request {request_id}: {e}")

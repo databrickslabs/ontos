@@ -2,6 +2,8 @@
  * New run dialog: what the user picks is what the backend gets. Views go out
  * as `table` selections (the API's selection types are catalog/schema/table),
  * schemas load their tables and views lazily, and API errors are shown inline.
+ * The admin settings decide the endpoints offered and whether sample data can
+ * be included.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -34,7 +36,19 @@ vi.mock('@/components/ui/tree-view', () => ({
   },
 }));
 
-const CHILDREN: Record<string, unknown[]> = {
+const SETTINGS = {
+  max_tables_per_run: 500,
+  max_active_runs_per_user: 1,
+  allow_data_sampling: false,
+  sample_size: 5,
+  send_column_metadata: true,
+  allowed_endpoints: [],
+  default_endpoint: 'my-endpoint',
+  endpoints: ['my-endpoint'],
+};
+
+const CHILDREN: Record<string, unknown> = {
+  '/api/metadata-generation/settings': SETTINGS,
   '/api/catalogs': [{ id: 'main', name: 'main', type: 'catalog' }],
   '/api/catalogs/main/schemas': [{ id: 'main.sales', name: 'sales', type: 'schema' }],
   '/api/catalogs/main/schemas/sales/tables': [{ id: 'main.sales.orders', name: 'orders', type: 'table' }],
@@ -70,8 +84,9 @@ describe('NewRunDialog', () => {
         { type: 'schema', fqn: 'main.sales' },
       ],
       comment_style: 'standard',
-      model: null,
+      model: 'my-endpoint',
       regenerate_existing: false,
+      allow_data: false,
       auto_submit: false,
       reviewer_email: null,
     });
@@ -90,6 +105,41 @@ describe('NewRunDialog', () => {
 
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
     expect(api.post.mock.calls[0][1]).toMatchObject({ auto_submit: true, reviewer_email: 'steward@x.com' });
+  });
+
+  it('offers sample data only when an admin allows it', async () => {
+    api.post.mockResolvedValue({ data: { run_id: 'run-1', status: 'running' } });
+    const { unmount } = render(<NewRunDialog isOpen onOpenChange={vi.fn()} onStarted={vi.fn()} />);
+    await screen.findByRole('button', { name: 'main' });
+    expect(screen.getByText('Up to 500 tables per run.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Include sample data')).not.toBeInTheDocument();
+    unmount();
+
+    api.get.mockImplementation(async (url: string) => ({
+      data: url.endsWith('/settings') ? { ...SETTINGS, allow_data_sampling: true, sample_size: 3 } : CHILDREN[url] ?? [],
+    }));
+    renderDialog();
+    await userEvent.click(await screen.findByRole('button', { name: 'main' }));
+    expect(screen.getByText(/Sends 3 sample rows per table/)).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Include sample data'));
+    await userEvent.click(screen.getByRole('button', { name: 'Start run' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0][1]).toMatchObject({ allow_data: true });
+  });
+
+  it('falls back to the server default endpoint when the settings fail to load', async () => {
+    api.post.mockResolvedValue({ data: { run_id: 'run-1', status: 'running' } });
+    api.get.mockImplementation(async (url: string) =>
+      url.endsWith('/settings') ? { data: null, error: 'Forbidden' } : { data: CHILDREN[url] ?? [] },
+    );
+    renderDialog();
+    await userEvent.click(await screen.findByRole('button', { name: 'main' }));
+    expect(screen.queryByLabelText('Serving endpoint')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Start run' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0][1]).toMatchObject({ model: null, allow_data: false });
   });
 
   it('toggles a selection off again', async () => {

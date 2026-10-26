@@ -23,8 +23,26 @@ export interface StartRunRequest {
   comment_style: CommentStyle;
   model?: string | null;
   regenerate_existing: boolean;
+  /** Send sample rows to the LLM; only accepted when the admin setting permits it */
+  allow_data?: boolean;
   auto_submit: boolean;
   reviewer_email?: string | null;
+}
+
+/** Admin settings (PUT /api/metadata-generation/settings) */
+export interface MetadataGenerationSettings {
+  max_tables_per_run: number;
+  max_active_runs_per_user: number;
+  allow_data_sampling: boolean;
+  sample_size: number;
+  send_column_metadata: boolean;
+  allowed_endpoints: string[];
+}
+
+export interface MetadataGenerationSettingsResponse extends MetadataGenerationSettings {
+  default_endpoint: string;
+  /** Endpoints a run can pick, the default first */
+  endpoints: string[];
 }
 
 export interface StartRunResponse {

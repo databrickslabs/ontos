@@ -43,6 +43,12 @@ documents:
     description: "How workflows run: triggers, branching, variables, approvals, failures and debugging executions"
     category: user-guide
 
+  metadata-generation-guide:
+    file: metadata-generation-guide.md
+    title: Metadata Generation
+    description: Generate, review and apply Unity Catalog descriptions with dbxmetagen; what is sent to the LLM; settings
+    category: user-guide
+
   release-notes:
     file: RELEASE_NOTES.md
     title: Release Notes

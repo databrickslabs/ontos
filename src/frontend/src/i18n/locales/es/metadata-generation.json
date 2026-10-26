@@ -25,14 +25,19 @@
     "removeSelection": "Quitar {{fqn}}",
     "commentStyle": "Estilo de descripción",
     "model": "Endpoint de serving",
-    "modelPlaceholder": "Endpoint predeterminado",
     "regenerateExisting": "Regenerar las descripciones existentes",
     "regenerateExistingHint": "De forma predeterminada, solo los objetos sin descripción reciben sugerencias.",
     "autoSubmit": "Enviar a revisión al terminar",
     "autoSubmitHint": "Envía las descripciones generadas a revisión de activos en cuanto termine la ejecución.",
     "selectionRequired": "Seleccione al menos un objeto.",
     "startFailed": "No se pudo iniciar la ejecución de generación",
-    "start": "Iniciar ejecución"
+    "start": "Iniciar ejecución",
+    "defaultEndpoint": "{{endpoint}} (predeterminado)",
+    "tableLimit_one": "Hasta {{count}} tabla por ejecución.",
+    "tableLimit_other": "Hasta {{count}} tablas por ejecución.",
+    "allowData": "Incluir datos de muestra",
+    "allowDataHint_one": "Envía al LLM {{count}} fila de muestra por tabla y los valores mínimo/máximo de las columnas.",
+    "allowDataHint_other": "Envía al LLM {{count}} filas de muestra por tabla y los valores mínimo/máximo de las columnas."
   },
   "selectionType": {
     "catalog": "Catálogo",
@@ -130,7 +135,8 @@
     "reviews": "Revisiones:",
     "openReview": "Revisión {{number}}",
     "inReview": "En revisión",
-    "editedByReviewer": "Editada por el revisor"
+    "editedByReviewer": "Editada por el revisor",
+    "reviewClosedHint": "Esta revisión está cerrada; ya no se puede decidir sobre sus sugerencias."
   },
   "apply": {
     "button": "Aplicar {{count}} aprobadas",
@@ -141,5 +147,21 @@
     "forceButton_other": "Forzar {{count}} conflictos",
     "done_one": "{{count}} descripción aplicada en Unity Catalog",
     "done_other": "{{count}} descripciones aplicadas en Unity Catalog"
+  },
+  "settings": {
+    "button": "Configuración",
+    "title": "Configuración de la generación de metadatos",
+    "description": "Límites y lo que las ejecuciones de generación pueden enviar al LLM.",
+    "loadFailed": "No se pudo cargar la configuración",
+    "saved": "Configuración guardada",
+    "maxTables": "Tablas por ejecución",
+    "maxActiveRuns": "Ejecuciones activas por usuario",
+    "sendColumnMetadata": "Enviar estadísticas de columnas",
+    "sendColumnMetadataHint": "Recuentos de nulos y de valores distintos, longitudes de valores, etiquetas y restricciones. No se envían valores de datos.",
+    "allowSampling": "Permitir datos de muestra",
+    "allowSamplingHint": "Permite a los usuarios enviar al LLM filas de muestra y valores mínimo/máximo de columnas en una ejecución.",
+    "sampleSize": "Filas de muestra por tabla",
+    "allowedEndpoints": "Endpoints de serving adicionales",
+    "allowedEndpointsHint": "Uno por línea. El endpoint predeterminado de la app, {{endpoint}}, siempre está permitido."
   }
 }

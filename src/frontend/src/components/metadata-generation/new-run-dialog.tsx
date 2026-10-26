@@ -16,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TreeView } from '@/components/ui/tree-view';
@@ -24,6 +23,7 @@ import { useApi } from '@/hooks/use-api';
 import type { CatalogItem } from '@/types/data-asset-review';
 import type {
   CommentStyle,
+  MetadataGenerationSettingsResponse,
   SelectionItem,
   StartRunRequest,
   StartRunResponse,
@@ -54,8 +54,10 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
 
   const [selection, setSelection] = useState<SelectionItem[]>([]);
   const [commentStyle, setCommentStyle] = useState<CommentStyle>('standard');
+  const [settings, setSettings] = useState<MetadataGenerationSettingsResponse | null>(null);
   const [model, setModel] = useState('');
   const [regenerateExisting, setRegenerateExisting] = useState(false);
+  const [allowData, setAllowData] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(false);
   const [reviewer, setReviewer] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,7 +75,14 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
     if (!isOpen) return;
     setSelection([]);
     setFormError(null);
+    setAllowData(false);
     setIsLoadingCatalogs(true);
+    void (async () => {
+      // Without the settings the run uses the default endpoint and no sampling
+      const res = await get<MetadataGenerationSettingsResponse>('/api/metadata-generation/settings');
+      setSettings(res.error ? null : res.data);
+      setModel(res.error ? '' : (res.data?.default_endpoint ?? ''));
+    })();
     setCatalogError(null);
     void (async () => {
       const res = await get<CatalogItem[]>('/api/catalogs');
@@ -177,8 +186,9 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
     const body: StartRunRequest = {
       selection,
       comment_style: commentStyle,
-      model: model.trim() || null,
+      model: model || null,
       regenerate_existing: regenerateExisting,
+      allow_data: settings?.allow_data_sampling ? allowData : false,
       auto_submit: autoSubmit,
       reviewer_email: autoSubmit ? reviewer : null,
     };
@@ -251,16 +261,31 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="metagen-model">{t('newRun.model')}</Label>
-              <Input
-                id="metagen-model"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={t('newRun.modelPlaceholder')}
-              />
-            </div>
+            {settings && (
+              <div className="space-y-1">
+                <Label htmlFor="metagen-model">{t('newRun.model')}</Label>
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger id="metagen-model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {settings.endpoints.map((endpoint) => (
+                      <SelectItem key={endpoint} value={endpoint}>
+                        {endpoint === settings.default_endpoint
+                          ? t('newRun.defaultEndpoint', { endpoint })
+                          : endpoint}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
+          {settings && (
+            <p className="text-xs text-muted-foreground">
+              {t('newRun.tableLimit', { count: settings.max_tables_per_run })}
+            </p>
+          )}
 
           <div className="flex items-start gap-2">
             <Checkbox
@@ -273,6 +298,18 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
               <p className="text-xs text-muted-foreground">{t('newRun.regenerateExistingHint')}</p>
             </div>
           </div>
+
+          {settings?.allow_data_sampling && (
+            <div className="flex items-start gap-2">
+              <Checkbox id="metagen-allow-data" checked={allowData} onCheckedChange={(v) => setAllowData(v === true)} />
+              <div className="grid gap-0.5">
+                <Label htmlFor="metagen-allow-data">{t('newRun.allowData')}</Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('newRun.allowDataHint', { count: settings.sample_size })}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-start gap-2">
             <Checkbox

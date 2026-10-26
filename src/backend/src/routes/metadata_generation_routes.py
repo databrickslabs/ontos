@@ -11,6 +11,9 @@ the review's reviewer reads them (GET .../suggestions/{id}) and decides
 POST /runs/{run_id}/apply writes accepted suggestions of approved reviews to
 UC (normally the review workflow does this); feature admins can force
 Conflicts.
+
+GET /settings returns the limits, data-sampling gate and allowed serving
+endpoints a new run is checked against; feature admins change them with PUT.
 """
 
 from typing import Optional
@@ -30,6 +33,8 @@ from src.models.metadata_generation import (
     GenerationRunDetail,
     GenerationRunStatus,
     GenerationRunSummary,
+    MetadataGenerationSettings,
+    MetadataGenerationSettingsResponse,
     RunListResponse,
     SelectionItem,
     StartRunRequest,
@@ -91,6 +96,51 @@ async def _get_visible_run(request: Request, db, current_user, manager: Metadata
     return run
 
 
+@router.get(
+    "/settings",
+    response_model=MetadataGenerationSettingsResponse,
+    summary="Limits, data sampling and allowed serving endpoints of Generation Runs",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def get_settings(request: Request, db: DBSessionDep = None):
+    manager = _get_manager(request)
+    return manager.settings_response(manager.get_feature_settings(db))
+
+
+@router.put(
+    "/settings",
+    response_model=MetadataGenerationSettingsResponse,
+    summary="Change the Metadata Generation settings",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.ADMIN))],
+)
+def update_settings(
+    request: Request,
+    body: MetadataGenerationSettings,
+    db: DBSessionDep = None,
+    audit_manager: AuditManagerDep = None,
+    current_user: AuditCurrentUserDep = None,
+):
+    manager = _get_manager(request)
+    success = False
+    try:
+        result = manager.update_feature_settings(db, body)
+        success = True
+        return result
+    except Exception as e:
+        logger.exception("Failed to update the Metadata Generation settings")
+        raise HTTPException(status_code=500, detail="Failed to update the settings") from e
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID,
+            action="UPDATE_METADATA_GENERATION_SETTINGS",
+            success=success,
+            details=body.model_dump(),
+        )
+
+
 @router.post(
     "/runs",
     response_model=StartRunResponse,
@@ -108,7 +158,12 @@ def start_run(
 ):
     manager = _get_manager(request)
     success = False
-    details = {"selection_count": len(body.selection), "regenerate_existing": body.regenerate_existing}
+    details = {
+        "selection_count": len(body.selection),
+        "regenerate_existing": body.regenerate_existing,
+        "model": body.model,
+        "allow_data": body.allow_data,
+    }
     try:
         run = manager.start_run(
             db,

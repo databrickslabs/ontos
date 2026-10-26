@@ -20,8 +20,15 @@ step writes the accepted descriptions to UC as the app's service principal
 (``apply_review``); "Apply approved" on the run page retries or catches up
 (``apply_suggestions``). A target whose UC description changed since
 generation is a Conflict and is left alone unless an admin forces it.
+
+Admin settings (``get_feature_settings``, stored in app_settings) cap tables
+per run and active runs per user, gate sending sample data and column
+statistics to the LLM, and list the serving endpoints runs may use. Ingest
+checks which tables the app may change; suggestions for the others are Not
+applicable before anyone reviews them.
 """
 
+import json
 import threading
 import time
 import uuid
@@ -44,6 +51,8 @@ from src.models.metadata_generation import (
     TERMINAL_RUN_STATUSES,
     ApplyResult,
     GenerationRunStatus,
+    MetadataGenerationSettings,
+    MetadataGenerationSettingsResponse,
     StartRunRequest,
     SubmitReviewResponse,
     SuggestionDecisionBatch,
@@ -51,6 +60,7 @@ from src.models.metadata_generation import (
     SuggestionStatus,
 )
 from src.models.notifications import Notification, NotificationType
+from src.repositories.app_settings_repository import app_settings_repo
 from src.repositories.metadata_generation_repository import (
     metagen_runs_repo,
     metagen_suggestions_repo,
@@ -59,11 +69,19 @@ from src.repositories.metadata_generation_repository import (
 logger = get_logger(__name__)
 
 WORKFLOW_ID = "metagen_generate"
+# Job parameters start_run passes; the installed job must define all of them
+JOB_PARAMETERS = (
+    "ontos_run_id", "table_names", "output_catalog", "output_schema", "model", "comment_style",
+    "allow_data", "sample_size", "add_metadata", "max_tables", "regenerate_existing",
+)
 RESULTS_TABLE = "metagen_results"
 # Rows per results query; keeps each response well below the 25 MiB inline limit
 RESULTS_PAGE_SIZE = 2000
 DEFAULT_MODEL = "databricks-claude-sonnet-4-6"
-MAX_ACTIVE_RUNS_PER_USER = 1
+# app_settings key of the admin settings (MetadataGenerationSettings as JSON)
+SETTINGS_KEY = "METADATA_GENERATION_SETTINGS"
+# Schemas the job skips when expanding a catalog
+SKIP_SCHEMAS = {"information_schema"}
 # An ingest claim older than this is treated as abandoned (e.g. the app restarted)
 STALE_INGEST_CLAIM = timedelta(minutes=15)
 # Loading a successful job's results is retried this often before the run fails
@@ -98,6 +116,8 @@ _CLOSED_REVIEW_STATUSES = (
 FEATURE_ID = "metadata-generation"
 # UC SQL errors that mean the app's service principal may not change the object
 _PERMISSION_ERRORS = ("PERMISSION_DENIED", "INSUFFICIENT_PERMISSIONS", "does not have MODIFY", "is not the owner")
+# Privileges that let a non-owner comment on a table (views need ownership)
+_WRITE_PRIVILEGES = {"MODIFY", "ALL_PRIVILEGES"}
 
 
 class StatementError(RuntimeError):
@@ -231,6 +251,36 @@ class MetadataGenerationManager:
         return self._settings.DATABRICKS_CATALOG, self._settings.DATABRICKS_SCHEMA
 
     # ------------------------------------------------------------------
+    # Admin settings
+    # ------------------------------------------------------------------
+    def get_feature_settings(self, db: Session) -> MetadataGenerationSettings:
+        raw = app_settings_repo.get_by_key(db, SETTINGS_KEY)
+        if not raw:
+            return MetadataGenerationSettings()
+        try:
+            return MetadataGenerationSettings.model_validate(json.loads(raw))
+        except Exception:
+            logger.warning("Invalid %s in app settings; using the defaults", SETTINGS_KEY, exc_info=True)
+            return MetadataGenerationSettings()
+
+    def update_feature_settings(
+        self, db: Session, settings: MetadataGenerationSettings
+    ) -> MetadataGenerationSettingsResponse:
+        app_settings_repo.set(db, SETTINGS_KEY, settings.model_dump_json())
+        return self.settings_response(settings)
+
+    def default_endpoint(self) -> str:
+        return self._settings.LLM_ENDPOINT or DEFAULT_MODEL
+
+    def settings_response(self, settings: MetadataGenerationSettings) -> MetadataGenerationSettingsResponse:
+        default = self.default_endpoint()
+        return MetadataGenerationSettingsResponse(
+            **settings.model_dump(),
+            default_endpoint=default,
+            endpoints=[default] + [e for e in settings.allowed_endpoints if e != default],
+        )
+
+    # ------------------------------------------------------------------
     # Start / cancel / delete
     # ------------------------------------------------------------------
     def start_run(
@@ -246,14 +296,28 @@ class MetadataGenerationManager:
         ``defer_ingest`` is passed on to the refresh of active runs, so a
         finished run's ingest doesn't run inside this request.
         """
+        settings = self.get_feature_settings(db)
         active = self._refresh_active_runs(db, defer_ingest=defer_ingest)
-        if sum(1 for r in active if r.user_id == user_id) >= MAX_ACTIVE_RUNS_PER_USER:
-            raise ActiveRunLimitError("You already have a Generation Run in progress. Wait for it to finish or cancel it.")
+        limit = settings.max_active_runs_per_user
+        if sum(1 for r in active if r.user_id == user_id) >= limit:
+            raise ActiveRunLimitError(
+                "You already have a Generation Run in progress. Wait for it to finish or cancel it."
+                if limit == 1 else
+                f"You already have {limit} Generation Runs in progress. Wait for one to finish or cancel it."
+            )
         selection = [item.model_dump() for item in request.selection]
         table_names = selection_to_table_names(selection)
         if not self._jobs:
             raise ValueError("Jobs manager not available")
+
+        model = request.model or self.default_endpoint()
+        if model not in self.settings_response(settings).endpoints:
+            raise ValueError(f"The serving endpoint '{model}' is not allowed for Metadata Generation")
+        if request.allow_data and not settings.allow_data_sampling:
+            raise ValueError("Sending sample data to the LLM is turned off for Metadata Generation")
+
         self._check_no_overlapping_run(active, table_names)
+        self._check_table_limit(table_names, settings.max_tables_per_run)
 
         from src.repositories.workflow_installations_repository import workflow_installation_repo
         installation = workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=WORKFLOW_ID)
@@ -263,16 +327,18 @@ class MetadataGenerationManager:
                 "Ask an administrator to enable it under Settings > Jobs."
             )
 
+        self._check_job_is_current(int(installation.job_id))
+
         if request.auto_submit and request.reviewer_email and request.reviewer_email.lower() == user_id.lower():
             raise ValueError("You can't review your own Generation Run; pick another reviewer")
 
-        model = request.model or self._settings.LLM_ENDPOINT or DEFAULT_MODEL
+        sample_size = settings.sample_size if request.allow_data else 0
         options = {
             "comment_style": request.comment_style.value,
             "model": model,
-            # Data sampling stays off until the admin-gated toggle lands (#1188)
-            "allow_data": False,
-            "sample_size": 0,
+            "allow_data": request.allow_data,
+            "sample_size": sample_size,
+            "send_column_metadata": settings.send_column_metadata,
             "regenerate_existing": request.regenerate_existing,
             "auto_submit": request.auto_submit,
             "reviewer_email": request.reviewer_email,
@@ -289,8 +355,10 @@ class MetadataGenerationManager:
             "output_schema": output_schema,
             "model": model,
             "comment_style": options["comment_style"],
-            "allow_data": "false",
-            "sample_size": "0",
+            "allow_data": str(request.allow_data).lower(),
+            "sample_size": str(sample_size),
+            "add_metadata": str(settings.send_column_metadata).lower(),
+            "max_tables": str(settings.max_tables_per_run),
             "regenerate_existing": str(request.regenerate_existing).lower(),
         }
         try:
@@ -331,6 +399,66 @@ class MetadataGenerationManager:
                             f"Another Generation Run is already describing objects in {item['fqn']}. "
                             "Wait for it to finish or cancel it."
                         )
+
+    def _check_job_is_current(self, job_id: int) -> None:
+        """Refuse to launch a job installed from an older definition.
+
+        Installed jobs keep their definition; one without the parameters this
+        version passes would reject the run or ignore settings such as the
+        column-statistics switch.
+        """
+        names = self._jobs.get_job_parameter_names(job_id)
+        if names is None:
+            return
+        if set(JOB_PARAMETERS) - names:
+            raise ConflictError(
+                "The Metadata Generation background job is outdated. Ask an administrator to "
+                "turn it off and on again under Settings > Jobs."
+            )
+
+    def _check_table_limit(self, table_names: List[str], limit: int) -> None:
+        """Reject a selection that covers more than ``limit`` tables.
+
+        Counts what the app's service principal (which the job runs as) can
+        list, stopping as soon as the limit is passed. If UC can't be listed
+        the job enforces the limit itself.
+        """
+        try:
+            count = self._count_tables(self._workspace(), table_names, stop_after=limit)
+        except Exception:
+            logger.warning("Failed to count the tables of a Generation Run selection", exc_info=True)
+            return
+        if count > limit:
+            raise ValueError(
+                f"The selection covers more than {limit} tables. "
+                "Pick fewer schemas or tables, or ask an administrator to raise the limit."
+            )
+
+    @staticmethod
+    def _count_tables(ws: Any, table_names: List[str], *, stop_after: int) -> int:
+        seen: set = set()
+        schemas: List[Tuple[str, str]] = []
+        for name in table_names:
+            parts = name.split(".")
+            if len(parts) == 3:
+                seen.add(name.lower())
+            elif len(parts) == 2:
+                schemas.append((parts[0], parts[1]))
+            else:
+                schemas.extend(
+                    (parts[0], schema.name)
+                    for schema in ws.schemas.list(catalog_name=parts[0])
+                    if schema.name and schema.name.lower() not in SKIP_SCHEMAS
+                )
+        for catalog, schema in schemas:
+            if len(seen) > stop_after:
+                break
+            # Only these two arguments: the app's CachingWorkspaceClient wraps tables.list
+            for table in ws.tables.list(catalog_name=catalog, schema_name=schema):
+                seen.add(f"{catalog}.{schema}.{table.name}".lower())
+                if len(seen) > stop_after:
+                    break
+        return len(seen)
 
     def cancel_run(self, db: Session, run: MetadataGenerationRunDb) -> MetadataGenerationRunDb:
         if run.status in TERMINAL_RUN_STATUSES:
@@ -573,9 +701,12 @@ class MetadataGenerationManager:
             return run.suggestion_count
         try:
             rows = self._fetch_results(run.id, on_page=lambda: self._heartbeat(db, run))
+            unwritable = self._unwritable_tables(
+                {row["table_fqn"] for row in rows if row.get("table_fqn")}, on_progress=lambda: self._heartbeat(db, run)
+            )
             # A failure while storing rolls back only the half-written suggestions
             with db.begin_nested():
-                count = self._store_suggestions(db, run, rows)
+                count = self._store_suggestions(db, run, rows, unwritable=unwritable)
             db.commit()
             logger.info("Ingested %d description suggestions for run %s", count, run.id)
         except Exception as e:
@@ -602,8 +733,20 @@ class MetadataGenerationManager:
         db.commit()
         return 0
 
-    def _store_suggestions(self, db: Session, run: MetadataGenerationRunDb, rows: List[Dict[str, Optional[str]]]) -> int:
+    def _store_suggestions(
+        self,
+        db: Session,
+        run: MetadataGenerationRunDb,
+        rows: List[Dict[str, Optional[str]]],
+        *,
+        unwritable: Optional[Dict[str, str]] = None,
+    ) -> int:
+        """Replace the run's suggestions with ``rows``.
 
+        ``unwritable`` (lower-cased table FQN -> reason) marks the suggestions
+        of tables the app can't change as Not applicable, so nobody reviews them.
+        """
+        unwritable = unwritable or {}
         regenerate_existing = bool((run.options or {}).get("regenerate_existing"))
         db.query(DescriptionSuggestionDb).filter(DescriptionSuggestionDb.run_id == run.id).delete()
         # A newer run that already covered an object wins, even if this ingest finishes later
@@ -625,6 +768,13 @@ class MetadataGenerationManager:
                 continue
             column_name = row.get("column_name") or None
             outdated = (row["table_fqn"], column_name) in newer
+            blocked = unwritable.get(row["table_fqn"].lower())
+            if outdated:
+                status = SuggestionStatus.SUPERSEDED.value
+            elif blocked:
+                status = SuggestionStatus.NOT_APPLICABLE.value
+            else:
+                status = SuggestionStatus.PENDING.value
             db.add(DescriptionSuggestionDb(
                 run_id=run.id,
                 kind="description",
@@ -633,10 +783,11 @@ class MetadataGenerationManager:
                 column_name=column_name,
                 base_text=base_text,
                 proposed_text=proposed_text,
-                status=SuggestionStatus.SUPERSEDED.value if outdated else SuggestionStatus.PENDING.value,
+                status=status,
+                error=blocked if status == SuggestionStatus.NOT_APPLICABLE.value else None,
             ))
             stored += 1
-            if not outdated:
+            if status == SuggestionStatus.PENDING.value:
                 targets.append((row["table_fqn"], column_name))
 
         # This run replaces older runs' not yet reviewed suggestions for the same objects
@@ -649,6 +800,61 @@ class MetadataGenerationManager:
         run.completed_at = _now()
         db.flush()
         return stored
+
+    def _unwritable_tables(
+        self, table_fqns: set, *, on_progress: Optional[Callable[[], None]] = None
+    ) -> Dict[str, str]:
+        """Pre-flight check: the tables the app's service principal can't comment on.
+
+        ``COMMENT ON`` needs ownership of a view, and ownership or ``MODIFY``
+        on a table. Returns lower-cased FQN -> reason; a table whose
+        permissions can't be read is left out (Apply reports it if it fails).
+        """
+        if not table_fqns:
+            return {}
+        try:
+            ws = self._workspace()
+            me = ws.current_user.me()
+            principal = me.user_name
+            principals = {principal.lower()} | {
+                g.display.lower() for g in (me.groups or []) if getattr(g, "display", None)
+            }
+        except Exception:
+            logger.warning("Failed to identify the app's service principal; skipping the writability check", exc_info=True)
+            return {}
+
+        from databricks.sdk.service.catalog import TableType
+
+        unwritable: Dict[str, str] = {}
+        for index, fqn in enumerate(sorted(table_fqns)):
+            if on_progress is not None and index and index % 50 == 0:
+                on_progress()
+            try:
+                info = ws.tables.get(full_name=fqn)
+                if (info.owner or "").lower() in principals:
+                    continue
+                if info.table_type == TableType.VIEW:
+                    unwritable[fqn.lower()] = "The app's service principal must own this view to change its description"
+                    continue
+                if not self._has_write_privilege(ws, fqn, principal):
+                    unwritable[fqn.lower()] = "The app's service principal needs MODIFY on this table to change its description"
+            except Exception:
+                logger.warning("Failed to check whether the app may change the descriptions of %s", fqn, exc_info=True)
+        return unwritable
+
+    @staticmethod
+    def _has_write_privilege(ws: Any, fqn: str, principal: str) -> bool:
+        page_token = None
+        while True:
+            resp = ws.grants.get_effective(securable_type="table", full_name=fqn, principal=principal, page_token=page_token)
+            for assignment in resp.privilege_assignments or []:
+                for p in assignment.privileges or []:
+                    privilege = getattr(p.privilege, "value", p.privilege)
+                    if privilege in _WRITE_PRIVILEGES:
+                        return True
+            page_token = getattr(resp, "next_page_token", None)
+            if not page_token:
+                return False
 
     def _heartbeat(self, db: Session, run: MetadataGenerationRunDb) -> None:
         """Keep a long ingest's claim (and queued marker) from looking abandoned."""

@@ -1,10 +1,13 @@
 """API models for Metadata Generation (Generation Runs and Description Suggestions)."""
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+_ENDPOINT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
 class GenerationRunStatus(str, Enum):
@@ -52,9 +55,45 @@ class StartRunRequest(BaseModel):
     # Serving endpoint; defaults to the app's LLM_ENDPOINT
     model: Optional[str] = None
     regenerate_existing: bool = False
+    # Send sample rows to the LLM; only allowed when the admin setting permits it
+    allow_data: bool = False
     auto_submit: bool = False
     # Reviewer of the auto-submitted review; defaults to a Data Steward
     reviewer_email: Optional[EmailStr] = None
+
+
+class MetadataGenerationSettings(BaseModel):
+    """Admin settings of the feature (GET/PUT /settings)."""
+    max_tables_per_run: int = Field(500, ge=1, le=5000)
+    max_active_runs_per_user: int = Field(1, ge=1, le=20)
+    # Whether runs may send sample rows (and column min/max values) to the LLM
+    allow_data_sampling: bool = False
+    sample_size: int = Field(5, ge=1, le=50)
+    # Column statistics (null and distinct counts, lengths), tags and constraints;
+    # off means the LLM sees only names, types and existing comments
+    send_column_metadata: bool = True
+    # Serving endpoints runs may use besides the app's default LLM endpoint
+    allowed_endpoints: List[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("allowed_endpoints")
+    @classmethod
+    def _clean_endpoints(cls, value: List[str]) -> List[str]:
+        cleaned: List[str] = []
+        for name in value:
+            name = name.strip()
+            if not name:
+                continue
+            if len(name) > 200 or not _ENDPOINT_NAME.fullmatch(name):
+                raise ValueError(f"'{name}' is not a valid serving endpoint name")
+            if name not in cleaned:
+                cleaned.append(name)
+        return cleaned
+
+
+class MetadataGenerationSettingsResponse(MetadataGenerationSettings):
+    default_endpoint: str
+    # Endpoints a run can pick, the default first
+    endpoints: List[str]
 
 
 class StartRunResponse(BaseModel):

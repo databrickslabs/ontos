@@ -32,6 +32,12 @@ class SyncExecutor:
 
 
 @pytest.fixture(autouse=True)
+def all_tables_writable(monkeypatch):
+    """The pre-flight writability check is covered in test_metadata_generation_settings.py."""
+    monkeypatch.setattr(MetadataGenerationManager, "_unwritable_tables", lambda self, fqns, **kwargs: {})
+
+
+@pytest.fixture(autouse=True)
 def rollback_keeps_fixture_data(db_session, monkeypatch):
     """A real Session.rollback() would discard the harness's outer transaction."""
     rollback = MagicMock()
@@ -143,6 +149,18 @@ def test_submit_puts_each_pending_suggestion_in_one_review(db_session, manager, 
     assert notification.recipient == REVIEWER
     assert notification.link == f"/data-asset-reviews/{review.id}"
     assert notification.data["i18n"]["params"] == {"requester": REQUESTER, "count": "2", "selection": "main.sales"}
+
+
+def test_review_names_its_suggestions_by_their_targets(db_session, manager):
+    run = _run(db_session)
+    _suggestion(db_session, run)
+    _suggestion(db_session, run, "id")
+    result = manager.create_review_for_run(db_session, run, requester_email=REQUESTER, reviewer_email=REVIEWER)
+
+    review = manager._reviews.get_review_request(result.review_request_id)
+    assert sorted(a.display_name for a in review.assets) == ["main.sales.orders", "main.sales.orders.id"]
+    asset = manager._reviews.get_reviewed_asset(result.review_request_id, review.assets[0].id)
+    assert asset.display_name in {"main.sales.orders", "main.sales.orders.id"}
 
 
 def test_resubmitting_only_takes_suggestions_not_yet_in_review(db_session, manager):

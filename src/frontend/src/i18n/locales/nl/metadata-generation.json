@@ -25,14 +25,19 @@
     "removeSelection": "{{fqn}} verwijderen",
     "commentStyle": "Beschrijvingsstijl",
     "model": "Serving-endpoint",
-    "modelPlaceholder": "Standaard-endpoint",
     "regenerateExisting": "Bestaande beschrijvingen opnieuw genereren",
     "regenerateExistingHint": "Standaard krijgen alleen objecten zonder beschrijving suggesties.",
     "autoSubmit": "Na afloop ter beoordeling indienen",
     "autoSubmitHint": "Dient de gegenereerde beschrijvingen ter assetbeoordeling in zodra de run klaar is.",
     "selectionRequired": "Selecteer ten minste één object.",
     "startFailed": "De generatierun kon niet worden gestart",
-    "start": "Run starten"
+    "start": "Run starten",
+    "defaultEndpoint": "{{endpoint}} (standaard)",
+    "tableLimit_one": "Maximaal {{count}} tabel per run.",
+    "tableLimit_other": "Maximaal {{count}} tabellen per run.",
+    "allowData": "Voorbeeldgegevens meesturen",
+    "allowDataHint_one": "Stuurt {{count}} voorbeeldrij per tabel en de min-/maxwaarden van kolommen naar het LLM.",
+    "allowDataHint_other": "Stuurt {{count}} voorbeeldrijen per tabel en de min-/maxwaarden van kolommen naar het LLM."
   },
   "selectionType": {
     "catalog": "Catalogus",
@@ -130,7 +135,8 @@
     "reviews": "Beoordelingen:",
     "openReview": "Beoordeling {{number}}",
     "inReview": "In beoordeling",
-    "editedByReviewer": "Bewerkt door beoordelaar"
+    "editedByReviewer": "Bewerkt door beoordelaar",
+    "reviewClosedHint": "Deze review is gesloten; over de suggesties kan niet meer worden beslist."
   },
   "apply": {
     "button": "{{count}} goedgekeurde toepassen",
@@ -141,5 +147,21 @@
     "forceButton_other": "{{count}} conflicten forceren",
     "done_one": "{{count}} beschrijving toegepast in Unity Catalog",
     "done_other": "{{count}} beschrijvingen toegepast in Unity Catalog"
+  },
+  "settings": {
+    "button": "Instellingen",
+    "title": "Instellingen voor metadatageneratie",
+    "description": "Limieten, en wat generatieruns naar het LLM mogen sturen.",
+    "loadFailed": "Instellingen konden niet worden geladen",
+    "saved": "Instellingen opgeslagen",
+    "maxTables": "Tabellen per run",
+    "maxActiveRuns": "Actieve runs per gebruiker",
+    "sendColumnMetadata": "Kolomstatistieken meesturen",
+    "sendColumnMetadataHint": "Aantallen null- en unieke waarden, waardelengtes, tags en constraints. Er worden geen gegevenswaarden verstuurd.",
+    "allowSampling": "Voorbeeldgegevens toestaan",
+    "allowSamplingHint": "Laat gebruikers voor een run voorbeeldrijen en min-/maxwaarden van kolommen naar het LLM sturen.",
+    "sampleSize": "Voorbeeldrijen per tabel",
+    "allowedEndpoints": "Extra serving-endpoints",
+    "allowedEndpointsHint": "Eén per regel. Het standaard-endpoint van de app, {{endpoint}}, is altijd toegestaan."
   }
 }

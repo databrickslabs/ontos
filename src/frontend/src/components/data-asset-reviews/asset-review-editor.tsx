@@ -52,6 +52,7 @@ interface AssetReviewEditorProps {
     hasNext?: boolean; // Whether there's a next asset
     currentIndex?: number; // Current position (1-based)
     totalCount?: number; // Total assets in review
+    reviewClosed?: boolean; // Review approved, denied or cancelled
 }
 
 // Helper function to check API response
@@ -76,6 +77,7 @@ export default function AssetReviewEditor({
     hasNext = false,
     currentIndex,
     totalCount,
+    reviewClosed = false,
 }: AssetReviewEditorProps) {
     const { t } = useTranslation(['data-asset-reviews', 'common']);
     const { get, put, post } = api;
@@ -363,6 +365,7 @@ export default function AssetReviewEditor({
             <div className="px-1 pb-1">
                 <MetadataSuggestionReview
                     assetFqn={asset.asset_fqn}
+                    reviewClosed={reviewClosed}
                     onReviewComplete={(status) => {
                         onReviewSave({
                             ...asset,

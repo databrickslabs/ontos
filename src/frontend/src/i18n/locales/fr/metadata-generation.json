@@ -25,14 +25,19 @@
     "removeSelection": "Retirer {{fqn}}",
     "commentStyle": "Style de description",
     "model": "Endpoint de serving",
-    "modelPlaceholder": "Endpoint par défaut",
     "regenerateExisting": "Régénérer les descriptions existantes",
     "regenerateExistingHint": "Par défaut, seuls les objets sans description reçoivent des suggestions.",
     "autoSubmit": "Soumettre pour revue à la fin",
     "autoSubmitHint": "Soumet les descriptions générées à une revue d'actifs dès la fin de l'exécution.",
     "selectionRequired": "Sélectionnez au moins un objet.",
     "startFailed": "Échec du lancement de l'exécution de génération",
-    "start": "Lancer l'exécution"
+    "start": "Lancer l'exécution",
+    "defaultEndpoint": "{{endpoint}} (par défaut)",
+    "tableLimit_one": "Jusqu'à {{count}} table par exécution.",
+    "tableLimit_other": "Jusqu'à {{count}} tables par exécution.",
+    "allowData": "Inclure des données d'exemple",
+    "allowDataHint_one": "Envoie au LLM {{count}} ligne d'exemple par table ainsi que les valeurs min/max des colonnes.",
+    "allowDataHint_other": "Envoie au LLM {{count}} lignes d'exemple par table ainsi que les valeurs min/max des colonnes."
   },
   "selectionType": {
     "catalog": "Catalogue",
@@ -130,7 +135,8 @@
     "reviews": "Revues :",
     "openReview": "Revue {{number}}",
     "inReview": "En revue",
-    "editedByReviewer": "Modifiée par le réviseur"
+    "editedByReviewer": "Modifiée par le réviseur",
+    "reviewClosedHint": "Cette revue est close ; ses suggestions ne peuvent plus être tranchées."
   },
   "apply": {
     "button": "Appliquer {{count}} approuvées",
@@ -141,5 +147,21 @@
     "forceButton_other": "Forcer {{count}} conflits",
     "done_one": "{{count}} description appliquée dans Unity Catalog",
     "done_other": "{{count}} descriptions appliquées dans Unity Catalog"
+  },
+  "settings": {
+    "button": "Paramètres",
+    "title": "Paramètres de la génération de métadonnées",
+    "description": "Limites, et ce que les exécutions de génération peuvent envoyer au LLM.",
+    "loadFailed": "Impossible de charger les paramètres",
+    "saved": "Paramètres enregistrés",
+    "maxTables": "Tables par exécution",
+    "maxActiveRuns": "Exécutions actives par utilisateur",
+    "sendColumnMetadata": "Envoyer les statistiques de colonnes",
+    "sendColumnMetadataHint": "Nombre de valeurs nulles et distinctes, longueurs des valeurs, tags et contraintes. Aucune valeur de données n'est envoyée.",
+    "allowSampling": "Autoriser les données d'exemple",
+    "allowSamplingHint": "Permet aux utilisateurs d'envoyer au LLM des lignes d'exemple et les valeurs min/max des colonnes pour une exécution.",
+    "sampleSize": "Lignes d'exemple par table",
+    "allowedEndpoints": "Endpoints de serving supplémentaires",
+    "allowedEndpointsHint": "Un par ligne. L'endpoint par défaut de l'app, {{endpoint}}, est toujours autorisé."
   }
 }

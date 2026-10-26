@@ -28,6 +28,10 @@ tasks:
         - "{{job.parameters.allow_data}}"
         - "--sample_size"
         - "{{job.parameters.sample_size}}"
+        - "--add_metadata"
+        - "{{job.parameters.add_metadata}}"
+        - "--max_tables"
+        - "{{job.parameters.max_tables}}"
         - "--regenerate_existing"
         - "{{job.parameters.regenerate_existing}}"
     environment_key: "metagen-env"
@@ -41,6 +45,8 @@ parameters:
   comment_style: "standard"
   allow_data: "false"
   sample_size: "0"
+  add_metadata: "true"
+  max_tables: "500"
   regenerate_existing: "false"
 
 timeout_seconds: 7200

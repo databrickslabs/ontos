@@ -148,11 +148,15 @@ def main():
     parser.add_argument("--comment_style", type=str, default="standard")
     parser.add_argument("--allow_data", type=str, default="false")
     parser.add_argument("--sample_size", type=str, default="0")
+    parser.add_argument("--add_metadata", type=str, default="true")
+    parser.add_argument("--max_tables", type=str, default="500")
     parser.add_argument("--regenerate_existing", type=str, default="false")
     args, _ = parser.parse_known_args()
 
     run_id = str(uuid.UUID(args.ontos_run_id))  # also guards the DELETE below
     allow_data = parse_bool(args.allow_data)
+    add_metadata = parse_bool(args.add_metadata)
+    max_tables = int(args.max_tables)
     regenerate_existing = parse_bool(args.regenerate_existing)
     selection = [n.strip() for n in args.table_names.split(",") if n.strip()]
     output_prefix = f"{args.output_catalog}.{args.output_schema}"
@@ -162,13 +166,15 @@ def main():
     print(f"  Selection: {selection}")
     print(f"  Output schema: {output_prefix}")
     print(f"  Model: {args.model}, style: {args.comment_style}")
-    print(f"  Allow data: {allow_data}, regenerate existing: {regenerate_existing}")
+    print(f"  Allow data: {allow_data}, column metadata: {add_metadata}, regenerate existing: {regenerate_existing}")
 
     spark = SparkSession.builder.getOrCreate()
 
     try:
         tables = expand_selection(spark, selection)
         print(f"\nResolved {len(tables)} table(s)")
+        if len(tables) > max_tables:
+            raise ValueError(f"The selection covers {len(tables)} tables, more than the limit of {max_tables}")
 
         # Current UC descriptions become each suggestion's base text
         described: Dict[str, Tuple[str, Optional[str], Dict[str, Optional[str]]]] = {}
@@ -206,6 +212,9 @@ def main():
             "allow_data": str(allow_data).lower(),
             "allow_data_in_comments": str(allow_data).lower(),
             "sample_size": args.sample_size if allow_data else "0",
+            # Column statistics, tags and constraints. Passed as a bool: dbxmetagen
+            # doesn't parse this flag, so the string "false" would count as on
+            "add_metadata": add_metadata,
             "apply_ddl": "false",
             "apply_tags": "false",
             "incremental": "false",

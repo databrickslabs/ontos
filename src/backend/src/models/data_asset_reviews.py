@@ -95,6 +95,8 @@ class ReviewedAsset(BaseModel):
     status: ReviewedAssetStatus = Field(default=ReviewedAssetStatus.PENDING, description="Current review status of this specific asset")
     comments: Optional[str] = Field(None, description="Reviewer comments specific to this asset")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the last update for this asset review")
+    # Read-only label for assets whose FQN isn't readable (e.g. metagen://run/suggestion)
+    display_name: Optional[str] = Field(None, description="Human-readable name of the asset, when it differs from the FQN")
 
     model_config = {
         "from_attributes": True

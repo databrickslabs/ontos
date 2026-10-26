@@ -228,9 +228,10 @@ export default function DataAssetReviewDetails() {
             ),
             cell: ({ row }) => {
                 const entityLink = appEntityAssetLink(row.original);
+                const label = row.original.display_name || row.original.asset_fqn;
                 return entityLink
-                    ? <Link to={entityLink} className="font-mono text-xs underline">{row.original.asset_fqn}</Link>
-                    : <span className="font-mono text-xs">{row.original.asset_fqn}</span>;
+                    ? <Link to={entityLink} className="font-mono text-xs underline">{label}</Link>
+                    : <span className="font-mono text-xs" title={row.original.asset_fqn}>{label}</span>;
             },
         },
         {
@@ -432,7 +433,7 @@ export default function DataAssetReviewDetails() {
                 <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                     <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-background">
                         <CardHeader className="flex flex-row justify-between items-center">
-                            <CardTitle>{t('data-asset-reviews:details.reviewing', { fqn: selectedAsset.asset_fqn })}</CardTitle>
+                            <CardTitle>{t('data-asset-reviews:details.reviewing', { fqn: selectedAsset.display_name || selectedAsset.asset_fqn })}</CardTitle>
                             <Button variant="ghost" size="icon" onClick={() => setIsEditorOpen(false)}><X className="h-4 w-4" /></Button>
                         </CardHeader>
                         <CardContent className="flex-1 overflow-auto space-y-4">
@@ -464,6 +465,11 @@ export default function DataAssetReviewDetails() {
                                 hasNext={hasNextAsset}
                                 currentIndex={selectedAssetIndex}
                                 totalCount={pendingAssets.length}
+                                reviewClosed={[
+                                    ReviewRequestStatus.APPROVED,
+                                    ReviewRequestStatus.DENIED,
+                                    ReviewRequestStatus.CANCELLED,
+                                ].includes(request.status)}
                              />
                              {/* Footer with save button is now part of AssetReviewEditor logic,
                                 but usually triggered from parent dialog for consistency.

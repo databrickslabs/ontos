@@ -25,14 +25,19 @@
     "removeSelection": "{{fqn}} entfernen",
     "commentStyle": "Beschreibungsstil",
     "model": "Serving-Endpunkt",
-    "modelPlaceholder": "Standard-Endpunkt",
     "regenerateExisting": "Vorhandene Beschreibungen neu generieren",
     "regenerateExistingHint": "Standardmäßig erhalten nur Objekte ohne Beschreibung Vorschläge.",
     "autoSubmit": "Nach Abschluss zur Prüfung einreichen",
     "autoSubmitHint": "Reicht die generierten Beschreibungen nach Abschluss des Laufs zur Asset-Prüfung ein.",
     "selectionRequired": "Wählen Sie mindestens ein Objekt aus.",
     "startFailed": "Der Generierungslauf konnte nicht gestartet werden",
-    "start": "Lauf starten"
+    "start": "Lauf starten",
+    "defaultEndpoint": "{{endpoint}} (Standard)",
+    "tableLimit_one": "Bis zu {{count}} Tabelle pro Lauf.",
+    "tableLimit_other": "Bis zu {{count}} Tabellen pro Lauf.",
+    "allowData": "Beispieldaten einbeziehen",
+    "allowDataHint_one": "Sendet {{count}} Beispielzeile pro Tabelle sowie Min-/Max-Werte der Spalten an das LLM.",
+    "allowDataHint_other": "Sendet {{count}} Beispielzeilen pro Tabelle sowie Min-/Max-Werte der Spalten an das LLM."
   },
   "selectionType": {
     "catalog": "Katalog",
@@ -130,7 +135,8 @@
     "reviews": "Prüfungen:",
     "openReview": "Prüfung {{number}}",
     "inReview": "In Prüfung",
-    "editedByReviewer": "Vom Prüfer bearbeitet"
+    "editedByReviewer": "Vom Prüfer bearbeitet",
+    "reviewClosedHint": "Dieses Review ist abgeschlossen; über seine Vorschläge kann nicht mehr entschieden werden."
   },
   "apply": {
     "button": "{{count}} genehmigte anwenden",
@@ -141,5 +147,21 @@
     "forceButton_other": "{{count}} Konflikte erzwingen",
     "done_one": "{{count}} Beschreibung in Unity Catalog übernommen",
     "done_other": "{{count}} Beschreibungen in Unity Catalog übernommen"
+  },
+  "settings": {
+    "button": "Einstellungen",
+    "title": "Einstellungen der Metadatengenerierung",
+    "description": "Grenzen und was Generierungsläufe an das LLM senden dürfen.",
+    "loadFailed": "Einstellungen konnten nicht geladen werden",
+    "saved": "Einstellungen gespeichert",
+    "maxTables": "Tabellen pro Lauf",
+    "maxActiveRuns": "Aktive Läufe pro Benutzer",
+    "sendColumnMetadata": "Spaltenstatistiken senden",
+    "sendColumnMetadataHint": "Anzahl der Nullwerte und eindeutigen Werte, Wertlängen, Tags und Constraints. Es werden keine Datenwerte gesendet.",
+    "allowSampling": "Beispieldaten erlauben",
+    "allowSamplingHint": "Erlaubt Benutzern, für einen Lauf Beispielzeilen und Min-/Max-Werte der Spalten an das LLM zu senden.",
+    "sampleSize": "Beispielzeilen pro Tabelle",
+    "allowedEndpoints": "Weitere Serving-Endpunkte",
+    "allowedEndpointsHint": "Einer pro Zeile. Der Standard-Endpunkt der App, {{endpoint}}, ist immer erlaubt."
   }
 }

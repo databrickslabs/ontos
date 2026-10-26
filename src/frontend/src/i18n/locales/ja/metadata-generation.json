@@ -25,14 +25,19 @@
     "removeSelection": "{{fqn}} を削除",
     "commentStyle": "説明のスタイル",
     "model": "サービングエンドポイント",
-    "modelPlaceholder": "デフォルトのエンドポイント",
     "regenerateExisting": "既存の説明を再生成する",
     "regenerateExistingHint": "デフォルトでは、説明のないオブジェクトにのみ提案が作成されます。",
     "autoSubmit": "完了したらレビューに提出",
     "autoSubmitHint": "実行が終わり次第、生成された説明をアセットレビューに提出します。",
     "selectionRequired": "少なくとも 1 つのオブジェクトを選択してください。",
     "startFailed": "生成実行を開始できませんでした",
-    "start": "実行を開始"
+    "start": "実行を開始",
+    "defaultEndpoint": "{{endpoint}}（デフォルト）",
+    "tableLimit_one": "1回の実行あたり最大 {{count}} テーブル。",
+    "tableLimit_other": "1回の実行あたり最大 {{count}} テーブル。",
+    "allowData": "サンプルデータを含める",
+    "allowDataHint_one": "テーブルごとに {{count}} 行のサンプルと列の最小値/最大値を LLM に送信します。",
+    "allowDataHint_other": "テーブルごとに {{count}} 行のサンプルと列の最小値/最大値を LLM に送信します。"
   },
   "selectionType": {
     "catalog": "カタログ",
@@ -130,7 +135,8 @@
     "reviews": "レビュー:",
     "openReview": "レビュー {{number}}",
     "inReview": "レビュー中",
-    "editedByReviewer": "レビュー担当者が編集"
+    "editedByReviewer": "レビュー担当者が編集",
+    "reviewClosedHint": "このレビューは終了しています。提案についてこれ以上判断できません。"
   },
   "apply": {
     "button": "承認済み {{count}} 件を適用",
@@ -141,5 +147,21 @@
     "forceButton_other": "競合 {{count}} 件を強制適用",
     "done_one": "{{count}} 件の説明を Unity Catalog に適用しました",
     "done_other": "{{count}} 件の説明を Unity Catalog に適用しました"
+  },
+  "settings": {
+    "button": "設定",
+    "title": "メタデータ生成の設定",
+    "description": "上限と、生成実行が LLM に送信できる内容。",
+    "loadFailed": "設定を読み込めませんでした",
+    "saved": "設定を保存しました",
+    "maxTables": "実行あたりのテーブル数",
+    "maxActiveRuns": "ユーザーあたりの実行中の数",
+    "sendColumnMetadata": "列の統計情報を送信",
+    "sendColumnMetadataHint": "NULL 数と個別値の数、値の長さ、タグ、制約。データ値は送信されません。",
+    "allowSampling": "サンプルデータを許可",
+    "allowSamplingHint": "実行時にサンプル行と列の最小値/最大値を LLM に送信することをユーザーに許可します。",
+    "sampleSize": "テーブルあたりのサンプル行数",
+    "allowedEndpoints": "追加のサービングエンドポイント",
+    "allowedEndpointsHint": "1行に1つ。アプリのデフォルトエンドポイント {{endpoint}} は常に許可されます。"
   }
 }

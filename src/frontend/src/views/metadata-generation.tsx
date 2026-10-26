@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Loader2, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { AlertCircle, Loader2, Plus, RefreshCw, Settings, Sparkles } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { RelativeDate } from '@/components/common/relative-date';
 import NewRunDialog from '@/components/metadata-generation/new-run-dialog';
 import RunStatusBadge from '@/components/metadata-generation/run-status-badge';
+import SettingsDialog from '@/components/metadata-generation/settings-dialog';
 import { useApi } from '@/hooks/use-api';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { usePermissions } from '@/stores/permissions-store';
@@ -24,6 +25,7 @@ export default function MetadataGenerationView() {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+  const isAdmin = hasPermission(FEATURE_ID, FeatureAccessLevel.ADMIN);
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
@@ -31,6 +33,7 @@ export default function MetadataGenerationView() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isNewRunOpen, setIsNewRunOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     setStaticSegments([]);
@@ -72,6 +75,11 @@ export default function MetadataGenerationView() {
           <Button variant="outline" size="sm" onClick={() => void fetchRuns()} disabled={isLoading}>
             <RefreshCw className="h-4 w-4 mr-1" /> {t('common:actions.refresh')}
           </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)}>
+              <Settings className="h-4 w-4 mr-1" /> {t('settings.button')}
+            </Button>
+          )}
           {canWrite && (
             <Button size="sm" onClick={() => setIsNewRunOpen(true)}>
               <Plus className="h-4 w-4 mr-1" /> {t('actions.newRun')}
@@ -135,6 +143,7 @@ export default function MetadataGenerationView() {
         onOpenChange={setIsNewRunOpen}
         onStarted={(runId) => navigate(`/metadata-generation/runs/${runId}`)}
       />
+      {isAdmin && <SettingsDialog isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />}
     </div>
   );
 }

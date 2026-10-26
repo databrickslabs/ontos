@@ -25,14 +25,19 @@
     "removeSelection": "Remover {{fqn}}",
     "commentStyle": "Estilo da descrição",
     "model": "Endpoint de serving",
-    "modelPlaceholder": "Endpoint padrão",
     "regenerateExisting": "Gerar novamente as descrições existentes",
     "regenerateExistingHint": "Por padrão, apenas objetos sem descrição recebem sugestões.",
     "autoSubmit": "Enviar para revisão ao concluir",
     "autoSubmitHint": "Envia as descrições geradas para revisão de ativos assim que a execução terminar.",
     "selectionRequired": "Selecione pelo menos um objeto.",
     "startFailed": "Falha ao iniciar a execução de geração",
-    "start": "Iniciar execução"
+    "start": "Iniciar execução",
+    "defaultEndpoint": "{{endpoint}} (padrão)",
+    "tableLimit_one": "Até {{count}} tabela por execução.",
+    "tableLimit_other": "Até {{count}} tabelas por execução.",
+    "allowData": "Incluir dados de amostra",
+    "allowDataHint_one": "Envia ao LLM {{count}} linha de amostra por tabela e os valores mín./máx. das colunas.",
+    "allowDataHint_other": "Envia ao LLM {{count}} linhas de amostra por tabela e os valores mín./máx. das colunas."
   },
   "selectionType": {
     "catalog": "Catálogo",
@@ -130,7 +135,8 @@
     "reviews": "Revisões:",
     "openReview": "Revisão {{number}}",
     "inReview": "Em revisão",
-    "editedByReviewer": "Editada pelo revisor"
+    "editedByReviewer": "Editada pelo revisor",
+    "reviewClosedHint": "Esta revisão está encerrada; não é mais possível decidir sobre as sugestões."
   },
   "apply": {
     "button": "Aplicar {{count}} aprovadas",
@@ -141,5 +147,21 @@
     "forceButton_other": "Forçar {{count}} conflitos",
     "done_one": "{{count}} descrição aplicada no Unity Catalog",
     "done_other": "{{count}} descrições aplicadas no Unity Catalog"
+  },
+  "settings": {
+    "button": "Configurações",
+    "title": "Configurações da geração de metadados",
+    "description": "Limites e o que as execuções de geração podem enviar ao LLM.",
+    "loadFailed": "Não foi possível carregar as configurações",
+    "saved": "Configurações salvas",
+    "maxTables": "Tabelas por execução",
+    "maxActiveRuns": "Execuções ativas por usuário",
+    "sendColumnMetadata": "Enviar estatísticas das colunas",
+    "sendColumnMetadataHint": "Contagens de nulos e de valores distintos, comprimentos dos valores, tags e restrições. Nenhum valor de dados é enviado.",
+    "allowSampling": "Permitir dados de amostra",
+    "allowSamplingHint": "Permite que os usuários enviem ao LLM linhas de amostra e valores mín./máx. das colunas em uma execução.",
+    "sampleSize": "Linhas de amostra por tabela",
+    "allowedEndpoints": "Endpoints de serving adicionais",
+    "allowedEndpointsHint": "Um por linha. O endpoint padrão do app, {{endpoint}}, é sempre permitido."
   }
 }

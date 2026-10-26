@@ -217,6 +217,7 @@ def test_main_generates_only_for_undescribed_objects_and_writes_normalized_rows(
     assert (kwargs["catalog_name"], kwargs["schema_name"]) == ("app", "ontos")
     assert kwargs["model"] == "endpoint-x"
     assert kwargs["apply_ddl"] == "false" and kwargs["allow_data"] == "false"
+    assert kwargs["add_metadata"] is True
     assert any(q.startswith("DELETE") and RUN_ID in q for q in spark.queries)
 
     rows = spark.written[-1]
@@ -232,6 +233,24 @@ def test_main_regenerate_existing_includes_described_tables(job, monkeypatch):
     assert calls[0]["table_names"] == "main.sales.orders,main.sales.customers,main.sales.revenue"
 
 
+def test_main_passes_sampling_and_metadata_switches(job, monkeypatch):
+    calls = _run_main(
+        job, monkeypatch, _main_spark(),
+        "--allow_data", "true", "--sample_size", "7", "--add_metadata", "false",
+    )
+    kwargs = calls[0]
+    assert (kwargs["allow_data"], kwargs["sample_size"]) == ("true", "7")
+    # A real bool: dbxmetagen doesn't parse add_metadata, so "false" would be truthy
+    assert kwargs["add_metadata"] is False
+
+
+def test_main_fails_when_the_selection_exceeds_the_table_limit(job, monkeypatch):
+    spark = _main_spark()
+    with pytest.raises(SystemExit):
+        _run_main(job, monkeypatch, spark, "--max_tables", "2")
+    assert not spark.written  # nothing generated or written
+
+
 def test_main_rejects_a_non_uuid_run_id(job, monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "metagen_generate.py", "--ontos_run_id", "x' OR '1'='1", "--table_names", "main.sales",
@@ -239,3 +258,16 @@ def test_main_rejects_a_non_uuid_run_id(job, monkeypatch):
     ])
     with pytest.raises(ValueError):
         job.main()
+
+
+def test_job_definition_declares_every_parameter_the_app_passes():
+    import yaml
+    from pathlib import Path
+
+    from src.controller.metadata_generation_manager import JOB_PARAMETERS
+
+    yaml_path = Path(__file__).resolve().parents[2] / "workflows" / "metagen_generate" / "metagen_generate.yaml"
+    spec = yaml.safe_load(yaml_path.read_text())
+    assert set(spec["parameters"]) == set(JOB_PARAMETERS)
+    args = spec["tasks"][0]["spark_python_task"]["parameters"]
+    assert {a[2:] for a in args if a.startswith("--")} == set(JOB_PARAMETERS)

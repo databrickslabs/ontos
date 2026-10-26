@@ -25,14 +25,19 @@
     "removeSelection": "Remove {{fqn}}",
     "commentStyle": "Description style",
     "model": "Serving endpoint",
-    "modelPlaceholder": "Default endpoint",
     "regenerateExisting": "Regenerate existing descriptions",
     "regenerateExistingHint": "By default only objects without a description get suggestions.",
     "autoSubmit": "Submit for review when done",
     "autoSubmitHint": "Puts the generated descriptions up for Asset Review as soon as the run finishes.",
     "selectionRequired": "Select at least one object.",
     "startFailed": "Failed to start the Generation Run",
-    "start": "Start run"
+    "start": "Start run",
+    "defaultEndpoint": "{{endpoint}} (default)",
+    "tableLimit_one": "Up to {{count}} table per run.",
+    "tableLimit_other": "Up to {{count}} tables per run.",
+    "allowData": "Include sample data",
+    "allowDataHint_one": "Sends {{count}} sample row per table, and column min/max values, to the LLM.",
+    "allowDataHint_other": "Sends {{count}} sample rows per table, and column min/max values, to the LLM."
   },
   "selectionType": {
     "catalog": "Catalog",
@@ -130,7 +135,8 @@
     "reviews": "Reviews:",
     "openReview": "Review {{number}}",
     "inReview": "In review",
-    "editedByReviewer": "Edited by reviewer"
+    "editedByReviewer": "Edited by reviewer",
+    "reviewClosedHint": "This review is closed; its suggestions can't be decided any more."
   },
   "apply": {
     "button": "Apply {{count}} approved",
@@ -141,5 +147,21 @@
     "forceButton_other": "Force-apply {{count}} conflicts",
     "done_one": "{{count}} description applied to Unity Catalog",
     "done_other": "{{count}} descriptions applied to Unity Catalog"
+  },
+  "settings": {
+    "button": "Settings",
+    "title": "Metadata Generation settings",
+    "description": "Limits, and what Generation Runs may send to the LLM.",
+    "loadFailed": "Failed to load the settings",
+    "saved": "Settings saved",
+    "maxTables": "Tables per run",
+    "maxActiveRuns": "Active runs per user",
+    "sendColumnMetadata": "Send column statistics",
+    "sendColumnMetadataHint": "Null and distinct counts, value lengths, tags and constraints. No data values are sent.",
+    "allowSampling": "Allow sample data",
+    "allowSamplingHint": "Lets users send sample rows and column min/max values to the LLM for a run.",
+    "sampleSize": "Sample rows per table",
+    "allowedEndpoints": "Additional serving endpoints",
+    "allowedEndpointsHint": "One per line. The app's default endpoint, {{endpoint}}, is always allowed."
   }
 }

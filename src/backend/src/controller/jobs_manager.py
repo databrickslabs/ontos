@@ -373,6 +373,15 @@ class JobsManager:
             logger.error(f"Failed to remove installation record for job_id {job_id}: {e}")
             self._db.rollback()
 
+    def get_job_parameter_names(self, job_id: int) -> Optional[set]:
+        """Names of the job parameters an installed job defines; None if it can't be read."""
+        try:
+            job = self._client.jobs.get(job_id=job_id)
+        except Exception as e:
+            logger.warning(f"Failed to read the definition of job {job_id}: {e}")
+            return None
+        return {p.name for p in ((job.settings.parameters if job.settings else None) or [])}
+
     def run_job(self, job_id: int, job_name: Optional[str] = None, job_parameters: Optional[Dict[str, str]] = None, workflow_id: Optional[str] = None) -> int:
         """Run a job and create a progress notification.
         

@@ -29,6 +29,8 @@ interface Props {
   currentIndex?: number;
   totalCount?: number;
   readOnly?: boolean;
+  /** The review was approved, denied or cancelled: nothing can be decided in it any more */
+  reviewClosed?: boolean;
 }
 
 function parseMetagenFqn(fqn: string): { runId: string; suggestionId: string } | null {
@@ -53,6 +55,7 @@ export default function MetadataSuggestionReview({
   currentIndex,
   totalCount,
   readOnly = false,
+  reviewClosed = false,
 }: Props) {
   const { t } = useTranslation(['metadata-generation', 'common']);
   const { get, post } = useApi();
@@ -121,7 +124,7 @@ export default function MetadataSuggestionReview({
   }
 
   const inReview = Boolean(suggestion.review_request_id) && DECIDABLE.has(suggestion.status);
-  const disabled = readOnly || !inReview || submitting;
+  const disabled = readOnly || reviewClosed || !inReview || submitting;
   const edited = text.trim() !== suggestion.proposed_text.trim();
 
   const decide = async (decision: SuggestionDecisionKind): Promise<boolean> => {
@@ -253,10 +256,14 @@ export default function MetadataSuggestionReview({
         />
       </div>
 
-      {!inReview && (
-        <p className="text-xs text-muted-foreground">
-          {suggestion.status === 'pending' ? t('review.sentBackHint') : t('review.closedHint')}
-        </p>
+      {reviewClosed ? (
+        <p className="text-xs text-muted-foreground">{t('review.reviewClosedHint')}</p>
+      ) : (
+        !inReview && (
+          <p className="text-xs text-muted-foreground">
+            {suggestion.status === 'pending' ? t('review.sentBackHint') : t('review.closedHint')}
+          </p>
+        )
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">

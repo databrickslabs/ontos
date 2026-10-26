@@ -37,8 +37,12 @@ Stewards start a **Generation Run** over a selection of UC catalogs, schemas or 
 - dbxmetagen `comment` mode only. Suggestions carry a `kind` discriminator so `pi` (classification → tags) and `domain` (→ Ontos domain) can be added later.
 - Tables, views and columns. Catalog/schema descriptions are out of scope.
 - Default: only objects without a UC description. Opt-in "regenerate existing".
-- Data sampling (`allow_data`) is off by default. A per-run toggle is only offered when an admin setting permits it.
-- Limits (admin-configurable): 500 tables per run, 1 active run per user, job `max_concurrent_runs: 3`.
+- Data sampling (`allow_data`) is off by default. A per-run toggle is only offered when an admin setting permits it; it sends sample rows and column min/max values.
+- Even without sampling, dbxmetagen sends aggregate column statistics (null and distinct counts, value lengths), tags and constraints to the LLM. An admin setting (on by default) can turn these off (dbxmetagen `add_metadata`).
+- Serving endpoint: the app's `LLM_ENDPOINT` plus an admin allow-list; a run can pick only those.
+- Limits (admin-configurable): 500 tables per run (checked at start against what the app SP can list, and again by the job), 1 active run per user. The job's `max_concurrent_runs: 3` is part of its definition.
+- The admin settings are stored in `app_settings` (`METADATA_GENERATION_SETTINGS`) and edited from the runs page by feature admins.
+- Token usage is not recorded: dbxmetagen only logs it through its MLflow benchmarking, which the job turns off.
 
 **Execution** — see the decision record. The background job `workflows/metagen_generate/` runs as the app SP, with dbxmetagen output in the app's deploy-time catalog and schema (those of the app volume, else `DATABRICKS_CATALOG`.`DATABRICKS_SCHEMA`). A normalized Delta staging table `metagen_results` is ingested by the app through the SQL warehouse. Status comes from the Jobs API, refreshed on demand by the run page and by the `JobsManager` poller as backstop. `ingest_results(run_id)` is idempotent. Cancel cancels the Databricks job run.
 
@@ -53,7 +57,8 @@ Stewards start a **Generation Run** over a selection of UC catalogs, schemas or 
 
 **Apply**
 - Only accepted suggestions of approved reviews are applied. Executed as the app SP on the app's SQL warehouse (the workflow authorizes it): `COMMENT ON TABLE` / `COMMENT ON COLUMN` (tables and views). The reviewer's edit, if any, is what gets written. The description is mirrored to the Ontos Assets located at the FQN (columns: `table.column`). Data contracts are not touched.
-- Not applicable: the table or column is gone, or the app SP may not change it (UC permission error on write). Any other failure leaves the suggestion accepted with its error; applying again retries it. (#1188 adds a pre-flight writability check at run start.)
+- Not applicable: the table or column is gone, or the app SP may not change it (UC permission error on write). Any other failure leaves the suggestion accepted with its error; applying again retries it.
+- Pre-flight writability check at ingest, before anyone reviews: suggestions of a table the app SP neither owns (directly or through a group) nor holds `MODIFY` / `ALL_PRIVILEGES` on, or of a view it doesn't own, are Not applicable with the reason. A table whose permissions can't be read is left pending (Apply reports it).
 - Conflict check: the UC description is re-read before writing, and a mismatch with the base text marks the suggestion **Conflict** and skips it. Conflicts can be regenerated, or force-applied by an admin.
 - Each applied suggestion goes into the change log (on the run, and on the mirrored Asset) with before/after, approver, applier and whether it was forced; each apply is in the audit log with its counts. Undo is deferred, but the before text is in the change log.
 - A summary notification (applied / conflicts / not applicable / failed) goes to the run's owner, linking the run.
@@ -102,4 +107,4 @@ Review decisions follow the `data-asset-reviews` permissions and the workflow ap
 
 ## Licensing
 
-dbxmetagen is under the Databricks License, the same license as Ontos, so using it within the Databricks Services is covered. It is not bundled: the background job installs it at a pinned commit. It is credited in `NOTICE`. Its own NOTICE states that using it implies consent to Databricks collecting usage and tracking information; the feature's user documentation must say so (#1188).
+dbxmetagen is under the Databricks License, the same license as Ontos, so using it within the Databricks Services is covered. It is not bundled: the background job installs it at a pinned commit. It is credited in `NOTICE`. Its own NOTICE states that using it implies consent to Databricks collecting usage and tracking information; the user guide (`src/docs/metadata-generation-guide.md`) quotes it.

@@ -77,6 +77,8 @@ export interface ReviewedAsset {
     status: ReviewedAssetStatus;
     comments?: string | null;
     updated_at: string; // ISO date string
+    /** Readable name when the FQN isn't (e.g. metagen://run/suggestion) */
+    display_name?: string | null;
 }
 
 // Interface for creating a new review request

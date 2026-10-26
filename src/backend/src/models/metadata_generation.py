@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class GenerationRunStatus(str, Enum):
@@ -53,6 +53,8 @@ class StartRunRequest(BaseModel):
     model: Optional[str] = None
     regenerate_existing: bool = False
     auto_submit: bool = False
+    # Reviewer of the auto-submitted review; defaults to a Data Steward
+    reviewer_email: Optional[EmailStr] = None
 
 
 class StartRunResponse(BaseModel):
@@ -100,8 +102,10 @@ class DescriptionSuggestion(BaseModel):
     edited_text: Optional[str] = None
     status: SuggestionStatus
     review_request_id: Optional[str] = None
+    reviewed_asset_id: Optional[str] = None
     decided_by: Optional[str] = None
     decided_at: Optional[datetime] = None
+    review_comment: Optional[str] = None
     applied_by: Optional[str] = None
     applied_at: Optional[datetime] = None
     error: Optional[str] = None
@@ -109,6 +113,10 @@ class DescriptionSuggestion(BaseModel):
 
 class GenerationRunDetail(GenerationRunSummary):
     counts: SuggestionCounts = Field(default_factory=SuggestionCounts)
+    # Pending suggestions that can be submitted for review
+    unsubmitted: int = 0
+    # Asset Reviews holding the run's suggestions
+    review_request_ids: List[str] = Field(default_factory=list)
 
 
 class RunListResponse(BaseModel):
@@ -118,3 +126,42 @@ class RunListResponse(BaseModel):
 class SuggestionListResponse(BaseModel):
     suggestions: List[DescriptionSuggestion]
     total: int
+
+
+class SubmitReviewRequest(BaseModel):
+    """POST /runs/{run_id}/review: put the run's pending suggestions up for review."""
+    # Defaults to a Data Steward other than the requester
+    reviewer_email: Optional[EmailStr] = None
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class SubmitReviewResponse(BaseModel):
+    run_id: str
+    review_request_id: str
+    reviewer_email: str
+    suggestion_count: int
+
+
+class SuggestionDecision(BaseModel):
+    """A reviewer's decision on one Description Suggestion.
+
+    ``accept`` approves it (with ``edited_text`` if the reviewer changed the
+    description), ``reject`` closes it, ``clarify`` sends it back to pending
+    so it can be regenerated or put up for review again.
+    """
+    id: str
+    decision: Literal["accept", "reject", "clarify"]
+    edited_text: Optional[str] = Field(None, max_length=10000)
+    comment: Optional[str] = Field(None, max_length=2000)
+
+
+class SuggestionDecisionBatch(BaseModel):
+    decisions: List[SuggestionDecision] = Field(..., min_length=1, max_length=1000)
+
+
+class SuggestionDecisionResult(BaseModel):
+    accepted: int = 0
+    rejected: int = 0
+    clarify: int = 0
+    skipped: int = 0
+    errors: List[str] = Field(default_factory=list)

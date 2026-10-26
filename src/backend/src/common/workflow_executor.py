@@ -466,6 +466,7 @@ def _resolve_role_to_users(
 
     Handles:
     - 'requester' / 'trigger_user' → original user email
+    - 'reviewer' → the ``reviewer_email`` the request names
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
     - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
@@ -513,6 +514,13 @@ def _resolve_role_to_users(
     if role_spec in ('requester', 'trigger_user'):
         requester = _requester_email(context)
         return [(requester, None)] if requester else []
+
+    if role_spec == 'reviewer':
+        # The reviewer the request names (e.g. a Generation Run's review assignee)
+        tc = getattr(context, 'trigger_context', None)
+        reviewer = ((getattr(tc, 'entity_data', None) or {}).get('reviewer_email')
+                    or (context.entity or {}).get('reviewer_email'))
+        return [(reviewer, None)] if reviewer else []
 
     if role_spec == 'entity_owner':
         return [(email, None) for email in _entity_owner_emails(db, context)]
@@ -603,6 +611,7 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
     "data_contract": "Data Contract",
     "data_domain": "Data Domain",
     "data_asset_review": "Data Asset Review",
+    "metadata_generation_run": "Generation Run",
     "access_grant": "Access Grant",
     "asset": "Asset",
 }
@@ -1805,6 +1814,17 @@ class CreateAssetReviewStepHandler(StepHandler):
             logger.exception(f"Failed to resolve reviewer from role: {e}")
             return None
 
+
+
+def resolve_reviewer_email(db: Session, reviewer_role: str, requester_email: str) -> Optional[str]:
+    """The reviewer a ``create_asset_review`` step would assign for ``reviewer_role``:
+    someone other than ``requester_email``, else None."""
+    context = StepContext(
+        entity={}, entity_type='', entity_id='', entity_name=None,
+        user_email=requester_email, trigger_context=None, execution_id='',
+        workflow_id='', workflow_name='', step_results={},
+    )
+    return CreateAssetReviewStepHandler(db, {})._resolve_reviewer(reviewer_role, context, requester_email)
 
 class WebhookStepHandler(StepHandler):
     """Handler for webhook steps - calls external HTTP endpoints.

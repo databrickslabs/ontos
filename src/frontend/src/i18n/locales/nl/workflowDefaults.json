@@ -92,6 +92,9 @@
     },
     "publicationRequestReview": {
       "end": "De publicatieworkflow is mislukt"
+    },
+    "metadataGenerationReview": {
+      "rejected": "Gegenereerde beschrijvingen zijn afgewezen"
     }
   },
   "workflowNames": {
@@ -125,6 +128,7 @@
     "certification-request-review": "Beoordeling van certificeringsverzoeken",
     "publication-request-review": "Beoordeling van publicatieverzoeken",
     "first-access-welcome": "Welkom: gebruiksvoorwaarden",
-    "on-request-access-grant-permissions-reference": "Referentie: UC SELECT toekennen aan de aanvrager (on_request_access)"
+    "on-request-access-grant-permissions-reference": "Referentie: UC SELECT toekennen aan de aanvrager (on_request_access)",
+    "metadata-generation-review": "Beoordeling metadatageneratie"
   }
 }

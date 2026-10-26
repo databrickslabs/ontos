@@ -355,7 +355,8 @@
       "data_asset_review": "Asset Beoordeling",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Gebruiker"
+      "user": "Gebruiker",
+      "metadata_generation_run": "Generatierun"
     },
     "stepTypes": {
       "validation": "Validatie",

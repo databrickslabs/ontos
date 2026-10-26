@@ -307,6 +307,7 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'job',
   'subscription',
   'user',
+  'metadata_generation_run',
 ];
 
 /**
@@ -320,6 +321,7 @@ export const ENTITY_TYPE_TO_APPROVAL_ENTITY: Partial<Record<EntityType, string>>
   data_product: 'PRODUCTS',
   domain: 'DOMAINS',
   data_asset_review: 'ASSET_REVIEWS',
+  metadata_generation_run: 'ASSET_REVIEWS',
 };
 
 /**
@@ -386,7 +388,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_certify: ['data_contract', 'data_product'],
   on_decertify: ['data_contract', 'data_product'],
   // Request triggers
-  on_request_review: ['data_contract', 'data_product', 'data_asset_review'],
+  on_request_review: ['data_contract', 'data_product', 'data_asset_review', 'metadata_generation_run'],
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
   on_request_deploy: ['data_contract'],
@@ -406,7 +408,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   // types reflect the contexts from which the action can be invoked today.
   for_subscribe: ['data_product'],
   for_request_access: ['data_product', 'access_grant'],
-  for_request_review: ['data_product', 'data_contract', 'data_asset_review'],
+  for_request_review: ['data_product', 'data_contract', 'data_asset_review', 'metadata_generation_run'],
   for_request_publish: ['data_product', 'data_contract'],
   for_request_certify: ['data_product', 'data_contract'],
   for_request_status_change: ['data_product'],

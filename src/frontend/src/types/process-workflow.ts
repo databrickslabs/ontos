@@ -68,7 +68,8 @@ export type EntityType =
   | 'data_asset_review'
   | 'job'
   | 'subscription'
-  | 'user';
+  | 'user'
+  | 'metadata_generation_run';
 
 export type ScopeType = 'all' | 'project' | 'catalog' | 'domain';
 

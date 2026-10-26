@@ -355,7 +355,8 @@
       "data_domain": "Data Domain",
       "data_asset_review": "Data Asset Review",
       "access_grant": "Access Grant",
-      "asset": "Asset"
+      "asset": "Asset",
+      "metadata_generation_run": "Generation Run"
     },
     "fields": {
       "product_id": "Product ID",

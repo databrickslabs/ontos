@@ -33,6 +33,7 @@ import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import MetadataSuggestionReview from '@/components/metadata-generation/suggestion-review';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 
 // Register languages (using base import which has the static method)
@@ -337,6 +338,35 @@ export default function AssetReviewEditor({
                         onReviewSave({
                             ...asset,
                             status: newStatus,
+                            updated_at: new Date().toISOString(),
+                        });
+                    }}
+                    onNext={onNext}
+                    hasNext={hasNext}
+                    currentIndex={currentIndex}
+                    totalCount={totalCount}
+                />
+            </div>
+        );
+    }
+
+    // Metadata Generation description suggestions: the component posts to the
+    // metadata-generation decisions endpoint, which syncs the ReviewedAsset;
+    // only the local copy is updated here.
+    if (asset.asset_type === AssetType.METADATA_SUGGESTION) {
+        const outcomeStatus = {
+            approved: ReviewedAssetStatus.APPROVED,
+            rejected: ReviewedAssetStatus.REJECTED,
+            needs_clarification: ReviewedAssetStatus.NEEDS_CLARIFICATION,
+        } as const;
+        return (
+            <div className="px-1 pb-1">
+                <MetadataSuggestionReview
+                    assetFqn={asset.asset_fqn}
+                    onReviewComplete={(status) => {
+                        onReviewSave({
+                            ...asset,
+                            status: outcomeStatus[status],
                             updated_at: new Date().toISOString(),
                         });
                     }}

@@ -45,6 +45,7 @@ def _manager(run=None):
     manager.refresh_run.side_effect = lambda db, r, **kwargs: r
     manager.cancel_run.side_effect = lambda db, r: r
     manager.counts.return_value = {}
+    manager.review_summary.return_value = (0, [])
     manager.list_suggestions.return_value = []
     manager.count_suggestions.return_value = 0
     return manager
@@ -186,3 +187,121 @@ def test_start_run_defers_ingest_of_finished_runs_to_background():
     routes.start_run(_request(manager), body, background_tasks, db=MagicMock(), audit_manager=MagicMock(), current_user=OWNER)
     manager.make_deferrer.assert_called_once_with(background_tasks.add_task)
     manager.make_deferrer.return_value.assert_called_once_with("finished-run")
+
+
+# ----------------------------------------------------------------------
+# Review (#1186)
+# ----------------------------------------------------------------------
+REVIEWER = SimpleNamespace(email="steward@x.com", username="steward", groups=[])
+
+
+def _suggestion(run_id="run-1"):
+    now = datetime.now(timezone.utc)
+    return SimpleNamespace(
+        id="s-1", run_id=run_id, kind="description", object_type="column", table_fqn="main.sales.orders",
+        column_name="id", base_text=None, proposed_text="Order id", edited_text=None, status="pending",
+        review_request_id="rev-1", reviewed_asset_id="a-1", decided_by=None, decided_at=now,
+        review_comment=None, applied_by=None, applied_at=None, error=None,
+    )
+
+
+def _review_manager(reviewer="steward@x.com"):
+    manager = _manager()
+    manager.get_suggestion.return_value = _suggestion()
+    manager.get_review_assignees.return_value = ("owner@x.com", reviewer)
+    return manager
+
+
+@pytest.mark.asyncio
+async def test_submit_for_review_passes_the_caller_as_requester_and_audits():
+    from src.models.metadata_generation import SubmitReviewRequest, SubmitReviewResponse
+
+    manager = _manager()
+    manager.create_review_for_run.return_value = SubmitReviewResponse(
+        run_id="run-1", review_request_id="rev-1", reviewer_email="steward@x.com", suggestion_count=3,
+    )
+    audit = MagicMock()
+    with _admin(False):
+        result = await routes.submit_for_review(
+            "run-1", SubmitReviewRequest(reviewer_email="steward@x.com", notes="pls"), _request(manager),
+            db=MagicMock(), audit_manager=audit, current_user=OWNER,
+        )
+    assert result.review_request_id == "rev-1"
+    kwargs = manager.create_review_for_run.call_args.kwargs
+    assert kwargs == {"requester_email": "owner@x.com", "reviewer_email": "steward@x.com", "notes": "pls"}
+    logged = audit.log_action.call_args.kwargs
+    assert logged["action"] == "SUBMIT_METADATA_GENERATION_REVIEW" and logged["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_submit_for_review_conflicts_map_to_409_and_others_runs_to_404():
+    from src.models.metadata_generation import SubmitReviewRequest
+
+    manager = _manager()
+    manager.create_review_for_run.side_effect = ValueError("No pending suggestions left to review")
+    with _admin(False), pytest.raises(HTTPException) as exc:
+        await routes.submit_for_review("run-1", SubmitReviewRequest(), _request(manager), db=MagicMock(),
+                                       audit_manager=MagicMock(), current_user=OWNER)
+    assert exc.value.status_code == 409
+    with _admin(False), pytest.raises(HTTPException) as exc:
+        await routes.submit_for_review("run-1", SubmitReviewRequest(), _request(manager), db=MagicMock(),
+                                       audit_manager=MagicMock(), current_user=OTHER)
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("user, is_admin, visible", [
+    (REVIEWER, False, True),   # the assigned reviewer
+    (OWNER, False, True),      # the run's owner
+    (OTHER, True, True),       # a feature admin
+    (OTHER, False, False),     # anyone else
+])
+async def test_a_suggestion_is_visible_to_its_reviewer_owner_and_admins(user, is_admin, visible):
+    manager = _review_manager()
+    call = routes.get_suggestion("run-1", "s-1", _request(manager), db=MagicMock(), current_user=user)
+    with _admin(is_admin):
+        if visible:
+            assert (await call).id == "s-1"
+        else:
+            with pytest.raises(HTTPException) as exc:
+                await call
+            assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_suggestion_of_another_run_is_404():
+    manager = _review_manager()
+    manager.get_suggestion.return_value = _suggestion(run_id="run-2")
+    with _admin(True), pytest.raises(HTTPException) as exc:
+        await routes.get_suggestion("run-1", "s-1", _request(manager), db=MagicMock(), current_user=REVIEWER)
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_decisions_are_made_as_the_caller_and_audited():
+    from src.models.metadata_generation import SuggestionDecisionBatch, SuggestionDecisionResult
+
+    manager = _review_manager()
+    manager.decide.return_value = SuggestionDecisionResult(accepted=1)
+    audit = MagicMock()
+    batch = SuggestionDecisionBatch(decisions=[{"id": "s-1", "decision": "accept"}])
+    with _admin(False):
+        result = await routes.decide_suggestions("run-1", batch, _request(manager), db=MagicMock(),
+                                                 audit_manager=audit, current_user=REVIEWER)
+    assert result.accepted == 1
+    assert manager.decide.call_args.kwargs == {"decided_by": "steward@x.com", "is_admin": False}
+    logged = audit.log_action.call_args.kwargs
+    assert logged["action"] == "DECIDE_METADATA_SUGGESTIONS" and logged["details"]["accepted"] == 1
+
+
+@pytest.mark.asyncio
+async def test_decisions_on_an_unknown_run_are_404():
+    from src.models.metadata_generation import SuggestionDecisionBatch
+
+    manager = _review_manager()
+    manager.get_run.return_value = None
+    batch = SuggestionDecisionBatch(decisions=[{"id": "s-1", "decision": "reject"}])
+    with _admin(False), pytest.raises(HTTPException) as exc:
+        await routes.decide_suggestions("run-1", batch, _request(manager), db=MagicMock(),
+                                        audit_manager=MagicMock(), current_user=REVIEWER)
+    assert exc.value.status_code == 404

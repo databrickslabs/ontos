@@ -398,6 +398,8 @@ def initialize_managers(app: FastAPI):
                 settings=settings,
                 jobs_manager=getattr(app.state, 'jobs_manager', None),
                 workspace_client_factory=lambda: ws_client,
+                reviews_manager=getattr(app.state, 'data_asset_review_manager', None),
+                notifications_manager=getattr(app.state, 'notifications_manager', None),
             )
             logger.info("MetadataGenerationManager initialized.")
         except Exception as e:

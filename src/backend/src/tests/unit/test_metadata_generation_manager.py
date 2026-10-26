@@ -1057,3 +1057,20 @@ def test_heartbeat_refreshes_claim_and_queued_marker(db_session, installation, m
     db_session.refresh(run)
     assert not manager._is_stale(run.updated_at)
     assert manager._queued_ingests[run.id] == 1000.0
+
+
+def test_start_run_keeps_the_auto_submit_reviewer(db_session, installation):
+    run = _manager().start_run(
+        db_session, user_id="a@x.com", request=_request(auto_submit=True, reviewer_email="steward@x.com"),
+    )
+    assert run.options["auto_submit"] is True
+    assert run.options["reviewer_email"] == "steward@x.com"
+
+
+def test_start_run_rejects_auto_submitting_to_yourself(db_session, installation):
+    jobs = _jobs()
+    with pytest.raises(ValueError, match="your own"):
+        _manager(jobs=jobs).start_run(
+            db_session, user_id="a@x.com", request=_request(auto_submit=True, reviewer_email="A@x.com"),
+        )
+    jobs.run_job.assert_not_called()

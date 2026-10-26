@@ -117,6 +117,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
             return AssetType.CONCEPT_MAPPING_SUGGESTION
+        if fqn.startswith('metagen://'):
+            return AssetType.METADATA_SUGGESTION
         app_entity_type = app_entity_asset_type(fqn)
         if app_entity_type:
             return app_entity_type
@@ -179,12 +181,21 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected SDK error determining asset type for {fqn}: {e}. Defaulting to TABLE.", exc_info=True)
             return AssetType.TABLE
 
-    def create_review_request(self, request_data: DataAssetReviewRequestCreate, db: Optional[Session] = None) -> DataAssetReviewRequestApi:
+    def create_review_request(
+        self,
+        request_data: DataAssetReviewRequestCreate,
+        db: Optional[Session] = None,
+        *,
+        trigger_workflow: bool = True,
+    ) -> DataAssetReviewRequestApi:
         """Creates a new data asset review request.
         
         Args:
             request_data: The review request data
             db: Optional database session. If not provided, uses the manager's internal session.
+            trigger_workflow: Fire the data asset review workflow (or notify the
+                reviewer directly). Callers running their own review workflow
+                (Metadata Generation) pass False.
         """
         # Use provided db session or fall back to instance session
         db_session = db if db is not None else self._db
@@ -242,48 +253,49 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             display_title = created_api_obj.title
 
             # --- Trigger workflow for review request --- #
-            try:
-                from src.common.workflow_triggers import get_trigger_registry
-                from src.models.process_workflows import EntityType
+            if trigger_workflow:
+                try:
+                    from src.common.workflow_triggers import get_trigger_registry
+                    from src.models.process_workflows import EntityType
                 
-                trigger_registry = get_trigger_registry(db_session)
-                entity_data = {
-                    "id": created_api_obj.id,
-                    "requester_email": created_api_obj.requester_email,
-                    "reviewer_email": created_api_obj.reviewer_email,
-                    "status": created_api_obj.status.value,
-                    "notes": created_api_obj.notes,
-                    "asset_count": len(created_api_obj.assets),
-                    "asset_fqns": [a.asset_fqn for a in created_api_obj.assets],
-                }
+                    trigger_registry = get_trigger_registry(db_session)
+                    entity_data = {
+                        "id": created_api_obj.id,
+                        "requester_email": created_api_obj.requester_email,
+                        "reviewer_email": created_api_obj.reviewer_email,
+                        "status": created_api_obj.status.value,
+                        "notes": created_api_obj.notes,
+                        "asset_count": len(created_api_obj.assets),
+                        "asset_fqns": [a.asset_fqn for a in created_api_obj.assets],
+                    }
                 
-                executions = trigger_registry.on_request_review(
-                    entity_type=EntityType.DATA_ASSET_REVIEW,
-                    entity_id=created_api_obj.id,
-                    entity_name=display_title,
-                    entity_data=entity_data,
-                    user_email=created_api_obj.requester_email,
-                    blocking=False,  # Don't block on notification workflows
-                )
-                
-                if executions:
-                    logger.info(f"Triggered {len(executions)} workflow(s) for review request {created_api_obj.id}")
-                else:
-                    # Fallback to direct notification if no workflow configured
-                    notification = Notification(
-                        id=str(uuid.uuid4()),
-                        recipient=created_api_obj.reviewer_email,
-                        title=f"New review request: {display_title}",
-                        description=f"Assigned to you by {created_api_obj.requester_email}.",
-                        type=NotificationType.INFO,
-                        link=f"/data-asset-reviews/{created_api_obj.id}",
-                        created_at=datetime.utcnow(),
+                    executions = trigger_registry.on_request_review(
+                        entity_type=EntityType.DATA_ASSET_REVIEW,
+                        entity_id=created_api_obj.id,
+                        entity_name=display_title,
+                        entity_data=entity_data,
+                        user_email=created_api_obj.requester_email,
+                        blocking=False,  # Don't block on notification workflows
                     )
-                    self._notifications_manager.create_notification(notification)
-                    logger.info(f"No workflow configured; sent direct notification to {created_api_obj.reviewer_email}")
-            except Exception as workflow_err:
-                # Log error but don't fail the request creation
-                logger.error(f"Failed to trigger workflow for review request {created_api_obj.id}: {workflow_err}", exc_info=True)
+                
+                    if executions:
+                        logger.info(f"Triggered {len(executions)} workflow(s) for review request {created_api_obj.id}")
+                    else:
+                        # Fallback to direct notification if no workflow configured
+                        notification = Notification(
+                            id=str(uuid.uuid4()),
+                            recipient=created_api_obj.reviewer_email,
+                            title=f"New review request: {display_title}",
+                            description=f"Assigned to you by {created_api_obj.requester_email}.",
+                            type=NotificationType.INFO,
+                            link=f"/data-asset-reviews/{created_api_obj.id}",
+                            created_at=datetime.utcnow(),
+                        )
+                        self._notifications_manager.create_notification(notification)
+                        logger.info(f"No workflow configured; sent direct notification to {created_api_obj.reviewer_email}")
+                except Exception as workflow_err:
+                    # Log error but don't fail the request creation
+                    logger.error(f"Failed to trigger workflow for review request {created_api_obj.id}: {workflow_err}", exc_info=True)
 
             self._update_search_index(created_api_obj)
             return created_api_obj

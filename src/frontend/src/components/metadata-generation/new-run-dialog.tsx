@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 import {
   Dialog,
   DialogClose,
@@ -55,6 +56,8 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
   const [commentStyle, setCommentStyle] = useState<CommentStyle>('standard');
   const [model, setModel] = useState('');
   const [regenerateExisting, setRegenerateExisting] = useState(false);
+  const [autoSubmit, setAutoSubmit] = useState(false);
+  const [reviewer, setReviewer] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -176,7 +179,8 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
       comment_style: commentStyle,
       model: model.trim() || null,
       regenerate_existing: regenerateExisting,
-      auto_submit: false,
+      auto_submit: autoSubmit,
+      reviewer_email: autoSubmit ? reviewer : null,
     };
     const res = await post<StartRunResponse>('/api/metadata-generation/runs', body);
     setIsSubmitting(false);
@@ -267,6 +271,30 @@ export default function NewRunDialog({ isOpen, onOpenChange, onStarted }: NewRun
             <div className="grid gap-0.5">
               <Label htmlFor="metagen-regenerate">{t('newRun.regenerateExisting')}</Label>
               <p className="text-xs text-muted-foreground">{t('newRun.regenerateExistingHint')}</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="metagen-auto-submit"
+              checked={autoSubmit}
+              onCheckedChange={(v) => setAutoSubmit(v === true)}
+            />
+            <div className="grid gap-0.5 flex-1">
+              <Label htmlFor="metagen-auto-submit">{t('newRun.autoSubmit')}</Label>
+              <p className="text-xs text-muted-foreground">{t('newRun.autoSubmitHint')}</p>
+              {autoSubmit && (
+                <div className="pt-1">
+                  <PrincipalPicker
+                    id="metagen-auto-submit-reviewer"
+                    accepts={['user']}
+                    value={reviewer}
+                    onChange={setReviewer}
+                    placeholder={t('review.reviewerPlaceholder')}
+                    aria-label={t('review.reviewer')}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

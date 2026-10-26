@@ -170,6 +170,11 @@
         "notify-denied": "Uw publicatieaanvraag voor '{{entity_name}}' is geweigerd.",
         "notify-invalid": "De publicatieaanvraag voor '{{entity_name}}' is afgewezen: alleen goedgekeurde datacontracten en actieve dataproducten kunnen worden gepubliceerd.",
         "notify-error": "Er is een fout opgetreden bij het publiceren van '{{entity_name}}'."
+      },
+      "metadata-generation-review": {
+        "notify-requester": "Uw gegenereerde beschrijvingen zijn ter beoordeling ingediend.",
+        "notify-approved": "De beoordelaar heeft uw gegenereerde beschrijvingen goedgekeurd.",
+        "notify-rejected": "De beoordelaar heeft uw gegenereerde beschrijvingen afgewezen. Zie de beoordeling voor opmerkingen."
       }
     },
     "approval": {
@@ -194,6 +199,7 @@
         "data_asset_review": "Data-assetbeoordeling",
         "access_grant": "Toegangsverlening",
         "asset": "Asset",
+        "metadata_generation_run": "Generatierun",
         "entity": "Entiteit"
       }
     },
@@ -204,6 +210,12 @@
       "publication-request-review": {
         "approval-gate": "Beoordeel de publicatieaanvraag voor {{entity_type}} '{{entity_name}}'."
       }
+    }
+  },
+  "metadataGeneration": {
+    "reviewAssigned": {
+      "title": "Gegenereerde beschrijvingen om te beoordelen",
+      "description": "{{requester}} vraagt u {{count}} gegenereerde beschrijvingen voor {{selection}} te beoordelen."
     }
   }
 }

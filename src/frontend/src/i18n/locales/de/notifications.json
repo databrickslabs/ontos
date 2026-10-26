@@ -170,6 +170,11 @@
         "notify-denied": "Ihre Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt.",
         "notify-invalid": "Die Veröffentlichungsanfrage für '{{entity_name}}' wurde abgelehnt: Nur genehmigte Datenverträge und aktive Datenprodukte können veröffentlicht werden.",
         "notify-error": "Beim Veröffentlichen von '{{entity_name}}' ist ein Fehler aufgetreten."
+      },
+      "metadata-generation-review": {
+        "notify-requester": "Ihre generierten Beschreibungen wurden zur Prüfung eingereicht.",
+        "notify-approved": "Der Prüfer hat Ihre generierten Beschreibungen genehmigt.",
+        "notify-rejected": "Der Prüfer hat Ihre generierten Beschreibungen abgelehnt. Die Kommentare finden Sie in der Prüfung."
       }
     },
     "approval": {
@@ -194,6 +199,7 @@
         "data_asset_review": "Daten-Asset-Prüfung",
         "access_grant": "Zugriffsberechtigung",
         "asset": "Asset",
+        "metadata_generation_run": "Generierungslauf",
         "entity": "Entität"
       }
     },
@@ -204,6 +210,12 @@
       "publication-request-review": {
         "approval-gate": "Bitte prüfen Sie die Veröffentlichungsanfrage für {{entity_type}} '{{entity_name}}'."
       }
+    }
+  },
+  "metadataGeneration": {
+    "reviewAssigned": {
+      "title": "Generierte Beschreibungen zu prüfen",
+      "description": "{{requester}} bittet Sie, {{count}} generierte Beschreibungen für {{selection}} zu prüfen."
     }
   }
 }

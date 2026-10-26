@@ -73,8 +73,23 @@ describe('NewRunDialog', () => {
       model: null,
       regenerate_existing: false,
       auto_submit: false,
+      reviewer_email: null,
     });
     expect(onStarted).toHaveBeenCalledWith('run-1');
+  });
+
+  it('asks to auto-submit with the picked reviewer', async () => {
+    api.post.mockResolvedValue({ data: { run_id: 'run-1', status: 'running' } });
+    renderDialog();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'main' }));
+    expect(screen.queryByLabelText('Reviewer')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Submit for review when done'));
+    await userEvent.type(screen.getByLabelText('Reviewer'), 'steward@x.com{enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Start run' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0][1]).toMatchObject({ auto_submit: true, reviewer_email: 'steward@x.com' });
   });
 
   it('toggles a selection off again', async () => {

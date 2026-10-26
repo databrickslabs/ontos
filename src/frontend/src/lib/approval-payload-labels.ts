@@ -10,6 +10,7 @@ const ENTITY_TYPE_FALLBACKS: Record<string, string> = {
   data_contract: 'Data Contract',
   data_domain: 'Data Domain',
   data_asset_review: 'Data Asset Review',
+  metadata_generation_run: 'Generation Run',
   access_grant: 'Access Grant',
   asset: 'Asset',
 };

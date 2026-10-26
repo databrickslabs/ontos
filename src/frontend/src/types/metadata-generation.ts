@@ -24,6 +24,7 @@ export interface StartRunRequest {
   model?: string | null;
   regenerate_existing: boolean;
   auto_submit: boolean;
+  reviewer_email?: string | null;
 }
 
 export interface StartRunResponse {
@@ -43,6 +44,7 @@ export interface GenerationRunSummary {
     model?: string;
     regenerate_existing?: boolean;
     auto_submit?: boolean;
+    reviewer_email?: string | null;
   };
   job_run_id?: string | null;
   suggestion_count: number;
@@ -56,6 +58,10 @@ export type SuggestionCounts = Record<SuggestionStatus, number>;
 
 export interface GenerationRunDetail extends GenerationRunSummary {
   counts: SuggestionCounts;
+  /** Pending suggestions that can be submitted for review */
+  unsubmitted: number;
+  /** Asset Reviews holding the run's suggestions */
+  review_request_ids: string[];
 }
 
 export interface DescriptionSuggestion {
@@ -70,8 +76,10 @@ export interface DescriptionSuggestion {
   edited_text?: string | null;
   status: SuggestionStatus;
   review_request_id?: string | null;
+  reviewed_asset_id?: string | null;
   decided_by?: string | null;
   decided_at?: string | null;
+  review_comment?: string | null;
   applied_by?: string | null;
   applied_at?: string | null;
   error?: string | null;
@@ -80,6 +88,35 @@ export interface DescriptionSuggestion {
 export interface SuggestionListResponse {
   suggestions: DescriptionSuggestion[];
   total: number;
+}
+
+export interface SubmitReviewRequest {
+  reviewer_email?: string | null;
+  notes?: string | null;
+}
+
+export interface SubmitReviewResponse {
+  run_id: string;
+  review_request_id: string;
+  reviewer_email: string;
+  suggestion_count: number;
+}
+
+export type SuggestionDecisionKind = 'accept' | 'reject' | 'clarify';
+
+export interface SuggestionDecision {
+  id: string;
+  decision: SuggestionDecisionKind;
+  edited_text?: string | null;
+  comment?: string | null;
+}
+
+export interface SuggestionDecisionResult {
+  accepted: number;
+  rejected: number;
+  clarify: number;
+  skipped: number;
+  errors: string[];
 }
 
 export const TERMINAL_RUN_STATUSES: GenerationRunStatus[] = ['completed', 'failed', 'cancelled'];

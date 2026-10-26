@@ -3,6 +3,10 @@
 POST /runs returns 202 with a run id; the dbxmetagen background job does the
 work. GET /runs/{run_id} refreshes the run from the Jobs API while it is in
 flight, so the UI's polling drives completion and ingest.
+
+POST /runs/{run_id}/review puts the pending suggestions up for Asset Review;
+the review's reviewer reads them (GET .../suggestions/{id}) and decides
+(POST .../decisions) under the data-asset-reviews feature permissions.
 """
 
 from typing import Optional
@@ -24,7 +28,11 @@ from src.models.metadata_generation import (
     SelectionItem,
     StartRunRequest,
     StartRunResponse,
+    SubmitReviewRequest,
+    SubmitReviewResponse,
     SuggestionCounts,
+    SuggestionDecisionBatch,
+    SuggestionDecisionResult,
     SuggestionListResponse,
     SuggestionStatus,
 )
@@ -33,6 +41,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/metadata-generation", tags=["Metadata Generation"])
 FEATURE_ID = "metadata-generation"
+REVIEWS_FEATURE_ID = "data-asset-reviews"
 
 
 def _get_manager(request: Request) -> MetadataGenerationManager:
@@ -174,7 +183,13 @@ async def get_run(
         logger.warning("Failed to refresh metadata generation run %s", run_id, exc_info=True)
         db.rollback()
     summary = _to_summary(run)
-    return GenerationRunDetail(**summary.model_dump(), counts=SuggestionCounts(**manager.counts(db, run.id)))
+    unsubmitted, review_request_ids = manager.review_summary(db, run.id)
+    return GenerationRunDetail(
+        **summary.model_dump(),
+        counts=SuggestionCounts(**manager.counts(db, run.id)),
+        unsubmitted=unsubmitted,
+        review_request_ids=review_request_ids,
+    )
 
 
 @router.get(
@@ -269,6 +284,129 @@ async def delete_run(
             action="DELETE_METADATA_GENERATION_RUN",
             success=success,
             details={"run_id": run_id},
+        )
+
+
+@router.post(
+    "/runs/{run_id}/review",
+    response_model=SubmitReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a run's pending Description Suggestions for Asset Review",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+async def submit_for_review(
+    run_id: str,
+    body: SubmitReviewRequest,
+    request: Request,
+    db: DBSessionDep = None,
+    audit_manager: AuditManagerDep = None,
+    current_user: AuditCurrentUserDep = None,
+):
+    manager = _get_manager(request)
+    run = await _get_visible_run(request, db, current_user, manager, run_id)
+    success = False
+    details = {"run_id": run_id}
+    try:
+        # Resolving a default reviewer reads workspace groups
+        result = await run_in_threadpool(
+            manager.create_review_for_run,
+            db,
+            run,
+            requester_email=current_user.email or _user_id(current_user),
+            reviewer_email=body.reviewer_email,
+            notes=body.notes,
+        )
+        success = True
+        details.update(review_request_id=result.review_request_id, suggestion_count=result.suggestion_count)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to submit metadata generation run %s for review", run_id)
+        details["exception"] = {"type": type(e).__name__}
+        raise HTTPException(status_code=500, detail="Failed to submit the Generation Run for review")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID,
+            action="SUBMIT_METADATA_GENERATION_REVIEW",
+            success=success,
+            details=details,
+        )
+
+
+async def _can_review(request: Request, db, current_user, manager: MetadataGenerationManager, run, suggestion) -> bool:
+    """The suggestion's reviewer, the run's owner and feature admins may see it."""
+    if run.user_id == _user_id(current_user):
+        return True
+    _, reviewer = manager.get_review_assignees(db, suggestion.review_request_id)
+    if reviewer and current_user.email and reviewer.lower() == current_user.email.lower():
+        return True
+    return await is_user_feature_admin(current_user.email, current_user.groups, FEATURE_ID, request)
+
+
+@router.get(
+    "/runs/{run_id}/suggestions/{suggestion_id}",
+    response_model=DescriptionSuggestion,
+    summary="Get one Description Suggestion (for its reviewer)",
+    dependencies=[Depends(PermissionChecker(REVIEWS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+async def get_suggestion(
+    run_id: str,
+    suggestion_id: str,
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+):
+    manager = _get_manager(request)
+    run = manager.get_run(db, run_id)
+    suggestion = manager.get_suggestion(db, suggestion_id)
+    if run is None or suggestion is None or suggestion.run_id != run.id:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    if not await _can_review(request, db, current_user, manager, run, suggestion):
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    return DescriptionSuggestion.model_validate(suggestion)
+
+
+@router.post(
+    "/runs/{run_id}/decisions",
+    response_model=SuggestionDecisionResult,
+    summary="Record the reviewer's decisions on Description Suggestions",
+    dependencies=[Depends(PermissionChecker(REVIEWS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+async def decide_suggestions(
+    run_id: str,
+    batch: SuggestionDecisionBatch,
+    request: Request,
+    db: DBSessionDep = None,
+    audit_manager: AuditManagerDep = None,
+    current_user: AuditCurrentUserDep = None,
+):
+    manager = _get_manager(request)
+    run = manager.get_run(db, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    is_admin = await is_user_feature_admin(current_user.email, current_user.groups, FEATURE_ID, request)
+    success = False
+    details = {"run_id": run_id, "decisions": len(batch.decisions)}
+    try:
+        result = await run_in_threadpool(
+            manager.decide, db, run, batch, decided_by=current_user.email or _user_id(current_user), is_admin=is_admin,
+        )
+        success = True
+        details.update(accepted=result.accepted, rejected=result.rejected, clarify=result.clarify, skipped=result.skipped)
+        return result
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID,
+            action="DECIDE_METADATA_SUGGESTIONS",
+            success=success,
+            details=details,
         )
 
 

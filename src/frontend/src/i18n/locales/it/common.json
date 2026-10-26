@@ -355,7 +355,8 @@
       "data_asset_review": "Revisione asset",
       "job": "Job",
       "subscription": "Abbonamento",
-      "user": "Utente"
+      "user": "Utente",
+      "metadata_generation_run": "Esecuzione di generazione"
     },
     "stepTypes": {
       "validation": "Validazione",

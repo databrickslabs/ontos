@@ -92,6 +92,8 @@ class DescriptionSuggestionDb(Base):
     reviewed_asset_id = Column(String, nullable=True)
     decided_by = Column(String, nullable=True)
     decided_at = Column(DateTime(timezone=True), nullable=True)
+    # Reviewer's comment on the last decision (e.g. what needs clarifying)
+    review_comment = Column(Text, nullable=True)
 
     # Apply outcome
     applied_by = Column(String, nullable=True)

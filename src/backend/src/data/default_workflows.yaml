@@ -766,6 +766,68 @@ workflows:
         config:
           message: "Data asset review requires changes"
 
+  # Metadata Generation Review: the run's suggestions are in a data asset
+  # review Ontos creates; this workflow notifies and gets the reviewer's
+  # overall approval of the reviewed descriptions
+  - id: "metadata-generation-review"
+    name: "Metadata Generation Review"
+    description: "Notifies the requester of a Generation Run review and asks the assigned reviewer to approve the reviewed descriptions."
+    trigger:
+      type: "on_request_review"
+      entity_types:
+        - "metadata_generation_run"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Review Requested"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your generated descriptions have been submitted for review."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Reviewer Approval"
+        type: "approval"
+        config:
+          approvers: "reviewer"
+          timeout_days: 7
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Descriptions Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "The reviewer approved your generated descriptions."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Descriptions Rejected"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "The reviewer rejected your generated descriptions. See the review for comments."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Descriptions Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Descriptions Rejected"
+        type: "fail"
+        config:
+          message: "Generated descriptions were rejected"
+
   # =========================================================================
   # Project Access Request Workflow
   # =========================================================================

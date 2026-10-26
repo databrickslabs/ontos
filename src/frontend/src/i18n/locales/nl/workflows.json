@@ -355,7 +355,8 @@
       "data_domain": "Datadomein",
       "data_asset_review": "Beoordeling van data-assets",
       "access_grant": "Toegangsverlening",
-      "asset": "Asset"
+      "asset": "Asset",
+      "metadata_generation_run": "Generatierun"
     },
     "fields": {
       "product_id": "Product-ID",

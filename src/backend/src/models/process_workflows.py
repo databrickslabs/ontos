@@ -90,6 +90,7 @@ class EntityType(str, Enum):
     JOB = "job"  # For background job lifecycle workflows
     SUBSCRIPTION = "subscription"  # For subscription events
     USER = "user"  # The user themselves — for on_first_access disclaimer/ToU workflows
+    METADATA_GENERATION_RUN = "metadata_generation_run"  # Review of a Generation Run's description suggestions
 
 
 class ScopeType(str, Enum):

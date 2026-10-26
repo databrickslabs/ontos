@@ -201,7 +201,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "before_update": ["data_contract"],
     "before_status_change": ["data_contract", "data_product"],
     # Request flow — process side
-    "on_request_review": ["data_contract", "data_product", "data_asset_review"],
+    "on_request_review": ["data_contract", "data_product", "data_asset_review", "metadata_generation_run"],
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
     "on_request_deploy": ["data_contract"],
@@ -216,7 +216,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     # trigger's entity scope so the wizard targets the same kinds of objects.
     "for_subscribe": ["data_product", "data_contract"],
     "for_request_access": ["access_grant", "project", "role"],
-    "for_request_review": ["data_contract", "data_product", "data_asset_review"],
+    "for_request_review": ["data_contract", "data_product", "data_asset_review", "metadata_generation_run"],
     "for_request_publish": ["data_contract", "data_product"],
     "for_request_certify": ["data_contract", "data_product"],
     "for_request_status_change": ["data_product"],

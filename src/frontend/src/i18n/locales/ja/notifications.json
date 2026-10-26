@@ -170,6 +170,11 @@
         "notify-denied": "「{{entity_name}}」の公開リクエストが拒否されました。",
         "notify-invalid": "「{{entity_name}}」の公開リクエストは却下されました。公開できるのは承認済みのデータコントラクトとアクティブなデータプロダクトのみです。",
         "notify-error": "「{{entity_name}}」の公開中にエラーが発生しました。"
+      },
+      "metadata-generation-review": {
+        "notify-requester": "生成された説明がレビューに提出されました。",
+        "notify-approved": "レビュー担当者が生成された説明を承認しました。",
+        "notify-rejected": "レビュー担当者が生成された説明を却下しました。コメントはレビューで確認してください。"
       }
     },
     "approval": {
@@ -194,6 +199,7 @@
         "data_asset_review": "データアセットレビュー",
         "access_grant": "アクセス付与",
         "asset": "アセット",
+        "metadata_generation_run": "生成実行",
         "entity": "エンティティ"
       }
     },
@@ -204,6 +210,12 @@
       "publication-request-review": {
         "approval-gate": "{{entity_type}}「{{entity_name}}」の公開リクエストを確認してください。"
       }
+    }
+  },
+  "metadataGeneration": {
+    "reviewAssigned": {
+      "title": "レビュー待ちの生成された説明",
+      "description": "{{requester}} から {{selection}} の生成された説明 {{count}} 件のレビュー依頼が届いています。"
     }
   }
 }

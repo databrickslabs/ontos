@@ -355,7 +355,8 @@
       "data_domain": "Domínio de dados",
       "data_asset_review": "Revisão de ativos de dados",
       "access_grant": "Concessão de acesso",
-      "asset": "Ativo"
+      "asset": "Ativo",
+      "metadata_generation_run": "Execução de geração"
     },
     "fields": {
       "product_id": "ID do produto",

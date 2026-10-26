@@ -58,6 +58,10 @@ class AssetType(str, Enum):
     # FQN format: term-mapping://{run_id}/{suggestion_id}
     CONCEPT_MAPPING_SUGGESTION = "concept_mapping_suggestion"
 
+    # Metadata Generation description suggestions (one ReviewedAsset == one
+    # DescriptionSuggestionDb). FQN format: metagen://{run_id}/{suggestion_id}
+    METADATA_SUGGESTION = "metadata_suggestion"
+
     # Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept"
     KNOWLEDGE_COLLECTION = "knowledge_collection"

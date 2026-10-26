@@ -9,10 +9,16 @@ when the job finishes, this manager ingests them as Description Suggestions.
 Run status is derived from the Jobs API, refreshed on demand by the run page
 and by the JobsManager background poller (see ``handle_job_terminated``).
 See docs/decisions/metadata-generation-execution.md.
+
+A run's pending suggestions are reviewed in one Data Asset Review (one
+ReviewedAsset per suggestion, FQN ``metagen://{run_id}/{suggestion_id}``);
+the ``metadata_generation_run`` review workflow handles notifications and
+the overall approval. Reviewers' decisions come back through ``decide``.
 """
 
 import threading
 import time
+import uuid
 from concurrent.futures import Executor, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -23,13 +29,20 @@ from sqlalchemy.orm import Session
 from src.common.config import Settings, resolve_volume
 from src.common.errors import ConflictError
 from src.common.logging import get_logger
+from src.common.notification_i18n import notification_i18n_data
+from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 from src.db_models.metadata_generation import DescriptionSuggestionDb, MetadataGenerationRunDb
+from src.models.data_asset_reviews import DataAssetReviewRequestCreate, ReviewedAssetStatus
 from src.models.metadata_generation import (
     TERMINAL_RUN_STATUSES,
     GenerationRunStatus,
     StartRunRequest,
+    SubmitReviewResponse,
+    SuggestionDecisionBatch,
+    SuggestionDecisionResult,
     SuggestionStatus,
 )
+from src.models.notifications import Notification, NotificationType
 from src.repositories.metadata_generation_repository import (
     metagen_runs_repo,
     metagen_suggestions_repo,
@@ -58,6 +71,16 @@ QUEUED_INGEST_TTL = STALE_INGEST_CLAIM
 
 # Jobs API life-cycle states after which a run will not change any more
 _TERMINAL_LIFE_CYCLE_STATES = {"TERMINATED", "SKIPPED", "INTERNAL_ERROR"}
+
+# Who reviews a run when the submitter names nobody
+DEFAULT_REVIEWER_ROLE = "DataSteward"
+REVIEW_FQN_PREFIX = "metagen://"
+# Suggestions a reviewer can still (re)decide while they're in a review
+_DECIDABLE_STATUSES = (
+    SuggestionStatus.PENDING.value,
+    SuggestionStatus.ACCEPTED.value,
+    SuggestionStatus.REJECTED.value,
+)
 
 
 class ActiveRunLimitError(ValueError):
@@ -95,10 +118,14 @@ class MetadataGenerationManager:
         jobs_manager: Any = None,
         workspace_client_factory: Optional[Callable[[], Any]] = None,
         ingest_executor: Optional[Executor] = None,
+        reviews_manager: Any = None,
+        notifications_manager: Any = None,
     ):
         self._settings = settings
         self._jobs = jobs_manager
         self._ws_factory = workspace_client_factory
+        self._reviews = reviews_manager
+        self._notifications = notifications_manager
         # Ingests started from the jobs poller run here, so a slow warehouse
         # read doesn't stall polling for every other workflow
         self._ingest_executor = ingest_executor or ThreadPoolExecutor(
@@ -200,6 +227,9 @@ class MetadataGenerationManager:
                 "Ask an administrator to enable it under Settings > Jobs."
             )
 
+        if request.auto_submit and request.reviewer_email and request.reviewer_email.lower() == user_id.lower():
+            raise ValueError("You can't review your own Generation Run; pick another reviewer")
+
         model = request.model or self._settings.LLM_ENDPOINT or DEFAULT_MODEL
         options = {
             "comment_style": request.comment_style.value,
@@ -209,6 +239,7 @@ class MetadataGenerationManager:
             "sample_size": 0,
             "regenerate_existing": request.regenerate_existing,
             "auto_submit": request.auto_submit,
+            "reviewer_email": request.reviewer_email,
         }
 
         run = metagen_runs_repo.create(db, user_id=user_id, selection=selection, options=options)
@@ -511,24 +542,29 @@ class MetadataGenerationManager:
                 count = self._store_suggestions(db, run, rows)
             db.commit()
             logger.info("Ingested %d description suggestions for run %s", count, run.id)
-            return count
         except Exception as e:
-            logger.error("Failed to ingest metadata generation results for run %s: %s", run.id, e, exc_info=True)
-            # Drop whatever the failed attempt left in the session (incl. a failed commit)
-            db.rollback()
-            db.refresh(run)
-            run.ingest_attempts = (run.ingest_attempts or 0) + 1
-            if run.ingest_attempts < MAX_INGEST_ATTEMPTS:
-                # The job succeeded and its rows stay in Delta: the next refresh retries
-                run.status = GenerationRunStatus.RUNNING.value
-                run.progress_message = "Retrying to load the generated descriptions"
-            else:
-                run.status = GenerationRunStatus.FAILED.value
-                run.error = "Failed to read the generated descriptions"
-                run.progress_message = None
-                run.completed_at = _now()
-            db.commit()
-            return 0
+            return self._ingest_failed(db, run, e)
+        if (run.options or {}).get("auto_submit") and count:
+            self._auto_submit(db, run)
+        return count
+
+    def _ingest_failed(self, db: Session, run: MetadataGenerationRunDb, e: Exception) -> int:
+        logger.error("Failed to ingest metadata generation results for run %s: %s", run.id, e, exc_info=True)
+        # Drop whatever the failed attempt left in the session (incl. a failed commit)
+        db.rollback()
+        db.refresh(run)
+        run.ingest_attempts = (run.ingest_attempts or 0) + 1
+        if run.ingest_attempts < MAX_INGEST_ATTEMPTS:
+            # The job succeeded and its rows stay in Delta: the next refresh retries
+            run.status = GenerationRunStatus.RUNNING.value
+            run.progress_message = "Retrying to load the generated descriptions"
+        else:
+            run.status = GenerationRunStatus.FAILED.value
+            run.error = "Failed to read the generated descriptions"
+            run.progress_message = None
+            run.completed_at = _now()
+        db.commit()
+        return 0
 
     def _store_suggestions(self, db: Session, run: MetadataGenerationRunDb, rows: List[Dict[str, Optional[str]]]) -> int:
 
@@ -644,6 +680,244 @@ class MetadataGenerationManager:
         return [dict(zip(columns, values)) for values in data]
 
     # ------------------------------------------------------------------
+    # Review
+    # ------------------------------------------------------------------
+    def create_review_for_run(
+        self,
+        db: Session,
+        run: MetadataGenerationRunDb,
+        *,
+        requester_email: str,
+        reviewer_email: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> SubmitReviewResponse:
+        """Put the run's pending suggestions not yet in a review up for review.
+
+        One Data Asset Review per submission, one ReviewedAsset per
+        suggestion. The review isn't handed to the generic data asset review
+        workflow: the ``metadata_generation_run`` workflow runs instead.
+        """
+        if self._reviews is None:
+            raise ValueError("Asset Review is not available")
+        if run.status != GenerationRunStatus.COMPLETED.value:
+            raise ValueError("Only a completed Generation Run can be submitted for review")
+        candidates = [
+            s for s in metagen_suggestions_repo.list_for_run(
+                db, run.id, status=SuggestionStatus.PENDING.value, limit=100_000
+            )
+            if not s.review_request_id
+        ]
+        if not candidates:
+            raise ValueError("No pending suggestions left to review")
+
+        reviewer = reviewer_email or self._default_reviewer(db, requester_email)
+        if not reviewer:
+            raise ValueError("No Data Steward found to review the run; pick a reviewer")
+        if reviewer.lower() == requester_email.lower():
+            raise ValueError("You can't review your own Generation Run; pick another reviewer")
+
+        title = f"Descriptions for {self._selection_label(run)}"[:200]
+        fqns = [f"{REVIEW_FQN_PREFIX}{run.id}/{s.id}" for s in candidates]
+        review = self._reviews.create_review_request(
+            DataAssetReviewRequestCreate(
+                requester_email=requester_email,
+                reviewer_email=reviewer,
+                asset_fqns=fqns,
+                title=title,
+                notes=notes or f"{len(candidates)} generated descriptions from Generation Run {run.id}",
+            ),
+            db=db,
+            trigger_workflow=False,
+        )
+        asset_ids = {a.asset_fqn: a.id for a in review.assets}
+        for fqn, suggestion in zip(fqns, candidates):
+            suggestion.review_request_id = review.id
+            suggestion.reviewed_asset_id = asset_ids.get(fqn)
+        db.commit()
+
+        self._start_review_workflow(
+            db, run, review_id=review.id, title=title, requester_email=requester_email,
+            reviewer_email=reviewer, suggestion_count=len(candidates),
+        )
+        self._notify_reviewer(
+            db, review_id=review.id, selection=self._selection_label(run), requester_email=requester_email,
+            reviewer_email=reviewer, suggestion_count=len(candidates),
+        )
+        return SubmitReviewResponse(
+            run_id=run.id, review_request_id=review.id, reviewer_email=reviewer, suggestion_count=len(candidates),
+        )
+
+    def _auto_submit(self, db: Session, run: MetadataGenerationRunDb) -> None:
+        """Submit a freshly ingested run for review, as its options ask. Best effort."""
+        try:
+            self.create_review_for_run(
+                db, run, requester_email=run.user_id, reviewer_email=(run.options or {}).get("reviewer_email"),
+            )
+        except Exception:
+            logger.warning("Failed to submit Generation Run %s for review", run.id, exc_info=True)
+            db.rollback()
+
+    def _default_reviewer(self, db: Session, requester_email: str) -> Optional[str]:
+        from src.common.workflow_executor import resolve_reviewer_email
+        return resolve_reviewer_email(db, DEFAULT_REVIEWER_ROLE, requester_email)
+
+    @staticmethod
+    def _selection_label(run: MetadataGenerationRunDb) -> str:
+        names = [item.get("fqn", "") for item in (run.selection or [])]
+        if len(names) <= 2:
+            return ", ".join(names)
+        return f"{names[0]} and {len(names) - 1} more"
+
+    def _start_review_workflow(
+        self,
+        db: Session,
+        run: MetadataGenerationRunDb,
+        *,
+        review_id: str,
+        title: str,
+        requester_email: str,
+        reviewer_email: str,
+        suggestion_count: int,
+    ) -> None:
+        """Fire on_request_review for the run (notifications, overall approval). Best effort."""
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+
+            get_trigger_registry(db).on_request_review(
+                entity_type=EntityType.METADATA_GENERATION_RUN,
+                entity_id=run.id,
+                entity_name=title,
+                entity_data={
+                    "run_id": run.id,
+                    "review_request_id": review_id,
+                    "requester_email": requester_email,
+                    "reviewer_email": reviewer_email,
+                    "suggestion_count": suggestion_count,
+                },
+                user_email=requester_email,
+                blocking=False,
+            )
+        except Exception:
+            logger.error("Failed to start the review workflow for Generation Run %s", run.id, exc_info=True)
+
+    def _notify_reviewer(
+        self,
+        db: Session,
+        *,
+        review_id: str,
+        selection: str,
+        requester_email: str,
+        reviewer_email: str,
+        suggestion_count: int,
+    ) -> None:
+        """Point the reviewer at the review (workflow notifications carry no link). Best effort."""
+        if self._notifications is None:
+            return
+        try:
+            self._notifications.create_notification(
+                Notification(
+                    id=str(uuid.uuid4()),
+                    recipient=reviewer_email,
+                    type=NotificationType.ACTION_REQUIRED,
+                    title="Generated descriptions to review",
+                    description=(
+                        f"{requester_email} asks you to review {suggestion_count} generated descriptions for {selection}."
+                    ),
+                    link=f"/data-asset-reviews/{review_id}",
+                    created_at=_now(),
+                    data=notification_i18n_data(
+                        "notifications:metadataGeneration.reviewAssigned.title",
+                        "notifications:metadataGeneration.reviewAssigned.description",
+                        requester=requester_email, count=suggestion_count, selection=selection,
+                    ),
+                ),
+                db,
+            )
+        except Exception:
+            logger.warning("Failed to notify reviewer of review %s", review_id, exc_info=True)
+
+    def get_review_assignees(self, db: Session, review_request_id: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+        """(requester, reviewer) emails of a review request, or (None, None)."""
+        if not review_request_id:
+            return None, None
+        review = db.get(DataAssetReviewRequestDb, review_request_id)
+        if review is None:
+            return None, None
+        return review.requester_email, review.reviewer_email
+
+    def decide(
+        self,
+        db: Session,
+        run: MetadataGenerationRunDb,
+        batch: SuggestionDecisionBatch,
+        *,
+        decided_by: str,
+        is_admin: bool = False,
+    ) -> SuggestionDecisionResult:
+        """Record reviewers' decisions on suggestions in a review of ``run``.
+
+        Only the review's reviewer (or a feature admin) decides. Accepted and
+        rejected suggestions can be decided again until they are applied; a
+        suggestion sent back for clarification leaves its review and is
+        pending again. The ReviewedAsset mirrors each decision.
+        """
+        result = SuggestionDecisionResult()
+        now = _now()
+        reviewers: Dict[str, Optional[str]] = {}
+        for decision in batch.decisions:
+            suggestion = db.get(DescriptionSuggestionDb, decision.id)
+            if suggestion is None or suggestion.run_id != run.id:
+                result.skipped += 1
+                result.errors.append(f"Suggestion {decision.id} is not part of this run")
+                continue
+            if not suggestion.review_request_id or suggestion.status not in _DECIDABLE_STATUSES:
+                result.skipped += 1
+                result.errors.append(f"Suggestion {decision.id} is not in review")
+                continue
+            if suggestion.review_request_id not in reviewers:
+                reviewers[suggestion.review_request_id] = self.get_review_assignees(db, suggestion.review_request_id)[1]
+            reviewer = reviewers[suggestion.review_request_id]
+            if not is_admin and (reviewer or "").lower() != decided_by.lower():
+                result.skipped += 1
+                result.errors.append(f"Suggestion {decision.id} is assigned to another reviewer")
+                continue
+
+            comment = (decision.comment or "").strip() or None
+            reviewed_asset_id = suggestion.reviewed_asset_id
+            if decision.decision == "accept":
+                edited = (decision.edited_text or "").strip()
+                suggestion.edited_text = edited if edited and edited != suggestion.proposed_text else None
+                suggestion.status = SuggestionStatus.ACCEPTED.value
+                asset_status = ReviewedAssetStatus.APPROVED
+                result.accepted += 1
+            elif decision.decision == "reject":
+                suggestion.status = SuggestionStatus.REJECTED.value
+                asset_status = ReviewedAssetStatus.REJECTED
+                result.rejected += 1
+            else:
+                # Back to pending and out of the review, so it can be submitted again
+                suggestion.status = SuggestionStatus.PENDING.value
+                suggestion.review_request_id = None
+                suggestion.reviewed_asset_id = None
+                asset_status = ReviewedAssetStatus.NEEDS_CLARIFICATION
+                result.clarify += 1
+            suggestion.review_comment = comment
+            suggestion.decided_by = decided_by
+            suggestion.decided_at = now
+            if reviewed_asset_id:
+                db.query(ReviewedAssetDb).filter(ReviewedAssetDb.id == reviewed_asset_id).update(
+                    {
+                        ReviewedAssetDb.status: asset_status.value,
+                        ReviewedAssetDb.comments: comment,
+                        ReviewedAssetDb.updated_at: now,
+                    },
+                    synchronize_session=False,
+                )
+        db.commit()
+        return result
+
+    # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
     def get_run(self, db: Session, run_id: str) -> Optional[MetadataGenerationRunDb]:
@@ -657,10 +931,20 @@ class MetadataGenerationManager:
     def counts(self, db: Session, run_id: str) -> Dict[str, int]:
         return metagen_suggestions_repo.counts_by_status(db, run_id)
 
+    def review_summary(self, db: Session, run_id: str) -> Tuple[int, List[str]]:
+        """(pending suggestions not yet submitted, ids of the reviews the run is in)."""
+        return (
+            metagen_suggestions_repo.count_unsubmitted(db, run_id),
+            metagen_suggestions_repo.review_request_ids(db, run_id),
+        )
+
     def list_suggestions(
         self, db: Session, run_id: str, *, status: Optional[str] = None, limit: int = 1000, skip: int = 0
     ) -> List[DescriptionSuggestionDb]:
         return metagen_suggestions_repo.list_for_run(db, run_id, status=status, limit=limit, skip=skip)
+
+    def get_suggestion(self, db: Session, suggestion_id: str) -> Optional[DescriptionSuggestionDb]:
+        return db.get(DescriptionSuggestionDb, suggestion_id)
 
     def count_suggestions(self, db: Session, run_id: str, *, status: Optional[str] = None) -> int:
         return metagen_suggestions_repo.count_for_run(db, run_id, status=status)

@@ -155,3 +155,63 @@ describe('MetadataGenerationRunDetails', () => {
     expect(await screen.findByTestId('location')).toHaveTextContent('/metadata-generation');
   });
 });
+
+describe('MetadataGenerationRunDetails review', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+    api.post.mockReset();
+  });
+
+  const reviewed = (unsubmitted: number, reviews: string[]) => ({
+    ...run('completed'), unsubmitted, review_request_ids: reviews,
+  });
+
+  it('submits the pending suggestions for review and links the review', async () => {
+    let state = reviewed(2, []);
+    api.get.mockImplementation(async (url: string) =>
+      url.includes('/suggestions') ? { data: { suggestions: SUGGESTIONS, total: 2 } } : { data: state },
+    );
+    api.post.mockImplementation(async () => {
+      state = reviewed(0, ['rev-1']);
+      return { data: { run_id: 'run-1', review_request_id: 'rev-1', reviewer_email: 'r@x.com', suggestion_count: 2 } };
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Submit 2 for review/ }));
+    await userEvent.type(screen.getByLabelText('Notes for the reviewer'), 'please check');
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/api/metadata-generation/runs/run-1/review', {
+        reviewer_email: null, notes: 'please check',
+      }),
+    );
+    expect(await screen.findByRole('link', { name: /Review 1/ })).toHaveAttribute('href', '/data-asset-reviews/rev-1');
+    expect(screen.queryByRole('button', { name: /for review/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the error of a failed submit in the dialog', async () => {
+    api.get.mockImplementation(async (url: string) =>
+      url.includes('/suggestions') ? { data: { suggestions: SUGGESTIONS, total: 2 } } : { data: reviewed(2, []) },
+    );
+    api.post.mockResolvedValue({ error: 'No Data Steward found to review the run; pick a reviewer' });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Submit 2 for review/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(await screen.findByText(/pick a reviewer/)).toBeInTheDocument();
+  });
+
+  it("shows the reviewer's edit and comment on a suggestion", async () => {
+    const decided = [{ ...SUGGESTIONS[0], status: 'accepted', edited_text: 'Orders placed by customers.',
+      review_comment: 'shorter', decided_by: 'r@x.com', review_request_id: 'rev-1' }];
+    api.get.mockImplementation(async (url: string) =>
+      url.includes('/suggestions') ? { data: { suggestions: decided, total: 1 } } : { data: reviewed(0, ['rev-1']) },
+    );
+    renderPage();
+
+    expect(await screen.findByText('Orders placed by customers.')).toBeInTheDocument();
+    expect(screen.getByText('Edited by reviewer')).toBeInTheDocument();
+    expect(screen.getByText('r@x.com: shorter')).toBeInTheDocument();
+  });
+});

@@ -355,7 +355,8 @@
       "data_asset_review": "アセットレビュー",
       "job": "ジョブ",
       "subscription": "購読",
-      "user": "ユーザー"
+      "user": "ユーザー",
+      "metadata_generation_run": "生成実行"
     },
     "stepTypes": {
       "validation": "検証",

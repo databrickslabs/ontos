@@ -170,6 +170,11 @@
         "notify-denied": "Su solicitud de publicación de '{{entity_name}}' ha sido denegada.",
         "notify-invalid": "La solicitud de publicación de '{{entity_name}}' ha sido rechazada: solo se pueden publicar contratos de datos aprobados y productos de datos activos.",
         "notify-error": "Se produjo un error al publicar '{{entity_name}}'."
+      },
+      "metadata-generation-review": {
+        "notify-requester": "Sus descripciones generadas se han enviado a revisión.",
+        "notify-approved": "El revisor aprobó sus descripciones generadas.",
+        "notify-rejected": "El revisor rechazó sus descripciones generadas. Consulte los comentarios en la revisión."
       }
     },
     "approval": {
@@ -194,6 +199,7 @@
         "data_asset_review": "Revisión de activos de datos",
         "access_grant": "Concesión de acceso",
         "asset": "Activo",
+        "metadata_generation_run": "Ejecución de generación",
         "entity": "Entidad"
       }
     },
@@ -204,6 +210,12 @@
       "publication-request-review": {
         "approval-gate": "Revise la solicitud de publicación de {{entity_type}} '{{entity_name}}'."
       }
+    }
+  },
+  "metadataGeneration": {
+    "reviewAssigned": {
+      "title": "Descripciones generadas para revisar",
+      "description": "{{requester}} le pide que revise {{count}} descripciones generadas para {{selection}}."
     }
   }
 }

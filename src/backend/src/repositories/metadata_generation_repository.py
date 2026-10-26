@@ -106,6 +106,32 @@ class DescriptionSuggestionsRepository:
         )
         return {status: count for status, count in rows}
 
+    def count_unsubmitted(self, db: Session, run_id: str) -> int:
+        """Pending suggestions not (or no longer) in a review."""
+        return (
+            db.query(func.count(DescriptionSuggestionDb.id))
+            .filter(
+                DescriptionSuggestionDb.run_id == run_id,
+                DescriptionSuggestionDb.status == 'pending',
+                DescriptionSuggestionDb.review_request_id.is_(None),
+            )
+            .scalar()
+        ) or 0
+
+    def review_request_ids(self, db: Session, run_id: str) -> List[str]:
+        """The reviews the run's suggestions are in, oldest suggestion first."""
+        rows = (
+            db.query(DescriptionSuggestionDb.review_request_id, func.min(DescriptionSuggestionDb.created_at))
+            .filter(
+                DescriptionSuggestionDb.run_id == run_id,
+                DescriptionSuggestionDb.review_request_id.isnot(None),
+            )
+            .group_by(DescriptionSuggestionDb.review_request_id)
+            .order_by(func.min(DescriptionSuggestionDb.created_at))
+            .all()
+        )
+        return [review_id for review_id, _ in rows]
+
     def supersede_pending_for_targets(
         self, db: Session, *, run: MetadataGenerationRunDb, targets: List[tuple]
     ) -> int:

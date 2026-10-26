@@ -13,7 +13,7 @@ Most Unity Catalog tables and columns have no description, or a poor one. Writin
 
 ## Solution
 
-Stewards start a **Generation Run** over a selection of UC catalogs, schemas or tables. Ontos runs dbxmetagen as a background job and records the run. Its output becomes **Description Suggestions**, which the steward can browse on the run page (as with the Ontology Generator and Concept Mapper). The steward submits them for review. A default process workflow creates a Data Asset Review, requests approval and notifies the people involved. Approved suggestions, possibly edited by the reviewer, are **Applied** to Unity Catalog and mirrored onto the Ontos Asset.
+Stewards start a **Generation Run** over a selection of UC catalogs, schemas or tables. Ontos runs dbxmetagen as a background job and records the run. Its output becomes **Description Suggestions**, which the steward can browse on the run page (as with the Ontology Generator and Concept Mapper). The steward submits them for review. Ontos puts them in a Data Asset Review, and a default process workflow requests approval and notifies the people involved. Approved suggestions, possibly edited by the reviewer, are **Applied** to Unity Catalog and mirrored onto the Ontos Asset.
 
 ## User Stories
 
@@ -43,10 +43,11 @@ Stewards start a **Generation Run** over a selection of UC catalogs, schemas or 
 **Execution** — see the decision record. The background job `workflows/metagen_generate/` runs as the app SP, with dbxmetagen output in the app's deploy-time catalog and schema (those of the app volume, else `DATABRICKS_CATALOG`.`DATABRICKS_SCHEMA`). A normalized Delta staging table `metagen_results` is ingested by the app through the SQL warehouse. Status comes from the Jobs API, refreshed on demand by the run page and by the `JobsManager` poller as backstop. `ingest_results(run_id)` is idempotent. Cancel cancels the Databricks job run.
 
 **Review**
-- Manual "Submit for review" from the run page, plus an opt-in auto-submit on completion. One Data Asset Review per run. The reviewer is picked at submit time, or defaults to the `DataSteward` role.
+- Manual "Submit for review" from the run page, plus an opt-in auto-submit on completion. One Data Asset Review per submission (normally one per run; suggestions sent back for clarification can be submitted again). The reviewer is picked at submit time, or defaults to a member of the `DataSteward` role other than the requester (resolved like the workflow's `create_asset_review` step). Nobody reviews their own run.
 - New `AssetType.METADATA_SUGGESTION` with FQN `metagen://{run_id}/{suggestion_id}`. It follows the Concept Mapper's review-spawn pattern: suggestion ↔ ReviewedAsset back-pointers, and a `/decisions` endpoint that forward-syncs ReviewedAsset status.
 - A `MetadataSuggestionReview` editor component in the AR UI provides the diff and editing.
-- New `EntityType.METADATA_GENERATION_RUN` and default workflow `metadata-generation-review` (trigger `on_request_review`): notify requester → `create_asset_review` → `approval` → `entity_action: apply_metadata_suggestions` → summary notification.
+- New `EntityType.METADATA_GENERATION_RUN` and default workflow `metadata-generation-review` (trigger `on_request_review`): notify requester → `approval` by the assigned reviewer (approver token `reviewer`) → notify the outcome; slice 3 adds `entity_action: apply_metadata_suggestions` and the summary notification. Ontos creates the Data Asset Review itself, because the workflow's `create_asset_review` step can't take a list of suggestions; the generic data asset review workflow is not run for it, so the reviewer doesn't get a second approval request. The reviewer gets a notification linking the review.
+- Decisions are made by the review's reviewer (or a feature admin) under the `data-asset-reviews` permissions; the reviewer can edit the text, and leaves an optional comment that the run page shows.
 - Per-item outcomes: approved → applied; rejected → closed; needs clarification → back to pending, resubmittable. If the overall approval is rejected, nothing is applied.
 
 **Apply**

@@ -355,7 +355,8 @@
       "data_domain": "データドメイン",
       "data_asset_review": "データ資産レビュー",
       "access_grant": "アクセス付与",
-      "asset": "資産"
+      "asset": "資産",
+      "metadata_generation_run": "生成実行"
     },
     "fields": {
       "product_id": "製品 ID",

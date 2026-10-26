@@ -92,6 +92,9 @@
     },
     "publicationRequestReview": {
       "end": "Le workflow de publication a échoué"
+    },
+    "metadataGenerationReview": {
+      "rejected": "Les descriptions générées ont été rejetées"
     }
   },
   "workflowNames": {
@@ -125,6 +128,7 @@
     "certification-request-review": "Revue des demandes de certification",
     "publication-request-review": "Revue des demandes de publication",
     "first-access-welcome": "Bienvenue : conditions d'utilisation",
-    "on-request-access-grant-permissions-reference": "Référence : accorder SELECT UC au demandeur (on_request_access)"
+    "on-request-access-grant-permissions-reference": "Référence : accorder SELECT UC au demandeur (on_request_access)",
+    "metadata-generation-review": "Revue de génération de métadonnées"
   }
 }

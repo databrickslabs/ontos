@@ -39,8 +39,11 @@ describe('DeprecationNotice', () => {
     expect(screen.getByText('Obsoleto')).toBeInTheDocument();
     expect(screen.getByTestId('deprecation-reason')).toHaveTextContent('Replaced by v2');
     expect(screen.getByTestId('deprecation-sunset-date')).toHaveTextContent('2027-01-31');
-    await waitFor(() => expect(screen.getByTestId('deprecation-replacement')).toHaveTextContent('Orders v2'));
-    expect(screen.getByTestId('deprecation-replacement')).toHaveAttribute('href', '/data-products/p-2');
+    await waitFor(() =>
+      expect(screen.getByTestId('deprecation-replacement')).toHaveTextContent('Orders v2'),
+    );
+    expect(screen.getByTestId('deprecation-replacement'))
+      .toHaveAttribute('href', '/data-products/p-2');
     expect(get).toHaveBeenCalledWith('/api/data-products/p-2');
   });
 
@@ -52,7 +55,8 @@ describe('DeprecationNotice', () => {
     expect(screen.getByText('Retired')).toBeInTheDocument();
     expect(screen.getByTestId('deprecation-reason')).toHaveTextContent('No reason recorded');
     await waitFor(() => expect(get).toHaveBeenCalledWith('/api/data-contracts/c-9'));
-    expect(screen.getByTestId('deprecation-replacement')).toHaveAttribute('href', '/data-contracts/c-9');
+    expect(screen.getByTestId('deprecation-replacement'))
+      .toHaveAttribute('href', '/data-contracts/c-9');
   });
 
   it('shows nothing for an entity that is not deprecated or retired', () => {
@@ -89,7 +93,9 @@ describe('Requested deprecation fields', () => {
 
   it('sends only the sunset date and the replacement with a request', () => {
     expect(
-      requestedDeprecationPayload({ deprecationReason: 'x', sunsetDate: '2027-01-31', replacementId: 'p-2' }),
+      requestedDeprecationPayload({
+        deprecationReason: 'x', sunsetDate: '2027-01-31', replacementId: 'p-2',
+      }),
     ).toEqual({ sunset_date: '2027-01-31', replacement_id: 'p-2' });
     expect(requestedDeprecationPayload(EMPTY_DEPRECATION)).toEqual({
       sunset_date: undefined,

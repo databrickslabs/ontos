@@ -40,7 +40,9 @@ export function utcToday(now: Date = new Date()): string {
  * Request body fields of a status change *request* to `deprecated`: the
  * justification is the reason, so only the sunset date and the replacement.
  */
-export function requestedDeprecationPayload(values: DeprecationValues): Record<string, string | undefined> {
+export function requestedDeprecationPayload(
+  values: DeprecationValues,
+): Record<string, string | undefined> {
   return {
     sunset_date: values.sunsetDate || undefined,
     replacement_id: values.replacementId || undefined,
@@ -100,7 +102,10 @@ export default function DeprecationFields({
       const byId = new Map<string, Candidate>();
       for (const res of responses) {
         for (const c of Array.isArray(res.data) ? res.data : []) {
-          if (c.id !== entityId && !['deprecated', 'retired'].includes((c.status || '').toLowerCase())) {
+          if (
+            c.id !== entityId
+            && !['deprecated', 'retired'].includes((c.status || '').toLowerCase())
+          ) {
             byId.set(c.id, c);
           }
         }

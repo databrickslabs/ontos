@@ -401,7 +401,10 @@ class UpdateDataProductTool(BaseTool):
         },
         "sunset_date": {
             "type": "string",
-            "description": "Date the product stops being supported, YYYY-MM-DD (with status deprecated; not in the past)"
+            "description": (
+                "Date the product stops being supported, YYYY-MM-DD "
+                "(with status deprecated; not in the past)"
+            )
         },
         "replacement_id": {
             "type": "string",

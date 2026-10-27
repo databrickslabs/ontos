@@ -241,7 +241,10 @@ class UpdateDataContractTool(BaseTool):
         },
         "sunset_date": {
             "type": "string",
-            "description": "Date the contract stops being supported, YYYY-MM-DD (with status deprecated; not in the past)"
+            "description": (
+                "Date the contract stops being supported, YYYY-MM-DD "
+                "(with status deprecated; not in the past)"
+            )
         },
         "replacement_id": {
             "type": "string",

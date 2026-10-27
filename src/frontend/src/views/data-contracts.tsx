@@ -313,7 +313,8 @@ export default function DataContracts() {
       // Surface anything that was not created (failed entities AND files
       // skipped as the wrong type, e.g. an ODPS product dropped here) and the
       // notes on created ones (e.g. a replacement that isn't here).
-      const detail = reportedImportItems(result).slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
+      const detail = reportedImportItems(result).slice(0, 5)
+        .map((i) => importItemLine(i, t)).join('\n');
       if (result.failed > 0 || result.skipped > 0) {
         // Keep the dialog open so the user sees which entities were skipped/failed.
         setUploadError({ message: summarizeImport(result, t), detail });
@@ -360,7 +361,8 @@ export default function DataContracts() {
       }
       const result: BatchImportResult = await res.json();
       await fetchContracts();
-      const detail = reportedImportItems(result).slice(0, 5).map((i) => importItemLine(i, t)).join('\n');
+      const detail = reportedImportItems(result).slice(0, 5)
+        .map((i) => importItemLine(i, t)).join('\n');
       if (result.failed > 0 || result.skipped > 0) {
         setUploadError({ message: summarizeImport(result, t), detail });
         // Partial success: keep the pasted content so the user can fix the
@@ -370,7 +372,9 @@ export default function DataContracts() {
         setOdcsPaste('');
         toast({
           title: t('data-contracts:import.importedTitle', 'Imported'),
-          description: detail ? `${summarizeImport(result, t)}\n${detail}` : summarizeImport(result, t),
+          description: detail
+            ? `${summarizeImport(result, t)}\n${detail}`
+            : summarizeImport(result, t),
           ...(detail ? { duration: 10000 } : {}),
         });
       }

@@ -37,9 +37,13 @@ export function importItemLine(item: ImportItemResult, t: TFunction): string {
   const fallback = item.message ?? item.status;
   // Refused by a status check shared with the status change dialogs
   const statusKey = item.code ? STATUS_CODE_KEYS[item.code] : undefined;
-  if (statusKey) return `• ${name}: ${t(statusKey, { ...(item.params ?? {}), defaultValue: fallback })}`;
+  if (statusKey) {
+    return `• ${name}: ${t(statusKey, { ...(item.params ?? {}), defaultValue: fallback })}`;
+  }
   const text = item.code && IMPORT_CODES.has(item.code)
-    ? t(`common:deprecation.import.${item.code}`, { ...(item.params ?? {}), defaultValue: fallback })
+    ? t(`common:deprecation.import.${item.code}`, {
+      ...(item.params ?? {}), defaultValue: fallback,
+    })
     : fallback;
   return `• ${name}: ${text}`;
 }
@@ -48,7 +52,9 @@ type ImportNote = NonNullable<ImportItemResult['notes']>[number];
 
 function noteText(note: ImportNote, t: TFunction): string | null {
   if (note.code && IMPORT_CODES.has(note.code)) {
-    return t(`common:deprecation.import.${note.code}`, { ...(note.params ?? {}), defaultValue: note.message ?? '' });
+    return t(`common:deprecation.import.${note.code}`, {
+      ...(note.params ?? {}), defaultValue: note.message ?? '',
+    });
   }
   return note.message ?? null;
 }

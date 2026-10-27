@@ -110,7 +110,9 @@ def requested_status_change(
         requested = (details.get('target_status') or '').lower()
         if target_status and requested and requested != target_status.lower():
             continue
-        request_id = details.get('request_id') or (str(change.id) if change.id is not None else None)
+        request_id = details.get('request_id') or (
+            str(change.id) if change.id is not None else None
+        )
         return request_id, details.get('justification')
     return None, None
 

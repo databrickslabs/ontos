@@ -52,15 +52,24 @@ export default function DeprecationNotice({
   if (!shown) return null;
 
   return (
-    <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+    <Alert
+      className={
+        'border-amber-300 bg-amber-50 text-amber-900 '
+        + 'dark:bg-amber-950/30 dark:text-amber-200'
+      }
+    >
       <AlertTriangle className="h-4 w-4" />
       <AlertTitle>
-        {t(lifecycle === 'retired' ? 'common:deprecation.notice.retired' : 'common:deprecation.notice.deprecated')}
+        {t(lifecycle === 'retired'
+          ? 'common:deprecation.notice.retired'
+          : 'common:deprecation.notice.deprecated')}
       </AlertTitle>
       <AlertDescription>
         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt className="font-medium">{t('common:deprecation.reason')}</dt>
-          <dd data-testid="deprecation-reason">{reason || t('common:deprecation.notice.noReason')}</dd>
+          <dd data-testid="deprecation-reason">
+            {reason || t('common:deprecation.notice.noReason')}
+          </dd>
           {sunsetDate && (
             <>
               <dt className="font-medium">{t('common:deprecation.sunsetDate')}</dt>

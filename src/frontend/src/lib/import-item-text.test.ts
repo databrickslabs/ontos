@@ -42,8 +42,10 @@ describe('import report lines', () => {
 
     expect(importItemLine({ index: 5, name: 'Legacy', entity_id: 'p-5', status: 'created',
       message: "'production' is not a lifecycle status, so it was imported as 'draft'.",
-      code: 'imported_status_mapped', params: { status: 'production', mappedTo: 'draft' } }, i18n.t))
-      .toBe("• Legacy: 'production' não é um status do ciclo de vida, então foi importado como 'draft'.");
+      code: 'imported_status_mapped', params: { status: 'production', mappedTo: 'draft' } },
+    i18n.t))
+      .toBe("• Legacy: 'production' não é um status do ciclo de vida, "
+        + "então foi importado como 'draft'.");
   });
 
   it('translates older status names mapped like the database migration', async () => {
@@ -51,11 +53,13 @@ describe('import report lines', () => {
 
     expect(importItemLine({ index: 7, name: 'Old', entity_id: 'p-7', status: 'created',
       message: "'archived' is an older status name, so it was imported as 'retired'.",
-      code: 'imported_legacy_status', params: { status: 'archived', mappedTo: 'retired' } }, i18n.t))
+      code: 'imported_legacy_status', params: { status: 'archived', mappedTo: 'retired' } },
+    i18n.t))
       .toBe("• Old: 'archived' é um nome de status antigo, então foi importado como 'retired'.");
     expect(importItemLine({ index: 8, name: 'Cert', entity_id: 'p-8', status: 'created',
       message: "'certified' is not a status any more, so it was imported as 'active'.",
-      code: 'imported_certified_as_active', params: { status: 'certified', mappedTo: 'active' } }, i18n.t))
+      code: 'imported_certified_as_active', params: { status: 'certified', mappedTo: 'active' } },
+    i18n.t))
       .toBe("• Cert: 'certified' não é mais um status, então foi importado como 'active'. "
         + 'A certificação não é importada: certifique a entidade no Ontos.');
   });
@@ -68,7 +72,8 @@ describe('import report lines', () => {
       code: 'imported_status_mapped', params: { status: 'production', mappedTo: 'draft' },
       notes: [{ code: 'imported_replacement_dropped', params: { replacementId: '1111' },
         message: 'replacement note.' }] }, i18n.t))
-      .toBe("• Legacy: 'production' não é um status do ciclo de vida, então foi importado como 'draft'. "
+      .toBe("• Legacy: 'production' não é um status do ciclo de vida, "
+        + "então foi importado como 'draft'. "
         + 'O substituto 1111 não existe aqui, então não foi vinculado.');
   });
 
@@ -86,7 +91,8 @@ describe('import report lines', () => {
         index: 0,
         name: 'Cert Product',
         status: 'failed',
-        message: "'certified' is not a status: certification is set with the certify action, on an active entity.",
+        message: "'certified' is not a status: certification is set with the certify action, "
+          + 'on an active entity.',
         code: 'certified_is_not_a_status',
         params: null,
       },

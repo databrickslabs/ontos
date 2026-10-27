@@ -18,7 +18,11 @@ export interface ImportItemResult {
   code?: string | null;
   params?: Record<string, unknown> | null;
   /** Further coded notes when an item has more than one. */
-  notes?: { code?: string | null; params?: Record<string, unknown> | null; message?: string | null }[] | null;
+  notes?: {
+    code?: string | null;
+    params?: Record<string, unknown> | null;
+    message?: string | null;
+  }[] | null;
 }
 
 export interface BatchImportResult {

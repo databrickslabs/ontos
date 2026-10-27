@@ -93,7 +93,10 @@ def test_a_retired_replacement_is_rejected(db_session):
 
 def _deprecated_toward(entity, replacement, entity_type='data_product'):
     entity.status = 'deprecated'
-    column = 'replacement_product_id' if entity_type == 'data_product' else 'replacement_contract_id'
+    column = (
+        'replacement_product_id' if entity_type == 'data_product'
+        else 'replacement_contract_id'
+    )
     setattr(entity, column, replacement.id)
 
 
@@ -826,7 +829,8 @@ async def test_the_mcp_product_tool_deprecates_with_its_details(db_session):
     assert result.success, result.error
     db_session.refresh(product)
     assert (product.status, product.deprecation_reason, product.sunset_date,
-            product.replacement_product_id) == ('deprecated', 'Moved to v2', _TOMORROW, replacement.id)
+            product.replacement_product_id) == (
+        'deprecated', 'Moved to v2', _TOMORROW, replacement.id)
 
 
 @pytest.mark.asyncio
@@ -984,7 +988,9 @@ def test_the_requested_sunset_date_and_replacement_are_stored_with_the_request(d
         sunset_date=sunset, replacement_id=replacement.id,
     )
 
-    request_id, details = requested_deprecation(db_session, 'data_product', product.id, 'deprecated')
+    request_id, details = requested_deprecation(
+        db_session, 'data_product', product.id, 'deprecated'
+    )
     assert request_id
     assert (details.reason, details.sunset_date.isoformat(), details.replacement_id) == (
         'Superseded by v2', sunset, replacement.id,

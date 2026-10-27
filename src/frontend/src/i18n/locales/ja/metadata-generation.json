@@ -1,0 +1,91 @@
+{
+  "title": "メタデータ生成",
+  "subtitle": "dbxmetagen で Unity Catalog のテーブルと列の説明を生成し、レビューして適用します。",
+  "actions": {
+    "newRun": "新規実行",
+    "cancelRun": "実行をキャンセル",
+    "deleteRun": "実行を削除"
+  },
+  "list": {
+    "empty": "生成実行はまだありません。説明を生成するには実行を開始してください。",
+    "selectionMore": "{{first}} ほか {{count}} 件",
+    "columns": {
+      "selection": "選択",
+      "status": "ステータス",
+      "suggestions": "提案",
+      "startedBy": "開始者",
+      "created": "作成日時"
+    }
+  },
+  "newRun": {
+    "title": "新しい生成実行",
+    "description": "カタログ、スキーマ、テーブル、またはビューを選択してください。カタログまたはスキーマには、そのすべてのテーブルが含まれます。",
+    "selectObjects": "説明を生成するオブジェクト",
+    "catalogLoadFailed": "カタログを読み込めませんでした",
+    "removeSelection": "{{fqn}} を削除",
+    "commentStyle": "説明のスタイル",
+    "model": "サービングエンドポイント",
+    "modelPlaceholder": "デフォルトのエンドポイント",
+    "regenerateExisting": "既存の説明を再生成する",
+    "regenerateExistingHint": "デフォルトでは、説明のないオブジェクトにのみ提案が作成されます。",
+    "selectionRequired": "少なくとも 1 つのオブジェクトを選択してください。",
+    "startFailed": "生成実行を開始できませんでした",
+    "start": "実行を開始"
+  },
+  "selectionType": {
+    "catalog": "カタログ",
+    "schema": "スキーマ",
+    "table": "テーブル"
+  },
+  "commentStyle": {
+    "concise": "簡潔",
+    "standard": "標準",
+    "detailed": "詳細"
+  },
+  "runStatus": {
+    "pending": "保留中",
+    "running": "実行中",
+    "ingesting": "結果を読み込み中",
+    "completed": "完了",
+    "failed": "失敗",
+    "cancelled": "キャンセル済み"
+  },
+  "suggestionStatus": {
+    "pending": "保留中",
+    "accepted": "承認済み",
+    "rejected": "却下",
+    "applied": "適用済み",
+    "conflict": "競合",
+    "not_applicable": "対象外",
+    "superseded": "置き換え済み"
+  },
+  "objectType": {
+    "table": "テーブルの説明",
+    "view": "ビューの説明",
+    "column": "列の説明"
+  },
+  "detail": {
+    "runTitle": "実行 {{id}}",
+    "startedBy": "開始者: {{user}}",
+    "selection": "選択",
+    "options": "オプション",
+    "regenerateExisting": "既存の説明を再生成",
+    "suggestionsTitle": "説明の提案",
+    "statusFilter": "ステータスで絞り込み",
+    "allStatuses": "すべてのステータス",
+    "noSuggestions": "提案はありません。",
+    "suggestionsLoadFailed": "提案を読み込めませんでした",
+    "current": "現在",
+    "proposed": "提案",
+    "noDescription": "説明なし"
+  },
+  "confirm": {
+    "cancel": "この生成実行をキャンセルしますか？",
+    "delete": "この生成実行とその提案を削除しますか？"
+  },
+  "toast": {
+    "cancelFailed": "実行をキャンセルできませんでした",
+    "deleteFailed": "実行を削除できませんでした",
+    "deleted": "生成実行を削除しました"
+  }
+}

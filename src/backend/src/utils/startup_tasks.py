@@ -391,6 +391,18 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize OntologyGeneratorManager: {e}", exc_info=True)
 
+        # --- MetadataGenerationManager (dbxmetagen Generation Runs) ---
+        try:
+            from src.controller.metadata_generation_manager import MetadataGenerationManager
+            app.state.metadata_generation_manager = MetadataGenerationManager(
+                settings=settings,
+                jobs_manager=getattr(app.state, 'jobs_manager', None),
+                workspace_client_factory=lambda: ws_client,
+            )
+            logger.info("MetadataGenerationManager initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize MetadataGenerationManager: {e}", exc_info=True)
+
         # --- SchemaImportRunsManager (async/background Schema Importer) ---
         try:
             from src.controller.schema_import_runs_manager import SchemaImportRunsManager

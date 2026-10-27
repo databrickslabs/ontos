@@ -37,6 +37,8 @@ import SecurityFeatures from './views/security-features';
 import Entitlements from './views/entitlements';
 import EntitlementsSync from './views/entitlements-sync';
 import DataAssetReviews from './views/data-asset-reviews';
+import MetadataGenerationView from './views/metadata-generation';
+import MetadataGenerationRunDetails from './views/metadata-generation-run-details';
 import DataAssetReviewDetails from './views/data-asset-review-details';
 import DataCatalog from './views/data-catalog';
 import DataCatalogDetails from './views/data-catalog-details';
@@ -199,6 +201,8 @@ export default function App() {
               <Route path="/schema-importer" element={<SchemaImporterView />} />
               <Route path="/domain-sync" element={<SyncDomainsView />} />
               <Route path="/ontology-generator" element={<Navigate to="/concepts/generator" replace />} />
+              <Route path="/metadata-generation" element={<MetadataGenerationView />} />
+              <Route path="/metadata-generation/runs/:runId" element={<MetadataGenerationRunDetails />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />
               <Route path="/data-asset-reviews/:requestId" element={<DataAssetReviewDetails />} />
               <Route path="/data-catalog" element={<DataCatalog />} />

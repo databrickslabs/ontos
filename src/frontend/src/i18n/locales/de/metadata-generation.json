@@ -1,0 +1,91 @@
+{
+  "title": "Metadatengenerierung",
+  "subtitle": "Erzeugen Sie Tabellen- und Spaltenbeschreibungen für Unity Catalog mit dbxmetagen, prüfen Sie sie und wenden Sie sie an.",
+  "actions": {
+    "newRun": "Neuer Lauf",
+    "cancelRun": "Lauf abbrechen",
+    "deleteRun": "Lauf löschen"
+  },
+  "list": {
+    "empty": "Noch keine Generierungsläufe. Starten Sie einen, um Beschreibungen zu erzeugen.",
+    "selectionMore": "{{first}} und {{count}} weitere",
+    "columns": {
+      "selection": "Auswahl",
+      "status": "Status",
+      "suggestions": "Vorschläge",
+      "startedBy": "Gestartet von",
+      "created": "Erstellt"
+    }
+  },
+  "newRun": {
+    "title": "Neuer Generierungslauf",
+    "description": "Wählen Sie Kataloge, Schemas, Tabellen oder Views. Ein Katalog oder Schema umfasst alle seine Tabellen.",
+    "selectObjects": "Zu beschreibende Objekte",
+    "catalogLoadFailed": "Kataloge konnten nicht geladen werden",
+    "removeSelection": "{{fqn}} entfernen",
+    "commentStyle": "Beschreibungsstil",
+    "model": "Serving-Endpunkt",
+    "modelPlaceholder": "Standard-Endpunkt",
+    "regenerateExisting": "Vorhandene Beschreibungen neu generieren",
+    "regenerateExistingHint": "Standardmäßig erhalten nur Objekte ohne Beschreibung Vorschläge.",
+    "selectionRequired": "Wählen Sie mindestens ein Objekt aus.",
+    "startFailed": "Der Generierungslauf konnte nicht gestartet werden",
+    "start": "Lauf starten"
+  },
+  "selectionType": {
+    "catalog": "Katalog",
+    "schema": "Schema",
+    "table": "Tabelle"
+  },
+  "commentStyle": {
+    "concise": "Knapp",
+    "standard": "Standard",
+    "detailed": "Ausführlich"
+  },
+  "runStatus": {
+    "pending": "Ausstehend",
+    "running": "Läuft",
+    "ingesting": "Ergebnisse werden geladen",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen"
+  },
+  "suggestionStatus": {
+    "pending": "Ausstehend",
+    "accepted": "Akzeptiert",
+    "rejected": "Abgelehnt",
+    "applied": "Angewendet",
+    "conflict": "Konflikt",
+    "not_applicable": "Nicht anwendbar",
+    "superseded": "Ersetzt"
+  },
+  "objectType": {
+    "table": "Tabellenbeschreibung",
+    "view": "View-Beschreibung",
+    "column": "Spaltenbeschreibung"
+  },
+  "detail": {
+    "runTitle": "Lauf {{id}}",
+    "startedBy": "Gestartet von {{user}}",
+    "selection": "Auswahl",
+    "options": "Optionen",
+    "regenerateExisting": "vorhandene werden neu generiert",
+    "suggestionsTitle": "Beschreibungsvorschläge",
+    "statusFilter": "Nach Status filtern",
+    "allStatuses": "Alle Status",
+    "noSuggestions": "Keine Vorschläge.",
+    "suggestionsLoadFailed": "Die Vorschläge konnten nicht geladen werden",
+    "current": "Aktuell",
+    "proposed": "Vorgeschlagen",
+    "noDescription": "Keine Beschreibung"
+  },
+  "confirm": {
+    "cancel": "Diesen Generierungslauf abbrechen?",
+    "delete": "Diesen Generierungslauf und seine Vorschläge löschen?"
+  },
+  "toast": {
+    "cancelFailed": "Der Lauf konnte nicht abgebrochen werden",
+    "deleteFailed": "Der Lauf konnte nicht gelöscht werden",
+    "deleted": "Generierungslauf gelöscht"
+  }
+}

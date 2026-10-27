@@ -1,0 +1,91 @@
+{
+  "title": "Metadata Generation",
+  "subtitle": "Generate table and column descriptions for Unity Catalog with dbxmetagen, review them, and apply them.",
+  "actions": {
+    "newRun": "New run",
+    "cancelRun": "Cancel run",
+    "deleteRun": "Delete run"
+  },
+  "list": {
+    "empty": "No Generation Runs yet. Start one to generate descriptions.",
+    "selectionMore": "{{first}} and {{count}} more",
+    "columns": {
+      "selection": "Selection",
+      "status": "Status",
+      "suggestions": "Suggestions",
+      "startedBy": "Started by",
+      "created": "Created"
+    }
+  },
+  "newRun": {
+    "title": "New Generation Run",
+    "description": "Pick catalogs, schemas, tables or views. A catalog or schema includes all of its tables.",
+    "selectObjects": "Objects to describe",
+    "catalogLoadFailed": "Failed to load catalogs",
+    "removeSelection": "Remove {{fqn}}",
+    "commentStyle": "Description style",
+    "model": "Serving endpoint",
+    "modelPlaceholder": "Default endpoint",
+    "regenerateExisting": "Regenerate existing descriptions",
+    "regenerateExistingHint": "By default only objects without a description get suggestions.",
+    "selectionRequired": "Select at least one object.",
+    "startFailed": "Failed to start the Generation Run",
+    "start": "Start run"
+  },
+  "selectionType": {
+    "catalog": "Catalog",
+    "schema": "Schema",
+    "table": "Table"
+  },
+  "commentStyle": {
+    "concise": "Concise",
+    "standard": "Standard",
+    "detailed": "Detailed"
+  },
+  "runStatus": {
+    "pending": "Pending",
+    "running": "Running",
+    "ingesting": "Loading results",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "suggestionStatus": {
+    "pending": "Pending",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "applied": "Applied",
+    "conflict": "Conflict",
+    "not_applicable": "Not applicable",
+    "superseded": "Superseded"
+  },
+  "objectType": {
+    "table": "Table description",
+    "view": "View description",
+    "column": "Column description"
+  },
+  "detail": {
+    "runTitle": "Run {{id}}",
+    "startedBy": "Started by {{user}}",
+    "selection": "Selection",
+    "options": "Options",
+    "regenerateExisting": "regenerating existing",
+    "suggestionsTitle": "Description Suggestions",
+    "statusFilter": "Filter by status",
+    "allStatuses": "All statuses",
+    "noSuggestions": "No suggestions.",
+    "suggestionsLoadFailed": "Failed to load the suggestions",
+    "current": "Current",
+    "proposed": "Proposed",
+    "noDescription": "No description"
+  },
+  "confirm": {
+    "cancel": "Cancel this Generation Run?",
+    "delete": "Delete this Generation Run and its suggestions?"
+  },
+  "toast": {
+    "cancelFailed": "Failed to cancel the run",
+    "deleteFailed": "Failed to delete the run",
+    "deleted": "Generation Run deleted"
+  }
+}

@@ -90,5 +90,9 @@
   "about": {
     "name": "Sobre",
     "description": "Informações sobre o aplicativo e seus recursos."
+  },
+  "metadata-generation": {
+    "name": "Geração de metadados",
+    "description": "Gere, revise e aplique descrições do Unity Catalog com o dbxmetagen."
   }
 }

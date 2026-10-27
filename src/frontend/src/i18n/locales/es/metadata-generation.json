@@ -1,0 +1,91 @@
+{
+  "title": "Generación de metadatos",
+  "subtitle": "Genere descripciones de tablas y columnas para Unity Catalog con dbxmetagen, revíselas y aplíquelas.",
+  "actions": {
+    "newRun": "Nueva ejecución",
+    "cancelRun": "Cancelar ejecución",
+    "deleteRun": "Eliminar ejecución"
+  },
+  "list": {
+    "empty": "Aún no hay ejecuciones de generación. Inicie una para generar descripciones.",
+    "selectionMore": "{{first}} y {{count}} más",
+    "columns": {
+      "selection": "Selección",
+      "status": "Estado",
+      "suggestions": "Sugerencias",
+      "startedBy": "Iniciada por",
+      "created": "Creada"
+    }
+  },
+  "newRun": {
+    "title": "Nueva ejecución de generación",
+    "description": "Elija catálogos, esquemas, tablas o vistas. Un catálogo o esquema incluye todas sus tablas.",
+    "selectObjects": "Objetos a describir",
+    "catalogLoadFailed": "No se pudieron cargar los catálogos",
+    "removeSelection": "Quitar {{fqn}}",
+    "commentStyle": "Estilo de descripción",
+    "model": "Endpoint de serving",
+    "modelPlaceholder": "Endpoint predeterminado",
+    "regenerateExisting": "Regenerar las descripciones existentes",
+    "regenerateExistingHint": "De forma predeterminada, solo los objetos sin descripción reciben sugerencias.",
+    "selectionRequired": "Seleccione al menos un objeto.",
+    "startFailed": "No se pudo iniciar la ejecución de generación",
+    "start": "Iniciar ejecución"
+  },
+  "selectionType": {
+    "catalog": "Catálogo",
+    "schema": "Esquema",
+    "table": "Tabla"
+  },
+  "commentStyle": {
+    "concise": "Conciso",
+    "standard": "Estándar",
+    "detailed": "Detallado"
+  },
+  "runStatus": {
+    "pending": "Pendiente",
+    "running": "En ejecución",
+    "ingesting": "Cargando resultados",
+    "completed": "Completada",
+    "failed": "Fallida",
+    "cancelled": "Cancelada"
+  },
+  "suggestionStatus": {
+    "pending": "Pendiente",
+    "accepted": "Aceptada",
+    "rejected": "Rechazada",
+    "applied": "Aplicada",
+    "conflict": "Conflicto",
+    "not_applicable": "No aplicable",
+    "superseded": "Reemplazada"
+  },
+  "objectType": {
+    "table": "Descripción de la tabla",
+    "view": "Descripción de la vista",
+    "column": "Descripción de la columna"
+  },
+  "detail": {
+    "runTitle": "Ejecución {{id}}",
+    "startedBy": "Iniciada por {{user}}",
+    "selection": "Selección",
+    "options": "Opciones",
+    "regenerateExisting": "regenerando las existentes",
+    "suggestionsTitle": "Sugerencias de descripción",
+    "statusFilter": "Filtrar por estado",
+    "allStatuses": "Todos los estados",
+    "noSuggestions": "No hay sugerencias.",
+    "suggestionsLoadFailed": "No se pudieron cargar las sugerencias",
+    "current": "Actual",
+    "proposed": "Propuesta",
+    "noDescription": "Sin descripción"
+  },
+  "confirm": {
+    "cancel": "¿Cancelar esta ejecución de generación?",
+    "delete": "¿Eliminar esta ejecución de generación y sus sugerencias?"
+  },
+  "toast": {
+    "cancelFailed": "No se pudo cancelar la ejecución",
+    "deleteFailed": "No se pudo eliminar la ejecución",
+    "deleted": "Ejecución de generación eliminada"
+  }
+}

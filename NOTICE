@@ -108,3 +108,9 @@ lucide-icons/lucide - https://github.com/lucide-icons/lucide
 Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2023 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2025.
 
 
+
+________________
+This Software uses the following project, licensed under the Databricks License (https://github.com/databricks-industry-solutions/dbxmetagen/blob/main/LICENSE.md). It is not bundled; the Metadata Generation background job installs it at a pinned version on Databricks compute:
+
+databricks-industry-solutions/dbxmetagen - https://github.com/databricks-industry-solutions/dbxmetagen
+Copyright (2025-2026) Databricks, Inc.

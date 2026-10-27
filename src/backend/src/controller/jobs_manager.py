@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any
 import json
 import configparser
 import time
@@ -25,6 +25,14 @@ from src.models.workflow_configurations import WorkflowParameterDefinition, Work
 logger = get_logger(__name__)
 
 
+# Life-cycle states after which a job run will not change any more
+_FINAL_LIFE_CYCLE_STATES = {
+    RunLifeCycleState.TERMINATED,
+    RunLifeCycleState.SKIPPED,
+    RunLifeCycleState.INTERNAL_ERROR,
+}
+
+
 class JobsManager:
     def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
@@ -42,6 +50,41 @@ class JobsManager:
         # workflow-free deployment lets Lakebase idle down); True = at least one.
         # Authoritative because JobsManager is a single app-state singleton.
         self._has_installations: Optional[bool] = None
+        # Per-workflow callbacks invoked by the poller when a run terminates:
+        # handler(db, run_id, result_state). Lets features that track their
+        # own run records (e.g. Metadata Generation) finish runs nobody watches.
+        self._run_terminated_handlers: Dict[str, Callable[[Session, int, Optional[str]], None]] = {}
+        # Callbacks run once per polling cycle that saw installed workflows:
+        # handler(db). For features that retry their own unfinished work.
+        self._poll_cycle_handlers: List[Callable[[Session], None]] = []
+
+    def register_run_terminated_handler(
+        self, workflow_id: str, handler: Callable[[Session, int, Optional[str]], None]
+    ) -> None:
+        """Register a callback for terminated runs of ``workflow_id``."""
+        self._run_terminated_handlers[workflow_id] = handler
+
+    def register_poll_cycle_handler(self, handler: Callable[[Session], None]) -> None:
+        """Register a callback invoked on every polling cycle."""
+        self._poll_cycle_handlers.append(handler)
+
+    def _run_poll_cycle_handlers(self, db: Session) -> None:
+        for handler in self._poll_cycle_handlers:
+            try:
+                handler(db)
+            except Exception as e:
+                logger.error(f"Poll-cycle handler {handler!r} failed: {e}", exc_info=True)
+                db.rollback()
+
+    def _notify_run_terminated(self, workflow_id: str, run_id: int, result_state: Optional[str], db: Session) -> None:
+        handler = self._run_terminated_handlers.get(workflow_id)
+        if handler is None:
+            return
+        try:
+            handler(db, run_id, result_state)
+        except Exception as e:
+            logger.error(f"Run-terminated handler for workflow '{workflow_id}' failed on run {run_id}: {e}", exc_info=True)
+            db.rollback()
 
     def list_available_workflows(self) -> List[Dict[str, str]]:
         root = self._workflows_root
@@ -1068,6 +1111,9 @@ class JobsManager:
             # Tracks whether this cycle observed anything worth polling promptly
             # for: an active (non-terminal) run, or a persisted state change.
             saw_activity = False
+            # (workflow_id, run_id, state) of runs that ended this cycle; handed
+            # to run-terminated handlers once the cycle's updates are committed
+            terminated_runs: List[tuple] = []
 
             # Create a new database session for this polling iteration
             db = next(get_db())
@@ -1156,6 +1202,15 @@ class JobsManager:
                                 run_data=run_data
                             )
 
+                            if (run.state.life_cycle_state in _FINAL_LIFE_CYCLE_STATES and
+                                    not job_run.notified_at):
+                                terminated_runs.append((
+                                    installation.workflow_id,
+                                    run.run_id,
+                                    # SKIPPED / INTERNAL_ERROR runs have no result state
+                                    (run.state.result_state or run.state.life_cycle_state).value,
+                                ))
+
                             # Create notification if job terminated unsuccessfully (failed, canceled, timed out, etc.)
                             if (run.state.life_cycle_state == RunLifeCycleState.TERMINATED and
                                 run.state.result_state != RunResultState.SUCCESS):
@@ -1231,6 +1286,23 @@ class JobsManager:
             finally:
                 # Always close the session
                 db.close()
+
+            # Feature handlers run after the cycle's own updates are committed,
+            # on a separate session, so their commits or rollbacks can't touch them
+            has_run_handlers = terminated_runs and self._run_terminated_handlers
+            if has_run_handlers or (self._poll_cycle_handlers and self._has_installations):
+                try:
+                    handler_db = next(get_db())
+                    try:
+                        for workflow_id, run_id, state in terminated_runs:
+                            self._notify_run_terminated(workflow_id, run_id, state, handler_db)
+                        if self._has_installations:
+                            self._run_poll_cycle_handlers(handler_db)
+                    finally:
+                        handler_db.close()
+                except Exception as e:
+                    # Never let a handler (or opening its session) end the polling thread
+                    logger.error(f"Error running job handlers: {e}", exc_info=True)
 
             # Adaptive interval: reset to base when there's live activity to
             # track, otherwise ease off toward the cap so a quiet system stops

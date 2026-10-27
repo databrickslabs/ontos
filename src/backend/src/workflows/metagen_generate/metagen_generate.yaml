@@ -1,0 +1,51 @@
+name: "Metadata Generation"
+description: "Generate table and column descriptions for Unity Catalog objects using dbxmetagen"
+format: "MULTI_TASK"
+environments:
+  - environment_key: "metagen-env"
+    spec:
+      dependencies:
+        # dbxmetagen is not published to PyPI; pinned to a reviewed commit.
+        - "dbxmetagen @ git+https://github.com/databricks-industry-solutions/dbxmetagen@ac192b4fdddcd0188187f36a7ce06d15c7d771f3"
+tasks:
+  - task_key: "metagen_generate"
+    spark_python_task:
+      python_file: "metagen_generate.py"
+      parameters:
+        - "--ontos_run_id"
+        - "{{job.parameters.ontos_run_id}}"
+        - "--table_names"
+        - "{{job.parameters.table_names}}"
+        - "--output_catalog"
+        - "{{job.parameters.output_catalog}}"
+        - "--output_schema"
+        - "{{job.parameters.output_schema}}"
+        - "--model"
+        - "{{job.parameters.model}}"
+        - "--comment_style"
+        - "{{job.parameters.comment_style}}"
+        - "--allow_data"
+        - "{{job.parameters.allow_data}}"
+        - "--sample_size"
+        - "{{job.parameters.sample_size}}"
+        - "--regenerate_existing"
+        - "{{job.parameters.regenerate_existing}}"
+    environment_key: "metagen-env"
+
+parameters:
+  ontos_run_id: ""
+  table_names: ""
+  output_catalog: ""
+  output_schema: ""
+  model: "databricks-claude-sonnet-4-6"
+  comment_style: "standard"
+  allow_data: "false"
+  sample_size: "0"
+  regenerate_existing: "false"
+
+timeout_seconds: 7200
+max_concurrent_runs: 3
+
+tags:
+  environment: "production"
+  owner: "ontos"

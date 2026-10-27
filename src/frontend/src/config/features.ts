@@ -15,6 +15,7 @@ import {
     Box,
     ShoppingCart,
     ClipboardList,
+    Sparkles,
     type LucideIcon,
   } from 'lucide-react';
   
@@ -77,6 +78,16 @@ import {
       group: 'Build',
       maturity: 'ga',
       showInLanding: true,
+    },
+    {
+      id: 'metadata-generation',
+      name: 'Metadata Generation',
+      path: '/metadata-generation',
+      description: 'Generate, review and apply Unity Catalog descriptions with dbxmetagen.',
+      icon: Sparkles,
+      group: 'Build',
+      maturity: 'alpha',
+      showInLanding: false,
     },
     {
       id: 'concepts',

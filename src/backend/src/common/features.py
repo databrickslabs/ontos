@@ -100,6 +100,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_BUILD,  # lives under /concepts/mapping alongside Concepts
     },
+    'metadata-generation': {
+        'name': 'Metadata Generation',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_BUILD,
+    },
     'schema-importer': {
         # Cross-cutting: schema-importer has no top-level sidebar entry; it
         # is launched inline from Data Contracts / Data Products to populate

@@ -1,0 +1,91 @@
+{
+  "title": "Metadatageneratie",
+  "subtitle": "Genereer tabel- en kolombeschrijvingen voor Unity Catalog met dbxmetagen, beoordeel ze en pas ze toe.",
+  "actions": {
+    "newRun": "Nieuwe run",
+    "cancelRun": "Run annuleren",
+    "deleteRun": "Run verwijderen"
+  },
+  "list": {
+    "empty": "Nog geen generatieruns. Start er een om beschrijvingen te genereren.",
+    "selectionMore": "{{first}} en {{count}} meer",
+    "columns": {
+      "selection": "Selectie",
+      "status": "Status",
+      "suggestions": "Suggesties",
+      "startedBy": "Gestart door",
+      "created": "Aangemaakt"
+    }
+  },
+  "newRun": {
+    "title": "Nieuwe generatierun",
+    "description": "Kies catalogi, schema's, tabellen of views. Een catalogus of schema omvat al zijn tabellen.",
+    "selectObjects": "Te beschrijven objecten",
+    "catalogLoadFailed": "Catalogi konden niet worden geladen",
+    "removeSelection": "{{fqn}} verwijderen",
+    "commentStyle": "Beschrijvingsstijl",
+    "model": "Serving-endpoint",
+    "modelPlaceholder": "Standaard-endpoint",
+    "regenerateExisting": "Bestaande beschrijvingen opnieuw genereren",
+    "regenerateExistingHint": "Standaard krijgen alleen objecten zonder beschrijving suggesties.",
+    "selectionRequired": "Selecteer ten minste één object.",
+    "startFailed": "De generatierun kon niet worden gestart",
+    "start": "Run starten"
+  },
+  "selectionType": {
+    "catalog": "Catalogus",
+    "schema": "Schema",
+    "table": "Tabel"
+  },
+  "commentStyle": {
+    "concise": "Beknopt",
+    "standard": "Standaard",
+    "detailed": "Uitgebreid"
+  },
+  "runStatus": {
+    "pending": "In afwachting",
+    "running": "Bezig",
+    "ingesting": "Resultaten laden",
+    "completed": "Voltooid",
+    "failed": "Mislukt",
+    "cancelled": "Geannuleerd"
+  },
+  "suggestionStatus": {
+    "pending": "In afwachting",
+    "accepted": "Geaccepteerd",
+    "rejected": "Afgewezen",
+    "applied": "Toegepast",
+    "conflict": "Conflict",
+    "not_applicable": "Niet van toepassing",
+    "superseded": "Vervangen"
+  },
+  "objectType": {
+    "table": "Tabelbeschrijving",
+    "view": "Viewbeschrijving",
+    "column": "Kolombeschrijving"
+  },
+  "detail": {
+    "runTitle": "Run {{id}}",
+    "startedBy": "Gestart door {{user}}",
+    "selection": "Selectie",
+    "options": "Opties",
+    "regenerateExisting": "bestaande worden opnieuw gegenereerd",
+    "suggestionsTitle": "Beschrijvingssuggesties",
+    "statusFilter": "Filteren op status",
+    "allStatuses": "Alle statussen",
+    "noSuggestions": "Geen suggesties.",
+    "suggestionsLoadFailed": "De suggesties konden niet worden geladen",
+    "current": "Huidig",
+    "proposed": "Voorgesteld",
+    "noDescription": "Geen beschrijving"
+  },
+  "confirm": {
+    "cancel": "Deze generatierun annuleren?",
+    "delete": "Deze generatierun en de bijbehorende suggesties verwijderen?"
+  },
+  "toast": {
+    "cancelFailed": "De run kon niet worden geannuleerd",
+    "deleteFailed": "De run kon niet worden verwijderd",
+    "deleted": "Generatierun verwijderd"
+  }
+}

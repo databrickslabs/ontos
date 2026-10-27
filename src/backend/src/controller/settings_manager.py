@@ -95,6 +95,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.ADMIN,
         'compliance': FeatureAccessLevel.ADMIN,
+        'access-policies': FeatureAccessLevel.ADMIN,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'estate-manager': FeatureAccessLevel.ADMIN,
         'master-data': FeatureAccessLevel.ADMIN,
@@ -114,6 +115,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_WRITE,
         'compliance': FeatureAccessLevel.READ_ONLY,
+        'access-policies': FeatureAccessLevel.READ_WRITE,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'data-asset-reviews': FeatureAccessLevel.READ_WRITE,
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
@@ -148,6 +150,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         'entitlements': FeatureAccessLevel.ADMIN,
         'entitlements-sync': FeatureAccessLevel.ADMIN,
         'compliance': FeatureAccessLevel.READ_WRITE,
+        'access-policies': FeatureAccessLevel.ADMIN,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'data-asset-reviews': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment

@@ -271,6 +271,12 @@ def create_default_registry() -> ToolRegistry:
         AssignTagToEntityTool,
         RemoveTagFromEntityTool
     )
+    from src.tools.access_policies import (
+        CheckAccessTool,
+        ListAccessPoliciesTool,
+        GetAccessPolicyTool,
+        GetOdrlProfileTool,
+    )
     from src.tools.unity_catalog import (
         GetCurrentUserTool,
         ListCatalogsTool,
@@ -298,6 +304,12 @@ def create_default_registry() -> ToolRegistry:
     registry.register(UpdateDataContractTool())
     registry.register(DeleteDataContractTool())
     
+    # Access Policies tools (ODRL; read + deterministic access check)
+    registry.register(CheckAccessTool())
+    registry.register(ListAccessPoliciesTool())
+    registry.register(GetAccessPolicyTool())
+    registry.register(GetOdrlProfileTool())
+
     # Domains tools (full CRUD)
     registry.register(SearchDomainsTool())
     registry.register(GetDomainTool())

@@ -170,6 +170,10 @@
         "notify-denied": "Your publication request for '{{entity_name}}' has been denied.",
         "notify-invalid": "Publication request for '{{entity_name}}' was rejected: only approved data contracts and active data products can be published.",
         "notify-error": "An error occurred while publishing '{{entity_name}}'."
+      },
+      "access-policy-review-request": {
+        "notify-requester": "Your access policy review request has been submitted. A data steward will review it shortly.",
+        "notify-stewards": "An access policy entity was submitted for review. Open Access Policies to approve or send it back."
       }
     },
     "approval": {

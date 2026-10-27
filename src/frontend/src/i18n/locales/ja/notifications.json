@@ -170,6 +170,10 @@
         "notify-denied": "「{{entity_name}}」の公開リクエストが拒否されました。",
         "notify-invalid": "「{{entity_name}}」の公開リクエストは却下されました。公開できるのは承認済みのデータコントラクトとアクティブなデータプロダクトのみです。",
         "notify-error": "「{{entity_name}}」の公開中にエラーが発生しました。"
+      },
+      "access-policy-review-request": {
+        "notify-requester": "アクセスポリシーのレビュー依頼を送信しました。データスチュワードがまもなく確認します。",
+        "notify-stewards": "アクセスポリシーの項目がレビューに提出されました。アクセスポリシーを開いて承認するか差し戻してください。"
       }
     },
     "approval": {

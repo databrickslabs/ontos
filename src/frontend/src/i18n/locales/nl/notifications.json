@@ -170,6 +170,10 @@
         "notify-denied": "Uw publicatieaanvraag voor '{{entity_name}}' is geweigerd.",
         "notify-invalid": "De publicatieaanvraag voor '{{entity_name}}' is afgewezen: alleen goedgekeurde datacontracten en actieve dataproducten kunnen worden gepubliceerd.",
         "notify-error": "Er is een fout opgetreden bij het publiceren van '{{entity_name}}'."
+      },
+      "access-policy-review-request": {
+        "notify-requester": "Uw beoordelingsverzoek voor het toegangsbeleid is ingediend. Een data steward beoordeelt het binnenkort.",
+        "notify-stewards": "Er is een toegangsbeleid-item ter beoordeling ingediend. Open Toegangsbeleid om het goed te keuren of terug te sturen."
       }
     },
     "approval": {

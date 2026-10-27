@@ -15,6 +15,9 @@ class OwnerObjectType(str, Enum):
     BUSINESS_TERM = "business_term"
     ASSET = "asset"
     TAG = "tag"
+    ACCESS_POLICY = "access_policy"
+    ACCESS_AUDIENCE = "access_audience"
+    ACCESS_ASSET_COLLECTION = "access_asset_collection"
 
 
 # --- Business Owner Models ---

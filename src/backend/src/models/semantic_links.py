@@ -7,7 +7,8 @@ from typing import Optional, Literal
 #   asset      = AssetDb UUID (polymorphic asset-backed entity: Table, View, Dataset, Dashboard, Column, ...)
 EntityType = Literal[
     'data_domain', 'data_product', 'data_contract', 'data_contract_schema', 'data_contract_property',
-    'dataset', 'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'
+    'dataset', 'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column',
+    'access_policy', 'access_audience', 'access_asset_collection',
 ]
 
 

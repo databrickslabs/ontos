@@ -90,6 +90,7 @@ class EntityType(str, Enum):
     JOB = "job"  # For background job lifecycle workflows
     SUBSCRIPTION = "subscription"  # For subscription events
     USER = "user"  # The user themselves — for on_first_access disclaimer/ToU workflows
+    ACCESS_POLICY = "access_policy"  # Access Policies (ODRL) lifecycle reviews
 
 
 class ScopeType(str, Enum):

@@ -8,10 +8,17 @@ import json
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
-from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.controller.lifecycle_fields import (
+    LifecycleFieldError, deprecation_details_from_strings,
+)
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
+
+
+# The update tool's answer to a sunset_date that isn't YYYY-MM-DD
+INVALID_SUNSET_DATE = "Invalid sunset_date: expected YYYY-MM-DD"
+INVALID_SUNSET_DATE_CODE = "sunset_date_invalid"
 
 
 def _original_id_from_props(custom_properties) -> Optional[str]:
@@ -288,14 +295,21 @@ class UpdateDataContractTool(BaseTool):
                         error=f"Data contract '{contract_id}' not found"
                     )
                 if (current.status or 'draft').lower() != status.lower():
+                    try:
+                        deprecation = deprecation_details_from_strings(
+                            deprecation_reason, sunset_date, replacement_id
+                        )
+                    except ValueError:
+                        return ToolResult(
+                            success=False, error=INVALID_SUNSET_DATE,
+                            error_code=INVALID_SUNSET_DATE_CODE,
+                        )
                     updated = ctx.data_contracts_manager.transition_status(
                         db=ctx.db,
                         contract_id=contract_id,
                         new_status=status.lower(),
                         current_user=None,
-                        deprecation=deprecation_details_from_strings(
-                            deprecation_reason, sunset_date, replacement_id
-                        ),
+                        deprecation=deprecation,
                     )
                 else:
                     updated = current
@@ -330,6 +344,11 @@ class UpdateDataContractTool(BaseTool):
                 }
             )
             
+        except LifecycleFieldError as err:
+            # A deprecation the details don't allow: an expected, app-written error
+            # (no SQL or internal text), so its message and code go to the client,
+            # like the API's coded 400. Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("update_data_contract", e))
 

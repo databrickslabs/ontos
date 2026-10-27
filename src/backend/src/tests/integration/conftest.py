@@ -30,14 +30,6 @@ _WS_GETTERS = ('get_workspace_client', 'get_obo_workspace_client')
 # the suite can run in CI. Fix and remove entries one at a time, as with the
 # unit tests' collect_ignore list.
 # Candidate app bugs: the test asserts the intended behaviour and fails on it.
-_NO_GROUPS = (
-    'app: get_user_groups() returns [] outside LOCAL/mock mode, so an admin '
-    'gets 403 creating a global comment'
-)
-_AUDIT_UUID = (
-    'app: the create route puts the new id (a UUID) in the audit details, '
-    'which are not JSON serialisable, so no audit entry is written'
-)
 _ODCS_DOMAIN = (
     'app (candidate): an imported `domain` that matches no native domain is kept only as '
     'the ontosOriginalDomain custom property; the export omits the root `domain`'
@@ -51,8 +43,6 @@ _DOMAIN_CYCLE = (
 )
 
 QUARANTINE = {
-    'test_comments_routes.py::TestCommentsRoutes::test_create_comment': _NO_GROUPS,
-    'test_costs_routes.py::TestCostsRoutes::test_create_cost_item_is_audited': _AUDIT_UUID,
     'test_data_domains_routes.py::TestDataDomainsRoutes::'
     'test_create_domain_with_nonexistent_parent_fails': _DOMAIN_NO_PARENT,
     'test_data_domains_routes.py::TestDataDomainsRoutes::'

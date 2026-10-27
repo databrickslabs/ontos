@@ -10,8 +10,10 @@ from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
 from src.controller import search_scoring
+from src.controller.lifecycle_fields import (
+    LifecycleFieldError, deprecation_details_from_strings,
+)
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
-from src.controller.lifecycle_fields import deprecation_details_from_strings
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -119,6 +121,11 @@ def _serialize_product(product) -> Dict[str, Any]:
     }
 
 logger = get_logger(__name__)
+
+
+# The update tool's answer to a sunset_date that isn't YYYY-MM-DD
+INVALID_SUNSET_DATE = "Invalid sunset_date: expected YYYY-MM-DD"
+INVALID_SUNSET_DATE_CODE = "sunset_date_invalid"
 
 
 class SearchDataProductsTool(BaseTool):
@@ -447,11 +454,17 @@ class UpdateDataProductTool(BaseTool):
                     )
                 current_status = getattr(current.status, 'value', current.status) or 'draft'
                 if str(current_status).lower() != status.lower():
-                    ctx.data_products_manager.transition_status(
-                        product_id, status,
-                        deprecation=deprecation_details_from_strings(
+                    try:
+                        deprecation = deprecation_details_from_strings(
                             deprecation_reason, sunset_date, replacement_id
-                        ),
+                        )
+                    except ValueError:
+                        return ToolResult(
+                            success=False, error=INVALID_SUNSET_DATE,
+                            error_code=INVALID_SUNSET_DATE_CODE,
+                        )
+                    ctx.data_products_manager.transition_status(
+                        product_id, status, deprecation=deprecation,
                     )
 
             # Update the product
@@ -484,6 +497,11 @@ class UpdateDataProductTool(BaseTool):
                 }
             )
             
+        except LifecycleFieldError as err:
+            # A deprecation the details don't allow: an expected, app-written error
+            # (no SQL or internal text), so its message and code go to the client,
+            # like the API's coded 400. Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("update_data_product", e))
 

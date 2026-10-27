@@ -18,7 +18,7 @@ hooks) don't care which is active:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
@@ -89,11 +89,43 @@ class InMemoryBackend(SearchBackend):
 
 
 class PostgresBackend(SearchBackend):
-    """DB-backed full-text search over the search_documents table."""
+    """DB-backed search over the search_documents table, ranked by the
+    advanced-search Settings exactly like the in-memory scorer."""
 
-    def __init__(self, session_factory):
+    def __init__(
+        self,
+        session_factory,
+        config_provider: Optional[Callable[[], Any]] = None,
+        engine_name: str = "auto",
+        trgm_threshold: float = 0.45,
+    ):
         # session_factory() -> context manager yielding a Session (get_db_session).
+        # config_provider() -> the current SearchConfig (hot-reloaded per call), so
+        # Settings changes apply on the next query without a reindex.
         self._session_factory = session_factory
+        self._config_provider = config_provider
+        self._engine_name = engine_name
+        self._trgm_threshold = trgm_threshold
+        self.engine = None  # SearchEngine, set by prepare()
+
+    def prepare(self) -> None:
+        """Detect the engine from installed extensions and ensure its indexes.
+
+        Called once at startup before the backfill. A misconfigured explicit
+        ``SEARCH_ENGINE=lakebase`` raises; anything else degrades to plain
+        Settings-driven search (no typo fallback) with a logged warning.
+        """
+        from src.repositories.search_engine import SearchEngineUnavailable, prepare_engine
+        try:
+            self.engine = prepare_engine(self._session_factory, self._engine_name)
+        except SearchEngineUnavailable:
+            raise
+        except Exception as e:
+            logger.warning(f"Search engine detection failed; continuing without engine extras: {e}")
+            self.engine = None
+
+    def _config(self):
+        return self._config_provider() if self._config_provider else None
 
     def search(self, query, *, type_filter=None, filters=None, allowed_features=None,
                limit=25, offset=0, include_facets=True, fields=None) -> Dict[str, Any]:
@@ -102,13 +134,17 @@ class PostgresBackend(SearchBackend):
             return search_repository.search(
                 db, query, type_filter=type_filter, filters=filters,
                 allowed_features=allowed_features, limit=limit, offset=offset,
-                include_facets=include_facets, fields=fields,
+                include_facets=include_facets, fields=fields, config=self._config(),
+                engine=self.engine, trgm_threshold=self._trgm_threshold,
             )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:
         from src.repositories import search_repository
         with self._session_factory() as db:
-            return search_repository.search_index_items(db, query, limit=limit)
+            return search_repository.search_index_items(
+                db, query, limit=limit, config=self._config(),
+                engine=self.engine, trgm_threshold=self._trgm_threshold,
+            )
 
     def upsert(self, items: Iterable[SearchIndexItem]) -> None:
         from src.repositories import search_repository
@@ -137,11 +173,16 @@ class PostgresBackend(SearchBackend):
         logger.info(f"PostgresBackend: rebuilt search_documents with {len(rows)} items.")
 
 
-def create_backend(manager: Any, backend_name: str) -> SearchBackend:
+def create_backend(
+    manager: Any, backend_name: str, engine_name: str = "auto", trgm_threshold: float = 0.45,
+) -> SearchBackend:
     """Factory: 'postgres' -> PostgresBackend, anything else -> InMemoryBackend."""
     if (backend_name or "memory").lower() == "postgres":
         from src.common.database import get_db_session
-        logger.info("SearchManager using PostgresBackend (DB-backed full-text search).")
-        return PostgresBackend(get_db_session)
+        logger.info("SearchManager using PostgresBackend (DB-backed, Settings-driven ranking).")
+        return PostgresBackend(
+            get_db_session, config_provider=lambda: manager.config,
+            engine_name=engine_name, trgm_threshold=trgm_threshold,
+        )
     logger.info("SearchManager using InMemoryBackend (in-process index).")
     return InMemoryBackend(manager)

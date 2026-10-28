@@ -110,6 +110,9 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
 
         db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'}) # Use model_dump for Pydantic v2
         db_obj_data['created_by'] = current_user_id
+        # parent_id is a String column: Postgres casts a UUID, SQLite does not.
+        if db_obj_data.get('parent_id') is not None:
+            db_obj_data['parent_id'] = str(db_obj_data['parent_id'])
 
         # Tags are now handled by TagsManager - no serialization needed
 

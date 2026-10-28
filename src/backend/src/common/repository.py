@@ -3,7 +3,7 @@ from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import select, func, String as SAString
+from sqlalchemy import select, func, String as SAString, Uuid as SAUuid
 from uuid import UUID
 
 from src.common.database import Base
@@ -15,6 +15,19 @@ logger = get_logger(__name__)
 ModelType = TypeVar("ModelType", bound=Base)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
+
+def coerce_uuid(value: Any) -> Any:
+    """`value` as a UUID when it is a UUID string, else unchanged.
+
+    For binding to a Uuid column: Postgres casts the string, SQLite needs the UUID.
+    """
+    if isinstance(value, str):
+        try:
+            return UUID(value)
+        except ValueError:
+            return value
+    return value
+
 
 class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """Generic CRUD base class for SQLAlchemy models."""
@@ -29,19 +42,26 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         self.model = model
 
+    def _normalize_id(self, id: Any) -> Any:
+        """The id in the type of the model's primary key column.
+
+        A UUID becomes a string for a String key, a UUID string a UUID for a Uuid key.
+        """
+        try:
+            id_type = getattr(self.model, 'id').property.columns[0].type
+        except Exception:
+            # If any introspection fails, fall back to original id
+            return id
+        if isinstance(id_type, SAString) and isinstance(id, UUID):
+            return str(id)
+        if isinstance(id_type, SAUuid) and id_type.as_uuid:
+            return coerce_uuid(id)
+        return id
+
     def get(self, db: Session, id: Any) -> Optional[ModelType]:
         logger.debug(f"Fetching {self.model.__name__} with id: {id}")
         try:
-            # Normalize UUID to string if model primary key is String
-            normalized_id = id
-            try:
-                model_id_column = getattr(self.model, 'id').property.columns[0]
-                if isinstance(model_id_column.type, SAString) and isinstance(id, UUID):
-                    normalized_id = str(id)
-            except Exception:
-                # If any introspection fails, fall back to original id
-                normalized_id = id
-
+            normalized_id = self._normalize_id(id)
             return db.query(self.model).filter(self.model.id == normalized_id).first()
         except SQLAlchemyError as e:
             logger.error(f"Database error fetching {self.model.__name__} by id {id}: {e}", exc_info=True)
@@ -113,15 +133,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def remove(self, db: Session, *, id: Any) -> Optional[ModelType]:
         logger.debug(f"Deleting {self.model.__name__} with id: {id}")
         try:
-            # Normalize UUID to string if model primary key is String
-            normalized_id = id
-            try:
-                model_id_column = getattr(self.model, 'id').property.columns[0]
-                if isinstance(model_id_column.type, SAString) and isinstance(id, UUID):
-                    normalized_id = str(id)
-            except Exception:
-                normalized_id = id
-
+            normalized_id = self._normalize_id(id)
             obj = db.query(self.model).get(normalized_id)
             if obj:
                 db.delete(obj)

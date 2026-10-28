@@ -17,7 +17,6 @@ collect_ignore = [
     "test_notifications_manager.py",
     "test_search_manager.py",
     "test_security_features_manager.py",
-    "test_semantic_links_manager.py",
     "test_settings_manager.py",
     "test_users_manager.py",
     "test_workflow_executor_scripts.py",

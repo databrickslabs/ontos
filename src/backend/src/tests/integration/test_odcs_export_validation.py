@@ -24,6 +24,8 @@ from src.db_models.data_contracts import (
     SchemaObjectAuthoritativeDefinitionDb,
     SchemaObjectCustomPropertyDb,
 )
+from src.db_models.data_domains import DataDomain
+from src.db_models.domain_associations import EntityDomainAssociationDb
 
 
 class TestODCSExportValidation:
@@ -438,25 +440,34 @@ class TestODCSExportValidation:
 
     def test_odcs_export_has_all_required_root_fields(self, client: TestClient, db_session: Session, comprehensive_contract_db):
         """Test that ODCS export includes all required root-level fields."""
-        with patch('src.repositories.data_domain_repository.data_domain_repo') as mock_domain_repo:
-            mock_domain = Mock()
-            mock_domain.name = "seller"
-            mock_domain_repo.get.return_value = mock_domain
+        # The root `domain` is the primary assigned domain's name (#520).
+        domain = DataDomain(name="seller", created_by="test")
+        db_session.add(domain)
+        db_session.flush()
+        db_session.add(EntityDomainAssociationDb(
+            domain_id=domain.id, entity_type="data_contract",
+            entity_id=comprehensive_contract_db.id, is_primary=True,
+        ))
+        db_session.commit()
 
-            with patch('src.controller.semantic_links_manager.SemanticLinksManager') as mock_semantic_manager:
-                mock_semantic_manager.return_value.list_for_entity.return_value = []
+        semantic_links = 'src.controller.semantic_links_manager.SemanticLinksManager'
+        with patch(semantic_links) as mock_semantic_manager:
+            mock_semantic_manager.return_value.list_for_entity.return_value = []
 
-                response = client.get(f"/api/data-contracts/{comprehensive_contract_db.id}/odcs/export")
+            response = client.get(f"/api/data-contracts/{comprehensive_contract_db.id}/odcs/export")
 
         assert response.status_code == 200
         odcs_data = yaml.safe_load(response.content)
 
-        # Test required ODCS root fields
-        required_fields = [
-            'id', 'kind', 'apiVersion', 'version', 'status', 'name', 'owner'
-        ]
-        for field in required_fields:
+        # The root fields ODCS v3.1.0 requires, plus the name this contract has.
+        # The schema has no root `owner` (the team carries ownership) and allows
+        # no other root properties.
+        schema_path = Path(__file__).parents[2] / "schemas" / "odcs-json-schema-v3.1.0.json"
+        schema = json.loads(schema_path.read_text())
+        for field in [*schema['required'], 'name']:
             assert field in odcs_data, f"Missing required field: {field}"
+        assert 'owner' not in schema['properties']
+        assert 'owner' not in odcs_data
 
         # Test specific values
         assert odcs_data['kind'] == "DataContract"

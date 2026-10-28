@@ -10,7 +10,7 @@ from sqlalchemy import select, distinct, or_, and_
 from typing import Iterable, List, Optional, Any, Dict, Set, Union
 import json
 
-from src.common.repository import CRUDBase
+from src.common.repository import CRUDBase, coerce_uuid
 from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_products import (
@@ -174,7 +174,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         description=port.description,
                         port_type=port.type,
                         contract_id=port.contractId,
-                        delivery_method_id=port.deliveryMethodId,
+                        delivery_method_id=coerce_uuid(port.deliveryMethodId),
                         asset_type=port.assetType,
                         asset_identifier=port.assetIdentifier,
                         status=port.status,
@@ -387,7 +387,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         # method field (e.g. a name/description edit) would silently NULL
                         # the FK on every save.
                         if 'delivery_method_id' in port_dict:
-                            port_obj.delivery_method_id = port_dict.get('delivery_method_id')
+                            port_obj.delivery_method_id = coerce_uuid(
+                                port_dict.get('delivery_method_id'))
                         port_obj.asset_type = port_dict.get('asset_type')
                         port_obj.asset_identifier = port_dict.get('asset_identifier')
                         port_obj.status = port_dict.get('status')
@@ -415,7 +416,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                             description=port_dict.get('description'),
                             port_type=port_dict.get('type'),
                             contract_id=port_dict.get('contract_id'),
-                            delivery_method_id=port_dict.get('delivery_method_id'),
+                            delivery_method_id=coerce_uuid(port_dict.get('delivery_method_id')),
                             asset_type=port_dict.get('asset_type'),
                             asset_identifier=port_dict.get('asset_identifier'),
                             status=port_dict.get('status'),

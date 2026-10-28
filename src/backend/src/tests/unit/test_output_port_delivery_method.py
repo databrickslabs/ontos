@@ -145,7 +145,8 @@ class TestOutputPortDeliveryMethodOnUpdate:
             db=_stub_session(), db_obj=product, obj_in=update_payload
         )
 
-        assert port.delivery_method_id == new_dm_id
+        # Bound as a UUID, the type of the Uuid column
+        assert port.delivery_method_id == uuid.UUID(new_dm_id)
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +180,7 @@ class TestOutputPortDeliveryMethodOnCreateInUpdate:
         )
 
         assert len(product.output_ports) == 1
-        assert product.output_ports[0].delivery_method_id == new_dm_id
+        assert product.output_ports[0].delivery_method_id == uuid.UUID(new_dm_id)
 
     def test_new_port_without_delivery_method_persists_null(self):
         product = DataProductDb(

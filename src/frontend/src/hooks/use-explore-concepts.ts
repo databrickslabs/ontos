@@ -8,18 +8,7 @@ import type {
 } from '@/types/ontology';
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
-
-// Extract the stripped source name from a collection IRI by removing known URN
-// prefixes. Mirrors backend _extract_source_context prefix list.
-function stripSourcePrefix(iri: string): string {
-  const prefixes = ['urn:glossary:', 'urn:taxonomy:', 'urn:ontology:', 'urn:semantic-model:', 'urn:schema:'];
-  for (const prefix of prefixes) {
-    if (iri.startsWith(prefix)) {
-      return iri.slice(prefix.length);
-    }
-  }
-  return iri;
-}
+import { collectionSourceKey } from '@/lib/collection-source-key';
 
 // Walk the collections tree (the API returns nested child_collections when
 // hierarchical=true, so a child scheme with a parent is NOT at top level).
@@ -128,12 +117,14 @@ export function useExploreConcepts(): UseExploreConceptsResult {
     allConcepts.forEach((c) => { if (c.source_context) sources.add(c.source_context); });
     allProperties.forEach((p) => { if (p.source_context) sources.add(p.source_context); });
 
-    // Add stripped sources from all editable collections (even if 0 concepts).
+    // Add the source key of every editable collection (even if 0 concepts),
+    // i.e. the key its concepts are grouped under, so a scheme with a fixed
+    // group name (urn:demo -> "Demo Data") is listed once, not twice.
     // Flatten the hierarchy first so nested child schemes (which the API nests
     // under their parent, not at top level) also appear.
     flattenCollectionsTree(collections).forEach((collection) => {
       if (collection.is_editable) {
-        sources.add(stripSourcePrefix(collection.iri));
+        sources.add(collectionSourceKey(collection));
       }
     });
 

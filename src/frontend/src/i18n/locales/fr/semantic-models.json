@@ -282,7 +282,12 @@
       "annotation": "Annotation de métadonnées"
     },
     "createTitle": "Créer une entrée",
-    "noFittingScheme": "Aucun schéma de concepts modifiable pour ce type d'entrée ({{kind}}). Créez-en un d'abord."
+    "noFittingScheme": "Aucun schéma de concepts modifiable pour ce type d'entrée ({{kind}}). Créez-en un d'abord.",
+    "parentConcept": "Concept parent",
+    "addParent": "Ajouter un parent",
+    "subclassOf": "Sous-classe de",
+    "selectClass": "Sélectionner une classe",
+    "removeParent": "Retirer {{name}}"
   },
   "collectionEditor": {
     "editTitle": "Modifier le schéma de concepts",

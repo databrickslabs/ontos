@@ -282,7 +282,12 @@
       "annotation": "Metadata-annotatie"
     },
     "createTitle": "Item aanmaken",
-    "noFittingScheme": "Er is nog geen bewerkbaar conceptschema voor dit itemtype ({{kind}}). Maak er eerst een aan."
+    "noFittingScheme": "Er is nog geen bewerkbaar conceptschema voor dit itemtype ({{kind}}). Maak er eerst een aan.",
+    "parentConcept": "Bovenliggend concept",
+    "addParent": "Bovenliggende toevoegen",
+    "subclassOf": "Subklasse van",
+    "selectClass": "Klasse selecteren",
+    "removeParent": "{{name}} verwijderen"
   },
   "collectionEditor": {
     "editTitle": "Conceptschema bewerken",

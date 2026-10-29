@@ -282,7 +282,12 @@
       "annotation": "メタデータ注釈"
     },
     "createTitle": "エントリを作成",
-    "noFittingScheme": "このエントリタイプに対応する編集可能なコンセプトスキーム（{{kind}}）がまだありません。先に作成してください。"
+    "noFittingScheme": "このエントリタイプに対応する編集可能なコンセプトスキーム（{{kind}}）がまだありません。先に作成してください。",
+    "parentConcept": "親コンセプト",
+    "addParent": "親を追加",
+    "subclassOf": "サブクラス（上位クラス）",
+    "selectClass": "クラスを選択",
+    "removeParent": "{{name}}を削除"
   },
   "collectionEditor": {
     "editTitle": "コンセプトスキームを編集",

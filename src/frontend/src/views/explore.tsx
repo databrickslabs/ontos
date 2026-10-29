@@ -13,18 +13,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useConceptMode } from '@/components/concepts/mode-switch';
 import KGSearch from '@/components/search/kg-search';
+import { collectionSourceKey, stripSourcePrefix } from '@/lib/collection-source-key';
 
-// Strip known URN prefixes so an incoming ?source= (which may be a full IRI
-// like urn:glossary:test) matches availableSources (which are already stripped).
-function stripSourcePrefix(iri: string): string {
-  const prefixes = ['urn:glossary:', 'urn:taxonomy:', 'urn:ontology:', 'urn:semantic-model:', 'urn:schema:'];
-  for (const prefix of prefixes) {
-    if (iri.startsWith(prefix)) {
-      return iri.slice(prefix.length);
-    }
-  }
-  return iri;
-}
 import {
   FolderTree,
   Plus,
@@ -81,17 +71,18 @@ const VIEW_MODES: { id: ViewMode; labelKey: string; defaultLabel: string; icon: 
 ];
 
 // Concept types the Create menu can preset, in menu order per scheme type.
-type CreatableConceptType = 'term' | 'concept' | 'class' | 'property';
+// Property creation is parked pending a property design; existing properties
+// can still be edited, and schemeKindsForType('property') is unchanged.
+type CreatableConceptType = 'term' | 'concept' | 'class';
 
 const CREATE_ITEMS: Record<CreatableConceptType, { labelKey: string; defaultLabel: string }> = {
   term: { labelKey: 'concepts:explore.createTerm', defaultLabel: 'New Term' },
   concept: { labelKey: 'concepts:explore.createConcept', defaultLabel: 'New Concept' },
   class: { labelKey: 'concepts:explore.createClass', defaultLabel: 'New Class' },
-  property: { labelKey: 'concepts:explore.createProperty', defaultLabel: 'New Property' },
 };
 
 // Generic set (no single scheme in focus), in display order.
-const GENERIC_CREATE_TYPES: CreatableConceptType[] = ['term', 'concept', 'class', 'property'];
+const GENERIC_CREATE_TYPES: CreatableConceptType[] = ['term', 'concept', 'class'];
 
 /**
  * Create-menu concept types for the scheme in focus: the types whose scheme
@@ -412,7 +403,7 @@ export default function ExploreView() {
   const focusedCollection = useMemo(() => {
     if (editableCollections.length === 1) return editableCollections[0];
     const visible = editableCollections.filter(
-      (c) => !hiddenSources.includes(stripSourcePrefix(c.iri)),
+      (c) => !hiddenSources.includes(collectionSourceKey(c)),
     );
     return visible.length === 1 ? visible[0] : undefined;
   }, [editableCollections, hiddenSources]);

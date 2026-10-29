@@ -94,6 +94,31 @@ function fittingSchemes(colls: KnowledgeCollection[], kinds: CollectionType[]): 
   return result;
 }
 
+// Parent field per type. Only listed types show one; the payload field is
+// always `broader_iris` and the backend picks the predicate by type
+// (class -> rdfs:subClassOf, concept -> skos:broader). Glossary terms stay a
+// flat list of agreed terms (hierarchy lives in taxonomies); add a 'term'
+// entry here to bring their Parent field back.
+const PARENT_FIELD_BY_TYPE: Partial<Record<EditorConceptType, {
+  labelKey: string;
+  defaultLabel: string;
+  addKey: string;
+  defaultAdd: string;
+}>> = {
+  concept: {
+    labelKey: 'semantic-models:conceptEditor.parentConcept',
+    defaultLabel: 'Parent Concept',
+    addKey: 'semantic-models:conceptEditor.addParent',
+    defaultAdd: 'Add Parent',
+  },
+  class: {
+    labelKey: 'semantic-models:conceptEditor.subclassOf',
+    defaultLabel: 'Subclass of',
+    addKey: 'semantic-models:conceptEditor.selectClass',
+    defaultAdd: 'Select Class',
+  },
+};
+
 // Short display name for an IRI (local name after # or the last /).
 function iriLocalName(iri: string): string {
   const hash = iri.lastIndexOf('#');
@@ -170,8 +195,15 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   const noFittingScheme = isNew && schemeOptions.length === 0;
   const typeLabel =
     conceptTypes.find((ct) => ct.value === formData.concept_type)?.label ?? formData.concept_type;
-  // Parent (skos:broader) only applies to SKOS concepts and terms.
-  const showParent = formData.concept_type === 'concept' || formData.concept_type === 'term';
+  const parentField = PARENT_FIELD_BY_TYPE[formData.concept_type];
+  const showParent = !!parentField;
+  // An entry is never its own parent; a class also may not subclass one of
+  // its current subclasses (edit mode), which would create a cycle.
+  const excludedParentIris = new Set<string>(
+    concept
+      ? [concept.iri, ...(formData.concept_type === 'class' ? concept.child_concepts || [] : [])]
+      : [],
+  );
 
   // Keep the picked scheme valid: the preset `collection` when it fits,
   // otherwise the first fitting scheme (or none).
@@ -413,13 +445,13 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                 />
               </div>
 
-              {/* Parent (skos:broader): concepts and terms only. Hidden for other
-                  types, but broader_iris stays in state and in the save payload
-                  so existing parents of a class or property are kept. */}
-              {showParent && (
+              {/* Parent: see PARENT_FIELD_BY_TYPE. Hidden for other types, but
+                  broader_iris stays in state and in the save payload so existing
+                  parents of a term, property or individual are kept. */}
+              {parentField && (
               <div className="grid gap-2" data-testid="parent-field">
                 <Label>
-                  {t('semantic-models:conceptEditor.parentConcept', 'Parent Concept')}
+                  {t(parentField.labelKey, parentField.defaultLabel)}
                 </Label>
                 <div className="flex flex-wrap gap-2">
                   {formData.broader_iris.map((iri) => (
@@ -450,7 +482,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                   <div>
                     <Button type="button" variant="outline" size="sm" onClick={() => setParentPickerOpen(true)}>
                       <Plus className="h-4 w-4 mr-1" />
-                      {t('semantic-models:conceptEditor.addParent', 'Add Parent')}
+                      {t(parentField.addKey, parentField.defaultAdd)}
                     </Button>
                   </div>
                 )}
@@ -719,9 +751,11 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           isOpen={parentPickerOpen}
           onOpenChange={setParentPickerOpen}
           entityType="class"
+          // Class parents: classes only. Taxonomy parents: any concept.
+          conceptTypes={formData.concept_type === 'class' ? ['class'] : undefined}
           onSelect={(iri) => {
             setFormData((prev) =>
-              prev.broader_iris.includes(iri) || iri === concept?.iri
+              prev.broader_iris.includes(iri) || excludedParentIris.has(iri)
                 ? prev
                 : { ...prev, broader_iris: [...prev.broader_iris, iri] },
             );

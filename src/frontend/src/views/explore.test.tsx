@@ -318,38 +318,48 @@ describe('Explore Create menu adapts to the scheme in focus', () => {
     expect(menuLabels()).toEqual(['New Concept', 'New Concept Scheme']);
   });
 
-  it('ontology in focus: New Class, New Property (no New Concept)', () => {
+  it('ontology in focus: New Class only (no New Concept, property creation parked)', () => {
     collectionsMock = [ONTOLOGY];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Class', 'New Property', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Class', 'New Concept Scheme']);
     expect(screen.getByTestId('menu-separator')).toBeInTheDocument();
   });
 
   it('several editable schemes, none in focus: full set', () => {
     collectionsMock = [GLOSSARY, TAXONOMY, ONTOLOGY];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Term', 'New Concept', 'New Class', 'New Property', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Term', 'New Concept', 'New Class', 'New Concept Scheme']);
   });
 
   it('no single scheme in focus offers the full set even if no scheme fits a type', () => {
     collectionsMock = [GLOSSARY, TAXONOMY];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Term', 'New Concept', 'New Class', 'New Property', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Term', 'New Concept', 'New Class', 'New Concept Scheme']);
+    expect(screen.queryByRole('menuitem', { name: /New Property/ })).not.toBeInTheDocument();
   });
 
   it('source filter leaving one editable scheme visible focuses it', () => {
     collectionsMock = [GLOSSARY, ONTOLOGY];
     hiddenSourcesMock = ['business'];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Class', 'New Property', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Class', 'New Concept Scheme']);
+  });
+
+  it('source filter compares the scheme source_key when the backend sends one', () => {
+    // Demo-style scheme: concepts are grouped under "Demo Data", not the stripped IRI.
+    const DEMO = { iri: 'urn:demo', label: 'Demo', collection_type: 'glossary', is_editable: true, source_key: 'Demo Data' };
+    collectionsMock = [DEMO, ONTOLOGY];
+    hiddenSourcesMock = ['Demo Data'];
+    renderExplore();
+    expect(menuLabels()).toEqual(['New Class', 'New Concept Scheme']);
   });
 
   it('picking an item opens the editor preset to that type and the focused scheme', async () => {
     collectionsMock = [ONTOLOGY];
     renderExplore();
-    fireEvent.click(screen.getByRole('menuitem', { name: /New Property/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /New Class/ }));
     await waitFor(() => expect(editorProps.open).toBe(true));
-    expect(editorProps.initialConceptType).toBe('property');
+    expect(editorProps.initialConceptType).toBe('class');
     expect(editorProps.collection).toEqual(ONTOLOGY);
   });
 

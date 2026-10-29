@@ -87,6 +87,8 @@ class KnowledgeCollection(BaseModel):
     
     # Computed fields
     concept_count: int = 0
+    # Key this scheme's concepts are grouped under in concepts-grouped (source_context)
+    source_key: Optional[str] = None
     child_collections: List["KnowledgeCollection"] = []
 
 

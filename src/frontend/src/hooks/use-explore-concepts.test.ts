@@ -84,3 +84,38 @@ describe('useExploreConcepts system-ontology toggle', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('useExploreConcepts available sources', () => {
+  const load = (collection: Record<string, unknown>) => {
+    fetchMock.mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => {
+        const u = String(url);
+        if (u.includes('/api/knowledge/collections')) return { collections: [collection] };
+        if (u.includes('concepts-grouped')) {
+          return {
+            grouped_concepts: {
+              'Demo Data': [{ iri: 'urn:d1', label: 'D1', source_context: 'Demo Data', concept_type: 'concept' }],
+            },
+          };
+        }
+        return {};
+      },
+    }));
+    return renderHook(() => useExploreConcepts());
+  };
+
+  it('lists an editable scheme under its source_key, once', async () => {
+    const { result } = load({ iri: 'urn:demo', label: 'Demo', is_editable: true, source_key: 'Demo Data' });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.availableSources.filter((s) => s === 'Demo Data')).toHaveLength(1);
+    expect(result.current.availableSources).not.toContain('urn:demo');
+  });
+
+  it('falls back to the stripped IRI when source_key is missing', async () => {
+    const { result } = load({ iri: 'urn:glossary:finance', label: 'Finance', is_editable: true });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.availableSources).toEqual(['Demo Data', 'finance']);
+  });
+});

@@ -282,7 +282,12 @@
       "annotation": "Metadaten-Annotation"
     },
     "createTitle": "Eintrag erstellen",
-    "noFittingScheme": "Für diesen Eintragstyp gibt es noch kein bearbeitbares Konzeptschema ({{kind}}). Erstellen Sie zuerst eines."
+    "noFittingScheme": "Für diesen Eintragstyp gibt es noch kein bearbeitbares Konzeptschema ({{kind}}). Erstellen Sie zuerst eines.",
+    "parentConcept": "Übergeordnetes Konzept",
+    "addParent": "Übergeordnetes hinzufügen",
+    "subclassOf": "Unterklasse von",
+    "selectClass": "Klasse auswählen",
+    "removeParent": "{{name}} entfernen"
   },
   "collectionEditor": {
     "editTitle": "Konzeptschema bearbeiten",

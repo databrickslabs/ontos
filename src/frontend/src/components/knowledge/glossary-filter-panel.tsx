@@ -58,16 +58,7 @@ import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-label
 import type { OntologyConcept, KnowledgeCollection } from '@/types/ontology';
 import type { GroupByDimension } from '@/stores/glossary-preferences-store';
 import { getAvailableLanguages, getLanguageDisplayName } from '@/lib/ontology-utils';
-
-function stripSourcePrefix(iri: string): string {
-  const prefixes = ['urn:glossary:', 'urn:taxonomy:', 'urn:ontology:', 'urn:semantic-model:', 'urn:schema:'];
-  for (const prefix of prefixes) {
-    if (iri.startsWith(prefix)) {
-      return iri.slice(prefix.length);
-    }
-  }
-  return iri;
-}
+import { collectionSourceKey } from '@/lib/collection-source-key';
 
 interface GlossaryFilterPanelProps {
   // Data for computing counts
@@ -131,13 +122,13 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
   const setSortMode = useGlossaryPreferencesStore((s) => s.setSourceSortMode);
   const [deleteConfirmScheme, setDeleteConfirmScheme] = useState<KnowledgeCollection | null>(null);
 
-  // Flatten collections tree and build a map: stripped source → collection
+  // Flatten collections tree and build a map: source key (the concepts' group
+  // name) → collection
   const collectionsBySource = useMemo(() => {
     const map = new Map<string, KnowledgeCollection>();
     if (!collections) return map;
     const visit = (c: KnowledgeCollection) => {
-      const strippedSource = stripSourcePrefix(c.iri);
-      map.set(strippedSource, c);
+      map.set(collectionSourceKey(c), c);
       if (c.child_collections && c.child_collections.length > 0) {
         c.child_collections.forEach(visit);
       }

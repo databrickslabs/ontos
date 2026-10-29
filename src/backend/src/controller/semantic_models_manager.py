@@ -2428,6 +2428,49 @@ class SemanticModelsManager(SearchableAsset):
             # If SPARQL fails, fall back to empty results
             return []
 
+    def search_concepts_by_type(self, text_filter: str, concept_types: List[str], limit: int = 50) -> List[dict]:
+        """Search the cached concept list, keeping only the given concept types.
+
+        Unlike ``search_concepts`` (SPARQL, every row typed 'class'), this reads
+        ``get_grouped_concepts()`` (system sources included, so imported or
+        bundled classes stay selectable) and reports each concept's real
+        ``concept_type``. Unknown types are ignored. The text filter is a
+        case-insensitive contains on the primary label, all language labels
+        and the IRI.
+
+        Returns the same shape as ``search_concepts``: [{value, label, type}].
+        """
+        allowed = {
+            t.strip().lower() for t in (concept_types or [])
+            if t and t.strip().lower() in _VALID_CONCEPT_TYPES
+        }
+        if not allowed:
+            return []
+        needle = (text_filter or "").strip().lower()
+
+        seen: set = set()
+        results: List[dict] = []
+        for concepts in self.get_grouped_concepts().values():
+            for concept in concepts:
+                if concept.iri in seen:
+                    continue
+                concept_type = _normalise_concept_type(concept.concept_type)
+                if concept_type not in allowed:
+                    continue
+                if needle:
+                    haystack = [concept.iri, concept.label or ""] + list((concept.labels or {}).values())
+                    if not any(needle in (h or "").lower() for h in haystack):
+                        continue
+                seen.add(concept.iri)
+                label = (concept.label or "").strip()
+                if not label:
+                    # Same fallback as search_concepts: last IRI segment
+                    label = concept.iri.split('#')[-1] if '#' in concept.iri else concept.iri.split('/')[-1]
+                results.append({'value': concept.iri, 'label': label, 'type': concept_type})
+
+        results.sort(key=lambda r: r['label'].lower())
+        return results[:max(limit, 0)]
+
     def search_properties(self, text_filter: str = "", limit: int = 50) -> List[dict]:
         """Search for properties in the semantic models using SPARQL.
 
@@ -3740,11 +3783,13 @@ class SemanticModelsManager(SearchableAsset):
                 created_at = self._get_literal(context, coll_uri, ONTOS.createdAt)
                 created_by = self._get_uri(context, coll_uri, ONTOS.createdBy)
                 
-                # Count concepts using the grouped concepts data
-                # Collection IRI: "urn:glossary:enterprise-glossary" -> suffix: "enterprise-glossary"
-                # Concept source_context is already the suffix (e.g., "enterprise-glossary")
-                coll_suffix = coll_iri.split(":")[-1]
-                concept_count = len(grouped_concepts.get(coll_suffix, []))
+                # Count concepts using the grouped concepts data. Concepts are
+                # bucketed by _extract_source_context, so derive the key with
+                # the SAME mapper ("urn:glossary:finance" -> "finance", but
+                # "urn:demo" -> "Demo Data"); a bare IRI split would miss the
+                # fixed-name buckets and report 0.
+                source_key = self._extract_source_context(coll_iri) or coll_iri.split(":")[-1]
+                concept_count = len(grouped_concepts.get(source_key, []))
                 
                 collections.append({
                     "iri": coll_iri,
@@ -3760,6 +3805,7 @@ class SemanticModelsManager(SearchableAsset):
                     "created_at": created_at,
                     "created_by": created_by,
                     "concept_count": concept_count,
+                    "source_key": source_key,
                 })
         except Exception as e:
             logger.warning(f"Failed to query collections: {e}")

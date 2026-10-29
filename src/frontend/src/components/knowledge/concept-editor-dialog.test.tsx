@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import type { KnowledgeCollection } from '@/types/ontology';
 
 // ---------------------------------------------------------------------------
 // ConceptEditorDialog: fixed type (read-only), scheme list filtered by type,
-// the no-fitting-scheme notice, and the concept/term-only Parent field.
+// the no-fitting-scheme notice, and the per-type Parent field.
 // ---------------------------------------------------------------------------
 
 vi.mock('react-i18next', () => ({
@@ -30,9 +30,13 @@ vi.mock('@/components/concepts/mode-switch', () => ({
 
 // Stand-in for the concept picker: one button that picks a fixed IRI.
 let pickerEntityType: string | undefined;
+let pickerConceptTypes: string[] | undefined;
+let pickerOnSelect: ((iri: string) => void) | undefined;
 vi.mock('@/components/semantic/concept-select-dialog', () => ({
-  default: ({ isOpen, onSelect, entityType }: { isOpen: boolean; onSelect: (iri: string) => void; entityType?: string }) => {
+  default: ({ isOpen, onSelect, entityType, conceptTypes }: { isOpen: boolean; onSelect: (iri: string) => void; entityType?: string; conceptTypes?: string[] }) => {
     pickerEntityType = entityType;
+    pickerConceptTypes = conceptTypes;
+    pickerOnSelect = onSelect;
     return isOpen ? (
       <button type="button" data-testid="pick-parent" onClick={() => onSelect('https://example.org/onto#Party')}>
         pick
@@ -128,6 +132,8 @@ const EXISTING_CLASS = {
 
 beforeEach(() => {
   pickerEntityType = undefined;
+  pickerConceptTypes = undefined;
+  pickerOnSelect = undefined;
 });
 
 describe('ConceptEditorDialog header and type', () => {
@@ -251,26 +257,36 @@ describe('ConceptEditorDialog with no fitting scheme', () => {
 });
 
 describe('ConceptEditorDialog Parent field', () => {
-  it('is shown for a concept and saves picks as broader_iris', async () => {
+  it('is shown for a concept as Parent Concept and saves picks as broader_iris', async () => {
     const onSave = renderDialog({ collection: TAXONOMY, initialConceptType: 'concept' });
     expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Concept');
     fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
     expect(pickerEntityType).toBe('class');
+    // Taxonomy parents: any concept, no type filter.
+    expect(pickerConceptTypes).toBeUndefined();
     fireEvent.click(screen.getByTestId('pick-parent'));
     expect(screen.getByTestId('parent-field')).toHaveTextContent('Party');
     const data = await fillAndSubmit(onSave);
     expect(data.broader_iris).toEqual(['https://example.org/onto#Party']);
   });
 
-  it('is shown for a term, labelled Parent Concept', () => {
-    renderDialog({ collection: GLOSSARY, initialConceptType: 'term' });
-    expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Concept');
+  it('is shown for a class as "Subclass of" with a classes-only picker', async () => {
+    const onSave = renderDialog({ initialConceptType: 'class' });
+    expect(screen.getByTestId('parent-field')).toHaveTextContent('Subclass of');
+    expect(screen.queryByRole('button', { name: 'Add Parent' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    expect(pickerConceptTypes).toEqual(['class']);
+    fireEvent.click(screen.getByTestId('pick-parent'));
+    const data = await fillAndSubmit(onSave);
+    // Same payload field; the backend writes rdfs:subClassOf for a class.
+    expect(data.broader_iris).toEqual(['https://example.org/onto#Party']);
   });
 
-  it.each(['class', 'property', 'individual'] as const)('is hidden for %s', (type) => {
-    renderDialog({ initialConceptType: type });
+  it.each(['term', 'property', 'individual'] as const)('is hidden for %s', (type) => {
+    renderDialog({ collection: type === 'term' ? GLOSSARY : ONTOLOGY, initialConceptType: type });
     expect(screen.queryByTestId('parent-field')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add Parent' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select Class' })).not.toBeInTheDocument();
   });
 
   it('is shown for an existing concept, prefilled from parent_concepts', () => {
@@ -282,12 +298,40 @@ describe('ConceptEditorDialog Parent field', () => {
     expect(screen.getByTestId('parent-field')).toHaveTextContent('urn:x:Parent');
   });
 
-  it('editing a class keeps its existing parents in the save payload', async () => {
+  it('editing a class shows its superclasses and keeps them in the payload', async () => {
     const onSave = renderDialog({ collection: undefined, concept: EXISTING_CLASS });
-    expect(screen.queryByTestId('parent-field')).not.toBeInTheDocument();
+    expect(screen.getByTestId('parent-field')).toHaveTextContent('Subclass of');
+    expect(screen.getByTestId('parent-field')).toHaveTextContent('Party');
     const data = await fillAndSubmit(onSave, 'common:actions.save');
     expect(data.broader_iris).toEqual(['urn:x:Party']);
     expect(data.concept_type).toBe('class');
+  });
+
+  it('a class cannot pick itself or one of its subclasses as superclass', async () => {
+    const onSave = renderDialog({
+      collection: undefined,
+      concept: { ...EXISTING_CLASS, child_concepts: ['urn:x:VipCustomer'] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    act(() => pickerOnSelect!('urn:x:Customer'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    act(() => pickerOnSelect!('urn:x:VipCustomer'));
+    const data = await fillAndSubmit(onSave, 'common:actions.save');
+    expect(data.broader_iris).toEqual(['urn:x:Party']);
+  });
+
+  it.each([
+    ['term', { concept_type: 'term', source_context: 'business' }],
+    ['property', { concept_type: 'property', domain: 'urn:x:A' }],
+    ['individual', { concept_type: 'individual' }],
+  ] as const)('editing a %s keeps stored parents even though the field is hidden', async (_type, extra) => {
+    const onSave = renderDialog({
+      collection: undefined,
+      concept: { ...EXISTING_CLASS, ...extra, parent_concepts: ['urn:x:Stored'] },
+    });
+    expect(screen.queryByTestId('parent-field')).not.toBeInTheDocument();
+    const data = await fillAndSubmit(onSave, 'common:actions.save');
+    expect(data.broader_iris).toEqual(['urn:x:Stored']);
   });
 });
 

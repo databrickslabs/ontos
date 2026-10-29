@@ -653,14 +653,24 @@ async def get_semantic_model_title_candidates(
 async def list_simple_concepts(
     q: Optional[str] = Query(None, description="Simple text filter for concepts"),
     limit: int = Query(50, description="Maximum number of results"),
+    concept_types: Optional[str] = Query(None, description="Comma-separated concept types to keep (e.g. 'class' or 'class,individual')"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
 ) -> List[dict]:
     """Return a simple flat list of concepts for selection dialogs.
 
     Shape: [{ value, label, type }]
+
+    When ``concept_types`` is given (comma-separated, e.g. ``class`` or
+    ``class,individual``), only concepts of those types are returned and
+    ``type`` carries each concept's real concept_type. Unknown types are
+    ignored. Without it (or if it is blank), the default list is returned,
+    with every row typed 'class'.
     """
     try:
+        types_list = [t.strip() for t in (concept_types or "").split(',') if t.strip()]
+        if types_list:
+            return manager.search_concepts_by_type(q or "", types_list, limit=limit)
         results = manager.search_concepts(q or "", limit=limit)
         return results
     except Exception as e:

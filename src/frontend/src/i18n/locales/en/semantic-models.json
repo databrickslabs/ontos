@@ -416,7 +416,12 @@
       "annotation": "Metadata annotation"
     },
     "createTitle": "Create Entry",
-    "noFittingScheme": "No editable scheme for this entry type yet ({{kind}}). Create one first."
+    "noFittingScheme": "No editable scheme for this entry type yet ({{kind}}). Create one first.",
+    "parentConcept": "Parent Concept",
+    "addParent": "Add Parent",
+    "subclassOf": "Subclass of",
+    "selectClass": "Select Class",
+    "removeParent": "Remove {{name}}"
   },
   "collectionEditor": {
     "editTitle": "Edit Scheme",

@@ -282,7 +282,12 @@
       "annotation": "Annotazione di metadati"
     },
     "createTitle": "Crea voce",
-    "noFittingScheme": "Non esiste ancora uno schema di concetti modificabile per questo tipo di voce ({{kind}}). Creane uno prima."
+    "noFittingScheme": "Non esiste ancora uno schema di concetti modificabile per questo tipo di voce ({{kind}}). Creane uno prima.",
+    "parentConcept": "Concetto padre",
+    "addParent": "Aggiungi padre",
+    "subclassOf": "Sottoclasse di",
+    "selectClass": "Seleziona classe",
+    "removeParent": "Rimuovi {{name}}"
   },
   "collectionEditor": {
     "editTitle": "Modifica Schema di concetti",

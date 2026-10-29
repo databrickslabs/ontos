@@ -282,7 +282,12 @@
       "annotation": "Anotación de metadatos"
     },
     "createTitle": "Crear entrada",
-    "noFittingScheme": "Aún no hay un esquema de conceptos editable para este tipo de entrada ({{kind}}). Crea uno primero."
+    "noFittingScheme": "Aún no hay un esquema de conceptos editable para este tipo de entrada ({{kind}}). Crea uno primero.",
+    "parentConcept": "Concepto superior",
+    "addParent": "Añadir superior",
+    "subclassOf": "Subclase de",
+    "selectClass": "Seleccionar clase",
+    "removeParent": "Quitar {{name}}"
   },
   "collectionEditor": {
     "editTitle": "Editar esquema de conceptos",

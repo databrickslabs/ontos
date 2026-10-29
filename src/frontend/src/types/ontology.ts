@@ -36,6 +36,8 @@ export interface KnowledgeCollection {
   
   // Computed fields
   concept_count: number;
+  /** Key this scheme's concepts are grouped under (`source_context`); see collectionSourceKey. */
+  source_key?: string | null;
   child_collections: KnowledgeCollection[];
 }
 

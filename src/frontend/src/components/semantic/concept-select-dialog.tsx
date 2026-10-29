@@ -12,7 +12,9 @@ import type {
   TermMappingTargetEntityType,
 } from '@/types/term-mapping';
 
-type ConceptItem = { value: string; label: string; type: 'class' | 'property' };
+// `type` is the real concept_type when the list is type-filtered
+// (e.g. 'class', 'individual'); otherwise 'class' or 'property'.
+type ConceptItem = { value: string; label: string; type: string };
 
 interface MappingSource {
   /** Term-mapping entity_type (e.g. 'asset' or 'data_contract_property'). */
@@ -38,14 +40,21 @@ interface Props {
   /** When provided, the dialog adds a "Suggested by mapping" tier sourced
    *  from the term-mapping inline heuristic. No persistence; purely a hint. */
   mappingSource?: MappingSource;
+  /** Optional: only offer concepts whose `concept_type` is listed (e.g.
+   *  ['class'] for an rdfs:subClassOf picker). Omit for the default list. */
+  conceptTypes?: string[];
 }
 
-export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, parentConceptIris, entityType = 'class', mappingSource }: Props) {
+export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, parentConceptIris, entityType = 'class', mappingSource, conceptTypes }: Props) {
   const { get, post } = useApi();
   const [q, setQ] = useState('');
   const [suggested, setSuggested] = useState<ConceptItem[]>([]);
   const [other, setOther] = useState<ConceptItem[]>([]);
   const [mappingHints, setMappingHints] = useState<InlineSuggestion[]>([]);
+
+  // Type-filtered mode: the flat concepts endpoint narrows by concept_type
+  // server-side. No "suggested" tier in this mode.
+  const typeFilter = conceptTypes && conceptTypes.length > 0 ? conceptTypes.join(',') : '';
 
   useEffect(() => {
     const run = async () => {
@@ -56,7 +65,12 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
 
       const baseEndpoint = entityType === 'property' ? '/api/semantic-models/properties' : '/api/semantic-models/concepts';
 
-      if (parentConceptIris && parentConceptIris.length > 0) {
+      if (typeFilter && entityType !== 'property') {
+        params.set('concept_types', typeFilter);
+        const res = await get<ConceptItem[]>(`${baseEndpoint}?${params}`);
+        setSuggested([]);
+        setOther(res.data || []);
+      } else if (parentConceptIris && parentConceptIris.length > 0) {
         params.set('parent_iris', parentConceptIris.join(','));
         const res = await get<{suggested: ConceptItem[], other: ConceptItem[]}>(`${baseEndpoint}/suggestions?${params}`);
         setSuggested(res.data?.suggested || []);
@@ -69,7 +83,7 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
     };
     const t = setTimeout(run, 250);
     return () => clearTimeout(t);
-  }, [q, parentConceptIris, entityType]);
+  }, [q, parentConceptIris, entityType, typeFilter]);
 
   // Inline mapping suggestions. We deliberately re-fetch only when the
   // dialog is (re)opened or the source entity changes — these are

@@ -421,7 +421,11 @@
     "addParent": "Add Parent",
     "subclassOf": "Subclass of",
     "selectClass": "Select Class",
-    "removeParent": "Remove {{name}}"
+    "removeParent": "Remove {{name}}",
+    "selectSuperclass": "Select Superclass",
+    "selectParentConcept": "Select Parent Concept",
+    "searchClasses": "Search classes...",
+    "searchConceptsInScheme": "Search concepts in this scheme..."
   },
   "collectionEditor": {
     "editTitle": "Edit Scheme",
@@ -599,5 +603,14 @@
       "descriptionPlaceholder": "Describe the purpose of this ontology scheme...",
       "importSummary": "{{classes}} classes and {{properties}} properties will be imported."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Include other schemes",
+    "thisScheme": "This scheme: {{label}}",
+    "noScheme": "No scheme",
+    "noMatchesInScheme": "No matches in this scheme.",
+    "noClassesInScheme": "No classes in this scheme yet.",
+    "noConceptsInScheme": "No concepts in this scheme yet.",
+    "includeOtherSchemesHint": "Tick \"Include other schemes\" to pick from another scheme."
   }
 }

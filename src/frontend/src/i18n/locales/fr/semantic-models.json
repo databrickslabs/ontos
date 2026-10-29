@@ -287,7 +287,11 @@
     "addParent": "Ajouter un parent",
     "subclassOf": "Sous-classe de",
     "selectClass": "Sélectionner une classe",
-    "removeParent": "Retirer {{name}}"
+    "removeParent": "Retirer {{name}}",
+    "selectSuperclass": "Sélectionner une super-classe",
+    "selectParentConcept": "Sélectionner un concept parent",
+    "searchClasses": "Rechercher des classes...",
+    "searchConceptsInScheme": "Rechercher des concepts dans ce schéma de concepts..."
   },
   "collectionEditor": {
     "editTitle": "Modifier le schéma de concepts",
@@ -465,5 +469,14 @@
       "descriptionPlaceholder": "Décrivez l'objet de ce schéma de concepts d'ontologie...",
       "importSummary": "{{classes}} classes et {{properties}} propriétés seront importées."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Inclure les autres schémas de concepts",
+    "thisScheme": "Ce schéma de concepts : {{label}}",
+    "noScheme": "Aucun schéma de concepts",
+    "noMatchesInScheme": "Aucun résultat dans ce schéma de concepts.",
+    "noClassesInScheme": "Ce schéma de concepts ne contient pas encore de classes.",
+    "noConceptsInScheme": "Ce schéma de concepts ne contient pas encore de concepts.",
+    "includeOtherSchemesHint": "Cochez « Inclure les autres schémas de concepts » pour choisir dans un autre schéma."
   }
 }

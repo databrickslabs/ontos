@@ -2428,7 +2428,13 @@ class SemanticModelsManager(SearchableAsset):
             # If SPARQL fails, fall back to empty results
             return []
 
-    def search_concepts_by_type(self, text_filter: str, concept_types: List[str], limit: int = 50) -> List[dict]:
+    def search_concepts_by_type(
+        self,
+        text_filter: str,
+        concept_types: List[str],
+        limit: int = 50,
+        source_context: Optional[str] = None,
+    ) -> List[dict]:
         """Search the cached concept list, keeping only the given concept types.
 
         Unlike ``search_concepts`` (SPARQL, every row typed 'class'), this reads
@@ -2436,9 +2442,12 @@ class SemanticModelsManager(SearchableAsset):
         bundled classes stay selectable) and reports each concept's real
         ``concept_type``. Unknown types are ignored. The text filter is a
         case-insensitive contains on the primary label, all language labels
-        and the IRI.
+        and the IRI. ``source_context`` (optional) keeps only concepts of that
+        scheme, matched exactly against each concept's group key (the
+        collection's ``source_key``, e.g. 'finance').
 
-        Returns the same shape as ``search_concepts``: [{value, label, type}].
+        Returns the ``search_concepts`` shape plus each concept's group key:
+        [{value, label, type, source_context}].
         """
         allowed = {
             t.strip().lower() for t in (concept_types or [])
@@ -2454,6 +2463,8 @@ class SemanticModelsManager(SearchableAsset):
             for concept in concepts:
                 if concept.iri in seen:
                     continue
+                if source_context is not None and concept.source_context != source_context:
+                    continue
                 concept_type = _normalise_concept_type(concept.concept_type)
                 if concept_type not in allowed:
                     continue
@@ -2466,7 +2477,12 @@ class SemanticModelsManager(SearchableAsset):
                 if not label:
                     # Same fallback as search_concepts: last IRI segment
                     label = concept.iri.split('#')[-1] if '#' in concept.iri else concept.iri.split('/')[-1]
-                results.append({'value': concept.iri, 'label': label, 'type': concept_type})
+                results.append({
+                    'value': concept.iri,
+                    'label': label,
+                    'type': concept_type,
+                    'source_context': concept.source_context,
+                })
 
         results.sort(key=lambda r: r['label'].lower())
         return results[:max(limit, 0)]

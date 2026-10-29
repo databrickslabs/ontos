@@ -287,7 +287,11 @@
     "addParent": "Übergeordnetes hinzufügen",
     "subclassOf": "Unterklasse von",
     "selectClass": "Klasse auswählen",
-    "removeParent": "{{name}} entfernen"
+    "removeParent": "{{name}} entfernen",
+    "selectSuperclass": "Oberklasse auswählen",
+    "selectParentConcept": "Übergeordnetes Konzept auswählen",
+    "searchClasses": "Klassen suchen...",
+    "searchConceptsInScheme": "Konzepte in diesem Konzeptschema suchen..."
   },
   "collectionEditor": {
     "editTitle": "Konzeptschema bearbeiten",
@@ -465,5 +469,14 @@
       "descriptionPlaceholder": "Beschreiben Sie den Zweck dieses Ontologie-Konzeptschemas...",
       "importSummary": "{{classes}} Klassen und {{properties}} Eigenschaften werden importiert."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Andere Konzeptschemata einbeziehen",
+    "thisScheme": "Dieses Konzeptschema: {{label}}",
+    "noScheme": "Kein Konzeptschema",
+    "noMatchesInScheme": "Keine Treffer in diesem Konzeptschema.",
+    "noClassesInScheme": "In diesem Konzeptschema gibt es noch keine Klassen.",
+    "noConceptsInScheme": "In diesem Konzeptschema gibt es noch keine Konzepte.",
+    "includeOtherSchemesHint": "Aktivieren Sie „Andere Konzeptschemata einbeziehen“, um aus einem anderen Konzeptschema zu wählen."
   }
 }

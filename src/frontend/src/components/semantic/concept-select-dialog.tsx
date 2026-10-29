@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { useApi } from '@/hooks/use-api';
 import type {
   InlineSuggestRequest,
@@ -14,7 +17,8 @@ import type {
 
 // `type` is the real concept_type when the list is type-filtered
 // (e.g. 'class', 'individual'); otherwise 'class' or 'property'.
-type ConceptItem = { value: string; label: string; type: string };
+// `source_context` (type-filtered list only) is the scheme's group key.
+type ConceptItem = { value: string; label: string; type: string; source_context?: string | null };
 
 interface MappingSource {
   /** Term-mapping entity_type (e.g. 'asset' or 'data_contract_property'). */
@@ -43,30 +47,71 @@ interface Props {
   /** Optional: only offer concepts whose `concept_type` is listed (e.g.
    *  ['class'] for an rdfs:subClassOf picker). Omit for the default list. */
   conceptTypes?: string[];
+  /** Optional: restrict the type-filtered list to one scheme (its group key,
+   *  sent as `source_context`). Ignored without `conceptTypes`. */
+  scopeSourceKey?: string;
+  /** Display label of the scoped scheme (group header). */
+  scopeLabel?: string;
+  /** Group key -> scheme label for the group headers; falls back to the key. */
+  schemeLabels?: Record<string, string>;
+  /** Scoped mode only: offer an "Include other schemes" checkbox (off by
+   *  default) that lists all schemes, grouped by scheme. */
+  allowOtherSchemes?: boolean;
+  /** IRIs never offered (dropped client-side after the fetch). */
+  excludeIris?: string[];
+  /** Overrides for the default title and search placeholder. */
+  title?: string;
+  searchPlaceholder?: string;
 }
 
-export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, parentConceptIris, entityType = 'class', mappingSource, conceptTypes }: Props) {
+// Scoped or widened lists drop excluded entries client-side, so ask for more.
+const SCOPED_LIMIT = '200';
+
+export default function ConceptSelectDialog({
+  isOpen,
+  onOpenChange,
+  onSelect,
+  parentConceptIris,
+  entityType = 'class',
+  mappingSource,
+  conceptTypes,
+  scopeSourceKey,
+  scopeLabel,
+  schemeLabels,
+  allowOtherSchemes = false,
+  excludeIris,
+  title,
+  searchPlaceholder,
+}: Props) {
+  const { t } = useTranslation();
   const { get, post } = useApi();
   const [q, setQ] = useState('');
   const [suggested, setSuggested] = useState<ConceptItem[]>([]);
   const [other, setOther] = useState<ConceptItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [includeOtherSchemes, setIncludeOtherSchemes] = useState(false);
   const [mappingHints, setMappingHints] = useState<InlineSuggestion[]>([]);
 
   // Type-filtered mode: the flat concepts endpoint narrows by concept_type
   // server-side. No "suggested" tier in this mode.
   const typeFilter = conceptTypes && conceptTypes.length > 0 ? conceptTypes.join(',') : '';
+  // Scoped mode: type-filtered and limited to one scheme. The opt-in checkbox
+  // widens it to all schemes (grouped by scheme below).
+  const scoped = !!scopeSourceKey && !!typeFilter && entityType !== 'property';
+  const widened = scoped && allowOtherSchemes && includeOtherSchemes;
 
   useEffect(() => {
     const run = async () => {
       const params = new URLSearchParams({
         q: q,
-        limit: '50'
+        limit: scoped ? SCOPED_LIMIT : '50'
       });
 
       const baseEndpoint = entityType === 'property' ? '/api/semantic-models/properties' : '/api/semantic-models/concepts';
 
       if (typeFilter && entityType !== 'property') {
         params.set('concept_types', typeFilter);
+        if (scoped && !widened) params.set('source_context', scopeSourceKey!);
         const res = await get<ConceptItem[]>(`${baseEndpoint}?${params}`);
         setSuggested([]);
         setOther(res.data || []);
@@ -80,10 +125,47 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
         setSuggested([]);
         setOther(res.data || []);
       }
+      setLoaded(true);
     };
-    const t = setTimeout(run, 250);
-    return () => clearTimeout(t);
-  }, [q, parentConceptIris, entityType, typeFilter]);
+    const timer = setTimeout(run, 250);
+    return () => clearTimeout(timer);
+  }, [q, parentConceptIris, entityType, typeFilter, scoped, widened, scopeSourceKey]);
+
+  const excludeKey = (excludeIris || []).join('|');
+  const excluded = useMemo(() => new Set(excludeKey ? excludeKey.split('|') : []), [excludeKey]);
+  const visibleSuggested = excluded.size ? suggested.filter((r) => !excluded.has(r.value)) : suggested;
+  const visibleOther = excluded.size ? other.filter((r) => !excluded.has(r.value)) : other;
+
+  // Widened list: one group per scheme, the scoped scheme first, then the
+  // others by label. Headers only when more than one scheme is present.
+  const schemeLabel = (key: string) => schemeLabels?.[key] || key;
+  const byScheme = new Map<string, ConceptItem[]>();
+  if (widened) {
+    visibleOther.forEach((r) => {
+      const key = r.source_context || '';
+      if (!byScheme.has(key)) byScheme.set(key, []);
+      byScheme.get(key)!.push(r);
+    });
+  }
+  const groups = widened
+    ? Array.from(byScheme.entries())
+        .sort(([a], [b]) => {
+          if (a === scopeSourceKey) return -1;
+          if (b === scopeSourceKey) return 1;
+          return schemeLabel(a).localeCompare(schemeLabel(b));
+        })
+        .map(([key, items]) => ({ key, items }))
+    : [{ key: '', items: visibleOther }];
+  const showGroupHeaders = groups.length > 1;
+  const groupHeader = (key: string) => {
+    if (key === scopeSourceKey) {
+      return t('semantic-models:conceptSelect.thisScheme', 'This scheme: {{label}}', {
+        label: scopeLabel || schemeLabel(key),
+      });
+    }
+    return key ? schemeLabel(key) : t('semantic-models:conceptSelect.noScheme', 'No scheme');
+  };
+  const classesOnly = typeFilter === 'class';
 
   // Inline mapping suggestions. We deliberately re-fetch only when the
   // dialog is (re)opened or the source entity changes — these are
@@ -129,10 +211,22 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl w-[90vw]">
         <DialogHeader>
-          <DialogTitle>Select Business {entityType === 'property' ? 'Property' : 'Concept'}</DialogTitle>
+          <DialogTitle>{title ?? `Select Business ${entityType === 'property' ? 'Property' : 'Concept'}`}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <Input placeholder={`Search business ${entityType === 'property' ? 'properties' : 'concepts'}...`} value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input placeholder={searchPlaceholder ?? `Search business ${entityType === 'property' ? 'properties' : 'concepts'}...`} value={q} onChange={(e) => setQ(e.target.value)} />
+          {scoped && allowOtherSchemes && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="concept-select-include-other-schemes"
+                checked={includeOtherSchemes}
+                onCheckedChange={(v) => setIncludeOtherSchemes(v === true)}
+              />
+              <Label htmlFor="concept-select-include-other-schemes" className="text-sm font-normal">
+                {t('semantic-models:conceptSelect.includeOtherSchemes', 'Include other schemes')}
+              </Label>
+            </div>
+          )}
           <div className="space-y-4 max-h-80 overflow-auto">
             {mappingHints.length > 0 && (
               <div className="space-y-2">
@@ -162,12 +256,12 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
                 ))}
               </div>
             )}
-            {suggested.length > 0 && (
+            {visibleSuggested.length > 0 && (
               <div className="space-y-2">
                 <div className="text-sm font-medium text-muted-foreground border-b pb-1">
                   Suggested (child {entityType === 'property' ? 'properties' : 'concepts'})
                 </div>
-                {suggested.map(r => (
+                {visibleSuggested.map(r => (
                   <div key={r.value} className="flex items-center justify-between gap-3 bg-blue-50 dark:bg-blue-950 p-2 rounded-lg">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <Badge variant="secondary" className="shrink-0">{r.type}</Badge>
@@ -185,29 +279,57 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
                 ))}
               </div>
             )}
-            {other.length > 0 && (
+            {visibleOther.length > 0 && (
               <div className="space-y-2">
-                {suggested.length > 0 && (
+                {visibleSuggested.length > 0 && (
                   <div className="text-sm font-medium text-muted-foreground border-b pb-1">
                     Other {entityType === 'property' ? 'properties' : 'concepts'}
                   </div>
                 )}
-                {other.map(r => (
-                  <div key={r.value} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Badge variant="secondary" className="shrink-0">{r.type}</Badge>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold truncate" title={r.label}>
-                          {r.label}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono break-all" title={r.value}>
-                          {r.value}
-                        </div>
+                {groups.map((group) => (
+                  <div key={group.key || '_'} className="space-y-2">
+                    {showGroupHeaders && (
+                      <div className="text-sm font-medium text-muted-foreground border-b pb-1">
+                        {groupHeader(group.key)}
                       </div>
-                    </div>
-                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => onSelect(r.value)}>Select</Button>
+                    )}
+                    {group.items.map(r => (
+                      <div key={r.value} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Badge variant="secondary" className="shrink-0">{r.type}</Badge>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold truncate" title={r.label}>
+                              {r.label}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono break-all" title={r.value}>
+                              {r.value}
+                            </div>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" className="shrink-0" onClick={() => onSelect(r.value)}>Select</Button>
+                      </div>
+                    ))}
                   </div>
                 ))}
+              </div>
+            )}
+            {scoped && !widened && loaded && visibleOther.length === 0 && (
+              <div className="text-sm text-muted-foreground py-2 space-y-1">
+                <p>
+                  {q.trim()
+                    ? t('semantic-models:conceptSelect.noMatchesInScheme', 'No matches in this scheme.')
+                    : classesOnly
+                      ? t('semantic-models:conceptSelect.noClassesInScheme', 'No classes in this scheme yet.')
+                      : t('semantic-models:conceptSelect.noConceptsInScheme', 'No concepts in this scheme yet.')}
+                </p>
+                {allowOtherSchemes && (
+                  <p>
+                    {t(
+                      'semantic-models:conceptSelect.includeOtherSchemesHint',
+                      'Tick "Include other schemes" to pick from another scheme.',
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </div>

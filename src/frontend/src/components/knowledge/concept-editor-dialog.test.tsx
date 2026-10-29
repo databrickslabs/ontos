@@ -32,8 +32,11 @@ vi.mock('@/components/concepts/mode-switch', () => ({
 let pickerEntityType: string | undefined;
 let pickerConceptTypes: string[] | undefined;
 let pickerOnSelect: ((iri: string) => void) | undefined;
+let pickerProps: Record<string, any> | undefined;
 vi.mock('@/components/semantic/concept-select-dialog', () => ({
-  default: ({ isOpen, onSelect, entityType, conceptTypes }: { isOpen: boolean; onSelect: (iri: string) => void; entityType?: string; conceptTypes?: string[] }) => {
+  default: (props: { isOpen: boolean; onSelect: (iri: string) => void; entityType?: string; conceptTypes?: string[] }) => {
+    const { isOpen, onSelect, entityType, conceptTypes } = props;
+    pickerProps = props;
     pickerEntityType = entityType;
     pickerConceptTypes = conceptTypes;
     pickerOnSelect = onSelect;
@@ -134,6 +137,7 @@ beforeEach(() => {
   pickerEntityType = undefined;
   pickerConceptTypes = undefined;
   pickerOnSelect = undefined;
+  pickerProps = undefined;
 });
 
 describe('ConceptEditorDialog header and type', () => {
@@ -262,8 +266,8 @@ describe('ConceptEditorDialog Parent field', () => {
     expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Concept');
     fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
     expect(pickerEntityType).toBe('class');
-    // Taxonomy parents: any concept, no type filter.
-    expect(pickerConceptTypes).toBeUndefined();
+    // Taxonomy parents: SKOS concepts only.
+    expect(pickerConceptTypes).toEqual(['concept']);
     fireEvent.click(screen.getByTestId('pick-parent'));
     expect(screen.getByTestId('parent-field')).toHaveTextContent('Party');
     const data = await fillAndSubmit(onSave);
@@ -352,5 +356,69 @@ describe('ConceptEditorDialog property block', () => {
   it('is not shown for a class', () => {
     renderDialog({ initialConceptType: 'class' });
     expect(document.getElementById('domain')).toBeNull();
+  });
+});
+
+describe('ConceptEditorDialog parent picker scope', () => {
+  const TAXONOMY_2 = { iri: 'urn:taxonomy:products', label: 'Products', collection_type: 'taxonomy', is_editable: true } as unknown as KnowledgeCollection;
+
+  it('taxonomy concept: scoped to the chosen scheme, no other schemes', () => {
+    renderDialog({ collection: TAXONOMY, collections: [ONTOLOGY, TAXONOMY, TAXONOMY_2], initialConceptType: 'concept' });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: TAXONOMY_2.iri } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
+    expect(pickerProps!.conceptTypes).toEqual(['concept']);
+    expect(pickerProps!.scopeSourceKey).toBe('products');
+    expect(pickerProps!.scopeLabel).toBe('Products');
+    expect(pickerProps!.schemeLabels).toMatchObject({ regions: 'Regions', products: 'Products', core: 'Core' });
+    expect(pickerProps!.allowOtherSchemes).toBe(false);
+    expect(pickerProps!.title).toBe('Select Parent Concept');
+    expect(pickerProps!.searchPlaceholder).toBe('Search concepts in this scheme...');
+  });
+
+  it('class: classes of the chosen ontology, other schemes opt-in', () => {
+    renderDialog({ initialConceptType: 'class' });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    expect(pickerProps!.conceptTypes).toEqual(['class']);
+    expect(pickerProps!.scopeSourceKey).toBe('core');
+    expect(pickerProps!.allowOtherSchemes).toBe(true);
+    expect(pickerProps!.title).toBe('Select Superclass');
+    expect(pickerProps!.searchPlaceholder).toBe('Search classes...');
+  });
+
+  it('uses the backend source_key when the scheme has one', () => {
+    const demo = { ...ONTOLOGY, iri: 'urn:demo', label: 'Demo', source_key: 'Demo Data' } as unknown as KnowledgeCollection;
+    renderDialog({ collection: demo, collections: [demo], initialConceptType: 'class' });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    expect(pickerProps!.scopeSourceKey).toBe('Demo Data');
+    expect(pickerProps!.schemeLabels).toMatchObject({ 'Demo Data': 'Demo' });
+  });
+
+  it("edit mode scopes to the entry's own scheme and excludes self, children and chosen parents", () => {
+    renderDialog({
+      collection: undefined,
+      concept: { ...EXISTING_CLASS, child_concepts: ['urn:x:VipCustomer'] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    expect(pickerProps!.scopeSourceKey).toBe('core');
+    expect(pickerProps!.scopeLabel).toBe('Core');
+    expect(pickerProps!.excludeIris).toEqual(
+      expect.arrayContaining(['urn:x:Customer', 'urn:x:VipCustomer', 'urn:x:Party']),
+    );
+  });
+
+  it('create mode excludes parents picked so far', () => {
+    renderDialog({ collection: TAXONOMY, initialConceptType: 'concept' });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
+    expect(pickerProps!.excludeIris).toEqual([]);
+    fireEvent.click(screen.getByTestId('pick-parent'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
+    expect(pickerProps!.excludeIris).toEqual(['https://example.org/onto#Party']);
+  });
+
+  it('falls back to the unscoped list when the scheme has no key', () => {
+    renderDialog({ collection: undefined, concept: { ...EXISTING_CLASS, source_context: undefined } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Class' }));
+    expect(pickerProps!.scopeSourceKey).toBeUndefined();
+    expect(pickerProps!.conceptTypes).toEqual(['class']);
   });
 });

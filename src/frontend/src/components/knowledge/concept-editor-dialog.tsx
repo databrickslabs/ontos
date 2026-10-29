@@ -23,6 +23,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import { collectionSourceKey } from '@/lib/collection-source-key';
 import {
   OntologyConcept,
   ConceptCreate,
@@ -85,6 +86,21 @@ function fittingSchemes(colls: KnowledgeCollection[], kinds: CollectionType[]): 
   const seen = new Set<string>();
   const visit = (c: KnowledgeCollection) => {
     if (c.is_editable && kinds.includes(c.collection_type) && !seen.has(c.iri)) {
+      seen.add(c.iri);
+      result.push(c);
+    }
+    c.child_collections?.forEach(visit);
+  };
+  colls.forEach(visit);
+  return result;
+}
+
+// Every scheme in the (possibly nested) tree, once each, editable or not.
+function allSchemes(colls: KnowledgeCollection[]): KnowledgeCollection[] {
+  const result: KnowledgeCollection[] = [];
+  const seen = new Set<string>();
+  const visit = (c: KnowledgeCollection) => {
+    if (!seen.has(c.iri)) {
       seen.add(c.iri);
       result.push(c);
     }
@@ -204,6 +220,27 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
       ? [concept.iri, ...(formData.concept_type === 'class' ? concept.child_concepts || [] : [])]
       : [],
   );
+  // The parent picker lists the TARGET scheme only (a hierarchy lives inside
+  // its scheme): the picked scheme in create mode, the entry's own scheme
+  // when editing. No resolvable key falls back to the unscoped list.
+  const schemePool = allSchemes(collection ? [collection, ...collections] : collections);
+  const schemeLabels: Record<string, string> = {};
+  schemePool.forEach((c) => {
+    const key = collectionSourceKey(c);
+    if (!(key in schemeLabels)) schemeLabels[key] = c.label;
+  });
+  const targetScheme = isNew ? schemePool.find((c) => c.iri === formData.collection_iri) : undefined;
+  const parentScopeKey = (isNew ? (targetScheme ? collectionSourceKey(targetScheme) : '') : concept?.source_context) || undefined;
+  const parentScopeLabel = parentScopeKey ? targetScheme?.label || schemeLabels[parentScopeKey] : undefined;
+  // Never offered: self, direct children (deeper descendants are not known
+  // here) and parents already chosen.
+  const pickerExcludeIris = Array.from(
+    new Set([
+      ...(concept ? [concept.iri, ...(concept.child_concepts || [])] : []),
+      ...formData.broader_iris,
+    ]),
+  );
+  const isClassParent = formData.concept_type === 'class';
 
   // Keep the picked scheme valid: the preset `collection` when it fits,
   // otherwise the first fitting scheme (or none).
@@ -751,8 +788,24 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           isOpen={parentPickerOpen}
           onOpenChange={setParentPickerOpen}
           entityType="class"
-          // Class parents: classes only. Taxonomy parents: any concept.
-          conceptTypes={formData.concept_type === 'class' ? ['class'] : undefined}
+          // Class parents: classes. Taxonomy parents: SKOS concepts (no terms).
+          conceptTypes={isClassParent ? ['class'] : ['concept']}
+          scopeSourceKey={parentScopeKey}
+          scopeLabel={parentScopeLabel}
+          schemeLabels={schemeLabels}
+          // Classes may subclass one from another ontology (opt-in).
+          allowOtherSchemes={isClassParent}
+          excludeIris={pickerExcludeIris}
+          title={
+            isClassParent
+              ? t('semantic-models:conceptEditor.selectSuperclass', 'Select Superclass')
+              : t('semantic-models:conceptEditor.selectParentConcept', 'Select Parent Concept')
+          }
+          searchPlaceholder={
+            isClassParent
+              ? t('semantic-models:conceptEditor.searchClasses', 'Search classes...')
+              : t('semantic-models:conceptEditor.searchConceptsInScheme', 'Search concepts in this scheme...')
+          }
           onSelect={(iri) => {
             setFormData((prev) =>
               prev.broader_iris.includes(iri) || excludedParentIris.has(iri)

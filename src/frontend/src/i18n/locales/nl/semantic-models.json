@@ -287,7 +287,11 @@
     "addParent": "Bovenliggende toevoegen",
     "subclassOf": "Subklasse van",
     "selectClass": "Klasse selecteren",
-    "removeParent": "{{name}} verwijderen"
+    "removeParent": "{{name}} verwijderen",
+    "selectSuperclass": "Superklasse selecteren",
+    "selectParentConcept": "Bovenliggend concept selecteren",
+    "searchClasses": "Klassen zoeken...",
+    "searchConceptsInScheme": "Concepten zoeken in dit conceptschema..."
   },
   "collectionEditor": {
     "editTitle": "Conceptschema bewerken",
@@ -465,5 +469,14 @@
       "descriptionPlaceholder": "Beschrijf het doel van dit ontologieconceptschema...",
       "importSummary": "{{classes}} klassen en {{properties}} eigenschappen worden geïmporteerd."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Andere conceptschema's meenemen",
+    "thisScheme": "Dit conceptschema: {{label}}",
+    "noScheme": "Geen conceptschema",
+    "noMatchesInScheme": "Geen resultaten in dit conceptschema.",
+    "noClassesInScheme": "Dit conceptschema bevat nog geen klassen.",
+    "noConceptsInScheme": "Dit conceptschema bevat nog geen concepten.",
+    "includeOtherSchemesHint": "Vink \"Andere conceptschema's meenemen\" aan om uit een ander schema te kiezen."
   }
 }

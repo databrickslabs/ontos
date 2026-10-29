@@ -78,7 +78,7 @@ def test_class_filter_returns_only_classes_with_real_type(seeded):
     rows = seeded.search_concepts_by_type("", ["class"], 50)
     assert _values(rows) == [EX + "Asset0", EX + "Asset1", EX + "Asset2", EX + "Vehicle"]
     assert all(r["type"] == "class" for r in rows)
-    assert set(rows[0].keys()) == {"value", "label", "type"}
+    assert set(rows[0].keys()) == {"value", "label", "type", "source_context"}
 
 
 def test_other_types_use_their_real_type(seeded):
@@ -140,3 +140,75 @@ def test_route_without_param_keeps_default_path(client, seeded, monkeypatch):
     assert blank.status_code == 200
     assert blank.json() == legacy
     assert calls[-1] == ("", 50)
+
+
+# --- Scheme scoping (source_context) -----------------------------------------
+
+def _scheme_key(manager, iri):
+    """Group key the seeded scheme's concepts carry (its `source_key`)."""
+    for concepts in manager.get_grouped_concepts().values():
+        for c in concepts:
+            if c.iri == iri:
+                return c.source_context
+    raise AssertionError(f"{iri} not seeded")
+
+
+def test_items_carry_source_context(seeded):
+    rows = seeded.search_concepts_by_type(EX + "Asset", ["class"], 50)
+    key = _scheme_key(seeded, EX + "Asset0")
+    assert key
+    assert {r["source_context"] for r in rows} == {key}
+
+
+def test_source_context_keeps_only_that_scheme_and_honors_types(seeded):
+    key = _scheme_key(seeded, EX + "Asset0")
+    rows = seeded.search_concepts_by_type("", ["class"], 50, source_context=key)
+    assert _values(rows) == [EX + "Asset0", EX + "Asset1", EX + "Asset2", EX + "Vehicle"]
+    assert all(r["source_context"] == key for r in rows)
+    # Type filter still applies inside the scheme.
+    concepts = seeded.search_concepts_by_type("", ["concept"], 50, source_context=key)
+    assert _values(concepts) == [EX + "Region"]
+
+
+def test_source_context_other_scheme_and_unknown(seeded):
+    key = _scheme_key(seeded, EX + "Asset0")
+    other_keys = {
+        c.source_context
+        for concepts in seeded.get_grouped_concepts().values()
+        for c in concepts
+        if c.iri == EX + "Vehicle" and c.source_context != key
+    }
+    assert len(other_keys) == 1
+    other_key = other_keys.pop()
+    # The second scheme only declares Vehicle; nothing from the first leaks in.
+    rows = seeded.search_concepts_by_type("", ["class"], 50, source_context=other_key)
+    assert _values(rows) == [EX + "Vehicle"]
+    assert rows[0]["source_context"] == other_key
+    assert seeded.search_concepts_by_type("", ["class"], 50, source_context="no-such-scheme") == []
+
+
+def test_route_passes_source_context(client, seeded):
+    key = _scheme_key(seeded, EX + "Asset0")
+    r = client.get(
+        "/api/semantic-models/concepts",
+        params={"q": "", "limit": 50, "concept_types": "concept", "source_context": key},
+    )
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    assert _values(rows) == [EX + "Region"]
+    assert rows[0]["source_context"] == key
+
+
+def test_route_ignores_source_context_without_concept_types(client, seeded, monkeypatch):
+    calls = []
+    legacy = [{"value": EX + "Region", "label": "Region", "type": "class"}]
+
+    def _fake_search(text_filter="", limit=50):
+        calls.append((text_filter, limit))
+        return legacy
+
+    monkeypatch.setattr(seeded, "search_concepts", _fake_search)
+    r = client.get("/api/semantic-models/concepts", params={"q": "", "limit": 50, "source_context": "typed"})
+    assert r.status_code == 200, r.text
+    assert r.json() == legacy
+    assert calls == [("", 50)]

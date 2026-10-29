@@ -287,7 +287,11 @@
     "addParent": "親を追加",
     "subclassOf": "サブクラス（上位クラス）",
     "selectClass": "クラスを選択",
-    "removeParent": "{{name}}を削除"
+    "removeParent": "{{name}}を削除",
+    "selectSuperclass": "スーパークラスを選択",
+    "selectParentConcept": "親コンセプトを選択",
+    "searchClasses": "クラスを検索...",
+    "searchConceptsInScheme": "このコンセプトスキーム内のコンセプトを検索..."
   },
   "collectionEditor": {
     "editTitle": "コンセプトスキームを編集",
@@ -465,5 +469,14 @@
       "descriptionPlaceholder": "このオントロジーのコンセプトスキームの目的を説明してください...",
       "importSummary": "クラス {{classes}} 件とプロパティ {{properties}} 件がインポートされます。"
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "他のコンセプトスキームを含める",
+    "thisScheme": "このコンセプトスキーム: {{label}}",
+    "noScheme": "コンセプトスキームなし",
+    "noMatchesInScheme": "このコンセプトスキームに一致する項目はありません。",
+    "noClassesInScheme": "このコンセプトスキームにはまだクラスがありません。",
+    "noConceptsInScheme": "このコンセプトスキームにはまだコンセプトがありません。",
+    "includeOtherSchemesHint": "他のスキームから選ぶには「他のコンセプトスキームを含める」をオンにしてください。"
   }
 }

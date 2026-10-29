@@ -654,6 +654,7 @@ async def list_simple_concepts(
     q: Optional[str] = Query(None, description="Simple text filter for concepts"),
     limit: int = Query(50, description="Maximum number of results"),
     concept_types: Optional[str] = Query(None, description="Comma-separated concept types to keep (e.g. 'class' or 'class,individual')"),
+    source_context: Optional[str] = Query(None, description="Only concepts of this scheme (its source_key); honored only together with concept_types"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
 ) -> List[dict]:
@@ -666,11 +667,17 @@ async def list_simple_concepts(
     ``type`` carries each concept's real concept_type. Unknown types are
     ignored. Without it (or if it is blank), the default list is returned,
     with every row typed 'class'.
+
+    ``source_context`` (the scheme's group key, as the collections list
+    returns it in ``source_key``) narrows the type-filtered list to that
+    scheme. It is ignored without ``concept_types``. Type-filtered rows also
+    carry each concept's ``source_context``.
     """
     try:
         types_list = [t.strip() for t in (concept_types or "").split(',') if t.strip()]
         if types_list:
-            return manager.search_concepts_by_type(q or "", types_list, limit=limit)
+            scope = (source_context or "").strip() or None
+            return manager.search_concepts_by_type(q or "", types_list, limit=limit, source_context=scope)
         results = manager.search_concepts(q or "", limit=limit)
         return results
     except Exception as e:

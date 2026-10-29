@@ -287,7 +287,11 @@
     "addParent": "Adicionar pai",
     "subclassOf": "Subclasse de",
     "selectClass": "Selecionar classe",
-    "removeParent": "Remover {{name}}"
+    "removeParent": "Remover {{name}}",
+    "selectSuperclass": "Selecionar superclasse",
+    "selectParentConcept": "Selecionar conceito pai",
+    "searchClasses": "Pesquisar classes...",
+    "searchConceptsInScheme": "Pesquisar conceitos neste esquema de conceitos..."
   },
   "collectionEditor": {
     "editTitle": "Editar esquema de conceitos",
@@ -465,5 +469,14 @@
       "descriptionPlaceholder": "Descreva a finalidade deste esquema de conceitos de ontologia...",
       "importSummary": "{{classes}} classes e {{properties}} propriedades serão importadas."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Incluir outros esquemas de conceitos",
+    "thisScheme": "Este esquema de conceitos: {{label}}",
+    "noScheme": "Sem esquema de conceitos",
+    "noMatchesInScheme": "Nenhuma correspondência neste esquema de conceitos.",
+    "noClassesInScheme": "Este esquema de conceitos ainda não tem classes.",
+    "noConceptsInScheme": "Este esquema de conceitos ainda não tem conceitos.",
+    "includeOtherSchemesHint": "Marque \"Incluir outros esquemas de conceitos\" para escolher de outro esquema."
   }
 }

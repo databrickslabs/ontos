@@ -705,7 +705,7 @@
       "deleteExecutionTitle": "Uitvoering Verwijderen",
       "deleteExecutionDescription": "Weet je zeker dat je deze workflow-uitvoering wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
       "activationOverlapTitle": "Een andere workflow komt overeen met dezelfde gebeurtenis",
-      "activationOverlapDescription": "Activering kan dezelfde goedkeuring meerdere keren aanvragen. Controleer de overlappende workflows en annuleer of activeer toch.",
+      "activationOverlapDescription": "De onderstaande workflows zouden ook bij dezelfde gebeurtenis worden uitgevoerd. Controleer ze en annuleer of activeer toch.",
       "activationOverlapDetails": "Trigger: {{trigger}} · Entiteiten: {{entities}}",
       "allEntities": "alle entiteiten",
       "activateAnyway": "Toch activeren"

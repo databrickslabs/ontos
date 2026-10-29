@@ -49,6 +49,10 @@ _DEFAULTS_LOCK_KEY = 7_340_001_016
 # (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
 # so two active workflows of these types can't consume the same event.
 _NON_EVENT_TRIGGER_TYPES = frozenset({TriggerType.MANUAL.value, TriggerType.SCHEDULED.value})
+# Trigger types whose from/to status filters narrow the events they match.
+_STATUS_FILTERED_TRIGGER_TYPES = frozenset({
+    TriggerType.ON_STATUS_CHANGE.value, TriggerType.BEFORE_STATUS_CHANGE.value,
+})
 
 
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
@@ -336,6 +340,22 @@ class WorkflowsManager:
         """
         return True
 
+    @staticmethod
+    def activation_trigger_key(trigger: WorkflowTrigger | Dict[str, Any] | None) -> tuple:
+        """The trigger fields ``activation_conflicts_for`` reads, for change detection.
+
+        Other fields (``schedule``, ``on_error``, ``disabled_for``) don't change
+        which events a workflow matches, so editing them needs no new check.
+        """
+        data = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
+        data = data or {}
+        trigger_type = data.get('type')
+        statuses = (
+            (data.get('from_status'), data.get('to_status'))
+            if trigger_type in _STATUS_FILTERED_TRIGGER_TYPES else (None, None)
+        )
+        return (trigger_type, frozenset(data.get('entity_types') or []), *statuses)
+
     def activation_conflicts_for(
         self,
         trigger: WorkflowTrigger | Dict[str, Any],
@@ -376,7 +396,7 @@ class WorkflowsManager:
                 continue
             if not self._activation_scopes_overlap(target_scope, scope):
                 continue
-            if target_trigger.get('type') in {'on_status_change', 'before_status_change'}:
+            if target_trigger.get('type') in _STATUS_FILTERED_TRIGGER_TYPES:
                 if any(
                     target_trigger.get(field) and trigger.get(field)
                     and target_trigger[field] != trigger[field]

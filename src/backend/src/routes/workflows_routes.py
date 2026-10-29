@@ -828,7 +828,12 @@ async def update_workflow(
     resulting_active = workflow.is_active if workflow.is_active is not None else existing.is_active
     resulting_trigger = workflow.trigger or existing.trigger
     resulting_scope = workflow.scope or existing.scope or WorkflowScope(type='all')
-    trigger_changed = workflow.trigger is not None and workflow.trigger != existing.trigger
+    # Only the fields the overlap check reads count: the designer omits `schedule`, and gate
+    # settings (`on_error`, `disabled_for`) don't change which events a workflow matches.
+    trigger_changed = workflow.trigger is not None and (
+        manager.activation_trigger_key(workflow.trigger)
+        != manager.activation_trigger_key(existing.trigger)
+    )
     scope_was_sent = 'scope' in workflow.model_fields_set
     scope_changed = scope_was_sent and (
         (workflow.scope or WorkflowScope(type='all'))

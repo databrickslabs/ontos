@@ -55,6 +55,12 @@ _STATUS_FILTERED_TRIGGER_TYPES = frozenset({
 })
 
 
+def _json_object(raw: Optional[str]) -> Dict[str, Any]:
+    """A stored JSON config; NULL, the text ``'null'`` or a non-object value read as ``{}``."""
+    value = json.loads(raw or '{}')
+    return value if isinstance(value, dict) else {}
+
+
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
@@ -384,8 +390,8 @@ class WorkflowsManager:
         candidates = query.all()
         for candidate in candidates:
             try:
-                trigger = json.loads(candidate.trigger_config or '{}')
-                scope = json.loads(candidate.scope_config or '{}')
+                trigger = _json_object(candidate.trigger_config)
+                scope = _json_object(candidate.scope_config)
             except (json.JSONDecodeError, TypeError):
                 continue
             if trigger.get('type') != target_trigger.get('type'):
@@ -419,8 +425,8 @@ class WorkflowsManager:
         if not target:
             return []
         try:
-            trigger = json.loads(target.trigger_config or '{}')
-            scope = json.loads(target.scope_config or '{}')
+            trigger = _json_object(target.trigger_config)
+            scope = _json_object(target.scope_config)
         except (json.JSONDecodeError, TypeError):
             return []
         return self.activation_conflicts_for(

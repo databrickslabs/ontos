@@ -392,3 +392,16 @@ def test_status_filter_change_on_active_workflow_is_still_checked(db_session):
         ))
 
     assert raised.value.status_code == 409
+
+
+def test_json_null_trigger_or_scope_config_is_treated_as_empty(db_session):
+    null_scope = _workflow(db_session, 'Null scope', active=True, entities=['data_contract'])
+    null_scope.scope_config = 'null'
+    null_trigger = _workflow(db_session, 'Null trigger', active=True)
+    null_trigger.trigger_config = 'null'
+    db_session.commit()
+    target = _workflow(db_session, 'Target', active=False, entities=['data_contract'])
+
+    conflicts = WorkflowsManager(db_session).activation_conflicts(target.id)
+
+    assert [(item['id'], item['scope_type']) for item in conflicts] == [(null_scope.id, 'all')]

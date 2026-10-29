@@ -11,23 +11,52 @@ vi.mock('react-i18next', () => ({
 import { ConceptModeSwitch } from './mode-switch'
 
 describe('ConceptModeSwitch', () => {
-  it('renders larger tab buttons and an aligned info trigger', () => {
-    render(<ConceptModeSwitch />)
-    const simple = screen.getByRole('tab', { name: 'Simple' })
-    const advanced = screen.getByRole('tab', { name: 'Advanced view' })
-    for (const tab of [simple, advanced]) {
-      expect(tab).toHaveClass('text-sm', 'px-4', 'py-2')
-    }
-    const info = screen.getByRole('button', { name: 'Advanced view reveals the ontology layer' })
-    expect(info).toHaveClass('h-5', 'w-5')
+  it('renders a compact S | L toggle instead of the wide Simple/Advanced tabs', () => {
+    render(<ConceptModeSwitch tipLeft />)
+    const group = screen.getByRole('group', { name: 'View mode' })
+    expect(group).toHaveClass('h-8')
+    const small = screen.getByRole('button', { name: 'Small View' })
+    const large = screen.getByRole('button', { name: /^Large View: Advanced view reveals/ })
+    expect(small).toHaveTextContent('S')
+    expect(large).toHaveTextContent('L')
+    expect(small).toHaveClass('w-8', 'text-xs')
+    // The old wide tabs, their labels and the info tooltip trigger are gone.
+    expect(screen.queryAllByRole('tab')).toHaveLength(0)
+    expect(screen.queryByText('Simple')).not.toBeInTheDocument()
+    expect(screen.queryByText('Advanced view')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Advanced view reveals the ontology layer' })
+    ).not.toBeInTheDocument()
   })
 
-  it('toggles the mode and reflects it on the document', () => {
+  it('toggles the mode, persists it and reflects it on the document', () => {
     render(<ConceptModeSwitch />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Advanced view' }))
-    expect(screen.getByRole('tab', { name: 'Advanced view' })).toHaveAttribute('aria-selected', 'true')
+    const small = screen.getByRole('button', { name: 'Small View' })
+    const large = screen.getByRole('button', { name: /^Large View/ })
+    fireEvent.click(large)
+    expect(large).toHaveAttribute('aria-pressed', 'true')
+    expect(small).toHaveAttribute('aria-pressed', 'false')
     expect(document.documentElement.getAttribute('data-mode')).toBe('advanced')
-    fireEvent.click(screen.getByRole('tab', { name: 'Simple' }))
+    expect(localStorage.getItem('ontosConceptMode')).toBe('advanced')
+    fireEvent.click(small)
+    expect(small).toHaveAttribute('aria-pressed', 'true')
     expect(document.documentElement.getAttribute('data-mode')).toBe('simple')
+    expect(localStorage.getItem('ontosConceptMode')).toBe('simple')
+  })
+
+  it('keeps every rendered instance in sync through the shared store', () => {
+    render(
+      <>
+        <ConceptModeSwitch />
+        <ConceptModeSwitch />
+      </>
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: /^Large View/ })[0])
+    for (const btn of screen.getAllByRole('button', { name: /^Large View/ })) {
+      expect(btn).toHaveAttribute('aria-pressed', 'true')
+    }
+    // Reset the shared module-level store so later tests start in simple mode.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Small View' })[1])
+    expect(screen.getAllByRole('button', { name: 'Small View' })[0]).toHaveAttribute('aria-pressed', 'true')
   })
 })

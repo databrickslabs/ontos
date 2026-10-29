@@ -25,15 +25,15 @@
   },
   "concepts": {
     "name": "Konzepte",
-    "description": "Durchsuchen, suchen und verwalten Sie Geschäftskonzepte, Sammlungen und Hierarchien."
+    "description": "Durchsuchen, suchen und verwalten Sie Geschäftskonzepte, Konzeptschemata und Hierarchien."
   },
   "semantic-models": {
     "name": "Konzept-Browser",
     "description": "Erkunden Sie Geschäftsglossar-Begriffe, Konzepte und ihre Beziehungen."
   },
   "collections": {
-    "name": "Konzeptsammlungen",
-    "description": "Konzepte und Assets in logische Sammlungen organisieren."
+    "name": "Konzeptschemata",
+    "description": "Konzepte und Assets in logische Konzeptschemata organisieren."
   },
   "process-workflows": {
     "name": "Workflows",

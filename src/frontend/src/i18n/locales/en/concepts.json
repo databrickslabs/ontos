@@ -15,7 +15,7 @@
     "createScheme": "New Concept Scheme"
   },
   "nav": {
-    "collections": "Collections",
+    "collections": "Schemes",
     "browser": "Concepts",
     "search": "Search",
     "searchSparql": "Search / SPARQL",

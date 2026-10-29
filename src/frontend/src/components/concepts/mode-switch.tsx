@@ -1,13 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
-import { Info } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { SizeToggle } from '@/components/common/size-toggle';
 
 // ---------------------------------------------------------------------------
 // Shared Simple/Advanced mode switch for Concepts views (Explore, Define,
@@ -79,83 +72,38 @@ export function useConceptMode(): [mode: ConceptMode, setMode: (m: ConceptMode) 
 }
 
 /**
- * ConceptModeSwitch — UI component for toggling between Simple and Advanced views.
- * Shows mode buttons + info tooltip explaining the difference.
+ * ConceptModeSwitch: compact S | L toggle for the Simple/Advanced concept mode.
+ * S = 'simple', L = 'advanced'. Rendered with the shared SizeToggle so it
+ * matches the view buttons on the Data Contracts detail page.
  *
  * Usage:
  *   <ConceptModeSwitch />
- *
- * Tip positioning:
- *   - Default: tooltip appears to the right (good for left-aligned switches)
- *   - Pass tipLeft=true to anchor it on the left (good for right-aligned switches)
  */
 interface ConceptModeSwitchProps {
+  /** @deprecated Unused. Kept so existing call sites keep compiling; the
+   *  info tooltip it positioned was replaced by the button titles. */
   tipLeft?: boolean;
 }
 
-export function ConceptModeSwitch({ tipLeft = false }: ConceptModeSwitchProps) {
-  const { t } = useTranslation(['concepts']);
+export function ConceptModeSwitch(_props: ConceptModeSwitchProps = {}) {
+  const { t } = useTranslation(['concepts', 'common']);
   const [mode, setMode] = useConceptMode();
 
-  return (
-    <div className="inline-flex items-center gap-2 flex-shrink-0">
-      <div
-        role="tablist"
-        aria-label={t('concepts:mode.label', 'View mode')}
-        className="inline-flex items-center gap-1 rounded-lg bg-muted p-1"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'simple'}
-          onClick={() => setMode('simple')}
-          className={cn(
-            'rounded-md px-4 py-2 text-sm font-medium leading-none transition-colors',
-            mode === 'simple'
-              ? 'bg-background text-foreground shadow'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          {t('concepts:mode.simple', 'Simple')}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'advanced'}
-          onClick={() => setMode('advanced')}
-          className={cn(
-            'rounded-md px-4 py-2 text-sm font-medium leading-none transition-colors',
-            mode === 'advanced'
-              ? 'bg-background text-foreground shadow'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          {t('concepts:mode.advanced', 'Advanced view')}
-        </button>
-      </div>
+  const largeLabel = t('common:tooltips.largeView', 'Large View');
+  const description = t(
+    'concepts:mode.description',
+    'Advanced view reveals the ontology layer: RDF/SKOS, IRIs, property domain & range, and technical delivery settings. Simple hides them. Your choice is remembered.'
+  );
 
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={t(
-                'concepts:mode.info',
-                'Advanced view reveals the ontology layer'
-              )}
-              className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-border text-muted-foreground hover:text-foreground"
-            >
-              <Info className="h-3.5 w-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side={tipLeft ? 'left' : 'right'} className="max-w-[240px]">
-            {t(
-              'concepts:mode.description',
-              'Advanced view reveals the ontology layer: RDF/SKOS, IRIs, property domain & range, and technical delivery settings. Simple hides them. Your choice is remembered.'
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </div>
+  return (
+    <SizeToggle<ConceptMode>
+      aria-label={t('concepts:mode.label', 'View mode')}
+      value={mode}
+      onChange={setMode}
+      options={[
+        { value: 'simple', label: 'S', title: t('common:tooltips.smallView', 'Small View') },
+        { value: 'advanced', label: 'L', title: `${largeLabel}: ${description}` },
+      ]}
+    />
   );
 }

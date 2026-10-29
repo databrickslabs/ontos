@@ -9,7 +9,7 @@
   "searchPlaceholder": "Search terms...",
   "loading": "Loading semantic models...",
   "tabs": {
-    "collections": "Collections",
+    "collections": "Schemes",
     "concepts": "Concepts",
     "graph": "Graph"
   },
@@ -60,7 +60,7 @@
     "noSourceFile": "No source file",
     "allTypes": "All Types",
     "allScopes": "All Scopes",
-    "allCollections": "All Collections",
+    "allCollections": "All Schemes",
     "searchSchemes": "Search schemes...",
     "sortBy": "Sort by",
     "sortName": "Name",
@@ -73,7 +73,7 @@
     "labelLanguage": "Label Language"
   },
   "groupBy": {
-    "collection": "By Collection",
+    "collection": "By Scheme",
     "type": "By Type",
     "flat": "Flat List"
   },
@@ -99,10 +99,10 @@
     "deleteConfirm": "Are you sure you want to delete this term?",
     "deleteSuccess": "Term deleted successfully",
     "deleteError": "Failed to delete term",
-    "collectionCreated": "Collection created successfully",
-    "collectionUpdated": "Collection updated successfully",
-    "collectionDeleted": "Collection deleted successfully",
-    "confirmDeleteCollection": "Are you sure you want to delete the collection \"{{name}}\"? This will delete all concepts in it.",
+    "collectionCreated": "Scheme created successfully",
+    "collectionUpdated": "Scheme updated successfully",
+    "collectionDeleted": "Scheme deleted successfully",
+    "confirmDeleteCollection": "Are you sure you want to delete the scheme \"{{name}}\"? This will delete all concepts in it.",
     "conceptCreated": "Concept created successfully",
     "conceptUpdated": "Concept updated successfully",
     "conceptDeleted": "Concept deleted successfully",
@@ -114,7 +114,7 @@
     "enterReviewerEmail": "Enter reviewer email address:",
     "conceptPromoted": "Concept promoted successfully",
     "conceptMigrated": "Concept migrated successfully",
-    "noCollections": "No collections found",
+    "noCollections": "No schemes found",
     "noConceptsFound": "No concepts found",
     "selectConcept": "Select a concept to view details",
     "linkAdded": "Link added successfully",
@@ -177,14 +177,14 @@
     "save": "Save"
   },
   "collections": {
-    "title": "Collections",
+    "title": "Schemes",
     "glossary": "Glossary",
     "taxonomy": "Taxonomy",
     "ontology": "Ontology"
   },
   "actions": {
     "createConcept": "Create Concept",
-    "createCollection": "Create Collection"
+    "createCollection": "Create Scheme"
   },
   "badges": {
     "imported": "Imported",
@@ -340,12 +340,12 @@
     "oneSchemeDesc": "Merge every file into a single concept scheme.",
     "oneSchemePerFile": "One scheme per file",
     "oneSchemePerFileDesc": "Each file becomes its own concept scheme.",
-    "perFileTodo": "One-scheme-per-file needs a backend that creates a scheme per file; for now all files land in the collection below.",
+    "perFileTodo": "One-scheme-per-file needs a backend that creates a scheme per file; for now all files land in the scheme below.",
     "targetCollection": "Target concept scheme",
-    "selectCollection": "Select a collection…",
+    "selectCollection": "Select a scheme…",
     "createNewScheme": "＋ Create a new scheme…",
     "newSchemeName": "New scheme name (e.g. Finance Ontology)",
-    "noEditableCollections": "No editable collections available. Create one first.",
+    "noEditableCollections": "No editable schemes available. Create one first.",
     "reconcileNote": "Overlapping or duplicate terms across schemes are reconciled later in the Review Board. Import just brings the graph in.",
     "summary": "Imported {{files}} file(s), {{count}} triples total.",
     "summaryPending": "Upload submitted for approval ({{files}} file(s))",
@@ -378,10 +378,10 @@
     "annotation": "Annotation Property"
   },
   "conceptEditor": {
-    "editTitle": "Edit Concept",
-    "createDescription": "Create a new term or concept in the collection.",
-    "collectionLabel": "Collection",
-    "selectCollectionPlaceholder": "Select collection...",
+    "editTitle": "Edit Entry",
+    "createDescription": "Add a new entry to a scheme.",
+    "collectionLabel": "Scheme",
+    "selectCollectionPlaceholder": "Select scheme...",
     "selectTypePlaceholder": "Select type...",
     "label": "Label",
     "labelPlaceholder": "e.g., Revenue",
@@ -414,30 +414,32 @@
       "object": "Relates to other concepts",
       "datatype": "Relates to literal values",
       "annotation": "Metadata annotation"
-    }
+    },
+    "createTitle": "Create Entry",
+    "noFittingScheme": "No editable scheme for this entry type yet ({{kind}}). Create one first."
   },
   "collectionEditor": {
-    "editTitle": "Edit Collection",
-    "createDescription": "Create a new glossary, taxonomy, or ontology collection.",
-    "editDescription": "Update collection settings.",
+    "editTitle": "Edit Scheme",
+    "createDescription": "Create a new glossary, taxonomy, or ontology scheme.",
+    "editDescription": "Update scheme settings.",
     "namePlaceholder": "e.g., Finance Glossary",
     "descriptionPlaceholder": "Optional description...",
     "parentCollection": "Parent Scheme",
     "noneRootCollection": "None (root scheme)",
     "editable": "Editable",
-    "editableHelp": "Allow creating and editing concepts in this collection"
+    "editableHelp": "Allow creating and editing concepts in this scheme"
   },
   "promotion": {
     "promoteConcept": "Promote Concept",
     "demoteConcept": "Demote Concept",
     "migrateConcept": "Migrate Concept",
     "move": "Move",
-    "toDifferentCollection": "to a different collection",
+    "toDifferentCollection": "to a different scheme",
     "actionLabel": "Action",
     "promote": "Promote",
     "migrate": "Migrate",
     "currentLocation": "Current Location",
-    "selectTargetPlaceholder": "Select target collection...",
+    "selectTargetPlaceholder": "Select target scheme...",
     "newIri": "New IRI",
     "sourceConcept": "Source Concept",
     "deprecateOriginal": "Deprecate original (recommended)",
@@ -446,8 +448,8 @@
     "promoteWarning": "Promoted concepts require re-approval at the new scope level."
   },
   "collectionTree": {
-    "readOnly": "Read-only collection",
-    "noCollectionsYet": "No collections yet"
+    "readOnly": "Read-only scheme",
+    "noCollectionsYet": "No schemes yet"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -529,7 +531,7 @@
     "selectedCount": "{{count}} selected",
     "agentProgress": "Agent Progress",
     "generatedTurtle": "Generated Turtle",
-    "saveToCollection": "Save to Collection",
+    "saveToCollection": "Save to Scheme",
     "empty": "(empty)",
     "agentExecutionLog": "Agent Execution Log",
     "agentLogSummary": "{{iterations}} iteration(s) · {{promptTokens}} prompt tokens · {{completionTokens}} completion tokens",
@@ -579,17 +581,17 @@
       "deleteFailed": "Delete failed",
       "turtleCopied": "Turtle content copied to clipboard.",
       "saveFailed": "Save failed",
-      "savedTitle": "Saved to collection",
+      "savedTitle": "Saved to scheme",
       "savedDescription_one": "{{count}} triple imported into \"{{name}}\".",
       "savedDescription_other": "{{count}} triples imported into \"{{name}}\"."
     },
     "saveDialog": {
-      "title": "Save to Concept Collection",
-      "description": "Create a new ontology collection and import the generated triples into the knowledge graph.",
-      "nameLabel": "Collection Name",
+      "title": "Save to Concept Scheme",
+      "description": "Create a new ontology scheme and import the generated triples into the knowledge graph.",
+      "nameLabel": "Scheme Name",
       "namePlaceholder": "e.g., Customer Domain Ontology",
       "descriptionLabel": "Description (optional)",
-      "descriptionPlaceholder": "Describe the purpose of this ontology collection...",
+      "descriptionPlaceholder": "Describe the purpose of this ontology scheme...",
       "importSummary": "{{classes}} classes and {{properties}} properties will be imported."
     }
   }

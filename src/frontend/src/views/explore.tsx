@@ -41,7 +41,7 @@ import {
   FilterBarSkeleton,
   HierarchyTreeSkeleton,
 } from '@/components/common/list-view-skeleton';
-import type { OntologyConcept, KnowledgeCollection } from '@/types/ontology';
+import type { OntologyConcept, KnowledgeCollection, CollectionType } from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
@@ -57,7 +57,7 @@ import {
   GlossaryFilterPanel,
   ImportConceptsDialog,
 } from '@/components/knowledge';
-import { allowedConceptTypes } from '@/components/knowledge/concept-editor-dialog';
+import { schemeKindsForType } from '@/components/knowledge/concept-editor-dialog';
 
 // ---------------------------------------------------------------------------
 // Explore — the ONE unified browse surface for concepts.
@@ -90,30 +90,31 @@ const CREATE_ITEMS: Record<CreatableConceptType, { labelKey: string; defaultLabe
   property: { labelKey: 'concepts:explore.createProperty', defaultLabel: 'New Property' },
 };
 
-const CREATE_TYPES_BY_SCHEME: Record<string, CreatableConceptType[]> = {
-  glossary: ['term'],
-  taxonomy: ['concept'],
-  ontology: ['class', 'property', 'concept'],
-};
-
 // Generic set (no single scheme in focus), in display order.
-const GENERIC_CREATE_TYPES: CreatableConceptType[] = ['concept', 'term', 'class', 'property'];
+const GENERIC_CREATE_TYPES: CreatableConceptType[] = ['term', 'concept', 'class', 'property'];
 
 /**
- * Create-menu concept types for the scheme in focus. A known scheme type gets
- * its own set; otherwise the generic set, limited to types at least one
- * editable scheme accepts (all of them when no scheme is known).
+ * Create-menu concept types for the scheme in focus: the types whose scheme
+ * kinds (schemeKindsForType) include the focused scheme's kind. With no single
+ * scheme in focus, the full generic set (the editor explains when no editable
+ * scheme fits a type and offers to create one).
  */
-export function createMenuTypes(
-  focused: KnowledgeCollection | undefined,
-  editable: KnowledgeCollection[],
-): CreatableConceptType[] {
-  const byScheme = focused?.collection_type ? CREATE_TYPES_BY_SCHEME[focused.collection_type] : undefined;
-  if (byScheme) return byScheme;
-  if (editable.length === 0) return GENERIC_CREATE_TYPES;
-  return GENERIC_CREATE_TYPES.filter((ct) =>
-    editable.some((c) => allowedConceptTypes(c.collection_type).includes(ct)),
-  );
+export function createMenuTypes(focused: KnowledgeCollection | undefined): CreatableConceptType[] {
+  const kind = focused?.collection_type;
+  if (!kind) return GENERIC_CREATE_TYPES;
+  const byScheme = GENERIC_CREATE_TYPES.filter((ct) => schemeKindsForType(ct).includes(kind));
+  return byScheme.length > 0 ? byScheme : GENERIC_CREATE_TYPES;
+}
+
+// Editable schemes in the (nested) scheme tree, depth-first.
+function flattenEditable(colls: KnowledgeCollection[]): KnowledgeCollection[] {
+  const result: KnowledgeCollection[] = [];
+  const visit = (c: KnowledgeCollection) => {
+    if (c.is_editable) result.push(c);
+    c.child_collections?.forEach(visit);
+  };
+  colls.forEach(visit);
+  return result;
 }
 
 function parseViewMode(value: string | null): ViewMode {
@@ -178,6 +179,8 @@ export default function ExploreView() {
   // Dialog state
   const [collectionEditorOpen, setCollectionEditorOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<KnowledgeCollection | null>(null);
+  // Scheme kind preset for a new scheme (from the editor's "no fitting scheme" notice).
+  const [createSchemeType, setCreateSchemeType] = useState<CollectionType | undefined>(undefined);
   const [conceptEditorOpen, setConceptEditorOpen] = useState(false);
   const [editingConcept, setEditingConcept] = useState<OntologyConcept | null>(null);
   // Create-menu preset: the concept type and target scheme for a new concept.
@@ -283,14 +286,25 @@ export default function ExploreView() {
   const handleCreateConcept = (conceptType: CreatableConceptType) => {
     setEditingConcept(null);
     setCreateConceptType(conceptType);
-    // Target the focused scheme; otherwise the first editable scheme that
-    // accepts this type (the dialog re-validates if the user switches scheme).
+    // Target the focused scheme when it fits the type; otherwise the first
+    // editable scheme that does (the dialog shows a notice if none fits).
+    const kinds = schemeKindsForType(conceptType);
     setCreateCollection(
-      focusedCollection ??
-        editableCollections.find((c) => allowedConceptTypes(c.collection_type).includes(conceptType)) ??
-        defaultCollection,
+      focusedCollection && kinds.includes(focusedCollection.collection_type)
+        ? focusedCollection
+        : flattenEditable(collections).find((c) => kinds.includes(c.collection_type)),
     );
     setConceptEditorOpen(true);
+  };
+
+  // "New Concept Scheme" from the concept editor's notice: swap dialogs and
+  // preset the scheme kind the entry needs.
+  const handleCreateSchemeFromEditor = (kind: CollectionType) => {
+    setConceptEditorOpen(false);
+    setEditingConcept(null);
+    setEditingCollection(null);
+    setCreateSchemeType(kind);
+    setCollectionEditorOpen(true);
   };
 
   const handleSaveConcept = async (data: any, isNew: boolean) => {
@@ -326,6 +340,7 @@ export default function ExploreView() {
 
   const handleCreateCollection = () => {
     setEditingCollection(null);
+    setCreateSchemeType(undefined);
     setCollectionEditorOpen(true);
   };
 
@@ -390,7 +405,6 @@ export default function ExploreView() {
   }, [t, toast, bumpKnowledgeGraphRefresh]);
 
   const editableCollections = useMemo(() => collections.filter((c) => c.is_editable), [collections]);
-  const defaultCollection = editableCollections[0];
 
   // The scheme the user is working in: the only editable scheme, or the only
   // editable scheme left visible by the source filter. Otherwise none (the
@@ -402,7 +416,7 @@ export default function ExploreView() {
     );
     return visible.length === 1 ? visible[0] : undefined;
   }, [editableCollections, hiddenSources]);
-  const createTypes = createMenuTypes(focusedCollection, editableCollections);
+  const createTypes = createMenuTypes(focusedCollection);
 
   return (
     <div className="flex flex-col pt-3 pb-6">
@@ -600,6 +614,7 @@ export default function ExploreView() {
         collection={editingCollection}
         collections={collections}
         onSave={handleSaveCollection}
+        initialCollectionType={editingCollection ? undefined : createSchemeType}
       />
 
       {/* Concept Editor Dialog (edit from list or create from action bar) */}
@@ -610,10 +625,11 @@ export default function ExploreView() {
           if (!open) setEditingConcept(null);
         }}
         concept={editingConcept}
-        collection={editingConcept ? undefined : (createCollection ?? defaultCollection)}
-        collections={editableCollections}
+        collection={editingConcept ? undefined : createCollection}
+        collections={collections}
         initialConceptType={editingConcept ? undefined : createConceptType}
         onSave={handleSaveConcept}
+        onCreateScheme={handleCreateSchemeFromEditor}
       />
 
       {/* Import Dialog */}

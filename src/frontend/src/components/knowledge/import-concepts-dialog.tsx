@@ -725,7 +725,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
               <Select value={selectedCollectionIri} onValueChange={setSelectedCollectionIri}>
                 <SelectTrigger>
                   <SelectValue
-                    placeholder={t('semantic-models:import.selectCollection', 'Select a collection…')}
+                    placeholder={t('semantic-models:import.selectCollection', 'Select a scheme…')}
                   />
                 </SelectTrigger>
                 <SelectContent>
@@ -755,7 +755,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'semantic-models:import.noEditableCollections',
-                    'No editable collections available. Create one first.'
+                    'No editable schemes available. Create one first.'
                   )}
                 </p>
               )}

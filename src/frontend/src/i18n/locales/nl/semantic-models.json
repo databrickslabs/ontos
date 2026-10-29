@@ -9,7 +9,7 @@
   "searchPlaceholder": "Zoek termen...",
   "loading": "Semantische modellen laden...",
   "tabs": {
-    "collections": "Collecties",
+    "collections": "Conceptschema's",
     "concepts": "Concepten",
     "graph": "Grafiek"
   },
@@ -54,11 +54,11 @@
     "groupByDomain": "Groepeer op Domein",
     "allTypes": "Alle types",
     "allScopes": "Alle scopes",
-    "allCollections": "Alle collecties",
+    "allCollections": "Alle conceptschema's",
     "labelLanguage": "Labeltaal"
   },
   "groupBy": {
-    "collection": "Op collectie",
+    "collection": "Op conceptschema",
     "type": "Op type",
     "flat": "Platte lijst"
   },
@@ -84,10 +84,10 @@
     "deleteConfirm": "Weet je zeker dat je deze term wilt verwijderen?",
     "deleteSuccess": "Term succesvol verwijderd",
     "deleteError": "Kon term niet verwijderen",
-    "collectionCreated": "Collectie succesvol aangemaakt",
-    "collectionUpdated": "Collectie succesvol bijgewerkt",
-    "collectionDeleted": "Collectie succesvol verwijderd",
-    "confirmDeleteCollection": "Weet u zeker dat u de collectie \"{{name}}\" wilt verwijderen? Hiermee worden alle concepten erin verwijderd.",
+    "collectionCreated": "Conceptschema succesvol aangemaakt",
+    "collectionUpdated": "Conceptschema succesvol bijgewerkt",
+    "collectionDeleted": "Conceptschema succesvol verwijderd",
+    "confirmDeleteCollection": "Weet u zeker dat u het conceptschema \"{{name}}\" wilt verwijderen? Hiermee worden alle concepten erin verwijderd.",
     "conceptCreated": "Concept succesvol aangemaakt",
     "conceptUpdated": "Concept succesvol bijgewerkt",
     "conceptDeleted": "Concept succesvol verwijderd",
@@ -95,7 +95,7 @@
     "enterReviewerEmail": "Voer het e-mailadres van de beoordelaar in:",
     "conceptPromoted": "Concept succesvol gepromoveerd",
     "conceptMigrated": "Concept succesvol gemigreerd",
-    "noCollections": "Geen collecties gevonden",
+    "noCollections": "Geen conceptschema's gevonden",
     "noConceptsFound": "Geen concepten gevonden",
     "selectConcept": "Selecteer een concept om details te bekijken",
     "linkAdded": "Koppeling succesvol toegevoegd",
@@ -156,14 +156,14 @@
     "save": "Opslaan"
   },
   "collections": {
-    "title": "Collecties",
+    "title": "Conceptschema's",
     "glossary": "Glossary",
     "taxonomy": "Taxonomie",
     "ontology": "Ontologie"
   },
   "actions": {
     "createConcept": "Concept aanmaken",
-    "createCollection": "Collectie aanmaken"
+    "createCollection": "Conceptschema aanmaken"
   },
   "badges": {
     "imported": "Geïmporteerd",
@@ -230,12 +230,12 @@
   "import": {
     "chooseFile": "Bestand kiezen…",
     "file": "Bestand",
-    "noEditableCollections": "Geen bewerkbare collecties beschikbaar. Maak er eerst een aan.",
-    "selectCollection": "Selecteer een collectie…",
+    "noEditableCollections": "Geen bewerkbare conceptschema's beschikbaar. Maak er eerst een aan.",
+    "selectCollection": "Selecteer een conceptschema…",
     "submit": "Importeren",
     "success": "Import succesvol",
     "supportedFormats": "Ondersteund: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Doelcollectie",
+    "targetCollection": "Doelconceptschema",
     "title": "Concepten importeren"
   },
   "propertyTypes": {
@@ -244,10 +244,10 @@
     "annotation": "Annotatie-eigenschap"
   },
   "conceptEditor": {
-    "editTitle": "Concept bewerken",
-    "createDescription": "Maak een nieuwe term of concept aan in de collectie.",
-    "collectionLabel": "Collectie",
-    "selectCollectionPlaceholder": "Selecteer collectie...",
+    "editTitle": "Item bewerken",
+    "createDescription": "Voeg een nieuw item toe aan een conceptschema.",
+    "collectionLabel": "Conceptschema",
+    "selectCollectionPlaceholder": "Selecteer conceptschema...",
     "selectTypePlaceholder": "Selecteer type...",
     "label": "Label",
     "labelPlaceholder": "bijv. Omzet",
@@ -280,30 +280,32 @@
       "object": "Heeft betrekking op andere concepten",
       "datatype": "Heeft betrekking op literaalwaarden",
       "annotation": "Metadata-annotatie"
-    }
+    },
+    "createTitle": "Item aanmaken",
+    "noFittingScheme": "Er is nog geen bewerkbaar conceptschema voor dit itemtype ({{kind}}). Maak er eerst een aan."
   },
   "collectionEditor": {
-    "editTitle": "Collectie bewerken",
-    "createDescription": "Maak een nieuwe glossary-, taxonomie- of ontologiecollectie aan.",
-    "editDescription": "Werk collectie-instellingen bij.",
+    "editTitle": "Conceptschema bewerken",
+    "createDescription": "Maak een nieuw conceptschema aan voor een glossary, taxonomie of ontologie.",
+    "editDescription": "Werk de instellingen van het conceptschema bij.",
     "namePlaceholder": "bijv. Finance Glossary",
     "descriptionPlaceholder": "Optionele beschrijving...",
-    "parentCollection": "Bovenliggende collectie",
-    "noneRootCollection": "Geen (hoofdcollectie)",
+    "parentCollection": "Bovenliggend conceptschema",
+    "noneRootCollection": "Geen (hoofdconceptschema)",
     "editable": "Bewerkbaar",
-    "editableHelp": "Sta het aanmaken en bewerken van concepten in deze collectie toe"
+    "editableHelp": "Sta het aanmaken en bewerken van concepten in dit conceptschema toe"
   },
   "promotion": {
     "promoteConcept": "Concept promoveren",
     "demoteConcept": "Concept degraderen",
     "migrateConcept": "Concept migreren",
     "move": "Verplaatsen",
-    "toDifferentCollection": "naar een andere collectie",
+    "toDifferentCollection": "naar een ander conceptschema",
     "actionLabel": "Actie",
     "promote": "Promoveren",
     "migrate": "Migreren",
     "currentLocation": "Huidige locatie",
-    "selectTargetPlaceholder": "Selecteer doelcollectie...",
+    "selectTargetPlaceholder": "Selecteer doelconceptschema...",
     "newIri": "Nieuwe IRI",
     "sourceConcept": "Bronconcept",
     "deprecateOriginal": "Origineel als verouderd markeren (aanbevolen)",
@@ -312,8 +314,8 @@
     "promoteWarning": "Gepromoveerde concepten vereisen opnieuw goedkeuring op het nieuwe scope-niveau."
   },
   "collectionTree": {
-    "readOnly": "Alleen-lezen collectie",
-    "noCollectionsYet": "Nog geen collecties"
+    "readOnly": "Alleen-lezen conceptschema",
+    "noCollectionsYet": "Nog geen conceptschema's"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -395,7 +397,7 @@
     "selectedCount": "{{count}} geselecteerd",
     "agentProgress": "Voortgang agent",
     "generatedTurtle": "Gegenereerde Turtle",
-    "saveToCollection": "Opslaan in collectie",
+    "saveToCollection": "Opslaan in conceptschema",
     "empty": "(leeg)",
     "agentExecutionLog": "Uitvoeringslog agent",
     "agentLogSummary": "{{iterations}} iteratie(s) · {{promptTokens}} prompt-tokens · {{completionTokens}} completion-tokens",
@@ -445,17 +447,17 @@
       "deleteFailed": "Verwijderen mislukt",
       "turtleCopied": "Turtle-inhoud gekopieerd naar klembord.",
       "saveFailed": "Opslaan mislukt",
-      "savedTitle": "Opgeslagen in collectie",
+      "savedTitle": "Opgeslagen in conceptschema",
       "savedDescription_one": "{{count}} triple geïmporteerd in \"{{name}}\".",
       "savedDescription_other": "{{count}} triples geïmporteerd in \"{{name}}\"."
     },
     "saveDialog": {
-      "title": "Opslaan in conceptcollectie",
-      "description": "Maak een nieuwe ontologiecollectie aan en importeer de gegenereerde triples in de knowledge graph.",
-      "nameLabel": "Collectienaam",
+      "title": "Opslaan in conceptschema",
+      "description": "Maak een nieuw conceptschema voor een ontologie aan en importeer de gegenereerde triples in de knowledge graph.",
+      "nameLabel": "Naam conceptschema",
       "namePlaceholder": "bijv. Customer Domain Ontology",
       "descriptionLabel": "Beschrijving (optioneel)",
-      "descriptionPlaceholder": "Beschrijf het doel van deze ontologiecollectie...",
+      "descriptionPlaceholder": "Beschrijf het doel van dit ontologieconceptschema...",
       "importSummary": "{{classes}} klassen en {{properties}} eigenschappen worden geïmporteerd."
     }
   }

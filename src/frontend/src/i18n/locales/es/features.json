@@ -25,15 +25,15 @@
   },
   "concepts": {
     "name": "Conceptos",
-    "description": "Navegar, buscar y gestionar conceptos de negocio, colecciones y jerarquías."
+    "description": "Navegar, buscar y gestionar conceptos de negocio, esquemas de conceptos y jerarquías."
   },
   "semantic-models": {
     "name": "Navegador de conceptos",
     "description": "Explora términos del glosario de negocio, conceptos y sus relaciones."
   },
   "collections": {
-    "name": "Colecciones de conceptos",
-    "description": "Organiza conceptos y activos en colecciones lógicas."
+    "name": "Esquemas de conceptos",
+    "description": "Organiza conceptos y activos en esquemas lógicos."
   },
   "process-workflows": {
     "name": "Flujos de trabajo",

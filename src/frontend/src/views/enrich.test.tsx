@@ -8,7 +8,7 @@ import { MemoryRouter } from 'react-router-dom';
 //  - Review opens the inline modal (no navigation),
 //  - Deliver lane renders Tags(Live) / Column descriptions(Planned) /
 //    UC Glossary(Coming),
-//  - Advanced view reveals the Direct/Indirect/Manual mode cards; Simple hides.
+//  - The L (advanced) view reveals the Direct/Indirect/Manual mode cards; S hides.
 // ---------------------------------------------------------------------------
 
 vi.mock('react-i18next', () => ({
@@ -109,7 +109,7 @@ describe('EnrichView', () => {
     // Simple (default): mode cards hidden.
     expect(screen.queryByText('Direct')).not.toBeInTheDocument();
     // Switch to advanced.
-    fireEvent.click(screen.getByRole('tab', { name: 'Advanced view' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Large View/ }));
     expect(screen.getByText('Direct')).toBeInTheDocument();
     expect(screen.getByText('Indirect')).toBeInTheDocument();
     expect(screen.getByText('Manual')).toBeInTheDocument();

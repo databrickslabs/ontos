@@ -3,8 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { KnowledgeCollection } from '@/types/ontology';
 
 // ---------------------------------------------------------------------------
-// ConceptEditorDialog: preset type from the Explore Create menu, allowed-type
-// validation per scheme, and the Simple-mode Parent (broader) field.
+// ConceptEditorDialog: fixed type (read-only), scheme list filtered by type,
+// the no-fitting-scheme notice, and the concept/term-only Parent field.
 // ---------------------------------------------------------------------------
 
 vi.mock('react-i18next', () => ({
@@ -20,10 +20,12 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-let modeMock: 'simple' | 'advanced' = 'simple';
+// The dialog must not depend on the page-level mode: fail loudly if it does.
 vi.mock('@/components/concepts/mode-switch', () => ({
-  useConceptMode: () => [modeMock, vi.fn()],
-  ConceptModeSwitch: () => null,
+  useConceptMode: () => {
+    throw new Error('ConceptEditorDialog must not read the concept mode');
+  },
+  ConceptModeSwitch: () => <div data-testid="mode-switch" />,
 }));
 
 // Stand-in for the concept picker: one button that picks a fixed IRI.
@@ -73,11 +75,13 @@ vi.mock('@/components/ui/select', async () => {
   return { Select, SelectTrigger, SelectValue, SelectContent, SelectItem };
 });
 
-import { ConceptEditorDialog, parentFieldLabelKey } from './concept-editor-dialog';
+import { ConceptEditorDialog } from './concept-editor-dialog';
 
 const ONTOLOGY = { iri: 'urn:ontology:core', label: 'Core', collection_type: 'ontology', is_editable: true } as unknown as KnowledgeCollection;
+const ONTOLOGY_2 = { iri: 'urn:ontology:ext', label: 'Ext', collection_type: 'ontology', is_editable: true } as unknown as KnowledgeCollection;
 const TAXONOMY = { iri: 'urn:taxonomy:regions', label: 'Regions', collection_type: 'taxonomy', is_editable: true } as unknown as KnowledgeCollection;
 const GLOSSARY = { iri: 'urn:glossary:business', label: 'Business', collection_type: 'glossary', is_editable: true } as unknown as KnowledgeCollection;
+const READONLY_GLOSSARY = { iri: 'urn:glossary:ro', label: 'Read Only', collection_type: 'glossary', is_editable: false } as unknown as KnowledgeCollection;
 
 function renderDialog(props: Partial<React.ComponentProps<typeof ConceptEditorDialog>> = {}) {
   const onSave = vi.fn(async () => {});
@@ -87,7 +91,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ConceptEditorDi
       onOpenChange={vi.fn()}
       concept={null}
       collection={ONTOLOGY}
-      collections={[ONTOLOGY, TAXONOMY, GLOSSARY]}
+      collections={[ONTOLOGY, ONTOLOGY_2, TAXONOMY, GLOSSARY]}
       onSave={onSave}
       {...props}
     />,
@@ -95,74 +99,161 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ConceptEditorDi
   return onSave;
 }
 
-async function fillAndSubmit(onSave: ReturnType<typeof vi.fn>) {
-  fireEvent.change(document.getElementById('label')!, { target: { value: 'Thing' } });
-  fireEvent.click(screen.getByRole('button', { name: 'common:actions.create' }));
+async function fillAndSubmit(onSave: ReturnType<typeof vi.fn>, buttonName = 'common:actions.create') {
+  if (buttonName === 'common:actions.create') {
+    fireEvent.change(document.getElementById('label')!, { target: { value: 'Thing' } });
+  }
+  fireEvent.click(screen.getByRole('button', { name: buttonName }));
   await waitFor(() => expect(onSave).toHaveBeenCalled());
   return onSave.mock.calls[0][0] as Record<string, any>;
 }
 
+// Options of the scheme picker (the first select; a property also has a
+// property-type select further down).
+function schemeOptions() {
+  const select = screen.getAllByRole('combobox')[0];
+  return Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+}
+
+const EXISTING_CLASS = {
+  iri: 'urn:x:Customer',
+  label: 'Customer',
+  concept_type: 'class',
+  status: 'draft',
+  source_context: 'core',
+  parent_concepts: ['urn:x:Party'],
+  child_concepts: [],
+  related_concepts: [],
+} as any;
+
 beforeEach(() => {
-  modeMock = 'simple';
   pickerEntityType = undefined;
 });
 
-describe('ConceptEditorDialog preset type', () => {
-  it('saves the preset type when the scheme allows it', async () => {
+describe('ConceptEditorDialog header and type', () => {
+  it('create: neutral title and description', () => {
+    renderDialog({ initialConceptType: 'class' });
+    expect(screen.getByText('Create Entry')).toBeInTheDocument();
+    expect(screen.getByText('Add a new entry to a scheme.')).toBeInTheDocument();
+  });
+
+  it('edit: "Edit Entry" with the status badge and the IRI as description', () => {
+    renderDialog({ collection: undefined, concept: EXISTING_CLASS });
+    expect(screen.getByText('Edit Entry')).toBeInTheDocument();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('urn:x:Customer')).toBeInTheDocument();
+  });
+
+  it('shows the type read-only, with no type dropdown and no mode switch', () => {
+    renderDialog({ collection: GLOSSARY, initialConceptType: 'term' });
+    expect(screen.getByTestId('concept-type-row')).toHaveTextContent('semantic-models:types.term');
+    // The only select is the (disabled, single-option) scheme picker.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    expect(screen.queryByRole('option', { name: 'semantic-models:types.concept' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mode-switch')).not.toBeInTheDocument();
+  });
+
+  it('edit mode shows the entry type read-only too', () => {
+    renderDialog({ collection: undefined, concept: EXISTING_CLASS });
+    expect(screen.getByTestId('concept-type-row')).toHaveTextContent('semantic-models:types.class');
+  });
+
+  it('saves the preset type unchanged', async () => {
     const onSave = renderDialog({ initialConceptType: 'class' });
     const data = await fillAndSubmit(onSave);
     expect(data.concept_type).toBe('class');
     expect(data.collection_iri).toBe(ONTOLOGY.iri);
   });
 
-  it('saves a glossary term preset as concept_type "term"', async () => {
-    const onSave = renderDialog({ collection: GLOSSARY, initialConceptType: 'term' });
-    const data = await fillAndSubmit(onSave);
-    expect(data.concept_type).toBe('term');
-  });
-
-  it('resets a preset the scheme does not allow to "concept"', async () => {
-    const onSave = renderDialog({ collection: TAXONOMY, initialConceptType: 'property' });
+  it('defaults to concept_type "concept" without a preset', async () => {
+    const onSave = renderDialog({ collection: TAXONOMY });
     const data = await fillAndSubmit(onSave);
     expect(data.concept_type).toBe('concept');
-  });
-
-  it('re-validates the preset when the user switches scheme in the dialog', async () => {
-    const onSave = renderDialog({ collection: ONTOLOGY, initialConceptType: 'class' });
-    // Simple mode: the only select is the scheme picker.
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: TAXONOMY.iri } });
-    const data = await fillAndSubmit(onSave);
     expect(data.collection_iri).toBe(TAXONOMY.iri);
-    expect(data.concept_type).toBe('concept');
+  });
+});
+
+describe('ConceptEditorDialog scheme list follows the type', () => {
+  it('term: glossaries only (editable ones), single fit is read-only', () => {
+    renderDialog({ collection: undefined, initialConceptType: 'term', collections: [ONTOLOGY, GLOSSARY, READONLY_GLOSSARY, TAXONOMY] });
+    expect(schemeOptions()).toEqual(['Business']);
+    expect(screen.getByRole('combobox')).toBeDisabled();
   });
 
-  it('Simple mode: names a preset property and points to Advanced for domain/range', () => {
-    renderDialog({ initialConceptType: 'property' });
-    expect(screen.getByTestId('simple-type-hint')).toHaveTextContent('semantic-models:types.property');
-    expect(screen.getByText('Domain and range are set in Advanced view.')).toBeInTheDocument();
-    expect(document.getElementById('domain')).toBeNull();
+  it('concept: taxonomies only', () => {
+    renderDialog({ collection: undefined, initialConceptType: 'concept' });
+    expect(schemeOptions()).toEqual(['Regions']);
   });
 
-  it('Advanced mode: a preset property reaches the domain/range fields', () => {
-    modeMock = 'advanced';
+  it('class and property: ontologies only', () => {
+    renderDialog({ initialConceptType: 'class' });
+    expect(schemeOptions()).toEqual(['Core', 'Ext']);
+    expect(screen.getByRole('combobox')).not.toBeDisabled();
+  });
+
+  it('property: ontologies only', () => {
     renderDialog({ initialConceptType: 'property' });
-    expect(document.getElementById('domain')).not.toBeNull();
-    expect(document.getElementById('range')).not.toBeNull();
-    expect(screen.queryByTestId('simple-type-hint')).not.toBeInTheDocument();
+    expect(schemeOptions()).toEqual(['Core', 'Ext']);
+  });
+
+  it('includes fitting schemes nested under other schemes', () => {
+    const parent = { ...TAXONOMY, child_collections: [ONTOLOGY_2] } as unknown as KnowledgeCollection;
+    renderDialog({ collection: undefined, initialConceptType: 'class', collections: [parent] });
+    expect(schemeOptions()).toEqual(['Ext']);
+  });
+
+  it('preselects the first fitting scheme when the preset scheme does not fit', async () => {
+    const onSave = renderDialog({ collection: GLOSSARY, initialConceptType: 'class' });
+    const data = await fillAndSubmit(onSave);
+    expect(data.collection_iri).toBe(ONTOLOGY.iri);
+    expect(data.concept_type).toBe('class');
+  });
+
+  it('saves the scheme the user picks', async () => {
+    const onSave = renderDialog({ initialConceptType: 'class' });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: ONTOLOGY_2.iri } });
+    const data = await fillAndSubmit(onSave);
+    expect(data.collection_iri).toBe(ONTOLOGY_2.iri);
+  });
+});
+
+describe('ConceptEditorDialog with no fitting scheme', () => {
+  it('shows the notice, disables Create, and asks for a scheme of the right kind', () => {
+    const onCreateScheme = vi.fn();
+    renderDialog({ collection: undefined, initialConceptType: 'term', collections: [ONTOLOGY, READONLY_GLOSSARY], onCreateScheme });
+    expect(screen.getByTestId('no-scheme-notice')).toHaveTextContent('Create one first.');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    fireEvent.change(document.getElementById('label')!, { target: { value: 'Thing' } });
+    expect(screen.getByRole('button', { name: 'common:actions.create' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'New Concept Scheme' }));
+    expect(onCreateScheme).toHaveBeenCalledWith('glossary');
+  });
+
+  it('asks for an ontology for a class', () => {
+    const onCreateScheme = vi.fn();
+    renderDialog({ collection: undefined, initialConceptType: 'class', collections: [GLOSSARY], onCreateScheme });
+    fireEvent.click(screen.getByRole('button', { name: 'New Concept Scheme' }));
+    expect(onCreateScheme).toHaveBeenLastCalledWith('ontology');
+  });
+
+  it('asks for a taxonomy for a concept', () => {
+    const onCreateScheme = vi.fn();
+    renderDialog({ collection: undefined, initialConceptType: 'concept', collections: [GLOSSARY], onCreateScheme });
+    fireEvent.click(screen.getByRole('button', { name: 'New Concept Scheme' }));
+    expect(onCreateScheme).toHaveBeenLastCalledWith('taxonomy');
+  });
+
+  it('hides the button without onCreateScheme', () => {
+    renderDialog({ collection: undefined, initialConceptType: 'term', collections: [ONTOLOGY] });
+    expect(screen.getByTestId('no-scheme-notice')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New Concept Scheme' })).not.toBeInTheDocument();
   });
 });
 
 describe('ConceptEditorDialog Parent field', () => {
-  it('labels the parent by concept type', () => {
-    expect(parentFieldLabelKey('concept').defaultLabel).toBe('Parent Concept');
-    expect(parentFieldLabelKey('term').defaultLabel).toBe('Parent Concept');
-    expect(parentFieldLabelKey('class').defaultLabel).toBe('Parent Class');
-    expect(parentFieldLabelKey('property').defaultLabel).toBe('Parent Property');
-  });
-
-  it('is shown in Simple mode and saves picks as broader_iris', async () => {
-    const onSave = renderDialog({ initialConceptType: 'class' });
-    expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Class');
+  it('is shown for a concept and saves picks as broader_iris', async () => {
+    const onSave = renderDialog({ collection: TAXONOMY, initialConceptType: 'concept' });
+    expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Concept');
     fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
     expect(pickerEntityType).toBe('class');
     fireEvent.click(screen.getByTestId('pick-parent'));
@@ -171,28 +262,51 @@ describe('ConceptEditorDialog Parent field', () => {
     expect(data.broader_iris).toEqual(['https://example.org/onto#Party']);
   });
 
-  it('uses the property picker for a Parent Property', () => {
-    renderDialog({ initialConceptType: 'property' });
-    expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Property');
-    fireEvent.click(screen.getByRole('button', { name: 'Add Parent' }));
-    expect(pickerEntityType).toBe('property');
+  it('is shown for a term, labelled Parent Concept', () => {
+    renderDialog({ collection: GLOSSARY, initialConceptType: 'term' });
+    expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Concept');
+  });
+
+  it.each(['class', 'property', 'individual'] as const)('is hidden for %s', (type) => {
+    renderDialog({ initialConceptType: type });
+    expect(screen.queryByTestId('parent-field')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add Parent' })).not.toBeInTheDocument();
   });
 
   it('is shown for an existing concept, prefilled from parent_concepts', () => {
     renderDialog({
       collection: undefined,
-      concept: {
-        iri: 'urn:x:Child',
-        label: 'Child',
-        concept_type: 'concept',
-        status: 'draft',
-        source_context: 'regions',
-        parent_concepts: ['urn:x:Parent'],
-        child_concepts: [],
-        related_concepts: [],
-      } as any,
+      concept: { ...EXISTING_CLASS, iri: 'urn:x:Child', concept_type: 'concept', parent_concepts: ['urn:x:Parent'] },
     });
     expect(screen.getByTestId('parent-field')).toHaveTextContent('Parent Concept');
     expect(screen.getByTestId('parent-field')).toHaveTextContent('urn:x:Parent');
+  });
+
+  it('editing a class keeps its existing parents in the save payload', async () => {
+    const onSave = renderDialog({ collection: undefined, concept: EXISTING_CLASS });
+    expect(screen.queryByTestId('parent-field')).not.toBeInTheDocument();
+    const data = await fillAndSubmit(onSave, 'common:actions.save');
+    expect(data.broader_iris).toEqual(['urn:x:Party']);
+    expect(data.concept_type).toBe('class');
+  });
+});
+
+describe('ConceptEditorDialog property block', () => {
+  it('shows property type, domain and range for a new property without any mode', () => {
+    renderDialog({ initialConceptType: 'property' });
+    expect(screen.getByText('semantic-models:conceptEditor.propertyConfiguration')).toBeInTheDocument();
+    expect(document.getElementById('domain')).not.toBeNull();
+    expect(document.getElementById('range')).not.toBeNull();
+    expect(screen.queryByText('Domain and range are set in Advanced view.')).not.toBeInTheDocument();
+  });
+
+  it('shows the property block when editing a property', () => {
+    renderDialog({ collection: undefined, concept: { ...EXISTING_CLASS, concept_type: 'property', domain: 'urn:x:A' } });
+    expect((document.getElementById('domain') as HTMLInputElement).value).toBe('urn:x:A');
+  });
+
+  it('is not shown for a class', () => {
+    renderDialog({ initialConceptType: 'class' });
+    expect(document.getElementById('domain')).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('react-i18next', () => ({
@@ -13,7 +13,57 @@ vi.mock('@/components/common/relative-date', () => ({
   RelativeDate: ({ date }: { date: string }) => <span>{date}</span>,
 }))
 
+// Swap Radix Select (DataTable's page-size picker) for a native <select>:
+// driving Radix's pointer/portal machinery through jsdom hung the CI runner.
+vi.mock('@/components/ui/select', async () => {
+  const React = await import('react')
+  const SelectTrigger = () => null
+  const SelectValue = () => null
+  const SelectContent = ({ children }: { children?: React.ReactNode }) => <>{children}</>
+  const SelectItem = ({ value, children }: { value: string; children?: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  )
+  const Select = ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value?: string
+    onValueChange?: (v: string) => void
+    children?: React.ReactNode
+  }) => {
+    const options: React.ReactNode[] = []
+    React.Children.forEach(children, (child) => {
+      if (!React.isValidElement(child)) return
+      if ((child as React.ReactElement).type !== SelectTrigger) options.push(child)
+    })
+    return (
+      <select aria-label="page size" value={value} onChange={(e) => onValueChange?.(e.target.value)}>
+        {options}
+      </select>
+    )
+  }
+  return { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+})
+
 import CoverageMatrix, { type CoverageRow } from './coverage-matrix'
+import {
+  useEnrichCoverageTableStore,
+  DEFAULT_COVERAGE_SORTING,
+  DEFAULT_COVERAGE_PAGE_SIZE,
+} from '@/stores/enrich-coverage-table-store'
+
+// The table search is DataTable's own input (controlled by the store).
+const getSearch = () => screen.getByRole('textbox') as HTMLInputElement
+
+// Scheme names of the body rows, in rendered order.
+const bodyNames = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('tbody tr')).map(
+    (tr) => tr.querySelectorAll('td')[0]?.textContent ?? '',
+  )
+
+const footerRow = (container: HTMLElement) =>
+  container.querySelector('tfoot tr') as HTMLElement
 
 const sampleRows: CoverageRow[] = [
   {
@@ -56,6 +106,14 @@ describe('CoverageMatrix', () => {
 
   beforeEach(() => {
     mockOnReview.mockClear()
+    localStorage.clear()
+    act(() => {
+      useEnrichCoverageTableStore.setState({
+        search: '',
+        sorting: DEFAULT_COVERAGE_SORTING,
+        pageSize: DEFAULT_COVERAGE_PAGE_SIZE,
+      })
+    })
   })
 
   describe('header rendering', () => {
@@ -91,12 +149,14 @@ describe('CoverageMatrix', () => {
     })
 
     it('renders concept counts', () => {
-      render(
+      const { container } = render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      expect(screen.getByText('45')).toBeInTheDocument()
-      expect(screen.getByText('30')).toBeInTheDocument()
-      expect(screen.getByText('20')).toBeInTheDocument()
+      // Scope to the body: the page-size picker also lists 20 and 30.
+      const body = within(container.querySelector('tbody') as HTMLElement)
+      expect(body.getByText('45')).toBeInTheDocument()
+      expect(body.getByText('30')).toBeInTheDocument()
+      expect(body.getByText('20')).toBeInTheDocument()
     })
 
     it('renders coverage percentages', () => {
@@ -181,7 +241,7 @@ describe('CoverageMatrix', () => {
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
       // Total: 45 + 30 + 20 = 95
-      const allText = screen.getByText('All selected').closest('div')?.textContent || ''
+      const allText = screen.getByText('All selected').closest('tr')?.textContent || ''
       expect(allText).toContain('95')
     })
 
@@ -191,7 +251,7 @@ describe('CoverageMatrix', () => {
       )
       // Total covered: (45*0.8) + (30*0.5) + (20*0.6) = 36 + 15 + 12 = 63
       // Total pct: 63/95 = 66%
-      const allText = screen.getByText('All selected').closest('div')?.textContent || ''
+      const allText = screen.getByText('All selected').closest('tr')?.textContent || ''
       expect(allText).toContain('66%')
     })
 
@@ -208,7 +268,7 @@ describe('CoverageMatrix', () => {
       render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      const searchInput = screen.getByPlaceholderText('Search concept schemes…')
+      const searchInput = getSearch()
       await userEvent.type(searchInput, 'Product')
 
       expect(screen.getByText('Product Categories')).toBeInTheDocument()
@@ -220,17 +280,17 @@ describe('CoverageMatrix', () => {
       render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      const searchInput = screen.getByPlaceholderText('Search concept schemes…')
+      const searchInput = getSearch()
       await userEvent.type(searchInput, 'NonexistentScheme')
 
-      expect(screen.getByText('No concept schemes match your search.')).toBeInTheDocument()
+      expect(screen.getByText('noResults')).toBeInTheDocument()
     })
 
     it('case-insensitive search', async () => {
       render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      const searchInput = screen.getByPlaceholderText('Search concept schemes…')
+      const searchInput = getSearch()
       await userEvent.type(searchInput, 'customer')
 
       expect(screen.getByText('Customer Attributes')).toBeInTheDocument()
@@ -240,7 +300,7 @@ describe('CoverageMatrix', () => {
       render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      const searchInput = screen.getByPlaceholderText('Search concept schemes…') as HTMLInputElement
+      const searchInput = getSearch()
       await userEvent.type(searchInput, 'Product')
       expect(screen.getByText('Product Categories')).toBeInTheDocument()
 
@@ -260,8 +320,9 @@ describe('CoverageMatrix', () => {
           canWrite={true}
         />,
       )
-      const reviewButtons = screen.getAllByRole('button', { name: 'Review' })
-      await userEvent.click(reviewButtons[0])
+      // Default sort is by name, so find the button on the Product Categories row.
+      const row = screen.getByText('Product Categories').closest('tr') as HTMLElement
+      await userEvent.click(within(row).getByRole('button', { name: 'Review' }))
 
       expect(mockOnReview).toHaveBeenCalledWith(sampleRows[0])
     })
@@ -309,7 +370,7 @@ describe('CoverageMatrix', () => {
   })
 
   describe('pagination', () => {
-    it('paginates rows when there are more than 5', () => {
+    it('paginates rows when there are more than the page size (10)', () => {
       const manyRows: CoverageRow[] = Array.from({ length: 12 }, (_, i) => ({
         id: `scheme-${i}`,
         name: `Scheme ${i}`,
@@ -326,9 +387,8 @@ describe('CoverageMatrix', () => {
         <CoverageMatrix rows={manyRows} platformNoun="assets" onReview={mockOnReview} />,
       )
 
-      // Check that pagination control exists
-      const text = container.textContent || ''
-      expect(text).toContain('per page')
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(10)
+      expect(screen.getByLabelText('page size')).toHaveValue('10')
     })
   })
 
@@ -363,10 +423,10 @@ describe('CoverageMatrix', () => {
       render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      const searchInput = screen.getByPlaceholderText('Search concept schemes…')
+      const searchInput = getSearch()
       await userEvent.type(searchInput, 'XYZ123')
 
-      expect(screen.getByText('No concept schemes match your search.')).toBeInTheDocument()
+      expect(screen.getByText('noResults')).toBeInTheDocument()
     })
   })
 
@@ -437,6 +497,224 @@ describe('CoverageMatrix', () => {
       )
       const text = container.textContent || ''
       expect(text).toContain('100%')
+    })
+  })
+
+  describe('DataTable layout', () => {
+    const longName = 'test_ontology_with_a_very_long_scheme_name_for_layout_checks.ttl'
+    const longRow: CoverageRow = {
+      id: 'scheme-long',
+      name: longName,
+      concepts: 11,
+      coveragePct: 42,
+      products: 7,
+      contracts: 6,
+      assets: 9,
+      suggested: 4,
+      lastRun: null,
+    }
+
+    it('truncates a long scheme name and keeps the full name in the tooltip', () => {
+      render(<CoverageMatrix rows={[longRow]} platformNoun="assets" onReview={mockOnReview} />)
+      const nameCell = screen.getByText(longName)
+      expect(nameCell).toHaveClass('truncate')
+      expect(nameCell.className).toMatch(/max-w-/)
+      expect(nameCell).toHaveAttribute('title', longName)
+    })
+
+    it('renders each value in its own column, in header order', () => {
+      const { container } = render(
+        <CoverageMatrix rows={[longRow]} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      const headerCount = container.querySelectorAll('thead th').length
+      const cells = Array.from(container.querySelectorAll('tbody tr')[0].querySelectorAll('td'))
+      // scheme | concepts | coverage | products | contracts | assets | suggested | last run | review
+      expect(cells).toHaveLength(headerCount)
+      expect(cells.map((c) => c.textContent)).toEqual([
+        longName,
+        '11',
+        '42%',
+        '7',
+        '6',
+        '9',
+        '4',
+        '\u2014', // the existing neverRun placeholder
+        'Review',
+      ])
+      // Footer has one cell per column too, so it lines up with the header.
+      expect(footerRow(container).querySelectorAll('td')).toHaveLength(headerCount)
+    })
+
+    it('has no row-select column or selected-rows line (read-only table)', () => {
+      const { container } = render(
+        <CoverageMatrix rows={[longRow]} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      expect(container.querySelectorAll('input[type="checkbox"], button[role="checkbox"]')).toHaveLength(0)
+      expect(container.textContent).not.toMatch(/rows selected/i)
+    })
+
+    it('keeps the number colors per column', () => {
+      const { container } = render(
+        <CoverageMatrix rows={[longRow]} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      const cells = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
+      expect(cells[1].firstElementChild).toHaveClass('text-right', 'tabular-nums')
+      expect(cells[3].firstElementChild).toHaveClass('text-sky-700')
+      expect(cells[4].firstElementChild).toHaveClass('text-sky-700')
+      expect(cells[5].firstElementChild).toHaveClass('text-amber-700')
+    })
+
+    it('keeps the InfoDot tooltip on the Assets header', () => {
+      render(<CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />)
+      expect(
+        screen.getByRole('button', { name: /Asset links are what Deliver enriches/ }),
+      ).toBeInTheDocument()
+    })
+  })
+
+  describe('sorting', () => {
+    it('sorts by scheme name ascending by default', () => {
+      const { container } = render(
+        <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      expect(bodyNames(container)).toEqual([
+        'Business Events',
+        'Customer Attributes',
+        'Product Categories',
+      ])
+    })
+
+    it('sorts by Concepts when the header is clicked, and toggles direction', () => {
+      const { container } = render(
+        <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      // First click sorts ascending (20 < 30 < 45), second click descending.
+      fireEvent.click(screen.getByRole('button', { name: 'Concepts' }))
+      expect(bodyNames(container)).toEqual([
+        'Business Events',
+        'Customer Attributes',
+        'Product Categories',
+      ])
+      expect(useEnrichCoverageTableStore.getState().sorting).toEqual([
+        { id: 'concepts', desc: false },
+      ])
+      fireEvent.click(screen.getByRole('button', { name: 'Concepts' }))
+      expect(bodyNames(container)).toEqual([
+        'Product Categories',
+        'Customer Attributes',
+        'Business Events',
+      ])
+      expect(useEnrichCoverageTableStore.getState().sorting).toEqual([
+        { id: 'concepts', desc: true },
+      ])
+    })
+
+    it('sorts by coverage percent', () => {
+      const { container } = render(
+        <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      act(() => {
+        useEnrichCoverageTableStore.setState({ sorting: [{ id: 'coverage', desc: false }] })
+      })
+      // 50% < 60% < 80%
+      expect(bodyNames(container)).toEqual([
+        'Customer Attributes',
+        'Business Events',
+        'Product Categories',
+      ])
+      fireEvent.click(screen.getByRole('button', { name: 'Coverage' }))
+      expect(bodyNames(container)).toEqual([
+        'Product Categories',
+        'Business Events',
+        'Customer Attributes',
+      ])
+    })
+  })
+
+  describe('store wiring', () => {
+    it('restores search from the store', () => {
+      act(() => {
+        useEnrichCoverageTableStore.setState({ search: 'events' })
+      })
+      const { container } = render(
+        <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      expect(getSearch()).toHaveValue('events')
+      expect(bodyNames(container)).toEqual(['Business Events'])
+    })
+
+    it('writes search and page size to the store', () => {
+      render(<CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />)
+      fireEvent.change(getSearch(), { target: { value: 'cust' } })
+      expect(useEnrichCoverageTableStore.getState().search).toBe('cust')
+      fireEvent.change(screen.getByLabelText('page size'), { target: { value: '20' } })
+      expect(useEnrichCoverageTableStore.getState().pageSize).toBe(20)
+    })
+
+    it('uses the stored page size', () => {
+      act(() => {
+        useEnrichCoverageTableStore.setState({ pageSize: 20 })
+      })
+      const manyRows: CoverageRow[] = Array.from({ length: 25 }, (_, i) => ({
+        ...sampleRows[0],
+        id: `s-${i}`,
+        name: `Scheme ${String(i).padStart(2, '0')}`,
+      }))
+      const { container } = render(
+        <CoverageMatrix rows={manyRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(20)
+    })
+  })
+
+  describe('totals footer', () => {
+    it('shows the all-rows rollup regardless of search', () => {
+      const { container } = render(
+        <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      fireEvent.change(getSearch(), { target: { value: 'Product' } })
+      expect(bodyNames(container)).toEqual(['Product Categories'])
+      const cells = Array.from(footerRow(container).querySelectorAll('td')).map(
+        (c) => c.textContent,
+      )
+      // All selected | 95 | 66% | 18 | 8 | 52 | 8 | (last run) | (action)
+      expect(cells).toEqual(['All selected', '95', '66%', '18', '8', '52', '8', '', ''])
+    })
+
+    it('shows the all-rows rollup regardless of page', () => {
+      const manyRows: CoverageRow[] = Array.from({ length: 12 }, (_, i) => ({
+        ...sampleRows[1],
+        id: `s-${i}`,
+        name: `Scheme ${String(i).padStart(2, '0')}`,
+      }))
+      const { container } = render(
+        <CoverageMatrix rows={manyRows} platformNoun="assets" onReview={mockOnReview} />,
+      )
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(10)
+      const footer = within(footerRow(container))
+      // 12 * 30 concepts
+      expect(footer.getByText('360')).toBeInTheDocument()
+    })
+  })
+
+  describe('non-table content', () => {
+    it('shows the unmapped footnote and the sample-data note when not live', () => {
+      render(
+        <CoverageMatrix
+          rows={sampleRows}
+          platformNoun="assets"
+          onReview={mockOnReview}
+          isLive={false}
+        />,
+      )
+      // 95 concepts - 63 covered
+      expect(screen.getByText(/concepts have no link yet/)).toBeInTheDocument()
+      expect(screen.getByText(/Coverage figures are sample data/)).toBeInTheDocument()
+    })
+
+    it('hides the sample-data note when live', () => {
+      render(<CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />)
+      expect(screen.queryByText(/Coverage figures are sample data/)).not.toBeInTheDocument()
     })
   })
 })

@@ -306,7 +306,7 @@ export default function RunConfigDialog({
                 without leaving the run setup. Drives the same global mode as
                 the rest of the concepts UI (adv-only rows + {advanced} blocks). */}
             <span className="ml-auto">
-              <ConceptModeSwitch tipLeft />
+              <ConceptModeSwitch />
             </span>
           </DialogTitle>
           <DialogDescription>{t('runConfig.description')}</DialogDescription>

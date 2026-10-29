@@ -138,9 +138,9 @@ export default function ConceptsLayout() {
             {/* The global SPARQL link was removed: the concept detail page now
                 hosts an in-page SPARQL modal (scoped to the concept), so the
                 layout-level shortcut to the legacy Search page is redundant. */}
-            {/* Simple/Advanced switch, aligned with the section tabs. Shared
-                across all Concepts views; per-view copies are removed. */}
-            <ConceptModeSwitch tipLeft />
+            {/* Compact S | L (Simple/Advanced) switch, aligned with the section
+                tabs. Shared across all Concepts views; per-view copies are removed. */}
+            <ConceptModeSwitch />
           </div>
         </div>
 

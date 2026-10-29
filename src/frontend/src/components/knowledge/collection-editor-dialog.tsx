@@ -50,6 +50,9 @@ interface CollectionEditorDialogProps {
   collection?: KnowledgeCollection | null; // null = create mode
   collections?: KnowledgeCollection[]; // For parent selection
   onSave: (data: KnowledgeCollectionCreate | KnowledgeCollectionUpdate, isNew: boolean) => Promise<void>;
+  /** Create mode only: preselect the scheme Type (e.g. from a "no fitting
+   *  scheme" notice). Defaults to glossary. */
+  initialCollectionType?: CollectionType;
 }
 
 export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
@@ -58,6 +61,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
   collection,
   collections = [],
   onSave,
+  initialCollectionType,
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
   const [isLoading, setIsLoading] = useState(false);
@@ -86,13 +90,13 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
       setFormData({
         label: '',
         description: '',
-        collection_type: 'glossary',
+        collection_type: initialCollectionType || 'glossary',
         scope_level: 'enterprise',
         parent_collection_iri: '',
         is_editable: true,
       });
     }
-  }, [collection, open]);
+  }, [collection, open, initialCollectionType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,7 +168,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, label: e.target.value }))
                 }
-                placeholder={t('semantic-models:collectionEditor.namePlaceholder')}
+                placeholder={t('semantic-models:collectionEditor.namePlaceholder', 'e.g., Finance Glossary')}
                 required
               />
             </div>
@@ -178,12 +182,12 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
-                placeholder={t('semantic-models:collectionEditor.descriptionPlaceholder')}
+                placeholder={t('semantic-models:collectionEditor.descriptionPlaceholder', 'Optional description...')}
                 rows={3}
               />
             </div>
 
-            {/* Collection Type (only for new) */}
+            {/* Scheme Type (only for new) */}
             {isNew && (
               <div className="grid gap-2">
                 <div className="flex items-center gap-1.5">
@@ -243,7 +247,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
 
             {/* Parent Scheme */}
             <div className="grid gap-2">
-              <Label htmlFor="parent">{t('semantic-models:collectionEditor.parentCollection')}</Label>
+              <Label htmlFor="parent">{t('semantic-models:collectionEditor.parentCollection', 'Parent Scheme')}</Label>
               <Select
                 value={formData.parent_collection_iri || '_none'}
                 onValueChange={(value) =>
@@ -254,10 +258,10 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t('semantic-models:collectionEditor.noneRootCollection')} />
+                  <SelectValue placeholder={t('semantic-models:collectionEditor.noneRootCollection', 'None (root scheme)')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">{t('semantic-models:collectionEditor.noneRootCollection')}</SelectItem>
+                  <SelectItem value="_none">{t('semantic-models:collectionEditor.noneRootCollection', 'None (root scheme)')}</SelectItem>
                   {flatParentOptions.map((opt) => (
                     <SelectItem key={opt.iri} value={opt.iri}>
                       {'—'.repeat(opt.level)} {opt.label}
@@ -272,7 +276,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
               <div className="space-y-0.5">
                 <Label htmlFor="is_editable">{t('semantic-models:collectionEditor.editable')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('semantic-models:collectionEditor.editableHelp')}
+                  {t('semantic-models:collectionEditor.editableHelp', 'Allow creating and editing concepts in this scheme')}
                 </p>
               </div>
               <Switch

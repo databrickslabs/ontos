@@ -9,7 +9,7 @@
   "searchPlaceholder": "Begriffe suchen...",
   "loading": "Semantische Modelle werden geladen...",
   "tabs": {
-    "collections": "Sammlungen",
+    "collections": "Konzeptschemata",
     "concepts": "Konzepte",
     "graph": "Graph"
   },
@@ -54,11 +54,11 @@
     "groupByDomain": "Nach Domäne gruppieren",
     "allTypes": "Alle Typen",
     "allScopes": "Alle Geltungsbereiche",
-    "allCollections": "Alle Sammlungen",
+    "allCollections": "Alle Konzeptschemata",
     "labelLanguage": "Beschriftungssprache"
   },
   "groupBy": {
-    "collection": "Nach Sammlung",
+    "collection": "Nach Konzeptschema",
     "type": "Nach Typ",
     "flat": "Flache Liste"
   },
@@ -84,10 +84,10 @@
     "deleteConfirm": "Möchten Sie diesen Begriff wirklich löschen?",
     "deleteSuccess": "Begriff erfolgreich gelöscht",
     "deleteError": "Fehler beim Löschen des Begriffs",
-    "collectionCreated": "Sammlung erfolgreich erstellt",
-    "collectionUpdated": "Sammlung erfolgreich aktualisiert",
-    "collectionDeleted": "Sammlung erfolgreich gelöscht",
-    "confirmDeleteCollection": "Möchten Sie die Sammlung \"{{name}}\" wirklich löschen? Dadurch werden alle darin enthaltenen Konzepte gelöscht.",
+    "collectionCreated": "Konzeptschema erfolgreich erstellt",
+    "collectionUpdated": "Konzeptschema erfolgreich aktualisiert",
+    "collectionDeleted": "Konzeptschema erfolgreich gelöscht",
+    "confirmDeleteCollection": "Möchten Sie das Konzeptschema \"{{name}}\" wirklich löschen? Dadurch werden alle darin enthaltenen Konzepte gelöscht.",
     "conceptCreated": "Konzept erfolgreich erstellt",
     "conceptUpdated": "Konzept erfolgreich aktualisiert",
     "conceptDeleted": "Konzept erfolgreich gelöscht",
@@ -95,7 +95,7 @@
     "enterReviewerEmail": "E-Mail-Adresse des Prüfers eingeben:",
     "conceptPromoted": "Konzept erfolgreich hochgestuft",
     "conceptMigrated": "Konzept erfolgreich migriert",
-    "noCollections": "Keine Sammlungen gefunden",
+    "noCollections": "Keine Konzeptschemata gefunden",
     "noConceptsFound": "Keine Konzepte gefunden",
     "selectConcept": "Konzept auswählen, um Details anzuzeigen",
     "linkAdded": "Verknüpfung erfolgreich hinzugefügt",
@@ -156,14 +156,14 @@
     "save": "Speichern"
   },
   "collections": {
-    "title": "Sammlungen",
+    "title": "Konzeptschemata",
     "glossary": "Glossar",
     "taxonomy": "Taxonomie",
     "ontology": "Ontologie"
   },
   "actions": {
     "createConcept": "Konzept erstellen",
-    "createCollection": "Sammlung erstellen"
+    "createCollection": "Konzeptschema erstellen"
   },
   "badges": {
     "imported": "Importiert",
@@ -230,12 +230,12 @@
   "import": {
     "chooseFile": "Datei auswählen…",
     "file": "Datei",
-    "noEditableCollections": "Keine bearbeitbaren Sammlungen verfügbar. Erstellen Sie zuerst eine.",
-    "selectCollection": "Sammlung auswählen…",
+    "noEditableCollections": "Keine bearbeitbaren Konzeptschemata verfügbar. Erstellen Sie zuerst eines.",
+    "selectCollection": "Konzeptschema auswählen…",
     "submit": "Importieren",
     "success": "Import erfolgreich",
     "supportedFormats": "Unterstützt: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Zielsammlung",
+    "targetCollection": "Ziel-Konzeptschema",
     "title": "Konzepte importieren"
   },
   "propertyTypes": {
@@ -244,10 +244,10 @@
     "annotation": "Annotationseigenschaft"
   },
   "conceptEditor": {
-    "editTitle": "Konzept bearbeiten",
-    "createDescription": "Erstellen Sie einen neuen Begriff oder ein Konzept in der Sammlung.",
-    "collectionLabel": "Sammlung",
-    "selectCollectionPlaceholder": "Sammlung auswählen...",
+    "editTitle": "Eintrag bearbeiten",
+    "createDescription": "Fügen Sie einem Konzeptschema einen neuen Eintrag hinzu.",
+    "collectionLabel": "Konzeptschema",
+    "selectCollectionPlaceholder": "Konzeptschema auswählen...",
     "selectTypePlaceholder": "Typ auswählen...",
     "label": "Beschriftung",
     "labelPlaceholder": "z. B. Umsatz",
@@ -280,30 +280,32 @@
       "object": "Bezieht sich auf andere Konzepte",
       "datatype": "Bezieht sich auf literale Werte",
       "annotation": "Metadaten-Annotation"
-    }
+    },
+    "createTitle": "Eintrag erstellen",
+    "noFittingScheme": "Für diesen Eintragstyp gibt es noch kein bearbeitbares Konzeptschema ({{kind}}). Erstellen Sie zuerst eines."
   },
   "collectionEditor": {
-    "editTitle": "Sammlung bearbeiten",
-    "createDescription": "Erstellen Sie eine neue Glossar-, Taxonomie- oder Ontologie-Sammlung.",
-    "editDescription": "Sammlungseinstellungen aktualisieren.",
+    "editTitle": "Konzeptschema bearbeiten",
+    "createDescription": "Erstellen Sie ein neues Konzeptschema für ein Glossar, eine Taxonomie oder eine Ontologie.",
+    "editDescription": "Einstellungen des Konzeptschemas aktualisieren.",
     "namePlaceholder": "z. B. Finanzglossar",
     "descriptionPlaceholder": "Optionale Beschreibung...",
-    "parentCollection": "Übergeordnete Sammlung",
-    "noneRootCollection": "Keine (Stammsammlung)",
+    "parentCollection": "Übergeordnetes Konzeptschema",
+    "noneRootCollection": "Keines (Stamm-Konzeptschema)",
     "editable": "Bearbeitbar",
-    "editableHelp": "Erstellen und Bearbeiten von Konzepten in dieser Sammlung zulassen"
+    "editableHelp": "Erstellen und Bearbeiten von Konzepten in diesem Konzeptschema zulassen"
   },
   "promotion": {
     "promoteConcept": "Konzept hochstufen",
     "demoteConcept": "Konzept herabstufen",
     "migrateConcept": "Konzept migrieren",
     "move": "Verschieben",
-    "toDifferentCollection": "in eine andere Sammlung",
+    "toDifferentCollection": "in ein anderes Konzeptschema",
     "actionLabel": "Aktion",
     "promote": "Hochstufen",
     "migrate": "Migrieren",
     "currentLocation": "Aktueller Speicherort",
-    "selectTargetPlaceholder": "Zielsammlung auswählen...",
+    "selectTargetPlaceholder": "Ziel-Konzeptschema auswählen...",
     "newIri": "Neue IRI",
     "sourceConcept": "Quellkonzept",
     "deprecateOriginal": "Original als veraltet markieren (empfohlen)",
@@ -312,8 +314,8 @@
     "promoteWarning": "Hochgestufte Konzepte müssen auf der neuen Geltungsebene erneut genehmigt werden."
   },
   "collectionTree": {
-    "readOnly": "Schreibgeschützte Sammlung",
-    "noCollectionsYet": "Noch keine Sammlungen"
+    "readOnly": "Schreibgeschütztes Konzeptschema",
+    "noCollectionsYet": "Noch keine Konzeptschemata"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -395,7 +397,7 @@
     "selectedCount": "{{count}} ausgewählt",
     "agentProgress": "Agent-Fortschritt",
     "generatedTurtle": "Generiertes Turtle",
-    "saveToCollection": "In Sammlung speichern",
+    "saveToCollection": "In Konzeptschema speichern",
     "empty": "(leer)",
     "agentExecutionLog": "Agent-Ausführungsprotokoll",
     "agentLogSummary": "{{iterations}} Iteration(en) · {{promptTokens}} Prompt-Token · {{completionTokens}} Completion-Token",
@@ -445,17 +447,17 @@
       "deleteFailed": "Löschen fehlgeschlagen",
       "turtleCopied": "Turtle-Inhalt in die Zwischenablage kopiert.",
       "saveFailed": "Speichern fehlgeschlagen",
-      "savedTitle": "In Sammlung gespeichert",
+      "savedTitle": "In Konzeptschema gespeichert",
       "savedDescription_one": "{{count}} Triple in \"{{name}}\" importiert.",
       "savedDescription_other": "{{count}} Triples in \"{{name}}\" importiert."
     },
     "saveDialog": {
-      "title": "In Konzeptsammlung speichern",
-      "description": "Erstellen Sie eine neue Ontologie-Sammlung und importieren Sie die generierten Triples in den Wissensgraphen.",
-      "nameLabel": "Sammlungsname",
+      "title": "In Konzeptschema speichern",
+      "description": "Erstellen Sie ein neues Konzeptschema für eine Ontologie und importieren Sie die generierten Triples in den Wissensgraphen.",
+      "nameLabel": "Name des Konzeptschemas",
       "namePlaceholder": "z. B. Kundendomänen-Ontologie",
       "descriptionLabel": "Beschreibung (optional)",
-      "descriptionPlaceholder": "Beschreiben Sie den Zweck dieser Ontologie-Sammlung...",
+      "descriptionPlaceholder": "Beschreiben Sie den Zweck dieses Ontologie-Konzeptschemas...",
       "importSummary": "{{classes}} Klassen und {{properties}} Eigenschaften werden importiert."
     }
   }

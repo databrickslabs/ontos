@@ -30,7 +30,10 @@ describe('ConceptsLayout — v2 3-section nav', () => {
     renderAt('/concepts/browser');
     const tabs = screen.getAllByRole('tab');
     const labels = tabs.map((t) => t.textContent);
-    expect(labels).toEqual(expect.arrayContaining(['Define', 'Explore', 'Enrich']));
+    // The compact S | L mode toggle is a button group, not tabs, so the only
+    // tabs in the header row are the three sections.
+    expect(labels).toEqual(['Define', 'Explore', 'Enrich']);
+    expect(screen.getByRole('group', { name: 'View mode' })).toBeInTheDocument();
   });
 
   it('marks Explore active on the browser (default) route with no legacy sub-nav', () => {
@@ -43,9 +46,7 @@ describe('ConceptsLayout — v2 3-section nav', () => {
     expect(screen.queryByRole('tab', { name: 'Concepts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Search' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Hierarchy' })).not.toBeInTheDocument();
-    // The three primary section tabs are present (a Simple/Advanced switch also
-    // renders as tabs in this row, so assert the section tabs specifically
-    // rather than the total tab count).
+    // The three primary section tabs are present.
     expect(screen.getByRole('tab', { name: 'Define' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Explore' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Enrich' })).toBeInTheDocument();

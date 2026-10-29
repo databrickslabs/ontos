@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import type { OntologyConcept } from '@/types/ontology';
 
@@ -126,6 +126,7 @@ let conceptsTabConcepts: OntologyConcept[] | null = null;
 let conceptsTabViewMode: string | null = null;
 let graphTabConcepts: OntologyConcept[] | null = null;
 let editorProps: any = null;
+let schemeEditorProps: any = null;
 
 vi.mock('@/components/knowledge', () => ({
   ConceptsTab: ({ filteredConcepts, viewMode }: { filteredConcepts: OntologyConcept[]; viewMode?: string }) => {
@@ -152,7 +153,10 @@ vi.mock('@/components/knowledge', () => ({
       />
     </div>
   ),
-  CollectionEditorDialog: () => null,
+  CollectionEditorDialog: (props: any) => {
+    schemeEditorProps = props;
+    return null;
+  },
   ConceptEditorDialog: (props: any) => {
     editorProps = props;
     return null;
@@ -172,6 +176,7 @@ beforeEach(() => {
   hiddenSourcesMock = [];
   modeMock = 'simple';
   editorProps = null;
+  schemeEditorProps = null;
   useExploreSessionStore.setState({ showSystemSources: false });
   setHiddenSourcesSpy.mockClear();
   setStaticSegmentsSpy.mockClear();
@@ -313,33 +318,33 @@ describe('Explore Create menu adapts to the scheme in focus', () => {
     expect(menuLabels()).toEqual(['New Concept', 'New Concept Scheme']);
   });
 
-  it('ontology in focus: New Class, New Property, New Concept', () => {
+  it('ontology in focus: New Class, New Property (no New Concept)', () => {
     collectionsMock = [ONTOLOGY];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Class', 'New Property', 'New Concept', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Class', 'New Property', 'New Concept Scheme']);
     expect(screen.getByTestId('menu-separator')).toBeInTheDocument();
   });
 
-  it('several editable schemes, none in focus: generic set', () => {
+  it('several editable schemes, none in focus: full set', () => {
     collectionsMock = [GLOSSARY, TAXONOMY, ONTOLOGY];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Concept', 'New Term', 'New Class', 'New Property', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Term', 'New Concept', 'New Class', 'New Property', 'New Concept Scheme']);
   });
 
-  it('generic set only offers types some editable scheme accepts', () => {
+  it('no single scheme in focus offers the full set even if no scheme fits a type', () => {
     collectionsMock = [GLOSSARY, TAXONOMY];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Concept', 'New Term', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Term', 'New Concept', 'New Class', 'New Property', 'New Concept Scheme']);
   });
 
   it('source filter leaving one editable scheme visible focuses it', () => {
     collectionsMock = [GLOSSARY, ONTOLOGY];
     hiddenSourcesMock = ['business'];
     renderExplore();
-    expect(menuLabels()).toEqual(['New Class', 'New Property', 'New Concept', 'New Concept Scheme']);
+    expect(menuLabels()).toEqual(['New Class', 'New Property', 'New Concept Scheme']);
   });
 
-  it('picking an item opens the editor preset to that type and scheme', async () => {
+  it('picking an item opens the editor preset to that type and the focused scheme', async () => {
     collectionsMock = [ONTOLOGY];
     renderExplore();
     fireEvent.click(screen.getByRole('menuitem', { name: /New Property/ }));
@@ -348,13 +353,41 @@ describe('Explore Create menu adapts to the scheme in focus', () => {
     expect(editorProps.collection).toEqual(ONTOLOGY);
   });
 
-  it('generic pick targets the first scheme that accepts the type', async () => {
+  it('generic pick targets the first scheme that fits the type', async () => {
     collectionsMock = [GLOSSARY, TAXONOMY, ONTOLOGY];
     renderExplore();
     fireEvent.click(screen.getByRole('menuitem', { name: /New Class/ }));
     await waitFor(() => expect(editorProps.open).toBe(true));
     expect(editorProps.initialConceptType).toBe('class');
     expect(editorProps.collection).toEqual(ONTOLOGY);
+  });
+
+  it('generic pick with no fitting scheme leaves the scheme unset', async () => {
+    collectionsMock = [GLOSSARY, TAXONOMY];
+    renderExplore();
+    fireEvent.click(screen.getByRole('menuitem', { name: /New Class/ }));
+    await waitFor(() => expect(editorProps.open).toBe(true));
+    expect(editorProps.collection).toBeUndefined();
+  });
+
+  it('onCreateScheme closes the entry editor and opens the scheme editor preset to the kind', async () => {
+    collectionsMock = [GLOSSARY, TAXONOMY];
+    renderExplore();
+    fireEvent.click(screen.getByRole('menuitem', { name: /New Class/ }));
+    await waitFor(() => expect(editorProps.open).toBe(true));
+    act(() => editorProps.onCreateScheme('ontology'));
+    await waitFor(() => expect(schemeEditorProps.open).toBe(true));
+    expect(editorProps.open).toBe(false);
+    expect(schemeEditorProps.collection).toBeNull();
+    expect(schemeEditorProps.initialCollectionType).toBe('ontology');
+  });
+
+  it('the menu New Concept Scheme opens the scheme editor without a preset kind', async () => {
+    collectionsMock = [GLOSSARY];
+    renderExplore();
+    fireEvent.click(screen.getByRole('menuitem', { name: /New Concept Scheme/ }));
+    await waitFor(() => expect(schemeEditorProps.open).toBe(true));
+    expect(schemeEditorProps.initialCollectionType).toBeUndefined();
   });
 });
 

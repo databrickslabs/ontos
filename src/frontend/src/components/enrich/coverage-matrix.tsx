@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Info } from 'lucide-react';
+import type { Column, ColumnDef, Table as TanStackTable } from '@tanstack/react-table';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DataTable } from '@/components/ui/data-table';
+import { TableCell, TableRow } from '@/components/ui/table';
 import { RelativeDate } from '@/components/common/relative-date';
-import { usePagination, PaginationControls } from '@/components/common/paginated-list';
+import { cn } from '@/lib/utils';
+import { useEnrichCoverageTableStore } from '@/stores/enrich-coverage-table-store';
 import {
   Tooltip,
   TooltipContent,
@@ -18,7 +21,11 @@ import {
 // Map lane — per-concept-scheme coverage matrix.
 //
 // Columns: Concept scheme | Concepts | Coverage% | Products | Contracts |
-//          Assets | Suggested | (Review action).
+//          Assets | Suggested | Last run | (Review action).
+//
+// Rendered with the shared DataTable (sorting, column visibility, paging).
+// Sort, page size and search live in useEnrichCoverageTableStore so they
+// survive navigation and reload.
 //
 // IMPORTANT (data provenance):
 //   Ontos does NOT currently expose a per-scheme coverage read-model. The
@@ -86,6 +93,52 @@ function InfoDot({ text }: { text: string }) {
   );
 }
 
+// Column colors shared by the body cells and the totals footer.
+const SKY = 'text-sky-700 dark:text-sky-400';
+const AMBER = 'text-amber-700 dark:text-amber-500';
+const NUM = 'text-right tabular-nums';
+
+function SortHeader<T>({
+  column,
+  label,
+  align = 'right',
+  className,
+}: {
+  column: Column<T, unknown>;
+  label: string;
+  align?: 'left' | 'right';
+  className?: string;
+}) {
+  const sorted = column.getIsSorted();
+  const Icon = sorted === 'asc' ? ArrowUp : sorted === 'desc' ? ArrowDown : ArrowUpDown;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={cn(
+        'h-7 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
+        align === 'right' ? '-mr-1 ml-auto flex' : '-ml-1',
+        className,
+      )}
+      onClick={() => column.toggleSorting(sorted === 'asc')}
+    >
+      {label}
+      <Icon className="ml-1 h-3 w-3" />
+    </Button>
+  );
+}
+
+function CoverageBar({ pct }: { pct: number }) {
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <span className="h-1.5 w-[70px] overflow-hidden rounded-full bg-secondary">
+        <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+      </span>
+      <b className="tabular-nums">{pct}%</b>
+    </span>
+  );
+}
+
 export default function CoverageMatrix({
   rows,
   platformNoun,
@@ -94,7 +147,15 @@ export default function CoverageMatrix({
   isLive = true,
 }: Props) {
   const { t } = useTranslation(['concepts', 'common']);
+  const search = useEnrichCoverageTableStore((s) => s.search);
+  const setSearch = useEnrichCoverageTableStore((s) => s.setSearch);
+  const sorting = useEnrichCoverageTableStore((s) => s.sorting);
+  const setSorting = useEnrichCoverageTableStore((s) => s.setSorting);
+  const pageSize = useEnrichCoverageTableStore((s) => s.pageSize);
+  const setPageSize = useEnrichCoverageTableStore((s) => s.setPageSize);
 
+  // Rollup over ALL rows (not the filtered/paged subset), so the totals
+  // footer stays accurate on every page and for any search.
   const totals = rows.reduce(
     (acc, r) => {
       acc.concepts += r.concepts;
@@ -112,167 +173,193 @@ export default function CoverageMatrix({
     : 0;
   const unmapped = totals.concepts - totals.covered;
 
-  const gridCols =
-    'grid grid-cols-[1.4fr_0.7fr_1.4fr_0.8fr_0.8fr_0.8fr_0.9fr_0.9fr_90px] gap-3 items-center';
-
-  // Search by scheme name, then paginate the filtered set (5 per page by
-  // default, size-selectable). The totals row below is a rollup over ALL rows
-  // (not the filtered/paged subset), so it stays accurate on every page.
-  const [search, setSearch] = useState('');
+  // DataTable's controlled search does not filter client-side, so filter by
+  // scheme name here and hand the result to the table.
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) => r.name.toLowerCase().includes(q));
   }, [rows, search]);
-  const {
-    pageItems: pageRows,
-    page,
-    setPage,
-    pageCount,
-    pageSize,
-    setPageSize,
-  } = usePagination(filteredRows, 5);
 
-  return (
-    <div className="space-y-3">
-      {/* Search the concept schemes by name. */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('enrich.map.searchSchemes', 'Search concept schemes…')}
-          className="h-8 pl-8 text-sm"
-        />
-      </div>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        {/* header */}
-        <div
-          className={`${gridCols} border-b bg-muted/50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`}
-        >
-          <span>{t('enrich.map.col.scheme', 'Concept scheme')}</span>
-          <span className="text-right">{t('enrich.map.col.concepts', 'Concepts')}</span>
-          <span className="text-right">{t('enrich.map.col.coverage', 'Coverage')}</span>
-          <span className="text-right text-sky-700 dark:text-sky-400">
-            {t('enrich.map.col.products', 'Products')}
+  const columns = useMemo<ColumnDef<CoverageRow>[]>(
+    () => [
+      {
+        id: 'scheme',
+        accessorKey: 'name',
+        header: ({ column }) => (
+          <SortHeader column={column} align="left" label={t('enrich.map.col.scheme', 'Concept scheme')} />
+        ),
+        // Long names truncate inside a bounded width; the full name is in the
+        // tooltip, so the column never stretches.
+        cell: ({ row }) => (
+          <span
+            className="block max-w-[16rem] truncate font-semibold"
+            title={row.original.name}
+          >
+            {row.original.name}
           </span>
-          <span className="text-right text-sky-700 dark:text-sky-400">
-            {t('enrich.map.col.contracts', 'Contracts')}
-          </span>
-          <span className="flex items-center justify-end gap-1 text-amber-700 dark:text-amber-500">
-            {t('enrich.map.col.assets', 'Assets')}
+        ),
+      },
+      {
+        id: 'concepts',
+        accessorKey: 'concepts',
+        header: ({ column }) => (
+          <SortHeader column={column} label={t('enrich.map.col.concepts', 'Concepts')} />
+        ),
+        cell: ({ row }) => <div className={NUM}>{row.original.concepts}</div>,
+      },
+      {
+        id: 'coverage',
+        accessorKey: 'coveragePct',
+        header: ({ column }) => (
+          <SortHeader column={column} label={t('enrich.map.col.coverage', 'Coverage')} />
+        ),
+        cell: ({ row }) => <CoverageBar pct={row.original.coveragePct} />,
+      },
+      {
+        id: 'products',
+        accessorKey: 'products',
+        header: ({ column }) => (
+          <SortHeader column={column} className={SKY} label={t('enrich.map.col.products', 'Products')} />
+        ),
+        cell: ({ row }) => <div className={cn(NUM, SKY)}>{row.original.products}</div>,
+      },
+      {
+        id: 'contracts',
+        accessorKey: 'contracts',
+        header: ({ column }) => (
+          <SortHeader column={column} className={SKY} label={t('enrich.map.col.contracts', 'Contracts')} />
+        ),
+        cell: ({ row }) => <div className={cn(NUM, SKY)}>{row.original.contracts}</div>,
+      },
+      {
+        id: 'assets',
+        accessorKey: 'assets',
+        header: ({ column }) => (
+          <div className="flex items-center justify-end gap-1">
+            <SortHeader column={column} className={cn(AMBER, 'ml-0')} label={t('enrich.map.col.assets', 'Assets')} />
             <InfoDot
               text={t(
                 'enrich.map.assetNote',
                 'Asset links are what Deliver enriches in step 2. Asset-direct linking works even before any product or contract exists, so it solves the chicken-and-egg case.',
               )}
             />
-          </span>
-          <span className="text-right">{t('enrich.map.col.suggested', 'Suggested')}</span>
-          <span className="text-right">{t('enrich.map.col.lastRun', 'Last run')}</span>
-          <span />
-        </div>
-
-        {/* empty state when a search matches nothing */}
-        {filteredRows.length === 0 && (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-            {t('enrich.map.noSchemes', 'No concept schemes match your search.')}
           </div>
-        )}
-
-        {/* rows (paginated — the totals row below is not) */}
-        {pageRows.map((row) => (
-          <div key={row.id} className={`${gridCols} border-b px-4 py-2.5 text-sm last:border-b-0`}>
-            <span className="font-semibold">{row.name}</span>
-            <span className="text-right tabular-nums">{row.concepts}</span>
-            <span className="flex items-center justify-end gap-2">
-              <span className="h-1.5 w-[70px] overflow-hidden rounded-full bg-secondary">
-                <span
-                  className="block h-full rounded-full bg-emerald-500"
-                  style={{ width: `${row.coveragePct}%` }}
-                />
-              </span>
-              <b className="tabular-nums">{row.coveragePct}%</b>
-            </span>
-            <span className="text-right tabular-nums text-sky-700 dark:text-sky-400">
-              {row.products}
-            </span>
-            <span className="text-right tabular-nums text-sky-700 dark:text-sky-400">
-              {row.contracts}
-            </span>
-            <span className="text-right tabular-nums text-amber-700 dark:text-amber-500">
-              {row.assets}
-            </span>
-            <span className="text-right">
-              {row.suggested > 0 ? (
-                <Badge
-                  variant="outline"
-                  className="border-amber-300 bg-amber-100/60 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
-                >
-                  {row.suggested}
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground">0</span>
-              )}
-            </span>
-            <span className="text-right text-xs text-muted-foreground tabular-nums">
-              {row.lastRun ? (
-                <RelativeDate date={row.lastRun} />
-              ) : (
-                <span className="text-muted-foreground/50">{t('enrich.map.neverRun', '—')}</span>
-              )}
-            </span>
-            <span className="text-right">
-              <Button
+        ),
+        cell: ({ row }) => <div className={cn(NUM, AMBER)}>{row.original.assets}</div>,
+      },
+      {
+        id: 'suggested',
+        accessorKey: 'suggested',
+        header: ({ column }) => (
+          <SortHeader column={column} label={t('enrich.map.col.suggested', 'Suggested')} />
+        ),
+        cell: ({ row }) => (
+          <div className="text-right">
+            {row.original.suggested > 0 ? (
+              <Badge
                 variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                disabled={!canWrite || row.suggested === 0}
-                onClick={() => onReview(row)}
+                className="border-amber-300 bg-amber-100/60 text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
               >
-                {t('enrich.map.review', 'Review')}
-              </Button>
-            </span>
+                {row.original.suggested}
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground">0</span>
+            )}
           </div>
-        ))}
-
-        {/* totals */}
-        {rows.length > 0 && (
-          <div className={`${gridCols} bg-muted/40 px-4 py-2.5 text-sm font-semibold`}>
-            <span>{t('enrich.map.allSelected', 'All selected')}</span>
-            <span className="text-right tabular-nums">{totals.concepts}</span>
-            <span className="flex items-center justify-end gap-2">
-              <span className="h-1.5 w-[70px] overflow-hidden rounded-full bg-secondary">
-                <span
-                  className="block h-full rounded-full bg-emerald-500"
-                  style={{ width: `${totalPct}%` }}
-                />
-              </span>
-              <b className="tabular-nums">{totalPct}%</b>
-            </span>
-            <span className="text-right tabular-nums text-sky-700 dark:text-sky-400">
-              {totals.products}
-            </span>
-            <span className="text-right tabular-nums text-sky-700 dark:text-sky-400">
-              {totals.contracts}
-            </span>
-            <span className="text-right tabular-nums text-amber-700 dark:text-amber-500">
-              {totals.assets}
-            </span>
-            <span className="text-right tabular-nums">{totals.suggested}</span>
-            <span />
-            <span />
+        ),
+      },
+      {
+        id: 'lastRun',
+        accessorFn: (r) => r.lastRun ?? '',
+        header: ({ column }) => (
+          <SortHeader column={column} label={t('enrich.map.col.lastRun', 'Last run')} />
+        ),
+        cell: ({ row }) => (
+          <div className="text-right text-xs text-muted-foreground tabular-nums">
+            {row.original.lastRun ? (
+              <RelativeDate date={row.original.lastRun} />
+            ) : (
+              <span className="text-muted-foreground/50">{t('enrich.map.neverRun', '—')}</span>
+            )}
           </div>
-        )}
-      </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: () => null,
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="text-right">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              disabled={!canWrite || row.original.suggested === 0}
+              onClick={() => onReview(row.original)}
+            >
+              {t('enrich.map.review', 'Review')}
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [t, canWrite, onReview],
+  );
 
-      <PaginationControls
-        page={page}
-        pageCount={pageCount}
-        onPageChange={setPage}
+  // "All selected" footer: one cell per VISIBLE column so it stays aligned
+  // when the user hides columns from the Columns menu.
+  const renderTotals = (table: TanStackTable<CoverageRow>) => (
+    <TableRow className="font-semibold hover:bg-transparent">
+      {table.getVisibleLeafColumns().map((col) => {
+        let content: ReactNode = null;
+        switch (col.id) {
+          case 'scheme':
+            content = t('enrich.map.allSelected', 'All selected');
+            break;
+          case 'concepts':
+            content = <div className={NUM}>{totals.concepts}</div>;
+            break;
+          case 'coverage':
+            content = <CoverageBar pct={totalPct} />;
+            break;
+          case 'products':
+            content = <div className={cn(NUM, SKY)}>{totals.products}</div>;
+            break;
+          case 'contracts':
+            content = <div className={cn(NUM, SKY)}>{totals.contracts}</div>;
+            break;
+          case 'assets':
+            content = <div className={cn(NUM, AMBER)}>{totals.assets}</div>;
+            break;
+          case 'suggested':
+            content = <div className={NUM}>{totals.suggested}</div>;
+            break;
+        }
+        return (
+          <TableCell key={col.id} data-column={col.id}>
+            {content}
+          </TableCell>
+        );
+      })}
+    </TableRow>
+  );
+
+  return (
+    <div className="space-y-3">
+      <DataTable<CoverageRow, unknown>
+        columns={columns}
+        data={filteredRows}
+        searchColumn="scheme"
+        selectable={false}
+        searchValue={search}
+        onSearchChange={setSearch}
+        sorting={sorting}
+        onSortingChange={setSorting}
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
-        pageSizeOptions={[5, 10, 25, 50]}
+        footer={rows.length > 0 ? renderTotals : undefined}
       />
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">

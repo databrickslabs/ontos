@@ -59,7 +59,7 @@ const getSearch = () => screen.getByRole('textbox') as HTMLInputElement
 // Scheme names of the body rows, in rendered order.
 const bodyNames = (container: HTMLElement) =>
   Array.from(container.querySelectorAll('tbody tr')).map(
-    (tr) => tr.querySelectorAll('td')[0]?.textContent ?? '',
+    (tr) => tr.querySelectorAll('td')[0]?.querySelector('span')?.textContent ?? '',
   )
 
 const footerRow = (container: HTMLElement) =>
@@ -134,7 +134,8 @@ describe('CoverageMatrix', () => {
       expect(screen.getByText('Contracts')).toBeInTheDocument()
       expect(screen.getByText('Assets')).toBeInTheDocument()
       expect(screen.getByText('Suggested')).toBeInTheDocument()
-      expect(screen.getByText('Last run')).toBeInTheDocument()
+      // Last run is no longer a column: it is a second line under the scheme name
+      expect(screen.queryByRole('button', { name: 'Last run' })).not.toBeInTheDocument()
     })
   })
 
@@ -211,20 +212,25 @@ describe('CoverageMatrix', () => {
   })
 
   describe('lastRun formatting', () => {
-    it('renders ISO timestamp when lastRun is provided', () => {
-      render(
+    it('shows the last run as a second line under the scheme name', () => {
+      const { container } = render(
         <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
       )
-      expect(screen.getByText('2024-08-15T10:30:00Z')).toBeInTheDocument()
+      const firstCell = container.querySelector('tbody tr td') as HTMLElement
+      const lines = (firstCell.firstElementChild as HTMLElement).children
+      expect(lines).toHaveLength(2)
+      expect(lines[1].textContent).toMatch(/^Last run /)
+      expect(lines[1]).toHaveClass('truncate')
     })
 
-    it('renders em-dash when lastRun is null', () => {
-      render(
-        <CoverageMatrix rows={sampleRows} platformNoun="assets" onReview={mockOnReview} />,
+    it('shows no second line when the scheme never ran', () => {
+      const never: CoverageRow = { ...sampleRows[1], lastRun: null }
+      const { container } = render(
+        <CoverageMatrix rows={[never]} platformNoun="assets" onReview={mockOnReview} />,
       )
-      // The "neverRun" text is "—"
-      const dashes = screen.getAllByText('—')
-      expect(dashes.length).toBeGreaterThan(0)
+      const firstCell = container.querySelector('tbody tr td') as HTMLElement
+      expect((firstCell.firstElementChild as HTMLElement).children).toHaveLength(1)
+      expect(firstCell.textContent).not.toMatch(/Last run/)
     })
   })
 
@@ -517,8 +523,7 @@ describe('CoverageMatrix', () => {
     it('truncates a long scheme name and keeps the full name in the tooltip', () => {
       render(<CoverageMatrix rows={[longRow]} platformNoun="assets" onReview={mockOnReview} />)
       const nameCell = screen.getByText(longName)
-      expect(nameCell).toHaveClass('truncate')
-      expect(nameCell.className).toMatch(/max-w-/)
+      expect(nameCell).toHaveClass('truncate', 'block')
       expect(nameCell).toHaveAttribute('title', longName)
     })
 
@@ -528,7 +533,7 @@ describe('CoverageMatrix', () => {
       )
       const headerCount = container.querySelectorAll('thead th').length
       const cells = Array.from(container.querySelectorAll('tbody tr')[0].querySelectorAll('td'))
-      // scheme | concepts | coverage | products | contracts | assets | suggested | last run | review
+      // scheme | concepts | coverage | products | contracts | assets | suggested | review
       expect(cells).toHaveLength(headerCount)
       expect(cells.map((c) => c.textContent)).toEqual([
         longName,
@@ -538,7 +543,6 @@ describe('CoverageMatrix', () => {
         '6',
         '9',
         '4',
-        '\u2014', // the existing neverRun placeholder
         'Review',
       ])
       // Footer has one cell per column too, so it lines up with the header.
@@ -677,8 +681,8 @@ describe('CoverageMatrix', () => {
       const cells = Array.from(footerRow(container).querySelectorAll('td')).map(
         (c) => c.textContent,
       )
-      // All selected | 95 | 66% | 18 | 8 | 52 | 8 | (last run) | (action)
-      expect(cells).toEqual(['All selected', '95', '66%', '18', '8', '52', '8', '', ''])
+      // All selected | 95 | 66% | 18 | 8 | 52 | 8 | (action)
+      expect(cells).toEqual(['All selected', '95', '66%', '18', '8', '52', '8', ''])
     })
 
     it('shows the all-rows rollup regardless of page', () => {

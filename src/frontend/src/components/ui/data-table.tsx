@@ -47,6 +47,9 @@ const ChevronsLeft = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 const ChevronsRight = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M4.21 5.23a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.06-1.06L7.94 10 4.21 6.29a.75.75 0 010-1.06zm6.75 0a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.06-1.06L14.69 10l-3.72-3.71a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>;
 
 
+/** Minimum width (px) kept by a column without a declared size in `fixedLayout`. */
+const FLEXIBLE_COLUMN_MIN_WIDTH = 130;
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -58,6 +61,11 @@ interface DataTableProps<TData, TValue> {
   /** Show the row-select checkbox column and the "N of M rows selected" line.
    *  Defaults to true; turn off for read-only tables that have no row actions. */
   selectable?: boolean;
+  /** Compact cells and header (less padding, shorter rows). Defaults to false. */
+  dense?: boolean;
+  /** `table-layout: fixed`: columns that declare a `size` get that width in px, the rest share
+   *  the remaining space, and long content truncates instead of widening the table. Defaults to false. */
+  fixedLayout?: boolean;
   defaultSortColumn?: string;
   defaultSortDirection?: 'asc' | 'desc';
   isLoading?: boolean;
@@ -94,6 +102,8 @@ export function DataTable<TData, TValue>({
   onRowClick,
   storageKey,
   selectable = true,
+  dense = false,
+  fixedLayout = false,
   defaultSortColumn,
   defaultSortDirection = 'asc',
   isLoading = false,
@@ -306,6 +316,25 @@ export function DataTable<TData, TValue>({
     if (internalPageIndex > maxIndex) setInternalPageIndex(maxIndex);
   }, [isPageSizeControlled, searchValue, controlledPageCount, internalPageIndex]);
 
+  // Fixed layout: only columns whose definition declares a `size` get that width. TanStack merges a
+  // default size of 150 into every resolved column, so the declared sizes are read from `columns`.
+  const declaredSizes = React.useMemo(() => {
+    const sizes = new Map<string, number>();
+    columns.forEach((c) => {
+      const id = c.id ?? (c as { accessorKey?: string }).accessorKey;
+      if (id && typeof c.size === 'number') sizes.set(String(id), c.size);
+    });
+    return sizes;
+  }, [columns]);
+  const columnWidthStyle = (columnId: string): React.CSSProperties | undefined =>
+    fixedLayout && declaredSizes.has(columnId) ? { width: declaredSizes.get(columnId) } : undefined;
+  // Below this width the table scrolls inside its wrapper instead of squeezing the flexible columns
+  // (each flexible column keeps at least FLEXIBLE_COLUMN_MIN_WIDTH px).
+  const fixedTableMinWidth = fixedLayout
+    ? Array.from(declaredSizes.values()).reduce((sum, w) => sum + w, 0) +
+      (columns.length - declaredSizes.size) * FLEXIBLE_COLUMN_MIN_WIDTH
+    : undefined;
+
   const selectedRowsData = React.useMemo(() =>
     table.getFilteredSelectedRowModel().rows.map(row => row.original),
     [rowSelection, table]
@@ -382,13 +411,21 @@ export function DataTable<TData, TValue>({
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table
+              className={fixedLayout ? 'table-fixed' : undefined}
+              style={fixedTableMinWidth ? { minWidth: fixedTableMinWidth } : undefined}
+            >
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
                       return (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
+                        <TableHead
+                          key={header.id}
+                          colSpan={header.colSpan}
+                          className={dense ? 'h-9 px-3' : undefined}
+                          style={columnWidthStyle(header.column.id)}
+                        >
                           {header.isPlaceholder
                             ? null
                             : flexRender(
@@ -433,6 +470,7 @@ export function DataTable<TData, TValue>({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                            key={cell.id}
+                           className={dense ? 'px-3 py-2' : undefined}
                            // Mark action cells to prevent row click
                            {...(cell.column.id === 'actions' ? { 'data-action-cell': 'true' } : {})}
                         >

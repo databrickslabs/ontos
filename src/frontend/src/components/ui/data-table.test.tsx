@@ -232,4 +232,40 @@ describe('DataTable', () => {
       expect(cells).toEqual(['select', 'name', 'size']);
     });
   });
+
+  describe('dense and fixedLayout', () => {
+    const sized: ColumnDef<Item>[] = [
+      { ...columns[0] },
+      { ...columns[1], size: 90 },
+    ];
+
+    it('keeps the default layout and padding when the props are absent', () => {
+      const { container } = render(<DataTable columns={sized} data={items} />);
+      const table = container.querySelector('table') as HTMLTableElement;
+      expect(table).not.toHaveClass('table-fixed');
+      expect(table.style.minWidth).toBe('');
+      expect(container.querySelector('thead th')).not.toHaveClass('h-9');
+      expect(container.querySelector('tbody td')).not.toHaveClass('py-2');
+      // No width is set on any header
+      container.querySelectorAll('thead th').forEach((th) => expect((th as HTMLElement).style.width).toBe(''));
+    });
+
+    it('dense uses compact header and cell padding', () => {
+      const { container } = render(<DataTable columns={sized} data={items} dense />);
+      expect(container.querySelector('thead th')).toHaveClass('h-9', 'px-3');
+      expect(container.querySelector('tbody td')).toHaveClass('px-3', 'py-2');
+    });
+
+    it('fixedLayout fixes only the widths a column declares and keeps a minimum table width', () => {
+      const { container } = render(<DataTable columns={sized} data={items} fixedLayout selectable={false} />);
+      const table = container.querySelector('table') as HTMLTableElement;
+      expect(table).toHaveClass('table-fixed');
+      const ths = Array.from(container.querySelectorAll('thead th')) as HTMLElement[];
+      // name has no declared size -> flexible (TanStack's default 150 must not be applied)
+      expect(ths[0].style.width).toBe('');
+      expect(ths[1].style.width).toBe('90px');
+      // 90 declared + 130 for the one flexible column
+      expect(table.style.minWidth).toBe('220px');
+    });
+  });
 });

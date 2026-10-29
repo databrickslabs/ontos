@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, ArrowUp, ArrowUpDown, Info } from 'lucide-react';
+import { ArrowDown, ArrowUp, Info } from 'lucide-react';
 import type { Column, ColumnDef, Table as TanStackTable } from '@tanstack/react-table';
 
 import { Badge } from '@/components/ui/badge';
@@ -110,20 +110,26 @@ function SortHeader<T>({
   className?: string;
 }) {
   const sorted = column.getIsSorted();
-  const Icon = sorted === 'asc' ? ArrowUp : sorted === 'desc' ? ArrowDown : ArrowUpDown;
+  // The arrow shows on the sorted column only; the ghost button's hover state signals the rest.
+  const Icon = sorted === 'asc' ? ArrowUp : ArrowDown;
   return (
     <Button
       variant="ghost"
       size="sm"
       className={cn(
-        'h-7 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
+        'relative h-7 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
         align === 'right' ? '-mr-1 ml-auto flex' : '-ml-1',
         className,
       )}
       onClick={() => column.toggleSorting(sorted === 'asc')}
     >
       {label}
-      <Icon className="ml-1 h-3 w-3" />
+      {/* The arrow sits in the cell's side padding, so sorting never widens the header. */}
+      {sorted && (
+        <Icon
+          className="absolute -right-3.5 top-1/2 h-3 w-3 -translate-y-1/2"
+        />
+      )}
     </Button>
   );
 }
@@ -131,7 +137,7 @@ function SortHeader<T>({
 function CoverageBar({ pct }: { pct: number }) {
   return (
     <span className="flex items-center justify-end gap-2">
-      <span className="h-1.5 w-[70px] overflow-hidden rounded-full bg-secondary">
+      <span className="h-1.5 w-[48px] overflow-hidden rounded-full bg-secondary">
         <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
       </span>
       <b className="tabular-nums">{pct}%</b>
@@ -192,16 +198,21 @@ export default function CoverageMatrix({
         // Long names truncate inside a bounded width; the full name is in the
         // tooltip, so the column never stretches.
         cell: ({ row }) => (
-          <span
-            className="block max-w-[16rem] truncate font-semibold"
-            title={row.original.name}
-          >
-            {row.original.name}
-          </span>
+          <div className="min-w-0">
+            <span className="block truncate font-semibold" title={row.original.name}>
+              {row.original.name}
+            </span>
+            {row.original.lastRun && (
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {t('enrich.map.col.lastRun', 'Last run')} <RelativeDate date={row.original.lastRun} />
+              </span>
+            )}
+          </div>
         ),
       },
       {
         id: 'concepts',
+        size: 84,
         accessorKey: 'concepts',
         header: ({ column }) => (
           <SortHeader column={column} label={t('enrich.map.col.concepts', 'Concepts')} />
@@ -210,6 +221,7 @@ export default function CoverageMatrix({
       },
       {
         id: 'coverage',
+        size: 116,
         accessorKey: 'coveragePct',
         header: ({ column }) => (
           <SortHeader column={column} label={t('enrich.map.col.coverage', 'Coverage')} />
@@ -218,6 +230,7 @@ export default function CoverageMatrix({
       },
       {
         id: 'products',
+        size: 84,
         accessorKey: 'products',
         header: ({ column }) => (
           <SortHeader column={column} className={SKY} label={t('enrich.map.col.products', 'Products')} />
@@ -226,6 +239,7 @@ export default function CoverageMatrix({
       },
       {
         id: 'contracts',
+        size: 92,
         accessorKey: 'contracts',
         header: ({ column }) => (
           <SortHeader column={column} className={SKY} label={t('enrich.map.col.contracts', 'Contracts')} />
@@ -234,6 +248,7 @@ export default function CoverageMatrix({
       },
       {
         id: 'assets',
+        size: 100,
         accessorKey: 'assets',
         header: ({ column }) => (
           <div className="flex items-center justify-end gap-1">
@@ -250,6 +265,7 @@ export default function CoverageMatrix({
       },
       {
         id: 'suggested',
+        size: 92,
         accessorKey: 'suggested',
         header: ({ column }) => (
           <SortHeader column={column} label={t('enrich.map.col.suggested', 'Suggested')} />
@@ -270,23 +286,8 @@ export default function CoverageMatrix({
         ),
       },
       {
-        id: 'lastRun',
-        accessorFn: (r) => r.lastRun ?? '',
-        header: ({ column }) => (
-          <SortHeader column={column} label={t('enrich.map.col.lastRun', 'Last run')} />
-        ),
-        cell: ({ row }) => (
-          <div className="text-right text-xs text-muted-foreground tabular-nums">
-            {row.original.lastRun ? (
-              <RelativeDate date={row.original.lastRun} />
-            ) : (
-              <span className="text-muted-foreground/50">{t('enrich.map.neverRun', '—')}</span>
-            )}
-          </div>
-        ),
-      },
-      {
         id: 'actions',
+        size: 72,
         header: () => null,
         enableSorting: false,
         enableHiding: false,
@@ -338,7 +339,7 @@ export default function CoverageMatrix({
             break;
         }
         return (
-          <TableCell key={col.id} data-column={col.id}>
+          <TableCell key={col.id} data-column={col.id} className="px-3 py-2">
             {content}
           </TableCell>
         );
@@ -353,6 +354,8 @@ export default function CoverageMatrix({
         data={filteredRows}
         searchColumn="scheme"
         selectable={false}
+        dense
+        fixedLayout
         searchValue={search}
         onSearchChange={setSearch}
         sorting={sorting}

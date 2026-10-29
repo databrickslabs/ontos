@@ -17,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { getTargetTypeName } from '@/lib/relationship-type';
 import type { RelationshipDefinition, EntityRelationships } from '@/types/ontology-schema';
 
 interface LinkCandidate {
@@ -35,6 +36,9 @@ interface PendingRelationship {
   target_id: string;
   relationship_type: string;
   target_name: string;
+  /** Human-readable type labels for display only; the *_type fields are what gets sent to the API. */
+  source_type_label?: string;
+  target_type_label?: string;
 }
 
 const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
@@ -48,7 +52,7 @@ const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 function getIconForRelationship(rel: RelationshipDefinition): React.ElementType {
-  const typeName = rel.target_type_label || rel.target_type_iri.split('#').pop() || '';
+  const typeName = getTargetTypeName(rel);
   return TARGET_TYPE_ICONS[typeName] || Link2;
 }
 
@@ -311,7 +315,8 @@ function CandidateSearchStep({
 
   const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
-  const targetType = relationship.target_type_label || relationship.target_type_iri.split('#').pop() || '';
+  const targetType = getTargetTypeName(relationship);
+  const targetTypeLabel = relationship.target_type_label || targetType;
 
   useEffect(() => {
     const search = async () => {
@@ -357,6 +362,7 @@ function CandidateSearchStep({
           target_id: candidate.id,
           relationship_type: relationship.property_name,
           target_name: candidate.name,
+          target_type_label: targetTypeLabel,
         }
       : {
           source_type: targetType,
@@ -365,6 +371,7 @@ function CandidateSearchStep({
           target_id: entityId,
           relationship_type: relationship.property_name,
           target_name: candidate.name,
+          source_type_label: targetTypeLabel,
         };
     onAddRelationship(rel);
   };
@@ -464,12 +471,12 @@ function ReviewStep({ pendingRelationships, onRemove }: ReviewStepProps) {
         <Card key={i}>
           <CardContent className="p-3 flex items-center justify-between">
             <div className="text-sm">
-              <span className="font-medium">{rel.source_type}</span>
+              <span className="font-medium">{rel.source_type_label ?? rel.source_type}</span>
               <span className="mx-2 text-muted-foreground">
                 —[{rel.relationship_type}]→
               </span>
               <span className="font-medium">{rel.target_name}</span>
-              <Badge variant="outline" className="ml-2 text-[9px]">{rel.target_type}</Badge>
+              <Badge variant="outline" className="ml-2 text-[9px]">{rel.target_type_label ?? rel.target_type}</Badge>
             </div>
             <Button
               variant="ghost"

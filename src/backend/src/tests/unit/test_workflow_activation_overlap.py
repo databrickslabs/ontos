@@ -17,12 +17,13 @@ from src.routes.workflows_routes import create_workflow, toggle_workflow_active,
 
 
 def _workflow(db, name, *, active, trigger='on_request_review', entities=None,
-              scope_type='all', scope_ids=None, from_status=None, to_status=None):
+              scope_type='all', scope_ids=None, from_status=None, to_status=None,
+              schedule=None):
     row = ProcessWorkflowDb(
         id=str(uuid4()), name=name, is_active=active, workflow_type='process',
         trigger_config=json.dumps({
             'type': trigger, 'entity_types': entities or [],
-            'from_status': from_status, 'to_status': to_status,
+            'from_status': from_status, 'to_status': to_status, 'schedule': schedule,
         }),
         scope_config=json.dumps({'type': scope_type, 'ids': scope_ids or []}),
     )
@@ -119,6 +120,24 @@ def test_empty_entity_list_is_a_wildcard(db_session):
 
     conflicts = WorkflowsManager(db_session).activation_conflicts(target.id)
     assert [item['id'] for item in conflicts] == [active.id]
+
+
+def test_manual_workflows_never_conflict(db_session):
+    # Manual runs go by workflow id (POST /api/workflows/{id}/execute), not by event.
+    _workflow(db_session, 'Manual A', active=True, trigger='manual', entities=['data_product'])
+    target = _workflow(db_session, 'Manual B', active=False, trigger='manual',
+                       entities=['data_product'])
+
+    assert WorkflowsManager(db_session).activation_conflicts(target.id) == []
+
+
+def test_scheduled_workflows_never_conflict(db_session):
+    # Nothing fires a scheduled trigger event; each schedule belongs to one workflow.
+    _workflow(db_session, 'Nightly', active=True, trigger='scheduled', schedule='0 9 * * *')
+    target = _workflow(db_session, 'Evening', active=False, trigger='scheduled',
+                       schedule='0 18 * * *')
+
+    assert WorkflowsManager(db_session).activation_conflicts(target.id) == []
 
 
 def _toggle(db_session, target, audit, *, confirm=False):

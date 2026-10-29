@@ -45,6 +45,11 @@ logger = get_logger(__name__)
 # Advisory lock key for loading the default workflows (any constant, unique in the app)
 _DEFAULTS_LOCK_KEY = 7_340_001_016
 
+# Trigger types no event fires: manual runs go by workflow id
+# (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
+# so two active workflows of these types can't consume the same event.
+_NON_EVENT_TRIGGER_TYPES = frozenset({TriggerType.MANUAL.value, TriggerType.SCHEDULED.value})
+
 
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
@@ -343,9 +348,13 @@ class WorkflowsManager:
         Empty entity type lists and status filters are wildcards, matching the
         trigger runtime. Scope is deliberately conservative because current
         trigger events do not carry the metadata needed to filter it.
+        ``manual`` and ``scheduled`` workflows never conflict: no event fires
+        them, a manual run targets one workflow by id.
         """
         target_trigger = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
         target_trigger = target_trigger or {}
+        if target_trigger.get('type') in _NON_EVENT_TRIGGER_TYPES:
+            return []
         target_scope = scope.model_dump(mode='json') if isinstance(scope, WorkflowScope) else (scope or {'type': 'all'})
 
         conflicts = []

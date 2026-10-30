@@ -29,7 +29,7 @@ from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
 from ..controller.notifications_manager import NotificationsManager
 from ..common.config import get_settings
-from ..common.sanitization import sanitize_markdown_input
+from ..common.sanitization import coerce_hex_color, sanitize_markdown_input
 from ..common.search_config_loader import get_search_config_loader
 from ..common.authorization import PermissionChecker, require_demo_admin_or_setup_token
 from ..common.features import FeatureAccessLevel
@@ -157,6 +157,9 @@ async def get_ui_customization(_current_user: CurrentUserDep):
     - app_display_name: Global application display name (overrides default product name)
     - app_short_name: Optional short/abbreviated name for compact UI surfaces
     - favicon_url: URL to custom favicon image
+    - app_tagline: Optional subtitle shown next to the name (sidebar, home)
+    - custom_logo_dark_url: Optional logo for dark mode (falls back to custom_logo_url)
+    - theme: primary/accent colors (#rrggbb) for light and dark mode; invalid -> None
     """
     try:
         app_settings = get_settings()
@@ -168,6 +171,14 @@ async def get_ui_customization(_current_user: CurrentUserDep):
             "app_display_name": app_settings.UI_APP_DISPLAY_NAME,
             "app_short_name": app_settings.UI_APP_SHORT_NAME,
             "favicon_url": app_settings.UI_FAVICON_URL,
+            "app_tagline": app_settings.UI_APP_TAGLINE,
+            "custom_logo_dark_url": app_settings.UI_CUSTOM_LOGO_DARK_URL,
+            "theme": {
+                "primary": coerce_hex_color(app_settings.UI_THEME_PRIMARY),
+                "primary_dark": coerce_hex_color(app_settings.UI_THEME_PRIMARY_DARK),
+                "accent": coerce_hex_color(app_settings.UI_THEME_ACCENT),
+                "accent_dark": coerce_hex_color(app_settings.UI_THEME_ACCENT_DARK),
+            },
         }
     except Exception as e:
         logger.error("Error getting UI customization settings", exc_info=True)

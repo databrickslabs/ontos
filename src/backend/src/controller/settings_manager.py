@@ -20,8 +20,10 @@ from src.common.instance_identity import (
 from src.common.config import Settings
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
+    APP_TAGLINE_MAX_LEN,
     sanitize_app_display_name,
     validate_branding_url,
+    validate_hex_color,
 )
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -410,6 +412,11 @@ class SettingsManager:
             if 'UI_FAVICON_URL' in all_settings and all_settings['UI_FAVICON_URL'] is not None:
                 self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
                 logger.debug("Loaded UI_FAVICON_URL from database")
+
+            for key in self._BRANDING_EXTRA_KEYS:
+                if all_settings.get(key) is not None:
+                    setattr(self._settings, key, all_settings[key])
+                    logger.debug("Loaded %s from database", key)
 
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
@@ -1382,7 +1389,25 @@ class SettingsManager:
             'ui_app_display_name': self._settings.UI_APP_DISPLAY_NAME,
             'ui_app_short_name': self._settings.UI_APP_SHORT_NAME,
             'ui_favicon_url': self._settings.UI_FAVICON_URL,
+            **{key.lower(): getattr(self._settings, key) for key in self._BRANDING_EXTRA_KEYS},
         }
+
+    # Branding keys stored like the other UI_* settings (env default, DB override).
+    _BRANDING_EXTRA_KEYS = (
+        'UI_APP_TAGLINE', 'UI_CUSTOM_LOGO_DARK_URL',
+        'UI_THEME_PRIMARY', 'UI_THEME_PRIMARY_DARK',
+        'UI_THEME_ACCENT', 'UI_THEME_ACCENT_DARK',
+    )
+
+    @staticmethod
+    def _clean_branding_value(key: str, value: Any) -> Optional[str]:
+        """Validate one of ``_BRANDING_EXTRA_KEYS``; raises ``ValueError`` (-> 400)."""
+        field = key.lower()
+        if key == 'UI_APP_TAGLINE':
+            return sanitize_app_display_name(value, max_len=APP_TAGLINE_MAX_LEN, field=field)
+        if key == 'UI_CUSTOM_LOGO_DARK_URL':
+            return validate_branding_url(value or None, field=field)
+        return validate_hex_color(value or None, field=field)
 
     # Settings the Git service reads: its remote and its export location.
     _GIT_SETTING_ATTRS = (
@@ -1788,6 +1813,13 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'UI_FAVICON_URL', value)
             self._settings.UI_FAVICON_URL = value
             logger.info(f"Updated UI_FAVICON_URL")
+
+        for key in self._BRANDING_EXTRA_KEYS:
+            if key.lower() in settings:
+                value = self._clean_branding_value(key, settings.get(key.lower()))
+                app_settings_repo.set(self._db, key, value)
+                setattr(self._settings, key, value)
+                logger.info("Updated %s", key)
 
         # Reinitialize the Git service only when a value it reads changed. The
         # export location comes from the volume settings, so they count too; the

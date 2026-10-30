@@ -143,3 +143,57 @@ def test_branding_rejects_display_name_too_long(client: TestClient):
     assert response.status_code == 400
     detail = response.json().get("detail", "")
     assert "display name" in detail.lower() or "characters" in detail.lower()
+
+
+def test_ui_customization_extra_branding_defaults(client: TestClient):
+    """Tagline, dark logo and theme colors are exposed and unset by default."""
+    payload = client.get("/api/settings/ui-customization").json()
+    assert payload["app_tagline"] is None
+    assert payload["custom_logo_dark_url"] is None
+    assert payload["theme"] == {
+        "primary": None, "primary_dark": None, "accent": None, "accent_dark": None,
+    }
+
+
+def test_ui_customization_extra_branding_round_trip(client: TestClient):
+    """PUT validates/normalizes the new branding keys; GET returns them; null clears."""
+    put = client.put(
+        "/api/settings",
+        json={
+            "ui_app_tagline": "  Ontology of Acme ",
+            "ui_custom_logo_dark_url": "/branding/acme/logo-dark.svg",
+            "ui_theme_primary": "#2563eb",
+            "ui_theme_primary_dark": "#93c5fd",
+        },
+    )
+    assert put.status_code == 200, put.text
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot["app_tagline"] == "Ontology of Acme"
+    assert boot["custom_logo_dark_url"] == "/branding/acme/logo-dark.svg"
+    assert boot["theme"]["primary"] == "#2563eb"
+    assert boot["theme"]["primary_dark"] == "#93c5fd"
+    assert boot["theme"]["accent"] is None
+
+    bad = client.put("/api/settings", json={"ui_theme_accent": "red;}"})
+    assert bad.status_code == 400
+
+    clear = client.put(
+        "/api/settings",
+        json={"ui_app_tagline": None, "ui_theme_primary": "", "ui_custom_logo_dark_url": None},
+    )
+    assert clear.status_code == 200, clear.text
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot["app_tagline"] is None
+    assert boot["custom_logo_dark_url"] is None
+    assert boot["theme"]["primary"] is None
+    assert boot["theme"]["primary_dark"] == "#93c5fd"
+
+
+def test_ui_customization_ignores_invalid_env_color(client: TestClient, test_settings):
+    """A malformed color coming from the environment is dropped, not injected."""
+    test_settings.UI_THEME_PRIMARY = "#fff;}body{display:none"
+    try:
+        payload = client.get("/api/settings/ui-customization").json()
+        assert payload["theme"]["primary"] is None
+    finally:
+        test_settings.UI_THEME_PRIMARY = None

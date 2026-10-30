@@ -7,6 +7,7 @@ Tools for getting cost information for data products.
 from typing import Any, Dict, Optional
 
 from src.common.logging import get_logger
+from src.tools import read_access
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
@@ -50,14 +51,22 @@ class GetDataProductCostsTool(BaseTool):
                 query = query.filter(CostItemDb.entity_id == product_id)
             
             items = query.all()
+            # Costs of products the caller can't read are left out, so an
+            # unreadable product_id is answered like one without costs.
+            prefix = read_access.PRODUCT_ITEM_PREFIX
+            hidden = {
+                i[len(prefix):] for i in read_access.hidden_item_ids(ctx, "data-product")
+            }
+            dropped = sorted({item.entity_id for item in items if item.entity_id in hidden})
+            items = [item for item in items if item.entity_id not in hidden]
             logger.debug(f"[get_data_product_costs] Found {len(items)} cost items in database")
             
             if not items:
                 logger.info(f"[get_data_product_costs] No cost data found")
-                return ToolResult(
+                return read_access.denied(ctx, self.name, ToolResult(
                     success=True,
                     data={"message": "No cost data found", "total_usd": 0}
-                )
+                ), dropped)
             
             if aggregate:
                 # Sum all costs
@@ -68,7 +77,7 @@ class GetDataProductCostsTool(BaseTool):
                     by_center[center] = by_center.get(center, 0) + item.amount_cents / 100
                 
                 logger.info(f"[get_data_product_costs] SUCCESS: Aggregated {len(items)} cost items, total=${total_cents/100:.2f}")
-                return ToolResult(
+                return read_access.denied(ctx, self.name, ToolResult(
                     success=True,
                     data={
                         "total_usd": total_cents / 100,
@@ -76,7 +85,7 @@ class GetDataProductCostsTool(BaseTool):
                         "currency": "USD",
                         "product_count": len(set(item.entity_id for item in items))
                     }
-                )
+                ), dropped)
             else:
                 # Group by product
                 by_product: Dict[str, Dict[str, Any]] = {}
@@ -109,14 +118,14 @@ class GetDataProductCostsTool(BaseTool):
                     })
                 
                 logger.info(f"[get_data_product_costs] SUCCESS: Found costs for {len(by_product)} products")
-                return ToolResult(
+                return read_access.denied(ctx, self.name, ToolResult(
                     success=True,
                     data={
                         "products": list(by_product.values()),
                         "total_usd": sum(p["total_usd"] for p in by_product.values()),
                         "currency": "USD"
                     }
-                )
+                ), dropped)
                 
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_data_product_costs", e))

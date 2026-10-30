@@ -9,6 +9,7 @@ from src.common.dependencies import DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.routes.data_contracts_routes import readable_contract
+from src.routes.data_product_routes import readable_product
 from src.models.maturity import (
     MaturityLevelCreate,
     MaturityLevelRead,
@@ -279,7 +280,10 @@ def _get_evaluator(request: Request):
 @router.get(
     "/data-products/{product_id}/maturity",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_product),  # the same read rule as the product page
+    ],
 )
 def get_product_maturity(product_id: str, db: DBSessionDep, request: Request):
     """Get current maturity assessment for a data product."""
@@ -293,7 +297,10 @@ def get_product_maturity(product_id: str, db: DBSessionDep, request: Request):
 @router.post(
     "/data-products/{product_id}/maturity/evaluate",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_product),  # the same read rule as the product page
+    ],
 )
 def evaluate_product_maturity(product_id: str, db: DBSessionDep, request: Request):
     """Force re-evaluate maturity for a data product."""
@@ -307,7 +314,10 @@ def evaluate_product_maturity(product_id: str, db: DBSessionDep, request: Reques
 @router.get(
     "/data-products/{product_id}/maturity/history",
     response_model=List[MaturitySnapshotRead],
-    dependencies=[Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DP_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_product),  # the same read rule as the product page
+    ],
 )
 def get_product_maturity_history(product_id: str, db: DBSessionDep, limit: int = 50):
     """Get maturity evaluation history for a data product."""

@@ -234,7 +234,7 @@ class AgreementService:
         if scoped.empty:
             return None
         out = scoped.to_dict()
-        out["sql"] = target.adapter.render_sql(scoped)
+        out["sql"] = target.adapter.render_sql(scoped, target)
         names = ", ".join(a.name for a in agreements)
         row = rm._insert(db, AccessPolicyReleaseDb(
             target=target.key, release_kind=KIND_AGREEMENT_RELEASE, status=R_APPROVED,

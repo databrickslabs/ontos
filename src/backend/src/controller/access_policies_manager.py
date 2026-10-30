@@ -580,6 +580,7 @@ class AccessPoliciesManager:
         if not _TARGET_KEY_RE.match(row.key or ""):
             problems.append("The key must be 2–40 lower-case letters, digits, '-' or '_', starting with a letter")
         problems += adapter.scope_problems(row.scope or [])
+        problems += adapter.validate_connection(row.connection or {})
         from src.controller.delivery_service import DeliveryMode
         valid = {m.value for m in DeliveryMode}
         problems += [f"Unknown delivery mode '{m}'" for m in row.delivery_modes or [] if m not in valid]

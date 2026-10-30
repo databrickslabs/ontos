@@ -98,6 +98,32 @@ class GrantResult:
         }
 
 
+# Type name → the permissions API's securable type (the REST path segment). ``w.grants.get/update``
+# take it as a string; the ``SecurableType`` enum renders as ``SecurableType.CATALOG`` and is rejected.
+_PERMISSIONS_SECURABLE_TYPES = {
+    "catalog": "catalog",
+    "schema": "schema",
+    "table": "table",
+    "view": "table",  # Views use TABLE type
+    "function": "function",
+    "volume": "volume",
+    "model": "function",  # Registered models are FUNCTION securables in the permissions API
+    "registered_model": "function",
+    "share": "share",
+    "recipient": "recipient",
+    "provider": "provider",
+    "storage_credential": "storage_credential",
+    "external_location": "external_location",
+    "connection": "connection",
+    "metastore": "metastore",
+}
+
+
+def permissions_securable_type(type_str: str) -> str:
+    """Securable type for ``/api/2.1/unity-catalog/permissions/{type}/...`` (unknown → ``table``)."""
+    return _PERMISSIONS_SECURABLE_TYPES.get((type_str or "").strip().lower(), "table")
+
+
 class GrantManager:
     """Manager for Unity Catalog GRANT/REVOKE operations.
     
@@ -128,28 +154,7 @@ class GrantManager:
         return self._ws
     
     def _get_securable_type(self, type_str: str) -> str:
-        """The permissions API's securable type for a type name (the REST path segment).
-
-        ``w.grants.get/update`` take it as a string (SDK >= 0.40); passing the ``SecurableType``
-        enum renders as ``SecurableType.CATALOG`` and is rejected.
-        """
-        type_map = {
-            "catalog": "catalog",
-            "schema": "schema",
-            "table": "table",
-            "view": "table",  # Views use TABLE type
-            "function": "function",
-            "volume": "volume",
-            "model": "function",  # Registered models are FUNCTION securables in the permissions API
-            "share": "share",
-            "recipient": "recipient",
-            "provider": "provider",
-            "storage_credential": "storage_credential",
-            "external_location": "external_location",
-            "connection": "connection",
-            "metastore": "metastore",
-        }
-        return type_map.get(type_str.lower(), "table")
+        return permissions_securable_type(type_str)
 
     def _get_privileges(self, privilege_strs: List[str]) -> List[Privilege]:
         """Convert string privileges to SDK Privilege enum."""

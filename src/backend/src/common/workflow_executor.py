@@ -2528,7 +2528,9 @@ class GrantPermissionsStepHandler(StepHandler):
             # reliably across all SDK versions.
             import urllib.parse
 
-            securable_lower = securable_type_str.lower()  # e.g. "table", "schema"
+            from src.controller.grant_manager import permissions_securable_type
+
+            securable_lower = permissions_securable_type(securable_type_str)  # e.g. "table", "schema"
             encoded_name = urllib.parse.quote(target_full_name, safe='')
             path = f"/api/2.1/unity-catalog/permissions/{securable_lower}/{encoded_name}"
 

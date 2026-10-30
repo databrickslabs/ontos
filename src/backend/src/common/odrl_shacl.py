@@ -17,7 +17,6 @@ in any SHACL engine (pySHACL, TopBraid, Jena):
 vendored (``data/shapes/odrl-context.jsonld``, the context at ``http://www.w3.org/ns/odrl.jsonld``)
 so validation never fetches over the network.
 """
-import copy
 import json
 from functools import lru_cache
 from pathlib import Path
@@ -198,18 +197,35 @@ def _shapes_graph():
     return rdflib.Graph().parse(data=shapes_turtle(), format="turtle")
 
 
-def _local_contexts(context: Any) -> Any:
-    """The document's @context with the ODRL context inlined; any other remote context is refused."""
-    items = context if isinstance(context, list) else [context]
-    out = []
-    for item in items:
-        if isinstance(item, str):
-            if item.rstrip("/") != odrl.ODRL_CONTEXT_URL.rstrip("/"):
-                raise ValueError(f"Unsupported remote JSON-LD context: {item}")
-            out.append(_odrl_context())
-        else:
-            out.append(item)
-    return out
+_ODRL_CONTEXT_URLS = {u + suffix for u in ("http://www.w3.org/ns/odrl.jsonld", "https://www.w3.org/ns/odrl.jsonld",
+                                             "http://www.w3.org/ns/odrl/2/odrl.jsonld",
+                                             "https://www.w3.org/ns/odrl/2/odrl.jsonld") for suffix in ("", "/")}
+
+
+def _local_context(context: Any) -> Any:
+    """A @context value with the ODRL context inlined. Anything that would make the JSON-LD
+    processor fetch (another remote context, ``@import``) is refused."""
+    if isinstance(context, str):
+        if context not in _ODRL_CONTEXT_URLS:
+            raise ValueError(f"Unsupported remote JSON-LD context: {context}")
+        return _odrl_context()
+    if isinstance(context, list):
+        return [_local_context(c) for c in context]
+    if isinstance(context, dict):
+        if "@import" in context:
+            raise ValueError("JSON-LD @import is not supported")
+        # Term definitions may carry scoped contexts of their own.
+        return {k: _local_contexts(v) for k, v in context.items()}
+    return context
+
+
+def _local_contexts(node: Any) -> Any:
+    """``node`` with every @context (top-level, embedded or scoped) made local."""
+    if isinstance(node, list):
+        return [_local_contexts(n) for n in node]
+    if isinstance(node, dict):
+        return {k: (_local_context(v) if k == "@context" else _local_contexts(v)) for k, v in node.items()}
+    return node
 
 
 def validate_jsonld(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -222,8 +238,7 @@ def validate_jsonld(doc: Dict[str, Any]) -> Dict[str, Any]:
     from rdflib.namespace import RDF, SH
     from rdflib.term import BNode
 
-    doc = copy.deepcopy(doc)
-    doc["@context"] = _local_contexts(doc.get("@context") or odrl.ODRL_CONTEXT_URL)
+    doc = _local_contexts({**doc, "@context": doc.get("@context") or odrl.ODRL_CONTEXT_URL})
     data = rdflib.Graph().parse(data=json.dumps(doc), format="json-ld", base=VALIDATION_BASE)
     conforms, report, _ = validate(data, shacl_graph=_shapes_graph(), inference="none", advanced=False,
                                    abort_on_first=False, allow_warnings=True)

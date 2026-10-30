@@ -143,6 +143,10 @@ class TargetAdapter:
     def render_sql(self, diff: uc.GrantDiff, target: Optional["ResolvedTarget"] = None) -> List[str]:
         raise NotImplementedError
 
+    def validate_connection(self, connection: Dict[str, Any]) -> List[str]:
+        """Problems with the target's (non-secret) connection settings; none by default."""
+        return []
+
     def describe(self) -> Dict[str, Any]:
         return {"system": self.system, "label": self.label, "asset_prefix": self.asset_prefix,
                 "capabilities": sorted(self.capabilities)}

@@ -71,6 +71,24 @@ describe('SidebarBrand', () => {
     expect(screen.getByRole('img')).toBeTruthy();
   });
 
+  it('keeps the logo aspect ratio and fits it in the collapsed rail (#226)', () => {
+    useUICustomizationStore.getState().setSettings({
+      customLogoUrl: 'https://cdn.example/round.png',
+    });
+    const { unmount } = renderBrand();
+    let logo = screen.getByRole('img');
+    // A fixed square box with the default object-fit (fill) stretches a round logo
+    expect(logo.className).toContain('object-contain');
+    expect(logo.className).toContain('shrink-0');
+    unmount();
+
+    renderBrand(true);
+    logo = screen.getByRole('img');
+    // 32px box + 8px padding on each side fits the 56px collapsed sidebar
+    expect(logo.className).toMatch(/\bh-8 w-8\b/);
+    expect(logo.closest('div')?.className).toContain('px-2');
+  });
+
   it('uses the dark logo in dark mode and the light one otherwise', () => {
     useUICustomizationStore.getState().setSettings({
       appDisplayName: 'Acme Graph',

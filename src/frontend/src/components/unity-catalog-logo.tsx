@@ -34,7 +34,9 @@ export function UnityCatalogLogo({ className }: UnityCatalogLogoProps) {
 
   return (
     <img
-      className={cn('h-10 w-10 mr-2', className)}
+      // object-contain keeps a non-square or round logo's aspect ratio inside the
+      // fixed box, and shrink-0 stops a flex row from squeezing it (issue #226).
+      className={cn('h-10 w-10 mr-2 shrink-0 object-contain', className)}
       src={logoSrc}
       alt={appName}
       onError={() => {

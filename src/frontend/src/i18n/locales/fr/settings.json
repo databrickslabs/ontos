@@ -655,7 +655,11 @@
       "preview": "Aperçu:",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
-      "previewAlt": "Aperçu du logo"
+      "previewAlt": "Aperçu du logo",
+      "darkUrlLabel": "URL du logo en mode sombre (facultatif)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Utilisé en mode sombre. Laissez vide pour utiliser le logo ci-dessus dans les deux modes.",
+      "invalidUrlOrPath": "Saisissez une URL HTTP ou HTTPS, ou un chemin de l’application commençant par /"
     },
     "about": {
       "title": "Contenu personnalisé de la page À propos",
@@ -686,7 +690,11 @@
       "shortNameHelp": "Utilisé dans les espaces restreints (par ex. « Demander à {{shortName}} »). Utilise le nom d'affichage par défaut lorsqu'il est vide. Maximum {{max}} caractères.",
       "displayNameLabel": "Nom d'affichage",
       "shortNameLabel": "Nom court (optionnel)",
-      "title": "Image de marque"
+      "title": "Image de marque",
+      "taglineLabel": "Slogan (facultatif)",
+      "taglineHelp": "Court sous-titre affiché sous le nom dans la barre latérale et sur la page d’accueil. {{max}} caractères maximum.",
+      "poweredByLabel": "Afficher « propulsé par {{name}} » dans la barre latérale",
+      "poweredByHelp": "Affiché en bas de la barre latérale uniquement lorsqu’un nom d’affichage ou un logo personnalisé est défini."
     },
     "favicon": {
       "previewAlt": "Aperçu du favicon",
@@ -698,6 +706,23 @@
       "preview": "Aperçu :",
       "title": "Favicon du navigateur",
       "urlLabel": "URL du favicon"
+    },
+    "theme": {
+      "title": "Couleurs du thème",
+      "help": "Choisissez la couleur principale (boutons, liens, anneau de focus) et la couleur d’accent (arrière-plans au survol et des éléments sélectionnés). Les couleurs du texte sont choisies automatiquement pour le contraste, et une couleur du mode sombre laissée vide est dérivée de la couleur claire.",
+      "primaryLight": "Couleur principale",
+      "primaryDark": "Couleur principale (mode sombre)",
+      "accentLight": "Couleur d’accent",
+      "accentDark": "Couleur d’accent (mode sombre)",
+      "pickerLabel": "{{field}} : sélecteur de couleur",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Saisissez une couleur hexadécimale comme #2563eb",
+      "auto": "Automatique : {{color}} (dérivée de la couleur claire)",
+      "contrast": "Texte {{text}}, contraste {{ratio}}:1",
+      "textLight": "clair",
+      "textDark": "foncé",
+      "meetsAA": "AA",
+      "belowAA": "Inférieur à AA"
     }
   },
   "connectors": {

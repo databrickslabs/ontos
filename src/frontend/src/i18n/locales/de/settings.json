@@ -655,7 +655,11 @@
       "preview": "Vorschau:",
       "loadError": "Bild konnte nicht geladen werden",
       "openInNewTab": "In neuem Tab öffnen",
-      "previewAlt": "Logo-Vorschau"
+      "previewAlt": "Logo-Vorschau",
+      "darkUrlLabel": "Logo-URL für den dunklen Modus (optional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Wird im dunklen Modus verwendet. Leer lassen, um das obige Logo in beiden Modi zu verwenden.",
+      "invalidUrlOrPath": "Geben Sie eine HTTP- oder HTTPS-URL oder einen App-Pfad ein, der mit / beginnt"
     },
     "about": {
       "title": "Benutzerdefinierter Über-Seiten-Inhalt",
@@ -686,7 +690,11 @@
       "shortNameHelp": "Wird in beengten Bereichen verwendet (z. B. \"{{shortName}} fragen\"). Fällt bei leerem Feld auf den Anzeigenamen zurück. Maximal {{max}} Zeichen.",
       "displayNameLabel": "Anzeigename",
       "shortNameLabel": "Kurzname (optional)",
-      "title": "Branding"
+      "title": "Branding",
+      "taglineLabel": "Slogan (optional)",
+      "taglineHelp": "Kurzer Untertitel unter dem Namen in der Seitenleiste und auf der Startseite. Höchstens {{max}} Zeichen.",
+      "poweredByLabel": "„powered by {{name}}“ in der Seitenleiste anzeigen",
+      "poweredByHelp": "Erscheint in der Fußzeile der Seitenleiste nur, solange ein eigener Anzeigename oder ein eigenes Logo festgelegt ist."
     },
     "favicon": {
       "previewAlt": "Favicon-Vorschau",
@@ -698,6 +706,23 @@
       "preview": "Vorschau:",
       "title": "Browser-Favicon",
       "urlLabel": "Favicon-URL"
+    },
+    "theme": {
+      "title": "Designfarben",
+      "help": "Wählen Sie die Primärfarbe (Schaltflächen, Links, Fokusring) und die Akzentfarbe (Hintergründe beim Überfahren und für ausgewählte Elemente). Textfarben werden automatisch für ausreichenden Kontrast gewählt, und eine leere Farbe für den dunklen Modus wird aus der hellen abgeleitet.",
+      "primaryLight": "Primärfarbe",
+      "primaryDark": "Primärfarbe (dunkler Modus)",
+      "accentLight": "Akzentfarbe",
+      "accentDark": "Akzentfarbe (dunkler Modus)",
+      "pickerLabel": "{{field}}: Farbauswahl",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Geben Sie eine Hex-Farbe wie #2563eb ein",
+      "auto": "Automatisch: {{color}} (aus der hellen Farbe abgeleitet)",
+      "contrast": "{{text}} Text, Kontrast {{ratio}}:1",
+      "textLight": "Heller",
+      "textDark": "Dunkler",
+      "meetsAA": "AA",
+      "belowAA": "Unter AA"
     }
   },
   "connectors": {

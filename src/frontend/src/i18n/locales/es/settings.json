@@ -655,7 +655,11 @@
       "preview": "Vista previa:",
       "loadError": "Error al cargar la imagen",
       "openInNewTab": "Abrir en nueva pestaña",
-      "previewAlt": "Vista previa del logotipo"
+      "previewAlt": "Vista previa del logotipo",
+      "darkUrlLabel": "URL del logotipo para el modo oscuro (opcional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Se usa en el modo oscuro. Déjelo vacío para usar el logotipo anterior en ambos modos.",
+      "invalidUrlOrPath": "Introduzca una URL HTTP o HTTPS, o una ruta de la aplicación que empiece por /"
     },
     "about": {
       "title": "Contenido personalizado de la página Acerca de",
@@ -686,7 +690,11 @@
       "shortNameHelp": "Se usa en espacios reducidos (p. ej., \"Pregunta a {{shortName}}\"). Se recurre al nombre para mostrar cuando está vacío. Máximo {{max}} caracteres.",
       "displayNameLabel": "Nombre para mostrar",
       "shortNameLabel": "Nombre corto (opcional)",
-      "title": "Marca"
+      "title": "Marca",
+      "taglineLabel": "Eslogan (opcional)",
+      "taglineHelp": "Subtítulo breve que se muestra bajo el nombre en la barra lateral y en la página de inicio. Máximo {{max}} caracteres.",
+      "poweredByLabel": "Mostrar \"con la tecnología de {{name}}\" en la barra lateral",
+      "poweredByHelp": "Se muestra en el pie de la barra lateral solo mientras haya un nombre visible o un logotipo personalizado."
     },
     "favicon": {
       "previewAlt": "Vista previa del favicon",
@@ -698,6 +706,23 @@
       "preview": "Vista previa:",
       "title": "Favicon del navegador",
       "urlLabel": "URL del favicon"
+    },
+    "theme": {
+      "title": "Colores del tema",
+      "help": "Elija el color principal (botones, enlaces, anillo de foco) y el color de acento (fondos al pasar el cursor y de elementos seleccionados). Los colores del texto se eligen automáticamente para garantizar el contraste, y un color del modo oscuro vacío se deriva del claro.",
+      "primaryLight": "Color principal",
+      "primaryDark": "Color principal (modo oscuro)",
+      "accentLight": "Color de acento",
+      "accentDark": "Color de acento (modo oscuro)",
+      "pickerLabel": "{{field}}: selector de color",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Introduzca un color hexadecimal como #2563eb",
+      "auto": "Automático: {{color}} (derivado del color claro)",
+      "contrast": "Texto {{text}}, contraste {{ratio}}:1",
+      "textLight": "claro",
+      "textDark": "oscuro",
+      "meetsAA": "AA",
+      "belowAA": "Por debajo de AA"
     }
   },
   "connectors": {

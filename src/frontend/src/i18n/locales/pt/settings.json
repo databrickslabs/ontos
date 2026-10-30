@@ -673,7 +673,11 @@
       "preview": "Pré-visualização:",
       "loadError": "Falha ao carregar a imagem",
       "openInNewTab": "Abrir em nova guia",
-      "previewAlt": "Pré-visualização do logo"
+      "previewAlt": "Pré-visualização do logo",
+      "darkUrlLabel": "URL do logotipo no modo escuro (opcional)",
+      "darkUrlPlaceholder": "https://example.com/logo-dark.svg",
+      "darkUrlHelp": "Usado no modo escuro. Deixe em branco para usar o logotipo acima nos dois modos.",
+      "invalidUrlOrPath": "Informe uma URL HTTP ou HTTPS, ou um caminho do app que comece com /"
     },
     "about": {
       "title": "Conteúdo personalizado da página Sobre",
@@ -704,7 +708,11 @@
       "shortNameHelp": "Usado em espaços reduzidos (ex.: \"Perguntar ao {{shortName}}\"). Quando vazio, usa o nome de exibição. Máximo de {{max}} caracteres.",
       "displayNameLabel": "Nome de exibição",
       "shortNameLabel": "Nome curto (opcional)",
-      "title": "Identidade visual"
+      "title": "Identidade visual",
+      "taglineLabel": "Slogan (opcional)",
+      "taglineHelp": "Subtítulo curto exibido abaixo do nome na barra lateral e na página inicial. Máximo de {{max}} caracteres.",
+      "poweredByLabel": "Mostrar \"com tecnologia {{name}}\" na barra lateral",
+      "poweredByHelp": "Aparece no rodapé da barra lateral somente enquanto houver um nome de exibição ou logotipo personalizado."
     },
     "favicon": {
       "previewAlt": "Pré-visualização do favicon",
@@ -716,6 +724,23 @@
       "preview": "Pré-visualização:",
       "title": "Favicon do navegador",
       "urlLabel": "URL do favicon"
+    },
+    "theme": {
+      "title": "Cores do tema",
+      "help": "Escolha a cor primária (botões, links, anel de foco) e a cor de destaque (fundos ao passar o mouse e de itens selecionados). As cores do texto são escolhidas automaticamente para garantir contraste, e uma cor do modo escuro em branco é derivada da cor clara.",
+      "primaryLight": "Cor primária",
+      "primaryDark": "Cor primária (modo escuro)",
+      "accentLight": "Cor de destaque",
+      "accentDark": "Cor de destaque (modo escuro)",
+      "pickerLabel": "{{field}}: seletor de cor",
+      "hexPlaceholder": "#rrggbb",
+      "invalidColor": "Informe uma cor hexadecimal, como #2563eb",
+      "auto": "Automática: {{color}} (derivada da cor clara)",
+      "contrast": "Texto {{text}}, contraste {{ratio}}:1",
+      "textLight": "claro",
+      "textDark": "escuro",
+      "meetsAA": "AA",
+      "belowAA": "Abaixo de AA"
     }
   },
   "connectors": {

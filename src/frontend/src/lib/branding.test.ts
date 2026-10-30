@@ -9,6 +9,12 @@ import {
   hexToHslTriplet,
   pickForeground,
   resolveBrandingAssetUrl,
+  contrastRatio,
+  describeContrast,
+  deriveDarkColor,
+  normalizeHexColor,
+  resolveDarkTheme,
+  formatContrastRatio,
 } from './branding';
 
 describe('branding', () => {
@@ -94,12 +100,59 @@ describe('branding assets and theme colors', () => {
     expect(pickForeground('#ffffff')).toBe('0 0% 9%');
   });
 
-  it('builds no CSS when unset and falls back to light colors in dark mode', () => {
+  it('builds no CSS when unset and derives missing dark colors from the light ones', () => {
     expect(buildThemeCss(null)).toBe('');
     expect(buildThemeCss({ primary: 'nope' })).toBe('');
     const css = buildThemeCss({ primary: '#2563eb', accentDark: '#1e293b' });
     expect(css).toContain(':root {\n  --primary: 4 67% 51%;');
-    expect(css).toMatch(/\.dark \{\n {2}--primary: 4 67% 51%;[\s\S]*--accent: 14 17% 20%;/);
+    const derived = hexToHslTriplet(deriveDarkColor('#2563eb', 'primary'));
+    expect(derived).not.toBe('4 67% 51%');
+    expect(css).toContain(`.dark {\n  --primary: ${derived};`);
+    expect(css).toMatch(/\.dark \{[\s\S]*--accent: 14 17% 20%;/);
+    // A configured dark color wins over the derived one
+    expect(buildThemeCss({ primary: '#2563eb', primaryDark: '#93c5fd' }))
+      .toContain('.dark {\n  --primary: 18 85% 62%;');
+  });
+
+  it('computes WCAG contrast and the text color for a background', () => {
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 5);
+    expect(contrastRatio('#fff', '#fff')).toBeCloseTo(1, 5);
+    expect(contrastRatio('red', '#fff')).toBeNull();
+    const darkRed = describeContrast('#1d4ed8');
+    expect(darkRed).toMatchObject({ foreground: 'light', foregroundHex: '#fafafa', meetsAA: true });
+    // Light text still reads best on this red, but it falls just short of AA
+    const red = describeContrast('#2563eb');
+    expect(red).toMatchObject({ foreground: 'light', meetsAA: false });
+    expect(red!.ratio).toBeGreaterThan(4.3);
+    // Mid-tone yellow: neither text color reaches AA with the light one; dark text wins
+    const yellow = describeContrast('#f5b400');
+    expect(yellow).toMatchObject({ foreground: 'dark', meetsAA: true });
+    const mid = describeContrast('#777777');
+    expect(mid!.meetsAA).toBe(false);
+    expect(describeContrast('')).toBeNull();
+    expect(formatContrastRatio(4.49)).toBe('4.4');
+    expect(formatContrastRatio(4.5)).toBe('4.5');
+  });
+
+  it('derives dark-mode colors that read on the dark background', () => {
+    const darkBackground = '#11171d';
+    const primary = deriveDarkColor('#2563eb', 'primary')!;
+    expect(primary).toMatch(/^#[0-9a-f]{6}$/);
+    expect(contrastRatio(primary, darkBackground)!).toBeGreaterThanOrEqual(4.5);
+    // Same hue, only lighter
+    expect(hexToHslTriplet(primary)!.split(' ')[0]).toBe('4');
+    // An already light primary is kept
+    expect(deriveDarkColor('#93c5fd', 'primary')).toBe('#93c5fd');
+    // Accent becomes a dark, muted surface of the same hue
+    const accent = deriveDarkColor('#dbeafe', 'accent')!;
+    // (hex rounding moves hue/saturation by a point)
+    expect(hexToHslTriplet(accent)).toMatch(/^2[23] (29|30)% 20%$/);
+    expect(deriveDarkColor('nope', 'accent')).toBeNull();
+    expect(resolveDarkTheme({ primary: '#2563eb', accentDark: '#ABC' })).toEqual({
+      primary,
+      accent: '#aabbcc',
+    });
+    expect(normalizeHexColor(' #ABC ')).toBe('#aabbcc');
   });
 
   it('injects the theme style before custom CSS and removes it when cleared', () => {

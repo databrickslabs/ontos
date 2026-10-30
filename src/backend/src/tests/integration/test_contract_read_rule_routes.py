@@ -57,6 +57,8 @@ ROUTES = [
     "/api/data-contracts/{cid}/schemas/{schema_id}/relationships",
     "/api/data-contracts/{cid}/schemas/{schema_id}/properties/{prop_id}/relationships",
     "/api/data-contracts/{cid}/team-metadata",
+    "/api/data-contracts/{cid}/maturity",
+    "/api/data-contracts/{cid}/maturity/history",
 ]
 
 NOT_FOUND = {"detail": "Contract not found"}
@@ -219,3 +221,12 @@ def test_sub_resources_of_another_contract_are_not_found(as_persona, db_session,
         f"/api/data-contracts/{cid}/profile-runs/{hidden['run_id']}/suggestions",
     ]
     assert {p: client.get(p).status_code for p in paths} == {p: 404 for p in paths}
+
+
+@pytest.mark.parametrize("persona,expected", [("consumer", 404), ("teammate", 200)])
+def test_maturity_evaluation_follows_the_rule(as_persona, db_session, team, persona, expected):
+    ids = _make(db_session, team, "proposed")
+    response = as_persona(persona).post(f"/api/data-contracts/{ids['cid']}/maturity/evaluate")
+    assert response.status_code == expected
+    if expected == 404:
+        assert response.json() == NOT_FOUND

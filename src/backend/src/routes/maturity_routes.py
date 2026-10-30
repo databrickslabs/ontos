@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.common.dependencies import DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
+from src.routes.data_contracts_routes import readable_contract
 from src.models.maturity import (
     MaturityLevelCreate,
     MaturityLevelRead,
@@ -316,7 +317,10 @@ def get_product_maturity_history(product_id: str, db: DBSessionDep, limit: int =
 @router.get(
     "/data-contracts/{contract_id}/maturity",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_contract),  # the same read rule as the contract list
+    ],
 )
 def get_contract_maturity(contract_id: str, db: DBSessionDep, request: Request):
     """Get current maturity assessment for a data contract."""
@@ -330,7 +334,10 @@ def get_contract_maturity(contract_id: str, db: DBSessionDep, request: Request):
 @router.post(
     "/data-contracts/{contract_id}/maturity/evaluate",
     response_model=MaturityReport,
-    dependencies=[Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_contract),  # the same read rule as the contract list
+    ],
 )
 def evaluate_contract_maturity(contract_id: str, db: DBSessionDep, request: Request):
     """Force re-evaluate maturity for a data contract."""
@@ -344,7 +351,10 @@ def evaluate_contract_maturity(contract_id: str, db: DBSessionDep, request: Requ
 @router.get(
     "/data-contracts/{contract_id}/maturity/history",
     response_model=List[MaturitySnapshotRead],
-    dependencies=[Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[
+        Depends(PermissionChecker(DC_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+        Depends(readable_contract),  # the same read rule as the contract list
+    ],
 )
 def get_contract_maturity_history(contract_id: str, db: DBSessionDep, limit: int = 50):
     """Get maturity evaluation history for a data contract."""

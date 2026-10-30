@@ -250,14 +250,7 @@ class AccessPoliciesManager:
 
     def _normalize_rules(self, policy_type: str, conflict: Optional[str], inherit_from: List[str],
                          rules: Dict[str, Any]) -> Dict[str, Any]:
-        doc = {"@type": policy_type or "Set", "uid": "urn:ontos:policy:draft", "conflict": conflict,
-               "inheritFrom": inherit_from or [], **{k: rules.get(k) for k in odrl.RULE_KINDS if rules.get(k)}}
-        # Policy-level shared properties are allowed in the editor's JSON too (compact form).
-        for shared in ("action", "target", "assignee", "assigner"):
-            if rules.get(shared) is not None:
-                doc[shared] = rules[shared]
-        norm = odrl.normalize_policy(doc)
-        return {k: norm[k] for k in odrl.RULE_KINDS}
+        return odrl.normalize_rules(policy_type, conflict, inherit_from, rules)
 
     def _known_ref(self, db: Session, kind: str) -> Callable[[str], bool]:
         prefix = odrl.AUDIENCE_IRI_PREFIX if kind == KIND_AUDIENCE else odrl.ASSET_COLLECTION_IRI_PREFIX
@@ -319,9 +312,9 @@ class AccessPoliciesManager:
                 "body": self._normalize_rules(ptype, conflict, data.get("inherit_from") or [], data.get("rules") or {}),
             })
         elif kind == KIND_TARGET:
-            fields.update(_target_fields(data, partial=False))
+            fields.update(target_fields(data, partial=False))
         else:
-            fields.update({"members": _clean_members(data.get("members")),
+            fields.update({"members": clean_members(data.get("members")),
                            "refinement": [odrl.normalize_constraint(c) for c in data.get("refinement") or []]})
         row = repo_for(kind).create(db, obj_in=fields)
         if kind == KIND_POLICY:
@@ -422,7 +415,7 @@ class AccessPoliciesManager:
                 row.body = self._normalize_rules(row.policy_type, row.conflict, row.inherit_from or [], data["rules"])
             self._rebuild_index(db, row)
         elif kind == KIND_TARGET:
-            changes = _target_fields(data, partial=True)
+            changes = target_fields(data, partial=True)
             if "key" in changes and changes["key"] != row.key and len(
                     repo_for(kind).get_family_versions(db, family_id=row.version_family_id)) > 1:
                 # Releases and the Grant Ledger reference the key: renaming it would orphan tracked grants.
@@ -431,7 +424,7 @@ class AccessPoliciesManager:
                 setattr(row, f, v)
         else:
             if "members" in data and data["members"] is not None:
-                row.members = _clean_members(data["members"])
+                row.members = clean_members(data["members"])
             if "refinement" in data and data["refinement"] is not None:
                 row.refinement = [odrl.normalize_constraint(c) for c in data["refinement"]]
         row.updated_by = current_user
@@ -863,7 +856,7 @@ class AccessPoliciesManager:
         return out
 
 
-def _target_fields(data: Dict[str, Any], *, partial: bool) -> Dict[str, Any]:
+def target_fields(data: Dict[str, Any], *, partial: bool) -> Dict[str, Any]:
     """Validate + normalize the target fields present in ``data`` (all of them on create)."""
     out: Dict[str, Any] = {}
     if not partial or "key" in data:
@@ -887,7 +880,7 @@ def _target_fields(data: Dict[str, Any], *, partial: bool) -> Dict[str, Any]:
     return out
 
 
-def _clean_members(members: Optional[List[str]]) -> List[str]:
+def clean_members(members: Optional[List[str]]) -> List[str]:
     seen: List[str] = []
     for m in members or []:
         m = (m or "").strip()

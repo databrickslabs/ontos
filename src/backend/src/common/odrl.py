@@ -366,6 +366,18 @@ def normalize_policy(doc: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def normalize_rules(policy_type: Optional[str], conflict: Optional[str], inherit_from: Optional[List[str]],
+                    rules: Dict[str, Any]) -> Dict[str, Any]:
+    """The stored policy body: the editor's rules (compact form, with policy-level shared
+    action / target / assignee / assigner allowed) expanded to atomic rules per kind."""
+    doc = {"@type": policy_type or "Set", "uid": "urn:ontos:policy:draft", "conflict": conflict,
+           "inheritFrom": inherit_from or [], **{k: rules.get(k) for k in RULE_KINDS if rules.get(k)}}
+    for shared in ("action", "target", "assignee", "assigner"):
+        if rules.get(shared) is not None:
+            doc[shared] = rules[shared]
+    norm = normalize_policy(doc)
+    return {k: norm[k] for k in RULE_KINDS}
+
 def _own_assignees(child: Dict[str, Any]) -> List[Any]:
     out: List[Any] = []
     for r in child.get("permission") or []:

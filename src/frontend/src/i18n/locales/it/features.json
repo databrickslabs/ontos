@@ -68,8 +68,8 @@
     "description": "Abilita sicurezza avanzata come la privacy differenziale."
   },
   "access-policies": {
-    "name": "__TODO__ Access Policies",
-    "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
+    "name": "Policy di accesso",
+    "description": "Definisci chi può fare cosa su quali dati come policy ODRL del W3C, destinatari e collezioni di asset."
   },
   "search": {
     "name": "Ricerca",

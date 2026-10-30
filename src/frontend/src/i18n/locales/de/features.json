@@ -68,8 +68,8 @@
     "description": "Erweiterte Sicherheit wie Differenzialprivacy aktivieren."
   },
   "access-policies": {
-    "name": "__TODO__ Access Policies",
-    "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
+    "name": "Zugriffsrichtlinien",
+    "description": "Definieren Sie, wer was mit welchen Daten tun darf, als W3C-ODRL-Richtlinien, Zielgruppen und Asset-Sammlungen."
   },
   "search": {
     "name": "Suche",

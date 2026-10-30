@@ -1,5 +1,6 @@
 import { Navigation } from './navigation';
 import { SidebarBrand } from './sidebar-brand';
+import { SidebarPoweredBy } from './sidebar-powered-by';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -22,8 +23,8 @@ export function Sidebar({ isCollapsed }: SidebarProps) {
          <Navigation isCollapsed={isCollapsed} />
       </div>
 
-      {/* Optional Footer (if needed) */}
-      {/* <div className="mt-auto border-t p-4"> Footer Content </div> */}
+      {/* "powered by Ontos" while a custom brand is active */}
+      <SidebarPoweredBy isCollapsed={isCollapsed} />
     </aside>
   );
 }

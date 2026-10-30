@@ -34,5 +34,8 @@
       "seeding_failed": "Não foi possível criar os papéis, times ou projetos padrão. A causa está nos logs do servidor.",
       "database_unavailable": "Não foi possível inicializar o banco de dados de metadados. A causa está nos logs do servidor."
     }
+  },
+  "branding": {
+    "poweredBy": "com tecnologia {{name}}"
   }
 }

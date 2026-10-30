@@ -22,6 +22,8 @@ export interface UICustomizationSettings {
   /** Logo for dark mode; falls back to customLogoUrl. */
   customLogoDarkUrl: string | null;
   theme: BrandingTheme;
+  /** Show "powered by Ontos" in the sidebar footer while a custom brand is set. */
+  showPoweredBy: boolean;
   isLoaded: boolean;
 }
 
@@ -45,6 +47,7 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
   appTagline: null,
   customLogoDarkUrl: null,
   theme: {},
+  showPoweredBy: true,
   isLoaded: false,
 
   setSettings: (settings) => set((state) => ({ ...state, ...settings })),
@@ -70,6 +73,7 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
             accent: data.theme?.accent || null,
             accentDark: data.theme?.accent_dark || null,
           },
+          showPoweredBy: data.show_powered_by ?? true,
           isLoaded: true,
         });
 

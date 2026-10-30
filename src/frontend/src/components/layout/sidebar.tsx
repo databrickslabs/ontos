@@ -1,6 +1,5 @@
-import { Link } from 'react-router-dom';
 import { Navigation } from './navigation';
-import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
+import { SidebarBrand } from './sidebar-brand';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -16,11 +15,7 @@ export function Sidebar({ isCollapsed }: SidebarProps) {
       )}
     >
       {/* Logo/Branding */}
-      <div className="flex h-16 items-center justify-center border-b px-4 shrink-0">
-         <Link to="/" className="flex items-center gap-2 font-semibold">
-            <UnityCatalogLogo className={cn("h-8 w-8 transition-all", isCollapsed ? "h-10 w-10" : "h-10 w-10")} />
-         </Link>
-      </div>
+      <SidebarBrand isCollapsed={isCollapsed} />
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto">

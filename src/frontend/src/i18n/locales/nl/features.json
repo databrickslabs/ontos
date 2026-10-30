@@ -68,8 +68,8 @@
     "description": "Schakel geavanceerde beveiliging in zoals differential privacy."
   },
   "access-policies": {
-    "name": "__TODO__ Access Policies",
-    "description": "__TODO__ Define who may do what on which data as W3C ODRL policies, audiences and asset collections."
+    "name": "Toegangsbeleid",
+    "description": "Bepaal wie wat mag doen met welke data via W3C ODRL-beleid, doelgroepen en asset-collecties."
   },
   "search": {
     "name": "Zoeken",

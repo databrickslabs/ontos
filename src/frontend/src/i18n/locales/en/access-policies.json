@@ -119,7 +119,7 @@
     "validate": "Validate",
     "valid": "Valid against ODRL 2.2 and the Ontos profile.",
     "principals": "Principals",
-    "principalsHint": "One per line: group:<name>, user:<email> or sp:<id>. Leave empty to select purely by the refinement.",
+    "principalsHint": "Pick groups and users from the directory (Entra ID) or type them; service principals as sp:<application id>. Leave all empty to select purely by the refinement.",
     "assets": "Assets",
     "assetsHint": "One per line, e.g. uc:catalog.schema or uc:catalog.schema.table. A catalog or schema covers its children.",
     "refinement": "Refinement",
@@ -134,7 +134,12 @@
     "incompleteRules": "Some rules are incomplete",
     "offerFor": "Terms for data product",
     "offerForNone": "Not linked to a product",
-    "offerForHint": "Every Agreement concluded for this product (approved access request) inherits this Offer's prohibitions and obligations. An Offer itself grants nobody access."
+    "offerForHint": "Every Agreement concluded for this product (approved access request) inherits this Offer's prohibitions and obligations. An Offer itself grants nobody access.",
+    "groups": "Groups",
+    "groupsPlaceholder": "Add groups (directory search when configured)…",
+    "users": "Users",
+    "usersPlaceholder": "Add users by email…",
+    "servicePrincipals": "Service principals"
   },
   "rules": {
     "empty": "No rules yet.",

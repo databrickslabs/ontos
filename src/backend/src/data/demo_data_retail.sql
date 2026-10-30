@@ -94,6 +94,11 @@
 --   0f4 = asset_relationships
 --   0f5 = policy_attachments (now stored as entity_relationships)
 --   0f6 = business_owners
+--   1a0 = access_audiences          (generated block at the end — from demo_access_policies.yaml)
+--   1a1 = access_asset_collections
+--   1a2 = access_policies
+--   1a3 = access_targets
+--   1a4 = access_policy_index
 -- ============================================================================
 
 BEGIN;
@@ -3118,3 +3123,64 @@ INSERT INTO entity_domain_associations (id, domain_id, entity_id, entity_type, i
 ('03100043-0000-4000-8000-000000000067', '0000000a-0000-4000-8000-000000000010', '0f100006-0000-4000-8000-000000000006', 'asset', true, 'system@demo', NOW()),
 ('03100044-0000-4000-8000-000000000068', '00000007-0000-4000-8000-000000000007', '0f100007-0000-4000-8000-000000000007', 'asset', true, 'system@demo', NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- BEGIN access policies (generated from demo_access_policies.yaml — do not edit by hand)
+-- Audiences, asset collections, policies (+ index) and the UC target of the Access Policies
+-- example. Source: data/demo_access_policies.yaml.
+
+INSERT INTO access_audiences (id, uid, name, description, status, version, version_family_id, created_by, updated_by, submitted_by, approved_by, members, refinement, created_at, updated_at) VALUES
+('1a000001-0000-4000-8000-000000000001', 'urn:ontos:audience:1a000001-0000-4000-8000-000000000001', 'Sales Analysts', 'Analysts who build sales dashboards and forecasts.', 'active', '1.0.0', '1a000001-0000-4000-8000-000000000001', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["group:sales-analysts", "user:alice.chen@example.com"]', '[]', NOW(), NOW()),
+('1a000002-0000-4000-8000-000000000002', 'urn:ontos:audience:1a000002-0000-4000-8000-000000000002', 'Finance Team', 'Finance controllers who maintain the general ledger.', 'active', '1.0.0', '1a000002-0000-4000-8000-000000000002', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["group:finance"]', '[]', NOW(), NOW()),
+('1a000003-0000-4000-8000-000000000003', 'urn:ontos:audience:1a000003-0000-4000-8000-000000000003', 'HR Partners', 'HR business partners with access to employee records.', 'active', '1.0.0', '1a000003-0000-4000-8000-000000000003', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["group:hr-partners"]', '[]', NOW(), NOW()),
+('1a000004-0000-4000-8000-000000000004', 'urn:ontos:audience:1a000004-0000-4000-8000-000000000004', 'Data Science', 'Data scientists working on customer features.', 'active', '1.0.0', '1a000004-0000-4000-8000-000000000004', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["group:data-science"]', '[]', NOW(), NOW()),
+('1a000005-0000-4000-8000-000000000005', 'urn:ontos:audience:1a000005-0000-4000-8000-000000000005', 'Data Stewards', 'Everyone holding the Data Steward business role (dynamic — resolved from Ontos ownership).', 'active', '1.0.0', '1a000005-0000-4000-8000-000000000005', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '[]', '[{"leftOperand": "ontos:businessRole", "operator": "eq", "rightOperand": "Data Steward"}]', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO access_asset_collections (id, uid, name, description, status, version, version_family_id, created_by, updated_by, submitted_by, approved_by, members, refinement, created_at, updated_at) VALUES
+('1a100001-0000-4000-8000-000000000001', 'urn:ontos:asset-collection:1a100001-0000-4000-8000-000000000001', 'Sales data', 'Curated sales tables and the sales reporting view.', 'active', '1.0.0', '1a100001-0000-4000-8000-000000000001', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["uc:demo_enterprise.sales", "uc:demo_analytics.reporting.v_sales_summary"]', '[]', NOW(), NOW()),
+('1a100002-0000-4000-8000-000000000002', 'urn:ontos:asset-collection:1a100002-0000-4000-8000-000000000002', 'Finance ledger', 'Invoices, payments and GL accounts.', 'active', '1.0.0', '1a100002-0000-4000-8000-000000000002', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["uc:demo_enterprise.finance"]', '[]', NOW(), NOW()),
+('1a100003-0000-4000-8000-000000000003', 'urn:ontos:asset-collection:1a100003-0000-4000-8000-000000000003', 'HR records', 'Employee and department records (restricted).', 'active', '1.0.0', '1a100003-0000-4000-8000-000000000003', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', '["uc:demo_enterprise.hr"]', '[]', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO access_policies (id, uid, name, description, status, version, version_family_id, created_by, updated_by, submitted_by, approved_by, policy_type, conflict, inherit_from, body, subject_entity_type, subject_entity_id, created_at, updated_at) VALUES
+('1a200001-0000-4000-8000-000000000001', 'urn:ontos:policy:1a200001-0000-4000-8000-000000000001', 'Sales analytics read', 'Sales analysts read the sales data — never HR records.', 'active', '1.0.0', '1a200001-0000-4000-8000-000000000001', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', 'Set', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "read", "assignee": "urn:ontos:audience:1a000001-0000-4000-8000-000000000001", "assigner": null, "constraint": [], "target": "urn:ontos:asset-collection:1a100001-0000-4000-8000-000000000001"}], "prohibition": [{"action": "read", "assignee": "urn:ontos:audience:1a000001-0000-4000-8000-000000000001", "assigner": null, "constraint": [], "target": "urn:ontos:asset-collection:1a100003-0000-4000-8000-000000000003"}]}', NULL, NULL, NOW(), NOW()),
+('1a200002-0000-4000-8000-000000000002', 'urn:ontos:policy:1a200002-0000-4000-8000-000000000002', 'Finance ledger maintenance', 'Finance reads and maintains the ledger until the end of the 2027 audit cycle.', 'active', '1.0.0', '1a200002-0000-4000-8000-000000000002', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', 'Set', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "read", "assignee": "urn:ontos:audience:1a000002-0000-4000-8000-000000000002", "assigner": null, "constraint": [{"leftOperand": "dateTime", "operator": "lteq", "rightOperand": "2027-12-31T23:59:59Z"}], "target": "urn:ontos:asset-collection:1a100002-0000-4000-8000-000000000002"}, {"action": "modify", "assignee": "urn:ontos:audience:1a000002-0000-4000-8000-000000000002", "assigner": null, "constraint": [{"leftOperand": "dateTime", "operator": "lteq", "rightOperand": "2027-12-31T23:59:59Z"}], "target": "urn:ontos:asset-collection:1a100002-0000-4000-8000-000000000002"}], "prohibition": []}', NULL, NULL, NOW(), NOW()),
+('1a200003-0000-4000-8000-000000000003', 'urn:ontos:policy:1a200003-0000-4000-8000-000000000003', 'Steward catalog browse', 'Data stewards see every object''s metadata in the enterprise catalog.', 'active', '1.0.0', '1a200003-0000-4000-8000-000000000003', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', 'Set', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "ontos:browse", "assignee": "urn:ontos:audience:1a000005-0000-4000-8000-000000000005", "assigner": null, "constraint": [], "target": "uc:demo_enterprise"}], "prohibition": []}', NULL, NULL, NOW(), NOW()),
+('1a200004-0000-4000-8000-000000000004', 'urn:ontos:policy:1a200004-0000-4000-8000-000000000004', 'HR records read', 'HR partners read employee records after accepting the HR data terms.', 'active', '1.0.0', '1a200004-0000-4000-8000-000000000004', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', 'Set', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "read", "assignee": "urn:ontos:audience:1a000003-0000-4000-8000-000000000003", "assigner": null, "constraint": [], "duty": [{"action": "ontos:acknowledgeTerms", "assignee": "urn:ontos:audience:1a000003-0000-4000-8000-000000000003", "assigner": null, "constraint": [], "target": null}], "target": "urn:ontos:asset-collection:1a100003-0000-4000-8000-000000000003"}], "prohibition": []}', NULL, NULL, NOW(), NOW()),
+('1a200005-0000-4000-8000-000000000005', 'urn:ontos:policy:1a200005-0000-4000-8000-000000000005', 'Prepared sales — terms of use', 'Terms every consumer of the Prepared Sales Transactions product agrees to.', 'active', '1.0.0', '1a200005-0000-4000-8000-000000000005', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', 'Offer', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "read", "assignee": null, "assigner": "user:john.doe@company.com", "constraint": [], "duty": [{"action": "ontos:acknowledgeTerms", "assignee": null, "assigner": "user:john.doe@company.com", "constraint": [], "target": null}], "target": "uc:demo_enterprise.sales.orders"}], "prohibition": [{"action": "modify", "assignee": null, "assigner": "user:john.doe@company.com", "constraint": [], "target": "uc:demo_enterprise.sales.orders"}]}', 'data_product', '00700002-0000-4000-8000-000000000002', NOW(), NOW()),
+('1a200006-0000-4000-8000-000000000006', 'urn:ontos:policy:1a200006-0000-4000-8000-000000000006', 'Customer features for data science', 'Draft — data scientists read the customer feature view (under discussion).', 'draft', '1.0.0', '1a200006-0000-4000-8000-000000000006', 'system@demo', 'system@demo', NULL, NULL, 'Set', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "read", "assignee": "urn:ontos:audience:1a000004-0000-4000-8000-000000000004", "assigner": null, "constraint": [], "target": "uc:demo_analytics.data_science.v_customer_features"}], "prohibition": []}', NULL, NULL, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO access_policy_index (id, policy_id, rule_kind, role, value) VALUES
+('1a400001-0000-4000-8000-000000000001', '1a200001-0000-4000-8000-000000000001', 'permission', 'action', 'read'),
+('1a400002-0000-4000-8000-000000000002', '1a200001-0000-4000-8000-000000000001', 'permission', 'assignee', 'urn:ontos:audience:1a000001-0000-4000-8000-000000000001'),
+('1a400003-0000-4000-8000-000000000003', '1a200001-0000-4000-8000-000000000001', 'permission', 'target', 'urn:ontos:asset-collection:1a100001-0000-4000-8000-000000000001'),
+('1a400004-0000-4000-8000-000000000004', '1a200001-0000-4000-8000-000000000001', 'prohibition', 'action', 'read'),
+('1a400005-0000-4000-8000-000000000005', '1a200001-0000-4000-8000-000000000001', 'prohibition', 'assignee', 'urn:ontos:audience:1a000001-0000-4000-8000-000000000001'),
+('1a400006-0000-4000-8000-000000000006', '1a200001-0000-4000-8000-000000000001', 'prohibition', 'target', 'urn:ontos:asset-collection:1a100003-0000-4000-8000-000000000003'),
+('1a400007-0000-4000-8000-000000000007', '1a200002-0000-4000-8000-000000000002', 'permission', 'action', 'modify'),
+('1a400008-0000-4000-8000-000000000008', '1a200002-0000-4000-8000-000000000002', 'permission', 'action', 'read'),
+('1a400009-0000-4000-8000-000000000009', '1a200002-0000-4000-8000-000000000002', 'permission', 'assignee', 'urn:ontos:audience:1a000002-0000-4000-8000-000000000002'),
+('1a40000a-0000-4000-8000-000000000010', '1a200002-0000-4000-8000-000000000002', 'permission', 'target', 'urn:ontos:asset-collection:1a100002-0000-4000-8000-000000000002'),
+('1a40000b-0000-4000-8000-000000000011', '1a200003-0000-4000-8000-000000000003', 'permission', 'action', 'ontos:browse'),
+('1a40000c-0000-4000-8000-000000000012', '1a200003-0000-4000-8000-000000000003', 'permission', 'assignee', 'urn:ontos:audience:1a000005-0000-4000-8000-000000000005'),
+('1a40000d-0000-4000-8000-000000000013', '1a200003-0000-4000-8000-000000000003', 'permission', 'target', 'uc:demo_enterprise'),
+('1a40000e-0000-4000-8000-000000000014', '1a200004-0000-4000-8000-000000000004', 'permission', 'action', 'read'),
+('1a40000f-0000-4000-8000-000000000015', '1a200004-0000-4000-8000-000000000004', 'permission', 'assignee', 'urn:ontos:audience:1a000003-0000-4000-8000-000000000003'),
+('1a400010-0000-4000-8000-000000000016', '1a200004-0000-4000-8000-000000000004', 'permission', 'target', 'urn:ontos:asset-collection:1a100003-0000-4000-8000-000000000003'),
+('1a400011-0000-4000-8000-000000000017', '1a200005-0000-4000-8000-000000000005', 'permission', 'action', 'read'),
+('1a400012-0000-4000-8000-000000000018', '1a200005-0000-4000-8000-000000000005', 'permission', 'assigner', 'user:john.doe@company.com'),
+('1a400013-0000-4000-8000-000000000019', '1a200005-0000-4000-8000-000000000005', 'permission', 'target', 'uc:demo_enterprise.sales.orders'),
+('1a400014-0000-4000-8000-000000000020', '1a200005-0000-4000-8000-000000000005', 'prohibition', 'action', 'modify'),
+('1a400015-0000-4000-8000-000000000021', '1a200005-0000-4000-8000-000000000005', 'prohibition', 'assigner', 'user:john.doe@company.com'),
+('1a400016-0000-4000-8000-000000000022', '1a200005-0000-4000-8000-000000000005', 'prohibition', 'target', 'uc:demo_enterprise.sales.orders'),
+('1a400017-0000-4000-8000-000000000023', '1a200006-0000-4000-8000-000000000006', 'permission', 'action', 'read'),
+('1a400018-0000-4000-8000-000000000024', '1a200006-0000-4000-8000-000000000006', 'permission', 'assignee', 'urn:ontos:audience:1a000004-0000-4000-8000-000000000004'),
+('1a400019-0000-4000-8000-000000000025', '1a200006-0000-4000-8000-000000000006', 'permission', 'target', 'uc:demo_analytics.data_science.v_customer_features')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO access_targets (id, uid, name, description, status, version, version_family_id, created_by, updated_by, submitted_by, approved_by, key, system, connection, scope, delivery_modes, reconcile_schedule, drift_policy, created_at, updated_at) VALUES
+('1a300001-0000-4000-8000-000000000001', 'urn:ontos:target:1a300001-0000-4000-8000-000000000001', 'Unity Catalog — demo catalogs', 'Releases for the demo catalogs ship as a runbook or to Git; drift is checked daily.', 'active', '1.0.0', '1a300001-0000-4000-8000-000000000001', 'system@demo', 'system@demo', 'system@demo', 'steward@demo', 'uc', 'uc', '{}', '["demo_enterprise", "demo_analytics"]', '["manual", "indirect"]', '0 0 6 * * ?', 'report', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- END access policies

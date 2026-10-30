@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
 import { useApi } from '@/hooks/use-api';
@@ -46,6 +47,21 @@ interface Props {
 }
 
 const NONE = '__none__';
+
+/** Audience members are typed refs (group:x / user:x / sp:x); the pickers hold bare identifiers. */
+function splitPrincipals(members: string[]) {
+  const groups: string[] = [];
+  const users: string[] = [];
+  const other: string[] = [];
+  for (const m of members) {
+    const [prefix, ...rest] = m.split(':');
+    const value = rest.join(':');
+    if (prefix === 'group' && value) groups.push(value);
+    else if ((prefix === 'user' || prefix === 'mailto') && value) users.push(value);
+    else other.push(m);
+  }
+  return { groups, users, other };
+}
 const DELIVERY_MODES: DeliveryModeKey[] = ['direct', 'indirect', 'manual'];
 
 function normalizeTags(tags: (string | AssignedTag)[]) {
@@ -88,6 +104,10 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
   const [validation, setValidation] = useState<PolicyValidation | null>(null);
   // Collections
   const [members, setMembers] = useState('');
+  // Audiences: directory principals (Entra ID search when configured, typed badges otherwise).
+  const [groups, setGroups] = useState<string[]>([]);
+  const [users, setUsers] = useState<string[]>([]);
+  const [otherPrincipals, setOtherPrincipals] = useState('');
   const [refinement, setRefinement] = useState<FormConstraint[]>([]);
   const [refinementUnsupported, setRefinementUnsupported] = useState(false);
   // Targets
@@ -148,6 +168,10 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
     } else {
       const c = entity as AccessCollection | undefined;
       setMembers((c?.members || []).join('\n'));
+      const split = splitPrincipals(c?.members || []);
+      setGroups(split.groups);
+      setUsers(split.users);
+      setOtherPrincipals(split.other.join('\n'));
       const forms = (c?.refinement || []).map(constraintToForm);
       setRefinementUnsupported(forms.some((f) => f === null));
       setRefinement(forms.filter((f): f is FormConstraint => !!f));
@@ -253,7 +277,14 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
         } else {
           base.refinement = refinement.filter((c) => c.leftOperand && c.value.trim()).map(formToConstraint);
         }
-        base.members = members.split(/[\n,]/).map((m) => m.trim()).filter(Boolean);
+        base.members =
+          kind === 'audience'
+            ? [
+                ...groups.map((g) => `group:${g}`),
+                ...users.map((u) => `user:${u}`),
+                ...otherPrincipals.split(/[\n,]/).map((m) => m.trim()).filter(Boolean),
+              ]
+            : members.split(/[\n,]/).map((m) => m.trim()).filter(Boolean);
       }
     }
     setSaving(true);
@@ -284,7 +315,7 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
         <div className="space-y-5">
           {contentLocked && (
             <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              {t('access-policies:form.contentLocked', { status: entity!.status })}
+              {t('access-policies:form.contentLocked', { status: t(`access-policies:status.${entity!.status}`) })}
             </p>
           )}
           <div className="grid gap-4 md:grid-cols-2">
@@ -560,23 +591,60 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="ap-members">
-                  {kind === 'audience' ? t('access-policies:form.principals') : t('access-policies:form.assets')}
-                </Label>
-                <Textarea
-                  id="ap-members"
-                  rows={6}
-                  disabled={contentLocked}
-                  className="font-mono text-xs"
-                  placeholder={kind === 'audience' ? 'group:sales-analysts\nuser:jane@example.com' : 'uc:main.sales\nuc:main.finance.*'}
-                  value={members}
-                  onChange={(e) => setMembers(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {kind === 'audience' ? t('access-policies:form.principalsHint') : t('access-policies:form.assetsHint')}
-                </p>
-              </div>
+              {kind === 'audience' ? (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="ap-groups">{t('access-policies:form.groups')}</Label>
+                    <PrincipalPicker
+                      id="ap-groups"
+                      multiple
+                      accepts={['group']}
+                      disabled={contentLocked}
+                      value={groups}
+                      onChange={setGroups}
+                      placeholder={t('access-policies:form.groupsPlaceholder')}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="ap-users">{t('access-policies:form.users')}</Label>
+                    <PrincipalPicker
+                      id="ap-users"
+                      multiple
+                      accepts={['user']}
+                      disabled={contentLocked}
+                      value={users}
+                      onChange={setUsers}
+                      placeholder={t('access-policies:form.usersPlaceholder')}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="ap-other-principals">{t('access-policies:form.servicePrincipals')}</Label>
+                    <Input
+                      id="ap-other-principals"
+                      disabled={contentLocked}
+                      className="font-mono text-xs"
+                      placeholder="sp:00000000-0000-0000-0000-000000000000"
+                      value={otherPrincipals}
+                      onChange={(e) => setOtherPrincipals(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t('access-policies:form.principalsHint')}</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label htmlFor="ap-members">{t('access-policies:form.assets')}</Label>
+                  <Textarea
+                    id="ap-members"
+                    rows={6}
+                    disabled={contentLocked}
+                    className="font-mono text-xs"
+                    placeholder={'uc:main.sales\nuc:main.finance.*'}
+                    value={members}
+                    onChange={(e) => setMembers(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">{t('access-policies:form.assetsHint')}</p>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label>{t('access-policies:form.refinement')}</Label>
                 <p className="text-xs text-muted-foreground">

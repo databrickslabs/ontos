@@ -1,0 +1,113 @@
+# Access Policies example for the retail demo (preset=retail). Source of the generated block in
+# demo_data_retail.sql (see src/utils/demo_access_policies.py; test_demo_access_policies keeps it in
+# sync). Everything targets the demo_enterprise / demo_analytics catalogs from demo_uc_setup.sql.
+#
+# Ids follow the pack convention {type:3}{seq:5}-{dataset:4}-4000-8000-00000000000N with
+# 1a0 = access_audiences, 1a1 = access_asset_collections, 1a2 = access_policies,
+# 1a3 = access_targets, 1a4 = access_policy_index. References use the keys below.
+dataset: "0000"
+
+audiences:
+  sales_analysts:
+    name: Sales Analysts
+    description: Analysts who build sales dashboards and forecasts.
+    members: [group:sales-analysts, user:alice.chen@example.com]
+  finance_team:
+    name: Finance Team
+    description: Finance controllers who maintain the general ledger.
+    members: [group:finance]
+  hr_partners:
+    name: HR Partners
+    description: HR business partners with access to employee records.
+    members: [group:hr-partners]
+  data_science:
+    name: Data Science
+    description: Data scientists working on customer features.
+    members: [group:data-science]
+  data_stewards:
+    name: Data Stewards
+    description: Everyone holding the Data Steward business role (dynamic — resolved from Ontos ownership).
+    members: []
+    refinement:
+      - {leftOperand: "ontos:businessRole", operator: eq, rightOperand: Data Steward}
+
+asset_collections:
+  sales_data:
+    name: Sales data
+    description: Curated sales tables and the sales reporting view.
+    members: [uc:demo_enterprise.sales, uc:demo_analytics.reporting.v_sales_summary]
+  finance_ledger:
+    name: Finance ledger
+    description: Invoices, payments and GL accounts.
+    members: [uc:demo_enterprise.finance]
+  hr_records:
+    name: HR records
+    description: Employee and department records (restricted).
+    members: [uc:demo_enterprise.hr]
+
+policies:
+  sales_read:
+    name: Sales analytics read
+    description: Sales analysts read the sales data — never HR records.
+    rules:
+      permission:
+        - {action: read, target: "@sales_data", assignee: "@sales_analysts"}
+      prohibition:
+        - {action: read, target: "@hr_records", assignee: "@sales_analysts"}
+  finance_maintain:
+    name: Finance ledger maintenance
+    description: Finance reads and maintains the ledger until the end of the 2027 audit cycle.
+    rules:
+      permission:
+        - action: [read, modify]
+          target: "@finance_ledger"
+          assignee: "@finance_team"
+          constraint:
+            - {leftOperand: dateTime, operator: lteq, rightOperand: "2027-12-31T23:59:59Z"}
+  steward_browse:
+    name: Steward catalog browse
+    description: Data stewards see every object's metadata in the enterprise catalog.
+    rules:
+      permission:
+        - {action: "ontos:browse", target: "uc:demo_enterprise", assignee: "@data_stewards"}
+  hr_read:
+    name: HR records read
+    description: HR partners read employee records after accepting the HR data terms.
+    rules:
+      permission:
+        - action: read
+          target: "@hr_records"
+          assignee: "@hr_partners"
+          duty:
+            - {action: "ontos:acknowledgeTerms"}
+  sales_offer:
+    name: Prepared sales — terms of use
+    description: Terms every consumer of the Prepared Sales Transactions product agrees to.
+    policy_type: Offer
+    subject: {entity_type: data_product, entity_id: 00700002-0000-4000-8000-000000000002}
+    rules:
+      permission:
+        - action: read
+          target: "uc:demo_enterprise.sales.orders"
+          assigner: "user:john.doe@company.com"
+          duty:
+            - {action: "ontos:acknowledgeTerms"}
+      prohibition:
+        - {action: modify, target: "uc:demo_enterprise.sales.orders", assigner: "user:john.doe@company.com"}
+  ds_features:
+    name: Customer features for data science
+    description: Draft — data scientists read the customer feature view (under discussion).
+    status: draft
+    rules:
+      permission:
+        - {action: read, target: "uc:demo_analytics.data_science.v_customer_features", assignee: "@data_science"}
+
+targets:
+  uc_demo:
+    name: Unity Catalog — demo catalogs
+    description: Releases for the demo catalogs ship as a runbook or to Git; drift is checked daily.
+    key: uc
+    system: uc
+    scope: [demo_enterprise, demo_analytics]
+    delivery_modes: [manual, indirect]
+    reconcile_schedule: "0 0 6 * * ?"

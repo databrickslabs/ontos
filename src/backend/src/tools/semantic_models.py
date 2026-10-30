@@ -5,6 +5,7 @@ Tools for searching glossary terms and managing semantic links.
 """
 
 from typing import Any, Dict, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -116,6 +117,7 @@ class AddSemanticLinkTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id", "concept_iri", "concept_label"]
     required_scope = "semantic:write"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -267,6 +269,7 @@ class RemoveSemanticLinkTool(BaseTool):
     }
     required_params = ["link_id"]
     required_scope = "semantic:write"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,

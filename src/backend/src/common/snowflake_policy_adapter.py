@@ -13,9 +13,18 @@ the target (Lars, 2026-10-17: "joint groups are an adapter detail"):
   existing and future tables and views in it (database: in every schema), plus the
   ``USAGE`` on the parents a role needs to reach them.
 
-Identifiers are rendered upper-cased and double-quoted: that is how Snowflake stores
-unquoted names, and quoting keeps every name safe in SQL. Mixed-case (quoted) object
-names aren't supported — Ontos refs are case-insensitive.
+Object and role identifiers are rendered upper-cased and double-quoted: that is how
+Snowflake stores unquoted names, and quoting keeps every name safe in SQL. Mixed-case
+(quoted) object names aren't supported — Ontos refs are case-insensitive.
+
+User names are different: SCIM stores the IdP's ``userName`` as the user's ``NAME``
+exactly as sent (usually the lower-case e-mail / UPN), and a quoted identifier is
+case-sensitive, so ``"ALICE@X.COM"`` is not the user ``alice@x.com``. Users are therefore
+rendered as Ontos knows them (lower-case) unless the target's connection says otherwise:
+``user_names`` maps a principal to its exact Snowflake ``NAME`` (e.g. a mixed-case UPN, or
+``MAP_SCIM_USERNAME_TO_ENTERPRISE_ATTR`` accounts where NAME isn't the login), and
+``user_name_case: upper`` suits accounts whose users were created unquoted. The runbook
+names the ``SHOW USERS`` check for every user it grants to.
 
 No Direct delivery: there's no Snowflake connection in Ontos yet, so releases ship
 Indirect (Git, for the customer's CI) or Manual (runbook).
@@ -23,7 +32,7 @@ Indirect (Git, for the customer's CI) or Manual (runbook).
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.common import odrl
 from src.common import uc_policy_adapter as uc
@@ -192,12 +201,33 @@ class SnowflakeAdapter(TargetAdapter):
                        f"{copied} database-level future grant(s) repeated on schemas with their own future grants "
                        "(Snowflake applies only the schema-level ones there)")
 
-    def render_sql(self, diff: uc.GrantDiff) -> List[str]:
+    def validate_connection(self, connection: Dict[str, Any]) -> List[str]:
+        problems = []
+        names = connection.get("user_names")
+        if names is not None and not (isinstance(names, dict) and all(
+                isinstance(k, str) and isinstance(v, str) and v.strip() for k, v in names.items())):
+            problems.append("user_names must map each principal to its Snowflake user NAME (text)")
+        case = connection.get("user_name_case")
+        if case is not None and str(case).lower() not in USER_NAME_CASES:
+            problems.append(f"user_name_case must be one of: {', '.join(USER_NAME_CASES)}")
+        views = connection.get("views")
+        if views is not None and not isinstance(views, list):
+            problems.append("views must be a list of object names")
+        return problems
+
+    def render_sql(self, diff: uc.GrantDiff, target: Any = None) -> List[str]:
         """Runbook / CI script, fail-safe order: memberships off, revokes, roles, grants, memberships on."""
+        user = user_renderer((target.connection if target is not None else None) or {})
         out: List[str] = []
         members_off = [g for g in diff.remove if g.securable_type == KIND_ROLE]
         members_on = [g for g in diff.add if g.securable_type == KIND_ROLE]
-        out += [f"REVOKE ROLE {ident(g.securable_name)} FROM USER {ident_user(g.principal)};" for g in members_off]
+        names = sorted({user(g.principal) for g in members_off + members_on})
+        if names:
+            # One rendered (quoted) name per comment line; control characters can't end a comment.
+            out.append("-- Quoted user names are case-sensitive: check each with SHOW USERS LIKE '<name>'"
+                       " (map exceptions in the target connection's user_names):")
+            out += [f"--   {_comment_safe(n)}" for n in names]
+        out += [f"REVOKE ROLE {ident(g.securable_name)} FROM USER {user(g.principal)};" for g in members_off]
         for verb, prep, grants in (("REVOKE", "FROM", diff.remove), ("GRANT", "TO", diff.add)):
             objects = [g for g in grants if g.securable_type != KIND_ROLE]
             if verb == "GRANT":
@@ -207,13 +237,41 @@ class SnowflakeAdapter(TargetAdapter):
                 privs = ", ".join(item["privileges"])
                 out.append(f"{verb} {privs} ON {_on_clause(item['securable_type'], item['securable_name'])} "
                            f"{prep} ROLE {ident(item['principal'])};")
-        out += [f"GRANT ROLE {ident(g.securable_name)} TO USER {ident_user(g.principal)};" for g in members_on]
+        out += [f"GRANT ROLE {ident(g.securable_name)} TO USER {user(g.principal)};" for g in members_on]
         return out
 
 
-def ident_user(login: str) -> str:
-    """A user name, quoted and upper-cased like an unquoted identifier (Ontos principals are lower-cased).
+USER_NAME_CASES = ("as_is", "upper")
 
-    Unverified assumption: SCIM-provisioned users carry the upper-cased e-mail as their name.
+
+def _comment_safe(text: str) -> str:
+    """One line of a SQL ``--`` comment: control characters (line breaks) can't end it."""
+    return "".join(c if c.isprintable() else "?" for c in text)
+
+
+def user_renderer(connection: Optional[Dict[str, Any]] = None) -> Callable[[str], str]:
+    """``login → quoted Snowflake user NAME`` for a target connection (the map is read once).
+
+    The connection's ``user_names`` entry wins (keys matched case-insensitively); else the login
+    as Ontos knows it, upper-cased when ``user_name_case`` is ``upper``. Malformed settings are
+    ignored here (``validate_connection`` reports them). See the module docstring for why users
+    aren't upper-cased by default; the adapter never shipped with the old upper-casing, so no
+    ledger holds memberships rendered that way.
     """
-    return '"' + login.upper().replace('"', '""') + '"'
+    connection = connection or {}
+    raw = connection.get("user_names")
+    names = {k.strip().lower(): v for k, v in raw.items()
+             if isinstance(k, str) and isinstance(v, str) and v.strip()} if isinstance(raw, dict) else {}
+    upper = str(connection.get("user_name_case") or "").lower() == "upper"
+
+    def render(login: str) -> str:
+        name = names.get(login.strip().lower())
+        if name is None:
+            name = login.upper() if upper else login
+        return '"' + name.replace('"', '""') + '"'
+    return render
+
+
+def ident_user(login: str, connection: Optional[Dict[str, Any]] = None) -> str:
+    """A user's exact Snowflake ``NAME``, quoted (see :func:`user_renderer`)."""
+    return user_renderer(connection)(login)

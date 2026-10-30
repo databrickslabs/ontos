@@ -100,6 +100,13 @@ def test_every_example_entity_passes_activation(demo_db: Session, policies):
             assert policies.activation_problems(demo_db, kind, row) == [], (kind, row.name)
 
 
+def test_every_example_policy_conforms_to_the_shacl_shapes(demo_db: Session, policies):
+    from src.common.odrl_shacl import validate_jsonld
+    for p in demo_db.query(AccessPolicyDb).all():
+        report = validate_jsonld(policies.to_jsonld(demo_db, p))
+        assert report["conforms"], (p.name, report["results"])
+
+
 def _clear_plan(db: Session):
     from src.utils.demo_data_cleanup import plan_demo_clear
     from src.utils.demo_data_sql import parse_demo_inserts

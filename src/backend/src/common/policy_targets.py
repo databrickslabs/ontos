@@ -140,8 +140,12 @@ class TargetAdapter:
               target: Optional["ResolvedTarget"] = None) -> List[uc.UCGrant]:
         raise NotImplementedError
 
-    def render_sql(self, diff: uc.GrantDiff) -> List[str]:
+    def render_sql(self, diff: uc.GrantDiff, target: Optional["ResolvedTarget"] = None) -> List[str]:
         raise NotImplementedError
+
+    def validate_connection(self, connection: Dict[str, Any]) -> List[str]:
+        """Problems with the target's (non-secret) connection settings; none by default."""
+        return []
 
     def describe(self) -> Dict[str, Any]:
         return {"system": self.system, "label": self.label, "asset_prefix": self.asset_prefix,
@@ -166,7 +170,7 @@ class UnityCatalogAdapter(TargetAdapter):
               target: Optional["ResolvedTarget"] = None) -> List[uc.UCGrant]:
         return uc.build_grants(plan, resolve_object_kind) + uc.build_abac(plan, abac, resolve_object_kind)
 
-    def render_sql(self, diff: uc.GrantDiff) -> List[str]:
+    def render_sql(self, diff: uc.GrantDiff, target: Optional["ResolvedTarget"] = None) -> List[str]:
         return uc.render_sql(diff)
 
 

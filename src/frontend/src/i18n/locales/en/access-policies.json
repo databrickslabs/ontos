@@ -213,12 +213,14 @@
     "rules": "Rules",
     "rulesHint": "Atomic ODRL rules. Prohibitions vs. permissions are resolved by the conflict strategy.",
     "everyone": "Everyone",
-    "verb": {
-      "permission": "may",
-      "prohibition": "may not",
-      "obligation": "must"
+    "ruleSentence": {
+      "permission": "<who>{{assignee}}</who> may <act>{{action}}</act> on <tgt>{{target}}</tgt>",
+      "prohibition": "<who>{{assignee}}</who> may not <act>{{action}}</act> on <tgt>{{target}}</tgt>",
+      "obligation": "<who>{{assignee}}</who> must <act>{{action}}</act> on <tgt>{{target}}</tgt>",
+      "permissionNoTarget": "<who>{{assignee}}</who> may <act>{{action}}</act>",
+      "prohibitionNoTarget": "<who>{{assignee}}</who> may not <act>{{action}}</act>",
+      "obligationNoTarget": "<who>{{assignee}}</who> must <act>{{action}}</act>"
     },
-    "on": "on",
     "when": "when",
     "duty": "Duty",
     "remedy": "Remedy",
@@ -258,7 +260,13 @@
     "linkFailed": "Could not update concept link",
     "fromAccessGrant": "Recorded from an approved Access Grant",
     "offerFor": "Terms of use (Offer) for data product",
-    "subjectMissing": "(product no longer exists)"
+    "subjectMissing": "(product no longer exists)",
+    "shacl": {
+      "check": "Validate with SHACL",
+      "conforms": "Conforms to the Ontos ODRL SHACL shapes.",
+      "findings": "{{count}} SHACL finding(s)",
+      "failed": "SHACL validation failed"
+    }
   },
   "releases": {
     "hint": "A release compiles all active policies for a target into concrete grants, diffs them against the Grant Ledger and ships the change through the Delivery Modes after review.",

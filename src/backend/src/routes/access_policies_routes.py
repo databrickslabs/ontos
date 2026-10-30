@@ -3,9 +3,10 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 from src.common import odrl
-from src.common.odrl_shacl import shapes_turtle
+from src.common.odrl_shacl import shapes_turtle, validate_jsonld
 from src.common import policy_targets as pt
 from src.common.authorization import (
     PermissionChecker,
@@ -162,6 +163,22 @@ async def export_policy(entity_id: str, request: Request, db: DBSessionDep, curr
     except AccessPolicyError as e:
         raise _http(e)
     return manager.to_jsonld(db, row)
+
+
+@router.get("/policies/{entity_id}/shacl")
+async def validate_policy_shacl(entity_id: str, request: Request, db: DBSessionDep, current_user: AuditCurrentUserDep,
+                                _: bool = _READ):
+    """The policy's JSON-LD export validated against the Ontos ODRL SHACL shapes (pySHACL, offline)."""
+    try:
+        row = manager.require_visible(db, KIND_POLICY, entity_id, _email(current_user), await _is_admin(request, current_user))
+    except AccessPolicyError as e:
+        raise _http(e)
+    doc = manager.to_jsonld(db, row)
+    try:
+        return await run_in_threadpool(validate_jsonld, doc)
+    except Exception as e:  # pragma: no cover - malformed stored body
+        logger.warning("SHACL validation failed for policy %s: %s", row.id, type(e).__name__)
+        raise HTTPException(status_code=422, detail="The policy could not be validated against the SHACL shapes")
 
 
 @router.get("/policies/{entity_id}/validation")

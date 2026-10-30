@@ -303,7 +303,7 @@ class PolicyReleaseManager:
                        f"{len(expiring)} time-bound grant(s) are outside the target's scope; they stay tracked "
                        "here until they expire and are revoked")
         changes = diff.to_dict()
-        changes["sql"] = adapter.render_sql(diff)
+        changes["sql"] = adapter.render_sql(diff, resolved)
         ir = plan.to_dict()
         return {
             "target": target,
@@ -504,7 +504,7 @@ class PolicyReleaseManager:
         preexisting, live_checked = self._preexisting(adds, get_grants, resolved.adapter)
         diff = uc.GrantDiff(add=adds, remove=removes, untrack=untracks)
         changes = diff.to_dict()
-        changes["sql"] = resolved.adapter.render_sql(diff)
+        changes["sql"] = resolved.adapter.render_sql(diff, resolved)
         # Indirect mode serializes this snapshot, so the Git artifact matches what Direct/Manual ship.
         entity = SimpleNamespace(
             id=row.id, name=f"{row.target}-release-{row.sequence}", target=row.target, sequence=row.sequence,
@@ -698,7 +698,7 @@ class PolicyReleaseManager:
         gone = sorted((_ledger_grant(r) for r in expired), key=lambda g: g.key)
         diff = uc.GrantDiff(remove=[g for g in gone if not g.preexisting], untrack=[g for g in gone if g.preexisting])
         changes = diff.to_dict()
-        changes["sql"] = resolved.adapter.render_sql(diff)
+        changes["sql"] = resolved.adapter.render_sql(diff, resolved)
         row = AccessPolicyReleaseDb(
             target=target, release_kind=KIND_REVOCATION, status=R_APPROVED,
             notes=f"Automatic revocation of {len(expired)} expired grant(s)",

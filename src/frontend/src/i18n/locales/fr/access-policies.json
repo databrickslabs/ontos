@@ -213,12 +213,14 @@
     "rules": "Règles",
     "rulesHint": "Règles ODRL atomiques. Les interdictions et les permissions sont départagées par la stratégie de conflit.",
     "everyone": "Tout le monde",
-    "verb": {
-      "permission": "peut",
-      "prohibition": "ne peut pas",
-      "obligation": "doit"
+    "ruleSentence": {
+      "permission": "<who>{{assignee}}</who> peut <act>{{action}}</act> sur <tgt>{{target}}</tgt>",
+      "prohibition": "<who>{{assignee}}</who> ne peut pas <act>{{action}}</act> sur <tgt>{{target}}</tgt>",
+      "obligation": "<who>{{assignee}}</who> doit <act>{{action}}</act> sur <tgt>{{target}}</tgt>",
+      "permissionNoTarget": "<who>{{assignee}}</who> peut <act>{{action}}</act>",
+      "prohibitionNoTarget": "<who>{{assignee}}</who> ne peut pas <act>{{action}}</act>",
+      "obligationNoTarget": "<who>{{assignee}}</who> doit <act>{{action}}</act>"
     },
-    "on": "sur",
     "when": "quand",
     "duty": "Devoir",
     "remedy": "Recours",
@@ -258,7 +260,13 @@
     "linkFailed": "Échec de la mise à jour du lien de concept",
     "fromAccessGrant": "Enregistré à partir d'un octroi d'accès approuvé",
     "offerFor": "Conditions d'utilisation (Offre) pour le produit de données",
-    "subjectMissing": "(le produit n'existe plus)"
+    "subjectMissing": "(le produit n'existe plus)",
+    "shacl": {
+      "check": "Valider avec SHACL",
+      "conforms": "Conforme aux formes SHACL ODRL d’Ontos.",
+      "findings": "{{count}} constat(s) SHACL",
+      "failed": "La validation SHACL a échoué"
+    }
   },
   "releases": {
     "hint": "Une release compile toutes les politiques actives d'une cible en octrois concrets, les compare au registre des octrois et diffuse la modification via les modes de livraison après révision.",

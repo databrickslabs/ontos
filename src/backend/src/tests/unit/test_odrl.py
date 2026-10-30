@@ -378,3 +378,55 @@ def test_jsonld_export_expands_as_the_shapes_assume():
     assert (rdflib.URIRef("urn:p"), O.profile, rdflib.URIRef(odrl.ONTOS_PROFILE)) in g
     heads = list(g.objects(None, O["or"]))
     assert heads and all(len(list(rdflib.collection.Collection(g, h))) == 2 for h in heads)
+
+
+def test_shacl_validation_in_app_is_offline_and_reports_violations():
+    import pytest
+
+    from src.common import odrl_shacl
+
+    rules = odrl.normalize_rules("Set", "prohibit", [], {"permission": [
+        {"action": "read", "target": "uc:main.s", "assignee": "group:g",
+         "constraint": [{"or": [{"leftOperand": "dateTime", "operator": "lteq", "rightOperand": "2099-01-01"},
+                                {"leftOperand": "ontos:tag", "operator": "eq", "rightOperand": "pii"}]}]}]})
+    doc = odrl.to_jsonld(uid="urn:p", policy_type="Set", conflict="prohibit", rules=rules)
+    assert odrl_shacl.validate_jsonld(doc) == {"conforms": True, "results": []}
+
+    bad = {**doc, "permission": [{**doc["permission"][0], "action": "fly"}]}
+    bad.pop("profile")
+    report = odrl_shacl.validate_jsonld(bad)
+    assert report["conforms"] is False
+    messages = [r["message"] for r in report["results"]]
+    assert messages.count("An Ontos access policy declares the Ontos ODRL profile") == 1  # de-duplicated
+    assert any(r["path"] == f"{odrl.ODRL_NS}action" for r in report["results"])
+    assert not any("file:" in (r["message"] or "") + (r["focus"] or "") for r in report["results"])
+    with pytest.raises(ValueError):  # never fetches a remote context
+        odrl_shacl.validate_jsonld({**doc, "@context": ["https://example.com/ctx.jsonld"]})
+    # The https / trailing-slash spellings of the ODRL context are the same (vendored) context ...
+    assert odrl_shacl.validate_jsonld({**doc, "@context": ["https://www.w3.org/ns/odrl.jsonld/",
+                                                           doc["@context"][1]]})["conforms"]
+    # ... and remote contexts anywhere in the document (embedded, scoped, @import) are refused.
+    for bad_doc in ({**doc, "dc:x": {"@context": "http://attacker.example/ctx", "@value": "v"}},
+                    {**doc, "@context": [odrl.ODRL_CONTEXT_URL, {"t": {"@id": "ontos:t", "@context": "http://a.example/c"}}]},
+                    {**doc, "@context": [odrl.ODRL_CONTEXT_URL, {"@import": "http://a.example/c"}]}):
+        with pytest.raises(ValueError):
+            odrl_shacl.validate_jsonld(bad_doc)
+
+
+def test_grant_manager_passes_string_securable_types():
+    """SDK 0.148 grants.get/update take the type as a string (REST path); the enum was rejected."""
+    from types import SimpleNamespace
+
+    from src.controller.grant_manager import GrantManager, permissions_securable_type
+
+    calls = []
+    grants_api = SimpleNamespace(
+        update=lambda securable_type, full_name, changes=None: calls.append(("update", securable_type, full_name)),
+        get=lambda securable_type, full_name: calls.append(("get", securable_type, full_name))
+        or SimpleNamespace(privilege_assignments=[]))
+    gm = GrantManager(ws_client=SimpleNamespace(grants=grants_api), settings=SimpleNamespace())
+    assert gm.apply_grant({"principal": "g", "privileges": ["SELECT"], "securable_type": "view",
+                           "securable_name": "c.s.v"})["success"]
+    assert gm.get_grants("catalog", "c")["success"]
+    assert calls == [("update", "table", "c.s.v"), ("get", "catalog", "c")]
+    assert permissions_securable_type("model") == "function" and permissions_securable_type("SCHEMA") == "schema"

@@ -213,12 +213,14 @@
     "rules": "ルール",
     "rulesHint": "アトミックな ODRL ルール。禁止と許可の競合は、競合戦略によって解決されます。",
     "everyone": "全員",
-    "verb": {
-      "permission": "は許可",
-      "prohibition": "は禁止",
-      "obligation": "は義務"
+    "ruleSentence": {
+      "permission": "<who>{{assignee}}</who>は<tgt>{{target}}</tgt>に対して<act>{{action}}</act>が許可されています",
+      "prohibition": "<who>{{assignee}}</who>は<tgt>{{target}}</tgt>に対して<act>{{action}}</act>が禁止されています",
+      "obligation": "<who>{{assignee}}</who>は<tgt>{{target}}</tgt>に対して<act>{{action}}</act>が義務付けられています",
+      "permissionNoTarget": "<who>{{assignee}}</who>は<act>{{action}}</act>が許可されています",
+      "prohibitionNoTarget": "<who>{{assignee}}</who>は<act>{{action}}</act>が禁止されています",
+      "obligationNoTarget": "<who>{{assignee}}</who>は<act>{{action}}</act>が義務付けられています"
     },
-    "on": "対象",
     "when": "条件",
     "duty": "履行義務",
     "remedy": "是正措置",
@@ -258,7 +260,13 @@
     "linkFailed": "コンセプトのリンクを更新できませんでした",
     "fromAccessGrant": "承認済みのアクセス許可から記録",
     "offerFor": "データプロダクトの利用条件（オファー）",
-    "subjectMissing": "（プロダクトは存在しません）"
+    "subjectMissing": "（プロダクトは存在しません）",
+    "shacl": {
+      "check": "SHACL で検証",
+      "conforms": "Ontos ODRL SHACL シェイプに適合しています。",
+      "findings": "SHACL の指摘 {{count}} 件",
+      "failed": "SHACL 検証に失敗しました"
+    }
   },
   "releases": {
     "hint": "リリースは、ターゲットのすべてのアクティブなポリシーを具体的な付与にコンパイルし、付与台帳と差分比較したうえで、レビュー後に配信モードを通じて変更を出荷します。",

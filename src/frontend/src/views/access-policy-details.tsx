@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -33,6 +33,7 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import VersionNavigator from '@/components/common/version-navigator';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import RuleSentence from '@/components/access-policies/rule-sentence';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -59,6 +60,7 @@ import type {
   OdrlConstraint,
   OdrlRule,
   PolicyValidation,
+  ShaclReport,
   VersionRow,
 } from '@/types/access-policy';
 import { KIND_ENTITY_TYPE, KIND_SEGMENT, SEGMENT_KIND } from '@/types/access-policy';
@@ -113,6 +115,10 @@ export default function AccessPolicyDetails() {
   const [versions, setVersions] = useState<VersionRow[]>([]);
   const [validation, setValidation] = useState<PolicyValidation | null>(null);
   const [jsonld, setJsonld] = useState<unknown>(null);
+  const [shacl, setShacl] = useState<ShaclReport | null>(null);
+  // The page the SHACL report was requested for; a late response for another policy is dropped.
+  const shaclFor = useRef<string | null>(null);
+  const [shaclRunning, setShaclRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -133,6 +139,8 @@ export default function AccessPolicyDetails() {
     if (!entityId) return;
     setLoading(true);
     setError(null);
+    setShacl(null);
+    shaclFor.current = null;
     let res = await get<AccessEntity>(base);
     if (!res.data || res.error) {
       // Read-after-write: the create response can precede the commit.
@@ -255,6 +263,25 @@ export default function AccessPolicyDetails() {
     navigate(`/access-policies?tab=${KIND_SEGMENT[kind]}`);
   };
 
+  const runShacl = async () => {
+    if (!entity) return;
+    const url = `${base}/shacl`;
+    shaclFor.current = url;
+    setShaclRunning(true);
+    try {
+      const res = await get<ShaclReport>(url);
+      if (shaclFor.current !== url) return;
+      if (res.error || !res.data || typeof res.data.conforms !== 'boolean') {
+        setShacl(null);
+        toast({ variant: 'destructive', title: t('access-policies:details.shacl.failed'), description: res.error || undefined });
+      } else {
+        setShacl(res.data);
+      }
+    } finally {
+      setShaclRunning(false);
+    }
+  };
+
   const downloadJsonld = () => {
     if (!jsonld || !entity) return;
     const blob = new Blob([JSON.stringify(jsonld, null, 2)], { type: 'application/ld+json' });
@@ -303,14 +330,12 @@ export default function AccessPolicyDetails() {
             {t(`access-policies:ruleKinds.${kindName}`)}
           </Badge>
           <span>
-            <strong>{r.assignee ? describeRef(r.assignee, nameForIri) : t('access-policies:details.everyone')}</strong>{' '}
-            {t(`access-policies:details.verb.${kindName}`)} <strong>{actionLabel(r.action)}</strong>
-            {r.target ? (
-              <>
-                {' '}
-                {t('access-policies:details.on')} <code className="rounded bg-muted px-1">{describeRef(r.target, nameForIri)}</code>
-              </>
-            ) : null}
+            <RuleSentence
+              kind={kindName}
+              assignee={r.assignee ? describeRef(r.assignee, nameForIri) : t('access-policies:details.everyone')}
+              action={actionLabel(r.action)}
+              target={r.target ? describeRef(r.target, nameForIri) : null}
+            />
           </span>
         </div>
         {(r.constraint || []).length > 0 && (
@@ -767,11 +792,48 @@ export default function AccessPolicyDetails() {
               <CardTitle className="text-base">{t('access-policies:details.jsonld')}</CardTitle>
               <CardDescription>{t('access-policies:details.jsonldHint')}</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={downloadJsonld}>
-              <Download className="mr-1 h-4 w-4" /> {t('access-policies:details.download')}
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={runShacl} disabled={shaclRunning} data-testid="policy-shacl-check">
+                <ShieldCheck className="mr-1 h-4 w-4" /> {t('access-policies:details.shacl.check')}
+              </Button>
+              <Button size="sm" variant="outline" onClick={downloadJsonld}>
+                <Download className="mr-1 h-4 w-4" /> {t('access-policies:details.download')}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {shacl && (
+              <Alert variant={shacl.conforms ? 'default' : 'destructive'} data-testid="policy-shacl-report">
+                {shacl.conforms ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                <AlertDescription>
+                  <div className="space-y-1">
+                    <div>
+                      {shacl.conforms
+                        ? t('access-policies:details.shacl.conforms')
+                        : t('access-policies:details.shacl.findings', { count: shacl.results.length })}
+                    </div>
+                    {/* Warnings / info don't break conformance but are still shown. */}
+                    {shacl.results.length > 0 && (
+                      <ul className="list-disc space-y-0.5 pl-4 text-xs">
+                        {shacl.results.map((r, i) => (
+                          <li key={i}>
+                            {r.severity !== 'violation' && (
+                              <Badge variant="outline" className="mr-1 text-[10px]">
+                                {r.severity}
+                              </Badge>
+                            )}
+                            {r.message}
+                            {(r.focus || r.path) && (
+                              <code className="ml-1 rounded bg-muted px-1">{[r.focus, r.path].filter(Boolean).join(' → ')}</code>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
             <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs" data-testid="policy-jsonld">
               {JSON.stringify(jsonld, null, 2)}
             </pre>

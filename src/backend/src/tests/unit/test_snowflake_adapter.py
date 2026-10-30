@@ -43,15 +43,49 @@ def test_user_gets_a_derived_role_and_schema_read_becomes_all_and_future():
     assert ("jane@x.com", "role", role, "MEMBER") in keys
     assert {(role, f"schema:{p}:{w}", "db.s", "SELECT") for p in ("tables", "views") for w in ("all", "future")} <= keys
     sql = SF.render_sql(uc.diff_grants(grants, []))
-    assert sql[0] == f'CREATE ROLE IF NOT EXISTS "{role}";'
+    assert sql[0].startswith("-- Quoted user names are case-sensitive") and sql[1] == '--   "jane@x.com"'
+    assert sql[2] == f'CREATE ROLE IF NOT EXISTS "{role}";'
     assert f'GRANT SELECT ON FUTURE TABLES IN SCHEMA "DB"."S" TO ROLE "{role}";' in sql
-    assert sql[-1] == f'GRANT ROLE "{role}" TO USER "JANE@X.COM";'
+    # SCIM keeps the IdP userName as the (case-sensitive) NAME: no upper-casing by default.
+    assert sql[-1] == f'GRANT ROLE "{role}" TO USER "jane@x.com";'
+
+
+def test_user_names_follow_the_target_connection():
+    plan = _plan({"permission": [{"target": "snowflake:db.s.t", "action": "read", "assignee": "user:jane@x.com"},
+                                 {"target": "snowflake:db.s.t", "action": "read", "assignee": "user:bob@x.com"}]})
+    SF.own_plan(plan)
+    diff = uc.diff_grants(SF.build(plan, None), [])
+    target = pt.ResolvedTarget(key="sf", label="SF", adapter=SF, connection={
+        "user_names": {"Jane@X.com": "Jane.Doe@X.com"}, "user_name_case": "upper"})
+    sql = SF.render_sql(diff, target)
+    assert any(s.endswith('TO USER "Jane.Doe@X.com";') for s in sql)  # explicit map wins, case-insensitive key
+    assert any(s.endswith('TO USER "BOB@X.COM";') for s in sql)
+    assert sf.ident_user('a"b') == '"a""b"'
+    assert '--   "Jane.Doe@X.com"' in sql  # the check names what the script grants to
+
+
+def test_runbook_comment_cannot_be_broken_out_of():
+    plan = _plan({"permission": [{"target": "snowflake:db.s.t", "action": "read",
+                                  "assignee": 'user:x@y.com\nGRANT ROLE ACCOUNTADMIN TO USER "EVIL";'}]})
+    SF.own_plan(plan)
+    sql = SF.render_sql(uc.diff_grants(SF.build(plan, None), []))
+    lines = "\n".join(sql).split("\n")
+    assert not any(line.startswith("GRANT ROLE ACCOUNTADMIN") for line in lines)
+    assert all(not line.startswith("--") or "\n" not in line for line in sql)
+
+
+def test_connection_settings_are_validated_and_malformed_ones_ignored():
+    assert SF.validate_connection({"user_names": {"a@x.com": "A@X.com"}, "user_name_case": "upper", "views": []}) == []
+    problems = SF.validate_connection({"user_names": ["A@X.com"], "user_name_case": "title", "views": "v"})
+    assert len(problems) == 3
+    assert sf.ident_user("a@x.com", {"user_names": ["oops"]}) == '"a@x.com"'  # never crashes a release
+    assert pt.get_adapter("uc").validate_connection({"anything": 1}) == []
 
 
 def test_revocations_drop_membership_first():
     plan = _plan({"permission": [{"target": "snowflake:db.s.t", "action": "read", "assignee": "user:a@x.com"}]})
     SF.own_plan(plan)
-    sql = SF.render_sql(uc.diff_grants([], SF.build(plan, None)))
+    sql = [s for s in SF.render_sql(uc.diff_grants([], SF.build(plan, None))) if not s.startswith("--")]
     assert sql[0].startswith("REVOKE ROLE") and all(s.startswith("REVOKE") for s in sql)
 
 

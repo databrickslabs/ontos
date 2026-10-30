@@ -23,7 +23,7 @@ export function Sidebar({ isCollapsed }: SidebarProps) {
          <Navigation isCollapsed={isCollapsed} />
       </div>
 
-      {/* "powered by Ontos" while a custom brand is active */}
+      {/* "Powered by Ontos" while a custom brand is active */}
       <SidebarPoweredBy isCollapsed={isCollapsed} />
     </aside>
   );

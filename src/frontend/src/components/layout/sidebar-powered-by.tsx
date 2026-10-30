@@ -15,7 +15,7 @@ interface SidebarPoweredByProps {
 }
 
 /**
- * "powered by Ontos" footer of the sidebar.
+ * "Powered by Ontos" footer of the sidebar.
  *
  * Shown only while a custom brand is active (a display name or a logo is
  * configured) and the UI_SHOW_POWERED_BY setting is on. The collapsed sidebar

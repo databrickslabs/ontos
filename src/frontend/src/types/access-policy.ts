@@ -154,6 +154,12 @@ export interface PolicyValidation {
   activation_problems?: string[];
 }
 
+/** pySHACL report of the policy's JSON-LD export against the Ontos ODRL shapes. */
+export interface ShaclReport {
+  conforms: boolean;
+  results: { severity: string; message: string | null; focus: string | null; path: string | null; shape: string | null }[];
+}
+
 export interface ProfileAction {
   key: string;
   label: string;

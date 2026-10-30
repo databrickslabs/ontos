@@ -27,6 +27,7 @@ psycopg2-binary>=2.9.13
 openai>=3.26.0
 mlflow>=3.17.1
 rdflib>=7.1.0
+pyshacl>=0.30.0
 jsonschema>=4.22.0
 bleach>=6.4.0
 pip-licenses>=5.1.0

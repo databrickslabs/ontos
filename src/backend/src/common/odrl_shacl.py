@@ -12,13 +12,23 @@ in any SHACL engine (pySHACL, TopBraid, Jena):
   refinements) use known left operands / operators and exactly one right operand;
 * duties only on permissions, remedies only on prohibitions;
 * Offer rules name the assigner, Agreement rules assigner and assignee (as the app requires).
+
+:func:`validate_jsonld` runs them in-app with pySHACL. The W3C ODRL JSON-LD context is
+vendored (``data/shapes/odrl-context.jsonld``, the context at ``http://www.w3.org/ns/odrl.jsonld``)
+so validation never fetches over the network.
 """
+import copy
+import json
 from functools import lru_cache
-from typing import Iterable, List
+from pathlib import Path
+from typing import Any, Dict, Iterable, List
 
 from src.common import odrl
 
 SHAPES_IRI = "http://ontos.app/odrl/shapes/v1"
+# Base for relative IRIs in validated documents (never the server's working directory).
+VALIDATION_BASE = "urn:ontos:unresolved:"
+CONTEXT_FILE = Path(__file__).resolve().parent.parent / "data" / "shapes" / "odrl-context.jsonld"
 
 
 def _term(key: str) -> str:
@@ -174,3 +184,68 @@ def shapes_turtle() -> str:
         "",
     ]
     return "\n".join(out)
+
+
+@lru_cache(maxsize=1)
+def _odrl_context() -> Dict[str, Any]:
+    return json.loads(CONTEXT_FILE.read_text(encoding="utf-8"))["@context"]
+
+
+@lru_cache(maxsize=1)
+def _shapes_graph():
+    import rdflib
+
+    return rdflib.Graph().parse(data=shapes_turtle(), format="turtle")
+
+
+def _local_contexts(context: Any) -> Any:
+    """The document's @context with the ODRL context inlined; any other remote context is refused."""
+    items = context if isinstance(context, list) else [context]
+    out = []
+    for item in items:
+        if isinstance(item, str):
+            if item.rstrip("/") != odrl.ODRL_CONTEXT_URL.rstrip("/"):
+                raise ValueError(f"Unsupported remote JSON-LD context: {item}")
+            out.append(_odrl_context())
+        else:
+            out.append(item)
+    return out
+
+
+def validate_jsonld(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate an ODRL policy (JSON-LD, e.g. the app's export) against the shapes.
+
+    ``{"conforms": bool, "results": [{"severity", "message", "focus", "path", "shape"}]}``; offline.
+    """
+    import rdflib
+    from pyshacl import validate
+    from rdflib.namespace import RDF, SH
+    from rdflib.term import BNode
+
+    doc = copy.deepcopy(doc)
+    doc["@context"] = _local_contexts(doc.get("@context") or odrl.ODRL_CONTEXT_URL)
+    data = rdflib.Graph().parse(data=json.dumps(doc), format="json-ld", base=VALIDATION_BASE)
+    conforms, report, _ = validate(data, shacl_graph=_shapes_graph(), inference="none", advanced=False,
+                                   abort_on_first=False, allow_warnings=True)
+
+    def text(node: Any) -> Any:
+        # Blank nodes (anonymous rules / shapes) have random ids: not worth showing.
+        return None if node is None or isinstance(node, BNode) else str(node)
+
+    seen = set()
+    results = []
+    for r in report.subjects(RDF.type, SH.ValidationResult):
+        severity = report.value(r, SH.resultSeverity)
+        item = {
+            "severity": str(severity).rsplit("#", 1)[-1].lower() if severity is not None else "violation",
+            "message": text(report.value(r, SH.resultMessage)),
+            "focus": text(report.value(r, SH.focusNode)),
+            "path": text(report.value(r, SH.resultPath)),
+            "shape": text(report.value(r, SH.sourceShape)),
+        }
+        key = tuple(item.values())
+        if key not in seen:
+            seen.add(key)
+            results.append(item)
+    results.sort(key=lambda x: (x["focus"] or "", x["path"] or "", x["message"] or ""))
+    return {"conforms": bool(conforms), "results": results}

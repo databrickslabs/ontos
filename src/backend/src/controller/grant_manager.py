@@ -127,24 +127,30 @@ class GrantManager:
     def workspace_client(self) -> Optional[WorkspaceClient]:
         return self._ws
     
-    def _get_securable_type(self, type_str: str) -> SecurableType:
-        """Convert string type to SDK SecurableType enum."""
+    def _get_securable_type(self, type_str: str) -> str:
+        """The permissions API's securable type for a type name (the REST path segment).
+
+        ``w.grants.get/update`` take it as a string (SDK >= 0.40); passing the ``SecurableType``
+        enum renders as ``SecurableType.CATALOG`` and is rejected.
+        """
         type_map = {
-            "catalog": SecurableType.CATALOG,
-            "schema": SecurableType.SCHEMA,
-            "table": SecurableType.TABLE,
-            "view": SecurableType.TABLE,  # Views use TABLE type
-            "function": SecurableType.FUNCTION,
-            "volume": SecurableType.VOLUME,
-            "model": SecurableType.REGISTERED_MODEL,
-            "share": SecurableType.SHARE,
-            "recipient": SecurableType.RECIPIENT,
-            "provider": SecurableType.PROVIDER,
-            "storage_credential": SecurableType.STORAGE_CREDENTIAL,
-            "external_location": SecurableType.EXTERNAL_LOCATION,
+            "catalog": "catalog",
+            "schema": "schema",
+            "table": "table",
+            "view": "table",  # Views use TABLE type
+            "function": "function",
+            "volume": "volume",
+            "model": "function",  # Registered models are FUNCTION securables in the permissions API
+            "share": "share",
+            "recipient": "recipient",
+            "provider": "provider",
+            "storage_credential": "storage_credential",
+            "external_location": "external_location",
+            "connection": "connection",
+            "metastore": "metastore",
         }
-        return type_map.get(type_str.lower(), SecurableType.TABLE)
-    
+        return type_map.get(type_str.lower(), "table")
+
     def _get_privileges(self, privilege_strs: List[str]) -> List[Privilege]:
         """Convert string privileges to SDK Privilege enum."""
         privileges = []

@@ -378,3 +378,27 @@ def test_jsonld_export_expands_as_the_shapes_assume():
     assert (rdflib.URIRef("urn:p"), O.profile, rdflib.URIRef(odrl.ONTOS_PROFILE)) in g
     heads = list(g.objects(None, O["or"]))
     assert heads and all(len(list(rdflib.collection.Collection(g, h))) == 2 for h in heads)
+
+
+def test_shacl_validation_in_app_is_offline_and_reports_violations():
+    import pytest
+
+    from src.common import odrl_shacl
+
+    rules = odrl.normalize_rules("Set", "prohibit", [], {"permission": [
+        {"action": "read", "target": "uc:main.s", "assignee": "group:g",
+         "constraint": [{"or": [{"leftOperand": "dateTime", "operator": "lteq", "rightOperand": "2099-01-01"},
+                                {"leftOperand": "ontos:tag", "operator": "eq", "rightOperand": "pii"}]}]}]})
+    doc = odrl.to_jsonld(uid="urn:p", policy_type="Set", conflict="prohibit", rules=rules)
+    assert odrl_shacl.validate_jsonld(doc) == {"conforms": True, "results": []}
+
+    bad = {**doc, "permission": [{**doc["permission"][0], "action": "fly"}]}
+    bad.pop("profile")
+    report = odrl_shacl.validate_jsonld(bad)
+    assert report["conforms"] is False
+    messages = [r["message"] for r in report["results"]]
+    assert messages.count("An Ontos access policy declares the Ontos ODRL profile") == 1  # de-duplicated
+    assert any(r["path"] == f"{odrl.ODRL_NS}action" for r in report["results"])
+    assert not any("file:" in (r["message"] or "") + (r["focus"] or "") for r in report["results"])
+    with pytest.raises(ValueError):  # never fetches a remote context
+        odrl_shacl.validate_jsonld({**doc, "@context": ["https://example.com/ctx.jsonld"]})

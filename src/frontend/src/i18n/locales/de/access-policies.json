@@ -213,12 +213,14 @@
     "rules": "Regeln",
     "rulesHint": "Atomare ODRL-Regeln. Verbote und Erlaubnisse werden nach der Konfliktstrategie aufgelöst.",
     "everyone": "Alle",
-    "verb": {
-      "permission": "darf",
-      "prohibition": "darf nicht",
-      "obligation": "muss"
+    "ruleSentence": {
+      "permission": "<who>{{assignee}}</who> darf auf <tgt>{{target}}</tgt> <act>{{action}}</act> ausführen",
+      "prohibition": "<who>{{assignee}}</who> darf auf <tgt>{{target}}</tgt> <act>{{action}}</act> nicht ausführen",
+      "obligation": "<who>{{assignee}}</who> muss auf <tgt>{{target}}</tgt> <act>{{action}}</act> ausführen",
+      "permissionNoTarget": "<who>{{assignee}}</who> darf <act>{{action}}</act> ausführen",
+      "prohibitionNoTarget": "<who>{{assignee}}</who> darf <act>{{action}}</act> nicht ausführen",
+      "obligationNoTarget": "<who>{{assignee}}</who> muss <act>{{action}}</act> ausführen"
     },
-    "on": "auf",
     "when": "wenn",
     "duty": "Pflicht",
     "remedy": "Abhilfe",
@@ -258,7 +260,13 @@
     "linkFailed": "Konzeptverknüpfung konnte nicht aktualisiert werden",
     "fromAccessGrant": "Aus einer genehmigten Zugriffsberechtigung erfasst",
     "offerFor": "Nutzungsbedingungen (Angebot) für Datenprodukt",
-    "subjectMissing": "(Datenprodukt existiert nicht mehr)"
+    "subjectMissing": "(Datenprodukt existiert nicht mehr)",
+    "shacl": {
+      "check": "Mit SHACL validieren",
+      "conforms": "Entspricht den Ontos-ODRL-SHACL-Shapes.",
+      "findings": "{{count}} SHACL-Befund(e)",
+      "failed": "SHACL-Validierung fehlgeschlagen"
+    }
   },
   "releases": {
     "hint": "Ein Release kompiliert alle aktiven Richtlinien für ein Ziel zu konkreten Berechtigungen, gleicht sie mit dem Berechtigungsbuch ab und liefert die Änderung nach Prüfung über die Zustellungsmodi aus.",

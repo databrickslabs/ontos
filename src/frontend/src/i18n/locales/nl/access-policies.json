@@ -213,12 +213,14 @@
     "rules": "Regels",
     "rulesHint": "Atomaire ODRL-regels. Verboden en machtigingen worden opgelost via de conflictstrategie.",
     "everyone": "Iedereen",
-    "verb": {
-      "permission": "mag",
-      "prohibition": "mag niet",
-      "obligation": "moet"
+    "ruleSentence": {
+      "permission": "<who>{{assignee}}</who> mag <act>{{action}}</act> uitvoeren op <tgt>{{target}}</tgt>",
+      "prohibition": "<who>{{assignee}}</who> mag <act>{{action}}</act> niet uitvoeren op <tgt>{{target}}</tgt>",
+      "obligation": "<who>{{assignee}}</who> moet <act>{{action}}</act> uitvoeren op <tgt>{{target}}</tgt>",
+      "permissionNoTarget": "<who>{{assignee}}</who> mag <act>{{action}}</act> uitvoeren",
+      "prohibitionNoTarget": "<who>{{assignee}}</who> mag <act>{{action}}</act> niet uitvoeren",
+      "obligationNoTarget": "<who>{{assignee}}</who> moet <act>{{action}}</act> uitvoeren"
     },
-    "on": "op",
     "when": "wanneer",
     "duty": "Plicht",
     "remedy": "Herstelmaatregel",
@@ -258,7 +260,13 @@
     "linkFailed": "Kon conceptkoppeling niet bijwerken",
     "fromAccessGrant": "Vastgelegd vanuit een goedgekeurde toegangsverlening",
     "offerFor": "Gebruiksvoorwaarden (aanbod) voor dataproduct",
-    "subjectMissing": "(product bestaat niet meer)"
+    "subjectMissing": "(product bestaat niet meer)",
+    "shacl": {
+      "check": "Valideren met SHACL",
+      "conforms": "Voldoet aan de Ontos ODRL SHACL-shapes.",
+      "findings": "{{count}} SHACL-bevinding(en)",
+      "failed": "SHACL-validatie mislukt"
+    }
   },
   "releases": {
     "hint": "Een release compileert alle actieve beleidsregels voor een doel tot concrete rechten, vergelijkt ze met het Grant-register en levert de wijziging na beoordeling via de Leveringsmodi.",

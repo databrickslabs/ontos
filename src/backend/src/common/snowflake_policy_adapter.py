@@ -13,9 +13,18 @@ the target (Lars, 2026-10-17: "joint groups are an adapter detail"):
   existing and future tables and views in it (database: in every schema), plus the
   ``USAGE`` on the parents a role needs to reach them.
 
-Identifiers are rendered upper-cased and double-quoted: that is how Snowflake stores
-unquoted names, and quoting keeps every name safe in SQL. Mixed-case (quoted) object
-names aren't supported — Ontos refs are case-insensitive.
+Object and role identifiers are rendered upper-cased and double-quoted: that is how
+Snowflake stores unquoted names, and quoting keeps every name safe in SQL. Mixed-case
+(quoted) object names aren't supported — Ontos refs are case-insensitive.
+
+User names are different: SCIM stores the IdP's ``userName`` as the user's ``NAME``
+exactly as sent (usually the lower-case e-mail / UPN), and a quoted identifier is
+case-sensitive, so ``"ALICE@X.COM"`` is not the user ``alice@x.com``. Users are therefore
+rendered as Ontos knows them (lower-case) unless the target's connection says otherwise:
+``user_names`` maps a principal to its exact Snowflake ``NAME`` (e.g. a mixed-case UPN, or
+``MAP_SCIM_USERNAME_TO_ENTERPRISE_ATTR`` accounts where NAME isn't the login), and
+``user_name_case: upper`` suits accounts whose users were created unquoted. The runbook
+names the ``SHOW USERS`` check for every user it grants to.
 
 No Direct delivery: there's no Snowflake connection in Ontos yet, so releases ship
 Indirect (Git, for the customer's CI) or Manual (runbook).
@@ -192,12 +201,18 @@ class SnowflakeAdapter(TargetAdapter):
                        f"{copied} database-level future grant(s) repeated on schemas with their own future grants "
                        "(Snowflake applies only the schema-level ones there)")
 
-    def render_sql(self, diff: uc.GrantDiff) -> List[str]:
+    def render_sql(self, diff: uc.GrantDiff, target: Any = None) -> List[str]:
         """Runbook / CI script, fail-safe order: memberships off, revokes, roles, grants, memberships on."""
+        connection = (getattr(target, "connection", None) or {}) if target is not None else {}
+        user = lambda login: ident_user(login, connection)  # noqa: E731
         out: List[str] = []
         members_off = [g for g in diff.remove if g.securable_type == KIND_ROLE]
         members_on = [g for g in diff.add if g.securable_type == KIND_ROLE]
-        out += [f"REVOKE ROLE {ident(g.securable_name)} FROM USER {ident_user(g.principal)};" for g in members_off]
+        logins = sorted({g.principal for g in members_off + members_on})
+        if logins:
+            out.append("-- Quoted user names are case-sensitive; check each with SHOW USERS LIKE '<login>' "
+                       "(map exceptions in the target connection's user_names): " + ", ".join(logins))
+        out += [f"REVOKE ROLE {ident(g.securable_name)} FROM USER {user(g.principal)};" for g in members_off]
         for verb, prep, grants in (("REVOKE", "FROM", diff.remove), ("GRANT", "TO", diff.add)):
             objects = [g for g in grants if g.securable_type != KIND_ROLE]
             if verb == "GRANT":
@@ -207,13 +222,17 @@ class SnowflakeAdapter(TargetAdapter):
                 privs = ", ".join(item["privileges"])
                 out.append(f"{verb} {privs} ON {_on_clause(item['securable_type'], item['securable_name'])} "
                            f"{prep} ROLE {ident(item['principal'])};")
-        out += [f"GRANT ROLE {ident(g.securable_name)} TO USER {ident_user(g.principal)};" for g in members_on]
+        out += [f"GRANT ROLE {ident(g.securable_name)} TO USER {user(g.principal)};" for g in members_on]
         return out
 
 
-def ident_user(login: str) -> str:
-    """A user name, quoted and upper-cased like an unquoted identifier (Ontos principals are lower-cased).
-
-    Unverified assumption: SCIM-provisioned users carry the upper-cased e-mail as their name.
-    """
-    return '"' + login.upper().replace('"', '""') + '"'
+def ident_user(login: str, connection: Optional[Dict[str, Any]] = None) -> str:
+    """A user's exact Snowflake ``NAME``, quoted: the connection's ``user_names`` entry (matched
+    case-insensitively), else the login as Ontos knows it — upper-cased when ``user_name_case`` is
+    ``upper``. See the module docstring for why users aren't upper-cased by default."""
+    connection = connection or {}
+    names = {str(k).strip().lower(): str(v) for k, v in (connection.get("user_names") or {}).items() if v}
+    name = names.get(login.strip().lower())
+    if name is None:
+        name = login.upper() if str(connection.get("user_name_case") or "").lower() == "upper" else login
+    return '"' + name.replace('"', '""') + '"'

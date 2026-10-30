@@ -213,12 +213,14 @@
     "rules": "Regole",
     "rulesHint": "Regole ODRL atomiche. I divieti rispetto ai permessi vengono risolti dalla strategia di conflitto.",
     "everyone": "Tutti",
-    "verb": {
-      "permission": "può",
-      "prohibition": "non può",
-      "obligation": "deve"
+    "ruleSentence": {
+      "permission": "<who>{{assignee}}</who> può <act>{{action}}</act> su <tgt>{{target}}</tgt>",
+      "prohibition": "<who>{{assignee}}</who> non può <act>{{action}}</act> su <tgt>{{target}}</tgt>",
+      "obligation": "<who>{{assignee}}</who> deve <act>{{action}}</act> su <tgt>{{target}}</tgt>",
+      "permissionNoTarget": "<who>{{assignee}}</who> può <act>{{action}}</act>",
+      "prohibitionNoTarget": "<who>{{assignee}}</who> non può <act>{{action}}</act>",
+      "obligationNoTarget": "<who>{{assignee}}</who> deve <act>{{action}}</act>"
     },
-    "on": "su",
     "when": "quando",
     "duty": "Dovere",
     "remedy": "Rimedio",
@@ -258,7 +260,13 @@
     "linkFailed": "Impossibile aggiornare il collegamento al concetto",
     "fromAccessGrant": "Registrata da una Concessione di accesso approvata",
     "offerFor": "Condizioni d'uso (Offerta) per il prodotto dati",
-    "subjectMissing": "(il prodotto non esiste più)"
+    "subjectMissing": "(il prodotto non esiste più)",
+    "shacl": {
+      "check": "Valida con SHACL",
+      "conforms": "Conforme alle forme SHACL ODRL di Ontos.",
+      "findings": "{{count}} rilievo/i SHACL",
+      "failed": "Validazione SHACL non riuscita"
+    }
   },
   "releases": {
     "hint": "Un rilascio compila tutte le policy attive per una destinazione in autorizzazioni concrete, le confronta con il Registro delle autorizzazioni e distribuisce la modifica tramite le modalità di consegna dopo la revisione.",

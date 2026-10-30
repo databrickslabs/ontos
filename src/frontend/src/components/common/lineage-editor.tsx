@@ -17,7 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
-import { getTargetTypeName } from '@/lib/relationship-type';
+import { getOtherTypeName } from '@/lib/relationship-type';
 import type { RelationshipDefinition, EntityRelationships } from '@/types/ontology-schema';
 
 interface LinkCandidate {
@@ -35,10 +35,13 @@ interface PendingRelationship {
   target_type: string;
   target_id: string;
   relationship_type: string;
-  target_name: string;
-  /** Human-readable type labels for display only; the *_type fields are what gets sent to the API. */
-  source_type_label?: string;
-  target_type_label?: string;
+  /** Step the row came from: the candidate is the target if outgoing, the source if incoming. */
+  direction: RelationshipDefinition['direction'];
+  /** Display name of the picked candidate. */
+  candidate_name: string;
+  /** Display-only type labels; the *_type fields are what gets sent to the API. */
+  source_type_label?: string | null;
+  target_type_label?: string | null;
 }
 
 const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
@@ -52,8 +55,7 @@ const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 function getIconForRelationship(rel: RelationshipDefinition): React.ElementType {
-  const typeName = getTargetTypeName(rel);
-  return TARGET_TYPE_ICONS[typeName] || Link2;
+  return TARGET_TYPE_ICONS[getOtherTypeName(rel)] || Link2;
 }
 
 interface LineageEditorProps {
@@ -315,15 +317,15 @@ function CandidateSearchStep({
 
   const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
-  const targetType = getTargetTypeName(relationship);
-  const targetTypeLabel = relationship.target_type_label || targetType;
+  // The type to search and link: the target of an outgoing step, the source of an incoming one.
+  const otherType = getOtherTypeName(relationship);
 
   useEffect(() => {
     const search = async () => {
       setIsSearching(true);
       try {
         const params = new URLSearchParams({
-          target_type: targetType,
+          target_type: otherType,
           limit: '20',
         });
         if (searchQuery) params.set('query', searchQuery);
@@ -342,7 +344,7 @@ function CandidateSearchStep({
 
     const timer = setTimeout(search, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, targetType]);
+  }, [searchQuery, otherType]);
 
   const isAlreadyAdded = (candidateId: string) => {
     return pendingRelationships.some(r => {
@@ -354,29 +356,28 @@ function CandidateSearchStep({
   };
 
   const handleAdd = (candidate: LinkCandidate) => {
-    const rel: PendingRelationship = relationship.direction === 'outgoing'
+    const ends = relationship.direction === 'outgoing'
       ? {
-          source_type: entityType,
-          source_id: entityId,
-          target_type: targetType,
-          target_id: candidate.id,
-          relationship_type: relationship.property_name,
-          target_name: candidate.name,
-          target_type_label: targetTypeLabel,
+          source_type: entityType, source_id: entityId,
+          target_type: otherType, target_id: candidate.id,
         }
       : {
-          source_type: targetType,
-          source_id: candidate.id,
-          target_type: entityType,
-          target_id: entityId,
-          relationship_type: relationship.property_name,
-          target_name: candidate.name,
-          source_type_label: targetTypeLabel,
+          source_type: otherType, source_id: candidate.id,
+          target_type: entityType, target_id: entityId,
         };
-    onAddRelationship(rel);
+    onAddRelationship({
+      ...ends,
+      relationship_type: relationship.property_name,
+      direction: relationship.direction,
+      candidate_name: candidate.name,
+      // The definition's source/target labels belong to the same ends as the row's in both
+      // directions (an incoming definition already has the other type as its source).
+      source_type_label: relationship.source_type_label,
+      target_type_label: relationship.target_type_label,
+    });
   };
 
-  const searchLabel = formatLabel(relationship.label) || targetType;
+  const searchLabel = formatLabel(relationship.label) || otherType;
 
   return (
     <div className="space-y-3">
@@ -467,28 +468,44 @@ function ReviewStep({ pendingRelationships, onRemove }: ReviewStepProps) {
       <p className="text-sm text-muted-foreground mb-3">
         {t('common:lineageEditor.willBeCreated', { count: pendingRelationships.length })}
       </p>
-      {pendingRelationships.map((rel, i) => (
-        <Card key={i}>
-          <CardContent className="p-3 flex items-center justify-between">
-            <div className="text-sm">
-              <span className="font-medium">{rel.source_type_label ?? rel.source_type}</span>
-              <span className="mx-2 text-muted-foreground">
-                —[{rel.relationship_type}]→
-              </span>
-              <span className="font-medium">{rel.target_name}</span>
-              <Badge variant="outline" className="ml-2 text-[9px]">{rel.target_type_label ?? rel.target_type}</Badge>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-destructive hover:text-destructive"
-              onClick={() => onRemove(i)}
-            >
-              {t('common:actions.remove')}
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+      {pendingRelationships.map((rel, i) => {
+        const sourceLabel = rel.source_type_label || rel.source_type;
+        const targetLabel = rel.target_type_label || rel.target_type;
+        const incoming = rel.direction === 'incoming';
+        // The candidate (name + type badge) sits on its own side of the arrow; the
+        // current entity's side shows its type.
+        const candidate = (typeLabel: string) => (
+          <>
+            <span className="font-medium">{rel.candidate_name}</span>
+            <Badge variant="outline" className="ml-2 text-[9px]">{typeLabel}</Badge>
+          </>
+        );
+        return (
+          <Card key={i}>
+            <CardContent className="p-3 flex items-center justify-between">
+              <div className="text-sm">
+                {incoming
+                  ? candidate(sourceLabel)
+                  : <span className="font-medium">{sourceLabel}</span>}
+                <span className="mx-2 text-muted-foreground">
+                  —[{rel.relationship_type}]→
+                </span>
+                {incoming
+                  ? <span className="font-medium">{targetLabel}</span>
+                  : candidate(targetLabel)}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-destructive hover:text-destructive"
+                onClick={() => onRemove(i)}
+              >
+                {t('common:actions.remove')}
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

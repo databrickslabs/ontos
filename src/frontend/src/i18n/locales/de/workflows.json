@@ -705,7 +705,7 @@
       "deleteExecutionTitle": "Ausführung löschen",
       "deleteExecutionDescription": "Möchten Sie diese Workflow-Ausführung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
       "activationOverlapTitle": "Ein anderer Workflow reagiert auf dasselbe Ereignis",
-      "activationOverlapDescription": "Die Aktivierung kann dieselbe Genehmigung mehrfach anfordern. Prüfen Sie die überlappenden Workflows und brechen Sie ab oder aktivieren Sie trotzdem.",
+      "activationOverlapDescription": "Die folgenden Workflows würden beim selben Ereignis ebenfalls ausgeführt. Prüfen Sie sie und brechen Sie ab oder aktivieren Sie trotzdem.",
       "activationOverlapDetails": "Auslöser: {{trigger}} · Entitäten: {{entities}}",
       "allEntities": "alle Entitäten",
       "activateAnyway": "Trotzdem aktivieren"

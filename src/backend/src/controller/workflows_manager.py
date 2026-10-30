@@ -45,6 +45,21 @@ logger = get_logger(__name__)
 # Advisory lock key for loading the default workflows (any constant, unique in the app)
 _DEFAULTS_LOCK_KEY = 7_340_001_016
 
+# Trigger types no event fires: manual runs go by workflow id
+# (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
+# so two active workflows of these types can't consume the same event.
+_NON_EVENT_TRIGGER_TYPES = frozenset({TriggerType.MANUAL.value, TriggerType.SCHEDULED.value})
+# Trigger types whose from/to status filters narrow the events they match.
+_STATUS_FILTERED_TRIGGER_TYPES = frozenset({
+    TriggerType.ON_STATUS_CHANGE.value, TriggerType.BEFORE_STATUS_CHANGE.value,
+})
+
+
+def _json_object(raw: Optional[str]) -> Dict[str, Any]:
+    """A stored JSON config; NULL, the text ``'null'`` or a non-object value read as ``{}``."""
+    value = json.loads(raw or '{}')
+    return value if isinstance(value, dict) else {}
+
 
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
@@ -331,6 +346,22 @@ class WorkflowsManager:
         """
         return True
 
+    @staticmethod
+    def activation_trigger_key(trigger: WorkflowTrigger | Dict[str, Any] | None) -> tuple:
+        """The trigger fields ``activation_conflicts_for`` reads, for change detection.
+
+        Other fields (``schedule``, ``on_error``, ``disabled_for``) don't change
+        which events a workflow matches, so editing them needs no new check.
+        """
+        data = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
+        data = data or {}
+        trigger_type = data.get('type')
+        statuses = (
+            (data.get('from_status'), data.get('to_status'))
+            if trigger_type in _STATUS_FILTERED_TRIGGER_TYPES else (None, None)
+        )
+        return (trigger_type, frozenset(data.get('entity_types') or []), *statuses)
+
     def activation_conflicts_for(
         self,
         trigger: WorkflowTrigger | Dict[str, Any],
@@ -343,9 +374,13 @@ class WorkflowsManager:
         Empty entity type lists and status filters are wildcards, matching the
         trigger runtime. Scope is deliberately conservative because current
         trigger events do not carry the metadata needed to filter it.
+        ``manual`` and ``scheduled`` workflows never conflict: no event fires
+        them, a manual run targets one workflow by id.
         """
         target_trigger = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
         target_trigger = target_trigger or {}
+        if target_trigger.get('type') in _NON_EVENT_TRIGGER_TYPES:
+            return []
         target_scope = scope.model_dump(mode='json') if isinstance(scope, WorkflowScope) else (scope or {'type': 'all'})
 
         conflicts = []
@@ -355,8 +390,8 @@ class WorkflowsManager:
         candidates = query.all()
         for candidate in candidates:
             try:
-                trigger = json.loads(candidate.trigger_config or '{}')
-                scope = json.loads(candidate.scope_config or '{}')
+                trigger = _json_object(candidate.trigger_config)
+                scope = _json_object(candidate.scope_config)
             except (json.JSONDecodeError, TypeError):
                 continue
             if trigger.get('type') != target_trigger.get('type'):
@@ -367,7 +402,7 @@ class WorkflowsManager:
                 continue
             if not self._activation_scopes_overlap(target_scope, scope):
                 continue
-            if target_trigger.get('type') in {'on_status_change', 'before_status_change'}:
+            if target_trigger.get('type') in _STATUS_FILTERED_TRIGGER_TYPES:
                 if any(
                     target_trigger.get(field) and trigger.get(field)
                     and target_trigger[field] != trigger[field]
@@ -390,8 +425,8 @@ class WorkflowsManager:
         if not target:
             return []
         try:
-            trigger = json.loads(target.trigger_config or '{}')
-            scope = json.loads(target.scope_config or '{}')
+            trigger = _json_object(target.trigger_config)
+            scope = _json_object(target.scope_config)
         except (json.JSONDecodeError, TypeError):
             return []
         return self.activation_conflicts_for(

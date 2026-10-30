@@ -17,12 +17,13 @@ from src.routes.workflows_routes import create_workflow, toggle_workflow_active,
 
 
 def _workflow(db, name, *, active, trigger='on_request_review', entities=None,
-              scope_type='all', scope_ids=None, from_status=None, to_status=None):
+              scope_type='all', scope_ids=None, from_status=None, to_status=None,
+              schedule=None):
     row = ProcessWorkflowDb(
         id=str(uuid4()), name=name, is_active=active, workflow_type='process',
         trigger_config=json.dumps({
             'type': trigger, 'entity_types': entities or [],
-            'from_status': from_status, 'to_status': to_status,
+            'from_status': from_status, 'to_status': to_status, 'schedule': schedule,
         }),
         scope_config=json.dumps({'type': scope_type, 'ids': scope_ids or []}),
     )
@@ -119,6 +120,24 @@ def test_empty_entity_list_is_a_wildcard(db_session):
 
     conflicts = WorkflowsManager(db_session).activation_conflicts(target.id)
     assert [item['id'] for item in conflicts] == [active.id]
+
+
+def test_manual_workflows_never_conflict(db_session):
+    # Manual runs go by workflow id (POST /api/workflows/{id}/execute), not by event.
+    _workflow(db_session, 'Manual A', active=True, trigger='manual', entities=['data_product'])
+    target = _workflow(db_session, 'Manual B', active=False, trigger='manual',
+                       entities=['data_product'])
+
+    assert WorkflowsManager(db_session).activation_conflicts(target.id) == []
+
+
+def test_scheduled_workflows_never_conflict(db_session):
+    # Nothing fires a scheduled trigger event; each schedule belongs to one workflow.
+    _workflow(db_session, 'Nightly', active=True, trigger='scheduled', schedule='0 9 * * *')
+    target = _workflow(db_session, 'Evening', active=False, trigger='scheduled',
+                       schedule='0 18 * * *')
+
+    assert WorkflowsManager(db_session).activation_conflicts(target.id) == []
 
 
 def _toggle(db_session, target, audit, *, confirm=False):
@@ -315,3 +334,74 @@ def test_deactivation_and_idempotent_activation_skip_overlap_check(db_session):
         manager=WorkflowsManager(db_session), _=True,
     ))
     assert deactivated.is_active is False
+
+
+def _put_trigger(db_session, target, trigger):
+    return asyncio.run(update_workflow(
+        request=SimpleNamespace(client=SimpleNamespace(host='127.0.0.1')),
+        workflow_id=target.id,
+        workflow=ProcessWorkflowUpdate(trigger=trigger),
+        db=db_session, audit_manager=MagicMock(),
+        current_user=SimpleNamespace(email='admin@example.com', username='admin'),
+        confirm_overlap=False, manager=WorkflowsManager(db_session), _=True,
+    ))
+
+
+def _active_gate_pair(db_session):
+    _workflow(db_session, 'Gate A', active=True, trigger='before_status_change',
+              entities=['data_product'], to_status='active')
+    return _workflow(db_session, 'Gate B', active=True, trigger='before_status_change',
+                     entities=['data_product'], to_status='active')
+
+
+def test_gate_settings_edit_on_active_overlap_does_not_reask(db_session):
+    target = _active_gate_pair(db_session)
+
+    result = _put_trigger(db_session, target, WorkflowTrigger(
+        type='before_status_change', entity_types=['data_product'], to_status='active',
+        on_error='fail_closed', disabled_for={'domains': ['domain-a']},
+    ))
+
+    assert result.trigger.on_error.value == 'fail_closed'
+    assert result.trigger.disabled_for.domains == ['domain-a']
+
+
+def test_entity_order_change_on_active_overlap_does_not_reask(db_session):
+    _workflow(db_session, 'Review A', active=True, entities=['data_contract', 'data_product'])
+    target = _workflow(db_session, 'Review B', active=True,
+                       entities=['data_contract', 'data_product'])
+
+    result = _put_trigger(db_session, target, WorkflowTrigger(
+        type='on_request_review', entity_types=['data_product', 'data_contract'],
+    ))
+
+    assert result.trigger.entity_types == ['data_product', 'data_contract']
+
+
+def test_status_filter_change_on_active_workflow_is_still_checked(db_session):
+    _workflow(db_session, 'Gate deprecated', active=True, trigger='before_status_change',
+              entities=['data_product'], to_status='deprecated')
+    target = _workflow(db_session, 'Gate active', active=True,
+                       trigger='before_status_change', entities=['data_product'],
+                       to_status='active')
+
+    with pytest.raises(HTTPException) as raised:
+        _put_trigger(db_session, target, WorkflowTrigger(
+            type='before_status_change', entity_types=['data_product'],
+            to_status='deprecated',
+        ))
+
+    assert raised.value.status_code == 409
+
+
+def test_json_null_trigger_or_scope_config_is_treated_as_empty(db_session):
+    null_scope = _workflow(db_session, 'Null scope', active=True, entities=['data_contract'])
+    null_scope.scope_config = 'null'
+    null_trigger = _workflow(db_session, 'Null trigger', active=True)
+    null_trigger.trigger_config = 'null'
+    db_session.commit()
+    target = _workflow(db_session, 'Target', active=False, entities=['data_contract'])
+
+    conflicts = WorkflowsManager(db_session).activation_conflicts(target.id)
+
+    assert [(item['id'], item['scope_type']) for item in conflicts] == [(null_scope.id, 'all')]

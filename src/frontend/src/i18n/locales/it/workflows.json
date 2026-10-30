@@ -705,7 +705,7 @@
       "deleteExecutionTitle": "Elimina esecuzione",
       "deleteExecutionDescription": "Vuoi davvero eliminare questa esecuzione del workflow? Questa azione non può essere annullata.",
       "activationOverlapTitle": "Un altro workflow corrisponde allo stesso evento",
-      "activationOverlapDescription": "L’attivazione può richiedere più volte la stessa approvazione. Controlla i workflow sovrapposti, quindi annulla o attiva comunque.",
+      "activationOverlapDescription": "Anche i workflow qui sotto verrebbero eseguiti per lo stesso evento. Controllali, quindi annulla o attiva comunque.",
       "activationOverlapDetails": "Trigger: {{trigger}} · Entità: {{entities}}",
       "allEntities": "tutte le entità",
       "activateAnyway": "Attiva comunque"

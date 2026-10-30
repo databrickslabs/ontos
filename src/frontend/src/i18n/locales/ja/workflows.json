@@ -705,7 +705,7 @@
       "deleteExecutionTitle": "実行を削除",
       "deleteExecutionDescription": "このワークフロー実行を削除してもよろしいですか？この操作は元に戻せません。",
       "activationOverlapTitle": "別のワークフローが同じイベントに一致します",
-      "activationOverlapDescription": "有効化すると同じ承認が複数回要求される可能性があります。重複するワークフローを確認し、キャンセルまたはそのまま有効化してください。",
+      "activationOverlapDescription": "以下のワークフローも同じイベントで実行されます。内容を確認し、キャンセルするかそのまま有効化してください。",
       "activationOverlapDetails": "トリガー: {{trigger}} · エンティティ: {{entities}}",
       "allEntities": "すべてのエンティティ",
       "activateAnyway": "そのまま有効化"

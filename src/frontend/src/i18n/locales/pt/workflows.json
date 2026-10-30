@@ -705,7 +705,7 @@
       "deleteExecutionTitle": "Excluir execução",
       "deleteExecutionDescription": "Tem certeza de que deseja excluir esta execução de fluxo de trabalho? Esta ação não pode ser desfeita.",
       "activationOverlapTitle": "Outro workflow corresponde ao mesmo evento",
-      "activationOverlapDescription": "A ativação pode solicitar a mesma aprovação mais de uma vez. Revise os workflows sobrepostos e cancele ou ative mesmo assim.",
+      "activationOverlapDescription": "Os workflows abaixo também seriam executados no mesmo evento. Revise-os e cancele ou ative mesmo assim.",
       "activationOverlapDetails": "Gatilho: {{trigger}} · Entidades: {{entities}}",
       "allEntities": "todas as entidades",
       "activateAnyway": "Ativar mesmo assim"

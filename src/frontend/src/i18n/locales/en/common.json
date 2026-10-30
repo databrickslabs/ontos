@@ -532,7 +532,14 @@
     "countBadge": "{{entities}} entities, {{relationships}} relationships",
     "failedLoadRelationships": "Failed to load relationships: {{status}}",
     "failedLoadLineage": "Failed to load lineage: {{status}}",
-    "failedLoadGraph": "Failed to load graph"
+    "failedLoadGraph": "Failed to load graph",
+    "layers": {
+      "business": "Business",
+      "delivery": "Delivery",
+      "logical": "Logical",
+      "physical": "Physical",
+      "other": "Other"
+    }
   },
   "lifecycleDialogs": {
     "certifyTitle": "Certify",

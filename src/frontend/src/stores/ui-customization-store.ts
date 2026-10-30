@@ -22,7 +22,7 @@ export interface UICustomizationSettings {
   /** Logo for dark mode; falls back to customLogoUrl. */
   customLogoDarkUrl: string | null;
   theme: BrandingTheme;
-  /** Show "powered by Ontos" in the sidebar footer while a custom brand is set. */
+  /** Show "Powered by Ontos" in the sidebar footer while a custom brand is set. */
   showPoweredBy: boolean;
   isLoaded: boolean;
 }

@@ -197,3 +197,24 @@ def test_ui_customization_ignores_invalid_env_color(client: TestClient, test_set
         assert payload["theme"]["primary"] is None
     finally:
         test_settings.UI_THEME_PRIMARY = None
+
+
+def test_ui_customization_show_powered_by(client: TestClient, test_settings):
+    """The powered-by toggle defaults to on, round-trips as a bool and rejects other types."""
+    try:
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is True
+        assert client.get("/api/settings").json()["ui_show_powered_by"] is True
+
+        put = client.put("/api/settings", json={"ui_show_powered_by": False})
+        assert put.status_code == 200, put.text
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
+        assert client.get("/api/settings").json()["ui_show_powered_by"] is False
+
+        bad = client.put("/api/settings", json={"ui_show_powered_by": "no"})
+        assert bad.status_code == 400
+        # null clears the stored override but keeps the value in effect until restart
+        clear = client.put("/api/settings", json={"ui_show_powered_by": None})
+        assert clear.status_code == 200, clear.text
+        assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
+    finally:
+        test_settings.UI_SHOW_POWERED_BY = True

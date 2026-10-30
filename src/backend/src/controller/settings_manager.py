@@ -418,6 +418,12 @@ class SettingsManager:
                     setattr(self._settings, key, all_settings[key])
                     logger.debug("Loaded %s from database", key)
 
+            if all_settings.get('UI_SHOW_POWERED_BY') is not None:
+                self._settings.UI_SHOW_POWERED_BY = (
+                    all_settings['UI_SHOW_POWERED_BY'].lower() == 'true'
+                )
+                logger.debug("Loaded UI_SHOW_POWERED_BY from database")
+
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
 
@@ -1390,6 +1396,7 @@ class SettingsManager:
             'ui_app_short_name': self._settings.UI_APP_SHORT_NAME,
             'ui_favicon_url': self._settings.UI_FAVICON_URL,
             **{key.lower(): getattr(self._settings, key) for key in self._BRANDING_EXTRA_KEYS},
+            'ui_show_powered_by': self._settings.UI_SHOW_POWERED_BY,
         }
 
     # Branding keys stored like the other UI_* settings (env default, DB override).
@@ -1820,6 +1827,18 @@ class SettingsManager:
                 app_settings_repo.set(self._db, key, value)
                 setattr(self._settings, key, value)
                 logger.info("Updated %s", key)
+
+        if 'ui_show_powered_by' in settings:
+            value = settings.get('ui_show_powered_by')
+            if value is not None and not isinstance(value, bool):
+                raise ValueError("ui_show_powered_by must be true, false or null")
+            # null clears the override; the environment default applies after a restart
+            app_settings_repo.set(
+                self._db, 'UI_SHOW_POWERED_BY', str(value).lower() if value is not None else None
+            )
+            if value is not None:
+                self._settings.UI_SHOW_POWERED_BY = value
+            logger.info("Updated UI_SHOW_POWERED_BY to: %s", value)
 
         # Reinitialize the Git service only when a value it reads changed. The
         # export location comes from the volume settings, so they count too; the

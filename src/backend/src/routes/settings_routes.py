@@ -160,6 +160,7 @@ async def get_ui_customization(_current_user: CurrentUserDep):
     - app_tagline: Optional subtitle shown next to the name (sidebar, home)
     - custom_logo_dark_url: Optional logo for dark mode (falls back to custom_logo_url)
     - theme: primary/accent colors (#rrggbb) for light and dark mode; invalid -> None
+    - show_powered_by: Show "powered by Ontos" in the sidebar while a custom brand is set
     """
     try:
         app_settings = get_settings()
@@ -179,6 +180,7 @@ async def get_ui_customization(_current_user: CurrentUserDep):
                 "accent": coerce_hex_color(app_settings.UI_THEME_ACCENT),
                 "accent_dark": coerce_hex_color(app_settings.UI_THEME_ACCENT_DARK),
             },
+            "show_powered_by": app_settings.UI_SHOW_POWERED_BY,
         }
     except Exception as e:
         logger.error("Error getting UI customization settings", exc_info=True)

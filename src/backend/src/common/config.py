@@ -252,6 +252,8 @@ class Settings(BaseSettings):
     UI_THEME_PRIMARY_DARK: Optional[str] = Field(None, env='UI_THEME_PRIMARY_DARK')
     UI_THEME_ACCENT: Optional[str] = Field(None, env='UI_THEME_ACCENT')
     UI_THEME_ACCENT_DARK: Optional[str] = Field(None, env='UI_THEME_ACCENT_DARK')
+    # "powered by Ontos" in the sidebar footer; only shown while a custom name or logo is set.
+    UI_SHOW_POWERED_BY: bool = Field(True, env='UI_SHOW_POWERED_BY')
 
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(

@@ -429,6 +429,9 @@ def save_to_collection(
             content=body.owl_content,
             format="turtle",
             imported_by=current_user.email,
+            # Machine-generated concepts land as Draft so they flow through review
+            # before certification, matching manual-authoring behavior.
+            default_status="draft",
         )
 
         success = True

@@ -355,7 +355,9 @@
       "data_domain": "データドメイン",
       "data_asset_review": "データ資産レビュー",
       "access_grant": "アクセス付与",
-      "asset": "資産"
+      "asset": "資産",
+      "ontology_concept": "コンセプト",
+      "concept": "コンセプト"
     },
     "fields": {
       "product_id": "製品 ID",

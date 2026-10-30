@@ -25,6 +25,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
@@ -157,6 +158,26 @@ function buildDetailRows(
     });
   }
 
+  // Concept approvals carry a definition (+ type / scheme) in full_payload.
+  // Surface them explicitly with clean labels near the top rather than letting
+  // the generic loop dump them as raw keys further down.
+  const conceptType = payload.full_payload?.concept_type;
+  if (typeof conceptType === 'string' && conceptType) {
+    rows.push({ label: 'Type', value: conceptType });
+  }
+  // Prefer the scheme's label captured at submit time over the raw key.
+  const sourceContext = payload.full_payload?.source_context;
+  const sourceLabel = payload.full_payload?.source_label;
+  const schemeValue =
+    typeof sourceLabel === 'string' && sourceLabel ? sourceLabel : sourceContext;
+  if (typeof schemeValue === 'string' && schemeValue) {
+    rows.push({ label: 'Scheme', value: schemeValue });
+  }
+  const definition = payload.full_payload?.definition;
+  if (typeof definition === 'string' && definition) {
+    rows.push({ label: 'Definition', value: definition });
+  }
+
   if (payload.full_payload) {
     const alreadySurfaced = new Set([
       'requester_email', 'on_behalf_of', 'entity_type', 'entity_id', 'entity_name',
@@ -164,6 +185,7 @@ function buildDetailRows(
       'permission_level', 'requested_duration_days', 'reason',
       'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
+      'definition', 'concept_type', 'source_context', 'source_label',
     ]);
     for (const [key, val] of Object.entries(payload.full_payload)) {
       if (key.startsWith('_')) continue;
@@ -187,6 +209,7 @@ export default function WorkflowApprovalResponseDialog({
   const { t } = useTranslation(['workflows', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
+  const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
   const [stepConfig, setStepConfig] = useState<DefaultResponseWorkflowStep | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -280,6 +303,12 @@ export default function WorkflowApprovalResponseDialog({
           : t('workflows:approvalResponse.messages.entityRejected', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') }),
         variant: approved ? 'default' : 'destructive',
       });
+      // A concept approval changes the concept's lifecycle state (draft/
+      // approved). Nudge any open concept view to refetch. Scoped to concepts
+      // so other entity types don't trigger a needless knowledge-graph refresh.
+      if (payload.entity_type?.toLowerCase() === 'ontology_concept') {
+        bumpKnowledgeGraphRefresh('concept-approval-decision');
+      }
       onOpenChange(false);
       onDecisionMade?.();
     } catch (e) {
@@ -316,6 +345,9 @@ export default function WorkflowApprovalResponseDialog({
           </div>
         ) : (
           <>
+            {/* Cap height + scroll the body so a long concept payload
+                (definition + many rows) doesn't overflow the viewport. Header
+                and action buttons stay pinned outside this container. */}
             <div className="flex-1 overflow-y-auto space-y-4 px-1 -mx-1">
             {detailRows.length > 0 && (
               <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">

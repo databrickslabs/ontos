@@ -468,6 +468,7 @@ def _resolve_role_to_users(
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
+    - 'reviewer' → entity reviewer_email (falls back to the Admin role)
     - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
     - '<uuid>' → app role UUID
@@ -528,6 +529,15 @@ def _resolve_role_to_users(
     owner_approver = _OWNER_APPROVER_TOKENS.get(role_spec.lower().replace(' ', '').replace('_', ''))
     if owner_approver:
         return _owner_approvers(db, owner_approver, context, token=role_spec)
+
+    if role_spec == 'reviewer':
+        # Reviewer chosen by the requester (e.g. concept submit-for-review puts
+        # it on entity_data.reviewer_email). Without one, fall back to the
+        # Admin role so the approval is never left without an approver.
+        reviewer = context.entity.get('reviewer_email') if context.entity else None
+        if reviewer:
+            return [(reviewer, None)]
+        return _resolve_role_to_users(db, 'admins', context)
 
     if role_spec in role_aliases:
         role_name = role_aliases[role_spec]
@@ -605,6 +615,9 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
     "data_asset_review": "Data Asset Review",
     "access_grant": "Access Grant",
     "asset": "Asset",
+    "ontology_concept": "Concept",
+    "ontology_collection": "Concept Scheme",
+    "concept_changeset": "Concept Changeset",
 }
 
 
@@ -809,7 +822,17 @@ class ApprovalStepHandler(StepHandler):
         try:
             # Resolve approvers - returns list of (identifier, role_id or None)
             resolved_approvers = self._resolve_approvers(approvers, context)
-            
+
+            # An approver spec can legitimately resolve to nobody (e.g. a
+            # business role with no owner assigned on this entity). Route to
+            # the Admin role rather than dead-ending the request silently.
+            if not resolved_approvers and approvers != 'admins':
+                logger.warning(
+                    f"Approval step: no approvers resolved for '{approvers}' on "
+                    f"{context.entity_type}:{context.entity_id}; falling back to Admin role"
+                )
+                resolved_approvers = self._resolve_approvers('admins', context)
+
             if not resolved_approvers:
                 return StepResult(passed=False, error="Could not resolve any approvers")
             
@@ -2230,6 +2253,13 @@ class EntityActionStepHandler(StepHandler):
         entity_type = context.entity_type
         entity_id = context.entity_id
 
+        # Concepts are NOT repo rows: they are RDF triples keyed by IRI, mutated
+        # via the SemanticModelsManager singleton (holds the in-memory graph).
+        # Route concept actions here BEFORE the repo-based _get_db_entity path,
+        # since concepts have no repo row. entity_id IS the concept IRI.
+        if entity_type == 'ontology_concept':
+            return self._handle_concept_action(action, entity_id, context)
+
         try:
             if action in ('certify', 'decertify'):
                 return self._handle_certification(action, entity_type, entity_id, context)
@@ -2280,6 +2310,55 @@ class EntityActionStepHandler(StepHandler):
             from src.repositories.assets_repository import asset_repo
             return asset_repo.get(db=self._db, id=entity_id), 'asset'
         return None, entity_type
+
+    def _handle_concept_action(self, action: str, entity_id: str, context: StepContext) -> StepResult:
+        """Act on a SKOS concept. Concepts route through the SemanticModelsManager
+        SINGLETON (which owns the in-memory RDF graph), NOT a repository row;
+        entity_id IS the concept IRI."""
+        from src.common.app_state import get_app_state_manager
+
+        smm = get_app_state_manager('semantic_models_manager')
+        if smm is None:
+            return StepResult(passed=False, error="SemanticModelsManager unavailable")
+
+        entity = context.entity or {}
+
+        if action == 'publish_version':
+            try:
+                changes = entity.get('changes') or entity.get('proposed') or None
+                result = smm.publish_concept_version(
+                    concept_iri=entity_id,
+                    changes=changes,
+                    published_by=context.user_email,
+                    bypass_editable_gate=True,
+                )
+                new_version = result.get('new_version') if isinstance(result, dict) else None
+                return StepResult(passed=True, data={'new_version': new_version})
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        elif action == 'deprecate':
+            try:
+                smm.deprecate_concept(
+                    concept_iri=entity_id,
+                    deprecated_by=context.user_email,
+                    replaced_by=entity.get('replaced_by') or None,
+                    bypass_editable_gate=True,
+                )
+                return StepResult(passed=True)
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        elif action == 'set_status':
+            try:
+                new_status = self._config.get('target_status') or entity.get('to_status')
+                smm.update_concept_status(
+                    concept_iri=entity_id,
+                    new_status=new_status,
+                    updated_by=context.user_email,
+                )
+                return StepResult(passed=True, data={'status': new_status})
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        return StepResult(passed=False, error=f"Unknown concept entity_action: {action}")
 
     def _handle_certification(self, action: str, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
         from datetime import datetime, timezone
@@ -2961,6 +3040,36 @@ class WorkflowExecutor:
             }},
             on_behalf_of=on_behalf_of,
         )
+
+        # Concept review ping-pong (O2): when the resumed approval step gates an
+        # ontology_concept, the approver's decision drives the concept lifecycle
+        # directly — approve -> under_review->approved; reject -> ->draft +
+        # the reason as the reviewer comment for the owner. This makes the
+        # governing workflow the single source of truth for a governed concept
+        # (no separate DataAssetReview needed). Best-effort: a reflection failure
+        # must not sink the workflow resume.
+        if context.entity_type == 'ontology_concept' and context.entity_id:
+            try:
+                from src.common.app_state import get_app_state_manager
+                smm = get_app_state_manager('semantic_models_manager')
+                if smm is not None:
+                    decision = 'approved' if step_result else 'changes_requested'
+                    comments = (result_data or {}).get('reason') or (result_data or {}).get('message')
+                    smm.apply_review_decision(
+                        concept_iri=context.entity_id,
+                        decision=decision,
+                        decided_by=user_email,
+                        comments=comments,
+                    )
+                    logger.info(
+                        f"Concept {context.entity_id} {decision} via workflow "
+                        f"approval (execution {execution_id})"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to reflect workflow approval onto concept "
+                    f"{context.entity_id}: {e}", exc_info=True,
+                )
 
         # Cross-workflow variable propagation (#291):
         # When the approval step was backed by a wizard session (approval flow),

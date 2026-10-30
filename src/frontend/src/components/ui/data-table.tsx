@@ -14,6 +14,7 @@ import {
   useReactTable,
   RowSelectionState,
   Row,
+  Table as TanStackTable,
 } from "@tanstack/react-table";
 
 import { ChevronDown, Loader2 } from "lucide-react";
@@ -32,6 +33,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -45,6 +47,9 @@ const ChevronsLeft = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 const ChevronsRight = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M4.21 5.23a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.06-1.06L7.94 10 4.21 6.29a.75.75 0 010-1.06zm6.75 0a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.06-1.06L14.69 10l-3.72-3.71a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>;
 
 
+/** Minimum width (px) kept by a column without a declared size in `fixedLayout`. */
+const FLEXIBLE_COLUMN_MIN_WIDTH = 130;
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -53,6 +58,14 @@ interface DataTableProps<TData, TValue> {
   bulkActions?: (selectedRows: TData[]) => React.ReactNode;
   onRowClick?: (row: Row<TData>) => void;
   storageKey?: string;
+  /** Show the row-select checkbox column and the "N of M rows selected" line.
+   *  Defaults to true; turn off for read-only tables that have no row actions. */
+  selectable?: boolean;
+  /** Compact cells and header (less padding, shorter rows). Defaults to false. */
+  dense?: boolean;
+  /** `table-layout: fixed`: columns that declare a `size` get that width in px, the rest share
+   *  the remaining space, and long content truncates instead of widening the table. Defaults to false. */
+  fixedLayout?: boolean;
   defaultSortColumn?: string;
   defaultSortDirection?: 'asc' | 'desc';
   isLoading?: boolean;
@@ -66,6 +79,18 @@ interface DataTableProps<TData, TValue> {
   // Controlled search (for server-side filtering)
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  // Controlled sorting. When `sorting` is provided it is the source of truth
+  // and the `storageKey` localStorage persistence is not used for sorting.
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  // Controlled page size (client-side pagination only; ignored when
+  // `manualPagination` is set). The page index stays internal.
+  pageSize?: number;
+  onPageSizeChange?: (pageSize: number) => void;
+  // Optional footer rendered inside the same <table> (in a <tfoot>) so its
+  // cells align with the columns. Pass a function to read the table instance,
+  // e.g. to render one cell per visible column.
+  footer?: React.ReactNode | ((table: TanStackTable<TData>) => React.ReactNode);
 }
 
 export function DataTable<TData, TValue>({
@@ -76,6 +101,9 @@ export function DataTable<TData, TValue>({
   bulkActions,
   onRowClick,
   storageKey,
+  selectable = true,
+  dense = false,
+  fixedLayout = false,
   defaultSortColumn,
   defaultSortDirection = 'asc',
   isLoading = false,
@@ -87,6 +115,11 @@ export function DataTable<TData, TValue>({
   onPaginationChange,
   searchValue,
   onSearchChange,
+  sorting: controlledSorting,
+  onSortingChange,
+  pageSize: controlledPageSize,
+  onPageSizeChange,
+  footer,
 }: DataTableProps<TData, TValue>) {
   const { t } = useTranslation(['data-table', 'common']);
   
@@ -109,7 +142,10 @@ export function DataTable<TData, TValue>({
   }, [columns, defaultSortColumn]);
 
   // Initialize sorting state with localStorage and default sorting
+  const isSortingControlled = controlledSorting !== undefined;
   const getInitialSorting = React.useCallback((): SortingState => {
+    // Controlled sorting: the parent owns the state, nothing to load.
+    if (isSortingControlled) return [];
     // Try to load from localStorage if storageKey is provided
     if (storageKey) {
       try {
@@ -132,9 +168,30 @@ export function DataTable<TData, TValue>({
     }
     
     return [];
-  }, [storageKey, detectDefaultSortColumn, defaultSortDirection]);
+  }, [isSortingControlled, storageKey, detectDefaultSortColumn, defaultSortDirection]);
 
-  const [sorting, setSorting] = React.useState<SortingState>(getInitialSorting);
+  const [internalSorting, setInternalSorting] = React.useState<SortingState>(getInitialSorting);
+  const sorting = isSortingControlled ? controlledSorting : internalSorting;
+  const setSorting: OnChangeFn<SortingState> = React.useCallback((updater) => {
+    if (isSortingControlled) {
+      onSortingChange?.(typeof updater === 'function' ? updater(sorting) : updater);
+    } else {
+      setInternalSorting(updater);
+    }
+  }, [isSortingControlled, onSortingChange, sorting]);
+
+  // Controlled page size (client-side pagination only). The page index is
+  // kept here; page size changes are reported to the parent.
+  const isPageSizeControlled = controlledPageSize !== undefined && !manualPagination;
+  const [internalPageIndex, setInternalPageIndex] = React.useState(0);
+  const handleControlledPagination: OnChangeFn<PaginationState> = React.useCallback((updater) => {
+    const prev = { pageIndex: internalPageIndex, pageSize: controlledPageSize ?? 10 };
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    setInternalPageIndex(next.pageIndex);
+    if (next.pageSize !== prev.pageSize) {
+      onPageSizeChange?.(next.pageSize);
+    }
+  }, [internalPageIndex, controlledPageSize, onPageSizeChange]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
@@ -154,18 +211,18 @@ export function DataTable<TData, TValue>({
 
   // Persist sorting to localStorage whenever it changes
   React.useEffect(() => {
-    if (storageKey && sorting.length > 0) {
+    if (!isSortingControlled && storageKey && sorting.length > 0) {
       try {
         localStorage.setItem(storageKey, JSON.stringify(sorting));
       } catch (error) {
         console.warn('Failed to save sorting to localStorage:', error);
       }
     }
-  }, [sorting, storageKey]);
+  }, [sorting, storageKey, isSortingControlled]);
 
-  // Add default select column
+  // Add default select column (omitted when selectable is false)
   const tableColumns: ColumnDef<TData, TValue>[] = React.useMemo(() => [
-    {
+    ...(!selectable ? [] : [{
       id: "select",
       header: ({ table }) => (
         <Checkbox
@@ -185,9 +242,9 @@ export function DataTable<TData, TValue>({
       ),
       enableSorting: false,
       enableHiding: false,
-    },
+    } as ColumnDef<TData, TValue>]),
     ...columns,
-  ], [columns]);
+  ], [columns, selectable]);
 
   const table = useReactTable({
     data,
@@ -208,6 +265,9 @@ export function DataTable<TData, TValue>({
     ...(manualPagination && onPaginationChange
       ? { onPaginationChange }
       : {}),
+    ...(isPageSizeControlled
+      ? { onPaginationChange: handleControlledPagination }
+      : {}),
     state: {
       sorting,
       columnFilters,
@@ -215,6 +275,9 @@ export function DataTable<TData, TValue>({
       rowSelection,
       globalFilter,
       ...(manualPagination && paginationState ? { pagination: paginationState } : {}),
+      ...(isPageSizeControlled
+        ? { pagination: { pageIndex: internalPageIndex, pageSize: controlledPageSize } }
+        : {}),
     },
     initialState: {
       pagination: {
@@ -236,6 +299,41 @@ export function DataTable<TData, TValue>({
       table.setPageIndex(0);
     }
   }, [globalFilter, columnFilters, table]);
+
+  // Controlled page size: a controlled search does not touch globalFilter, so
+  // go back to the first page when it changes, and clamp the page index when
+  // the data shrinks below the current page.
+  const prevSearchValue = React.useRef(searchValue);
+  const controlledPageCount = isPageSizeControlled ? table.getPageCount() : 0;
+  React.useEffect(() => {
+    if (!isPageSizeControlled) return;
+    if (prevSearchValue.current !== searchValue) {
+      prevSearchValue.current = searchValue;
+      setInternalPageIndex(0);
+      return;
+    }
+    const maxIndex = Math.max(0, controlledPageCount - 1);
+    if (internalPageIndex > maxIndex) setInternalPageIndex(maxIndex);
+  }, [isPageSizeControlled, searchValue, controlledPageCount, internalPageIndex]);
+
+  // Fixed layout: only columns whose definition declares a `size` get that width. TanStack merges a
+  // default size of 150 into every resolved column, so the declared sizes are read from `columns`.
+  const declaredSizes = React.useMemo(() => {
+    const sizes = new Map<string, number>();
+    columns.forEach((c) => {
+      const id = c.id ?? (c as { accessorKey?: string }).accessorKey;
+      if (id && typeof c.size === 'number') sizes.set(String(id), c.size);
+    });
+    return sizes;
+  }, [columns]);
+  const columnWidthStyle = (columnId: string): React.CSSProperties | undefined =>
+    fixedLayout && declaredSizes.has(columnId) ? { width: declaredSizes.get(columnId) } : undefined;
+  // Below this width the table scrolls inside its wrapper instead of squeezing the flexible columns
+  // (each flexible column keeps at least FLEXIBLE_COLUMN_MIN_WIDTH px).
+  const fixedTableMinWidth = fixedLayout
+    ? Array.from(declaredSizes.values()).reduce((sum, w) => sum + w, 0) +
+      (columns.length - declaredSizes.size) * FLEXIBLE_COLUMN_MIN_WIDTH
+    : undefined;
 
   const selectedRowsData = React.useMemo(() =>
     table.getFilteredSelectedRowModel().rows.map(row => row.original),
@@ -313,13 +411,21 @@ export function DataTable<TData, TValue>({
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table
+              className={fixedLayout ? 'table-fixed' : undefined}
+              style={fixedTableMinWidth ? { minWidth: fixedTableMinWidth } : undefined}
+            >
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
                       return (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
+                        <TableHead
+                          key={header.id}
+                          colSpan={header.colSpan}
+                          className={dense ? 'h-9 px-3' : undefined}
+                          style={columnWidthStyle(header.column.id)}
+                        >
                           {header.isPlaceholder
                             ? null
                             : flexRender(
@@ -364,6 +470,7 @@ export function DataTable<TData, TValue>({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                            key={cell.id}
+                           className={dense ? 'px-3 py-2' : undefined}
                            // Mark action cells to prevent row click
                            {...(cell.column.id === 'actions' ? { 'data-action-cell': 'true' } : {})}
                         >
@@ -386,6 +493,11 @@ export function DataTable<TData, TValue>({
                   </TableRow>
                 )}
               </TableBody>
+              {footer !== undefined && footer !== null && (
+                <TableFooter className="bg-muted/40 text-foreground">
+                  {typeof footer === 'function' ? footer(table) : footer}
+                </TableFooter>
+              )}
             </Table>
           </div>
         </CardContent>
@@ -394,8 +506,12 @@ export function DataTable<TData, TValue>({
       {/* Pagination */}
       <div className="flex items-center justify-between space-x-2 pt-4">
         <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} {t('of')}{" "}
-          {table.getFilteredRowModel().rows.length} {t('rowsSelected')}
+          {selectable && (
+            <>
+              {table.getFilteredSelectedRowModel().rows.length} {t('of')}{" "}
+              {table.getFilteredRowModel().rows.length} {t('rowsSelected')}
+            </>
+          )}
         </div>
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">

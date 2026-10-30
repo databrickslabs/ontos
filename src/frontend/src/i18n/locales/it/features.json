@@ -25,15 +25,15 @@
   },
   "concepts": {
     "name": "Concetti",
-    "description": "Sfoglia, cerca e gestisci concetti aziendali, collezioni e gerarchie."
+    "description": "Sfoglia, cerca e gestisci concetti aziendali, schemi di concetti e gerarchie."
   },
   "semantic-models": {
     "name": "Browser dei concetti",
     "description": "Esplora i termini del glossario aziendale, concetti e le loro relazioni."
   },
   "collections": {
-    "name": "Collezioni di concetti",
-    "description": "Organizza concetti e risorse in collezioni logiche."
+    "name": "Schemi di concetti",
+    "description": "Organizza concetti e risorse in schemi logici."
   },
   "process-workflows": {
     "name": "Workflow",

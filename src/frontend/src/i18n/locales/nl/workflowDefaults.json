@@ -92,6 +92,9 @@
     },
     "publicationRequestReview": {
       "end": "De publicatieworkflow is mislukt"
+    },
+    "conceptReviewRequest": {
+      "rejected": "De conceptreview is niet goedgekeurd"
     }
   },
   "workflowNames": {

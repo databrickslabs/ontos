@@ -12,6 +12,8 @@ const ENTITY_TYPE_FALLBACKS: Record<string, string> = {
   data_asset_review: 'Data Asset Review',
   access_grant: 'Access Grant',
   asset: 'Asset',
+  ontology_concept: 'Concept',
+  concept: 'Concept',
 };
 
 /** Payload fields whose value is a lifecycle status. */

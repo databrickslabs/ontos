@@ -170,6 +170,10 @@
         "notify-denied": "Your publication request for '{{entity_name}}' has been denied.",
         "notify-invalid": "Publication request for '{{entity_name}}' was rejected: only approved data contracts and active data products can be published.",
         "notify-error": "An error occurred while publishing '{{entity_name}}'."
+      },
+      "concept-review-approval": {
+        "notify-approved": "Your concept '{{entity_name}}' has been approved.",
+        "notify-rejected": "Your concept '{{entity_name}}' was sent back for changes. Please review the reviewer comment and resubmit."
       }
     },
     "approval": {
@@ -194,7 +198,10 @@
         "data_asset_review": "Data Asset Review",
         "access_grant": "Access Grant",
         "asset": "Asset",
-        "entity": "Entity"
+        "entity": "Entity",
+        "ontology_concept": "Concept",
+        "ontology_collection": "Concept Scheme",
+        "concept_changeset": "Concept Changeset"
       }
     },
     "approvalMessages": {

@@ -170,6 +170,10 @@
         "notify-denied": "La tua richiesta di pubblicazione per '{{entity_name}}' è stata negata.",
         "notify-invalid": "La richiesta di pubblicazione per '{{entity_name}}' è stata rifiutata: si possono pubblicare solo contratti dati approvati e prodotti dati attivi.",
         "notify-error": "Si è verificato un errore durante la pubblicazione di '{{entity_name}}'."
+      },
+      "concept-review-approval": {
+        "notify-approved": "Il tuo concetto '{{entity_name}}' è stato approvato.",
+        "notify-rejected": "Il tuo concetto '{{entity_name}}' è stato rimandato per modifiche. Leggi il commento del revisore e invialo di nuovo."
       }
     },
     "approval": {
@@ -194,7 +198,10 @@
         "data_asset_review": "Revisione asset di dati",
         "access_grant": "Concessione di accesso",
         "asset": "Asset",
-        "entity": "Entità"
+        "entity": "Entità",
+        "ontology_concept": "Concetto",
+        "ontology_collection": "Schema di concetti",
+        "concept_changeset": "Set di modifiche dei concetti"
       }
     },
     "approvalMessages": {

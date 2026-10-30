@@ -92,6 +92,9 @@
     },
     "publicationRequestReview": {
       "end": "El flujo de trabajo de publicación falló"
+    },
+    "conceptReviewRequest": {
+      "rejected": "La revisión del concepto no fue aprobada"
     }
   },
   "workflowNames": {

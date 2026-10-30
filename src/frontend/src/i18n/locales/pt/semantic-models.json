@@ -9,7 +9,7 @@
   "searchPlaceholder": "Pesquisar termos...",
   "loading": "Carregando modelos semânticos...",
   "tabs": {
-    "collections": "Coleções",
+    "collections": "Esquemas de conceitos",
     "concepts": "Conceitos",
     "graph": "Grafo"
   },
@@ -54,11 +54,11 @@
     "groupByDomain": "Agrupar por domínio",
     "allTypes": "Todos os tipos",
     "allScopes": "Todos os escopos",
-    "allCollections": "Todas as coleções",
+    "allCollections": "Todos os esquemas de conceitos",
     "labelLanguage": "Idioma do rótulo"
   },
   "groupBy": {
-    "collection": "Por coleção",
+    "collection": "Por esquema de conceitos",
     "type": "Por tipo",
     "flat": "Lista simples"
   },
@@ -84,10 +84,10 @@
     "deleteConfirm": "Tem certeza de que deseja excluir este termo?",
     "deleteSuccess": "Termo excluído com sucesso",
     "deleteError": "Falha ao excluir termo",
-    "collectionCreated": "Coleção criada com sucesso",
-    "collectionUpdated": "Coleção atualizada com sucesso",
-    "collectionDeleted": "Coleção excluída com sucesso",
-    "confirmDeleteCollection": "Tem certeza de que deseja excluir a coleção \"{{name}}\"? Isso excluirá todos os conceitos nela contidos.",
+    "collectionCreated": "Esquema de conceitos criado com sucesso",
+    "collectionUpdated": "Esquema de conceitos atualizado com sucesso",
+    "collectionDeleted": "Esquema de conceitos excluído com sucesso",
+    "confirmDeleteCollection": "Tem certeza de que deseja excluir o esquema de conceitos \"{{name}}\"? Isso excluirá todos os conceitos nele contidos.",
     "conceptCreated": "Conceito criado com sucesso",
     "conceptUpdated": "Conceito atualizado com sucesso",
     "conceptDeleted": "Conceito excluído com sucesso",
@@ -95,7 +95,7 @@
     "enterReviewerEmail": "Informe o e-mail do revisor:",
     "conceptPromoted": "Conceito promovido com sucesso",
     "conceptMigrated": "Conceito migrado com sucesso",
-    "noCollections": "Nenhuma coleção encontrada",
+    "noCollections": "Nenhum esquema de conceitos encontrado",
     "noConceptsFound": "Nenhum conceito encontrado",
     "selectConcept": "Selecione um conceito para ver os detalhes",
     "linkAdded": "Vínculo adicionado com sucesso",
@@ -156,14 +156,14 @@
     "save": "Salvar"
   },
   "collections": {
-    "title": "Coleções",
+    "title": "Esquemas de conceitos",
     "glossary": "Glossário",
     "taxonomy": "Taxonomia",
     "ontology": "Ontologia"
   },
   "actions": {
     "createConcept": "Criar conceito",
-    "createCollection": "Criar coleção"
+    "createCollection": "Criar esquema de conceitos"
   },
   "badges": {
     "imported": "Importado",
@@ -230,13 +230,14 @@
   "import": {
     "chooseFile": "Escolher arquivo…",
     "file": "Arquivo",
-    "noEditableCollections": "Nenhuma coleção editável disponível. Crie uma primeiro.",
-    "selectCollection": "Selecione uma coleção…",
+    "noEditableCollections": "Nenhum esquema de conceitos editável disponível. Crie um primeiro.",
+    "selectCollection": "Selecione um esquema de conceitos…",
     "submit": "Importar",
     "success": "Importação bem-sucedida",
     "supportedFormats": "Compatíveis: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Coleção de destino",
-    "title": "Importar conceitos"
+    "targetCollection": "Esquema de conceitos de destino",
+    "title": "Importar conceitos",
+    "readOnlyHint": "Somente esquemas de conceitos editáveis podem receber importações. Esquemas importados e do sistema são somente leitura."
   },
   "propertyTypes": {
     "object": "Propriedade de objeto",
@@ -244,10 +245,10 @@
     "annotation": "Propriedade de anotação"
   },
   "conceptEditor": {
-    "editTitle": "Editar conceito",
-    "createDescription": "Crie um novo termo ou conceito na coleção.",
-    "collectionLabel": "Coleção",
-    "selectCollectionPlaceholder": "Selecionar coleção...",
+    "editTitle": "Editar entrada",
+    "createDescription": "Adicione uma nova entrada a um esquema de conceitos.",
+    "collectionLabel": "Esquema de conceitos",
+    "selectCollectionPlaceholder": "Selecionar esquema de conceitos...",
     "selectTypePlaceholder": "Selecionar tipo...",
     "label": "Rótulo",
     "labelPlaceholder": "ex.: Receita",
@@ -280,30 +281,41 @@
       "object": "Relaciona-se a outros conceitos",
       "datatype": "Relaciona-se a valores literais",
       "annotation": "Anotação de metadados"
-    }
+    },
+    "createTitle": "Criar entrada",
+    "noFittingScheme": "Ainda não há um esquema de conceitos editável para este tipo de entrada ({{kind}}). Crie um primeiro.",
+    "parentConcept": "Conceito pai",
+    "addParent": "Adicionar pai",
+    "subclassOf": "Subclasse de",
+    "selectClass": "Selecionar classe",
+    "removeParent": "Remover {{name}}",
+    "selectSuperclass": "Selecionar superclasse",
+    "selectParentConcept": "Selecionar conceito pai",
+    "searchClasses": "Pesquisar classes...",
+    "searchConceptsInScheme": "Pesquisar conceitos neste esquema de conceitos..."
   },
   "collectionEditor": {
-    "editTitle": "Editar coleção",
-    "createDescription": "Crie uma nova coleção de glossário, taxonomia ou ontologia.",
-    "editDescription": "Atualize as configurações da coleção.",
+    "editTitle": "Editar esquema de conceitos",
+    "createDescription": "Crie um novo esquema de conceitos de glossário, taxonomia ou ontologia.",
+    "editDescription": "Atualize as configurações do esquema de conceitos.",
     "namePlaceholder": "ex.: Glossário Financeiro",
     "descriptionPlaceholder": "Descrição opcional...",
-    "parentCollection": "Coleção pai",
-    "noneRootCollection": "Nenhuma (coleção raiz)",
+    "parentCollection": "Esquema de conceitos pai",
+    "noneRootCollection": "Nenhum (esquema de conceitos raiz)",
     "editable": "Editável",
-    "editableHelp": "Permitir criar e editar conceitos nesta coleção"
+    "editableHelp": "Permitir criar e editar conceitos neste esquema de conceitos"
   },
   "promotion": {
     "promoteConcept": "Promover conceito",
     "demoteConcept": "Rebaixar conceito",
     "migrateConcept": "Migrar conceito",
     "move": "Mover",
-    "toDifferentCollection": "para outra coleção",
+    "toDifferentCollection": "para outro esquema de conceitos",
     "actionLabel": "Ação",
     "promote": "Promover",
     "migrate": "Migrar",
     "currentLocation": "Localização atual",
-    "selectTargetPlaceholder": "Selecionar coleção de destino...",
+    "selectTargetPlaceholder": "Selecionar esquema de conceitos de destino...",
     "newIri": "Novo IRI",
     "sourceConcept": "Conceito de origem",
     "deprecateOriginal": "Descontinuar original (recomendado)",
@@ -312,8 +324,8 @@
     "promoteWarning": "Conceitos promovidos exigem nova aprovação no nível do novo escopo."
   },
   "collectionTree": {
-    "readOnly": "Coleção somente leitura",
-    "noCollectionsYet": "Ainda não há coleções"
+    "readOnly": "Esquema de conceitos somente leitura",
+    "noCollectionsYet": "Ainda não há esquemas de conceitos"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -395,7 +407,7 @@
     "selectedCount": "{{count}} selecionados",
     "agentProgress": "Progresso do agente",
     "generatedTurtle": "Turtle gerado",
-    "saveToCollection": "Salvar na coleção",
+    "saveToCollection": "Salvar no esquema de conceitos",
     "empty": "(vazio)",
     "agentExecutionLog": "Log de execução do agente",
     "agentLogSummary": "{{iterations}} iteração(ões) · {{promptTokens}} tokens de prompt · {{completionTokens}} tokens de conclusão",
@@ -445,18 +457,41 @@
       "deleteFailed": "Falha ao excluir",
       "turtleCopied": "Conteúdo Turtle copiado para a área de transferência.",
       "saveFailed": "Falha ao salvar",
-      "savedTitle": "Salvo na coleção",
+      "savedTitle": "Salvo no esquema de conceitos",
       "savedDescription_one": "{{count}} tripla importada para \"{{name}}\".",
       "savedDescription_other": "{{count}} triplas importadas para \"{{name}}\"."
     },
     "saveDialog": {
-      "title": "Salvar na coleção de conceitos",
-      "description": "Crie uma nova coleção de ontologia e importe as triplas geradas para o grafo de conhecimento.",
-      "nameLabel": "Nome da coleção",
+      "title": "Salvar no esquema de conceitos",
+      "description": "Crie um novo esquema de conceitos de ontologia e importe as triplas geradas para o grafo de conhecimento.",
+      "nameLabel": "Nome do esquema de conceitos",
       "namePlaceholder": "ex.: Ontologia do Domínio de Clientes",
       "descriptionLabel": "Descrição (opcional)",
-      "descriptionPlaceholder": "Descreva a finalidade desta coleção de ontologia...",
+      "descriptionPlaceholder": "Descreva a finalidade deste esquema de conceitos de ontologia...",
       "importSummary": "{{classes}} classes e {{properties}} propriedades serão importadas."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Incluir outros esquemas de conceitos",
+    "thisScheme": "Este esquema de conceitos: {{label}}",
+    "noScheme": "Sem esquema de conceitos",
+    "noMatchesInScheme": "Nenhuma correspondência neste esquema de conceitos.",
+    "noClassesInScheme": "Este esquema de conceitos ainda não tem classes.",
+    "noConceptsInScheme": "Este esquema de conceitos ainda não tem conceitos.",
+    "includeOtherSchemesHint": "Marque \"Incluir outros esquemas de conceitos\" para escolher de outro esquema."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossários",
+    "groupTaxonomy": "Taxonomias",
+    "groupOntology": "Ontologias",
+    "inParent": "em {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Ainda não há nada para explorar",
+    "emptyBody": "Importe arquivos ou crie conceitos na aba Define.",
+    "emptyCta": "Ir para Define"
+  },
+  "define": {
+    "requiresWrite": "Requer acesso de gravação"
   }
 }

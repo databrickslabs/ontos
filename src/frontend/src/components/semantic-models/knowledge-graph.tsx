@@ -24,6 +24,7 @@ import {
 import { ZoomIn, ZoomOut, Maximize, RotateCcw, Expand, Group, Ungroup, ChevronDown, Tag, Workflow, CircleDot, MoveHorizontal } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 import {
   Dialog,
   DialogContent,
@@ -246,19 +247,37 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   const layoutRef = useRef<{ stop: () => void } | null>(null);
   const initialLayoutDoneRef = useRef(false);
   const fullscreenInitialLayoutDoneRef = useRef(false);
-  const [layout, setLayout] = useState<LayoutType>('cose');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showDomainBoxes, setShowDomainBoxes] = useState(true);
-  const [showNodeLabels, setShowNodeLabels] = useState(false);
-  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
-  const [nodeSize, setNodeSize] = useState(24);
-  const [spacing, setSpacing] = useState(80);
+  // User-facing display options are persisted (survive reloads) in the
+  // glossary preferences store; transient state above stays local.
+  const layout = useGlossaryPreferencesStore((s) => s.graphLayout);
+  const showDomainBoxes = useGlossaryPreferencesStore((s) => s.graphShowDomainBoxes);
+  const showNodeLabels = useGlossaryPreferencesStore((s) => s.graphShowNodeLabels);
+  const showEdgeLabels = useGlossaryPreferencesStore((s) => s.graphShowEdgeLabels);
+  const nodeSize = useGlossaryPreferencesStore((s) => s.graphNodeSize);
+  const spacing = useGlossaryPreferencesStore((s) => s.graphSpacing);
+  const setGraphOption = useGlossaryPreferencesStore((s) => s.setGraphOption);
+  const setLayout = useCallback((v: LayoutType) => setGraphOption('graphLayout', v), [setGraphOption]);
+  const setShowDomainBoxes = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => setGraphOption('graphShowDomainBoxes', v),
+    [setGraphOption],
+  );
+  const setShowNodeLabels = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => setGraphOption('graphShowNodeLabels', v),
+    [setGraphOption],
+  );
+  const setShowEdgeLabels = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => setGraphOption('graphShowEdgeLabels', v),
+    [setGraphOption],
+  );
+  const setNodeSize = useCallback((v: number) => setGraphOption('graphNodeSize', v), [setGraphOption]);
+  const setSpacing = useCallback((v: number) => setGraphOption('graphSpacing', v), [setGraphOption]);
   
   // Handler for toggling domain boxes
   const handleToggleDomainBoxes = useCallback(() => {
     setShowDomainBoxes(prev => !prev);
-  }, []);
+  }, [setShowDomainBoxes]);
 
   // Reset layout done ref when showDomainBoxes changes (component will remount)
   useEffect(() => {

@@ -355,7 +355,9 @@
       "data_domain": "Data Domain",
       "data_asset_review": "Data Asset Review",
       "access_grant": "Access Grant",
-      "asset": "Asset"
+      "asset": "Asset",
+      "ontology_concept": "Concept",
+      "concept": "Concept"
     },
     "fields": {
       "product_id": "Product ID",

@@ -56,6 +56,7 @@ export enum AssetType {
 
     // Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept",
+    CONCEPT_CHANGESET = "concept_changeset",
     KNOWLEDGE_COLLECTION = "knowledge_collection",
 
     // Generic/external

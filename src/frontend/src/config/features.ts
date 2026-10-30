@@ -82,7 +82,7 @@ import {
       id: 'concepts',
       name: 'Concepts',
       path: '/concepts',
-      description: 'Browse, search, and manage business concepts, collections, and hierarchies.',
+      description: 'Browse, search, and manage business concepts, schemes, and hierarchies.',
       icon: Network,
       group: 'Build',
       maturity: 'ga',

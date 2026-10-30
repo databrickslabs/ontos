@@ -9,7 +9,7 @@
   "searchPlaceholder": "Rechercher des termes...",
   "loading": "Chargement des modèles sémantiques...",
   "tabs": {
-    "collections": "Collections",
+    "collections": "Schémas de concepts",
     "concepts": "Concepts",
     "graph": "Graphe"
   },
@@ -54,11 +54,11 @@
     "groupByDomain": "Grouper par domaine",
     "allTypes": "Tous les types",
     "allScopes": "Tous les périmètres",
-    "allCollections": "Toutes les collections",
+    "allCollections": "Tous les schémas de concepts",
     "labelLanguage": "Langue des libellés"
   },
   "groupBy": {
-    "collection": "Par collection",
+    "collection": "Par schéma de concepts",
     "type": "Par type",
     "flat": "Liste à plat"
   },
@@ -84,10 +84,10 @@
     "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce terme ?",
     "deleteSuccess": "Terme supprimé avec succès",
     "deleteError": "Échec de la suppression du terme",
-    "collectionCreated": "Collection créée avec succès",
-    "collectionUpdated": "Collection mise à jour avec succès",
-    "collectionDeleted": "Collection supprimée avec succès",
-    "confirmDeleteCollection": "Êtes-vous sûr de vouloir supprimer la collection « {{name}} » ? Cela supprimera tous les concepts qu'elle contient.",
+    "collectionCreated": "Schéma de concepts créé avec succès",
+    "collectionUpdated": "Schéma de concepts mis à jour avec succès",
+    "collectionDeleted": "Schéma de concepts supprimé avec succès",
+    "confirmDeleteCollection": "Êtes-vous sûr de vouloir supprimer le schéma de concepts « {{name}} » ? Cela supprimera tous les concepts qu'il contient.",
     "conceptCreated": "Concept créé avec succès",
     "conceptUpdated": "Concept mis à jour avec succès",
     "conceptDeleted": "Concept supprimé avec succès",
@@ -95,7 +95,7 @@
     "enterReviewerEmail": "Saisissez l'adresse e-mail du relecteur :",
     "conceptPromoted": "Concept promu avec succès",
     "conceptMigrated": "Concept migré avec succès",
-    "noCollections": "Aucune collection trouvée",
+    "noCollections": "Aucun schéma de concepts trouvé",
     "noConceptsFound": "Aucun concept trouvé",
     "selectConcept": "Sélectionnez un concept pour afficher les détails",
     "linkAdded": "Lien ajouté avec succès",
@@ -156,14 +156,14 @@
     "save": "Enregistrer"
   },
   "collections": {
-    "title": "Collections",
+    "title": "Schémas de concepts",
     "glossary": "Glossaire",
     "taxonomy": "Taxonomie",
     "ontology": "Ontologie"
   },
   "actions": {
     "createConcept": "Créer un concept",
-    "createCollection": "Créer une collection"
+    "createCollection": "Créer un schéma de concepts"
   },
   "badges": {
     "imported": "Importé",
@@ -230,13 +230,14 @@
   "import": {
     "chooseFile": "Choisir un fichier…",
     "file": "Fichier",
-    "noEditableCollections": "Aucune collection modifiable disponible. Créez-en une d'abord.",
-    "selectCollection": "Sélectionner une collection…",
+    "noEditableCollections": "Aucun schéma de concepts modifiable disponible. Créez-en un d'abord.",
+    "selectCollection": "Sélectionner un schéma de concepts…",
     "submit": "Importer",
     "success": "Importation réussie",
     "supportedFormats": "Pris en charge : Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Collection cible",
-    "title": "Importer des concepts"
+    "targetCollection": "Schéma de concepts cible",
+    "title": "Importer des concepts",
+    "readOnlyHint": "Seuls les schémas de concepts modifiables peuvent recevoir des imports. Les schémas importés et système sont en lecture seule."
   },
   "propertyTypes": {
     "object": "Propriété d'objet",
@@ -244,10 +245,10 @@
     "annotation": "Propriété d'annotation"
   },
   "conceptEditor": {
-    "editTitle": "Modifier le concept",
-    "createDescription": "Créez un nouveau terme ou concept dans la collection.",
-    "collectionLabel": "Collection",
-    "selectCollectionPlaceholder": "Sélectionner une collection...",
+    "editTitle": "Modifier l'entrée",
+    "createDescription": "Ajoutez une nouvelle entrée à un schéma de concepts.",
+    "collectionLabel": "Schéma de concepts",
+    "selectCollectionPlaceholder": "Sélectionner un schéma de concepts...",
     "selectTypePlaceholder": "Sélectionner un type...",
     "label": "Libellé",
     "labelPlaceholder": "ex. : Chiffre d'affaires",
@@ -280,30 +281,41 @@
       "object": "Se rapporte à d'autres concepts",
       "datatype": "Se rapporte à des valeurs littérales",
       "annotation": "Annotation de métadonnées"
-    }
+    },
+    "createTitle": "Créer une entrée",
+    "noFittingScheme": "Aucun schéma de concepts modifiable pour ce type d'entrée ({{kind}}). Créez-en un d'abord.",
+    "parentConcept": "Concept parent",
+    "addParent": "Ajouter un parent",
+    "subclassOf": "Sous-classe de",
+    "selectClass": "Sélectionner une classe",
+    "removeParent": "Retirer {{name}}",
+    "selectSuperclass": "Sélectionner une super-classe",
+    "selectParentConcept": "Sélectionner un concept parent",
+    "searchClasses": "Rechercher des classes...",
+    "searchConceptsInScheme": "Rechercher des concepts dans ce schéma de concepts..."
   },
   "collectionEditor": {
-    "editTitle": "Modifier la collection",
-    "createDescription": "Créez une nouvelle collection de glossaire, de taxonomie ou d'ontologie.",
-    "editDescription": "Mettez à jour les paramètres de la collection.",
+    "editTitle": "Modifier le schéma de concepts",
+    "createDescription": "Créez un nouveau schéma de concepts de glossaire, de taxonomie ou d'ontologie.",
+    "editDescription": "Mettez à jour les paramètres du schéma de concepts.",
     "namePlaceholder": "ex. : Glossaire Finance",
     "descriptionPlaceholder": "Description facultative...",
-    "parentCollection": "Collection parente",
-    "noneRootCollection": "Aucune (collection racine)",
+    "parentCollection": "Schéma de concepts parent",
+    "noneRootCollection": "Aucun (schéma de concepts racine)",
     "editable": "Modifiable",
-    "editableHelp": "Autoriser la création et la modification de concepts dans cette collection"
+    "editableHelp": "Autoriser la création et la modification de concepts dans ce schéma de concepts"
   },
   "promotion": {
     "promoteConcept": "Promouvoir le concept",
     "demoteConcept": "Rétrograder le concept",
     "migrateConcept": "Migrer le concept",
     "move": "Déplacer",
-    "toDifferentCollection": "vers une autre collection",
+    "toDifferentCollection": "vers un autre schéma de concepts",
     "actionLabel": "Action",
     "promote": "Promouvoir",
     "migrate": "Migrer",
     "currentLocation": "Emplacement actuel",
-    "selectTargetPlaceholder": "Sélectionner la collection cible...",
+    "selectTargetPlaceholder": "Sélectionner le schéma de concepts cible...",
     "newIri": "Nouvel IRI",
     "sourceConcept": "Concept source",
     "deprecateOriginal": "Déprécier l'original (recommandé)",
@@ -312,8 +324,8 @@
     "promoteWarning": "Les concepts promus nécessitent une nouvelle approbation au nouveau niveau de périmètre."
   },
   "collectionTree": {
-    "readOnly": "Collection en lecture seule",
-    "noCollectionsYet": "Aucune collection pour le moment"
+    "readOnly": "Schéma de concepts en lecture seule",
+    "noCollectionsYet": "Aucun schéma de concepts pour le moment"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -395,7 +407,7 @@
     "selectedCount": "{{count}} sélectionné(s)",
     "agentProgress": "Progression de l'agent",
     "generatedTurtle": "Turtle généré",
-    "saveToCollection": "Enregistrer dans la collection",
+    "saveToCollection": "Enregistrer dans le schéma de concepts",
     "empty": "(vide)",
     "agentExecutionLog": "Journal d'exécution de l'agent",
     "agentLogSummary": "{{iterations}} itération(s) · {{promptTokens}} tokens d'invite · {{completionTokens}} tokens de complétion",
@@ -445,18 +457,41 @@
       "deleteFailed": "Échec de la suppression",
       "turtleCopied": "Contenu Turtle copié dans le presse-papiers.",
       "saveFailed": "Échec de l'enregistrement",
-      "savedTitle": "Enregistré dans la collection",
+      "savedTitle": "Enregistré dans le schéma de concepts",
       "savedDescription_one": "{{count}} triplet importé dans « {{name}} ».",
       "savedDescription_other": "{{count}} triplets importés dans « {{name}} »."
     },
     "saveDialog": {
-      "title": "Enregistrer dans la collection de concepts",
-      "description": "Créez une nouvelle collection d'ontologie et importez les triplets générés dans le graphe de connaissances.",
-      "nameLabel": "Nom de la collection",
+      "title": "Enregistrer dans le schéma de concepts",
+      "description": "Créez un nouveau schéma de concepts d'ontologie et importez les triplets générés dans le graphe de connaissances.",
+      "nameLabel": "Nom du schéma de concepts",
       "namePlaceholder": "ex. : Ontologie du domaine client",
       "descriptionLabel": "Description (facultatif)",
-      "descriptionPlaceholder": "Décrivez l'objet de cette collection d'ontologie...",
+      "descriptionPlaceholder": "Décrivez l'objet de ce schéma de concepts d'ontologie...",
       "importSummary": "{{classes}} classes et {{properties}} propriétés seront importées."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Inclure les autres schémas de concepts",
+    "thisScheme": "Ce schéma de concepts : {{label}}",
+    "noScheme": "Aucun schéma de concepts",
+    "noMatchesInScheme": "Aucun résultat dans ce schéma de concepts.",
+    "noClassesInScheme": "Ce schéma de concepts ne contient pas encore de classes.",
+    "noConceptsInScheme": "Ce schéma de concepts ne contient pas encore de concepts.",
+    "includeOtherSchemesHint": "Cochez « Inclure les autres schémas de concepts » pour choisir dans un autre schéma."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossaires",
+    "groupTaxonomy": "Taxonomies",
+    "groupOntology": "Ontologies",
+    "inParent": "dans {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Rien à explorer pour l'instant",
+    "emptyBody": "Importez des fichiers ou créez des concepts dans l'onglet Define.",
+    "emptyCta": "Aller à Define"
+  },
+  "define": {
+    "requiresWrite": "Nécessite un accès en écriture"
   }
 }

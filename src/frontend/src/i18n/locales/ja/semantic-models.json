@@ -9,7 +9,7 @@
   "searchPlaceholder": "用語を検索...",
   "loading": "セマンティックモデルを読み込み中...",
   "tabs": {
-    "collections": "コレクション",
+    "collections": "コンセプトスキーム",
     "concepts": "コンセプト",
     "graph": "グラフ"
   },
@@ -54,11 +54,11 @@
     "groupByDomain": "ドメインでグループ化",
     "allTypes": "すべてのタイプ",
     "allScopes": "すべてのスコープ",
-    "allCollections": "すべてのコレクション",
+    "allCollections": "すべてのコンセプトスキーム",
     "labelLanguage": "ラベルの言語"
   },
   "groupBy": {
-    "collection": "コレクション別",
+    "collection": "コンセプトスキーム別",
     "type": "タイプ別",
     "flat": "フラットリスト"
   },
@@ -84,10 +84,10 @@
     "deleteConfirm": "この用語を削除してもよろしいですか？",
     "deleteSuccess": "用語が正常に削除されました",
     "deleteError": "用語の削除に失敗しました",
-    "collectionCreated": "コレクションを作成しました",
-    "collectionUpdated": "コレクションを更新しました",
-    "collectionDeleted": "コレクションを削除しました",
-    "confirmDeleteCollection": "コレクション「{{name}}」を削除してもよろしいですか？含まれるすべてのコンセプトが削除されます。",
+    "collectionCreated": "コンセプトスキームを作成しました",
+    "collectionUpdated": "コンセプトスキームを更新しました",
+    "collectionDeleted": "コンセプトスキームを削除しました",
+    "confirmDeleteCollection": "コンセプトスキーム「{{name}}」を削除してもよろしいですか？含まれるすべてのコンセプトが削除されます。",
     "conceptCreated": "コンセプトを作成しました",
     "conceptUpdated": "コンセプトを更新しました",
     "conceptDeleted": "コンセプトを削除しました",
@@ -95,7 +95,7 @@
     "enterReviewerEmail": "レビュー担当者のメールアドレスを入力してください:",
     "conceptPromoted": "コンセプトを昇格しました",
     "conceptMigrated": "コンセプトを移行しました",
-    "noCollections": "コレクションが見つかりません",
+    "noCollections": "コンセプトスキームが見つかりません",
     "noConceptsFound": "コンセプトが見つかりません",
     "selectConcept": "詳細を表示するコンセプトを選択してください",
     "linkAdded": "リンクを追加しました",
@@ -156,14 +156,14 @@
     "save": "保存"
   },
   "collections": {
-    "title": "コレクション",
+    "title": "コンセプトスキーム",
     "glossary": "用語集",
     "taxonomy": "分類体系",
     "ontology": "オントロジー"
   },
   "actions": {
     "createConcept": "コンセプトを作成",
-    "createCollection": "コレクションを作成"
+    "createCollection": "コンセプトスキームを作成"
   },
   "badges": {
     "imported": "インポート済み",
@@ -230,13 +230,14 @@
   "import": {
     "chooseFile": "ファイルを選択…",
     "file": "ファイル",
-    "noEditableCollections": "編集可能なコレクションがありません。先に作成してください。",
-    "selectCollection": "コレクションを選択…",
+    "noEditableCollections": "編集可能なコンセプトスキームがありません。先に作成してください。",
+    "selectCollection": "コンセプトスキームを選択…",
     "submit": "インポート",
     "success": "インポートに成功しました",
     "supportedFormats": "対応形式: Turtle (.ttl)、RDF/XML (.rdf, .xml)、OWL (.owl)、N-Triples (.nt)、N3 (.n3)、JSON-LD (.jsonld, .json)",
-    "targetCollection": "対象コレクション",
-    "title": "コンセプトをインポート"
+    "targetCollection": "対象コンセプトスキーム",
+    "title": "コンセプトをインポート",
+    "readOnlyHint": "インポートを受け付けられるのは編集可能なコンセプトスキームのみです。インポート済みスキームとシステムスキームは読み取り専用です。"
   },
   "propertyTypes": {
     "object": "オブジェクトプロパティ",
@@ -244,10 +245,10 @@
     "annotation": "注釈プロパティ"
   },
   "conceptEditor": {
-    "editTitle": "コンセプトを編集",
-    "createDescription": "コレクションに新しい用語またはコンセプトを作成します。",
-    "collectionLabel": "コレクション",
-    "selectCollectionPlaceholder": "コレクションを選択...",
+    "editTitle": "エントリを編集",
+    "createDescription": "コンセプトスキームに新しいエントリを追加します。",
+    "collectionLabel": "コンセプトスキーム",
+    "selectCollectionPlaceholder": "コンセプトスキームを選択...",
     "selectTypePlaceholder": "タイプを選択...",
     "label": "ラベル",
     "labelPlaceholder": "例: 収益",
@@ -280,30 +281,41 @@
       "object": "他のコンセプトと関連付けます",
       "datatype": "リテラル値と関連付けます",
       "annotation": "メタデータ注釈"
-    }
+    },
+    "createTitle": "エントリを作成",
+    "noFittingScheme": "このエントリタイプに対応する編集可能なコンセプトスキーム（{{kind}}）がまだありません。先に作成してください。",
+    "parentConcept": "親コンセプト",
+    "addParent": "親を追加",
+    "subclassOf": "サブクラス（上位クラス）",
+    "selectClass": "クラスを選択",
+    "removeParent": "{{name}}を削除",
+    "selectSuperclass": "スーパークラスを選択",
+    "selectParentConcept": "親コンセプトを選択",
+    "searchClasses": "クラスを検索...",
+    "searchConceptsInScheme": "このコンセプトスキーム内のコンセプトを検索..."
   },
   "collectionEditor": {
-    "editTitle": "コレクションを編集",
-    "createDescription": "新しい用語集、分類体系、またはオントロジーのコレクションを作成します。",
-    "editDescription": "コレクションの設定を更新します。",
+    "editTitle": "コンセプトスキームを編集",
+    "createDescription": "新しい用語集、分類体系、またはオントロジーのコンセプトスキームを作成します。",
+    "editDescription": "コンセプトスキームの設定を更新します。",
     "namePlaceholder": "例: 財務用語集",
     "descriptionPlaceholder": "説明（任意）...",
-    "parentCollection": "親コレクション",
-    "noneRootCollection": "なし（ルートコレクション）",
+    "parentCollection": "親コンセプトスキーム",
+    "noneRootCollection": "なし（ルートコンセプトスキーム）",
     "editable": "編集可能",
-    "editableHelp": "このコレクションでコンセプトの作成と編集を許可する"
+    "editableHelp": "このコンセプトスキームでコンセプトの作成と編集を許可する"
   },
   "promotion": {
     "promoteConcept": "コンセプトを昇格",
     "demoteConcept": "コンセプトを降格",
     "migrateConcept": "コンセプトを移行",
     "move": "移動",
-    "toDifferentCollection": "別のコレクションへ",
+    "toDifferentCollection": "別のコンセプトスキームへ",
     "actionLabel": "アクション",
     "promote": "昇格",
     "migrate": "移行",
     "currentLocation": "現在の場所",
-    "selectTargetPlaceholder": "対象コレクションを選択...",
+    "selectTargetPlaceholder": "対象コンセプトスキームを選択...",
     "newIri": "新しい IRI",
     "sourceConcept": "ソースコンセプト",
     "deprecateOriginal": "元を非推奨にする（推奨）",
@@ -312,8 +324,8 @@
     "promoteWarning": "昇格したコンセプトは、新しいスコープレベルで再承認が必要です。"
   },
   "collectionTree": {
-    "readOnly": "読み取り専用コレクション",
-    "noCollectionsYet": "コレクションはまだありません"
+    "readOnly": "読み取り専用コンセプトスキーム",
+    "noCollectionsYet": "コンセプトスキームはまだありません"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -395,7 +407,7 @@
     "selectedCount": "{{count}} 件選択",
     "agentProgress": "エージェントの進捗",
     "generatedTurtle": "生成された Turtle",
-    "saveToCollection": "コレクションに保存",
+    "saveToCollection": "コンセプトスキームに保存",
     "empty": "（空）",
     "agentExecutionLog": "エージェント実行ログ",
     "agentLogSummary": "{{iterations}} 回の反復 · プロンプトトークン {{promptTokens}} · 補完トークン {{completionTokens}}",
@@ -445,18 +457,41 @@
       "deleteFailed": "削除に失敗しました",
       "turtleCopied": "Turtle コンテンツをクリップボードにコピーしました。",
       "saveFailed": "保存に失敗しました",
-      "savedTitle": "コレクションに保存しました",
+      "savedTitle": "コンセプトスキームに保存しました",
       "savedDescription_one": "{{count}} 件のトリプルを「{{name}}」にインポートしました。",
       "savedDescription_other": "{{count}} 件のトリプルを「{{name}}」にインポートしました。"
     },
     "saveDialog": {
-      "title": "コンセプトコレクションに保存",
-      "description": "新しいオントロジーコレクションを作成し、生成されたトリプルをナレッジグラフにインポートします。",
-      "nameLabel": "コレクション名",
+      "title": "コンセプトスキームに保存",
+      "description": "新しいオントロジーのコンセプトスキームを作成し、生成されたトリプルをナレッジグラフにインポートします。",
+      "nameLabel": "コンセプトスキーム名",
       "namePlaceholder": "例: 顧客ドメインオントロジー",
       "descriptionLabel": "説明（任意）",
-      "descriptionPlaceholder": "このオントロジーコレクションの目的を説明してください...",
+      "descriptionPlaceholder": "このオントロジーのコンセプトスキームの目的を説明してください...",
       "importSummary": "クラス {{classes}} 件とプロパティ {{properties}} 件がインポートされます。"
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "他のコンセプトスキームを含める",
+    "thisScheme": "このコンセプトスキーム: {{label}}",
+    "noScheme": "コンセプトスキームなし",
+    "noMatchesInScheme": "このコンセプトスキームに一致する項目はありません。",
+    "noClassesInScheme": "このコンセプトスキームにはまだクラスがありません。",
+    "noConceptsInScheme": "このコンセプトスキームにはまだコンセプトがありません。",
+    "includeOtherSchemesHint": "他のスキームから選ぶには「他のコンセプトスキームを含める」をオンにしてください。"
+  },
+  "schemeSelect": {
+    "groupGlossary": "用語集",
+    "groupTaxonomy": "分類体系",
+    "groupOntology": "オントロジー",
+    "inParent": "{{parent}} 内"
+  },
+  "explore": {
+    "emptyTitle": "探索できるものはまだありません",
+    "emptyBody": "Define タブでファイルをインポートするか、コンセプトを作成してください。",
+    "emptyCta": "Define に移動"
+  },
+  "define": {
+    "requiresWrite": "書き込み権限が必要です"
   }
 }

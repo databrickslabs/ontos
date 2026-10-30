@@ -201,22 +201,19 @@ def _is_shipped_sample(data: List) -> bool:
         return False
 
 
-def _load_estates_yaml(yaml_path: Optional[Path] = None) -> Optional[List]:
-    """Load and parse the estates YAML file.
+def _default_estates_yaml_path() -> Path:
+    return Path(__file__).parent.parent / 'data' / 'estates.yaml'
+
+
+def _load_estates_yaml(yaml_path: Path) -> Optional[List]:
+    """Load and parse an existing estates YAML file.
 
     Args:
-        yaml_path: Optional override path. Defaults to data/estates.yaml.
+        yaml_path: Path of the file to read; the caller checks that it exists.
 
-    Returns parsed YAML (list of dicts) or None if not found/invalid.
+    Returns parsed YAML (list of dicts) or None if the file is empty.
     Raises yaml.YAMLError only; caller handles gracefully.
     """
-    if yaml_path is None:
-        yaml_path = Path(__file__).parent.parent / 'data' / 'estates.yaml'
-
-    if not yaml_path.exists():
-        logger.info("Estates YAML file not found at %s", yaml_path)
-        return None
-
     with open(yaml_path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
 
@@ -236,6 +233,9 @@ def import_estates_from_yaml_once(db: Session, yaml_path: Optional[Path] = None)
     """Import estates from YAML on startup if empty (one-time only).
 
     Detects shipped samples (never configured) and skips them.
+    If the file does not exist (e.g. an upgraded deployment where it was removed),
+    logs at info and does NOT mark done, so a customised file put back later is
+    still imported on the next startup. An empty or sample file marks done.
     On malformed YAML: logs a coded warning, does NOT mark done → retry after fix.
     All estates created in a single transaction for atomicity: on any error,
     all changes are rolled back and the "done" flag is NOT set, so retry happens
@@ -258,6 +258,13 @@ def import_estates_from_yaml_once(db: Session, yaml_path: Optional[Path] = None)
     if _count_estates(db) > 0:
         logger.debug("Estates table not empty; skipping YAML import")
         return False
+
+    if yaml_path is None:
+        yaml_path = _default_estates_yaml_path()
+
+    if not yaml_path.exists():
+        logger.info("Estates YAML file not found at %s; import not marked done", yaml_path)
+        return False  # Do NOT mark done
 
     # Load YAML (may raise YAMLError)
     try:

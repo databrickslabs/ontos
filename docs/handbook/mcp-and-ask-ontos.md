@@ -123,8 +123,8 @@ Same tool registry, different transport, different authentication:
 |---|---|---|
 | **Caller** | A logged-in Ontos user | An external agent / IDE |
 | **Auth** | Browser session + OBO | MCP token (DB-stored, scope-tagged) |
-| **Acts as** | The logged-in user (OBO) | The token's bound principal |
-| **Permissions** | Inherits the caller's Ontos role | Constrained by the token's scopes |
+| **Acts as** | The logged-in user (OBO) | The user (or service principal) of the forwarded token, verified with `current_user.me()`; with only an API key, no user (consumer-only) |
+| **Permissions** | Inherits the caller's Ontos role | The caller's Ontos role, further constrained by the token's scopes |
 | **Transport** | App UI calls backend | JSON-RPC 2.0 over HTTP (with SSE option) |
 
 #### Tokens and scopes {#mcp-tokens}
@@ -208,8 +208,10 @@ Yes. Genie's native MCP connector carries a single credential (the app-gate
 OAuth), so it can't also send the `X-API-Key` the header-based clients use.
 Ontos bridges this with **keyless MCP**: an admin designates one read-only
 MCP token as the **keyless default** (Settings → MCP Tokens → star a token),
-and app-gate-authenticated requests that arrive without an `X-API-Key`
-resolve to that token's scopes, attributed to the calling user. You then
+and app-gate-authenticated requests that arrive without an `X-API-Key` but
+with a forwarded user token resolve to that token's scopes, acting for (and
+attributed to) the user that `current_user.me()` returns for the forwarded
+token. A request with only the `X-Forwarded-Email` header is refused. You then
 register the Ontos `/api/mcp` endpoint as a Unity Catalog HTTP connection and
 add it in Genie One. Full walkthrough:
 [genie-one-mcp-setup.md](genie-one-mcp-setup.md). Because the keyless default
@@ -217,8 +219,11 @@ applies to any authenticated app user, scope it read-only.
 
 **"If I create an MCP token, does that token bypass Ontos permissions?"**
 
-No. The token is bound to a principal, and the principal's Ontos
-permissions still apply. The token's scopes are an *additional* restrict
-— they narrow what the token can do, never widen it.
+No. With a forwarded user token the tools act for that verified user, whose
+Ontos roles apply as in the REST API (feature levels for changes, the read
+rules for data products and contracts). With only an API key there is no user:
+the tools read published products and contracts only and refuse every change.
+The token's scopes are an *additional* restriction — they narrow what the token
+can do, never widen it.
 
-_Last verified against codebase: 2026-09-19_
+_Last verified against codebase: 2026-10-30_

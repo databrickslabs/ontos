@@ -6,6 +6,7 @@ Tools for searching glossary terms and managing semantic links.
 
 from typing import Any, Dict, Optional
 from src.common.features import FeatureAccessLevel
+from src.tools import read_access
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -224,7 +225,12 @@ class ListSemanticLinksTool(BaseTool):
                 semantic_models_manager=ctx.semantic_models_manager
             )
             
-            links = manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
+            # An entity the caller can't read is answered like a missing one (no links).
+            unreadable = read_access.entity_is_unreadable(ctx, entity_type, entity_id)
+            links = (
+                [] if unreadable
+                else manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
+            )
             
             link_list = []
             for link in links:
@@ -232,12 +238,17 @@ class ListSemanticLinksTool(BaseTool):
                     "id": link.id,
                     "iri": link.iri,
                     "label": link.label,
-                    "relationship_type": link.relationship_type,
-                    "created_at": link.created_at.isoformat() if link.created_at else None
+                    # EntitySemanticLink has neither field: reading them raised, so
+                    # any entity with a link answered the generic tool failure.
+                    "relationship_type": getattr(link, "relationship_type", None),
+                    "created_at": (
+                        link.created_at.isoformat()
+                        if getattr(link, "created_at", None) else None
+                    ),
                 })
             
             logger.info(f"[list_semantic_links] SUCCESS: Found {len(link_list)} links for {entity_type} {entity_id}")
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "links": link_list,
@@ -246,6 +257,7 @@ class ListSemanticLinksTool(BaseTool):
                     "entity_id": entity_id
                 }
             )
+            return read_access.denied(ctx, self.name, result, [entity_id] if unreadable else [])
             
         except Exception as e:
             return ToolResult(
@@ -347,9 +359,15 @@ class FindEntitiesByConceptTool(BaseTool):
             
             # Get all entities linked to this concept (explicit + inferred)
             links = manager.list_for_iri(iri=concept_iri)
+            # Products and contracts the caller can't read are left out.
+            hidden = read_access.hidden_entity_keys(ctx)
+            dropped = [link.entity_id for link in links
+                       if (link.entity_type, link.entity_id) in hidden]
             
             entities = []
             for link in links:
+                if (link.entity_type, link.entity_id) in hidden:
+                    continue
                 entities.append({
                     "entity_type": link.entity_type,
                     "entity_id": link.entity_id,
@@ -359,7 +377,7 @@ class FindEntitiesByConceptTool(BaseTool):
                 })
             
             logger.info(f"[find_entities_by_concept] SUCCESS: Found {len(entities)} entities linked to concept")
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "entities": entities,
@@ -367,6 +385,7 @@ class FindEntitiesByConceptTool(BaseTool):
                     "concept_iri": concept_iri
                 }
             )
+            return read_access.denied(ctx, self.name, result, dropped)
             
         except Exception as e:
             return ToolResult(
@@ -398,6 +417,10 @@ class ExecuteSparqlQueryTool(BaseTool):
     }
     required_params = ["sparql"]
     required_scope = "sparql:query"
+    # Admins only: the graph holds every product and contract, readable or
+    # not. Same feature as POST /api/semantic-models/query (Read/Write), one
+    # level up.
+    required_permission = ("semantic-models", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,

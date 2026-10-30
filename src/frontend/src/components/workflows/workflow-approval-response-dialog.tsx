@@ -165,9 +165,13 @@ function buildDetailRows(
   if (typeof conceptType === 'string' && conceptType) {
     rows.push({ label: 'Type', value: conceptType });
   }
+  // Prefer the scheme's label captured at submit time over the raw key.
   const sourceContext = payload.full_payload?.source_context;
-  if (typeof sourceContext === 'string' && sourceContext) {
-    rows.push({ label: 'Scheme', value: sourceContext });
+  const sourceLabel = payload.full_payload?.source_label;
+  const schemeValue =
+    typeof sourceLabel === 'string' && sourceLabel ? sourceLabel : sourceContext;
+  if (typeof schemeValue === 'string' && schemeValue) {
+    rows.push({ label: 'Scheme', value: schemeValue });
   }
   const definition = payload.full_payload?.definition;
   if (typeof definition === 'string' && definition) {
@@ -181,7 +185,7 @@ function buildDetailRows(
       'permission_level', 'requested_duration_days', 'reason',
       'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
-      'definition', 'concept_type', 'source_context',
+      'definition', 'concept_type', 'source_context', 'source_label',
     ]);
     for (const [key, val] of Object.entries(payload.full_payload)) {
       if (key.startsWith('_')) continue;

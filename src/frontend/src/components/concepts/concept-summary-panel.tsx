@@ -45,12 +45,15 @@ export interface ConceptSummaryPanelProps {
   title: string;
   /** Engine's current version number; hidden while unknown. */
   currentVersion?: number | null;
+  /** Scheme record's current label; falls back to the prettified source key. */
+  schemeLabel?: string;
 }
 
 export function ConceptSummaryPanel({
   concept,
   title,
   currentVersion,
+  schemeLabel,
 }: ConceptSummaryPanelProps) {
   const { t } = useTranslation(['semantic-models', 'common']);
   const { toast } = useToast();
@@ -92,7 +95,7 @@ export function ConceptSummaryPanel({
             </CardTitle>
             {concept.source_context && (
               <CardDescription className="pt-1">
-                {systemRdfNamespaceDisplayLabel(concept.source_context, t)}
+                {schemeLabel ?? systemRdfNamespaceDisplayLabel(concept.source_context, t)}
               </CardDescription>
             )}
           </div>

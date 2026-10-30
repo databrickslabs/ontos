@@ -3832,6 +3832,26 @@ class SemanticModelsManager(SearchableAsset):
         
         return collections
 
+    def _scheme_labels_by_source_key(self) -> Dict[str, str]:
+        """Map each scheme's source key to its collection record label.
+
+        Reads the collection records in the meta context directly (no concept
+        grouping, unlike get_collections) and keys them with the same
+        _extract_source_context mapper, so callers holding a concept's
+        source_context can show the scheme's current (possibly renamed) name.
+        First record wins on a duplicate key; empty labels are skipped.
+        """
+        labels: Dict[str, str] = {}
+        context = self._graph.get_context(URIRef("urn:meta:sources"))
+        for subj in context.subjects(RDF.type, ONTOS.KnowledgeCollection):
+            coll_iri = str(subj)
+            label = self._get_literal(context, subj, RDFS.label)
+            if not label:
+                continue
+            source_key = self._extract_source_context(coll_iri) or coll_iri.split(":")[-1]
+            labels.setdefault(source_key, label)
+        return labels
+
     def get_collection(self, collection_iri: str) -> Optional[Dict[str, Any]]:
         """Get a single collection by IRI."""
         collections = self.get_collections()
@@ -6068,6 +6088,18 @@ class SemanticModelsManager(SearchableAsset):
             review_context["concept_type"] = existing.get("concept_type")
         if existing.get("source_context"):
             review_context["source_context"] = existing.get("source_context")
+            # Readable (possibly renamed) scheme name for the approver; the key
+            # alone is often a file name. Best-effort: never blocks the submit.
+            # get_concept may return the full graph IRI ("urn:glossary:x"), so
+            # normalize through the same extractor that keys the label map.
+            try:
+                _sc = existing.get("source_context")
+                _labels = self._scheme_labels_by_source_key()
+                _source_label = _labels.get(self._extract_source_context(_sc) or _sc)
+                if _source_label:
+                    review_context["source_label"] = _source_label
+            except Exception as e:
+                logger.warning(f"Could not resolve scheme label for {concept_iri}: {e}")
 
         # 2. Fire the governance trigger. Governed iff a workflow executed.
         governed = False
@@ -7111,6 +7143,11 @@ class SemanticModelsManager(SearchableAsset):
         contract_layer_types = {'data_contract', 'data_contract_schema', 'data_contract_property'}
         asset_layer_types = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
 
+        # Rows show the scheme record's (possibly renamed) label; ``scheme``
+        # stays the raw key the frontend uses in pending-suggestions URLs.
+        # Sources without a record fall back to the key.
+        scheme_labels = self._scheme_labels_by_source_key()
+
         scheme_rows: List[CoverageSchemeRow] = []
         total_concepts = 0
         total_with_links = 0
@@ -7129,7 +7166,7 @@ class SemanticModelsManager(SearchableAsset):
                 # Empty scheme (no concepts with IRIs)
                 scheme_rows.append(CoverageSchemeRow(
                     scheme=scheme,
-                    label=scheme if scheme != "Unassigned" else None,
+                    label=(scheme_labels.get(scheme) or scheme) if scheme != "Unassigned" else None,
                     concepts=len(concepts),
                     coverage_pct=0,
                     products=0,
@@ -7182,7 +7219,7 @@ class SemanticModelsManager(SearchableAsset):
 
             scheme_rows.append(CoverageSchemeRow(
                 scheme=scheme,
-                label=scheme if scheme != "Unassigned" else None,
+                label=(scheme_labels.get(scheme) or scheme) if scheme != "Unassigned" else None,
                 concepts=len(concepts),
                 coverage_pct=coverage_pct,
                 products=len(scheme_products),

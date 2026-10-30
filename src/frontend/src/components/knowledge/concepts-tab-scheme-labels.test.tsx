@@ -136,6 +136,40 @@ describe('ConceptsTab scheme labels', () => {
     ).toBeInTheDocument();
   });
 
+  it('a renamed collection updates the row-level Scheme label in tree and list rows', () => {
+    const before = [collection('urn:ontology:supply-chain', 'Supply Chain Ontology')];
+    const after = [collection('urn:ontology:supply-chain', 'Supply Chain Ontology TEST')];
+    // Expand the group so the tree renders the concept row under its header.
+    storeState.expandedConceptGroups = ['supply-chain'];
+
+    const tree = render(
+      <ConceptsTab {...baseProps} viewMode="tree" collections={before} filteredConcepts={[SUPPLY]} />,
+    );
+    expect(
+      within(screen.getByTestId('concept-row-urn:c:supplier')).getByText('Supply Chain Ontology'),
+    ).toBeInTheDocument();
+    tree.rerender(
+      <ConceptsTab {...baseProps} viewMode="tree" collections={after} filteredConcepts={[SUPPLY]} />,
+    );
+    const treeRow = screen.getByTestId('concept-row-urn:c:supplier');
+    expect(within(treeRow).getByText('Supply Chain Ontology TEST')).toBeInTheDocument();
+    expect(within(treeRow).queryByText('Supply Chain Ontology')).not.toBeInTheDocument();
+    tree.unmount();
+
+    const list = render(
+      <ConceptsTab {...baseProps} viewMode="list" collections={before} filteredConcepts={[SUPPLY]} />,
+    );
+    expect(
+      within(screen.getByTestId('concept-row-urn:c:supplier')).getByText('Supply Chain Ontology'),
+    ).toBeInTheDocument();
+    list.rerender(
+      <ConceptsTab {...baseProps} viewMode="list" collections={after} filteredConcepts={[SUPPLY]} />,
+    );
+    const listRow = screen.getByTestId('concept-row-urn:c:supplier');
+    expect(within(listRow).getByText('Supply Chain Ontology TEST')).toBeInTheDocument();
+    expect(within(listRow).queryByText('Supply Chain Ontology')).not.toBeInTheDocument();
+  });
+
   it('finds a child scheme nested in child_collections', () => {
     const parent = collection('urn:glossary:enterprise', 'Enterprise Glossary', {
       child_collections: [collection('urn:glossary:finance', 'Finance Glossary')],

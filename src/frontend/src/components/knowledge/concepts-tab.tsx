@@ -38,7 +38,7 @@ import type {
 } from '@/types/ontology';
 import { resolveLabel } from '@/lib/ontology-utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
-import { collectionSourceKey } from '@/lib/collection-source-key';
+import { createSchemeLookup } from '@/lib/scheme-lookup';
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 
 interface ConceptsTabProps {
@@ -488,43 +488,15 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGrouping, treeData.groupKeys.join('|')]);
 
-  // `collections` is the NESTED scheme tree (children live in child_collections),
-  // so flatten it before looking schemes up; otherwise nested schemes are missed.
-  const flatCollections = useMemo(() => {
-    const out: KnowledgeCollection[] = [];
-    const walk = (nodes: KnowledgeCollection[] | undefined) => {
-      for (const c of nodes ?? []) {
-        out.push(c);
-        walk(c.child_collections);
-      }
-    };
-    walk(collections);
-    return out;
-  }, [collections]);
-
   // Scheme lookup keyed by the same key concepts are grouped under
-  // (source_context). First one wins on duplicate keys.
-  const collectionsByKey = useMemo(() => {
-    const map = new Map<string, KnowledgeCollection>();
-    for (const c of flatCollections) {
-      const key = collectionSourceKey(c);
-      if (!map.has(key)) map.set(key, c);
-    }
-    return map;
-  }, [flatCollections]);
-
-  const getCollection = useCallback((context?: string) => {
-    if (!context) return null;
-    return collectionsByKey.get(context)
-      ?? flatCollections.find(c => c.iri === context)
-      ?? null;
-  }, [collectionsByKey, flatCollections]);
+  // (source_context); handles the nested scheme tree and the IRI fallback.
+  const findScheme = useMemo(() => createSchemeLookup(collections), [collections]);
 
   // One label for a scheme everywhere (group headers and the Scheme column):
   // the collection record's label, falling back to the prettified key.
   const schemeLabel = useCallback(
-    (sourceKey: string) => getCollection(sourceKey)?.label || systemRdfNamespaceDisplayLabel(sourceKey, t),
-    [getCollection, t],
+    (sourceKey: string) => findScheme(sourceKey)?.label || systemRdfNamespaceDisplayLabel(sourceKey, t),
+    [findScheme, t],
   );
 
   const handleSelect = useCallback((concept: OntologyConcept) => {

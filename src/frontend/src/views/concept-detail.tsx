@@ -47,6 +47,7 @@ import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { resolveLabel, resolveComment } from '@/lib/ontology-utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
+import { createSchemeLookup } from '@/lib/scheme-lookup';
 import ConceptRelationsPanel from '@/components/semantic/concept-relations-panel';
 import LinkedObjectsPanel from '@/components/semantic/linked-objects-panel';
 import ConceptNeighborhoodGraph from '@/components/semantic/concept-neighborhood-graph';
@@ -376,14 +377,17 @@ export default function ConceptDetailView() {
     };
   }, [concept, setStaticSegments, setDynamicTitle, selectedLanguage, t]);
 
-  const collection = useMemo(() => {
-    if (!concept?.source_context) return null;
-    return (
-      collections.find(
-        (c) => c.iri === concept.source_context || c.iri.endsWith(`:${concept.source_context}`),
-      ) || null
-    );
-  }, [collections, concept]);
+  // Exact match on the scheme's source key, across nested child schemes too.
+  const findScheme = useMemo(() => createSchemeLookup(collections), [collections]);
+  const collection = useMemo(
+    () => findScheme(concept?.source_context),
+    [findScheme, concept],
+  );
+  // The scheme record's current label, so a rename shows here; falls back to
+  // the prettified key when no scheme record matches.
+  const schemeLabel = concept?.source_context
+    ? collection?.label || systemRdfNamespaceDisplayLabel(concept.source_context, t)
+    : undefined;
 
   // Whether the concept *itself* can be modified (label, definition, status,
   // relations within the concept document). Restricted to draft concepts in
@@ -905,6 +909,7 @@ export default function ConceptDetailView() {
           concept={concept}
           title={conceptTitle}
           currentVersion={currentVersion}
+          schemeLabel={schemeLabel}
         />
 
           {/* Definition + property domain/range in one compact full-width card
@@ -973,13 +978,15 @@ export default function ConceptDetailView() {
                 <dd className="font-medium text-right truncate">{collection.label}</dd>
               </div>
             )}
-            {concept.source_context && (
+            {/* Without a scheme record the "Concept scheme" row above is absent, so
+                this row carries the (prettified) source key instead. */}
+            {concept.source_context && !collection?.label && (
               <div className="flex justify-between gap-3 py-1.5">
                 <dt className="text-muted-foreground">
                   {t('semantic-models:fields.source', 'Source')}
                 </dt>
                 <dd className="font-medium text-right truncate">
-                  {systemRdfNamespaceDisplayLabel(concept.source_context, t)}
+                  {schemeLabel}
                 </dd>
               </div>
             )}

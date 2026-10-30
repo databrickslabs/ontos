@@ -76,7 +76,7 @@ export function TeamFormDialog({
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { get: apiGet, post: apiPost, put: apiPut, delete: apiDelete } = useApi();
+  const { get: apiGet, post: apiPost, put: apiPut } = useApi();
   const { toast } = useToast();
   const { t } = useTranslation(['teams', 'common']);
 
@@ -154,6 +154,24 @@ export function TeamFormDialog({
   };
 
 
+  // One request so the server applies the member diff atomically; deleting and re-adding
+  // members one by one can strip the caller's own Admin Team role mid-save.
+  const saveMembers = async (
+    teamId: string,
+    members: { member_type: string; member_identifier: string; app_role_override?: string }[],
+  ) => {
+    const membersResponse = await apiPut<TeamMember[]>(`/api/teams/${teamId}/members`, {
+      members: members.map(member => ({
+        member_type: member.member_type,
+        member_identifier: member.member_identifier,
+        app_role_override: member.app_role_override,
+      })),
+    });
+    if (membersResponse.error) {
+      throw new Error(membersResponse.error);
+    }
+  };
+
   const handleSubmit = async (data: TeamFormData) => {
     setIsSubmitting(true);
     try {
@@ -186,37 +204,14 @@ export function TeamFormDialog({
           tags: cleanedData.tags,
           metadata: undefined,
         };
+        // Members first: the server may refuse them (self-lockout, duplicates), and then
+        // nothing should have been saved.
+        await saveMembers(team.id, cleanedData.members);
+
         response = await apiPut<TeamRead>(`/api/teams/${team.id}`, updateData);
 
         if (response.error) {
           throw new Error(response.error);
-        }
-
-        // For updates, clear existing members and add new ones
-        // First, get current members
-        const currentMembersResponse = await apiGet<TeamMember[]>(`/api/teams/${team.id}/members`);
-        if (currentMembersResponse.data && !currentMembersResponse.error) {
-          // Remove all current members
-          for (const currentMember of currentMembersResponse.data) {
-            try {
-              await apiDelete(`/api/teams/${team.id}/members/${encodeURIComponent(currentMember.member_identifier)}`);
-            } catch (removeError) {
-              console.warn('Failed to remove existing member:', removeError);
-            }
-          }
-        }
-
-        // Add new members
-        for (const member of cleanedData.members) {
-          try {
-            await apiPost(`/api/teams/${team.id}/members`, {
-              member_type: member.member_type,
-              member_identifier: member.member_identifier,
-              app_role_override: member.app_role_override
-            });
-          } catch (memberError) {
-            console.warn('Failed to add member:', memberError);
-          }
         }
       } else {
         // Create new team (without members)
@@ -235,20 +230,19 @@ export function TeamFormDialog({
           throw new Error(response.error);
         }
 
-        // Add members separately after team creation
-        if (response.data && cleanedData.members && cleanedData.members.length > 0) {
-          const teamId = (response.data as TeamRead).id;
-          for (const member of cleanedData.members) {
-            try {
-              await apiPost(`/api/teams/${teamId}/members`, {
-                member_type: member.member_type,
-                member_identifier: member.member_identifier,
-                app_role_override: member.app_role_override
-              });
-            } catch (memberError) {
-              // Continue with other members if one fails
-              console.warn('Failed to add member during creation:', memberError);
-            }
+        if (response.data && cleanedData.members.length > 0) {
+          try {
+            await saveMembers((response.data as TeamRead).id, cleanedData.members);
+          } catch (memberError) {
+            // The team exists now; report the member failure instead of a failed create.
+            toast({
+              variant: 'destructive',
+              title: t('teams:form.toasts.membersFailedTitle'),
+              description: memberError instanceof Error ? memberError.message : t('teams:form.toasts.failedDescription'),
+            });
+            onSubmitSuccess(response.data as TeamRead);
+            onOpenChange(false);
+            return;
           }
         }
       }

@@ -7,6 +7,7 @@ from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.database import get_db
+from src.common.team_role_override import pick_team_role_override
 # Import dependencies for user info and managers (adjust paths if needed)
 # Import dependencies needed for the moved function
 from databricks.sdk.errors import NotFound
@@ -463,30 +464,10 @@ async def get_user_team_role_overrides(user_identifier: str, user_groups: List[s
         try:
             # Get teams where user is a member
             user_teams = teams_manager.get_teams_for_user(db, user_identifier)
-
-            # Normalize user groups to lowercase for case-insensitive matching
-            user_groups_lower = set(g.lower() for g in user_groups)
-
-            # Collect all role overrides for this user across teams
-            role_overrides = []
-            for team in user_teams:
-                for member in team.members:
-                    if member.member_identifier == user_identifier and member.app_role_override:
-                        role_overrides.append(member.app_role_override)
-
-            # Also check group memberships (case-insensitive)
-            for team in user_teams:
-                for member in team.members:
-                    if member.member_identifier.lower() in user_groups_lower and member.app_role_override:
-                        role_overrides.append(member.app_role_override)
-
-            if not role_overrides:
-                return None
-
-            # Return the highest role override (assuming role names have hierarchical order)
-            # For now, just return the first one found - in practice you'd need proper role hierarchy
-            logger.debug("Found team role overrides for user %s: %s", user_identifier, role_overrides)
-            return role_overrides[0]
+            override = pick_team_role_override(user_teams, user_identifier, user_groups)
+            if override:
+                logger.debug("Found team role override for user %s: %s", user_identifier, override)
+            return override
 
         finally:
             db.close()

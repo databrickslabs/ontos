@@ -9,9 +9,10 @@ from src.models.teams import (
     TeamSummary,
     TeamMemberCreate,
     TeamMemberUpdate,
-    TeamMemberRead
+    TeamMemberRead,
+    TeamMembersReplace,
 )
-from src.controller.teams_manager import TeamsManager, teams_manager
+from src.controller.teams_manager import InvalidMemberSetError, TeamsManager, teams_manager
 from src.common.database import get_db
 from sqlalchemy.orm import Session
 from src.common.authorization import PermissionChecker
@@ -290,10 +291,14 @@ def delete_team(
 
     logger.info(f"User '{current_user.email}' attempting to delete team: {team_id}")
     try:
+        _ensure_keeps_team_access(request, db, manager, team_id, [], current_user, details_for_audit)
         deleted_team = manager.delete_team(db=db, team_id=team_id)
         db.commit()
         success = True
         return deleted_team
+    except HTTPException:
+        db.rollback()
+        raise
     except NotFoundError as e:
         db.rollback()
         logger.error("Team not found for deletion %s: %s", team_id, e)
@@ -382,6 +387,131 @@ def add_team_member(
         )
 
 
+SELF_LOCKOUT_DETAIL = (
+    "This change would remove your own permission to manage teams. "
+    "Keep your own membership or role, or ask another administrator."
+)
+INVALID_MEMBER_SET_DETAIL = "Each member needs an identifier and may be listed only once."
+
+
+def _would_lose_team_write_access(
+    request: Request,
+    db: Session,
+    manager: TeamsManager,
+    team_id: str,
+    members_after: List[TeamMemberCreate],
+    current_user: UserInfo,
+) -> bool:
+    """True if ``team_id`` having ``members_after`` would leave the caller unable to manage teams."""
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    if auth_manager is None:
+        return False
+
+    settings_manager = getattr(request.app.state, "settings_manager", None)
+    if settings_manager is not None:
+        try:
+            if settings_manager.get_applied_role_override_for_user(current_user.email):
+                # An applied role override wins over team overrides, so team edits can't remove it.
+                return False
+        except Exception:
+            logger.debug("Could not read applied role override for %s", current_user.email, exc_info=True)
+
+    groups = current_user.groups or []
+    override_after = manager.team_role_override_with_members(
+        db=db, team_id=team_id, members=members_after,
+        user_identifier=current_user.email, user_groups=groups,
+    )
+    permissions_after = auth_manager.get_user_effective_permissions(
+        groups, override_after, user_email=current_user.email
+    )
+    return not auth_manager.has_permission(
+        permissions_after, TEAMS_FEATURE_ID, FeatureAccessLevel.READ_WRITE
+    )
+
+
+def _ensure_keeps_team_access(
+    request: Request,
+    db: Session,
+    manager: TeamsManager,
+    team_id: str,
+    members_after: List[TeamMemberCreate],
+    current_user: UserInfo,
+    details_for_audit: dict,
+) -> None:
+    if _would_lose_team_write_access(request, db, manager, team_id, members_after, current_user):
+        details_for_audit["exception"] = {
+            "type": "SelfLockout", "message": "Change would remove the caller's own team access",
+        }
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=SELF_LOCKOUT_DETAIL)
+
+
+@router.put(
+    "/teams/{team_id}/members",
+    response_model=List[TeamMemberRead],
+    dependencies=[Depends(PermissionChecker(TEAMS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
+)
+def replace_team_members(
+    team_id: str,
+    request: Request,
+    body: TeamMembersReplace,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager = Depends(get_teams_manager)
+):
+    """Replaces a team's member set in one transaction (adds, removes and updates only what changed)."""
+    success = False
+    details_for_audit = {
+        "params": {
+            "team_id": team_id,
+            "member_identifiers": [m.member_identifier for m in body.members],
+        },
+    }
+
+    logger.info(
+        "User %s replacing members of team %s (%d members)",
+        current_user.email, team_id, len(body.members),
+    )
+    try:
+        members_after = manager.validate_member_set(body.members)
+        _ensure_keeps_team_access(
+            request, db, manager, team_id, members_after, current_user, details_for_audit
+        )
+        members = manager.replace_team_members(
+            db=db, team_id=team_id, members_in=members_after, current_user_id=current_user.email
+        )
+        db.commit()
+        success = True
+        return members
+    except HTTPException:
+        db.rollback()
+        raise
+    except NotFoundError as e:
+        db.rollback()
+        logger.error("Team not found for replacing members %s: %s", team_id, e)
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    except InvalidMemberSetError as e:
+        db.rollback()
+        details_for_audit["exception"] = {"type": "InvalidMemberSetError", "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=INVALID_MEMBER_SET_DETAIL)
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to replace members of team %s", team_id)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update team members")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="REPLACE_MEMBERS",
+            success=success,
+            details=details_for_audit
+        )
+
+
 @router.get(
     "/teams/{team_id}/members",
     response_model=List[TeamMemberRead],
@@ -424,6 +554,16 @@ def update_team_member(
 
     logger.info(f"User '{current_user.email}' updating team member {member_id} in team {team_id}")
     try:
+        target = manager.team_member_repo.get(db, member_id)
+        if target is not None and target.team_id == team_id and "app_role_override" in member_in.model_fields_set:
+            members_after = [
+                m.model_copy(update={"app_role_override": member_in.app_role_override})
+                if m.member_identifier == target.member_identifier else m
+                for m in manager.current_member_set(db, team_id)
+            ]
+            _ensure_keeps_team_access(
+                request, db, manager, team_id, members_after, current_user, details_for_audit
+            )
         updated_member = manager.update_team_member(
             db=db,
             team_id=team_id,
@@ -434,6 +574,9 @@ def update_team_member(
         db.commit()
         success = True
         return updated_member
+    except HTTPException:
+        db.rollback()
+        raise
     except NotFoundError as e:
         db.rollback()
         logger.error("Team or member not found for update %s/%s: %s", team_id, member_id, e)
@@ -480,6 +623,13 @@ def remove_team_member(
 
     logger.info(f"User '{current_user.email}' removing member {member_identifier} from team {team_id}")
     try:
+        members_after = [
+            m for m in manager.current_member_set(db, team_id)
+            if m.member_identifier != member_identifier
+        ]
+        _ensure_keeps_team_access(
+            request, db, manager, team_id, members_after, current_user, details_for_audit
+        )
         removed = manager.remove_team_member(db=db, team_id=team_id, member_identifier=member_identifier)
         if not removed:
             details_for_audit["exception"] = {"type": "NotFoundError", "message": f"Member '{member_identifier}' not found in team"}
@@ -491,9 +641,9 @@ def remove_team_member(
         raise
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to remove team member: {e}")
+        logger.exception("Failed to remove team member %s from team %s", member_identifier, team_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to remove team member: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to remove team member")
     finally:
         if success:
             details_for_audit["deleted_resource_id"] = member_identifier

@@ -711,7 +711,7 @@
       "title": "Branding",
       "taglineLabel": "Slogan (optioneel)",
       "taglineHelp": "Korte ondertitel onder de naam in de zijbalk en op de startpagina. Maximaal {{max}} tekens.",
-      "poweredByLabel": "\"powered by {{name}}\" in de zijbalk tonen",
+      "poweredByLabel": "\"Powered by {{name}}\" in de zijbalk tonen",
       "poweredByHelp": "Wordt onderaan de zijbalk getoond, alleen zolang er een eigen weergavenaam of logo is ingesteld."
     },
     "favicon": {

@@ -1,5 +1,5 @@
 /**
- * "powered by Ontos" sidebar footer: hidden without a custom brand, shown
+ * "Powered by Ontos" sidebar footer: hidden without a custom brand, shown
  * (text or collapsed mark + tooltip) with one, and hidden by the setting.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -35,7 +35,7 @@ describe('SidebarPoweredBy', () => {
     useUICustomizationStore.getState().setSettings({ appDisplayName: 'Acme Graph' });
     render(<SidebarPoweredBy isCollapsed={false} />);
     const footer = screen.getByTestId('sidebar-powered-by');
-    expect(footer).toHaveTextContent('powered by Ontos');
+    expect(footer).toHaveTextContent('Powered by Ontos');
     const mark = footer.querySelector('img');
     expect(mark?.getAttribute('src')).toBe('/ontos-logo.svg');
     expect(mark?.className).toContain('object-contain');
@@ -51,11 +51,11 @@ describe('SidebarPoweredBy', () => {
     useUICustomizationStore.getState().setSettings({ appDisplayName: 'Acme Graph' });
     render(<SidebarPoweredBy isCollapsed />);
     const footer = screen.getByTestId('sidebar-powered-by');
-    expect(footer).not.toHaveTextContent('powered by Ontos');
-    const trigger = screen.getByRole('img', { name: 'powered by Ontos' });
+    expect(footer).not.toHaveTextContent('Powered by Ontos');
+    const trigger = screen.getByRole('img', { name: 'Powered by Ontos' });
 
     await userEvent.hover(trigger);
-    expect((await screen.findAllByText('powered by Ontos')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Powered by Ontos')).length).toBeGreaterThan(0);
   });
 
   it('is hidden when the powered-by setting is off', () => {

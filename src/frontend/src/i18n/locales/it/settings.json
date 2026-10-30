@@ -693,7 +693,7 @@
       "title": "Branding",
       "taglineLabel": "Slogan (facoltativo)",
       "taglineHelp": "Breve sottotitolo mostrato sotto il nome nella barra laterale e nella home page. Massimo {{max}} caratteri.",
-      "poweredByLabel": "Mostra \"powered by {{name}}\" nella barra laterale",
+      "poweredByLabel": "Mostra \"Powered by {{name}}\" nella barra laterale",
       "poweredByHelp": "Compare nel piè della barra laterale solo quando è impostato un nome visualizzato o un logo personalizzato."
     },
     "favicon": {

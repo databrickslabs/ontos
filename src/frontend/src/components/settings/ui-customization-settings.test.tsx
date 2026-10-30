@@ -100,7 +100,7 @@ describe('UICustomizationSettings co-branding fields', () => {
     fireEvent.change(screen.getByLabelText('Dark mode logo URL (optional)'), {
       target: { name: 'customLogoDarkUrl', value: '/branding/acme/mark-dark.svg' },
     });
-    fireEvent.click(screen.getByRole('switch', { name: 'Show "powered by Ontos" in the sidebar' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Show "Powered by Ontos" in the sidebar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save UI Settings' }));
 
     await waitFor(() => expect(putBody).not.toBeNull());

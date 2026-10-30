@@ -693,7 +693,7 @@
       "title": "Image de marque",
       "taglineLabel": "Slogan (facultatif)",
       "taglineHelp": "Court sous-titre affiché sous le nom dans la barre latérale et sur la page d’accueil. {{max}} caractères maximum.",
-      "poweredByLabel": "Afficher « propulsé par {{name}} » dans la barre latérale",
+      "poweredByLabel": "Afficher « Powered by {{name}} » dans la barre latérale",
       "poweredByHelp": "Affiché en bas de la barre latérale uniquement lorsqu’un nom d’affichage ou un logo personnalisé est défini."
     },
     "favicon": {

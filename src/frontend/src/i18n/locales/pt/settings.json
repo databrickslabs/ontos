@@ -711,7 +711,7 @@
       "title": "Identidade visual",
       "taglineLabel": "Slogan (opcional)",
       "taglineHelp": "Subtítulo curto exibido abaixo do nome na barra lateral e na página inicial. Máximo de {{max}} caracteres.",
-      "poweredByLabel": "Mostrar \"com tecnologia {{name}}\" na barra lateral",
+      "poweredByLabel": "Mostrar \"Powered by {{name}}\" na barra lateral",
       "poweredByHelp": "Aparece no rodapé da barra lateral somente enquanto houver um nome de exibição ou logotipo personalizado."
     },
     "favicon": {

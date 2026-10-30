@@ -711,7 +711,7 @@
       "title": "Branding",
       "taglineLabel": "Tagline (optional)",
       "taglineHelp": "Short subtitle shown under the name in the sidebar and on the home page. Maximum {{max}} characters.",
-      "poweredByLabel": "Show \"powered by {{name}}\" in the sidebar",
+      "poweredByLabel": "Show \"Powered by {{name}}\" in the sidebar",
       "poweredByHelp": "Shown in the sidebar footer only while a custom display name or logo is set."
     },
     "favicon": {

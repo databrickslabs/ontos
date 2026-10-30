@@ -693,7 +693,7 @@
       "title": "Marca",
       "taglineLabel": "Eslogan (opcional)",
       "taglineHelp": "Subtítulo breve que se muestra bajo el nombre en la barra lateral y en la página de inicio. Máximo {{max}} caracteres.",
-      "poweredByLabel": "Mostrar \"con la tecnología de {{name}}\" en la barra lateral",
+      "poweredByLabel": "Mostrar \"Powered by {{name}}\" en la barra lateral",
       "poweredByHelp": "Se muestra en el pie de la barra lateral solo mientras haya un nombre visible o un logotipo personalizado."
     },
     "favicon": {

@@ -693,7 +693,7 @@
       "title": "Branding",
       "taglineLabel": "Slogan (optional)",
       "taglineHelp": "Kurzer Untertitel unter dem Namen in der Seitenleiste und auf der Startseite. Höchstens {{max}} Zeichen.",
-      "poweredByLabel": "„powered by {{name}}“ in der Seitenleiste anzeigen",
+      "poweredByLabel": "„Powered by {{name}}“ in der Seitenleiste anzeigen",
       "poweredByHelp": "Erscheint in der Fußzeile der Seitenleiste nur, solange ein eigener Anzeigename oder ein eigenes Logo festgelegt ist."
     },
     "favicon": {

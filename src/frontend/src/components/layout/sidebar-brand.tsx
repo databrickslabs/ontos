@@ -25,12 +25,18 @@ export function SidebarBrand({ isCollapsed }: SidebarBrandProps) {
     <div
       className={cn(
         'flex h-16 items-center border-b shrink-0',
-        showText ? 'justify-start px-3' : 'justify-center px-4',
+        showText ? 'justify-start px-3' : 'justify-center',
+        !showText && (isCollapsed ? 'px-2' : 'px-4'),
       )}
     >
       <Link to="/" className="flex min-w-0 items-center gap-2 font-semibold">
         <UnityCatalogLogo
-          className={cn('transition-all', showText ? 'h-9 w-9 mr-0 shrink-0' : 'h-10 w-10')}
+          className={cn(
+            'transition-all',
+            showText && 'h-9 w-9 mr-0',
+            // The collapsed rail is 56px wide: a smaller box keeps the logo inside it
+            isCollapsed && 'h-8 w-8 mr-0',
+          )}
         />
         {showText && (
           <span className="flex min-w-0 flex-col leading-tight" data-testid="sidebar-brand-text">

@@ -14,12 +14,19 @@ vi.mock('@/stores/knowledge-graph-store', () => ({
   useKnowledgeGraphStore: (selector: any) => selector({ refreshNonce: 0 }),
 }));
 
+// The system-ontology toggle only takes effect in Advanced (L) mode.
+let conceptMode: 'simple' | 'advanced' = 'advanced';
+vi.mock('@/components/concepts/mode-switch', () => ({
+  useConceptMode: () => [conceptMode, vi.fn()],
+}));
+
 import { useExploreConcepts, useExploreSessionStore } from './use-explore-concepts';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   showProperties = false;
+  conceptMode = 'advanced';
   useExploreSessionStore.setState({ showSystemSources: false });
   fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
   global.fetch = fetchMock as unknown as typeof fetch;
@@ -82,6 +89,52 @@ describe('useExploreConcepts system-ontology toggle', () => {
     act(() => useExploreSessionStore.getState().setShowSystemSources(true));
     expect(Object.keys(result.current.groupedConcepts)).toContain('ontos-ontology');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('useExploreConcepts system-ontology toggle in Simple mode', () => {
+  const payload = (includeSystem: boolean) => ({
+    grouped_concepts: {
+      'my-scheme': [{ iri: 'urn:a', label: 'A', source_context: 'my-scheme', concept_type: 'concept' }],
+      ...(includeSystem
+        ? { 'ontos-ontology': [{ iri: 'urn:s', label: 'S', source_context: 'ontos-ontology', concept_type: 'class' }] }
+        : {}),
+    },
+    system_sources: ['ontos-ontology'],
+  });
+  const mockPayload = () =>
+    fetchMock.mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => (String(url).includes('concepts-grouped') ? payload(String(url).includes('include_system')) : {}),
+    }));
+
+  it('ignores a stored "on" flag in S mode: no include_system fetch, system groups hidden', async () => {
+    conceptMode = 'simple';
+    showProperties = true;
+    useExploreSessionStore.setState({ showSystemSources: true });
+    mockPayload();
+    const { result } = renderHook(() => useExploreConcepts());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(calledUrls().some((u) => u.includes('include_system'))).toBe(false);
+    expect(Object.keys(result.current.groupedConcepts)).toEqual(['my-scheme']);
+    // The stored choice itself is untouched.
+    expect(useExploreSessionStore.getState().showSystemSources).toBe(true);
+  });
+
+  it('hides system groups on switching L to S and restores them on switching back', async () => {
+    useExploreSessionStore.setState({ showSystemSources: true });
+    mockPayload();
+    const { result, rerender } = renderHook(() => useExploreConcepts());
+    await waitFor(() => expect(Object.keys(result.current.groupedConcepts)).toContain('ontos-ontology'));
+
+    conceptMode = 'simple';
+    rerender();
+    expect(Object.keys(result.current.groupedConcepts)).toEqual(['my-scheme']);
+
+    conceptMode = 'advanced';
+    rerender();
+    expect(Object.keys(result.current.groupedConcepts)).toContain('ontos-ontology');
   });
 });
 

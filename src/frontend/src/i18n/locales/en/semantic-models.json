@@ -367,7 +367,8 @@
     "success": "Import successful",
     "conflict": {
       "alreadyIn": "Already in {{scheme}}"
-    }
+    },
+    "readOnlyHint": "Only editable schemes can receive imports. Imported and system schemes are read-only."
   },
   "columns": {
     "fromFile": "from {{file}}"
@@ -612,5 +613,19 @@
     "noClassesInScheme": "No classes in this scheme yet.",
     "noConceptsInScheme": "No concepts in this scheme yet.",
     "includeOtherSchemesHint": "Tick \"Include other schemes\" to pick from another scheme."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossaries",
+    "groupTaxonomy": "Taxonomies",
+    "groupOntology": "Ontologies",
+    "inParent": "in {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Nothing to explore yet",
+    "emptyBody": "Import files or create concepts on the Define tab.",
+    "emptyCta": "Go to Define"
+  },
+  "define": {
+    "requiresWrite": "Requires write access"
   }
 }

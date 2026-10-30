@@ -17,6 +17,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -34,6 +35,8 @@ import {
   ScopeLevel,
 } from '@/types/ontology';
 import { Loader2 } from 'lucide-react';
+import { buildSchemeOptionGroups } from '@/lib/scheme-select-options';
+import { SchemeSelectItems } from './scheme-select-items';
 
 // Marker the backend writes as `created_by` on sources it auto-registers as
 // collections (bundled / imported ontologies). These are also read-only.
@@ -117,30 +120,13 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
     }
   };
 
-  // Flatten hierarchy for dropdown. Only schemes the user can actually nest
-  // under are offered: editable, not system/bundled, and not the scheme being
-  // edited. Non-qualifying schemes are skipped but their qualifying children
-  // are still listed (one level shallower).
-  const flattenCollections = (
-    colls: KnowledgeCollection[],
-    level = 0
-  ): Array<{ iri: string; label: string; level: number }> => {
-    let result: Array<{ iri: string; label: string; level: number }> = [];
-    for (const c of colls) {
-      const selectable = isNestableParent(c) && c.iri !== collection?.iri;
-      if (selectable) {
-        result.push({ iri: c.iri, label: c.label, level });
-      }
-      if (c.child_collections && c.child_collections.length > 0) {
-        result = result.concat(
-          flattenCollections(c.child_collections, selectable ? level + 1 : level)
-        );
-      }
-    }
-    return result;
-  };
-
-  const flatParentOptions = flattenCollections(collections);
+  // Parent options. Only schemes the user can actually nest under are
+  // offered: editable, not system/bundled, and not the scheme being edited.
+  // Each scheme is judged on its own, so a qualifying child of a skipped
+  // parent is still listed.
+  const parentOptionGroups = buildSchemeOptionGroups(collections, {
+    include: (c) => isNestableParent(c) && c.iri !== collection?.iri,
+  });
 
   return (
     <TooltipProvider>
@@ -262,11 +248,8 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">{t('semantic-models:collectionEditor.noneRootCollection', 'None (root scheme)')}</SelectItem>
-                  {flatParentOptions.map((opt) => (
-                    <SelectItem key={opt.iri} value={opt.iri}>
-                      {'—'.repeat(opt.level)} {opt.label}
-                    </SelectItem>
-                  ))}
+                  {parentOptionGroups.length > 0 && <SelectSeparator />}
+                  <SchemeSelectItems groups={parentOptionGroups} />
                 </SelectContent>
               </Select>
             </div>

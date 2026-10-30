@@ -71,6 +71,8 @@ let availableSourcesMock: string[] = [];
 let collectionsMock: any[] = [];
 // Hidden sources are overridable per-test (source filter narrows the focus).
 let hiddenSourcesMock: string[] = [];
+// Grouped concepts before user filters; empty means "nothing to explore yet".
+let groupedConceptsMock: Record<string, unknown[]> = {};
 
 // Simple/Advanced mode, controllable per test.
 let modeMock: 'simple' | 'advanced' = 'simple';
@@ -109,7 +111,7 @@ vi.mock('@/hooks/use-explore-concepts', async () => ({
   useExploreConcepts: () => ({
     isLoading: false,
     collections: collectionsMock,
-    groupedConcepts: {},
+    groupedConcepts: groupedConceptsMock,
     groupedProperties: {},
     stats: null,
     availableSources: availableSourcesMock,
@@ -161,7 +163,6 @@ vi.mock('@/components/knowledge', () => ({
     editorProps = props;
     return null;
   },
-  ImportConceptsDialog: () => null,
 }));
 
 import ExploreView from './explore';
@@ -174,6 +175,7 @@ beforeEach(() => {
   availableSourcesMock = [];
   collectionsMock = [];
   hiddenSourcesMock = [];
+  groupedConceptsMock = { 'my-scheme': FILTERED };
   modeMock = 'simple';
   editorProps = null;
   schemeEditorProps = null;
@@ -197,6 +199,7 @@ function renderExplore(initialEntry = '/concepts/browser') {
       <Routes>
         <Route path="/concepts/browser" element={<><ExploreView /><Probe /></>} />
         <Route path="/concepts/browser/*" element={<><div data-testid="detail-route" /><Probe /></>} />
+        <Route path="/concepts/define" element={<><div data-testid="define-route" /><Probe /></>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -273,7 +276,8 @@ describe('Explore unified surface', () => {
     await waitFor(() => expect(observe().search).not.toContain('source='));
   });
 
-  it('wires the "Show system ontologies" toggle: default OFF, session store flips on click', async () => {
+  it('wires the "Show system ontologies" toggle in Advanced: default OFF, session store flips on click', async () => {
+    modeMock = 'advanced';
     renderExplore();
     const toggle = screen.getByTestId('system-toggle');
     expect(toggle).toHaveAttribute('data-checked', 'false');
@@ -281,6 +285,21 @@ describe('Explore unified surface', () => {
     fireEvent.click(toggle);
     await waitFor(() => expect(screen.getByTestId('system-toggle')).toHaveAttribute('data-checked', 'true'));
     expect(useExploreSessionStore.getState().showSystemSources).toBe(true);
+  });
+
+  it('does not pass the "Show system ontologies" setter in Simple mode', () => {
+    useExploreSessionStore.setState({ showSystemSources: true });
+    renderExplore();
+    fireEvent.click(screen.getByTestId('system-toggle'));
+    // The stub calls the setter only when it is passed; the store is unchanged.
+    expect(useExploreSessionStore.getState().showSystemSources).toBe(true);
+  });
+
+  it('has no Upload / Import button (upload lives on Define)', () => {
+    modeMock = 'advanced';
+    renderExplore();
+    expect(screen.queryByTitle('common:actions.import')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import|Upload/i })).not.toBeInTheDocument();
   });
 
   it('system-sources query helper only opts in when the toggle is on', () => {
@@ -425,5 +444,34 @@ describe('Explore SPARQL panel', () => {
 
     fireEvent.click(toggle);
     await waitFor(() => expect(screen.queryByTestId('explore-sparql-panel')).not.toBeInTheDocument());
+  });
+});
+
+describe('Explore empty state', () => {
+  it('no concepts at all: shows the empty block with a link to Define, keeps header and filters', async () => {
+    groupedConceptsMock = { 'my-scheme': [] };
+    const observe = renderExplore();
+    expect(screen.getByTestId('explore-empty-state')).toBeInTheDocument();
+    expect(screen.getByText('Nothing to explore yet')).toBeInTheDocument();
+    expect(screen.getByText('Import files or create concepts on the Define tab.')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('create-menu')).toBeInTheDocument();
+    expect(screen.queryByTestId('concepts-tab')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Define' }));
+    await waitFor(() => expect(observe().pathname).toBe('/concepts/define'));
+  });
+
+  it('no groups at all also counts as empty', () => {
+    groupedConceptsMock = {};
+    renderExplore();
+    expect(screen.getByTestId('explore-empty-state')).toBeInTheDocument();
+  });
+
+  it('filters that hide everything keep ConceptsTab (its own "No concepts found")', () => {
+    hiddenSourcesMock = ['my-scheme'];
+    renderExplore();
+    expect(screen.queryByTestId('explore-empty-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('concepts-tab')).toBeInTheDocument();
   });
 });

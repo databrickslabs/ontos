@@ -15,12 +15,15 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { buildSchemeOptionGroups, flattenSchemeTree } from '@/lib/scheme-select-options';
+import { SchemeSelectItems } from './scheme-select-items';
 import { useToast } from '@/hooks/use-toast';
 import type { KnowledgeCollection } from '@/types/ontology';
 import { Loader2, Upload, FileUp, X, Info } from 'lucide-react';
@@ -106,8 +109,6 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   const [conflictMode, setConflictMode] = useState<'skip' | 'update'>('update');
   const [showAllConflicts, setShowAllConflicts] = useState(false);
 
-  const editableCollections = collections.filter((c) => c.is_editable);
-
   // Find a collection anywhere in the (possibly nested) tree by IRI, so we can
   // read its concept_count and decide whether a diff preview is meaningful.
   const findCollection = (
@@ -124,23 +125,12 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     return undefined;
   };
 
-  const flattenCollections = (
-    colls: KnowledgeCollection[],
-    level = 0
-  ): Array<{ iri: string; label: string; level: number }> => {
-    let items: Array<{ iri: string; label: string; level: number }> = [];
-    for (const c of colls) {
-      if (c.is_editable) {
-        items.push({ iri: c.iri, label: c.label, level });
-      }
-      if (c.child_collections?.length) {
-        items = items.concat(flattenCollections(c.child_collections, level + 1));
-      }
-    }
-    return items;
-  };
-
-  const flatOptions = flattenCollections(collections);
+  // Only editable schemes can receive an import; they are offered wherever they
+  // sit in the tree (an editable child of a read-only parent included).
+  const schemeOptionGroups = buildSchemeOptionGroups(collections);
+  const hasSchemeOptions = schemeOptionGroups.length > 0;
+  // Read-only schemes are deliberately not offered; say so when any exist.
+  const hasReadOnlyScheme = flattenSchemeTree(collections).some((c) => !c.is_editable);
 
   // Sentinel value for the "create a new scheme" option in the target selector.
   const CREATE_NEW = '__create_new_scheme__';
@@ -599,7 +589,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-          <div className="grid gap-4 py-4 overflow-y-auto min-h-0 flex-1 pr-1">
+          <div className="grid gap-4 py-4 overflow-y-auto min-h-0 flex-1 px-1 -mx-1">
             {/* File picker (multiple) */}
             <div className="grid gap-2">
               <Label>{t('semantic-models:import.sourceFiles', 'Source files')}</Label>
@@ -733,13 +723,8 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                   <SelectItem value={CREATE_NEW}>
                     {t('semantic-models:import.createNewScheme', '＋ Create a new scheme…')}
                   </SelectItem>
-                  {flatOptions.map((opt) => (
-                    <SelectItem key={opt.iri} value={opt.iri}>
-                      {'—'.repeat(opt.level)}
-                      {opt.level > 0 ? ' ' : ''}
-                      {opt.label}
-                    </SelectItem>
-                  ))}
+                  {hasSchemeOptions && <SelectSeparator />}
+                  <SchemeSelectItems groups={schemeOptionGroups} />
                 </SelectContent>
               </Select>
               {creatingNew && (
@@ -751,11 +736,19 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                   className="mt-1"
                 />
               )}
-              {editableCollections.length === 0 && (
+              {!hasSchemeOptions && (
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'semantic-models:import.noEditableCollections',
                     'No editable schemes available. Create one first.'
+                  )}
+                </p>
+              )}
+              {hasReadOnlyScheme && (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'semantic-models:import.readOnlyHint',
+                    'Only editable schemes can receive imports. Imported and system schemes are read-only.'
                   )}
                 </p>
               )}

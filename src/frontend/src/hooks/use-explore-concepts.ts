@@ -9,6 +9,7 @@ import type {
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { collectionSourceKey } from '@/lib/collection-source-key';
+import { useConceptMode } from '@/components/concepts/mode-switch';
 
 // Walk the collections tree (the API returns nested child_collections when
 // hierarchical=true, so a child scheme with a parent is NOT at top level).
@@ -85,7 +86,12 @@ export function useExploreConcepts(): UseExploreConceptsResult {
 
   const showProperties = useGlossaryPreferencesStore((s) => s.showProperties);
   const hiddenSources = useGlossaryPreferencesStore((s) => s.hiddenSources);
-  const showSystemSources = useExploreSessionStore((s) => s.showSystemSources);
+  // The toggle is an Advanced-only control, so it only takes effect in L mode.
+  // Switching to S hides system ontologies again (S has no control to turn
+  // them off); the stored choice is kept and comes back on switching to L.
+  const storeShowSystemSources = useExploreSessionStore((s) => s.showSystemSources);
+  const [conceptMode] = useConceptMode();
+  const showSystemSources = storeShowSystemSources && conceptMode === 'advanced';
 
   // System ontologies are fetched lazily: the first load skips them (smaller,
   // faster payload); the first time the toggle is switched on they are fetched

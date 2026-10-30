@@ -32,7 +32,23 @@ vi.mock('@/components/ui/select', async () => {
       </select>
     );
   };
-  return { Select, SelectTrigger, SelectValue, SelectContent, SelectItem };
+  const SelectGroup = ({ children }: { children?: React.ReactNode }) => (
+    <optgroup data-testid="scheme-group">{children}</optgroup>
+  );
+  const SelectLabel = ({ children }: { children?: React.ReactNode }) => (
+    <option disabled data-testid="scheme-group-label">{children}</option>
+  );
+  const SelectSeparator = () => <option disabled value="" />;
+  return {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectGroup,
+    SelectLabel,
+    SelectSeparator,
+    SelectItem,
+  };
 });
 
 vi.mock('react-i18next', () => ({
@@ -143,5 +159,41 @@ describe('CollectionEditorDialog', () => {
     );
     // The Type select is create-only; the remaining selects are scope and parent.
     expect(screen.queryByRole('option', { name: 'semantic-models:collections.ontology' })).toBeNull();
+  });
+
+  it('groups parent options by type without dash prefixes and keeps exclusions', () => {
+    const editing = makeCollection({ iri: 'urn:edit', label: 'Being edited' });
+    render(
+      <CollectionEditorDialog
+        open
+        onOpenChange={() => {}}
+        collection={editing}
+        collections={[
+          makeCollection({
+            iri: 'urn:ro',
+            label: 'Read-only root',
+            is_editable: false,
+            child_collections: [
+              makeCollection({ iri: 'urn:kid', label: 'Nested child', parent_collection_iri: 'urn:ro' }),
+            ],
+          }),
+          makeCollection({ iri: 'urn:sys', label: 'System', created_by: 'urn:user:system' }),
+          makeCollection({ iri: 'urn:tax', label: 'Tax', collection_type: 'taxonomy' }),
+          editing,
+        ]}
+        onSave={async () => {}}
+      />,
+    );
+    expect(screen.getAllByTestId('scheme-group-label').map((el) => el.textContent)).toEqual([
+      'Glossaries',
+      'Taxonomies',
+    ]);
+    // The editable child of a read-only parent is offered, flat.
+    expect(screen.getByRole('option', { name: 'Nested child' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Read-only root' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'System' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Being edited' })).toBeNull();
+    expect(screen.getByRole('option', { name: 'None (root scheme)' })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/[\u2014\u2013]/);
   });
 });

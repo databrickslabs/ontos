@@ -38,6 +38,7 @@ import type {
 } from '@/types/ontology';
 import { resolveLabel } from '@/lib/ontology-utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
+import { collectionSourceKey } from '@/lib/collection-source-key';
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 
 interface ConceptsTabProps {
@@ -487,12 +488,44 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGrouping, treeData.groupKeys.join('|')]);
 
+  // `collections` is the NESTED scheme tree (children live in child_collections),
+  // so flatten it before looking schemes up; otherwise nested schemes are missed.
+  const flatCollections = useMemo(() => {
+    const out: KnowledgeCollection[] = [];
+    const walk = (nodes: KnowledgeCollection[] | undefined) => {
+      for (const c of nodes ?? []) {
+        out.push(c);
+        walk(c.child_collections);
+      }
+    };
+    walk(collections);
+    return out;
+  }, [collections]);
+
+  // Scheme lookup keyed by the same key concepts are grouped under
+  // (source_context). First one wins on duplicate keys.
+  const collectionsByKey = useMemo(() => {
+    const map = new Map<string, KnowledgeCollection>();
+    for (const c of flatCollections) {
+      const key = collectionSourceKey(c);
+      if (!map.has(key)) map.set(key, c);
+    }
+    return map;
+  }, [flatCollections]);
+
   const getCollection = useCallback((context?: string) => {
     if (!context) return null;
-    return collections.find(c =>
-      c.iri === context || c.iri.endsWith(`:${context}`)
-    );
-  }, [collections]);
+    return collectionsByKey.get(context)
+      ?? flatCollections.find(c => c.iri === context)
+      ?? null;
+  }, [collectionsByKey, flatCollections]);
+
+  // One label for a scheme everywhere (group headers and the Scheme column):
+  // the collection record's label, falling back to the prettified key.
+  const schemeLabel = useCallback(
+    (sourceKey: string) => getCollection(sourceKey)?.label || systemRdfNamespaceDisplayLabel(sourceKey, t),
+    [getCollection, t],
+  );
 
   const handleSelect = useCallback((concept: OntologyConcept) => {
     // Save current scroll position so we can restore it on the way back.
@@ -742,12 +775,10 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           ? t('semantic-models:filters.noSourceFile', 'No source file')
           : itemId)
       : isSourceGroup
-        ? systemRdfNamespaceDisplayLabel(itemId, t)
+        ? schemeLabel(itemId)
         : (concept ? conceptLabel(concept) : itemId);
 
-    const collection = concept?.source_context ? getCollection(concept.source_context) : null;
-    const collectionLabel = collection?.label
-      || (concept?.source_context ? systemRdfNamespaceDisplayLabel(concept.source_context, t) : null);
+    const collectionLabel = concept?.source_context ? schemeLabel(concept.source_context) : null;
 
     return (
       <div key={itemId}>
@@ -921,9 +952,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     const label = conceptLabel(concept);
     const viaLang = searchQuery ? searchMatches.get(concept.iri)?.viaLang : undefined;
     const definition = concept.comment || '';
-    const collection = concept.source_context ? getCollection(concept.source_context) : null;
-    const collectionLabel = collection?.label
-      || (concept.source_context ? systemRdfNamespaceDisplayLabel(concept.source_context, t) : '');
+    const collectionLabel = concept.source_context ? schemeLabel(concept.source_context) : '';
     const map = mappingLabel(mappingStatus[concept.iri], t);
     const checked = selectedIris.has(concept.iri);
 
@@ -1198,7 +1227,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                       ? (groupKey === NO_FILE_KEY
                           ? t('semantic-models:filters.noSourceFile', 'No source file')
                           : groupKey)
-                      : systemRdfNamespaceDisplayLabel(groupKey, t);
+                      : schemeLabel(groupKey);
                     return (
                       <div key={`flat-group-${groupKey}`}>
                         <div className="flex items-center gap-2 px-3 py-1.5 font-semibold bg-muted/40 border-b">

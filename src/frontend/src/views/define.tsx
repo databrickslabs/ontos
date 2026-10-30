@@ -31,6 +31,8 @@ import type {
 } from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { GuidedGenerateDialog } from '@/components/concepts/guided-generate-dialog';
 
 // A recent creation-work item shown in the "In progress" list. Sourced from the
@@ -73,7 +75,7 @@ function relativeTime(iso?: string | null): string {
 // The three output "rungs" — a glossary -> taxonomy -> ontology maturity ladder.
 // Defined once, rendered both in the top legend and (via BuildsRow) inside every
 // path card, so the same icon vocabulary is taught once and reused everywhere.
-// `vocab` is the advanced-only "what gets written" note behind each rung's info
+// `vocab` is the "what gets written" note behind each rung's info
 // icon. Mirrors the backend's _resolve_concept_rdf_types / create_concept.
 const RUNGS = [
   {
@@ -155,6 +157,13 @@ function BuildsRow({ builds, note }: { builds: BuildsMap; note?: string }) {
 export default function DefineView() {
   const { t } = useTranslation(['semantic-models', 'common']);
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+
+  // Read-only users still see the three paths, but the actions are disabled.
+  const canWrite = hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
+  const requiresWriteTitle = canWrite
+    ? undefined
+    : t('semantic-models:define.requiresWrite', 'Requires write access');
 
   const { toast } = useToast();
   const [importOpen, setImportOpen] = useState(false);
@@ -284,7 +293,7 @@ export default function DefineView() {
           {RUNGS.map((r, i) => (
             <Fragment key={r.key}>
             {/* Progression separator between rungs: decoupled from the
-                advanced-only info icon, never after the last rung, and hidden
+                rung info icon, never after the last rung, and hidden
                 when the columns stack. */}
             {i > 0 && (
               <span
@@ -300,11 +309,11 @@ export default function DefineView() {
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="font-medium text-foreground">{r.label}</span>
-                  {/* Advanced view only: the RDF vocabulary this rung is written in. */}
+                  {/* The RDF vocabulary this rung is written in (shown in both modes). */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span
-                        className="adv-only cursor-help text-xs text-muted-foreground border rounded-full h-4 w-4 inline-flex items-center justify-center"
+                        className="cursor-help text-xs text-muted-foreground border rounded-full h-4 w-4 inline-flex items-center justify-center"
                         aria-label={`${r.label} vocabulary`}
                         data-testid={`rung-vocab-${r.key}`}
                       >
@@ -357,7 +366,12 @@ export default function DefineView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button className="w-full" onClick={() => setAuthorOpen(true)}>
+            <Button
+              className="w-full"
+              disabled={!canWrite}
+              title={requiresWriteTitle}
+              onClick={() => setAuthorOpen(true)}
+            >
               {t('semantic-models:define.author.cta', 'New Concept Scheme')}
             </Button>
             <BuildsRow
@@ -392,7 +406,12 @@ export default function DefineView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button className="w-full" onClick={() => setGuidedOpen(true)}>
+            <Button
+              className="w-full"
+              disabled={!canWrite}
+              title={requiresWriteTitle}
+              onClick={() => setGuidedOpen(true)}
+            >
               {t('semantic-models:define.generate.cta', 'Start guided build')}
             </Button>
             <BuildsRow
@@ -427,7 +446,13 @@ export default function DefineView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button className="w-full" variant="outline" onClick={() => setImportOpen(true)}>
+            <Button
+              className="w-full"
+              variant="outline"
+              disabled={!canWrite}
+              title={requiresWriteTitle}
+              onClick={() => setImportOpen(true)}
+            >
               <Upload className="h-4 w-4 mr-2" />
               {t('semantic-models:define.import.cta', 'Upload files')}
             </Button>

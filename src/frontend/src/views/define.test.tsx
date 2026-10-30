@@ -54,6 +54,12 @@ vi.mock('@/components/concepts/mode-switch', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+// Write access, controllable per test (read-only users get disabled actions).
+let canWriteMock = true;
+vi.mock('@/stores/permissions-store', () => ({
+  usePermissions: () => ({ hasPermission: () => canWriteMock }),
+}));
+
 import DefineView from './define';
 
 const RUNS = {
@@ -79,6 +85,7 @@ beforeEach(() => {
   importDialogOpen = false;
   authorDialogOpen = false;
   guidedDialogOpen = false;
+  canWriteMock = true;
   global.fetch = vi.fn(async (url: any) => {
     const u = String(url);
     if (u.includes('/api/ontology/runs')) {
@@ -137,12 +144,13 @@ describe('DefineView', () => {
     expect(importDialogOpen).toBe(true);
   });
 
-  it('legend puts each rung vocabulary behind an advanced-only info icon', () => {
+  it('legend puts each rung vocabulary behind an info icon shown in both modes', () => {
     renderDefine();
     expect(screen.queryByRole('button', { name: 'What gets written' })).not.toBeInTheDocument();
     for (const key of ['glossary', 'taxonomy', 'ontology']) {
       const icon = screen.getByTestId(`rung-vocab-${key}`);
-      expect(icon).toHaveClass('adv-only');
+      expect(icon).toBeInTheDocument();
+      expect(icon).not.toHaveClass('adv-only');
     }
     // Vocabulary text lives in tooltips, not inline under the rungs.
     expect(screen.queryByText(/skos:prefLabel \/ skos:altLabel/)).not.toBeInTheDocument();
@@ -164,6 +172,32 @@ describe('DefineView', () => {
       const row = screen.getByTestId(`rung-vocab-${key}`).parentElement!;
       expect(row.textContent).not.toContain('→');
     }
+  });
+
+  it('read-only user sees the path actions disabled with a write-access hint', async () => {
+    canWriteMock = false;
+    renderDefine();
+    for (const label of ['New Concept Scheme', 'Start guided build', 'Upload files']) {
+      const button = screen.getByRole('button', { name: label });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'Requires write access');
+    }
+    // Cards and the in-progress list stay visible.
+    expect(screen.getByText('Import')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('156 draft terms from gold.*')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Upload files' }));
+    expect(screen.queryByTestId('import-dialog')).not.toBeInTheDocument();
+  });
+
+  it('writer sees the path actions enabled and Upload files opens the import dialog', async () => {
+    renderDefine();
+    for (const label of ['New Concept Scheme', 'Start guided build', 'Upload files']) {
+      const button = screen.getByRole('button', { name: label });
+      expect(button).toBeEnabled();
+      expect(button).not.toHaveAttribute('title');
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Upload files' }));
+    await waitFor(() => expect(screen.getByTestId('import-dialog')).toBeInTheDocument());
   });
 
   it('shows in-progress generator runs from the runs endpoint', async () => {

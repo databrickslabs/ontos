@@ -236,7 +236,8 @@
     "success": "インポートに成功しました",
     "supportedFormats": "対応形式: Turtle (.ttl)、RDF/XML (.rdf, .xml)、OWL (.owl)、N-Triples (.nt)、N3 (.n3)、JSON-LD (.jsonld, .json)",
     "targetCollection": "対象コンセプトスキーム",
-    "title": "コンセプトをインポート"
+    "title": "コンセプトをインポート",
+    "readOnlyHint": "インポートを受け付けられるのは編集可能なコンセプトスキームのみです。インポート済みスキームとシステムスキームは読み取り専用です。"
   },
   "propertyTypes": {
     "object": "オブジェクトプロパティ",
@@ -478,5 +479,19 @@
     "noClassesInScheme": "このコンセプトスキームにはまだクラスがありません。",
     "noConceptsInScheme": "このコンセプトスキームにはまだコンセプトがありません。",
     "includeOtherSchemesHint": "他のスキームから選ぶには「他のコンセプトスキームを含める」をオンにしてください。"
+  },
+  "schemeSelect": {
+    "groupGlossary": "用語集",
+    "groupTaxonomy": "分類体系",
+    "groupOntology": "オントロジー",
+    "inParent": "{{parent}} 内"
+  },
+  "explore": {
+    "emptyTitle": "探索できるものはまだありません",
+    "emptyBody": "Define タブでファイルをインポートするか、コンセプトを作成してください。",
+    "emptyCta": "Define に移動"
+  },
+  "define": {
+    "requiresWrite": "書き込み権限が必要です"
   }
 }

@@ -294,7 +294,7 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
               count doesn't explode the panel vertically; multi-select behavior
               is unchanged (each chip is still an independent checkbox).
               Type headers replaced with icons + tooltips (left of each type row). */}
-          <div className="max-h-56 overflow-y-auto pr-1 space-y-1.5">
+          <div className="max-h-56 overflow-y-auto px-1 -mx-1 space-y-1.5">
             {(['glossary', 'taxonomy', 'ontology', 'other'] as const).map((type) => {
               const sources = sortedSourcesByType[type] || [];
               if (sources.length === 0) return null;

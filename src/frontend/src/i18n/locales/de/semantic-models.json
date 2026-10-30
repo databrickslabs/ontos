@@ -236,7 +236,8 @@
     "success": "Import erfolgreich",
     "supportedFormats": "Unterstützt: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
     "targetCollection": "Ziel-Konzeptschema",
-    "title": "Konzepte importieren"
+    "title": "Konzepte importieren",
+    "readOnlyHint": "Nur bearbeitbare Konzeptschemata können Importe aufnehmen. Importierte und System-Konzeptschemata sind schreibgeschützt."
   },
   "propertyTypes": {
     "object": "Objekteigenschaft",
@@ -478,5 +479,19 @@
     "noClassesInScheme": "In diesem Konzeptschema gibt es noch keine Klassen.",
     "noConceptsInScheme": "In diesem Konzeptschema gibt es noch keine Konzepte.",
     "includeOtherSchemesHint": "Aktivieren Sie „Andere Konzeptschemata einbeziehen“, um aus einem anderen Konzeptschema zu wählen."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossare",
+    "groupTaxonomy": "Taxonomien",
+    "groupOntology": "Ontologien",
+    "inParent": "in {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Noch nichts zu entdecken",
+    "emptyBody": "Importieren Sie Dateien oder erstellen Sie Konzepte auf dem Tab „Define“.",
+    "emptyCta": "Zu Define wechseln"
+  },
+  "define": {
+    "requiresWrite": "Schreibzugriff erforderlich"
   }
 }

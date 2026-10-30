@@ -19,7 +19,6 @@ import {
   FolderTree,
   Plus,
   ChevronDown,
-  Upload,
   List,
   Network,
   Globe2,
@@ -45,7 +44,6 @@ import {
   CollectionEditorDialog,
   ConceptEditorDialog,
   GlossaryFilterPanel,
-  ImportConceptsDialog,
 } from '@/components/knowledge';
 import { schemeKindsForType } from '@/components/knowledge/concept-editor-dialog';
 
@@ -142,8 +140,18 @@ export default function ExploreView() {
 
   // Session-only "Show system ontologies" toggle (default OFF). The hook reads
   // the same store and refetches with include_system=true when it is on.
+  // The toggle is a power-user filter: only offered in Advanced (L) mode, and
+  // the hook ignores the stored flag in Simple mode.
   const showSystemSources = useExploreSessionStore((s) => s.showSystemSources);
   const setShowSystemSources = useExploreSessionStore((s) => s.setShowSystemSources);
+
+  // No concepts at all (before the user's source filters; system ontologies
+  // hidden by default), i.e. no user content yet. Filters that merely hide
+  // everything keep ConceptsTab's own "No concepts found" instead.
+  const workspaceEmpty = useMemo(
+    () => Object.values(groupedConcepts).every((group) => group.length === 0),
+    [groupedConcepts],
+  );
 
   // View-mode: List | Tree | Graph. Kept in the URL (?view=) so links are
   // shareable and refresh-safe; defaults to List.
@@ -177,7 +185,6 @@ export default function ExploreView() {
   // Create-menu preset: the concept type and target scheme for a new concept.
   const [createConceptType, setCreateConceptType] = useState<CreatableConceptType | undefined>(undefined);
   const [createCollection, setCreateCollection] = useState<KnowledgeCollection | undefined>(undefined);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // Language selection - defaults to UI language
   const [selectedLanguage, setSelectedLanguage] = useState<string>(i18n.language?.split('-')[0] || 'en');
@@ -438,39 +445,28 @@ export default function ExploreView() {
             </Button>
           )}
           {canWrite && (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {t('common:actions.create')}
+                  <ChevronDown className="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {createTypes.map((ct) => (
+                  <DropdownMenuItem key={ct} onClick={() => handleCreateConcept(ct)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    {t('common:actions.create')}
-                    <ChevronDown className="h-4 w-4 ml-2" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {createTypes.map((ct) => (
-                    <DropdownMenuItem key={ct} onClick={() => handleCreateConcept(ct)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      {t(CREATE_ITEMS[ct].labelKey, CREATE_ITEMS[ct].defaultLabel)}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleCreateCollection}>
-                    <FolderTree className="h-4 w-4 mr-2" />
-                    {t('concepts:explore.createScheme', 'New Concept Scheme')}
+                    {t(CREATE_ITEMS[ct].labelKey, CREATE_ITEMS[ct].defaultLabel)}
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button
-                variant="outline"
-                size="icon"
-                title={t('common:actions.import')}
-                onClick={() => setImportDialogOpen(true)}
-              >
-                <Upload className="h-4 w-4" />
-              </Button>
-            </>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleCreateCollection}>
+                  <FolderTree className="h-4 w-4 mr-2" />
+                  {t('concepts:explore.createScheme', 'New Concept Scheme')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -523,7 +519,7 @@ export default function ExploreView() {
             showProperties={showProperties}
             onSetShowProperties={setShowProperties}
             showSystemSources={showSystemSources}
-            onSetShowSystemSources={setShowSystemSources}
+            onSetShowSystemSources={advanced ? setShowSystemSources : undefined}
             selectedLanguage={selectedLanguage}
             onSetSelectedLanguage={setSelectedLanguage}
             isFilterExpanded={isFilterExpanded}
@@ -533,67 +529,86 @@ export default function ExploreView() {
             onDeleteScheme={handleDeleteScheme}
           />
 
-          {/* View-mode switch: List | Tree | Graph */}
-          <div
-            role="tablist"
-            aria-label={t('concepts:explore.viewLabel', 'Explore views')}
-            className="inline-flex items-center gap-1 rounded-lg border bg-card p-1 self-start"
-          >
-            {VIEW_MODES.map((mode) => {
-              const active = mode.id === viewMode;
-              return (
-                <button
-                  key={mode.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setViewMode(mode.id)}
-                  className={cn(
-                    'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                    active
-                      ? 'bg-accent text-accent-foreground font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-                  )}
-                >
-                  <mode.icon className="h-4 w-4 shrink-0" />
-                  {t(mode.labelKey, mode.defaultLabel)}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Surface — same filteredConcepts feeds every mode.
-              List and Tree both render through ConceptsTab, which now honours a
-              genuine viewMode: 'list' renders a flat alphabetical list, 'tree'
-              renders the broader/narrower hierarchy. Graph uses GraphTab. */}
-          {viewMode === 'graph' ? (
-            <GraphTab
-              concepts={filteredConcepts}
-              hiddenRoots={hiddenRoots}
-              onToggleRoot={handleToggleRoot}
-              onNodeClick={handleNodeClick}
-              showRootBadges={!groupBySource && !groupByFile}
-              selectedLanguage={selectedLanguage}
-            />
+          {workspaceEmpty ? (
+            <div
+              data-testid="explore-empty-state"
+              className="flex flex-col items-center justify-center text-center gap-2 py-16 text-muted-foreground"
+            >
+              <h2 className="text-base font-medium text-foreground">
+                {t('semantic-models:explore.emptyTitle', 'Nothing to explore yet')}
+              </h2>
+              <p className="text-sm">
+                {t('semantic-models:explore.emptyBody', 'Import files or create concepts on the Define tab.')}
+              </p>
+              <Button variant="outline" className="mt-2" onClick={() => navigate('/concepts/define')}>
+                {t('semantic-models:explore.emptyCta', 'Go to Define')}
+              </Button>
+            </div>
           ) : (
-            <ConceptsTab
-              collections={collections}
-              groupedConcepts={groupedConcepts}
-              filteredConcepts={filteredConcepts}
-              selectedConcept={null}
-              onSelectConcept={handleSelectConcept}
-              groupBySource={groupBySource}
-              groupByFile={groupByFile}
-              showProperties={showProperties}
-              groupByDomain={groupByDomain}
-              selectedLanguage={selectedLanguage}
-              viewMode={viewMode === 'tree' ? 'tree' : 'list'}
-              onEditConcept={(concept) => {
-                setEditingConcept(concept);
-                setConceptEditorOpen(true);
-              }}
-              onConceptsChanged={refetch}
-            />
+            <>
+              {/* View-mode switch: List | Tree | Graph */}
+              <div
+                role="tablist"
+                aria-label={t('concepts:explore.viewLabel', 'Explore views')}
+                className="inline-flex items-center gap-1 rounded-lg border bg-card p-1 self-start"
+              >
+                {VIEW_MODES.map((mode) => {
+                  const active = mode.id === viewMode;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setViewMode(mode.id)}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                        active
+                          ? 'bg-accent text-accent-foreground font-medium'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                      )}
+                    >
+                      <mode.icon className="h-4 w-4 shrink-0" />
+                      {t(mode.labelKey, mode.defaultLabel)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Surface: same filteredConcepts feeds every mode.
+                  List and Tree both render through ConceptsTab, which now honours a
+                  genuine viewMode: 'list' renders a flat alphabetical list, 'tree'
+                  renders the broader/narrower hierarchy. Graph uses GraphTab. */}
+              {viewMode === 'graph' ? (
+                <GraphTab
+                  concepts={filteredConcepts}
+                  hiddenRoots={hiddenRoots}
+                  onToggleRoot={handleToggleRoot}
+                  onNodeClick={handleNodeClick}
+                  showRootBadges={!groupBySource && !groupByFile}
+                  selectedLanguage={selectedLanguage}
+                />
+              ) : (
+                <ConceptsTab
+                  collections={collections}
+                  groupedConcepts={groupedConcepts}
+                  filteredConcepts={filteredConcepts}
+                  selectedConcept={null}
+                  onSelectConcept={handleSelectConcept}
+                  groupBySource={groupBySource}
+                  groupByFile={groupByFile}
+                  showProperties={showProperties}
+                  groupByDomain={groupByDomain}
+                  selectedLanguage={selectedLanguage}
+                  viewMode={viewMode === 'tree' ? 'tree' : 'list'}
+                  onEditConcept={(concept) => {
+                    setEditingConcept(concept);
+                    setConceptEditorOpen(true);
+                  }}
+                  onConceptsChanged={refetch}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -621,14 +636,6 @@ export default function ExploreView() {
         initialConceptType={editingConcept ? undefined : createConceptType}
         onSave={handleSaveConcept}
         onCreateScheme={handleCreateSchemeFromEditor}
-      />
-
-      {/* Import Dialog */}
-      <ImportConceptsDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-        collections={collections}
-        onImported={refetch}
       />
     </div>
   );

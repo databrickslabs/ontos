@@ -236,7 +236,8 @@
     "success": "Importação bem-sucedida",
     "supportedFormats": "Compatíveis: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
     "targetCollection": "Esquema de conceitos de destino",
-    "title": "Importar conceitos"
+    "title": "Importar conceitos",
+    "readOnlyHint": "Somente esquemas de conceitos editáveis podem receber importações. Esquemas importados e do sistema são somente leitura."
   },
   "propertyTypes": {
     "object": "Propriedade de objeto",
@@ -478,5 +479,19 @@
     "noClassesInScheme": "Este esquema de conceitos ainda não tem classes.",
     "noConceptsInScheme": "Este esquema de conceitos ainda não tem conceitos.",
     "includeOtherSchemesHint": "Marque \"Incluir outros esquemas de conceitos\" para escolher de outro esquema."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossários",
+    "groupTaxonomy": "Taxonomias",
+    "groupOntology": "Ontologias",
+    "inParent": "em {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Ainda não há nada para explorar",
+    "emptyBody": "Importe arquivos ou crie conceitos na aba Define.",
+    "emptyCta": "Ir para Define"
+  },
+  "define": {
+    "requiresWrite": "Requer acesso de gravação"
   }
 }

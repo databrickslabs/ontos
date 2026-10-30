@@ -236,7 +236,8 @@
     "success": "Import succesvol",
     "supportedFormats": "Ondersteund: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
     "targetCollection": "Doelconceptschema",
-    "title": "Concepten importeren"
+    "title": "Concepten importeren",
+    "readOnlyHint": "Alleen bewerkbare conceptschema's kunnen imports ontvangen. Geïmporteerde en systeemschema's zijn alleen-lezen."
   },
   "propertyTypes": {
     "object": "Object-eigenschap",
@@ -478,5 +479,19 @@
     "noClassesInScheme": "Dit conceptschema bevat nog geen klassen.",
     "noConceptsInScheme": "Dit conceptschema bevat nog geen concepten.",
     "includeOtherSchemesHint": "Vink \"Andere conceptschema's meenemen\" aan om uit een ander schema te kiezen."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossaries",
+    "groupTaxonomy": "Taxonomieën",
+    "groupOntology": "Ontologieën",
+    "inParent": "in {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Nog niets om te verkennen",
+    "emptyBody": "Importeer bestanden of maak concepten aan op het tabblad Define.",
+    "emptyCta": "Ga naar Define"
+  },
+  "define": {
+    "requiresWrite": "Schrijftoegang vereist"
   }
 }

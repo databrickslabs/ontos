@@ -11,9 +11,11 @@ import pytest
 from src.common.sanitization import (
     APP_DISPLAY_NAME_MAX_LEN,
     APP_SHORT_NAME_MAX_LEN,
+    coerce_hex_color,
     sanitize_app_display_name,
     sanitize_markdown_input,
     validate_branding_url,
+    validate_hex_color,
 )
 
 
@@ -211,3 +213,39 @@ class TestBrandingUrlValidation:
         with pytest.raises(ValueError):
             validate_branding_url(123)  # type: ignore[arg-type]
 
+
+
+class TestBrandingAssetPath:
+    """Root-relative app asset paths are accepted as branding URLs."""
+
+    def test_root_relative_path_allowed(self):
+        path = "/branding/acme/logo.svg"
+        assert validate_branding_url(path) == path
+
+    @pytest.mark.parametrize("value", ["//evil.example/x.svg", "/a b.svg", "/a\\b.svg"])
+    def test_rejects_other_origin_or_odd_paths(self, value):
+        with pytest.raises(ValueError):
+            validate_branding_url(value)
+
+
+class TestHexColorValidation:
+    """Theme colors end up in injected CSS, so only #rgb / #rrggbb pass."""
+
+    def test_none_and_empty_return_none(self):
+        assert validate_hex_color(None) is None
+        assert validate_hex_color("  ") is None
+
+    def test_normalizes_case_and_short_form(self):
+        assert validate_hex_color(" #2563eb ") == "#2563eb"
+        assert validate_hex_color("#F0a") == "#ff00aa"
+
+    @pytest.mark.parametrize(
+        "value", ["red", "#12345", "#gggggg", "2563eb", "#fff;}body{x:y", "rgb(1,2,3)"]
+    )
+    def test_rejects_non_hex(self, value):
+        with pytest.raises(ValueError):
+            validate_hex_color(value)
+
+    def test_coerce_returns_none_for_invalid(self):
+        assert coerce_hex_color("#fff;}") is None
+        assert coerce_hex_color("#ABCDEF") == "#abcdef"

@@ -7,6 +7,7 @@ Tools for global search across all indexed features.
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
+from src.tools import read_access
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
@@ -63,13 +64,14 @@ class GlobalSearchTool(BaseTool):
             return ToolResult(success=False, error="Search not available", data={"results": []})
 
         try:
-            # MCP has its own scope-based access control via tokens, so no per-user
-            # permission filtering here — we search the shared index directly.
+            # Products and contracts the caller can't read are dropped before
+            # pagination and facets (the REST read rules, src.tools.read_access).
             data = ctx.search_manager.query_index(
                 query,
                 type_filter=type,
                 limit=limit,
                 offset=offset,
+                exclude_ids=read_access.hidden_item_ids(ctx, type),
             )
             logger.info(
                 f"[global_search] SUCCESS: returned {data['returned']} of {data['total_count']} matches"

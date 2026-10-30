@@ -363,6 +363,7 @@ def search_index(
     offset: int = 0,
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Search/list index items for MCP tools: paginated, faceted, filtered.
 
@@ -374,6 +375,8 @@ def search_index(
     - ``fields=[...]`` narrows each result row to the requested keys plus
       ``id``, so an agent in a "then fetch details" flow doesn't pay for
       description/tags/owner on every call.
+    - ``exclude_ids`` (index ids) are dropped with the filters, so they are in
+      neither the page, ``total_count``, ``has_more`` nor the facets.
 
     Returns a dict with ``results``, ``total_count``, ``returned``, ``offset``,
     ``limit``, ``has_more``, ``facets`` and ``query``.
@@ -381,7 +384,11 @@ def search_index(
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
 
-    candidates = [it for it in items if _passes_filters(it, type_filter, filters)]
+    excluded = set(exclude_ids or ())
+    candidates = [
+        it for it in items
+        if it.id not in excluded and _passes_filters(it, type_filter, filters)
+    ]
 
     if is_list_query(query):
         ranked = sorted(candidates, key=lambda it: (it.title or "").lower())

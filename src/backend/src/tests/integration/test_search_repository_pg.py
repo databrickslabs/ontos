@@ -153,3 +153,17 @@ def test_replace_all_rebuild_removes_stale(seeded):
     out = repo.search(seeded, "*")
     assert out["total_count"] == 1
     assert out["results"][0]["id"] == "99"
+
+
+def test_exclude_ids_apply_before_pagination_and_facets(seeded):
+    """Rows the caller can't read (exclude_ids) are in no page, count or facet."""
+    out = repo.search(seeded, "*", type_filter="data-product", limit=1,
+                      exclude_ids=["product::2"])
+    assert out["total_count"] == 1
+    assert out["has_more"] is False
+    assert [r["id"] for r in out["results"]] == ["1"]
+    assert out["facets"]["status"] == {"active": 1}
+
+    everything = repo.search(seeded, "*", exclude_ids=["product::2", "contract::3"])
+    assert everything["total_count"] == 1
+    assert everything["facets"]["type"] == {"data-product": 1}

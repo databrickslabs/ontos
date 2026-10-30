@@ -25,8 +25,8 @@ from src.controller.audit_manager import AuditManager
 from src.controller.mcp_tokens_manager import MCPTokensManager, MCPTokenInfo
 from src.models.mcp import JSONRPCRequest, JSONRPCError, JSONRPCResponse
 from src.common.api_errors import new_error_id
-from src.common.authorization import TEST_TOKEN_HEADER, get_user_details_from_sdk
 from src.common.manager_dependencies import get_users_manager
+from src.models.users import UserInfo
 from src.tools.base import (
     ToolCaller,
     ToolContext,
@@ -34,7 +34,11 @@ from src.tools.base import (
     check_tool_permission,
     tool_failed_message,
 )
-from src.tools.caller import mcp_api_key_caller, resolve_tool_caller
+from src.tools.caller import (
+    MCP_FORWARDED_TOKEN_AUTH_PATH,
+    mcp_api_key_caller,
+    resolve_tool_caller,
+)
 from src.tools.registry import create_default_registry
 
 logger = get_logger(__name__)
@@ -82,6 +86,11 @@ MCP_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 # Feature ID for audit logging
 MCP_FEATURE_ID = "mcp"
+
+# The forwarded user token (Databricks Apps proxy / native integration).
+FORWARDED_TOKEN_HEADER = "x-forwarded-access-token"
+# Client message for every identity rejection; the reason is in the audit entry.
+IDENTITY_REJECTED_MESSAGE = "The caller's identity could not be verified."
 
 # Session storage (in-memory for now, could be moved to Redis/DB for production)
 _sessions: Dict[str, Dict[str, Any]] = {}
@@ -175,12 +184,17 @@ class MCPHandler:
         # Set when a tool context is built: "obo" (ran as the forwarded user) or
         # "service_principal" (app identity). Audited so UC data scope is traceable.
         self._identity_mode: Optional[str] = None
+        # The caller the tools act for, resolved once per request (_resolve_caller).
+        self._caller: Optional[ToolCaller] = None
     
     def _get_username(self) -> str:
+        # The verified forwarded user when there is one, else the token's creator.
+        if self._caller is not None and self._caller.email:
+            return self._caller.email
         return self._token_info.created_by or self._token_info.name
     
     def _get_ip_address(self) -> Optional[str]:
-        return self._request.client.host if self._request.client else None
+        return _client_ip(self._request)
     
     def _audit(self, *, action: str, success: bool, details: Optional[Dict[str, Any]] = None):
         """Log an audit record if audit manager is available."""
@@ -219,6 +233,12 @@ class MCPHandler:
             )
         
         try:
+            if _has_forwarded_token(self._request):
+                # The verified user is the caller (and the audit username) of
+                # every method, not only of tool calls.
+                await self._resolve_caller(
+                    params.get("name") if method == "tools/call" else method
+                )
             result = await handler(params)
             return make_success_response(result, request_id=request_id)
         except MCPError as e:
@@ -331,19 +351,18 @@ class MCPHandler:
         
         # Create tool context (also sets self._identity_mode)
         ctx = self._create_tool_context()
-        if getattr(tool, "required_permission", None):
-            ctx.caller = await self._resolve_caller(tool_name)
+        ctx.caller = await self._resolve_caller(tool_name)
 
         # Execute the tool with audit logging
         success = False
         details_for_audit: Dict[str, Any] = {
             "tool_name": tool_name,
             "token_name": self._token_info.name,
+            "token_id": str(self._token_info.id) if getattr(self._token_info, "id", None) else None,
             "session_id": self._session_id,
             "identity_mode": self._identity_mode,
+            "auth_path": ctx.caller.auth_path,
         }
-        if ctx.caller is not None:
-            details_for_audit["auth_path"] = ctx.caller.auth_path
         try:
             result = check_tool_permission(tool, ctx) or await tool.execute(ctx, **tool_args)
             is_error = not result.success
@@ -351,6 +370,10 @@ class MCPHandler:
             success = not is_error
             if result.error_code:
                 details_for_audit["error_code"] = result.error_code
+            if result.denied_reason:
+                # The read rule answered some items as not found: not a success.
+                details_for_audit["denied_reason"] = result.denied_reason
+                success = False
             
             if result.success:
                 return {
@@ -463,44 +486,41 @@ class MCPHandler:
         self._identity_mode = "service_principal"
         return getattr(app.state, "workspace_client", None)
 
-    async def _resolve_caller(self, tool_name: str) -> ToolCaller:
-        """The caller a tool acts for: the forwarded user, else the API-key policy.
+    async def _resolve_caller(self, tool_name: Optional[str]) -> ToolCaller:
+        """The caller the tools act for, resolved once per request.
 
-        A forwarded user that can't be resolved fails the call (and is audited)
-        instead of falling back to the token's identity.
+        With a forwarded user token: the user (or service principal) returned by
+        the verified ``current_user.me()``; the X-Forwarded-Email header never
+        names the caller. The token's scopes stay the ceiling. When the identity
+        can't be verified the request fails and an ``IDENTITY_REJECTED`` audit
+        entry records why. Without a forwarded token (API key only): the
+        API-key policy, ``mcp_api_key_caller``.
         """
-        auth_path = _forwarded_auth_path(self._request, self._settings)
-        if auth_path is None:
-            return mcp_api_key_caller(self._token_info)
+        if self._caller is not None:
+            return self._caller
+        if not _has_forwarded_token(self._request):
+            self._caller = mcp_api_key_caller(self._token_info)
+            return self._caller
         try:
-            user = await get_user_details_from_sdk(
-                self._request, self._settings, get_users_manager(self._request)
-            )
-        except Exception as e:
-            logger.warning(
-                "MCP tool %s refused: the forwarded user could not be resolved "
-                "(auth path %s, %s)",
-                tool_name,
-                auth_path,
-                type(e).__name__,
-            )
+            user = await verify_forwarded_user(self._request, self._settings)
+        except MCPIdentityError as e:
+            _log_identity_rejection(e.reason, tool_name, MCP_FORWARDED_TOKEN_AUTH_PATH)
             self._audit(
                 action="IDENTITY_REJECTED",
                 success=False,
                 details={
-                    "reason": "forwarded_user_unresolved",
+                    "reason": e.reason,
                     "tool_name": tool_name,
-                    "auth_path": auth_path,
+                    "auth_path": MCP_FORWARDED_TOKEN_AUTH_PATH,
                     "token_name": self._token_info.name,
                     "session_id": self._session_id,
                 },
             )
-            raise MCPError(
-                MCP_AUTH_FAILED,
-                "The forwarded user could not be resolved, so the tool did not run.",
-                {"auth_path": auth_path},
-            )
-        return await resolve_tool_caller(user, self._request, auth_path)
+            raise MCPError(MCP_AUTH_FAILED, IDENTITY_REJECTED_MESSAGE)
+        self._caller = await resolve_tool_caller(
+            user, self._request, MCP_FORWARDED_TOKEN_AUTH_PATH, self._db
+        )
+        return self._caller
 
     def _create_tool_context(self) -> ToolContext:
         """Create a ToolContext for tool execution."""
@@ -552,46 +572,122 @@ def _forwarded_email(request: Request) -> Optional[str]:
     return request.headers.get("X-Forwarded-Email") or request.headers.get("X-Forwarded-User")
 
 
-def _forwarded_auth_path(request: Request, settings: Settings) -> Optional[str]:
-    """How the request names its user, or None when it names none (API key only)."""
-    if request.headers.get("x-forwarded-access-token"):
-        return "mcp_forwarded_token"
-    if _forwarded_email(request):
-        return "mcp_forwarded_email"
-    if settings.TEST_USER_TOKEN and request.headers.get(TEST_TOKEN_HEADER):
-        return "mcp_test_user"
-    return None
+def _client_ip(request: Request) -> Optional[str]:
+    """The caller's address: the proxy's X-Real-Ip when present, else the socket peer."""
+    real_ip = request.headers.get("X-Real-Ip")
+    if real_ip:
+        return real_ip
+    return request.client.host if getattr(request, "client", None) else None
 
 
-def resolve_mcp_principal(
+def _has_forwarded_token(request: Request) -> bool:
+    return bool(request.headers.get(FORWARDED_TOKEN_HEADER))
+
+
+class MCPIdentityError(Exception):
+    """The forwarded identity was refused; ``reason`` is the audit code.
+
+    ``forwarded_token_missing``: a keyless request without a forwarded user token.
+    ``caller_unresolved``: ``current_user.me()`` failed for the forwarded token.
+    ``forwarded_identity_mismatch``: X-Forwarded-Email names someone else.
+    """
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
+def _log_identity_rejection(reason: str, tool_name: Optional[str], auth_path: str) -> None:
+    logger.warning(
+        "MCP identity rejected (%s): tool=%s auth_path=%s", reason, tool_name, auth_path
+    )
+
+
+async def verify_forwarded_user(request: Request, settings: Settings) -> UserInfo:
+    """The identity behind the forwarded user token, from ``current_user.me()``.
+
+    A service principal is resolved the same way, with its groups. The result is
+    kept on ``request.state`` so a request verifies it once. Raises
+    ``MCPIdentityError``.
+    """
+    state = getattr(request, "state", None)
+    cached = getattr(state, "mcp_verified_user", None) if state is not None else None
+    if cached is not None:
+        return cached
+    if not _has_forwarded_token(request):
+        raise MCPIdentityError("forwarded_token_missing")
+    try:
+        obo_client = get_obo_workspace_client(request, settings)
+        user = get_users_manager(request).get_current_user(
+            obo_client=obo_client, real_ip=request.headers.get("X-Real-Ip")
+        )
+    except Exception as e:
+        logger.warning("current_user.me() failed for the forwarded token: %s", type(e).__name__)
+        raise MCPIdentityError("caller_unresolved") from e
+    if not user or not (user.email or user.username):
+        raise MCPIdentityError("caller_unresolved")
+    forwarded = _forwarded_email(request)
+    if forwarded:
+        known = {str(v).lower() for v in (user.email, user.username) if v}
+        if forwarded.lower() not in known:
+            raise MCPIdentityError("forwarded_identity_mismatch")
+    if state is not None:
+        state.mcp_verified_user = user
+    return user
+
+
+def _audit_identity_rejection(audit_manager, db, request: Request, reason: str,
+                              endpoint: str) -> None:
+    _log_identity_rejection(reason, None, "mcp_keyless")
+    audit_manager.log_action(
+        db=db,
+        username="anonymous",
+        ip_address=_client_ip(request),
+        feature=MCP_FEATURE_ID,
+        action="IDENTITY_REJECTED",
+        success=False,
+        details={"reason": reason, "auth_path": "mcp_keyless", "endpoint": endpoint},
+    )
+
+
+async def resolve_mcp_principal(
     db: Session,
     x_api_key: Optional[str],
-    request: Request
+    request: Request,
+    settings: Optional[Settings] = None,
 ) -> Optional[MCPTokenInfo]:
     """
     Resolve the caller of an MCP request to a token principal, or None to reject.
 
     Two paths:
     - A request carrying an ``X-API-Key`` is validated exactly as before; the
-      keyless default is never consulted.
-    - A request with no key but a forwarded Databricks identity (i.e. it cleared
-      the app-gate) is resolved to the active keyless default token, if one exists,
-      stamped with the caller's forwarded email for audit attribution. This is the
-      opt-in keyless path: it is inert unless an admin has designated an active
-      default token.
+      keyless default is never consulted. (Who the tools then act for is decided
+      per request by ``MCPHandler._resolve_caller``.)
+    - A request with no key is the opt-in keyless path, inert unless an admin has
+      designated an active default token. It is accepted only with a forwarded
+      user token (``x-forwarded-access-token``): the caller is the identity from
+      the verified ``current_user.me()``, stamped on the default token for audit
+      attribution. The X-Forwarded-Email / X-Forwarded-User headers alone are not
+      accepted, in every environment.
 
-    Returns None (reject) when no key is present and either keyless access is not
-    enabled or the request carries no forwarded identity.
+    Returns None (reject) when the key is invalid, or when there is no key and
+    keyless access is not enabled or the request names no caller at all. Raises
+    ``MCPIdentityError`` when a keyless request names a caller that can't be
+    verified (no forwarded token, ``me()`` failed, or the headers disagree).
     """
     if x_api_key:
         return validate_api_key(db, x_api_key)
 
-    email = _forwarded_email(request)
-    if not email:
+    if not _has_forwarded_token(request) and not _forwarded_email(request):
         return None
+    from src.repositories.mcp_tokens_repository import mcp_tokens_repo
+
+    if mcp_tokens_repo.get_keyless_default(db) is None:
+        return None
+    user = await verify_forwarded_user(request, settings or get_settings())
 
     token_manager = MCPTokensManager(db=db)
-    return token_manager.resolve_keyless_default(email)
+    return token_manager.resolve_keyless_default(user.email or user.username)
 
 
 async def sse_event_generator(
@@ -652,6 +748,7 @@ async def sse_stream_generator(
 @router.get("")
 async def mcp_sse_stream(
     request: Request,
+    audit_manager: AuditManagerDep,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
@@ -671,8 +768,14 @@ async def mcp_sse_stream(
         )
     
     # Resolve caller: X-API-Key token, or the keyless default for app-gate
-    # authenticated requests when enabled.
-    token_info = resolve_mcp_principal(db, x_api_key, request)
+    # authenticated requests with a verified forwarded user token, when enabled.
+    try:
+        token_info = await resolve_mcp_principal(db, x_api_key, request, settings)
+    except MCPIdentityError as e:
+        _audit_identity_rejection(audit_manager, db, request, e.reason, "GET")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=IDENTITY_REJECTED_MESSAGE
+        )
     if not token_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -777,13 +880,17 @@ async def mcp_handler(
                         headers={"MCP-Session-Id": session_id} if session_id else {})
     
     # Resolve caller: X-API-Key token, or the keyless default for app-gate
-    # authenticated requests when enabled.
-    token_info = resolve_mcp_principal(db, x_api_key, request)
+    # authenticated requests with a verified forwarded user token, when enabled.
+    try:
+        token_info = await resolve_mcp_principal(db, x_api_key, request, settings)
+    except MCPIdentityError as e:
+        _audit_identity_rejection(audit_manager, db, request, e.reason, "POST")
+        return await error_response(MCP_AUTH_FAILED, IDENTITY_REJECTED_MESSAGE, rpc_request.id)
     if not token_info:
         audit_manager.log_action(
             db=db,
             username="anonymous",
-            ip_address=request.client.host if request.client else None,
+            ip_address=_client_ip(request),
             feature=MCP_FEATURE_ID,
             action="AUTH_FAILURE",
             success=False,
@@ -859,13 +966,19 @@ async def mcp_delete_session(
     Clients should call this when they no longer need the session.
     """
     # Resolve caller: X-API-Key token, or the keyless default for app-gate
-    # authenticated requests when enabled.
-    token_info = resolve_mcp_principal(db, x_api_key, request)
+    # authenticated requests with a verified forwarded user token, when enabled.
+    try:
+        token_info = await resolve_mcp_principal(db, x_api_key, request)
+    except MCPIdentityError as e:
+        _audit_identity_rejection(audit_manager, db, request, e.reason, "DELETE")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=IDENTITY_REJECTED_MESSAGE
+        )
     if not token_info:
         audit_manager.log_action(
             db=db,
             username="anonymous",
-            ip_address=request.client.host if request.client else None,
+            ip_address=_client_ip(request),
             feature=MCP_FEATURE_ID,
             action="AUTH_FAILURE",
             success=False,
@@ -888,7 +1001,7 @@ async def mcp_delete_session(
         audit_manager.log_action(
             db=db,
             username=token_info.created_by or token_info.name,
-            ip_address=request.client.host if request.client else None,
+            ip_address=_client_ip(request),
             feature=MCP_FEATURE_ID,
             action="SESSION_DELETE",
             success=True,

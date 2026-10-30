@@ -71,6 +71,8 @@ EXPECTED = {
     # POST /semantic-links/, DELETE /semantic-links/{id}
     'add_semantic_link': ('semantic-models', RW),
     'remove_semantic_link': ('semantic-models', RW),
+    # Reads, but admins only: POST /semantic-models/query (Read/Write), one level up
+    'execute_sparql_query': ('semantic-models', ADMIN),
 }
 WRITE_PREFIXES = ('create_', 'update_', 'delete_', 'add_', 'remove_', 'assign_', 'set_')
 BELOW = {RW: RO, ADMIN: RW}
@@ -155,10 +157,18 @@ class TestRegistryChecksTheLevel:
         _assert_refused(res, 'data-products', ADMIN)
         assert calls == []
 
-    def test_the_api_key_policy_caller_runs_every_write_tool(self, fake_registry):
+    def test_the_api_key_policy_caller_is_refused_every_write_tool(self, fake_registry):
         registry, calls = fake_registry
         caller = mcp_api_key_caller(SimpleNamespace(created_by='admin@example.com'))
-        assert caller.email == 'admin@example.com' and caller.auth_path == 'mcp_api_key'
+        # Consumer-only: no identity (not the token's creator), no levels.
+        assert caller.email is None and caller.auth_path == 'mcp_api_key'
+        for name, (feature, level) in EXPECTED.items():
+            _assert_refused(_run(registry.execute(name, _ctx(caller=caller), {})), feature, level)
+        assert calls == []
+
+    def test_a_full_access_caller_runs_every_write_tool(self, fake_registry):
+        registry, calls = fake_registry
+        caller = ToolCaller(email=None, auth_path='test', full_access=True)
         for name in EXPECTED:
             assert _run(registry.execute(name, _ctx(caller=caller), {})).success is True
         assert sorted(calls) == sorted(EXPECTED)
@@ -364,15 +374,20 @@ class TestAskOntosPassesTheCaller:
 
 # --- MCP ----------------------------------------------------------------------
 
-def _mcp_handler(headers, audit_manager=None):
+def _mcp_handler(headers, audit_manager=None, user=None, me_error=None):
+    users_manager = MagicMock()
+    if me_error is not None:
+        users_manager.get_current_user.side_effect = me_error
+    else:
+        users_manager.get_current_user.return_value = user
     app = SimpleNamespace(state=SimpleNamespace(workspace_client=object(),
-                                                users_manager=MagicMock()))
-    request = SimpleNamespace(headers=headers, app=app, client=SimpleNamespace(host='127.0.0.1'))
-    settings = MagicMock()
-    settings.TEST_USER_TOKEN = None
+                                                users_manager=users_manager))
+    request = SimpleNamespace(headers=headers, app=app, state=SimpleNamespace(),
+                              client=SimpleNamespace(host='127.0.0.1'))
     return MCPHandler(
-        db=None, settings=settings,
-        token_info=SimpleNamespace(name='tok', created_by='admin@example.com', scopes=['*']),
+        db=None, settings=MagicMock(),
+        token_info=SimpleNamespace(id='t1', name='tok', created_by='admin@example.com',
+                                   scopes=['*']),
         request=request, audit_manager=audit_manager, session_id='s1',
     )
 
@@ -393,79 +408,103 @@ def _audits(audit_manager, action):
             if c.kwargs['action'] == action]
 
 
-class TestMcpChecksTheLevel:
-    def test_an_api_key_without_a_forwarded_user_follows_the_policy(self, monkeypatch):
-        async def _no_lookup(*a, **k):
-            raise AssertionError('no user lookup without a forwarded user')
+SUE = UserInfo(email='sue@example.com', username='sue@example.com', user='Sue', ip=None,
+               groups=['g'])
+TOKEN = {'x-forwarded-access-token': 'user-token'}
 
-        monkeypatch.setattr(mcp_routes, 'get_user_details_from_sdk', _no_lookup)
+
+@pytest.fixture
+def obo(monkeypatch):
+    monkeypatch.setattr(mcp_routes, 'get_obo_workspace_client', lambda *a, **k: object())
+
+    async def _levels(email, groups, request):
+        return {'data-domains': RW}
+
+    monkeypatch.setattr(tool_caller, 'resolve_effective_permissions', _levels)
+
+
+class TestMcpChecksTheLevel:
+    def test_an_api_key_without_a_forwarded_token_is_consumer_only(self, obo):
         audit = MagicMock()
-        h = _mcp_handler({}, audit)
+        # The forwarded email header alone never names the caller.
+        h = _mcp_handler({'X-Forwarded-Email': 'sue@example.com'}, audit)
         calls = _recording_tool(h, 'delete_domain')
         out = _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
-        assert out['isError'] is False
-        assert calls[0].auth_path == 'mcp_api_key' and calls[0].email == 'admin@example.com'
-        assert _audits(audit, 'TOOL_CALL')[0]['details']['auth_path'] == 'mcp_api_key'
+        assert out['isError'] is True and calls == []
+        details = _audits(audit, 'TOOL_CALL')[0]['details']
+        assert details['auth_path'] == 'mcp_api_key'
+        assert details['error_code'] == TOOL_NOT_PERMITTED_CODE
+        read_calls = _recording_tool(h, 'get_domain')
+        out = _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
+        assert out['isError'] is False and read_calls[0].email is None
 
-    def test_a_forwarded_user_below_the_level_is_refused_and_audited(self, monkeypatch):
-        async def _user(request, settings, manager):
-            return UserInfo(email='sue@example.com', username='sue', user='Sue', ip=None,
-                            groups=['g'])
-
-        async def _levels(email, groups, request):
-            return {'data-domains': RW}
-
-        monkeypatch.setattr(mcp_routes, 'get_user_details_from_sdk', _user)
-        monkeypatch.setattr(tool_caller, 'resolve_effective_permissions', _levels)
+    def test_the_verified_user_is_the_caller_and_the_audit_username(self, obo):
         audit = MagicMock()
-        h = _mcp_handler({'X-Forwarded-Email': 'sue@example.com'}, audit)
+        h = _mcp_handler(TOKEN, audit, user=SUE)
         calls = _recording_tool(h, 'delete_domain')
 
         out = _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
         assert out['isError'] is True and calls == []
         assert 'Not allowed' in out['content'][0]['text']
-        details = _audits(audit, 'TOOL_CALL')[0]['details']
-        assert details['error_code'] == TOOL_NOT_PERMITTED_CODE
-        assert details['auth_path'] == 'mcp_forwarded_email'
+        entry = _audits(audit, 'TOOL_CALL')[0]
+        assert entry['username'] == 'sue@example.com'
+        assert entry['details']['error_code'] == TOOL_NOT_PERMITTED_CODE
+        assert entry['details']['auth_path'] == 'mcp_forwarded_token'
+        assert entry['details']['token_name'] == 'tok' and entry['details']['token_id'] == 't1'
 
         create_calls = _recording_tool(h, 'create_domain')
         out = _run(h._handle_tools_call({'name': 'create_domain', 'arguments': {}}))
         assert out['isError'] is False and create_calls[0].email == 'sue@example.com'
+        # me() once per request.
+        assert h._request.app.state.users_manager.get_current_user.call_count == 1
 
-    @pytest.mark.parametrize('headers, auth_path', [
-        ({'X-Forwarded-Email': 'ghost@example.com'}, 'mcp_forwarded_email'),
-        ({'x-forwarded-access-token': 'user-token'}, 'mcp_forwarded_token'),
-    ])
-    def test_an_unresolvable_forwarded_user_fails_and_is_recorded(
-        self, monkeypatch, caplog, headers, auth_path
-    ):
-        async def _unknown(request, settings, manager):
-            raise HTTPException(status_code=404, detail='User not found')
-
-        monkeypatch.setattr(mcp_routes, 'get_user_details_from_sdk', _unknown)
-        monkeypatch.setattr(mcp_routes, 'get_obo_workspace_client', lambda *a, **k: object())
+    def test_the_x_real_ip_is_recorded(self, obo):
         audit = MagicMock()
-        h = _mcp_handler(headers, audit)
-        calls = _recording_tool(h, 'delete_domain')
+        h = _mcp_handler({**TOKEN, 'X-Real-Ip': '10.1.2.3'}, audit, user=SUE)
+        _recording_tool(h, 'create_domain')
+        _run(h._handle_tools_call({'name': 'create_domain', 'arguments': {}}))
+        assert _audits(audit, 'TOOL_CALL')[0]['ip_address'] == '10.1.2.3'
+
+    @pytest.mark.parametrize('headers, kwargs, reason', [
+        (TOKEN, {'me_error': RuntimeError('token rejected')}, 'caller_unresolved'),
+        ({**TOKEN, 'X-Forwarded-Email': 'mallory@example.com'}, {'user': SUE},
+         'forwarded_identity_mismatch'),
+    ])
+    def test_an_unverifiable_forwarded_user_fails_and_is_recorded(
+        self, obo, caplog, headers, kwargs, reason
+    ):
+        audit = MagicMock()
+        h = _mcp_handler(headers, audit, **kwargs)
+        calls = _recording_tool(h, 'get_domain')
 
         with caplog.at_level(logging.WARNING), pytest.raises(MCPError) as exc_info:
-            _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
+            _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
         assert exc_info.value.code == MCP_AUTH_FAILED
-        assert 'User not found' not in exc_info.value.message
+        assert exc_info.value.message == mcp_routes.IDENTITY_REJECTED_MESSAGE
         assert calls == []
         rejected = _audits(audit, 'IDENTITY_REJECTED')
         assert len(rejected) == 1 and rejected[0]['success'] is False
-        assert rejected[0]['details']['reason'] == 'forwarded_user_unresolved'
-        assert rejected[0]['details']['tool_name'] == 'delete_domain'
-        assert rejected[0]['details']['auth_path'] == auth_path
-        assert 'delete_domain' in caplog.text and auth_path in caplog.text
+        assert rejected[0]['details']['reason'] == reason
+        assert rejected[0]['details']['tool_name'] == 'get_domain'
+        assert rejected[0]['details']['auth_path'] == 'mcp_forwarded_token'
+        assert 'get_domain' in caplog.text and 'mcp_forwarded_token' in caplog.text
 
-    def test_read_tools_do_not_look_the_user_up_yet(self, monkeypatch):
-        async def _no_lookup(*a, **k):
-            raise AssertionError('read tools do not resolve the caller')
+    def test_any_method_resolves_the_verified_user_first(self, obo):
+        h = _mcp_handler(TOKEN, MagicMock(), me_error=RuntimeError('expired'))
+        from src.models.mcp import JSONRPCRequest
 
-        monkeypatch.setattr(mcp_routes, 'get_user_details_from_sdk', _no_lookup)
-        h = _mcp_handler({'X-Forwarded-Email': 'sue@example.com'})
-        calls = _recording_tool(h, 'get_domain')
-        out = _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
-        assert out['isError'] is False and calls == [None]
+        resp = _run(h.handle(JSONRPCRequest(jsonrpc='2.0', id=1, method='tools/list')))
+        assert resp.error is not None and resp.error.code == MCP_AUTH_FAILED
+
+    def test_a_rejected_tool_call_is_audited_with_the_tool_name(self, obo):
+        audit = MagicMock()
+        h = _mcp_handler(TOKEN, audit, me_error=RuntimeError('expired'))
+        from src.models.mcp import JSONRPCRequest
+
+        rpc = JSONRPCRequest(jsonrpc='2.0', id=1, method='tools/call',
+                             params={'name': 'get_domain', 'arguments': {}})
+        resp = _run(h.handle(rpc))
+        assert resp.error.code == MCP_AUTH_FAILED
+        assert resp.error.message == mcp_routes.IDENTITY_REJECTED_MESSAGE
+        rejected = _audits(audit, 'IDENTITY_REJECTED')[0]['details']
+        assert rejected['tool_name'] == 'get_domain' and rejected['reason'] == 'caller_unresolved'

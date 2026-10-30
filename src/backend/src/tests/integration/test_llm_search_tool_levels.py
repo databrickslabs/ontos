@@ -59,7 +59,7 @@ def chat_as(client, db_session, test_settings, monkeypatch):
     test_settings.LLM_SYSTEM_PROMPT = None
     monkeypatch.setattr(config_module, 'get_settings', lambda: test_settings)
 
-    def _chat(level, product_id):
+    def _chat(level, product_id, tool='delete_data_product'):
         group = f'tool-level-{uuid.uuid4().hex[:6]}'
         _add_role(db_session, group, level)
         user = UserInfo(email=f'{group}@example.com', username=group, user=group,
@@ -70,7 +70,7 @@ def chat_as(client, db_session, test_settings, monkeypatch):
 
         app.dependency_overrides[get_user_details_from_sdk] = _user
         call = SimpleNamespace(id='call-1', function=SimpleNamespace(
-            name='delete_data_product', arguments=json.dumps({'product_id': product_id})))
+            name=tool, arguments=json.dumps({'product_id': product_id})))
         llm = _ScriptedLLM([_response(tool_calls=[call]), _response(content='Done.')])
         monkeypatch.setattr(LLMSearchManager, '_get_openai_client',
                             lambda self, user_token=None: llm)
@@ -93,8 +93,8 @@ def product_id(client):
     return created.id
 
 
-def _source(body):
-    sources = [s for s in body['sources'] if s['tool'] == 'delete_data_product']
+def _source(body, tool='delete_data_product'):
+    sources = [s for s in body['sources'] if s['tool'] == tool]
     assert len(sources) == 1, body['sources']
     return sources[0]
 
@@ -117,3 +117,14 @@ def test_an_admin_deletes_a_product_through_the_chat(chat_as, product_id):
     source = _source(chat_as('Admin', product_id))
     assert source['success'] is True
     assert app.state.data_products_manager.get_product(product_id) is None
+
+
+def test_a_consumer_reads_a_draft_product_as_not_found(chat_as, product_id):
+    source = _source(chat_as('Read-only', product_id, 'get_data_product'), 'get_data_product')
+    assert source['success'] is False
+    assert source['error'] == f"Data product '{product_id}' not found"
+
+
+def test_an_admin_reads_a_draft_product(chat_as, product_id):
+    source = _source(chat_as('Admin', product_id, 'get_data_product'), 'get_data_product')
+    assert source['success'] is True

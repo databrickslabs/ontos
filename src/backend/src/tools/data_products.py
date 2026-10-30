@@ -8,6 +8,7 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
+from src.tools import read_access
 
 from src.common.logging import get_logger
 from src.controller import search_scoring
@@ -223,6 +224,8 @@ class SearchDataProductsTool(BaseTool):
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
+                # The read rule, before pagination and facets.
+                exclude_ids=read_access.hidden_item_ids(ctx, "data-product"),
             )
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
@@ -501,12 +504,17 @@ class GetDataProductTool(BaseTool):
         
         try:
             product = ctx.data_products_manager.get_product(product_id)
+            readable = product is not None and read_access.can_read_product(ctx, product)
 
-            if not product:
-                return ToolResult(
+            if not readable:
+                # An unreadable product is answered like a missing one.
+                result = ToolResult(
                     success=False,
                     error=f"Data product '{product_id}' not found"
                 )
+                if product is not None:
+                    read_access.denied(ctx, self.name, result, [product_id])
+                return result
 
             logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
             return ToolResult(success=True, data=_serialize_product(product))
@@ -569,19 +577,23 @@ class GetDataProductsBulkTool(BaseTool):
 
         products: List[Dict[str, Any]] = []
         not_found: List[str] = []
+        unreadable: List[str] = []
         try:
             for pid in ids:
                 product = ctx.data_products_manager.get_product(pid)
-                if product:
+                if product and read_access.can_read_product(ctx, product):
                     products.append(_serialize_product(product))
                 else:
+                    # An unreadable product is answered like a missing one.
                     not_found.append(pid)
+                    if product:
+                        unreadable.append(pid)
 
             logger.info(
                 f"[get_data_products] SUCCESS: {len(products)} found, "
                 f"{len(not_found)} not found"
             )
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "products": products,
@@ -592,6 +604,7 @@ class GetDataProductsBulkTool(BaseTool):
                     "truncated": requested > effective_limit,
                 },
             )
+            return read_access.denied(ctx, self.name, result, unreadable)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_data_products", e))
 

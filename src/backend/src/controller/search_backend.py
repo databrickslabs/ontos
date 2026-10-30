@@ -40,8 +40,12 @@ class SearchBackend(ABC):
         offset: int = 0,
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
+        exclude_ids: Optional[Iterable[str]] = None,
     ) -> Dict[str, Any]:
-        """Paginated/faceted search (MCP tools)."""
+        """Paginated/faceted search (MCP tools).
+
+        ``exclude_ids`` (index ids) are dropped before pagination and facets.
+        """
 
     @abstractmethod
     def search_items(self, query: str, *, limit: int = 200) -> List[SearchIndexItem]:
@@ -65,12 +69,14 @@ class InMemoryBackend(SearchBackend):
         self._m = manager  # SearchManager (duck-typed to avoid a circular import)
 
     def search(self, query, *, type_filter=None, filters=None, allowed_features=None,
-               limit=25, offset=0, include_facets=True, fields=None) -> Dict[str, Any]:
+               limit=25, offset=0, include_facets=True, fields=None,
+               exclude_ids=None) -> Dict[str, Any]:
         # allowed_features is unused in-memory (MCP is scope-based; REST uses search_items).
         return search_scoring.search_index(
             self._m.index, query, self._m.config,
             type_filter=type_filter, filters=filters,
             limit=limit, offset=offset, include_facets=include_facets, fields=fields,
+            exclude_ids=exclude_ids,
         )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:
@@ -96,13 +102,14 @@ class PostgresBackend(SearchBackend):
         self._session_factory = session_factory
 
     def search(self, query, *, type_filter=None, filters=None, allowed_features=None,
-               limit=25, offset=0, include_facets=True, fields=None) -> Dict[str, Any]:
+               limit=25, offset=0, include_facets=True, fields=None,
+               exclude_ids=None) -> Dict[str, Any]:
         from src.repositories import search_repository
         with self._session_factory() as db:
             return search_repository.search(
                 db, query, type_filter=type_filter, filters=filters,
                 allowed_features=allowed_features, limit=limit, offset=offset,
-                include_facets=include_facets, fields=fields,
+                include_facets=include_facets, fields=fields, exclude_ids=exclude_ids,
             )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:

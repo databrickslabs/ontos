@@ -4,10 +4,11 @@ LLM Search Routes
 API endpoints for conversational LLM search functionality.
 
 Note: These routes do not use PermissionChecker, following the pattern of the
-existing /api/search endpoint. The chat route resolves the caller's feature
-levels once per request (``src.tools.caller``) and passes them to the tools: a
-tool that changes data runs only when the caller has the level its REST route
-requires. Read tools don't filter their results by caller yet.
+existing /api/search endpoint. The chat route resolves the caller once per
+request (``src.tools.caller``) and passes it to the tools: a tool that changes
+data runs only when the caller has the level its REST route requires, and the
+tools that read data products and contracts apply the same read rules as the
+REST routes (``src.tools.read_access``).
 """
 
 from typing import List, Optional
@@ -224,7 +225,7 @@ async def chat(
         )
 
         # The tools act for the chat's user, with the levels of the REST routes.
-        caller = await resolve_tool_caller(current_user, request, ASK_ONTOS_AUTH_PATH)
+        caller = await resolve_tool_caller(current_user, request, ASK_ONTOS_AUTH_PATH, db)
 
         # Note: manager already has OBO workspace client from get_llm_search_manager dependency
         response = await manager.chat(

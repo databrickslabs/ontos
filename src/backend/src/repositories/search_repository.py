@@ -98,11 +98,21 @@ def _where(
     type_filter: Optional[str],
     filters: Optional[Dict[str, Optional[str]]],
     allowed_features: Optional[Iterable[str]],
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> tuple[str, Dict[str, Any], bool]:
-    """Build the shared WHERE clause + params. Returns (sql, params, has_query)."""
+    """Build the shared WHERE clause + params. Returns (sql, params, has_query).
+
+    ``exclude_ids`` are document ids (``product::<id>``) left out of the
+    results, the counts and the facets alike.
+    """
     clauses: List[str] = []
     params: Dict[str, Any] = {}
     has_query = bool(query) and query.strip() not in ("", "*")
+
+    excluded = list(exclude_ids or [])
+    if excluded:
+        clauses.append("NOT (id = ANY(:exclude_ids))")
+        params["exclude_ids"] = excluded
 
     if type_filter:
         clauses.append("type = :type_filter")
@@ -219,11 +229,12 @@ def search(
     offset: int = 0,
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Full-text search over search_documents; result shape matches search_scoring.search_index."""
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    where, params, has_query = _where(query, type_filter, filters, allowed_features)
+    where, params, has_query = _where(query, type_filter, filters, allowed_features, exclude_ids)
 
     if has_query:
         sql = (

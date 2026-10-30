@@ -87,6 +87,10 @@ class ToolResult:
     data: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
     error_code: Optional[str] = None
+    # Why the caller got less than the tool would return to an admin (e.g.
+    # ``not_readable``). For audit entries only: never sent to the client,
+    # where an unreadable item looks like a missing one.
+    denied_reason: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -112,14 +116,19 @@ class ToolCaller:
     same way as ``PermissionChecker`` (role override, team role, groups).
     ``auth_path`` says where the identity came from (``ask_ontos``,
     ``mcp_forwarded_token``, ...) for logs and audit entries.
-    ``full_access`` skips the feature checks; only the MCP API-key policy
-    (``src.tools.caller.mcp_api_key_caller``) sets it.
+    ``products_admin`` / ``contracts_admin`` / ``team_ids`` are the inputs of
+    the product and contract read rules (``src.tools.read_access``).
+    ``full_access`` skips the feature checks and the read rules; no caller
+    sets it today (see ``src.tools.caller.mcp_api_key_caller``).
     """
     email: Optional[str]
     auth_path: str
     groups: List[str] = field(default_factory=list)
     permissions: Dict[str, FeatureAccessLevel] = field(default_factory=dict)
     full_access: bool = False
+    products_admin: bool = False
+    contracts_admin: bool = False
+    team_ids: set[str] = field(default_factory=set)
 
     def has_level(self, feature_id: str, required_level: FeatureAccessLevel) -> bool:
         if self.full_access:

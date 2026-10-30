@@ -3151,7 +3151,8 @@ INSERT INTO access_policies (id, uid, name, description, status, version, versio
 ('1a200006-0000-4000-8000-000000000006', 'urn:ontos:policy:1a200006-0000-4000-8000-000000000006', 'Customer features for data science', 'Draft — data scientists read the customer feature view (under discussion).', 'draft', '1.0.0', '1a200006-0000-4000-8000-000000000006', 'system@demo', 'system@demo', NULL, NULL, 'Set', 'prohibit', '[]', '{"obligation": [], "permission": [{"action": "read", "assignee": "urn:ontos:audience:1a000004-0000-4000-8000-000000000004", "assigner": null, "constraint": [], "target": "uc:demo_analytics.data_science.v_customer_features"}], "prohibition": []}', NULL, NULL, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO access_policy_index (id, policy_id, rule_kind, role, value) VALUES
+INSERT INTO access_policy_index (id, policy_id, rule_kind, role, value)
+SELECT column1, column2, column3, column4, column5 FROM (VALUES
 ('1a400001-0000-4000-8000-000000000001', '1a200001-0000-4000-8000-000000000001', 'permission', 'action', 'read'),
 ('1a400002-0000-4000-8000-000000000002', '1a200001-0000-4000-8000-000000000001', 'permission', 'assignee', 'urn:ontos:audience:1a000001-0000-4000-8000-000000000001'),
 ('1a400003-0000-4000-8000-000000000003', '1a200001-0000-4000-8000-000000000001', 'permission', 'target', 'urn:ontos:asset-collection:1a100001-0000-4000-8000-000000000001'),
@@ -3177,6 +3178,7 @@ INSERT INTO access_policy_index (id, policy_id, rule_kind, role, value) VALUES
 ('1a400017-0000-4000-8000-000000000023', '1a200006-0000-4000-8000-000000000006', 'permission', 'action', 'read'),
 ('1a400018-0000-4000-8000-000000000024', '1a200006-0000-4000-8000-000000000006', 'permission', 'assignee', 'urn:ontos:audience:1a000004-0000-4000-8000-000000000004'),
 ('1a400019-0000-4000-8000-000000000025', '1a200006-0000-4000-8000-000000000006', 'permission', 'target', 'uc:demo_analytics.data_science.v_customer_features')
+) AS v WHERE NOT EXISTS (SELECT 1 FROM access_policy_index i WHERE i.policy_id = v.column2)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO access_targets (id, uid, name, description, status, version, version_family_id, created_by, updated_by, submitted_by, approved_by, key, system, connection, scope, delivery_modes, reconcile_schedule, drift_policy, created_at, updated_at) VALUES

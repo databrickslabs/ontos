@@ -48,7 +48,8 @@ interface Props {
 
 const NONE = '__none__';
 
-/** Audience members are typed refs (group:x / user:x / sp:x); the pickers hold bare identifiers. */
+/** Audience members are typed refs (group:x / user:x / sp:x); the pickers hold bare identifiers.
+ *  Prefixes are case-insensitive, as on the backend. */
 function splitPrincipals(members: string[]) {
   const groups: string[] = [];
   const users: string[] = [];
@@ -56,11 +57,19 @@ function splitPrincipals(members: string[]) {
   for (const m of members) {
     const [prefix, ...rest] = m.split(':');
     const value = rest.join(':');
-    if (prefix === 'group' && value) groups.push(value);
-    else if ((prefix === 'user' || prefix === 'mailto') && value) users.push(value);
+    const p = prefix.toLowerCase();
+    if (p === 'group' && value) groups.push(value);
+    else if ((p === 'user' || p === 'mailto') && value) users.push(value);
     else other.push(m);
   }
   return { groups, users, other };
+}
+
+/** Typed ref for a picker value; a prefix typed into the picker (manual entry) isn't doubled. */
+function typedPrincipal(type: 'group' | 'user', value: string) {
+  const prefixes = type === 'group' ? ['group:'] : ['user:', 'mailto:'];
+  const bare = prefixes.reduce((v, p) => (v.toLowerCase().startsWith(p) ? v.slice(p.length) : v), value.trim());
+  return `${type}:${bare}`;
 }
 const DELIVERY_MODES: DeliveryModeKey[] = ['direct', 'indirect', 'manual'];
 
@@ -167,11 +176,15 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
       setSchedule(tg?.reconcile_schedule || '');
     } else {
       const c = entity as AccessCollection | undefined;
-      setMembers((c?.members || []).join('\n'));
-      const split = splitPrincipals(c?.members || []);
-      setGroups(split.groups);
-      setUsers(split.users);
-      setOtherPrincipals(split.other.join('\n'));
+      if (kind === 'audience') {
+        const split = splitPrincipals(c?.members || []);
+        setGroups(split.groups);
+        setUsers(split.users);
+        // A single-line input: newlines would be stripped and merge the refs.
+        setOtherPrincipals(split.other.join(', '));
+      } else {
+        setMembers((c?.members || []).join('\n'));
+      }
       const forms = (c?.refinement || []).map(constraintToForm);
       setRefinementUnsupported(forms.some((f) => f === null));
       setRefinement(forms.filter((f): f is FormConstraint => !!f));
@@ -280,8 +293,8 @@ export default function AccessEntityFormDialog({ kind, open, onOpenChange, entit
         base.members =
           kind === 'audience'
             ? [
-                ...groups.map((g) => `group:${g}`),
-                ...users.map((u) => `user:${u}`),
+                ...groups.filter((g) => g.trim()).map((g) => typedPrincipal('group', g)),
+                ...users.filter((u) => u.trim()).map((u) => typedPrincipal('user', u)),
                 ...otherPrincipals.split(/[\n,]/).map((m) => m.trim()).filter(Boolean),
               ]
             : members.split(/[\n,]/).map((m) => m.trim()).filter(Boolean);

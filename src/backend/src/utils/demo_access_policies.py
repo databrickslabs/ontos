@@ -50,8 +50,8 @@ def _governed(table: str, seq: int, dataset: str, spec: Dict[str, Any], status: 
 
 
 def rows(source: Path = SOURCE) -> List[Tuple[str, Dict[str, Any]]]:
-    """``[(table, row)]`` in FK-safe insertion order."""
-    from src.controller.access_policies_manager import AccessPoliciesManager
+    """``[(table, row)]`` in FK-safe insertion order, normalized exactly as the API stores them."""
+    from src.controller.access_policies_manager import clean_members, target_fields
 
     data = yaml.safe_load(source.read_text(encoding="utf-8"))
     ds = data["dataset"]
@@ -61,7 +61,7 @@ def rows(source: Path = SOURCE) -> List[Tuple[str, Dict[str, Any]]]:
     for table, section in (("access_audiences", "audiences"), ("access_asset_collections", "asset_collections")):
         for seq, (key, spec) in enumerate((data.get(section) or {}).items(), start=1):
             row = _governed(table, seq, ds, spec, spec.get("status", "active"))
-            row["members"] = list(spec.get("members") or [])
+            row["members"] = clean_members(spec.get("members"))
             row["refinement"] = [odrl.normalize_constraint(c) for c in spec.get("refinement") or []]
             refs[key] = row["uid"]
             out.append((table, row))
@@ -75,7 +75,6 @@ def rows(source: Path = SOURCE) -> List[Tuple[str, Dict[str, Any]]]:
             return {k: resolve(v) for k, v in value.items()}
         return value
 
-    manager = AccessPoliciesManager(attribute_sources=[])
     index_seq = 0
     for seq, (key, spec) in enumerate((data.get("policies") or {}).items(), start=1):
         ptype, conflict = spec.get("policy_type", "Set"), spec.get("conflict", odrl.DEFAULT_AUTHORED_CONFLICT)
@@ -83,7 +82,7 @@ def rows(source: Path = SOURCE) -> List[Tuple[str, Dict[str, Any]]]:
         subject = spec.get("subject") or {}
         row.update({
             "policy_type": ptype, "conflict": conflict, "inherit_from": [],
-            "body": manager._normalize_rules(ptype, conflict, [], resolve(spec["rules"])),
+            "body": odrl.normalize_rules(ptype, conflict, [], resolve(spec["rules"])),
             "subject_entity_type": subject.get("entity_type"), "subject_entity_id": subject.get("entity_id"),
         })
         out.append(("access_policies", row))
@@ -94,9 +93,7 @@ def rows(source: Path = SOURCE) -> List[Tuple[str, Dict[str, Any]]]:
 
     for seq, (key, spec) in enumerate((data.get("targets") or {}).items(), start=1):
         row = _governed("access_targets", seq, ds, spec, spec.get("status", "active"))
-        row.update({"key": spec["key"], "system": spec.get("system", "uc"), "connection": spec.get("connection") or {},
-                    "scope": list(spec.get("scope") or []), "delivery_modes": list(spec.get("delivery_modes") or []),
-                    "reconcile_schedule": spec.get("reconcile_schedule"), "drift_policy": "report"})
+        row.update(target_fields({"system": "uc", **spec}, partial=False))
         out.append(("access_targets", row))
     return out
 
@@ -120,14 +117,22 @@ def render_sql(source: Path = SOURCE) -> str:
              "-- example. Source: data/demo_access_policies.yaml.", ""]
     for table, items in by_table.items():
         cols = list(items[0])
-        timestamps = table != "access_policy_index"
-        head = cols + (["created_at", "updated_at"] if timestamps else [])
-        lines.append(f"INSERT INTO {table} ({', '.join(head)}) VALUES")
-        values = []
-        for r in items:
-            vals = [_literal(r[c]) for c in cols] + (["NOW()", "NOW()"] if timestamps else [])
-            values.append("(" + ", ".join(vals) + ")")
-        lines.append(",\n".join(values))
+        index = table == "access_policy_index"
+        head = cols + ([] if index else ["created_at", "updated_at"])
+        values = ",\n".join("(" + ", ".join([_literal(r[c]) for c in cols] + ([] if index else ["NOW()", "NOW()"])) + ")"
+                            for r in items)
+        if index:
+            # The index of a policy edited since the demo was loaded was rebuilt with new ids:
+            # only seed the index of policies that have none, so a reload never brings back
+            # stale terms next to the rebuilt ones.
+            pos = {c: f"column{i}" for i, c in enumerate(cols, start=1)}
+            lines.append(f"INSERT INTO {table} ({', '.join(cols)})")
+            lines.append(f"SELECT {', '.join(pos.values())} FROM (VALUES")
+            lines.append(values)
+            lines.append(f") AS v WHERE NOT EXISTS (SELECT 1 FROM {table} i WHERE i.policy_id = v.{pos['policy_id']})")
+        else:
+            lines.append(f"INSERT INTO {table} ({', '.join(head)}) VALUES")
+            lines.append(values)
         lines.append("ON CONFLICT (id) DO NOTHING;")
         lines.append("")
     lines.append(END)
@@ -135,9 +140,14 @@ def render_sql(source: Path = SOURCE) -> str:
 
 
 def pack_block(pack: Path = PACK) -> str:
+    """The generated block in the pack ('' if there is none); malformed markers raise."""
     text = pack.read_text(encoding="utf-8")
     start, end = text.find(BEGIN), text.find(END)
-    return text[start:end + len(END)] if start >= 0 and end >= 0 else ""
+    if start < 0 and end < 0:
+        return ""
+    if start < 0 or end < start or text.count(BEGIN) != 1 or text.count(END) != 1:
+        raise ValueError(f"{pack.name}: expected exactly one '{BEGIN}' followed by one '{END}'")
+    return text[start:end + len(END)]
 
 
 def write_pack(pack: Path = PACK) -> None:

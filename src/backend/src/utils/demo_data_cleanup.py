@@ -105,6 +105,8 @@ PART_OF: Set[Tuple[str, str]] = {
     ('team_members', 'team_id'),
     ('project_teams', 'project_id'),
     ('tag_namespace_permissions', 'namespace_id'),
+    # Access policies: their search index (rebuilt with new ids on every edit)
+    ('access_policy_index', 'policy_id'),
 }
 
 # (child table, foreign key column) -> the columns naming the link's other
@@ -151,6 +153,11 @@ POLYMORPHIC: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     # A relationship goes when its other end is demo data too
     'entity_relationships': ('link', ('source_id', 'target_id')),
 }
+
+# Tables referenced by ``uid`` from inside the access policies' JSON body (not a foreign
+# key); ``access_policy_index`` holds every term of a body, so a user's policy naming a
+# demo audience or asset collection there blocks the clear.
+UID_REFERENCED: Tuple[str, ...] = ('access_audiences', 'access_asset_collections')
 
 # Columns whose ids name a part of a demo contract as "{contractId}#..."
 # (semantic links on a contract's schema or property)
@@ -328,6 +335,7 @@ def plan_demo_clear(db: Session, demo: List[Tuple[str, str, List[str]]]) -> Demo
                 queue.append((child.name, pk[0].name, [k[0] for k in new_keys], depth + 1))
 
     _plan_polymorphic(db, plan, demo_rows, candidates)
+    _plan_uid_refs(db, demo_rows, candidates)
 
     for (table_name, column, referenced), keys in candidates.items():
         # A row that is also part of a demo row (through another foreign key) goes anyway
@@ -384,6 +392,30 @@ def _plan_polymorphic(
             else:
                 column_name, value = on_demo[0]
                 candidates[(table_name, column_name, table_of[value])].add(key)
+
+
+def _plan_uid_refs(
+    db: Session,
+    demo_rows: Dict[str, Tuple[str, Set[str]]],
+    candidates: Dict[Tuple[str, str, str], Set[RowKey]],
+) -> None:
+    """User access policies naming a demo audience / asset collection by uid block the clear."""
+    tables = Base.metadata.tables
+    index, policies = tables.get('access_policy_index'), tables.get('access_policies')
+    if index is None or policies is None:
+        return
+    demo_policies = demo_rows.get('access_policies', (None, set()))[1]
+    for table_name in UID_REFERENCED:
+        table = tables.get(table_name)
+        if table is None or table_name not in demo_rows:
+            continue
+        column, ids = demo_rows[table_name]
+        uids = [u for (u,) in db.execute(select(table.c.uid).where(table.c[column].in_(sorted(ids)))) if u]
+        if not uids:
+            continue
+        for (policy_id,) in db.execute(select(index.c.policy_id).where(index.c.value.in_(uids)).distinct()):
+            if _key(policy_id) not in demo_policies:
+                candidates[('access_policies', 'body', table_name)].add((_key(policy_id),))
 
 
 def run_demo_clear(db: Session, plan: DemoClearPlan) -> Dict[str, int]:

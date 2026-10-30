@@ -3,6 +3,7 @@ check access per persona → compile → release review → delivery (Manual onl
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.controller.access_policies_manager import AccessPoliciesManager, AccessPolicyError
@@ -58,12 +59,72 @@ def test_pack_block_is_generated_from_the_yaml():
 def test_generated_block_is_cleared_with_the_pack():
     from src.utils.demo_data_sql import parse_demo_inserts
     tables = {i.table for i in parse_demo_inserts(demo.render_sql())}
-    assert tables == set(MODELS)
+    # The index is seeded guarded (INSERT ... SELECT) and goes with its policy (PART_OF).
+    assert tables == set(MODELS) - {"access_policy_index"}
 
 
-def test_every_example_policy_validates(demo_db: Session, policies):
-    for p in demo_db.query(AccessPolicyDb).all():
-        assert policies.activation_problems(demo_db, "policy", p) == [], p.name
+def test_malformed_markers_are_refused(tmp_path):
+    pack = tmp_path / "pack.sql"
+    pack.write_text(f"SELECT 1;\n{demo.BEGIN}\nINSERT ...;\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        demo.write_pack(pack)
+    assert demo.BEGIN in pack.read_text(encoding="utf-8") and demo.END not in pack.read_text(encoding="utf-8")
+
+
+def _index_seed() -> str:
+    sql = demo.render_sql()
+    start = sql.index("INSERT INTO access_policy_index")
+    return sql[start:sql.index(";", start) + 1]
+
+
+def test_index_seed_only_fills_policies_without_an_index(demo_db: Session):
+    edited = demo_db.query(AccessPolicyDb).filter_by(name="Sales analytics read").one()
+    other = demo_db.query(AccessPolicyDb).filter_by(name="Finance ledger maintenance").one()
+    count = lambda p: demo_db.query(AccessPolicyIndexDb).filter_by(policy_id=p.id).count()  # noqa: E731
+    seeded_other = count(other)
+    # An edit rebuilt one policy's index with new ids; another policy lost its index.
+    demo_db.query(AccessPolicyIndexDb).filter(AccessPolicyIndexDb.policy_id.in_([edited.id, other.id])).delete()
+    demo_db.add(AccessPolicyIndexDb(id="rebuilt-1", policy_id=edited.id, rule_kind="permission",
+                                    role="action", value="modify"))
+    demo_db.flush()
+    demo_db.execute(text(_index_seed()))
+    # Reload: the stale terms of the edited policy don't come back; the empty index is re-seeded.
+    assert [r.id for r in demo_db.query(AccessPolicyIndexDb).filter_by(policy_id=edited.id)] == ["rebuilt-1"]
+    assert count(other) == seeded_other
+
+
+def test_every_example_entity_passes_activation(demo_db: Session, policies):
+    for kind, model in (("audience", AccessAudienceDb), ("asset_collection", AccessAssetCollectionDb),
+                        ("target", AccessTargetDb), ("policy", AccessPolicyDb)):
+        for row in demo_db.query(model).all():
+            assert policies.activation_problems(demo_db, kind, row) == [], (kind, row.name)
+
+
+def _clear_plan(db: Session):
+    from src.utils.demo_data_cleanup import plan_demo_clear
+    from src.utils.demo_data_sql import parse_demo_inserts
+    return plan_demo_clear(db, [(i.table, i.pk_column, i.pk_values) for i in parse_demo_inserts(demo.render_sql())])
+
+
+def test_clear_takes_the_index_and_stops_at_user_policies_on_demo_audiences(demo_db: Session, policies):
+    plan = _clear_plan(demo_db)
+    assert plan.blocking == {}
+    # A rebuilt (non-demo id) index row of a demo policy is part of it.
+    policy = demo_db.query(AccessPolicyDb).filter_by(name="Sales analytics read").one()
+    demo_db.add(AccessPolicyIndexDb(id="rebuilt-1", policy_id=policy.id, rule_kind="permission",
+                                    role="action", value="modify"))
+    audience = demo_db.query(AccessAudienceDb).filter_by(name="Sales Analysts").one()
+    mine = AccessPolicyDb(id="user-policy", uid="urn:ontos:policy:user-policy", name="Mine", status="draft",
+                          version="1.0.0", version_family_id="user-policy", policy_type="Set", conflict="prohibit",
+                          inherit_from=[], body=policies._normalize_rules("Set", "prohibit", [], {"permission": [
+                              {"action": "read", "target": "uc:main.x", "assignee": audience.uid}]}))
+    demo_db.add(mine)
+    demo_db.flush()
+    policies._rebuild_index(demo_db, mine)
+    demo_db.flush()
+    plan = _clear_plan(demo_db)
+    assert ("rebuilt-1",) in plan.dependents.get("access_policy_index", {})
+    assert plan.blocking == {("access_policies", "body", "access_audiences"): ["user-policy"]}
 
 
 def test_personas_get_what_their_audience_allows(demo_db: Session, policies):

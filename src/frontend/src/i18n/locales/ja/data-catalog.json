@@ -150,6 +150,31 @@
       "entityIdPlaceholder": "例: uuid",
       "load": "読み込み",
       "emptyHint": "上でエンティティ種別とIDを入力し、「読み込み」をクリックしてください"
+    },
+    "relationships": {
+      "describes": "説明",
+      "hasOutputPort": "出力ポートあり",
+      "portHasContract": "管理元",
+      "portHasAsset": "公開",
+      "hasSchemaObject": "スキーマあり",
+      "hasProperty": "プロパティあり",
+      "implementedBy": "実装",
+      "dependsOn": "依存",
+      "hasDataset": "データセットあり",
+      "hasTable": "テーブルあり",
+      "hasView": "ビューあり",
+      "hasColumn": "列あり",
+      "governedBy": "管理元",
+      "implementsContract": "契約を実装",
+      "consumesFrom": "取得元",
+      "producesTo": "出力先",
+      "derivedFrom": "派生元",
+      "replacedBy": "置換先",
+      "exposes": "公開",
+      "relatesTo": "関連",
+      "hasTerm": "用語あり",
+      "attachedPolicy": "ポリシー適用",
+      "belongsToDomain": "ドメインに属する"
     }
   },
   "hierarchy": {

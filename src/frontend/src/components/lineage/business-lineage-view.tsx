@@ -352,7 +352,13 @@ function BusinessLineageViewInner({
         sourceHandle: le.sourceHandle || 'parent',
         targetHandle: le.targetHandle || 'parent',
         type: 'smoothstep',
-        label: showLabel ? (le.edge.label || undefined) : undefined,
+        // Translated by relationship type; the backend label (rdfs:label or
+        // derived-link label) is the fallback for types without a key
+        label: showLabel
+          ? t(`data-catalog:lineage.relationships.${le.edge.relationship_type}`, {
+            defaultValue: le.edge.label || le.edge.relationship_type,
+          })
+          : undefined,
         labelStyle: { fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' },
         labelBgStyle: {
           fill: isDark ? '#1e293b' : '#ffffff',
@@ -371,7 +377,7 @@ function BusinessLineageViewInner({
       };
     });
     setEdges(rfEdges);
-  }, [renderLayout, highlight, focusMode, hoveredEdgeId, isDark, viewOptions.showLabels, setEdges]);
+  }, [renderLayout, highlight, focusMode, hoveredEdgeId, isDark, viewOptions.showLabels, setEdges, t]);
 
   // ─── Render ──────────────────────────────────────────────────────────
 

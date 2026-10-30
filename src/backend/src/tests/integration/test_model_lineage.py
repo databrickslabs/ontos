@@ -323,7 +323,224 @@ def test_walk_stops_at_node_budget(manager, db_session, stack, monkeypatch):
 
     graph = manager.get_business_lineage(db_session, "DataContract", stack.contract.id, 3)
     assert graph.truncated
-    assert len(graph.nodes) <= 3 + 3  # budget, plus containers of gap-fill leaves
+    assert len(graph.nodes) <= 3  # hard cap — includes attached containers
     keys = _keys(graph)
     for e in graph.edges:
         assert e.source in keys and e.target in keys
+
+
+# ---------------------------------------------------------------------------
+# PR #973 review follow-ups
+# ---------------------------------------------------------------------------
+
+def _asset_type(db_session, name):
+    t = db_session.query(AssetTypeDb).filter(AssetTypeDb.name == name).first()
+    if t is None:
+        t = AssetTypeDb(id=uuid4(), name=name)
+        db_session.add(t)
+        db_session.flush()
+    return t
+
+
+def _asset(db_session, type_name, name, location=None):
+    a = AssetDb(id=uuid4(), name=name, asset_type_id=_asset_type(db_session, type_name).id, location=location)
+    db_session.add(a)
+    db_session.flush()
+    return a
+
+
+def _rel(db_session, st, sid, tt, tid, rel):
+    db_session.add(EntityRelationshipDb(
+        source_type=st, source_id=str(sid), target_type=tt, target_id=str(tid), relationship_type=rel,
+    ))
+    db_session.flush()
+
+
+def test_impact_bridges_hidden_logical_types(manager, db_session, stack):
+    """BusinessTerm → LogicalEntity → LogicalAttribute → Dataset: the hidden middle is
+    walked through, the term still reaches the dataset (Impact tab, retail demo)."""
+    term = _asset(db_session, "BusinessTerm", "Transaction")
+    entity = _asset(db_session, "LogicalEntity", "Transaction")
+    attr = _asset(db_session, "LogicalAttribute", "Transaction.Id")
+    ds = _asset(db_session, "Dataset", "Sales Analytics")
+    _rel(db_session, "BusinessTerm", term.id, "LogicalEntity", entity.id, "relatesTo")
+    _rel(db_session, "LogicalEntity", entity.id, "LogicalAttribute", attr.id, "hasLogicalAttribute")
+    _rel(db_session, "LogicalAttribute", attr.id, "Dataset", ds.id, "implementedBy")
+
+    graph = manager.get_business_lineage(db_session, "BusinessTerm", str(term.id), 4, "downstream")
+    keys = _keys(graph)
+    assert f"Dataset:{ds.id}" in keys
+    assert f"LogicalEntity:{entity.id}" not in keys and f"LogicalAttribute:{attr.id}" not in keys
+    bridged = [e for e in graph.edges if e.source == f"BusinessTerm:{term.id}" and e.target == f"Dataset:{ds.id}"]
+    assert bridged and bridged[0].derived and not bridged[0].reversed
+
+    # Entering hidden nodes is free: still reached at depth 1
+    assert f"Dataset:{ds.id}" in _keys(manager.get_business_lineage(db_session, "BusinessTerm", str(term.id), 1, "downstream"))
+    # And from the dataset back upstream
+    assert f"BusinessTerm:{term.id}" in _keys(manager.get_business_lineage(db_session, "Dataset", str(ds.id), 1, "upstream"))
+
+
+def _access(products=lambda row: True, contracts=lambda row: True):
+    from src.controller.model_lineage import LineageAccess
+    return LineageAccess(can_read_product=products, can_read_contract=contracts)
+
+
+def test_unreadable_contract_and_its_schema_are_hidden(manager, db_session, stack):
+    """Published product → port → another user's personal draft contract: the contract,
+    its schema objects and properties must not leak into the caller's lineage."""
+    stack.contract.draft_owner_id = "someone-else@example.com"
+    db_session.flush()
+
+    def personal_draft_rule(row):
+        return not row.draft_owner_id or row.draft_owner_id == "me@example.com"
+
+    graph = manager.get_business_lineage(
+        db_session, "DataProduct", stack.product.id, 3, access=_access(contracts=personal_draft_rule),
+    )
+    keys = _keys(graph)
+    assert f"OutputPort:{stack.port.id}" in keys
+    assert f"DataContract:{stack.contract.id}" not in keys
+    assert f"SchemaObject:{stack.schema.id}" not in keys
+    assert f"SchemaProperty:{stack.prop.id}" not in keys
+    for e in graph.edges:
+        assert e.source in keys and e.target in keys
+
+    # The owner sees it
+    owner_view = manager.get_business_lineage(
+        db_session, "DataProduct", stack.product.id, 3,
+        access=_access(contracts=lambda row: row.draft_owner_id == "someone-else@example.com"),
+    )
+    assert f"SchemaObject:{stack.schema.id}" in _keys(owner_view)
+
+
+def test_unreadable_product_hides_product_and_ports(manager, db_session, stack):
+    graph = manager.get_business_lineage(
+        db_session, "DataContract", stack.contract.id, 3, access=_access(products=lambda row: False),
+    )
+    keys = _keys(graph)
+    assert f"DataProduct:{stack.product.id}" not in keys
+    assert f"OutputPort:{stack.port.id}" not in keys
+    # An unreadable center yields an empty graph
+    assert manager.get_business_lineage(
+        db_session, "DataProduct", stack.product.id, 3, access=_access(products=lambda row: False),
+    ).nodes == []
+
+
+def test_concept_fanout_is_deterministic_and_flags_truncation(manager, db_session, stack):
+    from src.controller.model_lineage import MAX_CONCEPT_FANOUT
+    iri = "http://demo.ontos.app/concepts#Busy"
+    for i in range(MAX_CONCEPT_FANOUT + 3):
+        dp = _add_product(db_session, f"busy{i}")
+        db_session.add(EntitySemanticLinkDb(entity_type="data_product", entity_id=dp.id, iri=iri, label="Busy"))
+    db_session.flush()
+
+    first = manager.get_business_lineage(db_session, "Concept", iri, 1, "downstream")
+    second = manager.get_business_lineage(db_session, "Concept", iri, 1, "downstream")
+    assert first.truncated
+    assert _keys(first) == _keys(second)
+
+    small = "http://demo.ontos.app/concepts#Quiet"
+    db_session.add(EntitySemanticLinkDb(entity_type="data_product", entity_id=stack.product.id, iri=small, label="Quiet"))
+    db_session.flush()
+    assert not manager.get_business_lineage(db_session, "Concept", small, 1, "downstream").truncated
+
+
+def test_contract_by_name_prefers_active_then_newest(db_session):
+    from datetime import datetime, timedelta, timezone
+    from src.controller.model_lineage import ModelLineageResolver
+    now = datetime.now(timezone.utc)
+    family = str(uuid4())
+    rows = [
+        DataContractDb(id=str(uuid4()), name="orders", version="3", version_family_id=family, status="draft",
+                       created_at=now),
+        DataContractDb(id=str(uuid4()), name="orders", version="1", version_family_id=family, status="active",
+                       created_at=now - timedelta(days=10)),
+        DataContractDb(id=str(uuid4()), name="orders", version="2", version_family_id=family, status="active",
+                       created_at=now - timedelta(days=1)),
+    ]
+    db_session.add_all(rows)
+    db_session.flush()
+    assert ModelLineageResolver._contract_by_ref(db_session, "orders").version == "2"
+
+
+def test_query_count_is_bounded(manager, db_session, monkeypatch):
+    """Reviewer scenario: 3 schema objects × 40 properties bound to 3 tables × 40 columns,
+    plus 2,000 unrelated tables. Physical matching runs once per schema object, and
+    both passes of "Both" share one link cache."""
+    from sqlalchemy import event
+    from src.controller.model_lineage import ModelLineageResolver
+
+    product = _add_product(db_session, "Big")
+    contract = DataContractDb(id=str(uuid4()), name="big", version="1", version_family_id=str(uuid4()))
+    db_session.add(contract)
+    db_session.flush()
+    db_session.add(OutputPortDb(id=str(uuid4()), product_id=product.id, name="p", version="1", contract_id=contract.id))
+    for t in range(3):
+        obj = SchemaObjectDb(id=str(uuid4()), contract_id=contract.id, name=f"t{t}", logical_type="object",
+                             physical_name=f"sales.t{t}")
+        db_session.add(obj)
+        db_session.flush()
+        table = _asset(db_session, "Table", f"t{t}", location=f"prod.sales.t{t}")
+        for c in range(40):
+            db_session.add(SchemaPropertyDb(id=str(uuid4()), object_id=obj.id, name=f"c{c}", logical_type="string"))
+            col = _asset(db_session, "Column", f"c{c}")
+            _rel(db_session, "Table", table.id, "Column", col.id, "hasColumn")
+    table_type = _asset_type(db_session, "Table")
+    db_session.add_all([
+        AssetDb(id=uuid4(), name=f"noise{i}", asset_type_id=table_type.id, location=f"prod.other.noise{i}")
+        for i in range(2000)
+    ])
+    db_session.flush()
+
+    physical_queries = []
+    original = ModelLineageResolver._query_physical_assets
+    monkeypatch.setattr(ModelLineageResolver, "_query_physical_assets",
+                        staticmethod(lambda db, pn, exact: physical_queries.append(pn) or original(db, pn, exact)))
+
+    statements = []
+    engine = db_session.get_bind()
+    listener = lambda *args: statements.append(1)  # noqa: E731
+    event.listen(engine, "before_cursor_execute", listener)
+    try:
+        graph = manager.get_business_lineage(db_session, "DataProduct", product.id, 3)
+    finally:
+        event.remove(engine, "before_cursor_execute", listener)
+
+    assert sorted(physical_queries) == ["sales.t0", "sales.t1", "sales.t2"]  # once per schema object
+    assert len(graph.nodes) >= 249
+    print(f"\nnodes={len(graph.nodes)} queries={len(statements)}")
+    assert len(statements) < 700  # ~2 per node; was ~3,150 before per-request caching
+
+
+def test_access_check_errors_fail_closed(manager, db_session, stack):
+    graph = manager.get_business_lineage(
+        db_session, "DataProduct", stack.product.id, 3, access=_access(contracts=lambda row: 1 / 0),
+    )
+    keys = _keys(graph)
+    assert f"DataContract:{stack.contract.id}" not in keys
+    assert f"SchemaObject:{stack.schema.id}" not in keys
+    assert f"SchemaProperty:{stack.prop.id}" not in keys
+    for e in graph.edges:
+        assert e.source in keys and e.target in keys
+
+
+def test_each_anchor_gets_its_own_bridge(manager, db_session, stack):
+    """Two terms relating to the same hidden LogicalEntity both bridge to the dataset."""
+    t1 = _asset(db_session, "BusinessTerm", "Order")
+    t2 = _asset(db_session, "BusinessTerm", "Purchase")
+    entity = _asset(db_session, "LogicalEntity", "Order")
+    ds = _asset(db_session, "Dataset", "Orders")
+    for t in (t1, t2):
+        _rel(db_session, "BusinessTerm", t.id, "LogicalEntity", entity.id, "relatesTo")
+    _rel(db_session, "LogicalEntity", entity.id, "Dataset", ds.id, "implementedBy")
+
+    # Both terms are visible nodes reaching the same hidden entity (via a concept)
+    iri = "http://demo.ontos.app/concepts#Order"
+    for t in (t1, t2):
+        db_session.add(EntitySemanticLinkDb(entity_type="asset", entity_id=str(t.id), iri=iri, label="Order"))
+    db_session.flush()
+
+    graph = manager.get_business_lineage(db_session, "Concept", iri, 3, "downstream")
+    edges = {(e.source, e.target) for e in graph.edges}
+    assert (f"BusinessTerm:{t1.id}", f"Dataset:{ds.id}") in edges
+    assert (f"BusinessTerm:{t2.id}", f"Dataset:{ds.id}") in edges

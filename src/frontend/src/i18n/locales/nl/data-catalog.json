@@ -150,6 +150,31 @@
       "entityIdPlaceholder": "bijv. uuid",
       "load": "Laden",
       "emptyHint": "Voer hierboven een entiteitstype en ID in en klik dan op Laden"
+    },
+    "relationships": {
+      "describes": "beschrijft",
+      "hasOutputPort": "heeft uitvoerpoort",
+      "portHasContract": "beheerd door",
+      "portHasAsset": "stelt beschikbaar",
+      "hasSchemaObject": "heeft schema",
+      "hasProperty": "heeft eigenschap",
+      "implementedBy": "geïmplementeerd door",
+      "dependsOn": "hangt af van",
+      "hasDataset": "heeft dataset",
+      "hasTable": "heeft tabel",
+      "hasView": "heeft weergave",
+      "hasColumn": "heeft kolom",
+      "governedBy": "beheerd door",
+      "implementsContract": "implementeert contract",
+      "consumesFrom": "consumeert van",
+      "producesTo": "produceert naar",
+      "derivedFrom": "afgeleid van",
+      "replacedBy": "vervangen door",
+      "exposes": "stelt beschikbaar",
+      "relatesTo": "heeft betrekking op",
+      "hasTerm": "heeft term",
+      "attachedPolicy": "beleid gekoppeld",
+      "belongsToDomain": "hoort bij domein"
     }
   },
   "hierarchy": {

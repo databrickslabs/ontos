@@ -150,6 +150,31 @@
       "entityIdPlaceholder": "ex.: uuid",
       "load": "Carregar",
       "emptyHint": "Informe um tipo de entidade e um ID acima, depois clique em Carregar"
+    },
+    "relationships": {
+      "describes": "descreve",
+      "hasOutputPort": "tem porta de saída",
+      "portHasContract": "governado por",
+      "portHasAsset": "expõe",
+      "hasSchemaObject": "tem esquema",
+      "hasProperty": "tem propriedade",
+      "implementedBy": "implementado por",
+      "dependsOn": "depende de",
+      "hasDataset": "tem conjunto de dados",
+      "hasTable": "tem tabela",
+      "hasView": "tem vista",
+      "hasColumn": "tem coluna",
+      "governedBy": "governado por",
+      "implementsContract": "implementa contrato",
+      "consumesFrom": "consome de",
+      "producesTo": "produz para",
+      "derivedFrom": "derivado de",
+      "replacedBy": "substituído por",
+      "exposes": "expõe",
+      "relatesTo": "relaciona-se com",
+      "hasTerm": "tem termo",
+      "attachedPolicy": "política anexada",
+      "belongsToDomain": "pertence ao domínio"
     }
   },
   "hierarchy": {

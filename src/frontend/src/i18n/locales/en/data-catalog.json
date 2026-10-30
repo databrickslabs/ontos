@@ -150,6 +150,31 @@
       "entityIdPlaceholder": "e.g. uuid",
       "load": "Load",
       "emptyHint": "Enter an entity type and ID above, then click Load"
+    },
+    "relationships": {
+      "describes": "describes",
+      "hasOutputPort": "has output port",
+      "portHasContract": "governed by",
+      "portHasAsset": "exposes",
+      "hasSchemaObject": "has schema",
+      "hasProperty": "has property",
+      "implementedBy": "implemented by",
+      "dependsOn": "depends on",
+      "hasDataset": "has dataset",
+      "hasTable": "has table",
+      "hasView": "has view",
+      "hasColumn": "has column",
+      "governedBy": "governed by",
+      "implementsContract": "implements contract",
+      "consumesFrom": "consumes from",
+      "producesTo": "produces to",
+      "derivedFrom": "derived from",
+      "replacedBy": "replaced by",
+      "exposes": "exposes",
+      "relatesTo": "relates to",
+      "hasTerm": "has term",
+      "attachedPolicy": "policy attached",
+      "belongsToDomain": "belongs to domain"
     }
   },
   "hierarchy": {

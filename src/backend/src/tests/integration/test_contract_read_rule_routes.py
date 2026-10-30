@@ -18,6 +18,7 @@ from src.db_models.data_contracts import (
     SchemaObjectDb,
     SchemaPropertyDb,
 )
+from src.db_models.data_products import DataProductDb
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.models.users import UserInfo
 
@@ -230,3 +231,57 @@ def test_maturity_evaluation_follows_the_rule(as_persona, db_session, team, pers
     assert response.status_code == expected
     if expected == 404:
         assert response.json() == NOT_FOUND
+
+
+PRODUCT_ROUTES = [
+    ("get", "/api/data-products/{pid}/maturity"),
+    ("get", "/api/data-products/{pid}/maturity/history"),
+    ("post", "/api/data-products/{pid}/maturity/evaluate"),
+]
+PRODUCT_NOT_FOUND = {"detail": "Data product not found"}
+
+PRODUCT_CASES = [
+    # (status, owned through, persona, expected status)
+    ("draft", "draft_owner", "consumer", 404),
+    ("draft", "draft_owner", "owner", 200),
+    ("draft", "draft_owner", "feature_admin", 200),
+    ("draft", "team", "consumer", 404),
+    ("draft", "team", "teammate", 200),
+    ("proposed", "team", "consumer", 404),
+    ("proposed", "team", "teammate", 200),
+    ("proposed", "team", "feature_admin", 200),
+    ("active", "team", "consumer", 200),
+    ("deprecated", "team", "consumer", 200),
+]
+
+
+def _product(db_session, team, status, owned_through):
+    row = DataProductDb(
+        id=str(uuid.uuid4()), name="orders-product", version="1.0.0", status=status,
+        draft_owner_id=OWNER if owned_through == "draft_owner" else None,
+        owner_team_id=team.id if owned_through == "team" else None,
+    )
+    db_session.add(row)
+    db_session.commit()
+    return row.id
+
+
+def _product_responses(client, pid):
+    return {f"{m} {r}": getattr(client, m)(r.format(pid=pid)) for m, r in PRODUCT_ROUTES}
+
+
+@pytest.mark.parametrize("status,owned_through,persona,expected", PRODUCT_CASES,
+                         ids=[f"{s}-{o}-{p}" for s, o, p, _ in PRODUCT_CASES])
+def test_product_maturity_routes_follow_the_product_read_rule(
+        as_persona, db_session, team, status, owned_through, persona, expected):
+    pid = _product(db_session, team, status, owned_through)
+    responses = _product_responses(as_persona(persona), pid)
+    assert {r: x.status_code for r, x in responses.items() if x.status_code != expected} == {}
+    if expected == 404:
+        assert all(x.json() == PRODUCT_NOT_FOUND for x in responses.values())
+
+
+def test_missing_product_answers_the_same_404_on_the_maturity_routes(as_persona):
+    responses = _product_responses(as_persona("consumer"), str(uuid.uuid4()))
+    assert {r: x.status_code for r, x in responses.items() if x.status_code != 404} == {}
+    assert all(x.json() == PRODUCT_NOT_FOUND for x in responses.values())

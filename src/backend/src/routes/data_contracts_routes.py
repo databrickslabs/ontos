@@ -90,6 +90,62 @@ def get_jobs_manager(request: Request):
     """Retrieves the JobsManager instance from app.state."""
     return getattr(request.app.state, 'jobs_manager', None)
 
+
+async def contract_read_scope(
+    request: Request, db: DBSessionDep, current_user: CurrentUserDep
+) -> dict:
+    """The caller's inputs to the contract read rule (PRD #442).
+
+    Admin comes from the role-aware check, not just workspace-group membership:
+    a user whose admin rights come from an Ontos role sees every contract, as
+    in the data-products listing. The owning teams are resolved for everyone
+    else so the manager can tell whether the caller is elevated for a family.
+    """
+    from src.common.authorization import is_user_feature_admin
+
+    user_groups = current_user.groups if current_user else []
+    caller_email = current_user.email if current_user else None
+    is_admin = await is_user_feature_admin(
+        user_email=caller_email,
+        user_groups=user_groups,
+        feature_id='data-contracts',
+        request=request,
+    )
+    caller_team_ids: Set[str] = set()
+    if not is_admin and current_user:
+        try:
+            from src.controller.teams_manager import teams_manager
+            user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
+            caller_team_ids = {t.id for t in user_teams if getattr(t, "id", None)}
+        except Exception:
+            # Best-effort: a failed team lookup downgrades the caller to
+            # consumer visibility, which is the safe fail-closed default.
+            logger.exception(
+                "Failed to resolve teams for %s; falling back to consumer visibility",
+                caller_email,
+            )
+    return {
+        "is_admin": is_admin,
+        "caller_email": caller_email,
+        "caller_team_ids": caller_team_ids,
+    }
+
+
+async def readable_contract(
+    contract_id: str,
+    db: DBSessionDep,
+    scope: dict = Depends(contract_read_scope),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+) -> DataContractDb:
+    """The path's contract, when the caller may read it (the same rule as the list).
+
+    A contract the caller can't read answers the same 404 as a missing one.
+    """
+    contract = data_contract_repo.get(db, id=contract_id)
+    if contract is None or not manager.can_read_contract(db, contract, **scope):
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return contract
+
  
 
 @router.get('/data-contracts', response_model=list[DataContractSummary])
@@ -118,46 +174,16 @@ async def get_contracts(
     is already permitted to see.
     """
     try:
-        # Determine admin via the role-aware check, not just workspace-group
-        # membership. A user whose admin rights come from an Ontos role (rather
-        # than the workspace ``admins`` group) must still bypass the PRD #442
-        # visibility filter — exactly as the data-products listing does. The
-        # narrower ``is_user_admin`` used here previously let such role-based
-        # admins fall through to consumer visibility, hiding their own draft/
-        # proposed contracts (e.g. a freshly uploaded draft would never appear).
-        from src.common.authorization import is_user_feature_admin
-        user_groups = current_user.groups if current_user else []
-        is_admin = await is_user_feature_admin(
-            user_email=current_user.email if current_user else None,
-            user_groups=user_groups,
-            feature_id='data-contracts',
-            request=request,
-        )
+        # Role-aware admin and the caller's owning teams: the same read scope
+        # as the single-contract routes (see ``contract_read_scope``).
+        scope = await contract_read_scope(request, db, current_user)
 
         logger.info(
-            f"User {current_user.email if current_user else 'unknown'} fetching contracts "
-            f"(project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin}, "
-            f"include_history: {include_history})"
+            "User %s fetching contracts (project_id: %s, domain_id: %s, is_admin: %s, "
+            "include_history: %s)",
+            current_user.email if current_user else 'unknown',
+            project_id, domain_id, scope['is_admin'], include_history,
         )
-
-        # Resolve the caller's owning teams once so the manager can compute
-        # elevated visibility for their contracts (PRD #442 role-aware rank).
-        caller_email = current_user.email if current_user else None
-        caller_team_ids: Set[str] = set()
-        if not is_admin and current_user:
-            try:
-                from src.controller.teams_manager import teams_manager
-                user_teams = teams_manager.get_teams_for_user(
-                    db, caller_email, user_groups
-                )
-                caller_team_ids = {t.id for t in user_teams if getattr(t, "id", None)}
-            except Exception:
-                # Best-effort: a failed team lookup downgrades the caller to
-                # consumer visibility, which is the safe fail-closed default.
-                logger.exception(
-                    f"Failed to resolve teams for {caller_email}; "
-                    "falling back to consumer visibility"
-                )
 
         domain_ids_list = [d.strip() for d in domain_ids.split(",") if d.strip()] if domain_ids else None
         result = manager.list_contracts_from_db(
@@ -166,10 +192,8 @@ async def get_contracts(
             domain_ids=domain_ids_list,
             project_id=project_id,
             status=status,
-            is_admin=is_admin,
             include_history=include_history,
-            caller_email=caller_email,
-            caller_team_ids=caller_team_ids,
+            **scope,
         )
         return result
     except Exception as e:
@@ -192,7 +216,8 @@ async def get_contract(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get a specific data contract with full ODCS structure"""
     contract = data_contract_repo.get_with_all(db, id=contract_id)
@@ -1842,7 +1867,8 @@ async def import_odcs_json(
 async def get_contract_schemas(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """List schema objects for a contract (names + property counts, no properties loaded)."""
     from sqlalchemy import func as sa_func
@@ -1963,7 +1989,8 @@ async def get_schema_properties(
     db: DBSessionDep,
     skip: int = 0,
     limit: int = 50,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get paginated properties for a specific schema object.
 
@@ -2030,7 +2057,13 @@ async def get_schema_properties(
 
 
 @router.get('/data-contracts/{contract_id}/odcs/export')
-async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContractsManager = Depends(get_data_contracts_manager), _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def export_odcs(
+    contract_id: str,
+    db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+):
     try:
         from fastapi.responses import Response
 
@@ -2092,6 +2125,7 @@ async def get_contract_entity_relationships(
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get entity relationships involving this contract (incoming governedBy, etc.)."""
     try:
@@ -2161,7 +2195,12 @@ async def add_comment(
 
 
 @router.get('/data-contracts/{contract_id}/comments', response_model=list[DataContractCommentRead])
-async def list_comments(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def list_comments(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+):
     try:
         comments = db.query(DataContractCommentDb).filter(DataContractCommentDb.contract_id == contract_id).order_by(DataContractCommentDb.created_at.asc()).all()
         return [
@@ -2297,7 +2336,8 @@ async def get_profile_runs(
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     jobs_manager = Depends(get_jobs_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get profiling runs for a contract with suggestion counts."""
     try:
@@ -2321,7 +2361,8 @@ async def get_suggestions(
     run_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get quality check suggestions for a profiling run."""
     try:
@@ -2450,7 +2491,8 @@ async def reject_suggestions(
 async def get_custom_properties(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all custom properties for a contract."""
     from src.repositories.data_contracts_repository import custom_property_repo
@@ -2603,7 +2645,8 @@ async def delete_custom_property(
 async def get_support_channels(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all support channels for a contract."""
     from src.repositories.data_contracts_repository import support_channel_repo
@@ -2759,7 +2802,8 @@ async def delete_support_channel(
 async def get_pricing(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get pricing for a contract (returns empty object if not set)."""
     from src.repositories.data_contracts_repository import pricing_repo
@@ -2842,7 +2886,8 @@ async def update_pricing(
 async def get_roles(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all roles for a contract (with nested properties)."""
     from src.repositories.data_contracts_repository import role_repo
@@ -3043,7 +3088,8 @@ async def delete_role(
 async def get_contract_authoritative_definitions(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all authoritative definitions for a contract."""
     from src.repositories.data_contracts_repository import contract_authoritative_definition_repo
@@ -3211,7 +3257,8 @@ async def get_schema_authoritative_definitions(
     contract_id: str,
     schema_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all authoritative definitions for a schema object.
     
@@ -3229,18 +3276,16 @@ async def get_schema_authoritative_definitions(
     try:
         # Check if schema_id is a UUID or a name
         uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
-        actual_schema_id = schema_id
-        
-        if not uuid_pattern.match(schema_id):
-            # Treat as schema name, look up the actual ID
-            schema_obj = db.query(SchemaObjectDb).filter(
-                SchemaObjectDb.contract_id == contract_id,
-                SchemaObjectDb.name == schema_id
-            ).first()
-            if not schema_obj:
-                raise HTTPException(status_code=404, detail=f"Schema '{schema_id}' not found")
-            actual_schema_id = schema_obj.id
-        
+        by_id = bool(uuid_pattern.match(schema_id))
+        # Either way the schema must belong to this contract
+        schema_obj = db.query(SchemaObjectDb).filter(
+            SchemaObjectDb.contract_id == contract_id,
+            (SchemaObjectDb.id if by_id else SchemaObjectDb.name) == schema_id,
+        ).first()
+        if not schema_obj:
+            raise HTTPException(status_code=404, detail=f"Schema '{schema_id}' not found")
+        actual_schema_id = schema_obj.id
+
         definitions = schema_authoritative_definition_repo.get_by_schema(db=db, schema_id=actual_schema_id)
         return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
     except HTTPException:
@@ -3404,7 +3449,8 @@ async def get_property_authoritative_definitions(
     schema_id: str,
     property_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all authoritative definitions for a schema property."""
     from src.repositories.data_contracts_repository import property_authoritative_definition_repo
@@ -3413,6 +3459,15 @@ async def get_property_authoritative_definitions(
     contract = data_contract_repo.get(db, id=contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
+
+    # The property must belong to one of this contract's schema objects
+    owned = db.query(SchemaPropertyDb.id).join(
+        SchemaObjectDb, SchemaPropertyDb.object_id == SchemaObjectDb.id
+    ).filter(
+        SchemaPropertyDb.id == property_id, SchemaObjectDb.contract_id == contract_id
+    ).first()
+    if not owned:
+        raise HTTPException(status_code=404, detail="Property not found")
 
     try:
         definitions = property_authoritative_definition_repo.get_by_property(db=db, property_id=property_id)
@@ -3577,7 +3632,8 @@ async def delete_property_authoritative_definition(
 async def get_contract_tags(
     contract_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Get all tags for a specific contract."""
     from src.repositories.data_contracts_repository import contract_tag_repo
@@ -3768,27 +3824,25 @@ async def delete_contract_tag(
 async def get_contract_versions(
     contract_id: str,
     db: DBSessionDep,
-    current_user: AuditCurrentUserDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+    scope: dict = Depends(contract_read_scope),
 ):
-    """Get every visible version of a contract's family, newest first.
+    """Get every version of a contract's family the caller may read, newest first.
 
     Grouped by ``version_family_id`` (PRD #442): one indexed equality
     lookup returns every member, regardless of which clone path produced
-    them. Personal drafts owned by other users are hidden.
+    them. Each version is filtered by the same read rule as the list.
     """
     try:
-        from src.common.authorization import is_user_admin
-        from src.common.config import get_settings
-        user_email = current_user.username if current_user else None
-        is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
         contracts = manager.get_contract_versions(
             db=db,
             contract_id=contract_id,
-            user_email=user_email,
-            is_admin=is_admin,
+            user_email=scope["caller_email"],
+            is_admin=scope["is_admin"],
         )
+        contracts = manager.readable_contracts(db, contracts, **scope)
 
         # Map directly to a shape matching the frontend VersionSelector's
         # ContractVersion type — keeps the response tight and skips the
@@ -3987,14 +4041,24 @@ async def get_contract_version_history(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
+    scope: dict = Depends(contract_read_scope),
 ):
-    """Get version history lineage for a contract with parent-child relationships."""
+    """Get version history lineage for a contract with parent-child relationships.
+
+    The parent, children and siblings follow the same read rule as the list.
+    """
     try:
         from src.models.data_contracts_api import DataContractRead
 
         # Business logic now in manager
         history = manager.get_version_history(db=db, contract_id=contract_id)
+        parent = history["parent"]
+        if parent is not None and not manager.can_read_contract(db, parent, **scope):
+            history["parent"] = None
+        for key in ("children", "siblings"):
+            history[key] = manager.readable_contracts(db, history[key], **scope)
 
         # Convert database objects to API models. `from_attributes=True` is required
         # so Pydantic v2 propagates ORM-attribute validation into nested config models
@@ -4137,7 +4201,8 @@ async def get_diff_from_parent(
     contract_id: str,
     db: DBSessionDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     """Compare a contract to its parent and get version suggestion.
     
@@ -4332,7 +4397,8 @@ async def list_schema_relationships(
     contract_id: str,
     schema_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     schema_obj = db.query(SchemaObjectDb).filter(
         SchemaObjectDb.id == schema_id,
@@ -4434,11 +4500,15 @@ async def list_property_relationships(
     schema_id: str,
     prop_id: str,
     db: DBSessionDep = None,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
-    prop = db.query(SchemaPropertyDb).filter(
+    prop = db.query(SchemaPropertyDb).join(
+        SchemaObjectDb, SchemaPropertyDb.object_id == SchemaObjectDb.id
+    ).filter(
         SchemaPropertyDb.id == prop_id,
-        SchemaPropertyDb.object_id == schema_id
+        SchemaPropertyDb.object_id == schema_id,
+        SchemaObjectDb.contract_id == contract_id,
     ).first()
     if not prop:
         raise HTTPException(404, "Property not found")
@@ -4532,7 +4602,8 @@ async def delete_property_relationship(
 async def get_team_metadata(
     contract_id: str,
     db: DBSessionDep = None,
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+    _contract: DataContractDb = Depends(readable_contract),
 ):
     contract = data_contract_repo.get(db, id=contract_id)
     if not contract:

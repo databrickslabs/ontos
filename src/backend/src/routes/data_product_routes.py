@@ -176,6 +176,23 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
         return False
 
 
+def readable_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+):
+    """The path's product, when the caller may read it (the rule of the product page).
+
+    A product the caller can't read answers the same 404 as a missing one.
+    """
+    product = manager.get_product(product_id)
+    if product is None or not _caller_can_read_product(request, db, current_user, manager, product):
+        raise HTTPException(status_code=404, detail="Data product not found")
+    return product
+
+
 # --- Lifecycle transitions (minimal) ---
 
 @router.post('/data-products/{product_id}/move-to-sandbox')

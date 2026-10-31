@@ -10,6 +10,7 @@ from databricks.sdk import WorkspaceClient
 from fastapi import Depends, Header, Request
 from typing import Optional as OptionalType
 
+from .api_errors import UserTokenRequiredError
 from .config import Settings, get_settings
 from src import __version__
 
@@ -404,6 +405,19 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
 
     return caching_client
 
+USER_TOKEN_REQUIRED_MESSAGE = "This request needs the user's Databricks token, and it has none."
+
+
+def _local_dev_without_user_token(settings: Settings) -> bool:
+    """Whether a request without the user's token may use the app's own client.
+
+    Design decision: only local development (ENV=LOCAL*, the documented local setting)
+    keeps that fallback, because no Databricks Apps proxy forwards a user token there.
+    Every other ENV (PROD is the default and what app.yaml sets) refuses the request.
+    """
+    return str(getattr(settings, 'ENV', '') or '').upper().startswith('LOCAL')
+
+
 def get_workspace_client_dependency(timeout: int = 30):
     """Returns the actual dependency function for FastAPI."""
 
@@ -437,7 +451,9 @@ def get_obo_workspace_client(
         Workspace client instance configured with the user's token
 
     Raises:
-        HTTPException: If the OBO token is not present in headers
+        HTTPException: 403 with code ``user_token_required`` when the request has no
+            x-forwarded-access-token. The app's own client is never returned in its
+            place, except with ENV=LOCAL (see ``_local_dev_without_user_token``).
     """
     from fastapi import HTTPException
 
@@ -451,9 +467,14 @@ def get_obo_workspace_client(
     obo_token = request.headers.get('x-forwarded-access-token')
 
     if not obo_token:
-        logger.warning("OBO token not found in request headers, falling back to service principal")
-        # Fall back to service principal client
-        return get_workspace_client(settings, timeout)
+        if _local_dev_without_user_token(settings):
+            logger.warning(
+                "OBO token not found in request headers; ENV=LOCAL, using the app's client"
+            )
+            return get_workspace_client(settings, timeout)
+        logger.warning("OBO token not found in request headers; on-behalf-of client refused")
+        error = UserTokenRequiredError(USER_TOKEN_REQUIRED_MESSAGE)
+        raise HTTPException(status_code=403, detail=str(error)) from error
 
     # Extract user email for stable cache key
     user_email = request.headers.get('X-Forwarded-Email') or request.headers.get('X-Forwarded-User')

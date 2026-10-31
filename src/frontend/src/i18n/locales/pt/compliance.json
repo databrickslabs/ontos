@@ -175,5 +175,11 @@
     "rule_parse_failed": "Não foi possível interpretar a regra: {{detail}}",
     "workspace_client_unavailable": "O workspace Databricks não está disponível e esta regra verifica objetos do Unity Catalog, por isso não pôde ser executada.",
     "tags_load_failed": "Não foi possível carregar as tags das entidades {{entityType}}, por isso a regra não pôde ser avaliada."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir."
   }
 }

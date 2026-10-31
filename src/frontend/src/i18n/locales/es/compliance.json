@@ -175,5 +175,11 @@
     "rule_parse_failed": "No se pudo interpretar la regla: {{detail}}",
     "workspace_client_unavailable": "El workspace de Databricks no está disponible y esta regla comprueba objetos de Unity Catalog, por lo que no se pudo ejecutar.",
     "tags_load_failed": "No se pudieron cargar las etiquetas de las entidades {{entityType}}, por lo que no se pudo evaluar la regla."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo."
   }
 }

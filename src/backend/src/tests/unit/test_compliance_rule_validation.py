@@ -47,7 +47,7 @@ class TestValidateRule:
         assert validate_rule("ASSERT obj.has_owner = True") == []
 
     def test_missing_assert_is_a_warning(self):
-        assert validate_rule("asset.tags['pii'] == 'true'") == [{
+        assert validate_rule("MATCH (a:data_product) WHERE a.name != ''") == [{
             'code': 'missing_assert',
             'params': {},
             'message': "The rule has no ASSERT clause, so every entity passes.",

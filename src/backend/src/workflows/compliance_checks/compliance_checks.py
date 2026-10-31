@@ -325,9 +325,15 @@ def load_policies(
 
     Returns:
         List of policy dictionaries
+
+    Policies that are maturity gates (linked from ``maturity_gates``) are never
+    returned: the maturity evaluator runs them against the entity whose level
+    is checked, and run here they would match no entity.
     """
     # Build WHERE clause
-    conditions = []
+    conditions = [
+        "id NOT IN (SELECT compliance_policy_id FROM maturity_gates)",
+    ]
 
     if policy_filter == 'active':
         conditions.append("is_active = TRUE")

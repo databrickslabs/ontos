@@ -175,5 +175,11 @@
     "rule_parse_failed": "Die Regel konnte nicht geparst werden: {{detail}}",
     "workspace_client_unavailable": "Der Databricks-Workspace ist nicht verfügbar, und diese Regel prüft Unity-Catalog-Objekte; sie konnte daher nicht ausgeführt werden.",
     "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren."
   }
 }

@@ -210,15 +210,34 @@ async def delete_policy(
     return {"status": "success"}
 
 
-def _run_error_code(run) -> dict:
-    """The run's error code and parameters, which the UI translates."""
+def _run_params(run):
     import json
 
     try:
-        params = json.loads(run.error_params) if run.error_params else None
+        return json.loads(run.error_params) if run.error_params else None
     except (TypeError, ValueError):
-        params = None
-    return {'error_code': run.error_code, 'error_params': params}
+        return None
+
+
+def _run_error_code(run) -> dict:
+    """The run's error code and parameters, which the UI translates."""
+    if run.error_message is None:
+        return {'error_code': None, 'error_params': None}
+    return {'error_code': run.error_code, 'error_params': _run_params(run)}
+
+
+def _run_codes(run) -> dict:
+    """The error code of a failed run, or the warning code of a run that finished.
+
+    A succeeded run keeps its warning in the error columns
+    (see ``ComplianceManager.complete_run``).
+    """
+    warned = run.error_message is None and bool(run.error_code)
+    return {
+        **_run_error_code(run),
+        'warning_code': run.error_code if warned else None,
+        'warning_params': _run_params(run) if warned else None,
+    }
 
 
 @router.post("/compliance/policies/{policy_id}/runs")
@@ -265,7 +284,7 @@ async def run_policy(
         'failure_count': run.failure_count,
         'score': run.score,
         'error_message': run.error_message,
-        **_run_error_code(run),
+        **_run_codes(run),
     }
 
 
@@ -290,7 +309,7 @@ async def list_runs(
             'failure_count': r.failure_count,
             'score': r.score,
             'error_message': r.error_message,
-            **_run_error_code(r),
+            **_run_codes(r),
         } for r in runs
     ]
 
@@ -317,7 +336,7 @@ async def get_run_results(
             'failure_count': run.failure_count,
             'score': run.score,
             'error_message': run.error_message,
-            **_run_error_code(run),
+            **_run_codes(run),
         },
         'results': [
             {

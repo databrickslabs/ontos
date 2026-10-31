@@ -6,6 +6,8 @@ Tools for searching, creating, updating, and deleting data contracts.
 
 import json
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
+from src.tools import read_access
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -120,6 +122,7 @@ class CreateDraftDataContractTool(BaseTool):
     }
     required_params = ["name", "description", "domain"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -229,6 +232,7 @@ class UpdateDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -244,6 +248,22 @@ class UpdateDataContractTool(BaseTool):
         if not ctx.data_contracts_manager:
             logger.error(f"[update_data_contract] FAILED: Data contracts manager not available")
             return ToolResult(success=False, error="Data contracts manager not available")
+
+        # A contract the caller can't read is answered like a missing one; one
+        # in a project needs a project member, as on PUT /api/data-contracts/{id}.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_contract", contract_id,
+            f"Data contract '{contract_id}' not found",
+        )
+        if refusal:
+            return refusal
+        from src.repositories.data_contracts_repository import data_contract_repo as _repo
+        target = _repo.get(ctx.db, id=contract_id)
+        refusal = read_access.project_refusal(
+            ctx, getattr(target, "project_id", None), "contract"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Build update data
@@ -413,6 +433,8 @@ class SearchDataContractsTool(BaseTool):
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
+                # The read rule, before pagination and facets.
+                allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, "data-contract"),
             )
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
@@ -476,11 +498,15 @@ class GetDataContractTool(BaseTool):
             from src.repositories.data_contracts_repository import data_contract_repo
 
             db_obj = data_contract_repo.get_with_all(ctx.db, id=contract_id)
-            if not db_obj:
-                return ToolResult(
+            if not db_obj or not read_access.can_read_contract(ctx, db_obj):
+                # An unreadable contract is answered like a missing one.
+                result = ToolResult(
                     success=False,
                     error=f"Data contract '{contract_id}' not found"
                 )
+                if db_obj:
+                    read_access.denied(ctx, self.name, result, [contract_id])
+                return result
 
             contract = ctx.data_contracts_manager._build_contract_api_model(ctx.db, db_obj)
 
@@ -546,20 +572,24 @@ class GetDataContractsBulkTool(BaseTool):
 
         contracts: List[Dict[str, Any]] = []
         not_found: List[str] = []
+        unreadable: List[str] = []
         try:
             for cid in ids:
                 db_obj = data_contract_repo.get_with_all(ctx.db, id=cid)
-                if db_obj:
+                if db_obj and read_access.can_read_contract(ctx, db_obj):
                     contract = ctx.data_contracts_manager._build_contract_api_model(ctx.db, db_obj)
                     contracts.append(_serialize_contract(contract))
                 else:
+                    # An unreadable contract is answered like a missing one.
                     not_found.append(cid)
+                    if db_obj:
+                        unreadable.append(cid)
 
             logger.info(
                 f"[get_data_contracts] SUCCESS: {len(contracts)} found, "
                 f"{len(not_found)} not found"
             )
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "contracts": contracts,
@@ -570,6 +600,7 @@ class GetDataContractsBulkTool(BaseTool):
                     "truncated": requested > effective_limit,
                 },
             )
+            return read_access.denied(ctx, self.name, result, unreadable)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_data_contracts", e))
 
@@ -640,6 +671,7 @@ class DeleteDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
         """Delete a data contract."""
@@ -648,6 +680,15 @@ class DeleteDataContractTool(BaseTool):
         if not ctx.data_contracts_manager:
             logger.error(f"[delete_data_contract] FAILED: Data contracts manager not available")
             return ToolResult(success=False, error="Data contracts manager not available")
+
+        # A contract the caller can't read (e.g. another user's personal draft)
+        # is answered like a missing one, and nothing is deleted.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_contract", contract_id,
+            f"Data contract '{contract_id}' not found",
+        )
+        if refusal:
+            return refusal
         
         try:
             # DB-backed delete: the legacy in-memory manager.delete_contract() never touches

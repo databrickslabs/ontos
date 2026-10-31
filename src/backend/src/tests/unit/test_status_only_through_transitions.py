@@ -265,8 +265,13 @@ class TestMcpUpdateTools:
     def _ctx(db_session, product_manager=None, contract_manager=None):
         from src.tools.base import ToolContext
 
+        from src.tools.base import ToolCaller
+
+        # These tests change drafts: act for an admin of both features.
+        admin = ToolCaller(email='a@b.com', auth_path='test',
+                           products_admin=True, contracts_admin=True)
         return ToolContext(
-            db=db_session, settings=MagicMock(),
+            db=db_session, settings=MagicMock(), caller=admin,
             data_products_manager=product_manager, data_contracts_manager=contract_manager,
         )
 

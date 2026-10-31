@@ -123,6 +123,8 @@
     "request-publish": "Veröffentlichung anfordern",
     "request-status-change": "Statusänderung anfordern",
     "before-status-change-default": "Gate für Statusänderungen (Standard)",
+    "owner-deprecation-notice": "Hinweis an Verantwortliche: veraltet",
+    "owner-retirement-notice": "Hinweis an Verantwortliche: stillgelegt",
     "on-publish-notification": "Benachrichtigung über Veröffentlichung",
     "on-unpublish-notification": "Benachrichtigung über zurückgezogene Veröffentlichung",
     "certification-request-review": "Prüfung von Zertifizierungsanfragen",

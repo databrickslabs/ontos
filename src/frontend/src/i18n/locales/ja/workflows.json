@@ -188,7 +188,9 @@
         "validationPassed": "検証に合格しました",
         "productApproved": "プロダクトが承認されました",
         "productRejected": "プロダクトが却下されました",
-        "piiDetected": "PII を検出しました"
+        "piiDetected": "PII を検出しました",
+        "entityDeprecated": "非推奨のお知らせ",
+        "entityRetired": "廃止のお知らせ"
       },
       "customMessage": "カスタムメッセージ",
       "customMessagePlaceholder": "テンプレートメッセージを上書きします。${entity_name}、${entity_type}、${user_email}、${entity.field} に対応...",

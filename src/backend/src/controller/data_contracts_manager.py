@@ -141,6 +141,7 @@ from src.controller.lifecycle_fields import (
     check_lifecycle_fields,
     imported_lifecycle_columns,
     lifecycle_custom_properties,
+    lifecycle_trigger_data,
     peek_lifecycle_replacement,
     pop_lifecycle_custom_properties,
     requested_deprecation,
@@ -4374,7 +4375,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from_status=current_status,
                 to_status=new_status,
                 entity_name=contract.name,
-                entity_data={"name": contract.name, "status": new_status, **lifecycle_changes},
+                entity_data={
+                    "name": contract.name, "status": new_status, **lifecycle_changes,
+                    **lifecycle_trigger_data(db, 'data_contract', updated, new_status),
+                },
                 user_email=current_user,
             )
         except Exception as e:

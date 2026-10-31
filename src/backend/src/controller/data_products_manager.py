@@ -150,6 +150,7 @@ from src.controller.lifecycle_fields import (
     check_lifecycle_fields,
     imported_lifecycle_columns,
     lifecycle_custom_properties,
+    lifecycle_trigger_data,
     peek_lifecycle_replacement,
     pop_lifecycle_custom_properties,
     requested_deprecation,
@@ -1147,7 +1148,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if fire_status_change_trigger:
                 self.fire_status_change_trigger(
                     product_id, product_db.name, current_status, new_status_lower, current_user,
-                    extra_data=lifecycle_changes,
+                    extra_data={
+                        **lifecycle_changes,
+                        **lifecycle_trigger_data(
+                            self._db, 'data_product', product_db, new_status_lower
+                        ),
+                    },
                 )
 
             result = self._load_product_with_tags(product_db)

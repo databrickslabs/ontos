@@ -188,7 +188,9 @@
         "validationPassed": "Validierung bestanden",
         "productApproved": "Produkt genehmigt",
         "productRejected": "Produkt abgelehnt",
-        "piiDetected": "PII erkannt"
+        "piiDetected": "PII erkannt",
+        "entityDeprecated": "Hinweis: veraltet",
+        "entityRetired": "Hinweis: stillgelegt"
       },
       "customMessage": "Benutzerdefinierte Nachricht",
       "customMessagePlaceholder": "Vorlagennachricht überschreiben. Unterstützt ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

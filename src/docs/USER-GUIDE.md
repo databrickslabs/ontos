@@ -2399,6 +2399,10 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Subscription Welcome** | Subscription (dataset) | Welcome message to subscribers (disabled by default) |
 | **Access Expiring Warning** | Expiring (access_grant) | Warns users before access expires |
 | **Access Revoked Notification** | Access Revoked (access_grant) | Notifies users of revocation |
+| **Owner Deprecation Notice** | On Status Change to `deprecated` (data_product, data_contract) | Tells the owners, with the reason, sunset date and replacement (disabled by default) |
+| **Owner Retirement Notice** | On Status Change to `retired` (data_product, data_contract) | Tells the owners, with the reason, sunset date and replacement of the deprecation (disabled by default) |
+
+**Owner lifecycle notices.** The subscribers of a data product are told about its deprecation and retirement in every installation, without a workflow. The owners are told only once an admin enables **Owner Deprecation Notice** and **Owner Retirement Notice** in **Compliance → Workflows**. The recipients are the entity's owners (`entity_owner`: the user members of its owner team, the current members of its ODPS or ODCS team whose role is owner, and its active Business Owners with the Data Owner role). The notice uses the `entity_deprecated` / `entity_retired` notification templates: one line for the change, then one line each for the reason, the sunset date and the replacement, left out when not set, shown in each owner's language. To change the recipients, edit the **Notify Owners** step; to write your own text, set a custom message, which can use `${entity.deprecation_reason}`, `${entity.sunset_date}`, `${entity.replacement_id}` and `${entity.replacement_name}` (a custom message is shown as written, not translated).
 
 #### After an Upgrade
 

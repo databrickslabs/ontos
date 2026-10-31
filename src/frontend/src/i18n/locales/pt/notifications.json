@@ -84,6 +84,14 @@
         "title": "PII detectado",
         "message": "Possível PII detectado em {{entity_type}} '{{entity_name}}'. Revise."
       },
+      "entity_deprecated": {
+        "title": "Aviso de obsolescência",
+        "message": "{{entity_type}} '{{entity_name}}' foi marcado como obsoleto."
+      },
+      "entity_retired": {
+        "title": "Aviso de aposentadoria",
+        "message": "{{entity_type}} '{{entity_name}}' foi aposentado."
+      },
       "default": {
         "title": "Notificação de workflow",
         "message": "Notificação de workflow para {{entity_name}}"
@@ -233,6 +241,11 @@
     "activation": {
       "title": "Produto ativado",
       "description": "O produto de dados '{{productName}}' foi ativado e já está disponível para uso."
+    },
+    "ownerNotice": {
+      "reason": "Motivo: {{reason}}",
+      "sunsetDate": "Data de desativação: {{sunsetDate}}",
+      "replacement": "Substituto: {{replacementName}}"
     }
   }
 }

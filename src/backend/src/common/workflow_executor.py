@@ -40,9 +40,11 @@ from src.common.logging import get_logger
 from src.common.workflow_notification_texts import (
     DEFAULT_TEMPLATE_MESSAGE,
     DEFAULT_TEMPLATE_TITLE,
+    LIFECYCLE_TEMPLATES,
     TEMPLATE_MESSAGES,
     TEMPLATE_TITLES,
     approval_notification_i18n,
+    lifecycle_notice,
     notification_step_i18n,
 )
 
@@ -968,6 +970,12 @@ class NotificationStepHandler(StepHandler):
                 context.entity_name or context.entity_id,
                 lambda name: substitute_template('${' + name + '}', context),
             )
+            if not custom_message and template in LIFECYCLE_TEMPLATES:
+                # Reason, sunset date and replacement, each on its own line when set
+                message, i18n_data = lifecycle_notice(
+                    template, context.entity_type, context.entity_name or context.entity_id,
+                    context.entity or {},
+                )
             
             # Determine notification type based on template
             notification_type = self._get_notification_type(template)
@@ -1138,6 +1146,8 @@ class NotificationStepHandler(StepHandler):
             return NotificationType.ERROR
         elif template in ('approval_requested',):
             return NotificationType.ACTION_REQUIRED
+        elif template in LIFECYCLE_TEMPLATES:
+            return NotificationType.WARNING
         elif template in ('validation_passed', 'request_approved', 'product_approved'):
             return NotificationType.SUCCESS
         else:

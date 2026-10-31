@@ -357,6 +357,44 @@ def apply_lifecycle_fields(
     return {}
 
 
+def lifecycle_trigger_data(
+    db: Session, entity_type: str, entity_db, new_status: str,
+) -> Dict[str, Any]:
+    """The stored lifecycle fields, for the on_status_change payload.
+
+    For a move to ``deprecated`` or ``retired`` (empty otherwise): the reason,
+    the sunset date (ISO) and the replacement, by its column name and as
+    ``replacement_id`` / ``replacement_name`` for both entity types, so one
+    notice workflow reads them the same way. A retirement carries the values
+    of the deprecation before it. ``replacement_name`` is the id when the
+    replacement can't be read.
+    """
+    if new_status not in ('deprecated', 'retired'):
+        return {}
+    column = _REPLACEMENT_COLUMN[entity_type]
+    sunset = entity_db.sunset_date
+    replacement_id = getattr(entity_db, column, None) or None
+    replacement_name = None
+    if replacement_id:
+        try:
+            # Savepoint: a failed query must not abort the caller's session
+            with db.begin_nested():
+                replacement = db.get(_entity_model(entity_type), replacement_id)
+            replacement_name = getattr(replacement, 'name', None)
+        except Exception as e:
+            logger.warning(
+                "Could not read the replacement %s of %s %s: %s",
+                replacement_id, entity_type, getattr(entity_db, 'id', None), e,
+            )
+    return {
+        'deprecation_reason': entity_db.deprecation_reason or None,
+        'sunset_date': sunset.isoformat() if hasattr(sunset, 'isoformat') else sunset,
+        column: replacement_id,
+        'replacement_id': replacement_id,
+        'replacement_name': (replacement_name or replacement_id) if replacement_id else None,
+    }
+
+
 # ODPS / ODCS round-trip: the fields travel as reserved customProperties, like
 # ontosEntityId / ontosOriginalId.
 _PROPERTY_COLUMNS = {

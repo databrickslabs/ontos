@@ -84,6 +84,14 @@
         "title": "PII が検出されました",
         "message": "{{entity_type}}「{{entity_name}}」で PII の可能性があるデータが検出されました。確認してください。"
       },
+      "entity_deprecated": {
+        "title": "非推奨のお知らせ",
+        "message": "{{entity_type}}「{{entity_name}}」は非推奨になりました。"
+      },
+      "entity_retired": {
+        "title": "廃止のお知らせ",
+        "message": "{{entity_type}}「{{entity_name}}」は廃止されました。"
+      },
       "default": {
         "title": "ワークフロー通知",
         "message": "{{entity_name}} のワークフロー通知"
@@ -233,6 +241,11 @@
     "activation": {
       "title": "プロダクトが有効化されました",
       "description": "データプロダクト「{{productName}}」が有効化され、利用できるようになりました。"
+    },
+    "ownerNotice": {
+      "reason": "理由: {{reason}}",
+      "sunsetDate": "提供終了日: {{sunsetDate}}",
+      "replacement": "後継: {{replacementName}}"
     }
   }
 }

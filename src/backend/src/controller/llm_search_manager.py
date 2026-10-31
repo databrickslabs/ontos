@@ -28,6 +28,7 @@ from src.models.llm_search import (
     GetDataProductCostsParams, GetTableSchemaParams, ExecuteAnalyticsQueryParams
 )
 from src.tools import ToolRegistry, ToolContext, create_default_registry
+from src.tools.base import ToolCaller
 
 logger = get_logger(__name__)
 
@@ -399,6 +400,8 @@ class LLMSearchManager:
         # ``None`` afterwards so the manager is safe to reuse across
         # requests within a process.
         self._chat_context: Optional[Dict[str, Any]] = None
+        # The caller the tools act for, set by ``chat()`` like ``_chat_context``.
+        self._tool_caller: Optional[ToolCaller] = None
 
         # Initialize tool registry with all default tools
         self._tool_registry = create_default_registry()
@@ -415,7 +418,8 @@ class LLMSearchManager:
             data_contracts_manager=self._data_contracts_manager,
             semantic_models_manager=self._semantic_models_manager,
             costs_manager=self._costs_manager,
-            search_manager=self._search_manager
+            search_manager=self._search_manager,
+            caller=self._tool_caller,
         )
     
     def _get_latest_user_message(self, session: ConversationSession) -> str:
@@ -486,6 +490,7 @@ class LLMSearchManager:
         page_url: Optional[str] = None,
         feature_id: Optional[str] = None,
         selected_entity: Optional[Dict[str, Any]] = None,
+        caller: Optional[ToolCaller] = None,
     ) -> ChatResponse:
         """
         Process a chat message and return the assistant's response.
@@ -506,6 +511,8 @@ class LLMSearchManager:
                 prompt today.
             selected_entity: Entity the user has selected in the UI
                 (Phase 3). Dict with optional ``type``, ``name``, ``id``.
+            caller: Who the tools act for. Without one, tools that change
+                data are refused.
 
         Returns:
             ChatResponse with the assistant's message
@@ -520,6 +527,7 @@ class LLMSearchManager:
             "feature_id": feature_id,
             "selected_entity": selected_entity,
         }
+        self._tool_caller = caller
         try:
             return await self._chat_inner(
                 user_message=user_message,
@@ -529,6 +537,7 @@ class LLMSearchManager:
             )
         finally:
             self._chat_context = None
+            self._tool_caller = None
 
     async def _chat_inner(
         self,
@@ -817,7 +826,11 @@ class LLMSearchManager:
                             "tool": tool_name,
                             "args": tool_args,
                             "success": False,
-                            "error": result.error
+                            "error": result.error,
+                            "error_code": result.error_code,
+                            # The params of a coded refusal (tool_not_permitted).
+                            **{k: result.data[k] for k in ("feature_id", "required_level")
+                               if k in (result.data or {})},
                         })
                     else:
                         result_summary = str(result_dict)[:500] + "..." if len(str(result_dict)) > 500 else str(result_dict)

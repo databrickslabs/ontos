@@ -414,6 +414,22 @@ def get_workspace_client_dependency(timeout: int = 30):
 
     return _get_ws_client
 
+def build_user_token_workspace_client(host: str, token: str) -> WorkspaceClient:
+    """Build a WorkspaceClient that authenticates with this user token only.
+
+    auth_type="pat" makes the SDK use just this token and ignore the app's OAuth env
+    vars (DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET / DATABRICKS_AUTH_TYPE)
+    without touching os.environ, which concurrent service-principal builds read.
+    """
+    return WorkspaceClient(
+        host=host,
+        token=token,
+        auth_type="pat",
+        product="ontos",
+        product_version=__version__,
+    )
+
+
 def get_obo_workspace_client(
     request: Request,
     settings: Optional[Settings] = None,
@@ -486,17 +502,7 @@ def get_obo_workspace_client(
     masked_token = f"{obo_token[:4]}...{obo_token[-4:]}"
     logger.info(f"Initializing NEW OBO workspace client for user: {user_email or 'unknown'}, host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
-    # Create client with the user's token only. auth_type="pat" makes the SDK use
-    # just this token and ignore the app's OAuth env vars (DATABRICKS_CLIENT_ID /
-    # DATABRICKS_CLIENT_SECRET / DATABRICKS_AUTH_TYPE) without touching os.environ,
-    # which concurrent service-principal client builds read.
-    client = WorkspaceClient(
-        host=settings.DATABRICKS_HOST,
-        token=obo_token,
-        auth_type="pat",
-        product="ontos",
-        product_version=__version__
-    )
+    client = build_user_token_workspace_client(settings.DATABRICKS_HOST, obo_token)
 
     # Verify connectivity and set telemetry headers
     # Use lighter verification for OBO tokens (skip cluster check due to limited scopes)

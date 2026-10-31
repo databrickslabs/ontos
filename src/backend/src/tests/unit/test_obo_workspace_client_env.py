@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 import src.common.workspace_client as wc_mod
+from src import __version__
 
 HOST = "https://example.cloud.databricks.com"
 SP_ID = "sp-client-id"
@@ -69,6 +70,8 @@ def test_obo_build_does_not_touch_process_env(obo_env, monkeypatch):
     assert seen["env"] == (SP_ID, SP_SECRET)
     assert seen["kwargs"]["token"] == USER_TOKEN
     assert seen["kwargs"]["auth_type"] == "pat"
+    assert seen["kwargs"]["product"] == "ontos"
+    assert seen["kwargs"]["product_version"] == __version__
     assert os.environ["DATABRICKS_CLIENT_ID"] == SP_ID
     assert os.environ["DATABRICKS_CLIENT_SECRET"] == SP_SECRET
 

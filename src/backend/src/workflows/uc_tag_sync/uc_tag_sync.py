@@ -397,7 +397,14 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
 
 
 def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read UC-taggable assets (Table, View) with their domain, contract, product, and semantic link metadata."""
+    """Read UC-taggable assets (Table, View, Metric View) with their links.
+
+    Each row carries the asset's domain, contract, product and semantic link metadata.
+
+    The type names mirror PHYSICAL_TABLE_ASSET_TYPES in src/models/assets.py, written out as
+    literals because this job runs without the app package. Metric views get the tag DDL views
+    get today; ALTER VIEW for both is phase 4 of the UC semantic view lifecycle PRD.
+    """
     sql = (
         """
         SELECT a.id::text    AS asset_id,
@@ -438,7 +445,7 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
         LEFT JOIN data_domains d ON d.id = ada.domain_id
         LEFT JOIN entity_relationships er
           ON er.source_id = a.id::text
-         AND er.source_type IN ('Table', 'View')
+         AND er.source_type IN ('Table', 'View', 'Metric View')
          AND er.target_type = 'DataContract'
          AND er.relationship_type = 'implementsContract'
         LEFT JOIN data_contracts c ON er.target_id = c.id
@@ -454,7 +461,7 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
         LEFT JOIN entity_semantic_links esl
           ON esl.entity_id = a.id::text
          AND esl.entity_type = 'asset'
-        WHERE at.name IN ('Table', 'View')
+        WHERE at.name IN ('Table', 'View', 'Metric View')
           AND a.status = 'active'
           AND a.location IS NOT NULL
         """

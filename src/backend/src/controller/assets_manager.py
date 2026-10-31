@@ -419,6 +419,65 @@ class AssetsManager(SearchableAsset):
                 raise ConflictError("Asset identity conflict.")
             raise
 
+    def retype_asset(
+        self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,
+        current_user_id: str,
+    ) -> int:
+        """Change an asset's type and the type name its entity_relationships rows carry.
+
+        entity_relationships stores the asset type name in source_type / target_type, so
+        both change together (one commit, with the change-log entry). Does nothing unless
+        the asset currently has ``from_type``. Returns the number of rows rewritten, or -1
+        when nothing changed.
+        """
+        from src.repositories.entity_relationships_repository import entity_relationship_repo
+
+        db_asset = self._asset_repo.get(db, asset_id)
+        new_type = self._type_repo.get_by_name(db, name=to_type)
+        if not db_asset or not new_type or not db_asset.asset_type:
+            return -1
+        if db_asset.asset_type.name != from_type:
+            return -1
+
+        entity_id = str(db_asset.id)
+        rewritten = 0
+        for rel in entity_relationship_repo.get_for_entity(
+                db, entity_type=from_type, entity_id=entity_id):
+            source_type = to_type if rel.source_id == entity_id else rel.source_type
+            target_type = to_type if rel.target_id == entity_id else rel.target_type
+            duplicate = entity_relationship_repo.find_existing(
+                db, source_type=source_type, source_id=rel.source_id,
+                target_type=target_type, target_id=rel.target_id,
+                relationship_type=rel.relationship_type,
+            )
+            if duplicate is not None:
+                db.delete(rel)  # the same link already exists under the new type
+            else:
+                rel.source_type, rel.target_type = source_type, target_type
+            rewritten += 1
+        db_asset.asset_type_id = new_type.id
+        db.flush()
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="asset",
+            entity_id=entity_id,
+            action="retyped",
+            username=current_user_id,
+            details={
+                "location": db_asset.location,
+                "from_type": from_type,
+                "to_type": to_type,
+                "relationships_rewritten": rewritten,
+            },
+        )
+        db.refresh(db_asset)
+        self._update_search_index(db_asset)
+        logger.info(
+            "Retyped asset %s (%s) from %s to %s; %d relationship rows rewritten",
+            entity_id, db_asset.location, from_type, to_type, rewritten,
+        )
+        return rewritten
+
     def delete_asset(self, db: Session, *, asset_id: UUID, current_user_id: str = "system") -> AssetRead:
         db_asset = self._asset_repo.get_with_relationships(db, asset_id)
         if not db_asset:

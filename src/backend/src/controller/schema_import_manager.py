@@ -403,6 +403,13 @@ class SchemaImportManager:
                 continue
 
             if not item.will_create:
+                if item.asset_type == METRIC_VIEW_ASSET_TYPE and item.existing_asset_id:
+                    # Unity Catalog reports a metric view here: convert a legacy View
+                    # asset (no-op when it already is a Metric View)
+                    self._assets.retype_asset(
+                        db, asset_id=item.existing_asset_id, from_type="View",
+                        to_type=METRIC_VIEW_ASSET_TYPE, current_user_id=current_user_id,
+                    )
                 result.skipped += 1
                 result.items.append(ImportResultItem(
                     path=item.path,
@@ -728,16 +735,17 @@ class SchemaImportManager:
                         platform=platform, location=path,
                     )
                 if existing is None and ontos_type_name == METRIC_VIEW_ASSET_TYPE:
-                    # Reuse a metric view imported as a View before the Metric View
-                    # type existed (no duplicate, no retyping); import it as a View
-                    # when the Metric View type isn't seeded yet.
+                    # A metric view imported as a View before the Metric View type
+                    # existed is reused, and execute_import converts it. Without the
+                    # seeded Metric View type it stays (or is imported as) a View.
                     view_db = _get_asset_type_db("View")
                     legacy = view_db and asset_repo.get_by_identity(
                         db, name=metadata.name, asset_type_id=view_db.id,
                         platform=platform, location=path,
                     )
-                    if legacy or not at_db:
-                        ontos_type_name, existing = "View", legacy or None
+                    existing = legacy or None
+                    if not at_db:
+                        ontos_type_name = "View"
 
                 items.append(ImportPreviewItem(
                     path=path,

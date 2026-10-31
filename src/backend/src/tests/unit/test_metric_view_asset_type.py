@@ -5,6 +5,7 @@ mapped it to View), so it could not be certified or deprecated as a metric view.
 ontos:MetricView is a subclass of ontos:View: it keeps every relationship a view
 has, and the places that treat tables and views alike include it.
 """
+import json
 import os
 
 os.environ['TESTING'] = 'true'
@@ -24,6 +25,7 @@ from src.controller.entity_relationships_manager import EntityRelationshipsManag
 from src.controller.ontology_schema_manager import OntologySchemaManager
 from src.controller.schema_import_manager import SchemaImportManager
 from src.db_models.assets import AssetDb, AssetTypeDb
+from src.db_models.change_log import ChangeLogDb
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.models.assets import (
     AssetCreate,
@@ -34,11 +36,13 @@ from src.models.assets import (
     SchemaInfo,
     UnifiedAssetType,
 )
+from src.models.entity_relationships import EntityRelationshipCreate
 from src.models.schema_import import ImportDepth, ImportRequest
 
 ONTOS = "http://ontos.app/ontology#"
 TTL = Path(__file__).resolve().parents[2] / "data" / "taxonomies" / "ontos-ontology.ttl"
 METRIC_VIEW = "main.sales.revenue_metrics"
+PLAIN_VIEW = "main.sales.v_orders"
 
 
 @pytest.fixture(scope="module")
@@ -129,6 +133,10 @@ class _Connector:
                 identifier=METRIC_VIEW, name="revenue_metrics",
                 asset_type=UnifiedAssetType.UC_METRIC, connector_type="databricks",
                 schema_info=SchemaInfo(columns=columns)),
+            PLAIN_VIEW: AssetMetadata(
+                identifier=PLAIN_VIEW, name="v_orders",
+                asset_type=UnifiedAssetType.UC_VIEW, connector_type="databricks",
+                schema_info=SchemaInfo(columns=[ColumnInfo(name="id", data_type="INT")])),
         }
 
     def get_asset_metadata(self, path):
@@ -179,23 +187,141 @@ def test_an_imported_metric_view_is_a_metric_view_asset_with_its_columns(
     assert ("Metric View", "hasColumn", "Column") in rels
 
 
-def test_a_metric_view_imported_earlier_as_a_view_is_reused_not_duplicated(
-        db_session, asset_types):
-    legacy = AssetsManager().create_asset(db_session, asset_in=AssetCreate(
-        name="revenue_metrics", asset_type_id=asset_types["View"].id,
-        platform="databricks", location=METRIC_VIEW,
+def _legacy_view(db, asset_types, location=METRIC_VIEW):
+    """A metric view imported as a View before the Metric View type, with its links."""
+    name = location.rsplit(".", 1)[-1]
+    legacy = AssetsManager().create_asset(db, asset_in=AssetCreate(
+        name=name, asset_type_id=asset_types["View"].id,
+        platform="databricks", location=location,
     ), current_user_id="u@x.com")
+    vid = str(legacy.id)
+    for source, relationship, target in (
+        (("Schema", "schema-1"), "hasView", ("View", vid)),
+        (("View", vid), "hasColumn", ("Column", "column-1")),
+        (("OutputPort", "port-1"), "portHasView", ("View", vid)),
+        (("View", vid), "implementsContract", ("DataContract", "contract-1")),
+    ):
+        db.add(EntityRelationshipDb(
+            source_type=source[0], source_id=source[1], target_type=target[0],
+            target_id=target[1], relationship_type=relationship))
+    db.flush()
+    return legacy
+
+
+def _links_of(db, asset_id):
+    aid = str(asset_id)
+    return sorted(
+        (r.source_type, r.relationship_type, r.target_type)
+        for r in db.query(EntityRelationshipDb).all()
+        if aid in (r.source_id, r.target_id)
+    )
+
+
+def _retyped_entries(db, asset_id):
+    return [c for c in db.query(ChangeLogDb).filter_by(
+        entity_type="asset", entity_id=str(asset_id), action="retyped").all()]
+
+
+def test_a_metric_view_imported_earlier_as_a_view_is_previewed_as_the_same_asset(
+        db_session, asset_types):
+    legacy = _legacy_view(db_session, asset_types)
+
+    items = {i.path: i for i in _importer().preview_import(db_session, _request())}
+
+    assert items[METRIC_VIEW].asset_type == "Metric View"
+    assert items[METRIC_VIEW].will_create is False
+    assert items[METRIC_VIEW].existing_asset_id == legacy.id
+    db_session.refresh(db_session.get(AssetDb, legacy.id))
+    assert db_session.get(AssetDb, legacy.id).asset_type.name == "View"  # preview only
+
+
+def test_a_legacy_view_reimported_as_a_metric_view_is_converted_with_its_links(
+        db_session, asset_types):
+    legacy = _legacy_view(db_session, asset_types)
+
+    result = _importer().execute_import(db_session, _request(), current_user_id="u@x.com")
+
+    assert result.errors == 0, result.error_messages
+    [asset] = _assets_at(db_session, METRIC_VIEW)
+    assert asset.id == legacy.id  # converted, not duplicated
+    assert asset.asset_type.name == "Metric View"
+    links = _links_of(db_session, asset.id)
+    assert ("Metric View", "hasColumn", "Column") in links
+    assert ("Metric View", "implementsContract", "DataContract") in links
+    assert ("OutputPort", "portHasView", "Metric View") in links
+    assert ("Schema", "hasView", "Metric View") in links
+    assert not [link for link in links if "View" in (link[0], link[2])]
+    [entry] = _retyped_entries(db_session, asset.id)
+    assert entry.username == "u@x.com"
+    assert json.loads(entry.details_json) == {
+        "location": METRIC_VIEW, "from_type": "View", "to_type": "Metric View",
+        "relationships_rewritten": 4,
+    }
+
+
+def test_a_second_import_of_a_converted_metric_view_changes_nothing(db_session, asset_types):
+    legacy = _legacy_view(db_session, asset_types)
+    _importer().execute_import(db_session, _request(), current_user_id="u@x.com")
+    links = _links_of(db_session, legacy.id)
+
+    result = _importer().execute_import(db_session, _request(), current_user_id="u@x.com")
+
+    assert result.errors == 0, result.error_messages
+    [asset] = _assets_at(db_session, METRIC_VIEW)
+    assert asset.asset_type.name == "Metric View"
+    assert _links_of(db_session, asset.id) == links
+    assert len(_retyped_entries(db_session, asset.id)) == 1
+
+
+def test_a_plain_view_and_views_outside_the_import_are_untouched(db_session, asset_types):
+    plain = _legacy_view(db_session, asset_types, location=PLAIN_VIEW)
+    outside = _legacy_view(db_session, asset_types, location="main.sales.other_view")
+    request = ImportRequest(connection_id=uuid4(), selected_paths=[METRIC_VIEW, PLAIN_VIEW],
+                            depth=ImportDepth.ONE_LEVEL)
+
+    result = _importer().execute_import(db_session, request, current_user_id="u@x.com")
+
+    assert result.errors == 0, result.error_messages
+    for view in (plain, outside):
+        asset = db_session.get(AssetDb, view.id)
+        assert asset.asset_type.name == "View"
+        assert ("View", "hasColumn", "Column") in _links_of(db_session, view.id)
+        assert _retyped_entries(db_session, view.id) == []
+
+
+def test_a_legacy_view_stays_a_view_without_the_seeded_type(db_session, asset_types):
+    legacy = _legacy_view(db_session, asset_types)
+    links = _links_of(db_session, legacy.id)
+    db_session.delete(asset_types["Metric View"])
+    db_session.flush()
 
     items = {i.path: i for i in _importer().preview_import(db_session, _request())}
     result = _importer().execute_import(db_session, _request(), current_user_id="u@x.com")
 
     assert items[METRIC_VIEW].asset_type == "View"
-    assert items[METRIC_VIEW].will_create is False
-    assert items[METRIC_VIEW].existing_asset_id == legacy.id
     assert result.errors == 0, result.error_messages
     [asset] = _assets_at(db_session, METRIC_VIEW)
-    assert asset.id == legacy.id
-    assert asset.asset_type.name == "View"  # not retyped
+    assert asset.asset_type.name == "View"
+    assert set(links) <= set(_links_of(db_session, asset.id))  # still typed View
+    assert _retyped_entries(db_session, asset.id) == []
+
+
+def test_a_converted_metric_view_works_in_the_hierarchy_and_on_ports(
+        db_session, asset_types, osm):
+    legacy = _legacy_view(db_session, asset_types)
+    _importer().execute_import(db_session, _request(), current_user_id="u@x.com")
+    manager = EntityRelationshipsManager(osm)
+
+    tree = manager.get_entity_hierarchy(db_session, "Metric View", str(legacy.id))
+    link = manager.create_relationship(db_session, EntityRelationshipCreate(
+        source_type="OutputPort", source_id="port-2", target_type="Metric View",
+        target_id=str(legacy.id), relationship_type="portHasView",
+    ), current_user_id="u@x.com")
+
+    assert tree is not None
+    column_children = [c for c in tree.children if c.entity_type == "Column"]
+    assert {c.name for c in column_children} >= {"Region", "Total Revenue"}
+    assert link.target_type == "Metric View"
 
 
 def test_a_metric_view_imports_as_a_view_until_the_type_is_seeded(db_session, asset_types):

@@ -3022,11 +3022,16 @@ POST /mcp
 > header never names the caller. The tools then apply the caller's Ontos roles
 > like the REST API: a tool that changes data needs the feature level of the
 > matching route, and data products and contracts are returned only when the
-> caller may read them (published ones, or drafts the caller owns or administers;
-> anything else is answered as not found). The token's scopes still limit which
-> tools can be called. A request with only an `X-API-Key` has no user: it reads
-> published products and contracts only, and its tools that change data are
-> refused. `execute_sparql_query` is for semantic-models admins only.
+> caller has the feature's Read-only level (data-products, data-contracts) and
+> may read them (published ones, or drafts the caller owns or administers;
+> anything else is answered as not found). `global_search` also keeps only rows
+> of the features the caller reads, like `/api/search`. The token's scopes still
+> limit which tools can be called. A request with only an `X-API-Key` has no
+> user: it gets Read-only on the features its token's scopes name
+> (`data-products:*`, `contracts:*`, `domains:*`, `teams:*`, `projects:*`,
+> `semantic:*`, `tags:*`; `*` names them all), reads published products and
+> contracts only, and its tools that change data are refused.
+> `execute_sparql_query` is for semantic-models admins only.
 >
 > **Keyless MCP** (no `X-API-Key`, keyless default token enabled) is accepted only
 > with a forwarded user token; a request that carries only `X-Forwarded-Email` or

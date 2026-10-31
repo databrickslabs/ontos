@@ -533,3 +533,119 @@ class TestOneQueryPerRequest:
         first = len(calls)
         read_access.readable_ids(ctx, read_access.PRODUCT_TYPE)
         assert first == len(world.p) and len(calls) == first
+
+
+# --- Re-review follow-ups -------------------------------------------------------
+
+L = FeatureAccessLevel
+# Feature levels to change things, but no ownership and not a feature admin.
+WRITER = ToolCaller(email='carl@example.com', auth_path='test', permissions={
+    'data-products': L.ADMIN, 'data-contracts': L.READ_WRITE,
+    'semantic-models': L.READ_WRITE, 'tags': L.READ_WRITE,
+})
+
+
+def _write(world, tool, caller=WRITER, **args):
+    return _run(create_default_registry().execute(tool, _ctx(world, caller), args))
+
+
+class TestWritesApplyTheReadRule:
+    """Changing or linking an unreadable item answers exactly like a missing id."""
+
+    def _same_as_missing(self, world, tool, id_key, real_id, **args):
+        missing = str(uuid.uuid4())
+        got = _write(world, tool, **{id_key: real_id}, **args)
+        ref = _write(world, tool, **{id_key: missing}, **args)
+        assert got.success is False and ref.success is False
+        assert got.error == ref.error.replace(missing, real_id)
+        assert got.data == ref.data and got.error_code == ref.error_code
+        return got
+
+    def test_update_and_delete_products(self, world):
+        row = world.p['other_draft']
+        res = self._same_as_missing(world, 'update_data_product', 'product_id', row.id,
+                                    status='draft')
+        assert 'Other draft' not in str(res.to_dict())
+        self._same_as_missing(world, 'delete_data_product', 'product_id', row.id)
+        world.db.expire_all()
+        assert world.db.get(DataProductDb, row.id) is not None
+
+    def test_update_and_delete_contracts(self, world):
+        row = world.c['other_draft']
+        self._same_as_missing(world, 'update_data_contract', 'contract_id', row.id,
+                              status='retired')
+        self._same_as_missing(world, 'delete_data_contract', 'contract_id', row.id)
+        world.db.expire_all()
+        assert world.db.get(DataContractDb, row.id) is not None
+
+    def test_a_readable_contract_is_still_deleted(self, world):
+        row = world.c['published']
+        assert _write(world, 'delete_data_contract', contract_id=row.id).success is True
+
+    def test_links_and_tags(self, world):
+        draft = world.c['other_draft'].id
+        world.db.add(EntitySemanticLinkDb(id=uuid.uuid4(), entity_id=draft,
+                                          entity_type='data_contract', iri=IRI, label='C',
+                                          created_by='x'))
+        world.db.commit()
+        link_args = {'entity_type': 'data_contract', 'concept_iri': IRI, 'concept_label': 'C'}
+        self._same_as_missing(world, 'add_semantic_link', 'entity_id', draft, **link_args)
+        self._same_as_missing(world, 'add_semantic_link', 'entity_id', f'{draft}#schema',
+                              entity_type='data_contract_schema', concept_iri=IRI,
+                              concept_label='C')
+        link = world.db.query(EntitySemanticLinkDb).filter_by(entity_id=draft).one()
+        self._same_as_missing(world, 'remove_semantic_link', 'link_id', str(link.id))
+        assert world.db.query(EntitySemanticLinkDb).filter_by(entity_id=draft).count() == 1
+        tag_args = {'entity_type': 'data_contract', 'tag_id': str(uuid.uuid4())}
+        for tool in ('assign_tag_to_entity', 'remove_tag_from_entity'):
+            res = _write(world, tool, entity_id=draft, **tag_args)
+            assert res.error == f"data_contract '{draft}' not found"
+
+    def test_a_draft_product_cannot_point_at_an_unreadable_contract(self, world):
+        res = self._same_as_missing(world, 'create_draft_data_product', 'contract_id',
+                                    world.c['other_draft'].id, name='x', description='y',
+                                    domain='z', output_tables=['a.b.c'])
+        assert res.error.startswith('Data contract')
+
+    def test_a_contract_in_a_project_needs_a_member(self, world):
+        row = world.c['published']
+        row.project_id = 'proj-1'
+        world.db.commit()
+        res = _write(world, 'update_data_contract', contract_id=row.id, description='new')
+        assert res.error_code == 'project_membership_required'
+        member = ToolCaller(email='carl@example.com', auth_path='test',
+                            permissions=WRITER.permissions, project_ids={'proj-1'})
+        res = _write(world, 'update_data_contract', member, contract_id=row.id,
+                     description='new')
+        assert res.error_code != 'project_membership_required'
+
+
+def test_readable_ids_read_only_the_rule_columns(world):
+    from sqlalchemy import event
+
+    from src.tools import read_access
+
+    statements = []
+    engine = world.db.get_bind()
+
+    def _count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    event.listen(engine, 'before_cursor_execute', _count)
+    try:
+        ids = read_access.readable_ids(_ctx(world, CONSUMER), read_access.PRODUCT_TYPE)
+    finally:
+        event.remove(engine, 'before_cursor_execute', _count)
+    assert ids == {world.p['published'].id}
+    assert len(statements) == 1, statements
+    assert 'data_products.name' not in statements[0]
+
+
+def test_app_state_published_count_follows_the_read_rule(world):
+    world.p['other_draft'].publication_scope = 'organization'
+    world.p['published'].publication_scope = 'organization'
+    world.db.commit()
+    res = _call(world, 'consumer', 'get_app_state')
+    counts = res.data['counts']
+    assert counts['data_products_published'] == 1 <= counts['data_products_total']
+    assert _call(world, 'admin', 'get_app_state').data['counts']['data_products_published'] == 2

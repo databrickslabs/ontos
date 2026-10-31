@@ -24,6 +24,7 @@ from src.controller.data_products_manager import DataProductsManager
 from src.controller.llm_search_manager import LLMSearchManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_domains import DataDomain
+from src.db_models.data_products import DataProductDb
 from src.db_models.projects import ProjectDb
 from src.db_models.semantic_links import EntitySemanticLinkDb
 from src.db_models.tags import TagDb, TagNamespaceDb
@@ -83,7 +84,13 @@ def _run(coro):
 
 
 def _caller(levels, email='sue@example.com'):
-    return ToolCaller(email=email, auth_path='test', permissions=dict(levels))
+    # As resolve_tool_caller does: Admin on a feature also reads all its rows.
+    levels = dict(levels)
+    return ToolCaller(
+        email=email, auth_path='test', permissions=levels,
+        products_admin=levels.get('data-products') == ADMIN,
+        contracts_admin=levels.get('data-contracts') == ADMIN,
+    )
 
 
 def _ctx(db=None, caller=None, **managers):
@@ -240,7 +247,9 @@ class TestFamilies:
                         'data-contracts', RW)
         assert db_session.get(DataContractDb, created.id) is not None
 
-        ctx = _ctx(db_session, _caller({'data-contracts': RW}), data_contracts_manager=mgr)
+        # The contract's creator (a draft is readable by its owner).
+        ctx = _ctx(db_session, _caller({'data-contracts': RW}, email='a@b.com'),
+                   data_contracts_manager=mgr)
         assert _run(registry.execute('delete_data_contract', ctx, args)).success is True
         assert db_session.get(DataContractDb, created.id) is None
 
@@ -306,7 +315,11 @@ class TestFamilies:
 
     def test_semantic_links_add_needs_read_write(self, db_session):
         registry = create_default_registry()
+        # A published product: links are only added to entities the caller can read.
         entity_id = str(uuid.uuid4())
+        db_session.add(DataProductDb(id=entity_id, api_version='v1.0.0', kind='DataProduct',
+                                     name='Linked', version='1.0.0', status='active'))
+        db_session.commit()
         args = {'entity_type': 'data_product', 'entity_id': entity_id,
                 'concept_iri': 'http://example.com/onto#Customer', 'concept_label': 'Customer'}
 

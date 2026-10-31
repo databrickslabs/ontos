@@ -307,6 +307,15 @@ class CreateDraftDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[create_draft_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A contract the caller can't read is answered like a missing one.
+        if contract_id:
+            refusal = read_access.unreadable_target(
+                ctx, self.name, "data_contract", contract_id,
+                f"Data contract '{contract_id}' not found",
+            )
+            if refusal:
+                return refusal
         
         try:
             logger.info(f"Creating draft data product: {name}")
@@ -410,6 +419,13 @@ class UpdateDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[update_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A product the caller can't read is answered like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_product", product_id, f"Data product '{product_id}' not found"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Build update data
@@ -685,6 +701,13 @@ class DeleteDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[delete_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A product the caller can't read is answered like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_product", product_id, f"Data product '{product_id}' not found"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Get product name first for the response

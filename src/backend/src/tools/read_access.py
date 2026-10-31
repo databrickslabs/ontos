@@ -117,15 +117,20 @@ def readable_ids(ctx: ToolContext, kind: str) -> Optional[set]:
         return None
     key = f"readable_ids:{kind}"
     if key not in ctx.cache:
-        if kind == PRODUCT_TYPE:
-            from src.db_models.data_products import DataProductDb
+        from sqlalchemy.orm import lazyload, load_only
 
-            rows = ctx.db.query(DataProductDb).all()
+        # Only the columns the rule reads, and none of the eager relationships.
+        if kind == PRODUCT_TYPE:
+            from src.db_models.data_products import DataProductDb as M
+
+            cols = (M.id, M.status, M.draft_owner_id, M.owner_team_id, M.project_id)
+            rows = ctx.db.query(M).options(load_only(*cols), lazyload("*")).all()
             ctx.cache[key] = {str(r.id) for r in rows if can_read_product(ctx, r)}
         else:
-            from src.db_models.data_contracts import DataContractDb
+            from src.db_models.data_contracts import DataContractDb as M
 
-            rows = ctx.db.query(DataContractDb).all()
+            cols = (M.id, M.status, M.draft_owner_id, M.owner_team_id, M.version_family_id)
+            rows = ctx.db.query(M).options(load_only(*cols), lazyload("*")).all()
             ctx.cache[key] = {str(r.id) for r in readable_contract_rows(ctx, rows)}
     return ctx.cache[key]
 
@@ -188,6 +193,35 @@ def iri_is_unreadable(ctx: ToolContext, iri: Any) -> bool:
     caller can't read."""
     entity = graph_entity(iri)
     return entity is not None and entity_is_unreadable(ctx, *entity)
+
+
+def unreadable_target(
+    ctx: ToolContext, tool_name: str, entity_type: str, entity_id: Any, error: str
+) -> Optional[ToolResult]:
+    """For tools that change or link an entity: ``error`` (the tool's own "not
+    found" answer) when the entity belongs to a product or contract the caller
+    can't read, else None. Checked before anything is read or written, so the
+    answer is the same as for a missing id."""
+    if not entity_is_unreadable(ctx, entity_type, entity_id):
+        return None
+    return denied(ctx, tool_name, ToolResult(success=False, error=error), [str(entity_id)])
+
+
+PROJECT_MEMBERSHIP_CODE = "project_membership_required"
+
+
+def project_refusal(ctx: ToolContext, project_id: Optional[str], what: str) -> Optional[ToolResult]:
+    """The REST PUT's project rule: only a project member may edit ``what`` in a project."""
+    if not project_id:
+        return None
+    caller = _caller(ctx)
+    if caller.full_access or caller.project_ids is None or str(project_id) in caller.project_ids:
+        return None
+    return ToolResult(
+        success=False,
+        error=f"You must be a member of the project to edit this {what}",
+        error_code=PROJECT_MEMBERSHIP_CODE,
+    )
 
 
 def denied(ctx: ToolContext, tool_name: str, result: ToolResult, ids: Iterable[str]) -> ToolResult:

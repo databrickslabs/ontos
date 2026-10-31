@@ -137,6 +137,15 @@ class AddSemanticLinkTool(BaseTool):
     ) -> ToolResult:
         """Add a semantic link from an entity to a knowledge graph concept."""
         logger.info(f"[add_semantic_link] Starting - entity_type={entity_type}, entity_id={entity_id}, concept_iri={concept_iri}")
+
+        # An entity of a product or contract the caller can't read is answered
+        # like a missing one, before its existing links are looked at.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, entity_type, entity_id,
+            f"{entity_type} '{entity_id}' not found",
+        )
+        if refusal:
+            return refusal
         
         try:
             from src.controller.semantic_links_manager import SemanticLinksManager
@@ -306,6 +315,23 @@ class RemoveSemanticLinkTool(BaseTool):
                 semantic_models_manager=ctx.semantic_models_manager
             )
             
+            # A link of a product or contract the caller can't read is answered
+            # like a missing link, and nothing is removed.
+            try:
+                import uuid as _uuid
+
+                from src.db_models.semantic_links import EntitySemanticLinkDb
+                link_row = ctx.db.get(EntitySemanticLinkDb, _uuid.UUID(str(link_id)))
+            except (ValueError, AttributeError):
+                link_row = None
+            if link_row is not None:
+                refusal = read_access.unreadable_target(
+                    ctx, self.name, link_row.entity_type, link_row.entity_id,
+                    f"Semantic link '{link_id}' not found",
+                )
+                if refusal:
+                    return refusal
+
             # Remove the link
             success = manager.remove(link_id, removed_by="llm-assistant")
             

@@ -248,6 +248,22 @@ class UpdateDataContractTool(BaseTool):
         if not ctx.data_contracts_manager:
             logger.error(f"[update_data_contract] FAILED: Data contracts manager not available")
             return ToolResult(success=False, error="Data contracts manager not available")
+
+        # A contract the caller can't read is answered like a missing one; one
+        # in a project needs a project member, as on PUT /api/data-contracts/{id}.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_contract", contract_id,
+            f"Data contract '{contract_id}' not found",
+        )
+        if refusal:
+            return refusal
+        from src.repositories.data_contracts_repository import data_contract_repo as _repo
+        target = _repo.get(ctx.db, id=contract_id)
+        refusal = read_access.project_refusal(
+            ctx, getattr(target, "project_id", None), "contract"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Build update data
@@ -664,6 +680,15 @@ class DeleteDataContractTool(BaseTool):
         if not ctx.data_contracts_manager:
             logger.error(f"[delete_data_contract] FAILED: Data contracts manager not available")
             return ToolResult(success=False, error="Data contracts manager not available")
+
+        # A contract the caller can't read (e.g. another user's personal draft)
+        # is answered like a missing one, and nothing is deleted.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_contract", contract_id,
+            f"Data contract '{contract_id}' not found",
+        )
+        if refusal:
+            return refusal
         
         try:
             # DB-backed delete: the legacy in-memory manager.delete_contract() never touches

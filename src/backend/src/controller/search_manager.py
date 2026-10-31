@@ -346,12 +346,14 @@ class SearchManager:
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
         allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+        allowed_features: Optional[Iterable[str]] = None,
     ) -> Dict[str, Any]:
         """MCP entry point: paginated/faceted search via the active backend.
 
-        Scope-based access only (no per-user permission filtering) — the MCP
-        layer enforces token scopes. Returns the ``search_scoring.search_index``
-        result shape regardless of backend.
+        The caller's rules come in as arguments (the assistant tools pass the
+        read rules, ``src.tools.read_access``). Returns the
+        ``search_scoring.search_index`` result shape regardless of backend.
+        ``allowed_features`` keeps only rows of those features.
 
         ``include_facets=False`` saves the facet-computation pass when the
         caller only wants records. ``fields=[...]`` narrows each result row to
@@ -364,6 +366,7 @@ class SearchManager:
             query, type_filter=type_filter, filters=filters,
             limit=limit, offset=offset, include_facets=include_facets, fields=fields,
             allowed_ids_by_type=allowed_ids_by_type,
+            allowed_features=allowed_features,
         )
 
     def _filter_by_tag(

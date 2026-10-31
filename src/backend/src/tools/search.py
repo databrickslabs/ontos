@@ -72,6 +72,9 @@ class GlobalSearchTool(BaseTool):
                 limit=limit,
                 offset=offset,
                 allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, type),
+                # Rows of features without the caller's Read-only level are
+                # dropped too, as /api/search does by feature_id.
+                allowed_features=read_access.allowed_features(ctx),
             )
             logger.info(
                 f"[global_search] SUCCESS: returned {data['returned']} of {data['total_count']} matches"

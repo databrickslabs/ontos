@@ -18,6 +18,7 @@ An item the caller can't read is answered like a missing one; the result's
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.product_read_rule import can_read_product as _can_read_product_rule
 from src.tools.base import ToolCaller, ToolContext, ToolResult
@@ -42,6 +43,9 @@ _KIND_BY_ENTITY_TYPE = {
     "data_contract_property": CONTRACT_TYPE,
 }
 _ITEM_PREFIX_BY_KIND = {PRODUCT_TYPE: PRODUCT_ITEM_PREFIX, CONTRACT_TYPE: CONTRACT_ITEM_PREFIX}
+# The feature whose Read-only level a product / contract item needs, as the
+# REST GETs (PermissionChecker(..., READ_ONLY)).
+FEATURE_BY_KIND = {PRODUCT_TYPE: "data-products", CONTRACT_TYPE: "data-contracts"}
 _GRAPH_PREFIX = "urn:ontos:"
 
 
@@ -49,10 +53,38 @@ def _caller(ctx: ToolContext) -> ToolCaller:
     return ctx.caller or _ANONYMOUS
 
 
+def has_read_level(ctx: ToolContext, kind: str) -> bool:
+    """Whether the caller has the feature's Read-only level for products (or contracts).
+
+    A feature admin (``products_admin`` / ``contracts_admin``) has it.
+    """
+    caller = _caller(ctx)
+    if caller.full_access or reads_all(ctx, kind):
+        return True
+    return caller.has_level(FEATURE_BY_KIND[kind], FeatureAccessLevel.READ_ONLY)
+
+
+def allowed_features(ctx: ToolContext) -> Optional[List[str]]:
+    """Features whose index rows the caller may see in ``global_search``, as
+    ``/api/search`` keeps a row only with Read-only on its ``feature_id``.
+
+    ``None`` = every feature.
+    """
+    caller = _caller(ctx)
+    if caller.full_access:
+        return None
+    features = {f for f in caller.permissions
+                if caller.has_level(f, FeatureAccessLevel.READ_ONLY)}
+    features |= {FEATURE_BY_KIND[k] for k in FEATURE_BY_KIND if has_read_level(ctx, k)}
+    return sorted(features)
+
+
 def can_read_product(ctx: ToolContext, product: Any) -> bool:
     caller = _caller(ctx)
     if caller.full_access:
         return True
+    if not has_read_level(ctx, PRODUCT_TYPE):
+        return False
     try:
         return _can_read_product_rule(
             ctx.db,
@@ -74,6 +106,8 @@ def readable_contract_rows(ctx: ToolContext, rows: Iterable[Any]) -> List[Any]:
     caller = _caller(ctx)
     if caller.full_access or caller.contracts_admin:
         return rows
+    if not has_read_level(ctx, CONTRACT_TYPE):
+        return []
     manager = ctx.data_contracts_manager
     if manager is None or not hasattr(manager, "readable_contracts"):
         # Without the manager only the consumer part of the rule can be applied.
@@ -111,10 +145,13 @@ def reads_all(ctx: ToolContext, kind: str) -> bool:
 def readable_ids(ctx: ToolContext, kind: str) -> Optional[set]:
     """Ids of the products (``data-product``) or contracts the caller may read.
 
-    ``None`` when the caller reads them all. Computed once per request.
+    ``None`` when the caller reads them all; empty without the feature's
+    Read-only level. Computed once per request.
     """
     if reads_all(ctx, kind):
         return None
+    if not has_read_level(ctx, kind):
+        return set()
     key = f"readable_ids:{kind}"
     if key not in ctx.cache:
         from sqlalchemy.orm import lazyload, load_only

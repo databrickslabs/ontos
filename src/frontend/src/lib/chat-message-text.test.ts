@@ -21,6 +21,22 @@ describe('chatMessageText', () => {
     );
   });
 
+  it('shows an empty model answer in the user language, with its error id', async () => {
+    await i18n.changeLanguage('pt');
+    const text = chatMessageText(
+      {
+        content: "The model didn't return an answer to this request.",
+        error_code: 'chat_empty_answer',
+        error_params: { errorId: 'abc123def456' },
+      },
+      i18n.t,
+    );
+    expect(text).toBe(
+      'O modelo não retornou uma resposta para esta solicitação. ' +
+        'Tente novamente ou reformule sua pergunta (id do erro abc123def456).',
+    );
+  });
+
   it('keeps the stored text for an unknown code and for messages without a code', async () => {
     await i18n.changeLanguage('pt');
     expect(chatMessageText({ ...failed, error_code: 'something_new' }, i18n.t)).toBe(failed.content);

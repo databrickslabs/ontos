@@ -104,6 +104,7 @@ def test_a_consumer_cannot_delete_a_product_through_the_chat(chat_as, product_id
     source = _source(body)
     assert source['success'] is False
     assert source['error_code'] == TOOL_NOT_PERMITTED_CODE
+    assert source['feature_id'] == 'data-products' and source['required_level'] == 'Admin'
     assert app.state.data_products_manager.get_product(product_id) is not None
 
 

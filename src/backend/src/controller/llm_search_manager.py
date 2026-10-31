@@ -828,6 +828,9 @@ class LLMSearchManager:
                             "success": False,
                             "error": result.error,
                             "error_code": result.error_code,
+                            # The params of a coded refusal (tool_not_permitted).
+                            **{k: result.data[k] for k in ("feature_id", "required_level")
+                               if k in (result.data or {})},
                         })
                     else:
                         result_summary = str(result_dict)[:500] + "..." if len(str(result_dict)) > 500 else str(result_dict)

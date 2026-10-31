@@ -57,19 +57,22 @@ async def resolve_effective_permissions(
     user_email: Optional[str],
     user_groups: Optional[List[str]],
     request: Request,
+    auth_manager: Optional[AuthorizationManager] = None,
 ) -> Dict[str, FeatureAccessLevel]:
-    """The caller's effective feature levels, resolved like :class:`PermissionChecker`.
+    """The caller's effective feature levels, as every feature check resolves them.
 
     Precedence: an applied role override, else the merge of the team role
     override and the roles matching the groups or the email. Shared by
-    :func:`is_user_feature_admin`, :func:`enforce_feature_permission` and the
-    assistant tools (``src.tools.caller``), which check levels outside ``Depends``.
+    :class:`PermissionChecker`, :func:`is_user_feature_admin`,
+    :func:`enforce_feature_permission` and the assistant tools
+    (``src.tools.caller``), which check levels outside ``Depends``.
 
+    ``auth_manager`` defaults to the one in ``request.app.state``
+    (``PermissionChecker`` passes its injected one).
     Raises ``RuntimeError`` when no ``AuthorizationManager`` is configured.
     """
-    auth_manager: Optional[AuthorizationManager] = getattr(
-        request.app.state, "authorization_manager", None
-    )
+    if auth_manager is None:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
     if auth_manager is None:
         raise RuntimeError("AuthorizationManager not found in app state")
     settings_manager: Optional[SettingsManager] = getattr(
@@ -690,31 +693,10 @@ class PermissionChecker:
             )
 
         try:
-            # Check for team role overrides
-            team_role_override = await get_user_team_role_overrides(
-                user_details.email,
-                user_details.groups or [],
-                request
+            # Applied role override, else team role override + group/email roles.
+            effective_permissions = await resolve_effective_permissions(
+                user_details.email, user_details.groups, request, auth_manager=auth_manager
             )
-
-            # Check if an explicit role override is applied for this user
-            applied_role_id = None
-            try:
-                settings_manager = getattr(request.app.state, 'settings_manager', None)
-                if settings_manager:
-                    applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-            except Exception:
-                applied_role_id = None
-
-            if applied_role_id and settings_manager:
-                # Build effective permissions directly from the selected role
-                effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                effective_permissions = auth_manager.get_user_effective_permissions(
-                    user_details.groups,
-                    team_role_override,
-                    user_email=user_details.email,
-                )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,
                 self.feature_id,

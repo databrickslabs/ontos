@@ -30,6 +30,7 @@ from src.common.manager_dependencies import get_users_manager
 from src.tools.base import (
     ToolCaller,
     ToolContext,
+    TOOL_FAILED_CODE,
     ToolResult,
     check_tool_permission,
     tool_failed_message,
@@ -364,15 +365,7 @@ class MCPHandler:
                 }
             else:
                 details_for_audit["tool_error"] = result.error
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": result.error or "Unknown error"
-                        }
-                    ],
-                    "isError": True
-                }
+                return _tool_error_result(result.error or "Unknown error", result.to_dict())
                 
         except Exception as e:
             error_id = new_error_id()
@@ -381,15 +374,10 @@ class MCPHandler:
             )
             details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
             details_for_audit["error_id"] = error_id
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": tool_failed_message(error_id)
-                    }
-                ],
-                "isError": True
-            }
+            message = tool_failed_message(error_id)
+            return _tool_error_result(
+                message, {"error": message, "error_code": TOOL_FAILED_CODE, "error_id": error_id}
+            )
         finally:
             self._audit(action="TOOL_CALL", success=success, details=details_for_audit)
     
@@ -517,6 +505,18 @@ class MCPHandler:
             costs_manager=None,  # Add if needed
             search_manager=getattr(app.state, "search_manager", None)
         )
+
+
+def _tool_error_result(text: str, structured: Dict[str, Any]) -> Dict[str, Any]:
+    """A failed ``tools/call`` result: the message as text, and the same failure
+    (``error``, ``error_code`` and its params, e.g. ``feature_id`` /
+    ``required_level`` for ``tool_not_permitted``) as ``structuredContent``.
+    """
+    return {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": structured,
+        "isError": True,
+    }
 
 
 class MCPError(Exception):

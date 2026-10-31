@@ -364,12 +364,12 @@ class TestAskOntosPassesTheCaller:
 
 # --- MCP ----------------------------------------------------------------------
 
-def _mcp_handler(headers, audit_manager=None):
+def _mcp_handler(headers, audit_manager=None, test_user_token=None):
     app = SimpleNamespace(state=SimpleNamespace(workspace_client=object(),
                                                 users_manager=MagicMock()))
     request = SimpleNamespace(headers=headers, app=app, client=SimpleNamespace(host='127.0.0.1'))
     settings = MagicMock()
-    settings.TEST_USER_TOKEN = None
+    settings.TEST_USER_TOKEN = test_user_token
     return MCPHandler(
         db=None, settings=settings,
         token_info=SimpleNamespace(name='tok', created_by='admin@example.com', scopes=['*']),
@@ -424,6 +424,10 @@ class TestMcpChecksTheLevel:
         out = _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
         assert out['isError'] is True and calls == []
         assert 'Not allowed' in out['content'][0]['text']
+        # The code and its params reach the client, not only the audit.
+        assert out['structuredContent']['error_code'] == TOOL_NOT_PERMITTED_CODE
+        assert out['structuredContent']['feature_id'] == 'data-domains'
+        assert out['structuredContent']['required_level'] == 'Admin'
         details = _audits(audit, 'TOOL_CALL')[0]['details']
         assert details['error_code'] == TOOL_NOT_PERMITTED_CODE
         assert details['auth_path'] == 'mcp_forwarded_email'
@@ -469,3 +473,41 @@ class TestMcpChecksTheLevel:
         calls = _recording_tool(h, 'get_domain')
         out = _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
         assert out['isError'] is False and calls == [None]
+
+    def test_an_unexpected_failure_is_coded_too(self):
+        h = _mcp_handler({})
+
+        async def _boom(ctx, **kwargs):
+            raise RuntimeError('secret detail')
+
+        h._tool_registry.get('get_domain').execute = _boom
+        out = _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
+        assert out['isError'] is True
+        assert out['structuredContent']['error_code'] == 'tool_failed'
+        assert out['structuredContent']['error_id'] in out['content'][0]['text']
+        assert 'secret detail' not in str(out)
+
+    def test_the_test_user_header_names_the_caller_when_enabled(self, monkeypatch):
+        seen = []
+
+        async def _user(request, settings, manager):
+            seen.append(request.headers['X-Test-Token'])
+            return UserInfo(email='persona@example.com', username='p', user='P', ip=None,
+                            groups=['g'])
+
+        async def _levels(email, groups, request):
+            return {'data-domains': ADMIN}
+
+        monkeypatch.setattr(mcp_routes, 'get_user_details_from_sdk', _user)
+        monkeypatch.setattr(tool_caller, 'resolve_effective_permissions', _levels)
+        h = _mcp_handler({'X-Test-Token': 'tok'}, MagicMock(), test_user_token='tok')
+        calls = _recording_tool(h, 'delete_domain')
+        out = _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
+        assert out['isError'] is False and seen == ['tok']
+        assert calls[0].email == 'persona@example.com' and calls[0].auth_path == 'mcp_test_user'
+
+        # Without TEST_USER_TOKEN the header is ignored: the API-key policy applies.
+        h = _mcp_handler({'X-Test-Token': 'tok'}, MagicMock())
+        calls = _recording_tool(h, 'delete_domain')
+        _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
+        assert calls[0].auth_path == 'mcp_api_key'

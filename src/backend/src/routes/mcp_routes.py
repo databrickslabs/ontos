@@ -183,9 +183,14 @@ class MCPHandler:
         self._audit_manager = audit_manager
         self._session_id = session_id
         self._tool_registry = create_default_registry()
-        # Set when a tool context is built: "obo" (ran as the forwarded user) or
-        # "service_principal" (app identity). Audited so UC data scope is traceable.
+        # Set when the UC workspace client is built, which happens only when a tool
+        # reads it: "obo" (ran as the forwarded user) or "service_principal" (app
+        # identity). ``None`` while no client was built. Audited so UC data scope
+        # is traceable.
         self._identity_mode: Optional[str] = None
+        # The refusal of an OBO client that could not be built, kept so that a later
+        # read fails the same way without a second audit entry.
+        self._workspace_client_error: Optional[MCPError] = None
         # The caller the tools act for, resolved once per request (_resolve_caller).
         self._caller: Optional[ToolCaller] = None
     
@@ -357,7 +362,8 @@ class MCPHandler:
                 {"required_scope": required_scope, "token_scopes": self._token_info.scopes}
             )
         
-        # Create tool context (also sets self._identity_mode)
+        # The UC workspace client is built only when a tool reads it (which sets
+        # self._identity_mode); the identity itself is verified just below.
         ctx = self._create_tool_context()
         ctx.caller = await self._resolve_caller(tool_name)
 
@@ -368,11 +374,14 @@ class MCPHandler:
             "token_name": self._token_info.name,
             "token_id": str(self._token_info.id) if getattr(self._token_info, "id", None) else None,
             "session_id": self._session_id,
-            "identity_mode": self._identity_mode,
+            "identity_mode": None,
             "auth_path": ctx.caller.auth_path,
         }
         try:
             result = check_tool_permission(tool, ctx) or await tool.execute(ctx, **tool_args)
+            if self._workspace_client_error is not None:
+                # The tool read the client and turned its failure into a result.
+                raise self._workspace_client_error
             is_error = not result.success
             details_for_audit["is_error"] = is_error
             success = not is_error
@@ -397,7 +406,14 @@ class MCPHandler:
                 details_for_audit["tool_error"] = result.error
                 return _tool_error_result(result.error or "Unknown error", result.to_dict())
                 
+        except MCPError:
+            # An OBO client that could not be built: a request-level refusal, not a
+            # tool failure. The audit entry (identity_mode None) is written below.
+            raise
         except Exception as e:
+            if self._workspace_client_error is not None:
+                # The tool wrapped the refusal of its workspace client: still the refusal.
+                raise self._workspace_client_error from None
             error_id = new_error_id()
             logger.error(
                 "Error executing tool %s (error id %s): %s", tool_name, error_id, e, exc_info=True
@@ -409,6 +425,11 @@ class MCPHandler:
                 message, {"error": message, "error_code": TOOL_FAILED_CODE, "error_id": error_id}
             )
         finally:
+            details_for_audit["identity_mode"] = self._identity_mode
+            if self._workspace_client_error is not None:
+                # Links this entry to the IDENTITY_REJECTED one without relying on time.
+                details_for_audit["is_error"] = True
+                details_for_audit["error_code"] = "obo_setup_failed"
             self._audit(action="TOOL_CALL", success=success, details=details_for_audit)
     
     def _has_scope(self, required_scope: str) -> bool:
@@ -451,6 +472,8 @@ class MCPHandler:
         SP grants, which they can't see and shouldn't have.
         """
         app = self._request.app
+        if self._workspace_client_error is not None:
+            raise self._workspace_client_error
         if self._request.headers.get("x-forwarded-access-token"):
             try:
                 client = get_obo_workspace_client(self._request, self._settings)
@@ -471,7 +494,10 @@ class MCPHandler:
                 )
                 # Not falling back to the service principal: the request would run
                 # with grants the caller cannot see. The reason is in the audit entry.
-                raise MCPError(MCP_AUTH_FAILED, IDENTITY_REJECTED_MESSAGE)
+                self._workspace_client_error = MCPError(
+                    MCP_AUTH_FAILED, IDENTITY_REJECTED_MESSAGE
+                )
+                raise self._workspace_client_error
             self._identity_mode = "obo"
             return client
         self._identity_mode = "service_principal"
@@ -514,14 +540,18 @@ class MCPHandler:
         return self._caller
 
     def _create_tool_context(self) -> ToolContext:
-        """Create a ToolContext for tool execution."""
+        """Create a ToolContext for tool execution.
+
+        The UC workspace client is not built here: ``ctx.workspace_client`` calls
+        ``_resolve_workspace_client`` when a tool first reads it.
+        """
         # Get managers from app.state if available
         app = self._request.app
 
         return ToolContext(
             db=self._db,
             settings=self._settings,
-            workspace_client=self._resolve_workspace_client(),
+            workspace_client_factory=self._resolve_workspace_client,
             data_products_manager=getattr(app.state, "data_products_manager", None),
             data_contracts_manager=getattr(app.state, "data_contracts_manager", None),
             semantic_models_manager=getattr(app.state, "semantic_models_manager", None),

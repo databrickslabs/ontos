@@ -7,7 +7,7 @@ the LLM Search feature and MCP server endpoints.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -81,7 +81,9 @@ class ToolContext:
     """
     db: Session
     settings: Settings
-    workspace_client: Optional[Any] = None
+    # Replaced below by ``_WorkspaceClientAttr``: a value passed here is used as is;
+    # otherwise the client is built by ``workspace_client_factory`` on first read.
+    workspace_client: Optional[Any] = field(default=None, repr=False, compare=False)
     caller: Optional["ToolCaller"] = None
     # Per-request memo for the read rules (src.tools.read_access).
     cache: Dict[str, Any] = field(default_factory=dict)
@@ -90,6 +92,44 @@ class ToolContext:
     semantic_models_manager: Optional[Any] = None
     costs_manager: Optional[Any] = None
     search_manager: Optional[Any] = None
+    # Builds the workspace client the first time a tool reads ``workspace_client``
+    # (once per context). An error it raises reaches the tool's caller.
+    workspace_client_factory: Optional[Callable[[], Any]] = field(
+        default=None, repr=False, compare=False
+    )
+
+
+class _WorkspaceClientAttr:
+    """``ToolContext.workspace_client``: an explicit value, else built lazily.
+
+    ``dataclasses.replace`` and copies read every field, so they build the client.
+    Assigning ``None`` clears the cached client (a later read calls the factory
+    again); nothing does that today.
+    """
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return None
+        state = obj.__dict__
+        if "_workspace_client_set" not in state:
+            factory = state.get("workspace_client_factory")
+            if factory is None:
+                return None
+            # A factory that raises leaves the client unset; it owns what a retry does.
+            state["_workspace_client"] = factory()
+            state["_workspace_client_set"] = True
+        return state["_workspace_client"]
+
+    def __set__(self, obj, value):
+        # ``None`` means "not given": the factory (set later in ``__init__``) may build it.
+        obj.__dict__["_workspace_client"] = value
+        if value is None:
+            obj.__dict__.pop("_workspace_client_set", None)
+        else:
+            obj.__dict__["_workspace_client_set"] = True
+
+
+ToolContext.workspace_client = _WorkspaceClientAttr()
 
 
 @dataclass

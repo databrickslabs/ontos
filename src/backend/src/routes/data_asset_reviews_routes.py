@@ -20,6 +20,7 @@ from src.models.data_asset_reviews import (
 # Import Manager and other dependencies
 from src.controller.data_asset_reviews_manager import DataAssetReviewManager
 from src.controller.notifications_manager import NotificationsManager # Assuming manager is here
+from src.controller.semantic_links_manager import SemanticLinksManager
 from src.common.database import get_db
 from src.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
@@ -386,11 +387,14 @@ async def get_asset_definition(
 async def get_metric_view_definition(
     request_id: str,
     asset_id: str,
+    request: Request,
+    db: DBSessionDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
     user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
-    """Get a metric view's definition: its YAML and its dimensions and measures."""
+    """Get a metric view's definition: its YAML, its dimensions and measures, and the
+    concept links of the view and of each field (``links``)."""
     try:
         reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
         if not reviewed_asset:
@@ -408,7 +412,11 @@ async def get_metric_view_definition(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Metric view definition not found by the workspace client, or access denied.",
             )
-        return result
+        links_manager = SemanticLinksManager(
+            db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+        )
+        links = links_manager.list_for_metric_view(reviewed_asset.asset_fqn, result['metric_view'])
+        return {**result, 'links': links.model_dump()}
     except HTTPException:
         raise
     except Exception as e:

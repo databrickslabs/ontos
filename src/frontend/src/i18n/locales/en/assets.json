@@ -149,6 +149,11 @@
       "relationships": "Relationships",
       "lineage": "Lineage",
       "impact": "Impact Analysis"
+    },
+    "metricView": {
+      "title": "Metric view",
+      "loading": "Loading the metric view",
+      "loadError": "The metric view definition could not be loaded."
     }
   },
   "explorer": {

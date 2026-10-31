@@ -155,7 +155,17 @@
       "yaml": "Definizione YAML",
       "materialization": "Materializzazione",
       "materializationSummary_one": "{{schedule}}, {{count}} vista materializzata",
-      "materializationSummary_other": "{{schedule}}, {{count}} viste materializzate"
+      "materializationSummary_other": "{{schedule}}, {{count}} viste materializzate",
+      "concepts": "Concetti",
+      "viewConcepts": "Concetti collegati alla metric view",
+      "linkConcept": "Collega concetto",
+      "linkConceptTo": "Collega un concetto a {{name}}",
+      "linked": "Concetto collegato a {{name}}.",
+      "unlinked": "Collegamento al concetto rimosso.",
+      "linkError": "Impossibile collegare il concetto.",
+      "unlinkError": "Impossibile rimuovere il collegamento al concetto.",
+      "removedFields": "Campi collegati non più presenti nella definizione",
+      "removedFieldsHint": "Questi campi hanno collegamenti a concetti ma non sono più nella definizione della metric view. I collegamenti vengono mantenuti; rimuovili se non sono più validi."
     },
     "noPreviewAvailable": "Nessuna anteprima o definizione disponibile per questo tipo di asset, oppure il contenuto è ancora in caricamento.",
     "messages": {

@@ -1,4 +1,5 @@
 // Corresponds to api/models/data_asset_reviews.py
+import type { EntitySemanticLink } from '@/types/semantic-link';
 
 // --- Enums --- //
 export enum ReviewRequestStatus {
@@ -140,7 +141,26 @@ export interface MetricViewField {
     comment?: string | null;
 }
 
-/** GET /api/data-asset-reviews/{id}/assets/{id}/metric-view */
+/** The concept links of one dimension or measure (`uc_column`, `catalog.schema.view.field`). */
+export interface MetricViewFieldLinks {
+    name: string;
+    kind?: 'dimension' | 'measure' | null; // null: no longer in the definition
+    entity_id: string;
+    links: EntitySemanticLink[];
+}
+
+/** A metric view's concept links: the view's own (`uc_table`) and each field's. */
+export interface MetricViewLinks {
+    view_entity_id: string;
+    view_links: EntitySemanticLink[];
+    fields: MetricViewFieldLinks[];
+    removed_fields: MetricViewFieldLinks[]; // Fields with links, no longer in the definition
+}
+
+/**
+ * GET /api/data-asset-reviews/{id}/assets/{id}/metric-view and
+ * GET /api/assets/{id}/metric-view
+ */
 export interface MetricViewDefinition {
     definition: string; // The metric view's YAML
     metric_view: {
@@ -156,6 +176,7 @@ export interface MetricViewDefinition {
             materialized_views: { name?: string | null; type?: string | null }[];
         } | null;
     } | null; // null when the YAML could not be parsed
+    links?: MetricViewLinks | null;
 }
 
 // Type for Table Preview Data (reuse from Catalog Commander or define similarly)

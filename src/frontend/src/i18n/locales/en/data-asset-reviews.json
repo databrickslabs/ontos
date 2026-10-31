@@ -155,7 +155,17 @@
       "yaml": "YAML definition",
       "materialization": "Materialization",
       "materializationSummary_one": "{{schedule}}, {{count}} materialized view",
-      "materializationSummary_other": "{{schedule}}, {{count}} materialized views"
+      "materializationSummary_other": "{{schedule}}, {{count}} materialized views",
+      "concepts": "Concepts",
+      "viewConcepts": "Concepts linked to the metric view",
+      "linkConcept": "Link concept",
+      "linkConceptTo": "Link a concept to {{name}}",
+      "linked": "Concept linked to {{name}}.",
+      "unlinked": "Concept link removed.",
+      "linkError": "The concept could not be linked.",
+      "unlinkError": "The concept link could not be removed.",
+      "removedFields": "Linked fields no longer in the definition",
+      "removedFieldsHint": "These fields have concept links but are no longer in the metric view definition. The links are kept; remove them if they no longer apply."
     },
     "noPreviewAvailable": "No preview or definition available for this asset type, or content is still loading.",
     "messages": {

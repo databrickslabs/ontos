@@ -155,7 +155,17 @@
       "yaml": "YAML-definitie",
       "materialization": "Materialisatie",
       "materializationSummary_one": "{{schedule}}, {{count}} gematerialiseerde view",
-      "materializationSummary_other": "{{schedule}}, {{count}} gematerialiseerde views"
+      "materializationSummary_other": "{{schedule}}, {{count}} gematerialiseerde views",
+      "concepts": "Concepten",
+      "viewConcepts": "Concepten gekoppeld aan de metric view",
+      "linkConcept": "Concept koppelen",
+      "linkConceptTo": "Een concept aan {{name}} koppelen",
+      "linked": "Concept gekoppeld aan {{name}}.",
+      "unlinked": "Conceptkoppeling verwijderd.",
+      "linkError": "Het concept kon niet worden gekoppeld.",
+      "unlinkError": "De conceptkoppeling kon niet worden verwijderd.",
+      "removedFields": "Gekoppelde velden die niet meer in de definitie staan",
+      "removedFieldsHint": "Deze velden hebben conceptkoppelingen maar staan niet meer in de definitie van de metric view. De koppelingen blijven behouden; verwijder ze als ze niet meer van toepassing zijn."
     },
     "noPreviewAvailable": "Geen voorbeeld of definitie beschikbaar voor dit asset-type, of de inhoud wordt nog geladen.",
     "messages": {

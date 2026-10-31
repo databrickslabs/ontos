@@ -124,3 +124,13 @@ def parse_metric_view_definition(definition: Optional[str]) -> Optional[Dict[str
         'measures': _fields(spec.get('measures')),
         'materialization': _materialization(spec.get('materialization')),
     }
+
+
+def metric_view_entity_id(fqn: str) -> str:
+    """The ``uc_table`` entity id of a metric view: its ``catalog.schema.view``.
+
+    Unity Catalog names are case-insensitive and stored lower-case, so the
+    view's name is lower-cased; a field's id appends its ``name`` as written in
+    the definition (``catalog.schema.view.field``).
+    """
+    return fqn.strip().lower()

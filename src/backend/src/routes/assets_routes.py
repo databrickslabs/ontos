@@ -11,6 +11,9 @@ from src.models.assets import (
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
 from src.controller.assets_manager import assets_manager
+from src.controller.metric_views_manager import MetricViewNotFoundError, MetricViewsManager
+from src.controller.semantic_links_manager import SemanticLinksManager
+from src.models.metric_views import MetricViewRead
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
@@ -18,6 +21,7 @@ from src.common.dependencies import (
     CurrentUserDep,
     AuditManagerDep,
     AuditCurrentUserDep,
+    WorkspaceClientDep,
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
@@ -72,6 +76,32 @@ def _user_has_assets_feature(request: Request, current_user, level: FeatureAcces
     except Exception:
         logger.exception("Failed to check assets feature for user")
         return False
+
+
+def _ensure_asset_readable(request: Request, db, current_user, manager, asset_id: UUID) -> None:
+    """Raise 403 unless the user may read the asset (issue #347).
+
+    Users with ``assets:READ_WRITE`` or higher read every asset; others only
+    assets linked (directly or via an OutputPort) to a Data Product they can
+    access.
+    """
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication required.",
+        )
+
+    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
+
+    if not is_unscoped:
+        dpm = _get_data_products_manager(request)
+        if dpm is None or not manager.is_asset_accessible(
+            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Asset is not linked to a Data Product accessible to this user.",
+            )
 
 
 # ===================== Asset Types =====================
@@ -376,23 +406,7 @@ def get_asset(
       the user can access. This enables Linked Assets navigation from a
       DP detail view even without the broader ``assets`` feature granted.
     """
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Authentication required.",
-        )
-
-    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
-
-    if not is_unscoped:
-        dpm = _get_data_products_manager(request)
-        if dpm is None or not manager.is_asset_accessible(
-            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Asset is not linked to a Data Product accessible to this user.",
-            )
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
 
     result = manager.get_asset(db=db, asset_id=asset_id)
     if not result:
@@ -552,6 +566,40 @@ def delete_asset(
             db=db, username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="DELETE_ASSET", success=success, details=details,
+        )
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view",
+    response_model=MetricViewRead,
+)
+def get_asset_metric_view(
+    asset_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    ws_client: WorkspaceClientDep,
+    manager=Depends(get_assets_manager),
+):
+    """The Unity Catalog metric view behind an asset: its YAML, its dimensions and
+    measures, and the concept links of the view and of each field.
+
+    404 (``metric_view_not_found``) when the asset isn't a metric view the app
+    can read. Readable by whoever can read the asset.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    links_manager = SemanticLinksManager(
+        db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+    )
+    try:
+        return MetricViewsManager(db, links_manager).get_for_asset(asset_id, ws_client)
+    except MetricViewNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except Exception:
+        logger.exception("Failed to read the metric view of asset %s", asset_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to read the metric view",
         )
 
 

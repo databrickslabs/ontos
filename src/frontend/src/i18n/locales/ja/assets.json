@@ -149,6 +149,11 @@
       "relationships": "関係",
       "lineage": "リネージ",
       "impact": "影響分析"
+    },
+    "metricView": {
+      "title": "メトリックビュー",
+      "loading": "メトリックビューを読み込み中",
+      "loadError": "メトリックビューの定義を読み込めませんでした。"
     }
   },
   "explorer": {

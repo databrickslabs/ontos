@@ -155,7 +155,17 @@
       "yaml": "Définition YAML",
       "materialization": "Matérialisation",
       "materializationSummary_one": "{{schedule}}, {{count}} vue matérialisée",
-      "materializationSummary_other": "{{schedule}}, {{count}} vues matérialisées"
+      "materializationSummary_other": "{{schedule}}, {{count}} vues matérialisées",
+      "concepts": "Concepts",
+      "viewConcepts": "Concepts liés à la metric view",
+      "linkConcept": "Lier un concept",
+      "linkConceptTo": "Lier un concept à {{name}}",
+      "linked": "Concept lié à {{name}}.",
+      "unlinked": "Lien vers le concept supprimé.",
+      "linkError": "Le concept n'a pas pu être lié.",
+      "unlinkError": "Le lien vers le concept n'a pas pu être supprimé.",
+      "removedFields": "Champs liés qui ne sont plus dans la définition",
+      "removedFieldsHint": "Ces champs ont des liens vers des concepts mais ne sont plus dans la définition de la metric view. Les liens sont conservés ; supprimez-les s'ils ne s'appliquent plus."
     },
     "noPreviewAvailable": "Aucun aperçu ni définition disponible pour ce type d'actif, ou le contenu est encore en cours de chargement.",
     "messages": {

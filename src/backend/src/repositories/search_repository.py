@@ -272,6 +272,19 @@ def search(
     }
 
 
+def match_ids(
+    db: Session,
+    query: str,
+    *,
+    type_filter: Optional[str] = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+) -> List[str]:
+    """Document ids that ``search`` would match (same WHERE), unpaginated."""
+    where, params, _has_query = _where(query, type_filter, filters, None, allowed_ids_by_type)
+    return [r[0] for r in db.execute(text(f"SELECT id FROM search_documents{where}"), params)]
+
+
 def _row_to_item(row: Any) -> SearchIndexItem:
     """Reconstruct a full SearchIndexItem from a search_documents row (for the REST path)."""
     m = row._mapping

@@ -65,6 +65,9 @@ class ToolContext:
     caller: Optional["ToolCaller"] = None
     # Per-request memo for the read rules (src.tools.read_access).
     cache: Dict[str, Any] = field(default_factory=dict)
+    # The search and list tools' default ``visibility`` (src.tools.visibility):
+    # "published" for MCP, "readable" for Ask Ontos.
+    default_visibility: str = "published"
     data_products_manager: Optional[Any] = None
     data_contracts_manager: Optional[Any] = None
     semantic_models_manager: Optional[Any] = None

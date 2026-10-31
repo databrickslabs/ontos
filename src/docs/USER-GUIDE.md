@@ -3033,6 +3033,13 @@ POST /mcp
 > contracts only, and its tools that change data are refused.
 > `execute_sparql_query` is for semantic-models admins only.
 >
+> **Visibility.** The search and list tools (`search_*`, `list_*`, `global_search`,
+> `find_entities_by_concept`, `list_semantic_links`) take `visibility`:
+> `published` (active and published to the marketplace, the MCP default) or
+> `readable` (everything the caller may read, the Ask Ontos default). Searches
+> also take `min_certification_level` and `include_history` (default: the newest
+> version of each product or contract). Get-by-id tools are not affected.
+>
 > **Keyless MCP** (no `X-API-Key`, keyless default token enabled) is accepted only
 > with a forwarded user token; a request that carries only `X-Forwarded-Email` or
 > `X-Forwarded-User` is refused (`-32001`) and audited as `IDENTITY_REJECTED`.

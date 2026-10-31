@@ -8,6 +8,7 @@ import json
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
 from src.tools import read_access
+from src.tools import visibility as vis
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -347,7 +348,8 @@ class SearchDataContractsTool(BaseTool):
         "contracts; the response is always paginated and includes 'total_count', "
         "'has_more' and (by default) 'facets' so you can refine rather than fetch "
         "everything. Set include_facets=false to skip the facet block on cheap list "
-        "calls, or fields=['title','status'] to narrow each row."
+        "calls, or fields=['title','status'] to narrow each row. "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "query": {
@@ -382,6 +384,9 @@ class SearchDataContractsTool(BaseTool):
             "description": "Optional allowlist of result-row keys to keep (e.g. ['title','status']). "
                            "'id' is always included. Shrinks payload for 'then fetch details' flows.",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = ["query"]
     required_scope = "contracts:read"
@@ -396,6 +401,9 @@ class SearchDataContractsTool(BaseTool):
         offset: int = 0,
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Search data contracts over the shared in-memory index."""
         logger.info(
@@ -424,18 +432,28 @@ class SearchDataContractsTool(BaseTool):
                     data={"contracts": []},
                 )
 
+        search_filters = {"domain": domain, "status": status}
+        applied = vis.applied_visibility(ctx, visibility)
+        if applied is None:
+            return vis.invalid_visibility(visibility, **{"contracts": []})
+
         try:
             data = ctx.search_manager.query_index(
                 query,
                 type_filter="data-contract",
-                filters={"domain": domain, "status": status},
+                filters=search_filters,
                 limit=limit,
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
-                # The read rule, before pagination and facets.
-                allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, "data-contract"),
+                # The read rule and the visibility, before pagination and facets.
+                allowed_ids_by_type=vis.allowed_ids_by_type(
+                    ctx, "data-contract", visibility=applied,
+                    min_certification_level=min_certification_level,
+                    include_history=include_history, query=query, filters=search_filters,
+                ),
             )
+            vis.annotate(ctx, data["results"], default_type="data-contract")
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
             for r in data["results"]:
@@ -456,6 +474,7 @@ class SearchDataContractsTool(BaseTool):
                     "has_more": data["has_more"],
                     "facets": data["facets"],
                     "query": query,
+                    "visibility": applied,
                 },
             )
 
@@ -615,7 +634,8 @@ class ListDataContractsTool(BaseTool):
         "thin wrapper over search_data_contracts with query='*'; prefer search_data_contracts "
         "directly when you need relevance ranking, pagination offsets, facets, or a free-text "
         "query. The response shape matches search_data_contracts (contracts / total_found / "
-        "has_more / offset / limit / facets)."
+        "has_more / offset / limit / facets). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "domain": {
@@ -631,6 +651,9 @@ class ListDataContractsTool(BaseTool):
             "type": "integer",
             "description": "Maximum number of contracts to return (default: 50, max: 100)",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = []
     required_scope = "contracts:read"
@@ -641,6 +664,9 @@ class ListDataContractsTool(BaseTool):
         domain: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 50,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Delegate to search_data_contracts with query='*' so list / search / get
         collapse to a single implementation. The previous version returned a
@@ -654,6 +680,9 @@ class ListDataContractsTool(BaseTool):
             status=status,
             limit=limit,
             offset=0,
+            visibility=visibility,
+            min_certification_level=min_certification_level,
+            include_history=include_history,
         )
 
 

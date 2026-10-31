@@ -86,7 +86,12 @@ class TestContractToolsAreDbBacked:
             db=db_session, settings=MagicMock(), caller=ADMIN,
             data_contracts_manager=mgr, search_manager=search_manager,
         )
-        res = _run(ListDataContractsTool().execute(ctx))
+        # A draft, so visibility 'readable' (MCP defaults to published). Every
+        # version: the admin's no-filter path reads the index alone (building
+        # the index here ends the fixture's transaction, so the row is gone).
+        res = _run(ListDataContractsTool().execute(
+            ctx, visibility="readable", include_history=True
+        ))
         assert res.success is True
         assert created.id in {c["id"] for c in res.data["contracts"]}
 

@@ -169,3 +169,11 @@ def test_allowed_ids_apply_before_pagination_and_facets(seeded):
         "data-product": ["product::1", "product::unknown"], "data-contract": []})
     assert everything["total_count"] == 1
     assert everything["facets"]["type"] == {"data-product": 1}
+
+
+def test_match_ids_uses_the_search_where(seeded):
+    assert sorted(repo.match_ids(seeded, "*", type_filter="data-product")) == [
+        "product::1", "product::2"]
+    assert repo.match_ids(seeded, "churn") == ["product::1"]
+    assert repo.match_ids(seeded, "*", allowed_ids_by_type={"data-product": ["product::2"]},
+                          filters={"status": "draft"}) == ["product::2"]

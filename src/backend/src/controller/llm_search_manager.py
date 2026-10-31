@@ -420,6 +420,8 @@ class LLMSearchManager:
             costs_manager=self._costs_manager,
             search_manager=self._search_manager,
             caller=self._tool_caller,
+            # The chat shows what its user may read (drafts they own included).
+            default_visibility="readable",
         )
     
     def _get_latest_user_message(self, session: ConversationSession) -> str:

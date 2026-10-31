@@ -119,10 +119,11 @@ def world(db_session):
 
 
 def _ctx(world, caller):
+    # visibility 'readable' (the Ask Ontos default) is the read rule itself.
     return ToolContext(db=world.db, settings=MagicMock(), caller=caller,
                        data_products_manager=world.products,
                        data_contracts_manager=world.contracts,
-                       search_manager=world.search)
+                       search_manager=world.search, default_visibility='readable')
 
 
 # What each persona may read (keys of world.p / world.c).
@@ -469,7 +470,9 @@ class TestAllowList:
         res = _call(world, 'consumer', 'search_data_products', query='*')
         assert 'not-committed' not in {r['id'] for r in res.data['products']}
         assert res.data['total_found'] == 1
-        res = _call(world, 'admin', 'search_data_products', query='*')
+        # A feature admin reading every version keeps the no-filter path. (The
+        # default, one version per family, needs the rows, so it lists rows only.)
+        res = _call(world, 'admin', 'search_data_products', query='*', include_history=True)
         assert 'not-committed' in {r['id'] for r in res.data['products']}
 
 
@@ -749,6 +752,7 @@ class TestReadLevelThroughMcp:
         assert data['total_found'] == 0
 
         consumer = self._handler(world, monkeypatch, READ)
-        err, data = self._call(consumer, 'search_data_products', query='*')
+        err, data = self._call(consumer, 'search_data_products', query='*',
+                               visibility='readable')
         assert {p['id'] for p in data['products']} == {pub}
         assert self._call(consumer, 'get_data_product', product_id=pub)[0] is False

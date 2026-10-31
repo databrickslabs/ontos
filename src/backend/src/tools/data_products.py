@@ -9,6 +9,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
 from src.tools import read_access
+from src.tools import visibility as vis
 
 from src.common.logging import get_logger
 from src.controller import search_scoring
@@ -136,7 +137,8 @@ class SearchDataProductsTool(BaseTool):
         "includes 'total_count', 'has_more' and (by default) 'facets' so you can refine "
         "rather than fetch everything. Set include_facets=false to skip the facet block "
         "on cheap list calls, or fields=['title','status'] to narrow each row. Call "
-        "get_data_product for full details (output tables, ports)."
+        "get_data_product for full details (output tables, ports). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "query": {
@@ -171,6 +173,9 @@ class SearchDataProductsTool(BaseTool):
             "description": "Optional allowlist of result-row keys to keep (e.g. ['title','status']). "
                            "'id' is always included. Shrinks payload for 'then fetch details' flows.",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = ["query"]
     required_scope = "data-products:read"
@@ -185,6 +190,9 @@ class SearchDataProductsTool(BaseTool):
         offset: int = 0,
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Search data products over the shared in-memory index."""
         logger.info(
@@ -213,20 +221,30 @@ class SearchDataProductsTool(BaseTool):
                     data={"products": []},
                 )
 
+        search_filters = {"domains": domain, "status": status}
+        applied = vis.applied_visibility(ctx, visibility)
+        if applied is None:
+            return vis.invalid_visibility(visibility, **{"products": []})
+
         try:
             data = ctx.search_manager.query_index(
                 query,
                 type_filter="data-product",
                 # 'domains' = full assigned-domain set, so the filter matches ANY
                 # assigned domain exactly (not just the primary).
-                filters={"domains": domain, "status": status},
+                filters=search_filters,
                 limit=limit,
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
-                # The read rule, before pagination and facets.
-                allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, "data-product"),
+                # The read rule and the visibility, before pagination and facets.
+                allowed_ids_by_type=vis.allowed_ids_by_type(
+                    ctx, "data-product", visibility=applied,
+                    min_certification_level=min_certification_level,
+                    include_history=include_history, query=query, filters=search_filters,
+                ),
             )
+            vis.annotate(ctx, data["results"], default_type="data-product")
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
             for r in data["results"]:
@@ -248,6 +266,7 @@ class SearchDataProductsTool(BaseTool):
                     "has_more": data["has_more"],
                     "facets": data["facets"],
                     "query": query,
+                    "visibility": applied,
                 },
             )
 
@@ -635,7 +654,8 @@ class ListDataProductsTool(BaseTool):
         "thin wrapper over search_data_products with query='*'; prefer search_data_products "
         "directly when you need relevance ranking, pagination offsets, facets, or a free-text "
         "query. The response shape matches search_data_products (products / total_found / "
-        "has_more / offset / limit / facets)."
+        "has_more / offset / limit / facets). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "domain": {
@@ -651,6 +671,9 @@ class ListDataProductsTool(BaseTool):
             "type": "integer",
             "description": "Maximum number of products to return (default: 50, max: 100)",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = []
     required_scope = "data-products:read"
@@ -661,6 +684,9 @@ class ListDataProductsTool(BaseTool):
         domain: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 50,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Delegate to search_data_products with query='*' so the three overlapping
         entry points (search / list / get) collapse to a single implementation.
@@ -675,6 +701,9 @@ class ListDataProductsTool(BaseTool):
             status=status,
             limit=limit,
             offset=0,
+            visibility=visibility,
+            min_certification_level=min_certification_level,
+            include_history=include_history,
         )
 
 

@@ -48,6 +48,17 @@ class SearchBackend(ABC):
         type) applies before pagination and facets.
         """
 
+    def match_ids(
+        self,
+        query: str,
+        *,
+        type_filter: Optional[str] = None,
+        filters: Optional[Dict[str, Optional[str]]] = None,
+        allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+    ) -> List[str]:  # pragma: no cover - overridden
+        """Index ids that ``search`` would match, unpaginated (no result rows)."""
+        raise NotImplementedError
+
     @abstractmethod
     def search_items(self, query: str, *, limit: int = 200) -> List[SearchIndexItem]:
         """Ranked items for the REST path; the caller applies permission filtering."""
@@ -77,6 +88,13 @@ class InMemoryBackend(SearchBackend):
             type_filter=type_filter, filters=filters,
             limit=limit, offset=offset, include_facets=include_facets, fields=fields,
             allowed_ids_by_type=allowed_ids_by_type, allowed_features=allowed_features,
+        )
+
+    def match_ids(self, query, *, type_filter=None, filters=None,
+                  allowed_ids_by_type=None) -> List[str]:
+        return search_scoring.match_ids(
+            self._m.index, query, self._m.config, type_filter=type_filter, filters=filters,
+            allowed_ids_by_type=allowed_ids_by_type,
         )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:
@@ -110,6 +128,15 @@ class PostgresBackend(SearchBackend):
                 db, query, type_filter=type_filter, filters=filters,
                 allowed_features=allowed_features, limit=limit, offset=offset,
                 include_facets=include_facets, fields=fields,
+                allowed_ids_by_type=allowed_ids_by_type,
+            )
+
+    def match_ids(self, query, *, type_filter=None, filters=None,
+                  allowed_ids_by_type=None) -> List[str]:
+        from src.repositories import search_repository
+        with self._session_factory() as db:
+            return search_repository.match_ids(
+                db, query, type_filter=type_filter, filters=filters,
                 allowed_ids_by_type=allowed_ids_by_type,
             )
 

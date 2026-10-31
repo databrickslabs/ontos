@@ -7,10 +7,19 @@ Tools for searching, creating, updating, and deleting data contracts.
 import json
 from typing import Any, Dict, List, Optional
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.tools.base import (
+    BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
+)
 
 logger = get_logger(__name__)
+
+
+# The update tool's answer to a sunset_date that isn't YYYY-MM-DD
+INVALID_SUNSET_DATE = "Invalid sunset_date: expected YYYY-MM-DD"
+INVALID_SUNSET_DATE_CODE = "sunset_date_invalid"
 
 
 def _original_id_from_props(custom_properties) -> Optional[str]:
@@ -225,6 +234,21 @@ class UpdateDataContractTool(BaseTool):
                 "only an allowed transition, and status change workflows can block it."
             ),
             "enum": ["draft", "active", "deprecated"]
+        },
+        "deprecation_reason": {
+            "type": "string",
+            "description": "Why the contract is deprecated (required with status deprecated)"
+        },
+        "sunset_date": {
+            "type": "string",
+            "description": (
+                "Date the contract stops being supported, YYYY-MM-DD "
+                "(with status deprecated; not in the past)"
+            )
+        },
+        "replacement_id": {
+            "type": "string",
+            "description": "ID of the contract that replaces it (with status deprecated)"
         }
     }
     required_params = ["contract_id"]
@@ -236,7 +260,10 @@ class UpdateDataContractTool(BaseTool):
         contract_id: str,
         domain: Optional[str] = None,
         description: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        deprecation_reason: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> ToolResult:
         """Update an existing data contract."""
         logger.info(f"[update_data_contract] Starting - contract_id={contract_id}, domain={domain}, status={status}")
@@ -271,12 +298,31 @@ class UpdateDataContractTool(BaseTool):
                         success=False,
                         error=f"Data contract '{contract_id}' not found"
                     )
-                if (current.status or 'draft').lower() != status.lower():
+                current_status = (current.status or 'draft').lower()
+                if current_status != status.lower():
+                    from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
+                    allowed = DATA_CONTRACT_TRANSITIONS.get(current_status)
+                    # A status outside the map allows any transition, as in the manager
+                    if allowed is not None and status.lower() not in allowed:
+                        return ToolResult(
+                            success=False,
+                            **invalid_transition(current_status, status.lower(), allowed),
+                        )
+                    try:
+                        deprecation = deprecation_details_from_strings(
+                            deprecation_reason, sunset_date, replacement_id
+                        )
+                    except ValueError:
+                        return ToolResult(
+                            success=False, error=INVALID_SUNSET_DATE,
+                            error_code=INVALID_SUNSET_DATE_CODE,
+                        )
                     updated = ctx.data_contracts_manager.transition_status(
                         db=ctx.db,
                         contract_id=contract_id,
                         new_status=status.lower(),
                         current_user=None,
+                        deprecation=deprecation,
                     )
                 else:
                     updated = current
@@ -303,13 +349,20 @@ class UpdateDataContractTool(BaseTool):
                     "success": True,
                     "contract_id": updated.id,
                     "name": updated.name,
-                    "domain": updated.domain,
+                    # A status-only change returns the DB row, which has no `domain`
+                    "domain": getattr(updated, 'domain', None),
                     "status": updated.status,
                     "message": f"Contract '{updated.name}' updated successfully.",
                     "url": f"/data-contracts/{updated.id}"
                 }
             )
             
+        except CodedValueError as err:
+            # An expected, app-written error (a deprecation the details don't allow,
+            # a status change a workflow blocks): no SQL or internal text, so its
+            # message and code go to the client, like the API's coded 400.
+            # Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code or None)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("update_data_contract", e))
 

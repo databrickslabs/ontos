@@ -78,6 +78,19 @@ const SKIP_KEYS = new Set([
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
 
+/**
+ * A requested deprecation carries its replacement's name next to its id: the
+ * approver sees the name, and the id only when there is no name. Pure.
+ */
+export function withReplacementName(fullPayload: Record<string, unknown>): Record<string, unknown> {
+  const { replacement_name: name, ...rest } = fullPayload;
+  if (typeof name === 'string' && name && rest.replacement_id) {
+    const { replacement_id: _id, ...others } = rest;
+    return { ...others, replacement_name: name };
+  }
+  return rest;
+}
+
 interface DetailRow {
   label: string;
   value: React.ReactNode;
@@ -187,7 +200,7 @@ function buildDetailRows(
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
       'definition', 'concept_type', 'source_context', 'source_label',
     ]);
-    for (const [key, val] of Object.entries(payload.full_payload)) {
+    for (const [key, val] of Object.entries(withReplacementName(payload.full_payload))) {
       if (key.startsWith('_')) continue;
       if (SKIP_KEYS.has(key)) continue;
       if (alreadySurfaced.has(key)) continue;

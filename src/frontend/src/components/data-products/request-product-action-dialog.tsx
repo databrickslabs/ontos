@@ -14,6 +14,12 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
 import AccessRequestFields from '@/components/access/access-request-fields';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
+import DeprecationFields, {
+  DeprecationValues,
+  EMPTY_DEPRECATION,
+  deprecationPayload,
+  requestedDeprecationPayload,
+} from '@/components/common/deprecation-fields';
 
 type RequestType = 'access' | 'review' | 'publish' | 'certify' | 'status_change';
 
@@ -115,6 +121,7 @@ export default function RequestProductActionDialog({
   const [message, setMessage] = useState('');
   const [justification, setJustification] = useState('');
   const [targetStatus, setTargetStatus] = useState('');
+  const [deprecation, setDeprecation] = useState<DeprecationValues>(EMPTY_DEPRECATION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number>(30);
@@ -153,6 +160,7 @@ export default function RequestProductActionDialog({
       setMessage('');
       setJustification('');
       setTargetStatus('');
+      setDeprecation(EMPTY_DEPRECATION);
       setError(null);
       setSelectedDuration(30);
       setCertificationLevel(null);
@@ -261,6 +269,14 @@ export default function RequestProductActionDialog({
         setError(t('data-products:requestAction.validation.targetStatusRequired'));
         return false;
       }
+      if (
+        canDirectStatusChange &&
+        targetStatus === 'deprecated' &&
+        !deprecation.deprecationReason.trim()
+      ) {
+        setError(t('common:deprecation.reasonRequired'));
+        return false;
+      }
       // Justification is only required for approval requests, not direct changes
       if (!canDirectStatusChange) {
         if (!justification.trim()) {
@@ -317,12 +333,16 @@ export default function RequestProductActionDialog({
       };
     } else if (type === 'status_change') {
       if (canDirectStatusChange) {
-        return { new_status: targetStatus };
+        return {
+          new_status: targetStatus,
+          ...(targetStatus === 'deprecated' ? deprecationPayload(deprecation) : {}),
+        };
       }
       return {
         target_status: targetStatus,
         justification: justification.trim(),
         current_status: productStatus,
+        ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
       };
     }
     return null;
@@ -384,6 +404,7 @@ export default function RequestProductActionDialog({
       setMessage('');
       setJustification('');
       setTargetStatus('');
+      setDeprecation(EMPTY_DEPRECATION);
       setCertificationLevel(null);
       setPublicationScope('organization');
       // keepOpen: sent from the wizard's completion; onSuccess (which reloads
@@ -580,7 +601,7 @@ export default function RequestProductActionDialog({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {config.icon}
@@ -676,6 +697,17 @@ export default function RequestProductActionDialog({
                 )}
               </div>
 
+              {targetStatus === 'deprecated' && (
+                <DeprecationFields
+                  entityType="data_product"
+                  entityId={productId}
+                  value={deprecation}
+                  onChange={setDeprecation}
+                  disabled={submitting}
+                  hideReason={!canDirectStatusChange}
+                />
+              )}
+
               {/* Justification - only for approval requests */}
               {!canDirectStatusChange && (
                 <div className="space-y-2">
@@ -690,6 +722,7 @@ export default function RequestProductActionDialog({
                   />
                   <div className="text-xs text-muted-foreground">
                     {t('data-products:requestAction.hints.justificationMinChars')}
+                    {targetStatus === 'deprecated' && ` ${t('common:deprecation.requestHint')}`}
                   </div>
                 </div>
               )}

@@ -8,9 +8,13 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller import search_scoring
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.controller.lifecycle_fields import deprecation_details_from_strings
+from src.tools.base import (
+    BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
+)
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -118,6 +122,11 @@ def _serialize_product(product) -> Dict[str, Any]:
     }
 
 logger = get_logger(__name__)
+
+
+# The update tool's answer to a sunset_date that isn't YYYY-MM-DD
+INVALID_SUNSET_DATE = "Invalid sunset_date: expected YYYY-MM-DD"
+INVALID_SUNSET_DATE_CODE = "sunset_date_invalid"
 
 
 class SearchDataProductsTool(BaseTool):
@@ -385,6 +394,21 @@ class UpdateDataProductTool(BaseTool):
                 "only an allowed transition, and status change workflows can block it."
             ),
             "enum": ["draft", "active", "deprecated"]
+        },
+        "deprecation_reason": {
+            "type": "string",
+            "description": "Why the product is deprecated (required with status deprecated)"
+        },
+        "sunset_date": {
+            "type": "string",
+            "description": (
+                "Date the product stops being supported, YYYY-MM-DD "
+                "(with status deprecated; not in the past)"
+            )
+        },
+        "replacement_id": {
+            "type": "string",
+            "description": "ID of the product that replaces it (with status deprecated)"
         }
     }
     required_params = ["product_id"]
@@ -396,7 +420,10 @@ class UpdateDataProductTool(BaseTool):
         product_id: str,
         domain: Optional[str] = None,
         description: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        deprecation_reason: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> ToolResult:
         """Update an existing data product."""
         logger.info(f"[update_data_product] Starting - product_id={product_id}, domain={domain}, status={status}")
@@ -430,8 +457,27 @@ class UpdateDataProductTool(BaseTool):
                         error=f"Data product '{product_id}' not found"
                     )
                 current_status = getattr(current.status, 'value', current.status) or 'draft'
-                if str(current_status).lower() != status.lower():
-                    ctx.data_products_manager.transition_status(product_id, status)
+                current_status = str(current_status).lower()
+                if current_status != status.lower():
+                    from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
+                    allowed = DATA_PRODUCT_TRANSITIONS.get(current_status, [])
+                    if status.lower() not in allowed:
+                        return ToolResult(
+                            success=False,
+                            **invalid_transition(current_status, status.lower(), allowed),
+                        )
+                    try:
+                        deprecation = deprecation_details_from_strings(
+                            deprecation_reason, sunset_date, replacement_id
+                        )
+                    except ValueError:
+                        return ToolResult(
+                            success=False, error=INVALID_SUNSET_DATE,
+                            error_code=INVALID_SUNSET_DATE_CODE,
+                        )
+                    ctx.data_products_manager.transition_status(
+                        product_id, status, deprecation=deprecation,
+                    )
 
             # Update the product
             if update_data:
@@ -463,6 +509,12 @@ class UpdateDataProductTool(BaseTool):
                 }
             )
             
+        except CodedValueError as err:
+            # An expected, app-written error (a deprecation the details don't allow,
+            # a status change a workflow blocks): no SQL or internal text, so its
+            # message and code go to the client, like the API's coded 400.
+            # Anything else stays generic (tool_failure).
+            return ToolResult(success=False, error=str(err), error_code=err.code or None)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("update_data_product", e))
 

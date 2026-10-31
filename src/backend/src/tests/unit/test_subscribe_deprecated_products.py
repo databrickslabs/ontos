@@ -27,6 +27,7 @@ from src.controller.data_products_manager import (
     DataProductsManager,
     ProductNotSubscribableError,
 )
+from src.controller.lifecycle_fields import DeprecationDetails
 from src.db_models.data_products import DataProductDb
 
 SUBSCRIBER = 'sub@example.com'
@@ -142,7 +143,13 @@ class TestSubscriberNotices:
         db_session.get(DataProductDb, product_id).status = old_status
         db_session.commit()
 
-        manager.transition_status(product_id, new_status, current_user='owner@example.com')
+        # Deprecating needs a reason (#1042)
+        deprecation = (
+            DeprecationDetails(reason='Replaced by v2') if new_status == 'deprecated' else None
+        )
+        manager.transition_status(
+            product_id, new_status, current_user='owner@example.com', deprecation=deprecation,
+        )
 
         (notification,) = _sent(notifications)
         assert notification.recipient == SUBSCRIBER

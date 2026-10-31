@@ -3719,8 +3719,33 @@ class WorkflowExecutor:
         search_manager = get_app_state_manager('search_manager')
         if search_manager:
             manager.set_search_manager(search_manager)
+        # A requested deprecation uses the request's justification as its
+        # reason, as handle-status-change does
+        # (and its sunset date and replacement, when the requester gave them)
+        from src.controller.lifecycle_fields import (
+            audit_approved_lifecycle_change, deprecation_details_from_strings,
+            requested_deprecation,
+        )
+        logged_request_id, deprecation = requested_deprecation(
+            self._db, 'data_product', product_id, target_status
+        )
+        entity_data = trigger_context.entity_data or {}
+        request_id = entity_data.get('request_id') or logged_request_id
+        if entity_data.get('justification'):
+            try:
+                deprecation = deprecation_details_from_strings(
+                    entity_data.get('justification'),
+                    entity_data.get('sunset_date') or (
+                        deprecation.sunset_date.isoformat() if deprecation.sunset_date else None
+                    ),
+                    entity_data.get('replacement_id') or deprecation.replacement_id,
+                )
+            except ValueError:
+                deprecation.reason = entity_data.get('justification')
         try:
-            manager.transition_status(product_id, target_status, responded_by)
+            manager.transition_status(
+                product_id, target_status, responded_by, deprecation=deprecation,
+            )
         except ValueError as e:
             logger.warning(
                 "Approved status change of data product %s to '%s' could not be applied: %s",
@@ -3737,6 +3762,10 @@ class WorkflowExecutor:
                 error=e,
             )
             return
+        audit_approved_lifecycle_change(
+            self._db, 'data_product', product_id, current_status, target_status,
+            request_id, responded_by,
+        )
         logger.info(
             "Data product %s moved to '%s' after its status change request was approved",
             product_id, target_status,

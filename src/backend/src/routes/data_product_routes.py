@@ -433,18 +433,21 @@ async def unpublish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
+        was_published = (product_db.publication_scope or "none").lower() != "none"
         product_db.publication_scope = "none"
         product_db.published_at = None
         product_db.published_by = None
         db.add(product_db)
         db.commit()
 
-        get_trigger_registry(db).on_unpublish(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            user_email=current_user.username,
-        )
+        # Same rule as set-publication-scope: unpublish workflows run only on a real change
+        if was_published:
+            get_trigger_registry(db).on_unpublish(
+                EntityType.DATA_PRODUCT,
+                product_id,
+                entity_name=product_db.name,
+                user_email=current_user.username,
+            )
 
         audit_manager.log_action(
             db=db,

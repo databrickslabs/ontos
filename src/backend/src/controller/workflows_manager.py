@@ -7,7 +7,7 @@ Manages CRUD operations and loading of default workflows from YAML.
 import json
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 import yaml
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -316,6 +316,40 @@ class WorkflowsManager:
     def delete_workflow(self, workflow_id: str) -> bool:
         """Delete a workflow (non-default only)."""
         return process_workflow_repo.delete(self._db, workflow_id)
+
+    def policy_reference_errors(self, steps: Iterable[Any]) -> List[CodedMessage]:
+        """Errors for ``policy_check`` steps whose policy doesn't exist.
+
+        An active workflow with such a step fails at run time ("Policy not
+        found") on every event it handles, so it can't be activated. A step
+        with no ``policy_id`` (a template still to be configured) counts too.
+        """
+        checks = [
+            (step.step_id, ((step.config or {}).get('policy_id') or '').strip())
+            for step in steps
+            if step.step_type == StepType.POLICY_CHECK
+        ]
+        if not checks:
+            return []
+        from src.db_models.compliance import CompliancePolicyDb
+
+        wanted = {policy_id for _, policy_id in checks if policy_id}
+        found = set()
+        if wanted:
+            found = {
+                row[0] for row in
+                self._db.query(CompliancePolicyDb.id)
+                .filter(CompliancePolicyDb.id.in_(wanted)).all()
+            }
+        return [
+            CodedMessage(
+                f"Step '{step_id}': the policy to check "
+                + (f"'{policy_id}' does not exist" if policy_id else "is not selected"),
+                'policy_check_policy_missing', step=step_id, policyId=policy_id,
+            )
+            for step_id, policy_id in checks
+            if policy_id not in found
+        ]
 
     def toggle_active(
         self,

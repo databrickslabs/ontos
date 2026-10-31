@@ -17,6 +17,7 @@ def _publish(entity_type, status, config=None, registry=None, **published):
     db = MagicMock()
     entity = SimpleNamespace(
         name='E', status=status, publication_scope='none', published_at=None, published_by=None,
+        output_ports=[],
     )
     for name, value in published.items():
         setattr(entity, name, value)

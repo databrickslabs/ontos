@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.common.api_errors import CodedValueError
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_contracts import DataContractDb
@@ -94,6 +95,50 @@ def test_publishing_a_product_fires_on_publish_once(db_session, registry):
     )
 
 
+def test_changing_the_scope_keeps_who_published_and_when(db_session, registry):
+    product = _product(db_session, contract_id=_contract(db_session).id)
+    manager = DataProductsManager(db=db_session)
+
+    manager.set_publication_scope(product.id, 'organization', 'alice@example.com')
+    db_session.refresh(product)
+    published_at = product.published_at
+
+    manager.set_publication_scope(product.id, 'domain', 'bob@example.com')
+
+    db_session.refresh(product)
+    assert product.publication_scope == 'domain'
+    assert product.published_by == 'alice@example.com'
+    assert product.published_at == published_at
+
+
+def test_publishing_again_after_unpublishing_stamps_the_new_publication(db_session, registry):
+    product = _product(db_session, contract_id=_contract(db_session).id)
+    manager = DataProductsManager(db=db_session)
+
+    manager.set_publication_scope(product.id, 'organization', 'alice@example.com')
+    manager.set_publication_scope(product.id, 'none', 'alice@example.com')
+    manager.set_publication_scope(product.id, 'domain', 'bob@example.com')
+
+    db_session.refresh(product)
+    assert product.published_by == 'bob@example.com'
+
+
+def test_refused_publication_errors_carry_a_code(db_session, registry):
+    no_contract = _product(db_session)
+    draft = _product(db_session, contract_id=_contract(db_session, status='draft').id)
+    manager = DataProductsManager(db=db_session)
+
+    with pytest.raises(CodedValueError) as missing:
+        manager.set_publication_scope(no_contract.id, 'organization')
+    with pytest.raises(CodedValueError) as unapproved:
+        manager.set_publication_scope(draft.id, 'organization')
+
+    assert missing.value.code == 'output_port_contracts_missing'
+    assert missing.value.params == {'ports': 'orders'}
+    assert unapproved.value.code == 'output_port_contracts_unapproved'
+    assert 'orders -> c (status: draft)' in unapproved.value.params['ports']
+
+
 def test_unpublishing_a_product_fires_on_unpublish_only_when_it_was_published(
     db_session, registry
 ):
@@ -113,6 +158,21 @@ def test_unpublishing_a_product_fires_on_unpublish_only_when_it_was_published(
 
 def _contracts_manager():
     return DataContractsManager(data_dir=Path('/tmp'))
+
+
+def test_changing_the_scope_of_a_contract_keeps_who_published_and_when(db_session, registry):
+    contract = _contract(db_session)
+    manager = _contracts_manager()
+
+    manager.set_publication_scope(db_session, contract.id, 'organization', 'bob@example.com')
+    db_session.refresh(contract)
+    published_at = contract.published_at
+    manager.set_publication_scope(db_session, contract.id, 'domain', 'carol@example.com')
+
+    db_session.refresh(contract)
+    assert contract.publication_scope == 'domain'
+    assert contract.published_by == 'bob@example.com'
+    assert contract.published_at == published_at
 
 
 def test_draft_contract_is_not_published(db_session, registry):

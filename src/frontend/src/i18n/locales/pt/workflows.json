@@ -310,6 +310,7 @@
       "duplicateStepIds": "Duas etapas têm o mesmo ID.",
       "stepUnknownReference": "A etapa \"{{step}}\" aponta o ramo de {{branch}} para \"{{target}}\", que não está no workflow.",
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
+      "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
@@ -486,6 +487,8 @@
     "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
     "stepErrors": {
       "approval_rejected": "Solicitação negada",
+      "output_port_contracts_missing": "Não é possível publicar: as portas de saída {{ports}} precisam ter contratos de dados atribuídos",
+      "output_port_contracts_unapproved": "Não é possível publicar: estas portas de saída têm contratos não aprovados: {{ports}}. Os contratos precisam ser aprovados primeiro.",
       "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
       "rule_entity_not_found": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada"
     },
@@ -527,6 +530,7 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nenhuma política selecionada",
+    "policyHint": "Sugerida: {{name}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Não definido",
     "connectionLabel": "Conexão: {{name}}",

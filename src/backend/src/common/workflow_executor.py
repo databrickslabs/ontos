@@ -2410,13 +2410,24 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        if scope != 'none' and resolved_type == 'data_product':
+            # The same rule as set_publication_scope: every output port needs an
+            # approved / active contract (approval can come after the contract changed)
+            from src.common.output_port_contracts import validate_output_port_contracts
+            from src.common.api_errors import CodedValueError
+            try:
+                validate_output_port_contracts(db_entity, self._db)
+            except CodedValueError as e:
+                return _rule_step_error(e)
         was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = scope
         if scope == 'none':
             # Unpublishing: clear the publication metadata, as unpublish does
             db_entity.published_at = None
             db_entity.published_by = None
-        else:
+        elif not was_published:
+            # Only a real unpublished -> published change is stamped; a scope
+            # change keeps who published it and when
             db_entity.published_at = datetime.now(timezone.utc)
             db_entity.published_by = context.user_email
         self._db.add(db_entity)

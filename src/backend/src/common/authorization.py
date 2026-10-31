@@ -1,6 +1,8 @@
+import hmac
 from typing import Optional, Dict, List
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader
 
 from src.controller.authorization_manager import AuthorizationManager
 from src.models.users import UserInfo
@@ -827,3 +829,51 @@ class ApprovalChecker:
         except Exception as e:
             logger.error("Unexpected error during approval check for '%s'", self.entity.value, exc_info=True)
             raise HTTPException(status_code=500, detail="Error checking approval privileges")
+
+
+# --- Demo-data routes: settings admin OR optional setup token ---
+
+DEMO_SETUP_TOKEN_HEADER = "X-Demo-Setup-Token"
+
+# Declared as a security scheme so Swagger "Authorize" can send the token.
+demo_setup_token_scheme = APIKeyHeader(
+    name=DEMO_SETUP_TOKEN_HEADER,
+    auto_error=False,
+    description=(
+        "Optional setup token (the DEMO_SETUP_TOKEN app setting). Accepted instead of the "
+        "settings-general ADMIN permission on the demo-data load/clear routes."
+    ),
+)
+
+
+def is_valid_demo_setup_token(provided: Optional[str], configured: Optional[str]) -> bool:
+    """Constant-time check of a presented token. Always False when no token is configured."""
+    if not configured or not provided:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))
+
+
+async def require_demo_admin_or_setup_token(
+    request: Request,
+    setup_token: Optional[str] = Depends(demo_setup_token_scheme),
+    settings: Settings = Depends(get_settings),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+) -> None:
+    """Allow the call for a ``settings-general`` ADMIN, or for a valid ``DEMO_SETUP_TOKEN``.
+
+    A presented token that is wrong, or presented while ``DEMO_SETUP_TOKEN`` is unset, does
+    not grant access; the request then falls through to the admin check (403 for non-admins).
+    The token value is never logged.
+    """
+    if is_valid_demo_setup_token(setup_token, settings.DEMO_SETUP_TOKEN):
+        logger.info(
+            "Demo-data access granted by setup token for '%s'",
+            user_details.user or user_details.email,
+        )
+        return
+    if setup_token:
+        logger.warning("Demo-data setup token rejected or not configured")
+    await PermissionChecker("settings-general", FeatureAccessLevel.ADMIN)(
+        request, user_details, auth_manager
+    )

@@ -165,6 +165,12 @@ class Settings(BaseSettings):
     # SECURITY: Leave UNSET in production. The feature is fully disabled when None.
     TEST_USER_TOKEN: Optional[str] = Field(None, env='TEST_USER_TOKEN')
 
+    # Optional setup token for the demo-data load/clear routes. When set, a request
+    # carrying it in the X-Demo-Setup-Token header is accepted instead of the settings-general
+    # ADMIN check (this is what Swagger "Authorize" sends). Unset = token path disabled.
+    # SECURITY: treat as a secret; never logged.
+    DEMO_SETUP_TOKEN: Optional[str] = Field(None, env='DEMO_SETUP_TOKEN')
+
     # LLM Configuration
     LLM_ENABLED: bool = Field(False, env='LLM_ENABLED')
     LLM_ENDPOINT: Optional[str] = Field(None, env='LLM_ENDPOINT')  # Databricks serving endpoint name (e.g., 'databricks-claude-sonnet-4-5')

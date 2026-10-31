@@ -85,6 +85,7 @@ DB_POOL_TIMEOUT=10
 | `LOG_FILE` | Path to log file | `/path/to/app.log` | No |
 | `APP_AUDIT_LOG_DIR` | Directory within `DATABRICKS_VOLUME` for audit logs | `audit_logs` | Yes |
 | `APP_ADMIN_DEFAULT_GROUPS` | JSON array of Databricks groups for default Admin role | `["admins", "superusers"]` | No |
+| `DEMO_SETUP_TOKEN` | Secret that lets a caller load or clear demo data via the `X-Demo-Setup-Token` header instead of the Admin permission. Leave unset to disable | `a-long-random-value` | No |
 | `APP_DEMO_MODE` | Enable demo mode (loads sample data on startup) | `False` | No |
 | `APP_DB_DROP_ON_START` | **DANGER:** Drop and recreate database on startup | `False` | No |
 | `APP_DB_ECHO` | Log SQLAlchemy SQL statements (debugging) | `False` | No |

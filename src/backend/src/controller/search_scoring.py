@@ -364,6 +364,7 @@ def search_index(
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
     allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+    allowed_features: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Search/list index items for MCP tools: paginated, faceted, filtered.
 
@@ -375,6 +376,8 @@ def search_index(
     - ``fields=[...]`` narrows each result row to the requested keys plus
       ``id``, so an agent in a "then fetch details" flow doesn't pay for
       description/tags/owner on every call.
+    - ``allowed_features``: when given, only items of these features (as the
+      Postgres backend and ``/api/search``).
     - ``allowed_ids_by_type`` (index type -> index ids): an item of a listed
       type is kept only when its id is listed (e.g. the products the caller may
       read). Applied with the filters, so dropped items are in neither the page,
@@ -387,9 +390,11 @@ def search_index(
     offset = max(0, offset)
 
     allowed = {t: set(ids) for t, ids in (allowed_ids_by_type or {}).items()}
+    features = None if allowed_features is None else set(allowed_features)
     candidates = [
         it for it in items
         if (it.type not in allowed or it.id in allowed[it.type])
+        and (features is None or it.feature_id in features)
         and _passes_filters(it, type_filter, filters)
     ]
 

@@ -98,21 +98,24 @@ def _where(
     type_filter: Optional[str],
     filters: Optional[Dict[str, Optional[str]]],
     allowed_features: Optional[Iterable[str]],
-    exclude_ids: Optional[Iterable[str]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
 ) -> tuple[str, Dict[str, Any], bool]:
     """Build the shared WHERE clause + params. Returns (sql, params, has_query).
 
-    ``exclude_ids`` are document ids (``product::<id>``) left out of the
-    results, the counts and the facets alike.
+    ``allowed_ids_by_type`` (type -> document ids, ``product::<id>``): a
+    document of a listed type is kept only when its id is listed, in the
+    results, the counts and the facets alike. Each list is bound as one array
+    parameter (``id = ANY(:allowed_n)``), so its size doesn't change the
+    statement or hit a placeholder limit.
     """
     clauses: List[str] = []
     params: Dict[str, Any] = {}
     has_query = bool(query) and query.strip() not in ("", "*")
 
-    excluded = list(exclude_ids or [])
-    if excluded:
-        clauses.append("NOT (id = ANY(:exclude_ids))")
-        params["exclude_ids"] = excluded
+    for n, (doc_type, ids) in enumerate(sorted((allowed_ids_by_type or {}).items())):
+        clauses.append(f"(type <> :allowed_type_{n} OR id = ANY(:allowed_{n}))")
+        params[f"allowed_type_{n}"] = doc_type
+        params[f"allowed_{n}"] = list(ids)
 
     if type_filter:
         clauses.append("type = :type_filter")
@@ -229,12 +232,14 @@ def search(
     offset: int = 0,
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
-    exclude_ids: Optional[Iterable[str]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
 ) -> Dict[str, Any]:
     """Full-text search over search_documents; result shape matches search_scoring.search_index."""
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    where, params, has_query = _where(query, type_filter, filters, allowed_features, exclude_ids)
+    where, params, has_query = _where(
+        query, type_filter, filters, allowed_features, allowed_ids_by_type
+    )
 
     if has_query:
         sql = (

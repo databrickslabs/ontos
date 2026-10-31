@@ -63,6 +63,8 @@ class ToolContext:
     settings: Settings
     workspace_client: Optional[Any] = None
     caller: Optional["ToolCaller"] = None
+    # Per-request memo for the read rules (src.tools.read_access).
+    cache: Dict[str, Any] = field(default_factory=dict)
     data_products_manager: Optional[Any] = None
     data_contracts_manager: Optional[Any] = None
     semantic_models_manager: Optional[Any] = None
@@ -129,6 +131,8 @@ class ToolCaller:
     products_admin: bool = False
     contracts_admin: bool = False
     team_ids: set[str] = field(default_factory=set)
+    # Projects the caller is a member of; None = every project (admin groups).
+    project_ids: Optional[set[str]] = field(default_factory=set)
 
     def has_level(self, feature_id: str, required_level: FeatureAccessLevel) -> bool:
         if self.full_access:

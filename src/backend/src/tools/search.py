@@ -71,7 +71,7 @@ class GlobalSearchTool(BaseTool):
                 type_filter=type,
                 limit=limit,
                 offset=offset,
-                exclude_ids=read_access.hidden_item_ids(ctx, type),
+                allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, type),
             )
             logger.info(
                 f"[global_search] SUCCESS: returned {data['returned']} of {data['total_count']} matches"

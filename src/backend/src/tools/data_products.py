@@ -225,7 +225,7 @@ class SearchDataProductsTool(BaseTool):
                 include_facets=include_facets,
                 fields=fields,
                 # The read rule, before pagination and facets.
-                exclude_ids=read_access.hidden_item_ids(ctx, "data-product"),
+                allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, "data-product"),
             )
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.

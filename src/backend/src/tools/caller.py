@@ -69,7 +69,7 @@ async def resolve_tool_caller(
             logger.error("Could not resolve the teams of %s (auth path %s)", user.email,
                          auth_path, exc_info=True)
     project_ids: Any = set()
-    if db is not None and not products_admin:
+    if db is not None:
         try:
             project_ids = lookup_member_project_ids(db, user.email, groups)
         except Exception:

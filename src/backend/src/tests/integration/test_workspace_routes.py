@@ -5,6 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+# Imported at collection, before the conftest routes the module attribute to a mock:
+# the routes depend on this function, so it is the key a dependency override needs.
+from src.common.workspace_client import get_obo_workspace_client
+
 
 class TestWorkspaceRoutes:
     """Integration tests for workspace API endpoints."""
@@ -19,7 +23,6 @@ class TestWorkspaceRoutes:
         from types import SimpleNamespace
 
         from src.app import app
-        from src.common.workspace_client import get_obo_workspace_client
 
         mock_workspace_client.catalogs.list.return_value = [
             SimpleNamespace(name="main"), SimpleNamespace(name="sales"),

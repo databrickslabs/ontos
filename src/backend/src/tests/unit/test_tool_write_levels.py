@@ -533,3 +533,16 @@ class TestMcpChecksTheLevel:
         calls = _recording_tool(h, 'get_domain')
         _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
         assert calls[0].auth_path == 'mcp_api_key' and calls[0].email is None
+
+    def test_an_unexpected_method_error_has_no_exception_text(self, obo):
+        h = _mcp_handler({}, MagicMock())
+        from src.models.mcp import JSONRPCRequest
+
+        async def _boom(params):
+            raise RuntimeError('db password=hunter2')
+
+        h._handle_tools_list = _boom
+        resp = _run(h.handle(JSONRPCRequest(jsonrpc='2.0', id=1, method='tools/list')))
+        assert 'hunter2' not in resp.error.message
+        assert resp.error.message.startswith('The request failed with an unexpected error')
+        assert 'error id' in resp.error.message

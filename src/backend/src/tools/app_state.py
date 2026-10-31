@@ -172,6 +172,21 @@ class GetAppStateTool(BaseTool):
                 **tool_failure("get_app_state", e),
             )
 
+        # The totals count only what the caller may read (the read rules), so
+        # they don't reveal unreadable drafts. Published counts are public.
+        from src.tools import read_access
+
+        for key, kind in (("data_products_total", read_access.PRODUCT_TYPE),
+                          ("data_contracts_total", read_access.CONTRACT_TYPE)):
+            try:
+                ids = read_access.readable_ids(ctx, kind)
+            except Exception:
+                logger.warning("[get_app_state] read rule failed for %s; counting 0", kind,
+                               exc_info=True)
+                ids = set()
+            if ids is not None:
+                snapshot["counts"][key] = len(ids)
+
         logger.info(
             f"[get_app_state] mode={snapshot['adoption_mode']} "
             f"counts={snapshot['counts']}"

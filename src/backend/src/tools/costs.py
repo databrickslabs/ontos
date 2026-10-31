@@ -53,12 +53,12 @@ class GetDataProductCostsTool(BaseTool):
             items = query.all()
             # Costs of products the caller can't read are left out, so an
             # unreadable product_id is answered like one without costs.
-            prefix = read_access.PRODUCT_ITEM_PREFIX
-            hidden = {
-                i[len(prefix):] for i in read_access.hidden_item_ids(ctx, "data-product")
-            }
-            dropped = sorted({item.entity_id for item in items if item.entity_id in hidden})
-            items = [item for item in items if item.entity_id not in hidden]
+            readable = read_access.readable_ids(ctx, read_access.PRODUCT_TYPE)
+            if readable is not None:
+                dropped = sorted({i.entity_id for i in items if i.entity_id not in readable})
+                items = [item for item in items if item.entity_id in readable]
+            else:
+                dropped = []
             logger.debug(f"[get_data_product_costs] Found {len(items)} cost items in database")
             
             if not items:

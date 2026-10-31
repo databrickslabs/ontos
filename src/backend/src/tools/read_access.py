@@ -5,11 +5,18 @@ products and ``DataContractsManager.readable_contracts`` for data contracts,
 with the caller's facts resolved once per request in ``ctx.caller``. Without a
 caller a tool reads like a consumer: published items only.
 
+The filter is an allow-list: a product or contract (or anything that belongs to
+one: a contract's schemas and properties, its graph node) is returned only when
+its id is in the caller's readable set, computed from the committed rows. So an
+index entry or link whose row the caller can't see, for any reason, is left out.
+Feature admins skip the filter. The readable sets are kept in ``ctx.cache`` for
+the request.
+
 An item the caller can't read is answered like a missing one; the result's
 ``denied_reason`` (audit only) says it was the read rule.
 """
 
-from typing import Any, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from src.common.logging import get_logger
 from src.common.product_read_rule import can_read_product as _can_read_product_rule
@@ -20,8 +27,22 @@ logger = get_logger(__name__)
 NOT_READABLE = "not_readable"
 PRODUCT_ITEM_PREFIX = "product::"
 CONTRACT_ITEM_PREFIX = "contract::"
+PRODUCT_TYPE = "data-product"
+CONTRACT_TYPE = "data-contract"
 
 _ANONYMOUS = ToolCaller(email=None, auth_path="none")
+
+# Entity types (semantic links, tag assignments, cost items, graph nodes) and
+# the kind of row whose read rule applies. Schema and property ids are
+# ``<contract_id>#<schema>[#<property>]``.
+_KIND_BY_ENTITY_TYPE = {
+    "data_product": PRODUCT_TYPE,
+    "data_contract": CONTRACT_TYPE,
+    "data_contract_schema": CONTRACT_TYPE,
+    "data_contract_property": CONTRACT_TYPE,
+}
+_ITEM_PREFIX_BY_KIND = {PRODUCT_TYPE: PRODUCT_ITEM_PREFIX, CONTRACT_TYPE: CONTRACT_ITEM_PREFIX}
+_GRAPH_PREFIX = "urn:ontos:"
 
 
 def _caller(ctx: ToolContext) -> ToolCaller:
@@ -40,6 +61,7 @@ def can_read_product(ctx: ToolContext, product: Any) -> bool:
             caller_email=caller.email,
             caller_groups=caller.groups,
             caller_team_ids=caller.team_ids,
+            caller_project_ids=caller.project_ids,
         )
     except Exception:
         logger.exception("Product read rule failed for %s; denying", getattr(product, "id", None))
@@ -78,78 +100,94 @@ def can_read_contract(ctx: ToolContext, row: Any) -> bool:
         return False
 
 
-def hidden_item_ids(ctx: ToolContext, type_filter: Optional[str] = None) -> set:
-    """Search index ids (``product::<id>``, ``contract::<id>``) the caller can't read.
-
-    Passed to the search as ``exclude_ids`` so the rows are dropped before
-    pagination and facets.
-    """
-    hidden: set = set()
-    if type_filter in (None, "", "data-product"):
-        hidden |= _hidden_products(ctx)
-    if type_filter in (None, "", "data-contract"):
-        hidden |= _hidden_contracts(ctx)
-    return hidden
-
-
-def _hidden_products(ctx: ToolContext) -> set:
+def reads_all(ctx: ToolContext, kind: str) -> bool:
+    """Whether the caller reads every product (or contract): no filter at all."""
     caller = _caller(ctx)
-    if caller.full_access or caller.products_admin:
-        return set()
-    from src.common.product_read_rule import is_published_product
-    from src.db_models.data_products import DataProductDb
-
-    rows = ctx.db.query(DataProductDb).all()
-    return {
-        f"{PRODUCT_ITEM_PREFIX}{r.id}"
-        for r in rows
-        if not is_published_product(r) and not can_read_product(ctx, r)
-    }
+    if caller.full_access:
+        return True
+    return caller.products_admin if kind == PRODUCT_TYPE else caller.contracts_admin
 
 
-def _hidden_contracts(ctx: ToolContext) -> set:
-    caller = _caller(ctx)
-    if caller.full_access or caller.contracts_admin:
-        return set()
-    from src.db_models.data_contracts import DataContractDb
+def readable_ids(ctx: ToolContext, kind: str) -> Optional[set]:
+    """Ids of the products (``data-product``) or contracts the caller may read.
 
-    rows = ctx.db.query(DataContractDb).all()
-    readable = {r.id for r in readable_contract_rows(ctx, rows)}
-    return {f"{CONTRACT_ITEM_PREFIX}{r.id}" for r in rows if r.id not in readable}
-
-
-# Entity types (semantic links, tag assignments, cost items) under a read rule.
-_ITEM_PREFIX_BY_ENTITY_TYPE = {
-    "data_product": PRODUCT_ITEM_PREFIX,
-    "data_contract": CONTRACT_ITEM_PREFIX,
-}
-
-
-def entity_is_unreadable(ctx: ToolContext, entity_type: str, entity_id: str) -> bool:
-    """True when the product or contract exists and the caller can't read it.
-
-    Other entity types, and ids that don't exist, are not under a read rule here.
+    ``None`` when the caller reads them all. Computed once per request.
     """
-    if entity_type == "data_product":
-        from src.db_models.data_products import DataProductDb
+    if reads_all(ctx, kind):
+        return None
+    key = f"readable_ids:{kind}"
+    if key not in ctx.cache:
+        if kind == PRODUCT_TYPE:
+            from src.db_models.data_products import DataProductDb
 
-        row = ctx.db.get(DataProductDb, entity_id)
-        return row is not None and not can_read_product(ctx, row)
-    if entity_type == "data_contract":
-        from src.db_models.data_contracts import DataContractDb
+            rows = ctx.db.query(DataProductDb).all()
+            ctx.cache[key] = {str(r.id) for r in rows if can_read_product(ctx, r)}
+        else:
+            from src.db_models.data_contracts import DataContractDb
 
-        row = ctx.db.get(DataContractDb, entity_id)
-        return row is not None and not can_read_contract(ctx, row)
-    return False
+            rows = ctx.db.query(DataContractDb).all()
+            ctx.cache[key] = {str(r.id) for r in readable_contract_rows(ctx, rows)}
+    return ctx.cache[key]
 
 
-def hidden_entity_keys(ctx: ToolContext) -> set:
-    """``(entity_type, entity_id)`` of every product and contract the caller can't read."""
-    hidden = hidden_item_ids(ctx)
-    keys = set()
-    for entity_type, prefix in _ITEM_PREFIX_BY_ENTITY_TYPE.items():
-        keys |= {(entity_type, i[len(prefix):]) for i in hidden if i.startswith(prefix)}
-    return keys
+def allowed_ids_by_type(ctx: ToolContext, type_filter: Optional[str] = None) -> Dict[str, set]:
+    """For the search: index type -> the index ids (``product::<id>``) the caller may see.
+
+    A type that is not in the dict is not filtered (other types, or a feature
+    admin). Passed to the search so the filter applies before pagination,
+    counts and facets.
+    """
+    allowed: Dict[str, set] = {}
+    for kind, prefix in _ITEM_PREFIX_BY_KIND.items():
+        if type_filter not in (None, "", kind):
+            continue
+        ids = readable_ids(ctx, kind)
+        if ids is not None:
+            allowed[kind] = {f"{prefix}{i}" for i in ids}
+    return allowed
+
+
+def owning_row(entity_type: str, entity_id: Any) -> Optional[Tuple[str, str]]:
+    """``(kind, row id)`` whose read rule applies to the entity, or None."""
+    kind = _KIND_BY_ENTITY_TYPE.get(str(entity_type or ""))
+    if kind is None or entity_id is None:
+        return None
+    row_id = str(entity_id)
+    if kind == CONTRACT_TYPE:
+        row_id = row_id.split("#", 1)[0]
+    return kind, row_id
+
+
+def entity_is_unreadable(ctx: ToolContext, entity_type: str, entity_id: Any) -> bool:
+    """True when the entity belongs to a product or contract the caller can't read.
+
+    Other entity types are not under a read rule here. An id without a
+    committed row the caller may read counts as unreadable (fail closed).
+    """
+    owner = owning_row(entity_type, entity_id)
+    if owner is None:
+        return False
+    kind, row_id = owner
+    ids = readable_ids(ctx, kind)
+    return ids is not None and row_id not in ids
+
+
+def graph_entity(iri: Any) -> Optional[Tuple[str, str]]:
+    """``(entity_type, entity_id)`` of an app-entity graph node (``urn:ontos:<type>:<id>``)."""
+    text = str(iri or "")
+    if not text.startswith(_GRAPH_PREFIX):
+        return None
+    entity_type, sep, entity_id = text[len(_GRAPH_PREFIX):].partition(":")
+    if not sep or entity_type not in _KIND_BY_ENTITY_TYPE or not entity_id:
+        return None
+    return entity_type, entity_id
+
+
+def iri_is_unreadable(ctx: ToolContext, iri: Any) -> bool:
+    """True for the graph node of a product or contract (or its schema/property) the
+    caller can't read."""
+    entity = graph_entity(iri)
+    return entity is not None and entity_is_unreadable(ctx, *entity)
 
 
 def denied(ctx: ToolContext, tool_name: str, result: ToolResult, ids: Iterable[str]) -> ToolResult:

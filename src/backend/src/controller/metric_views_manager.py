@@ -23,6 +23,18 @@ class MetricViewNotFoundError(CodedValueError):
     code = 'metric_view_not_found'
 
 
+class UserTokenRequiredError(CodedValueError):
+    """The request has no user (OBO) token to read Unity Catalog with."""
+
+    code = 'user_token_required'
+
+
+class UserClientUnavailableError(CodedValueError):
+    """The user's workspace client could not be built from their token."""
+
+    code = 'user_client_unavailable'
+
+
 def _uc_fqn(location: Optional[str]) -> Optional[str]:
     """``catalog.schema.name`` from an asset's location, or None when it isn't one."""
     parts = (location or '').strip().split('.')
@@ -38,6 +50,9 @@ class MetricViewsManager:
 
     def get_for_asset(self, asset_id: UUID, ws_client: Optional[WorkspaceClient]) -> MetricViewRead:
         """The metric view an asset points at (its ``location`` is the view's FQN).
+
+        ``ws_client`` is the requesting user's client, so Unity Catalog decides
+        whether they may read the definition.
 
         Raises ``MetricViewNotFoundError`` when the asset doesn't exist, isn't a
         Databricks asset with a ``catalog.schema.name`` location, or Unity

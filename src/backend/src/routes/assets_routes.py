@@ -11,7 +11,10 @@ from src.models.assets import (
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
 from src.controller.assets_manager import assets_manager
-from src.controller.metric_views_manager import MetricViewNotFoundError, MetricViewsManager
+from src.controller.metric_views_manager import (
+    MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
+)
+from src.common.workspace_client import get_obo_workspace_client
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.metric_views import MetricViewRead
 from src.common.authorization import PermissionChecker
@@ -21,7 +24,6 @@ from src.common.dependencies import (
     CurrentUserDep,
     AuditManagerDep,
     AuditCurrentUserDep,
-    WorkspaceClientDep,
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
@@ -569,6 +571,27 @@ def delete_asset(
         )
 
 
+def _user_workspace_client(request: Request):
+    """The workspace client of the requesting user, built from their OBO token.
+
+    Fails closed: ``get_obo_workspace_client`` falls back to the app's service
+    principal when the request has no ``x-forwarded-access-token``, so the token
+    is required here first, and a client that can't be built is an error rather
+    than a fallback.
+    """
+    if not request.headers.get('x-forwarded-access-token'):
+        raise UserTokenRequiredError(
+            "Reading Unity Catalog needs the user's Databricks token, and the request has none."
+        )
+    try:
+        return get_obo_workspace_client(request)
+    except Exception:
+        logger.warning("Could not build the user's workspace client", exc_info=True)
+        raise UserClientUnavailableError(
+            "The user's Databricks workspace client could not be created."
+        )
+
+
 @assets_router.get(
     "/{asset_id}/metric-view",
     response_model=MetricViewRead,
@@ -578,16 +601,25 @@ def get_asset_metric_view(
     request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
-    ws_client: WorkspaceClientDep,
     manager=Depends(get_assets_manager),
 ):
     """The Unity Catalog metric view behind an asset: its YAML, its dimensions and
     measures, and the concept links of the view and of each field.
 
-    404 (``metric_view_not_found``) when the asset isn't a metric view the app
-    can read. Readable by whoever can read the asset.
+    Unity Catalog is read as the user (on-behalf-of token), never as the app,
+    so the definition is only returned to users Unity Catalog lets read it.
+    403 ``user_token_required`` without the user's token, 503
+    ``user_client_unavailable`` when the user's client can't be built, 404
+    ``metric_view_not_found`` when the asset isn't a metric view the user can
+    read. The asset itself must be readable by the user.
     """
     _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    try:
+        ws_client = _user_workspace_client(request)
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except UserClientUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
     links_manager = SemanticLinksManager(
         db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
     )

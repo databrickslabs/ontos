@@ -10,6 +10,8 @@ import type { MetricViewDefinition } from '@/types/data-asset-review';
 // type once the Metric View asset type exists.
 const METRIC_VIEW_ASSET_TYPES = new Set(['View', 'Metric View']);
 
+type CardState = 'loading' | 'ready' | 'none' | 'noToken' | 'error';
+
 /** Whether an asset may be a Unity Catalog metric view, so its definition is worth asking for. */
 export function mayBeMetricView(
     asset: { asset_type_name?: string | null; platform?: string | null },
@@ -20,14 +22,15 @@ export function mayBeMetricView(
 
 /**
  * The metric view behind an asset: its dimensions and measures, and the
- * concepts linked to the view and to each field. Renders nothing when the
- * asset isn't a metric view (`metric_view_not_found`).
+ * concepts linked to the view and to each field, read from Unity Catalog as
+ * the user. Renders nothing when the asset isn't a metric view the user can
+ * read (`metric_view_not_found`).
  */
 export default function AssetMetricViewCard({ assetId }: { assetId: string }) {
     const { t } = useTranslation('assets');
     const { get } = useApi();
     const [definition, setDefinition] = useState<MetricViewDefinition | null>(null);
-    const [state, setState] = useState<'loading' | 'ready' | 'none' | 'error'>('loading');
+    const [state, setState] = useState<CardState>('loading');
 
     useEffect(() => {
         let cancelled = false;
@@ -38,6 +41,9 @@ export default function AssetMetricViewCard({ assetId }: { assetId: string }) {
             if (cancelled) return;
             if (res.errorCode === 'metric_view_not_found') {
                 setState('none');
+            } else if (res.errorCode === 'user_token_required') {
+                // Unity Catalog is read as the user: without their token nothing is read
+                setState('noToken');
             } else if (res.error || !res.data || typeof res.data.definition !== 'string') {
                 setState('error');
             } else {
@@ -63,6 +69,11 @@ export default function AssetMetricViewCard({ assetId }: { assetId: string }) {
                             aria-label={t('detail.metricView.loading')}
                         />
                     </div>
+                )}
+                {state === 'noToken' && (
+                    <p className="text-sm text-muted-foreground">
+                        {t('detail.metricView.userTokenRequired')}
+                    </p>
                 )}
                 {state === 'error' && (
                     <p className="text-sm text-muted-foreground">

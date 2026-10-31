@@ -153,7 +153,8 @@
     "metricView": {
       "title": "Metric view",
       "loading": "Loading the metric view",
-      "loadError": "The metric view definition could not be loaded."
+      "loadError": "The metric view definition could not be loaded.",
+      "userTokenRequired": "This metric view is read from Unity Catalog with your own access, and your Databricks sign-in isn't available in this session."
     }
   },
   "explorer": {

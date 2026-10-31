@@ -76,6 +76,19 @@ describe('AssetMetricViewCard', () => {
         await waitFor(() => expect(container).toBeEmptyDOMElement());
     });
 
+    it('says the user token is required instead of reading as the app', async () => {
+        getMock.mockResolvedValue({
+            data: {},
+            error: "Reading Unity Catalog needs the user's Databricks token.",
+            errorCode: 'user_token_required',
+        });
+        render(<AssetMetricViewCard assetId="a1" />);
+
+        expect(await screen.findByText(/read from Unity Catalog with your own access/))
+            .toBeInTheDocument();
+        expect(screen.queryByText(/could not be loaded/)).toBeNull();
+    });
+
     it('says when the definition could not be loaded, translated', async () => {
         getMock.mockResolvedValue({ data: {}, error: 'boom', errorCode: 'internal_error' });
         await i18n.changeLanguage('pt');

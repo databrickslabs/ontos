@@ -72,12 +72,11 @@ class InMemoryBackend(SearchBackend):
     def search(self, query, *, type_filter=None, filters=None, allowed_features=None,
                limit=25, offset=0, include_facets=True, fields=None,
                allowed_ids_by_type=None) -> Dict[str, Any]:
-        # allowed_features is unused in-memory (MCP is scope-based; REST uses search_items).
         return search_scoring.search_index(
             self._m.index, query, self._m.config,
             type_filter=type_filter, filters=filters,
             limit=limit, offset=offset, include_facets=include_facets, fields=fields,
-            allowed_ids_by_type=allowed_ids_by_type,
+            allowed_ids_by_type=allowed_ids_by_type, allowed_features=allowed_features,
         )
 
     def search_items(self, query, *, limit=200) -> List[SearchIndexItem]:

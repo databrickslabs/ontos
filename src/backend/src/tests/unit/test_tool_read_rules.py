@@ -33,16 +33,24 @@ from src.tools.registry import create_default_registry
 TEAM = 'team-owners'
 IRI = 'http://example.com/onto#Customer'
 
-CONSUMER = ToolCaller(email='carl@example.com', auth_path='test')
-OWNER = ToolCaller(email='sue@example.com', auth_path='test')
-MEMBER = ToolCaller(email='tom@example.com', auth_path='test', team_ids={TEAM})
+# Read-only on both features, as the default Data Consumer role.
+READ = {'data-products': FeatureAccessLevel.READ_ONLY,
+        'data-contracts': FeatureAccessLevel.READ_ONLY}
+CONSUMER = ToolCaller(email='carl@example.com', auth_path='test', permissions=READ)
+OWNER = ToolCaller(email='sue@example.com', auth_path='test', permissions=READ)
+MEMBER = ToolCaller(email='tom@example.com', auth_path='test', team_ids={TEAM},
+                    permissions=READ)
 ADMIN = ToolCaller(email='ann@example.com', auth_path='test',
                    products_admin=True, contracts_admin=True)
-POLICY = mcp_api_key_caller(SimpleNamespace(created_by='ann@example.com'))
+# No level on either feature, as the default Security Officer role or no role:
+# owning a draft doesn't help.
+NO_LEVEL = ToolCaller(email='sue@example.com', auth_path='test')
+POLICY = mcp_api_key_caller(SimpleNamespace(
+    created_by='ann@example.com', scopes=['data-products:read', 'contracts:read']))
 
 PERSONAS = {
     'consumer': CONSUMER, 'owner': OWNER, 'member': MEMBER, 'admin': ADMIN,
-    'no caller': None, 'api-key policy': POLICY,
+    'no caller': None, 'api-key policy': POLICY, 'no level': NO_LEVEL,
 }
 
 
@@ -123,8 +131,9 @@ READABLE = {
     'owner': {'published', 'own_draft'},
     'member': {'published', 'team_draft'},
     'admin': {'published', 'other_draft', 'own_draft', 'team_draft'},
-    'no caller': {'published'},
+    'no caller': set(),
     'api-key policy': {'published'},
+    'no level': set(),
 }
 
 
@@ -191,7 +200,7 @@ class TestByPersona:
         expected |= {world.c[k].id for k in READABLE[persona]}
         got = {r['id'].split('::')[-1] for r in res.data['results']}
         assert got == expected and res.data['total_count'] == len(expected)
-        assert sum(res.data['facets']['type'].values()) == len(expected)
+        assert sum(res.data['facets'].get('type', {}).values()) == len(expected)
 
     def test_semantic_links(self, world, persona):
         for rows, etype in ((world.p, 'data_product'), (world.c, 'data_contract')):
@@ -234,9 +243,9 @@ class TestByPersona:
         world.db.commit()
         res = _call(world, persona, 'get_data_product_costs')
         expected = {world.p[k].id for k in READABLE[persona]}
-        assert {p['product_id'] for p in res.data['products']} == expected
+        assert {p['product_id'] for p in res.data.get('products', [])} == expected
         total = _call(world, persona, 'get_data_product_costs', aggregate=True)
-        assert total.data['product_count'] == len(expected)
+        assert total.data.get('product_count', 0) == len(expected)
         hidden = world.p['other_draft']
         one = _call(world, persona, 'get_data_product_costs', product_id=hidden.id)
         if 'other_draft' in READABLE[persona]:
@@ -500,7 +509,7 @@ class TestOneQueryPerRequest:
         monkeypatch.setattr(projects_manager, 'is_user_project_member', _no_per_product_query)
 
         async def _levels(email, groups, request):
-            return {}
+            return dict(READ)
 
         async def _not_admin(**kwargs):
             return False
@@ -649,3 +658,97 @@ def test_app_state_published_count_follows_the_read_rule(world):
     counts = res.data['counts']
     assert counts['data_products_published'] == 1 <= counts['data_products_total']
     assert _call(world, 'admin', 'get_app_state').data['counts']['data_products_published'] == 2
+
+
+# --- The feature's Read-only level (option A, 2026-10-31) ------------------------
+
+class TestReadLevel:
+    def test_global_search_drops_rows_of_features_without_the_level(self, world):
+        term = SearchIndexItem(id='term::1', type='glossary-term', feature_id='semantic-models',
+                               title='Customer term', description='customer data',
+                               link='/x', tags=[], extra_data={})
+        world.search.index.append(term)
+        res = _call(world, 'consumer', 'global_search', query='*', limit=100)
+        assert 'glossary-term' not in res.data['facets'].get('type', {})
+        assert res.data['total_count'] == 2  # the published product and contract
+        reader = ToolCaller(email='carl@example.com', auth_path='test',
+                            permissions={**READ, 'semantic-models': FeatureAccessLevel.READ_ONLY})
+        res = _run(create_default_registry().execute(
+            'global_search', _ctx(world, reader), {'query': '*', 'limit': 100}))
+        assert res.data['facets']['type']['glossary-term'] == 1
+        assert res.data['total_count'] == 3
+
+    def test_api_key_scopes_grant_read_levels(self):
+        from src.tools.caller import scope_read_levels
+
+        ro = FeatureAccessLevel.READ_ONLY
+        assert scope_read_levels(['data-products:read', 'contracts:write', 'search:read']) == {
+            'data-products': ro, 'data-contracts': ro}
+        assert set(scope_read_levels(['*'])) == {
+            'data-products', 'data-contracts', 'data-domains', 'teams', 'projects',
+            'semantic-models', 'tags'}
+        assert scope_read_levels(['search:read', 'analytics:read']) == {}
+
+    def test_an_api_key_without_product_scopes_reads_no_products(self, world):
+        caller = mcp_api_key_caller(SimpleNamespace(scopes=['search:read']))
+        res = _run(create_default_registry().execute(
+            'global_search', _ctx(world, caller), {'query': '*'}))
+        assert res.data['total_count'] == 0
+
+
+class TestReadLevelThroughMcp:
+    """A forwarded user without the level gets no products or contracts over MCP."""
+
+    def _handler(self, world, monkeypatch, levels, headers=None):
+        import src.routes.mcp_routes as mcp_routes
+        from src.routes.mcp_routes import MCPHandler
+
+        async def _levels(email, groups, request):
+            return dict(levels)
+
+        async def _not_admin(**kwargs):
+            return False
+
+        monkeypatch.setattr(mcp_routes, 'get_obo_workspace_client', lambda *a, **k: object())
+        monkeypatch.setattr(tool_caller, 'resolve_effective_permissions', _levels)
+        monkeypatch.setattr(tool_caller, 'is_product_read_admin', lambda request, user: False)
+        monkeypatch.setattr(tool_caller, 'is_user_feature_admin', _not_admin)
+        users = MagicMock()
+        users.get_current_user.return_value = UserInfo(
+            email='sec@example.com', username='sec@example.com', user='Sec', ip=None,
+            groups=['security'])
+        state = SimpleNamespace(workspace_client=object(), users_manager=users,
+                                data_products_manager=world.products,
+                                data_contracts_manager=world.contracts,
+                                search_manager=world.search, semantic_models_manager=None)
+        request = SimpleNamespace(headers=headers or {'x-forwarded-access-token': 't'},
+                                  app=SimpleNamespace(state=state), state=SimpleNamespace(),
+                                  client=SimpleNamespace(host='127.0.0.1'))
+        return MCPHandler(db=world.db, settings=MagicMock(),
+                          token_info=SimpleNamespace(id='t1', name='tok', created_by=None,
+                                                     scopes=['*']),
+                          request=request, audit_manager=MagicMock(), session_id='s')
+
+    def _call(self, handler, tool, **args):
+        import json
+
+        out = _run(handler._handle_tools_call({'name': tool, 'arguments': args}))
+        return out['isError'], (json.loads(out['content'][0]['text'])
+                                if not out['isError'] else out['content'][0]['text'])
+
+    def test_security_officer_reads_nothing_and_a_consumer_reads_published(
+        self, world, monkeypatch
+    ):
+        pub = world.p['published'].id
+        officer = self._handler(world, monkeypatch, {'settings': FeatureAccessLevel.ADMIN})
+        err, data = self._call(officer, 'search_data_products', query='*')
+        assert not err and data['total_found'] == 0 and data['products'] == []
+        err, text = self._call(officer, 'get_data_product', product_id=pub)
+        assert err and text == f"Data product '{pub}' not found"
+        err, data = self._call(officer, 'list_data_contracts')
+        assert data['total_found'] == 0
+
+        consumer = self._handler(world, monkeypatch, READ)
+        err, data = self._call(consumer, 'search_data_products', query='*')
+        assert {p['id'] for p in data['products']} == {pub}
+        assert self._call(consumer, 'get_data_product', product_id=pub)[0] is False

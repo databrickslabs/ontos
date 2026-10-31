@@ -327,13 +327,13 @@ class TestFamilies:
             return db_session.query(EntitySemanticLinkDb).filter(
                 EntitySemanticLinkDb.entity_id == entity_id).count()
 
-        ctx = _ctx(db_session, _caller({'semantic-models': RO}),
+        ctx = _ctx(db_session, _caller({'semantic-models': RO, 'data-products': RO}),
                    semantic_models_manager=MagicMock())
         _assert_refused(_run(registry.execute('add_semantic_link', ctx, args)),
                         'semantic-models', RW)
         assert _count() == 0
 
-        ctx.caller = _caller({'semantic-models': RW})
+        ctx.caller = _caller({'semantic-models': RW, 'data-products': RO})
         res = _run(registry.execute('add_semantic_link', ctx, args))
         assert res.success is True, res.error
         assert _count() == 1

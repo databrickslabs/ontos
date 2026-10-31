@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { contractActionErrorText } from '@/lib/contract-action-error';
+import { needsStatusChangeRequest } from '@/lib/status-change-error';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
@@ -48,7 +49,7 @@ export default function RequestContractActionDialog({
   contractName,
   contractStatus,
   onSuccess,
-  canDirectStatusChange = false
+  canDirectStatusChange: allowDirectStatusChange = false
 }: RequestContractActionDialogProps) {
   const { t } = useTranslation(['data-contracts', 'common']);
   const { post, get } = useApi();
@@ -75,6 +76,11 @@ export default function RequestContractActionDialog({
   const [certificationLevel, setCertificationLevel] = useState<number | null>(null);
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevelOption[]>([]);
   const [publicationScope, setPublicationScope] = useState('organization');
+  // A direct change the API refused because the contract is certified: the
+  // user can send it as a status change request instead (certified guard)
+  const [canRequestInstead, setCanRequestInstead] = useState(false);
+  const [requestInstead, setRequestInstead] = useState(false);
+  const canDirectStatusChange = allowDirectStatusChange && !requestInstead;
 
   useEffect(() => {
     get<CertificationLevelOption[]>('/api/certification-levels').then(({ data }) => {
@@ -86,6 +92,8 @@ export default function RequestContractActionDialog({
     if (isOpen) {
       setCertificationLevel(null);
       setPublicationScope('organization');
+      setCanRequestInstead(false);
+      setRequestInstead(false);
     }
   }, [isOpen]);
 
@@ -213,6 +221,7 @@ export default function RequestContractActionDialog({
     }
 
     setError(null);
+    setCanRequestInstead(false);
     setSubmitting(true);
 
     try {
@@ -271,6 +280,9 @@ export default function RequestContractActionDialog({
       const response = await post(config.endpoint, payload);
 
       if (response.error) {
+        setCanRequestInstead(
+          requestType === 'status_change' && needsStatusChangeRequest(response),
+        );
         throw new Error(contractActionErrorText(response, t));
       }
 
@@ -841,7 +853,24 @@ export default function RequestContractActionDialog({
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {canRequestInstead && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 block"
+                    onClick={() => {
+                      setRequestInstead(true);
+                      setCanRequestInstead(false);
+                      setError(null);
+                    }}
+                  >
+                    {t('workflow-gates:requestInstead')}
+                  </Button>
+                )}
+              </AlertDescription>
             </Alert>
           )}
         </div>

@@ -605,25 +605,17 @@ class WorkflowsManager:
                 "data product or data contract (disabled_for)",
                 'gate_exemptions_wrong_trigger', triggerType=trigger.type.value,
             )]
-        from src.db_models.data_domains import DataDomain as DataDomainDb
-        from src.db_models.data_products import DataProductDb
-        from src.db_models.data_contracts import DataContractDb
+        from src.common.workflow_triggers import unknown_gate_exemptions
 
-        errors = []
-        for label, kind, model, ids in (
-            ('domain', 'domain', DataDomainDb, exemptions.domains),
-            ('data product', 'data_product', DataProductDb, exemptions.data_products),
-            ('data contract', 'data_contract', DataContractDb, exemptions.data_contracts),
-        ):
-            if not ids:
-                continue
-            found = {row[0] for row in self._db.query(model.id).filter(model.id.in_(ids)).all()}
-            for missing in [i for i in ids if i not in found]:
-                errors.append(CodedMessage(
-                    f"disabled_for: unknown {label} '{missing}'",
-                    'gate_exemption_not_found', kind=kind, id=missing,
-                ))
-        return errors
+        labels = {'domain': 'domain', 'data_product': 'data product',
+                  'data_contract': 'data contract'}
+        return [
+            CodedMessage(
+                f"disabled_for: unknown {labels[kind]} '{missing}'",
+                'gate_exemption_not_found', kind=kind, id=missing,
+            )
+            for kind, missing in unknown_gate_exemptions(self._db, exemptions)
+        ]
 
     def _validate_step_config(self, step: WorkflowStepCreate) -> List[str]:
         """Validate step configuration based on type."""

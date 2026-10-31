@@ -3512,10 +3512,18 @@ class WorkflowExecutor:
                     trigger_context.entity_data or {}
                 ).get('target_status')
                 if approved_request and target_status:
-                    self._apply_requested_status_change(
-                        trigger_context, entity_id, target_status, responded_by,
-                        execution_id=execution_id,
+                    # An approver's decision lets a certified product be
+                    # deprecated; a run without an approval step doesn't
+                    from src.controller.certified_deprecation_guard import (
+                        approved_status_change,
                     )
+                    with approved_status_change(
+                        'data_product', entity_id, accepted=approved is True,
+                    ):
+                        self._apply_requested_status_change(
+                            trigger_context, entity_id, target_status, responded_by,
+                            execution_id=execution_id,
+                        )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)

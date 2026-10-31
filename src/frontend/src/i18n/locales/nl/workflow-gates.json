@@ -16,5 +16,18 @@
   "certifiedIsNotAStatus": "Gecertificeerd is geen status: certificering stel je in met Certificeren, op een actieve entiteit.",
   "invalidStatus": "{{status}} is geen levenscyclusstatus. Gebruik een van: {{allowed}}.",
   "gateError": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: de workflowpoort {{workflows}} kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
-  "gateErrorUnnamed": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: een workflowpoort kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren."
+  "gateErrorUnnamed": "De statuswijziging van {{fromStatus}} naar {{toStatus}} is geweigerd: een workflowpoort kon niet worden geëvalueerd. Vraag een beheerder de workflow te controleren.",
+  "certifiedDeprecationRequiresApproval": "{{name}} is gecertificeerd en kan daarom alleen via een goedgekeurde statuswijzigingsaanvraag worden uitgefaseerd. Vraag in plaats daarvan de statuswijziging aan.",
+  "requestInstead": "Statuswijziging aanvragen",
+  "certifiedGuard": {
+    "title": "Bescherming tegen uitfaseren van gecertificeerde items",
+    "description": "Een gecertificeerd dataproduct of datacontract kan alleen via een goedgekeurde statuswijzigingsaanvraag worden uitgefaseerd. De bescherming geldt overal, tenzij u haar hieronder uitschakelt.",
+    "hint": "De bescherming geldt niet voor de hier vermelde domeinen, dataproducten en datacontracten (een domein omvat zijn producten en contracten): hun gecertificeerde items worden direct uitgefaseerd. Elke overgeslagen controle wordt gelogd en geaudit.",
+    "saved": "Bescherming tegen uitfaseren van gecertificeerde items opgeslagen",
+    "saveFailed": "De bescherming tegen uitfaseren van gecertificeerde items kon niet worden opgeslagen",
+    "loadFailed": "De bescherming tegen uitfaseren van gecertificeerde items kon niet worden geladen",
+    "notFound": "{{id}} bestaat niet meer. Verwijder het en sla opnieuw op.",
+    "missingOnSave_one": "De bescherming is uitgeschakeld voor {{count}} item dat niet meer bestaat. Verwijder het en sla opnieuw op.",
+    "missingOnSave_other": "De bescherming is uitgeschakeld voor {{count}} items die niet meer bestaan. Verwijder ze en sla opnieuw op."
+  }
 }

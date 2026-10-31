@@ -158,10 +158,17 @@ interface GateExemptionsFieldProps {
   onChange: (value: GateExemptions) => void;
   /** The selected ids whose entity no longer exists (the backend refuses to save them). */
   onMissingChange?: (ids: string[]) => void;
+  /** What the switch turns off, instead of the status gate's hint. */
+  hint?: string;
 }
 
 /** Domains, data products and data contracts a before_status_change gate is switched off for. */
-export default function GateExemptionsField({ value, onChange, onMissingChange }: GateExemptionsFieldProps) {
+export default function GateExemptionsField({
+  value,
+  onChange,
+  onMissingChange,
+  hint,
+}: GateExemptionsFieldProps) {
   const { t } = useTranslation('workflows');
   const { domains, loading: domainsLoading, error: domainsError } = useDomains();
   const products = useEntityOptions('/api/data-products');
@@ -181,7 +188,9 @@ export default function GateExemptionsField({ value, onChange, onMissingChange }
     <div className="space-y-2 rounded-md border p-3" data-testid="gate-exemptions">
       <div className="space-y-1">
         <Label>{t('designer.triggerConfig.disabledFor.title')}</Label>
-        <p className="text-xs text-muted-foreground">{t('designer.triggerConfig.disabledFor.hint')}</p>
+        <p className="text-xs text-muted-foreground">
+          {hint ?? t('designer.triggerConfig.disabledFor.hint')}
+        </p>
       </div>
       <Picker
         id="gate-disabled-domains"

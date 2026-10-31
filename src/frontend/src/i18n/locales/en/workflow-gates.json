@@ -16,5 +16,18 @@
   "certifiedIsNotAStatus": "Certified is not a status: certification is set with Certify, on an active entity.",
   "invalidStatus": "{{status}} is not a lifecycle status. Use one of: {{allowed}}.",
   "gateError": "The status change from {{fromStatus}} to {{toStatus}} was refused: the workflow gate {{workflows}} could not be evaluated. Ask an administrator to check the workflow.",
-  "gateErrorUnnamed": "The status change from {{fromStatus}} to {{toStatus}} was refused: a workflow gate could not be evaluated. Ask an administrator to check the workflow."
+  "gateErrorUnnamed": "The status change from {{fromStatus}} to {{toStatus}} was refused: a workflow gate could not be evaluated. Ask an administrator to check the workflow.",
+  "certifiedDeprecationRequiresApproval": "{{name}} is certified, so it can only be deprecated through an approved status change request. Request the status change instead.",
+  "requestInstead": "Request the status change",
+  "certifiedGuard": {
+    "title": "Certified deprecation guard",
+    "description": "A certified data product or data contract can only be deprecated through an approved status change request. The guard applies everywhere unless you switch it off below.",
+    "hint": "The guard doesn't apply to the domains, data products and data contracts listed here (a domain covers its products and contracts): their certified entities deprecate directly. Each skip is logged and audited.",
+    "saved": "Certified deprecation guard saved",
+    "saveFailed": "The certified deprecation guard couldn't be saved",
+    "loadFailed": "The certified deprecation guard couldn't be loaded",
+    "notFound": "{{id}} no longer exists. Remove it and save again.",
+    "missingOnSave_one": "The guard is switched off for {{count}} item that no longer exists. Remove it and save again.",
+    "missingOnSave_other": "The guard is switched off for {{count}} items that no longer exist. Remove them and save again."
+  }
 }

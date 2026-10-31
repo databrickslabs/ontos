@@ -70,6 +70,13 @@ export function statusChangeErrorText(
       defaultValue: error,
     });
   }
+  // A certified product or contract is deprecated through a status change request
+  if (response.errorCode === CERTIFIED_DEPRECATION_CODE) {
+    return t('workflow-gates:certifiedDeprecationRequiresApproval', {
+      name: String(params?.entityName ?? ''),
+      defaultValue: error,
+    });
+  }
   // A fail_closed gate that couldn't be evaluated (#1103)
   if (response.errorCode === 'status_change_gate_error' && params) {
     const workflows = Array.isArray(params.workflows) ? params.workflows.map(String) : [];
@@ -90,6 +97,19 @@ export function statusChangeErrorText(
       : t('workflow-gates:reasons.validationFailed'),
     defaultValue: error,
   });
+}
+
+/**
+ * The code of a direct deprecation refused because the entity is certified:
+ * it needs an approved status change request (the certified guard).
+ */
+export const CERTIFIED_DEPRECATION_CODE = 'certified_deprecation_requires_approval';
+
+/** Whether a failed status change can go through as a status change request instead. Pure. */
+export function needsStatusChangeRequest(
+  response: Pick<ApiResponse<unknown>, 'errorCode'>,
+): boolean {
+  return response.errorCode === CERTIFIED_DEPRECATION_CODE;
 }
 
 /** The `error` / `errorCode` / `errorParams` of a failed response's JSON body, as useApi gives them. */

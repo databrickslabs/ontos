@@ -2,12 +2,18 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from src.common.dependencies import DBSessionDep
+from src.common.dependencies import AuditCurrentUserDep, AuditManagerDep, DBSessionDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
+from src.controller.certified_deprecation_guard import (
+    GateExemptionNotFoundError,
+    guard_exemptions,
+    save_guard_exemptions,
+)
+from src.models.process_workflows import GateExemptions
 from src.models.certification_levels import (
     CertificationLevelCreate,
     CertificationLevelRead,
@@ -153,6 +159,54 @@ async def delete_certification_level(
         db.rollback()
         logger.error(f"Error deleting certification level: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete certification level")
+
+
+@router.get(
+    "/certified-deprecation-guard",
+    response_model=GateExemptions,
+)
+async def get_certified_deprecation_guard(
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Where the certified deprecation guard is switched off (domains, products, contracts).
+
+    The guard refuses a direct deprecation of a certified product or contract;
+    for the entities listed here it lets it through, and audits each skip.
+    """
+    return guard_exemptions(db)
+
+
+@router.put(
+    "/certified-deprecation-guard",
+    response_model=GateExemptions,
+)
+async def update_certified_deprecation_guard(
+    body: GateExemptions,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Switch the certified deprecation guard off for domains, products and contracts.
+
+    Every listed entity must exist (``gate_exemption_not_found`` otherwise).
+    """
+    try:
+        saved = save_guard_exemptions(db, body)
+    except GateExemptionNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'anonymous',
+        ip_address=request.client.host if request.client else None,
+        feature=SETTINGS_FEATURE_ID,
+        action='UPDATE_CERTIFIED_DEPRECATION_GUARD',
+        success=True,
+        details={'disabled_for': saved.model_dump()},
+    )
+    return saved
 
 
 def register_routes(app):

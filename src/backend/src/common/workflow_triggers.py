@@ -1230,6 +1230,29 @@ def gate_exemption(
     return None
 
 
+def unknown_gate_exemptions(db: Session, exemptions: GateExemptions) -> List[Tuple[str, str]]:
+    """The ``(kind, id)`` of every entity ``exemptions`` names that doesn't exist.
+
+    ``kind`` is ``domain``, ``data_product`` or ``data_contract``, as in
+    ``gate_exemption``. A switch naming a deleted entity is refused on save.
+    """
+    from src.db_models.data_contracts import DataContractDb
+    from src.db_models.data_domains import DataDomain as DataDomainDb
+    from src.db_models.data_products import DataProductDb
+
+    unknown: List[Tuple[str, str]] = []
+    for kind, model, ids in (
+        ('domain', DataDomainDb, exemptions.domains),
+        ('data_product', DataProductDb, exemptions.data_products),
+        ('data_contract', DataContractDb, exemptions.data_contracts),
+    ):
+        if not ids:
+            continue
+        found = {row[0] for row in db.query(model.id).filter(model.id.in_(ids)).all()}
+        unknown.extend((kind, missing) for missing in ids if missing not in found)
+    return unknown
+
+
 def report_gate_skipped(event: TriggerEvent, workflow: ProcessWorkflow, reason: Tuple[str, str]) -> None:
     """Log at info level and audit a gate that was skipped because it is switched off for the entity."""
     kind, ref = reason
@@ -1360,6 +1383,11 @@ def run_status_gates(
       unknown and the transition proceeds (the error is still reported).
     - A database error that aborted the session's transaction is rolled back
       first, so the lookup and the status write can still run.
+
+    Before the gates, the certified deprecation guard (enforced in code, not a
+    workflow) refuses a direct deprecation of a certified product or contract
+    (``CertifiedDeprecationRequiresApprovalError``), so a refused change
+    starts no gate approval.
     """
     event = TriggerEvent(
         trigger_type=TriggerType.BEFORE_STATUS_CHANGE,
@@ -1371,6 +1399,8 @@ def run_status_gates(
         from_status=from_status,
         to_status=to_status,
     )
+    from src.controller.certified_deprecation_guard import check_certified_deprecation
+    check_certified_deprecation(db, event)
     try:
         gate_passed, gate_executions = get_trigger_registry(db).before_status_change(
             entity_type=entity_type,

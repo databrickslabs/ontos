@@ -369,6 +369,24 @@ class SearchManager:
             allowed_features=allowed_features,
         )
 
+    def match_ids(
+        self,
+        query: str,
+        *,
+        type_filter: Optional[str] = None,
+        filters: Optional[Dict[str, Optional[str]]] = None,
+        allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+    ) -> List[str]:
+        """Index ids ``query_index`` would match with the same arguments, unpaginated.
+
+        Lets a caller pick among the matching rows (e.g. one version per family)
+        before the real, paginated search.
+        """
+        return self._backend.match_ids(
+            query, type_filter=type_filter, filters=filters,
+            allowed_ids_by_type=allowed_ids_by_type,
+        )
+
     def _filter_by_tag(
         self,
         tag_pattern: str,

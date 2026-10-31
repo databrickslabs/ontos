@@ -153,3 +153,27 @@ def test_replace_all_rebuild_removes_stale(seeded):
     out = repo.search(seeded, "*")
     assert out["total_count"] == 1
     assert out["results"][0]["id"] == "99"
+
+
+def test_allowed_ids_apply_before_pagination_and_facets(seeded):
+    """Only the listed ids of a restricted type are kept, in pages, counts and facets."""
+    out = repo.search(seeded, "*", type_filter="data-product", limit=1,
+                      allowed_ids_by_type={"data-product": ["product::1"]})
+    assert out["total_count"] == 1
+    assert out["has_more"] is False
+    assert [r["id"] for r in out["results"]] == ["1"]
+    assert out["facets"]["status"] == {"active": 1}
+
+    # Other types are not restricted; an empty list hides the whole type.
+    everything = repo.search(seeded, "*", allowed_ids_by_type={
+        "data-product": ["product::1", "product::unknown"], "data-contract": []})
+    assert everything["total_count"] == 1
+    assert everything["facets"]["type"] == {"data-product": 1}
+
+
+def test_match_ids_uses_the_search_where(seeded):
+    assert sorted(repo.match_ids(seeded, "*", type_filter="data-product")) == [
+        "product::1", "product::2"]
+    assert repo.match_ids(seeded, "churn") == ["product::1"]
+    assert repo.match_ids(seeded, "*", allowed_ids_by_type={"data-product": ["product::2"]},
+                          filters={"status": "draft"}) == ["product::2"]

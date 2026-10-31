@@ -7,6 +7,9 @@ Tools for searching, creating, updating, and deleting data products.
 import json
 import uuid
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
+from src.tools import read_access
+from src.tools import visibility as vis
 
 from src.common.logging import get_logger
 from src.controller import search_scoring
@@ -134,7 +137,8 @@ class SearchDataProductsTool(BaseTool):
         "includes 'total_count', 'has_more' and (by default) 'facets' so you can refine "
         "rather than fetch everything. Set include_facets=false to skip the facet block "
         "on cheap list calls, or fields=['title','status'] to narrow each row. Call "
-        "get_data_product for full details (output tables, ports)."
+        "get_data_product for full details (output tables, ports). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "query": {
@@ -169,6 +173,9 @@ class SearchDataProductsTool(BaseTool):
             "description": "Optional allowlist of result-row keys to keep (e.g. ['title','status']). "
                            "'id' is always included. Shrinks payload for 'then fetch details' flows.",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = ["query"]
     required_scope = "data-products:read"
@@ -183,6 +190,9 @@ class SearchDataProductsTool(BaseTool):
         offset: int = 0,
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Search data products over the shared in-memory index."""
         logger.info(
@@ -211,18 +221,30 @@ class SearchDataProductsTool(BaseTool):
                     data={"products": []},
                 )
 
+        search_filters = {"domains": domain, "status": status}
+        applied = vis.applied_visibility(ctx, visibility)
+        if applied is None:
+            return vis.invalid_visibility(visibility, **{"products": []})
+
         try:
             data = ctx.search_manager.query_index(
                 query,
                 type_filter="data-product",
                 # 'domains' = full assigned-domain set, so the filter matches ANY
                 # assigned domain exactly (not just the primary).
-                filters={"domains": domain, "status": status},
+                filters=search_filters,
                 limit=limit,
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
+                # The read rule and the visibility, before pagination and facets.
+                allowed_ids_by_type=vis.allowed_ids_by_type(
+                    ctx, "data-product", visibility=applied,
+                    min_certification_level=min_certification_level,
+                    include_history=include_history, query=query, filters=search_filters,
+                ),
             )
+            vis.annotate(ctx, data["results"], default_type="data-product")
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
             for r in data["results"]:
@@ -244,6 +266,7 @@ class SearchDataProductsTool(BaseTool):
                     "has_more": data["has_more"],
                     "facets": data["facets"],
                     "query": query,
+                    "visibility": applied,
                 },
             )
 
@@ -286,6 +309,7 @@ class CreateDraftDataProductTool(BaseTool):
     }
     required_params = ["name", "description", "domain"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -302,6 +326,15 @@ class CreateDraftDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[create_draft_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A contract the caller can't read is answered like a missing one.
+        if contract_id:
+            refusal = read_access.unreadable_target(
+                ctx, self.name, "data_contract", contract_id,
+                f"Data contract '{contract_id}' not found",
+            )
+            if refusal:
+                return refusal
         
         try:
             logger.info(f"Creating draft data product: {name}")
@@ -389,6 +422,7 @@ class UpdateDataProductTool(BaseTool):
     }
     required_params = ["product_id"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -404,6 +438,13 @@ class UpdateDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[update_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A product the caller can't read is answered like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_product", product_id, f"Data product '{product_id}' not found"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Build update data
@@ -498,12 +539,17 @@ class GetDataProductTool(BaseTool):
         
         try:
             product = ctx.data_products_manager.get_product(product_id)
+            readable = product is not None and read_access.can_read_product(ctx, product)
 
-            if not product:
-                return ToolResult(
+            if not readable:
+                # An unreadable product is answered like a missing one.
+                result = ToolResult(
                     success=False,
                     error=f"Data product '{product_id}' not found"
                 )
+                if product is not None:
+                    read_access.denied(ctx, self.name, result, [product_id])
+                return result
 
             logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
             return ToolResult(success=True, data=_serialize_product(product))
@@ -566,19 +612,23 @@ class GetDataProductsBulkTool(BaseTool):
 
         products: List[Dict[str, Any]] = []
         not_found: List[str] = []
+        unreadable: List[str] = []
         try:
             for pid in ids:
                 product = ctx.data_products_manager.get_product(pid)
-                if product:
+                if product and read_access.can_read_product(ctx, product):
                     products.append(_serialize_product(product))
                 else:
+                    # An unreadable product is answered like a missing one.
                     not_found.append(pid)
+                    if product:
+                        unreadable.append(pid)
 
             logger.info(
                 f"[get_data_products] SUCCESS: {len(products)} found, "
                 f"{len(not_found)} not found"
             )
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "products": products,
@@ -589,6 +639,7 @@ class GetDataProductsBulkTool(BaseTool):
                     "truncated": requested > effective_limit,
                 },
             )
+            return read_access.denied(ctx, self.name, result, unreadable)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_data_products", e))
 
@@ -603,7 +654,8 @@ class ListDataProductsTool(BaseTool):
         "thin wrapper over search_data_products with query='*'; prefer search_data_products "
         "directly when you need relevance ranking, pagination offsets, facets, or a free-text "
         "query. The response shape matches search_data_products (products / total_found / "
-        "has_more / offset / limit / facets)."
+        "has_more / offset / limit / facets). "
+        + vis.VISIBILITY_DESCRIPTION
     )
     parameters = {
         "domain": {
@@ -619,6 +671,9 @@ class ListDataProductsTool(BaseTool):
             "type": "integer",
             "description": "Maximum number of products to return (default: 50, max: 100)",
         },
+        "visibility": vis.VISIBILITY_PARAM,
+        "min_certification_level": vis.MIN_CERTIFICATION_PARAM,
+        "include_history": vis.INCLUDE_HISTORY_PARAM,
     }
     required_params = []
     required_scope = "data-products:read"
@@ -629,6 +684,9 @@ class ListDataProductsTool(BaseTool):
         domain: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 50,
+        visibility: Optional[str] = None,
+        min_certification_level: Optional[int] = None,
+        include_history: bool = False,
     ) -> ToolResult:
         """Delegate to search_data_products with query='*' so the three overlapping
         entry points (search / list / get) collapse to a single implementation.
@@ -643,6 +701,9 @@ class ListDataProductsTool(BaseTool):
             status=status,
             limit=limit,
             offset=0,
+            visibility=visibility,
+            min_certification_level=min_certification_level,
+            include_history=include_history,
         )
 
 
@@ -660,6 +721,7 @@ class DeleteDataProductTool(BaseTool):
     }
     required_params = ["product_id"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.ADMIN)
     
     async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
         """Delete a data product."""
@@ -668,6 +730,13 @@ class DeleteDataProductTool(BaseTool):
         if not ctx.data_products_manager:
             logger.error(f"[delete_data_product] FAILED: Data products manager not available")
             return ToolResult(success=False, error="Data products manager not available")
+
+        # A product the caller can't read is answered like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_product", product_id, f"Data product '{product_id}' not found"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Get product name first for the response

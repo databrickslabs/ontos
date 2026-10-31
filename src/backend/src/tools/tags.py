@@ -6,9 +6,17 @@ Tools for managing tags and assigning them to app objects.
 
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+from src.common.features import FeatureAccessLevel
+from src.tools import read_access
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
+from src.tools.base import (
+    BaseTool,
+    ToolContext,
+    ToolResult,
+    permission_refusal,
+    tool_failure,
+)
 
 logger = get_logger(__name__)
 
@@ -197,6 +205,7 @@ class CreateTagTool(BaseTool):
     }
     required_params = ["name"]
     required_scope = "tags:write"
+    required_permission = ("tags", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -232,6 +241,13 @@ class CreateTagTool(BaseTool):
             # Auto-create namespace if it doesn't exist
             existing_ns = tags_manager.get_namespace_by_name(ctx.db, name=final_namespace)
             if not existing_ns and final_namespace != "default":
+                # Creating a namespace is an admin action on the REST API
+                # (POST /api/tags/namespaces).
+                refusal = permission_refusal(
+                    ctx, "tags", FeatureAccessLevel.ADMIN, "create_tag"
+                )
+                if refusal:
+                    return refusal
                 logger.info(f"[create_tag] Auto-creating namespace '{final_namespace}'")
                 ns_create = TagNamespaceCreate(name=final_namespace, description=f"Auto-created namespace for {final_namespace} tags")
                 tags_manager.create_namespace(ctx.db, namespace_in=ns_create, user_email="llm-assistant")
@@ -293,6 +309,7 @@ class UpdateTagTool(BaseTool):
     }
     required_params = ["tag_id"]
     required_scope = "tags:write"
+    required_permission = ("tags", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -370,6 +387,7 @@ class DeleteTagTool(BaseTool):
     }
     required_params = ["tag_id"]
     required_scope = "tags:write"
+    required_permission = ("tags", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,
@@ -444,7 +462,9 @@ class ListEntityTagsTool(BaseTool):
             
             tags_manager = TagsManager()
             
-            assigned_tags = tags_manager.list_assigned_tags(
+            # An entity the caller can't read is answered like a missing one (no tags).
+            unreadable = read_access.entity_is_unreadable(ctx, entity_type, entity_id)
+            assigned_tags = [] if unreadable else tags_manager.list_assigned_tags(
                 ctx.db,
                 entity_id=entity_id,
                 entity_type=entity_type
@@ -463,7 +483,7 @@ class ListEntityTagsTool(BaseTool):
                 })
             
             logger.info(f"[list_entity_tags] SUCCESS: Found {len(result_tags)} tags for {entity_type}:{entity_id}")
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "entity_type": entity_type,
@@ -472,6 +492,7 @@ class ListEntityTagsTool(BaseTool):
                     "total_count": len(result_tags)
                 }
             )
+            return read_access.denied(ctx, self.name, result, [entity_id] if unreadable else [])
             
         except Exception as e:
             return ToolResult(success=False, **tool_failure("list_entity_tags", e), data={"tags": []})
@@ -504,6 +525,7 @@ class AssignTagToEntityTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id", "tag_id"]
     required_scope = "tags:write"
+    required_permission = ("tags", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -515,7 +537,14 @@ class AssignTagToEntityTool(BaseTool):
     ) -> ToolResult:
         """Assign a tag to an entity."""
         logger.info(f"[assign_tag_to_entity] Starting - entity_type={entity_type}, entity_id={entity_id}, tag_id={tag_id}")
-        
+        # An entity of a product or contract the caller can't read is answered
+        # like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, entity_type, entity_id, f"{entity_type} '{entity_id}' not found"
+        )
+        if refusal:
+            return refusal
+
         try:
             from src.controller.tags_manager import TagsManager
             
@@ -571,6 +600,7 @@ class RemoveTagFromEntityTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id", "tag_id"]
     required_scope = "tags:write"
+    required_permission = ("tags", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -581,7 +611,14 @@ class RemoveTagFromEntityTool(BaseTool):
     ) -> ToolResult:
         """Remove a tag from an entity."""
         logger.info(f"[remove_tag_from_entity] Starting - entity_type={entity_type}, entity_id={entity_id}, tag_id={tag_id}")
-        
+        # An entity of a product or contract the caller can't read is answered
+        # like a missing one.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, entity_type, entity_id, f"{entity_type} '{entity_id}' not found"
+        )
+        if refusal:
+            return refusal
+
         try:
             from src.controller.tags_manager import TagsManager
             

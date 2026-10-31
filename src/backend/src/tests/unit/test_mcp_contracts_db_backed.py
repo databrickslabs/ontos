@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_contracts import DataContractDb
-from src.tools.base import ToolContext
+from src.tools.base import ToolCaller, ToolContext
 from src.tools.data_contracts import (
     GetDataContractTool,
     ListDataContractsTool,
@@ -41,6 +41,11 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+# These tests read drafts: the tools apply the product and contract read rules,
+# so they act for an admin of both features.
+ADMIN = ToolCaller(email="a@b.com", auth_path="test", products_admin=True, contracts_admin=True)
+
+
 class TestContractToolsAreDbBacked:
     def test_get_finds_db_written_contract(self, db_session: Session):
         mgr = _contract_manager()
@@ -49,6 +54,7 @@ class TestContractToolsAreDbBacked:
         assert created.id not in getattr(mgr, "_contracts", {})
 
         ctx = ToolContext(db=db_session, settings=MagicMock(), data_contracts_manager=mgr)
+        ctx.caller = ADMIN
         res = _run(GetDataContractTool().execute(ctx, contract_id=created.id))
         assert res.success is True
         assert res.data["id"] == created.id
@@ -56,6 +62,7 @@ class TestContractToolsAreDbBacked:
 
     def test_get_unknown_returns_not_found(self, db_session: Session):
         ctx = ToolContext(db=db_session, settings=MagicMock(), data_contracts_manager=_contract_manager())
+        ctx.caller = ADMIN
         res = _run(GetDataContractTool().execute(ctx, contract_id=str(uuid.uuid4())))
         assert res.success is False and "not found" in (res.error or "").lower()
 
@@ -76,10 +83,15 @@ class TestContractToolsAreDbBacked:
         search_manager = SearchManager(searchable_managers=[mgr])
 
         ctx = ToolContext(
-            db=db_session, settings=MagicMock(),
+            db=db_session, settings=MagicMock(), caller=ADMIN,
             data_contracts_manager=mgr, search_manager=search_manager,
         )
-        res = _run(ListDataContractsTool().execute(ctx))
+        # A draft, so visibility 'readable' (MCP defaults to published). Every
+        # version: the admin's no-filter path reads the index alone (building
+        # the index here ends the fixture's transaction, so the row is gone).
+        res = _run(ListDataContractsTool().execute(
+            ctx, visibility="readable", include_history=True
+        ))
         assert res.success is True
         assert created.id in {c["id"] for c in res.data["contracts"]}
 
@@ -121,6 +133,7 @@ class TestContractToolsAreDbBacked:
         mgr = _contract_manager()
         created = mgr.create_from_upload(db=db_session, parsed_odcs=_odcs("Deletable DB Contract"), current_user="a@b.com")
         ctx = ToolContext(db=db_session, settings=MagicMock(), data_contracts_manager=mgr)
+        ctx.caller = ADMIN
 
         res = _run(DeleteDataContractTool().execute(ctx, contract_id=created.id))
         assert res.success is True
@@ -148,6 +161,7 @@ class TestProductToolsStillWork:
             db=db_session, user="a@b.com",
         )
         ctx = ToolContext(db=db_session, settings=MagicMock(), data_products_manager=product_manager)
+        ctx.caller = ADMIN
         got = _run(GetDataProductTool().execute(ctx, product_id=created.id))
         assert got.success is True and got.data["id"] == created.id
         deleted = _run(DeleteDataProductTool().execute(ctx, product_id=created.id))

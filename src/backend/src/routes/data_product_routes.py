@@ -80,100 +80,43 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
     readable by data-products admins (incl. via an in-app role override) and
     by owners (draft_owner / owning team / project member). This stops a
     consumer from reading an unpublished product by its id (ONT-NEG-011).
-    Fails closed on error.
+    The rule lives in ``src.common.product_read_rule`` (shared with the
+    assistant tools). Fails closed on error.
     """
+    from src.common import product_read_rule as rule
+
+    product_id = str(getattr(product, "id", "") or "")
     try:
-        from types import SimpleNamespace
-        from src.common.version_visibility import is_visible_consumer
-
-        # Normalize status (may be an enum on the API model) for the
-        # consumer-visibility check (active/deprecated are readable by all).
-        raw_status = getattr(product, "status", None)
-        status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
-        if is_visible_consumer(SimpleNamespace(status=status_str)):
+        if rule.is_published_product(product):
             return True
-
-        product_id = str(getattr(product, "id", "") or "")
-        auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
-        caller_email = current_user.email if current_user else None
-        user_groups = current_user.groups if current_user else []
-
-        if auth_manager and current_user:
-            applied_role_id = (
-                settings_manager.get_applied_role_override_for_user(caller_email)
-                if settings_manager else None
-            )
-            if applied_role_id and settings_manager:
-                eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                eff = auth_manager.get_user_effective_permissions(user_groups or [], None)
-            if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
-                return True
-
-        # Non-admin: grant only if the caller genuinely OWNS *this* product.
-        #
-        # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
-        # resolved the caller's scope via ``projects_manager.get_user_projects``
-        # and then checked membership of ``manager.list_products(...)``. But
-        # ``get_user_projects`` treats *any* group whose name merely contains
-        # the substring "admin" (e.g. the ubiquitous workspace ``admins``
-        # group) as a global admin and returns EVERY project. A Data Consumer
-        # in such a group therefore got ``caller_project_ids`` = all projects,
-        # which matched the draft's ``project_id`` in ``list_products`` and
-        # leaked the draft. We must NOT trust that broad, substring-admin
-        # scope. Instead resolve the three ownership facts against THIS product
-        # only, using membership-based checks (no substring-admin shortcut):
-        #   * draft_owner_id == caller (creator ownership)
-        #   * owner_team_id in caller's real team memberships
-        #   * project_id where the caller is a genuine project member
-        from src.controller.teams_manager import teams_manager
-        from src.controller.projects_manager import projects_manager
-
-        if not caller_email:
-            return False
-
-        owner_email = getattr(product, "draft_owner_id", None)
-        if owner_email and str(owner_email).lower() == str(caller_email).lower():
+        if rule.is_product_read_admin(request, current_user):
             return True
-
-        product_team_id = getattr(product, "owner_team_id", None)
-        if product_team_id:
-            try:
-                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-                if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
-                    return True
-            except Exception:
-                logger.exception(
-                    "Team-membership resolution failed for %s in product read gate",
-                    caller_email,
-                )
-
-        product_project_id = getattr(product, "project_id", None)
-        if product_project_id:
-            try:
-                from src.common.config import get_settings
-                # ``is_user_project_member`` uses configured admin groups
-                # (is_user_admin), not a substring match, and verifies real
-                # team membership of the project — so it does not over-grant.
-                if projects_manager.is_user_project_member(
-                    db=db,
-                    user_identifier=caller_email,
-                    user_groups=user_groups or [],
-                    project_id=str(product_project_id),
-                    settings=get_settings(),
-                ):
-                    return True
-            except Exception:
-                logger.exception(
-                    "Project-membership resolution failed for %s in product read gate",
-                    caller_email,
-                )
-
-        return False
+        return rule.caller_owns_product(
+            db,
+            product,
+            caller_email=current_user.email if current_user else None,
+            caller_groups=(current_user.groups if current_user else None) or [],
+        )
     except Exception:
         logger.exception("Product read gate failed for %s; denying", product_id)
         return False
+
+
+def readable_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+):
+    """The path's product, when the caller may read it (the rule of the product page).
+
+    A product the caller can't read answers the same 404 as a missing one.
+    """
+    product = manager.get_product(product_id)
+    if product is None or not _caller_can_read_product(request, db, current_user, manager, product):
+        raise HTTPException(status_code=404, detail="Data product not found")
+    return product
 
 
 # --- Lifecycle transitions (minimal) ---

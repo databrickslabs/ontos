@@ -3015,6 +3015,34 @@ POST /mcp
 > user**, scoped to that user's grants. External agents calling with only an
 > `X-API-Key` (no forwarded user identity) run as the app service principal, as
 > before.
+>
+> **Who the tools act for.** With a forwarded user token
+> (`x-forwarded-access-token`), the caller is the user, or service principal,
+> that `current_user.me()` returns for that token; the `X-Forwarded-Email`
+> header never names the caller. The tools then apply the caller's Ontos roles
+> like the REST API: a tool that changes data needs the feature level of the
+> matching route, and data products and contracts are returned only when the
+> caller has the feature's Read-only level (data-products, data-contracts) and
+> may read them (published ones, or drafts the caller owns or administers;
+> anything else is answered as not found). `global_search` also keeps only rows
+> of the features the caller reads, like `/api/search`. The token's scopes still
+> limit which tools can be called. A request with only an `X-API-Key` has no
+> user: it gets Read-only on the features its token's scopes name
+> (`data-products:*`, `contracts:*`, `domains:*`, `teams:*`, `projects:*`,
+> `semantic:*`, `tags:*`; `*` names them all), reads published products and
+> contracts only, and its tools that change data are refused.
+> `execute_sparql_query` is for semantic-models admins only.
+>
+> **Visibility.** The search and list tools (`search_*`, `list_*`, `global_search`,
+> `find_entities_by_concept`, `list_semantic_links`) take `visibility`:
+> `published` (active and published to the marketplace, the MCP default) or
+> `readable` (everything the caller may read, the Ask Ontos default). Searches
+> also take `min_certification_level` and `include_history` (default: the newest
+> version of each product or contract). Get-by-id tools are not affected.
+>
+> **Keyless MCP** (no `X-API-Key`, keyless default token enabled) is accepted only
+> with a forwarded user token; a request that carries only `X-Forwarded-Email` or
+> `X-Forwarded-User` is refused (`-32001`) and audited as `IDENTITY_REJECTED`.
 
 #### Authentication
 

@@ -315,6 +315,32 @@ class TestUsersManager:
 
         assert result.groups == ["test@example.com"]
 
+    def test_get_current_user_service_principal_groups(self, manager):
+        """me() of a service principal (an M2M caller): users.get(id) doesn't know
+        the id, so the groups come from service_principals.get(id)."""
+        me_user = Mock()
+        me_user.id = "sp-scim-id"
+        me_user.user_name = "11111111-2222-3333-4444-555555555555"
+        me_user.display_name = "genie-one"
+        me_user.emails = []
+        me_user.groups = []
+
+        group = Mock()
+        group.display = "genie-agents"
+        principal = Mock()
+        principal.groups = [group]
+
+        obo = Mock()
+        obo.current_user.me.return_value = me_user
+        obo.users.get.side_effect = Exception("not found")
+        obo.service_principals.get.return_value = principal
+
+        result = manager.get_current_user(obo_client=obo, real_ip=None)
+
+        obo.service_principals.get.assert_called_once_with("sp-scim-id")
+        assert result.groups == ["genie-agents"]
+        assert result.email == "11111111-2222-3333-4444-555555555555"
+
     def test_get_current_user_no_obo_client(self, manager):
         """ValueError when OBO client is missing."""
         with pytest.raises(ValueError, match="OBO WorkspaceClient is required"):

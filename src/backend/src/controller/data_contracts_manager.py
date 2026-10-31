@@ -4441,7 +4441,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
-        
+
+        # Only the contract's own runs (the route answers 404 otherwise)
+        from src.db_models.data_contracts import DataProfilingRunDb
+        run = db.query(DataProfilingRunDb.id).filter(
+            DataProfilingRunDb.id == run_id, DataProfilingRunDb.contract_id == contract_id
+        ).first()
+        if not run:
+            raise ValueError("Profile run not found")
+
         suggestions = suggested_quality_checks_repo.get_by_profile_run_id(db, run_id)
         
         result = []
@@ -6565,6 +6573,72 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 elevated.add(fid)
         return elevated
 
+    @staticmethod
+    def _visible_to_non_admin(contract, elevated_families: Set[str]) -> bool:
+        """The list's per-row rule for a caller who isn't a feature admin (PRD #442).
+
+        A published row (active/deprecated) is visible to everyone; any other
+        status only when the caller is elevated for the row's version family.
+        """
+        from src.common.version_visibility import is_admin_only_status, is_visible_consumer
+
+        if (contract.version_family_id or contract.id) in elevated_families:
+            return True
+        return not is_admin_only_status(contract) and is_visible_consumer(contract)
+
+    def readable_contracts(
+        self,
+        db,
+        contracts,
+        *,
+        is_admin: bool,
+        caller_email: Optional[str],
+        caller_team_ids: Optional[Set[str]],
+    ) -> list:
+        """The rows of ``contracts`` the caller may read by id, in their order.
+
+        Same rule as the list (:meth:`_query_contracts`): feature admins read
+        everything; for anyone else a contract is readable when it is published
+        or when the caller is elevated for its version family (draft owner or
+        owning-team member of any version). Another user's personal draft is
+        never readable.
+        """
+        if is_admin:
+            return list(contracts)
+        candidates = [
+            c for c in contracts
+            if not c.draft_owner_id or c.draft_owner_id == caller_email
+        ]
+        if all(self._visible_to_non_admin(c, set()) for c in candidates):
+            return candidates
+        family_ids = {c.version_family_id or c.id for c in candidates}
+        family_rows = db.query(DataContractDb).filter(
+            DataContractDb.version_family_id.in_(family_ids)
+            | DataContractDb.id.in_(family_ids)
+        ).all()
+        elevated = self._elevated_contract_families(
+            db, family_rows, caller_email=caller_email, caller_team_ids=caller_team_ids
+        )
+        return [c for c in candidates if self._visible_to_non_admin(c, elevated)]
+
+    def can_read_contract(
+        self,
+        db,
+        contract,
+        *,
+        is_admin: bool,
+        caller_email: Optional[str],
+        caller_team_ids: Optional[Set[str]],
+    ) -> bool:
+        """Whether the caller may read ``contract`` by id (see :meth:`readable_contracts`)."""
+        return bool(self.readable_contracts(
+            db,
+            [contract],
+            is_admin=is_admin,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
+        ))
+
     def _query_contracts(
         self,
         db,
@@ -6590,8 +6664,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.common.version_visibility import (
             collapse_by_family,
             family_counts as compute_family_counts,
-            is_admin_only_status,
-            is_visible_consumer,
         )
 
         wanted_domain_ids = list(domain_ids or [])
@@ -6634,10 +6706,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # consumer-visibility rule. Admins bypass.
         if not is_admin:
             contracts = [
-                c
-                for c in contracts
-                if (c.version_family_id or c.id) in elevated_families
-                or (not is_admin_only_status(c) and is_visible_consumer(c))
+                c for c in contracts if self._visible_to_non_admin(c, elevated_families)
             ]
 
         # Optional status filter (e.g. ?status=draft). Applied after the

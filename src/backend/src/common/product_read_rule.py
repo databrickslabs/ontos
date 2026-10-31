@@ -61,6 +61,44 @@ def lookup_team_ids(db: Any, caller_email: Optional[str], caller_groups: Iterabl
     return {str(t.id) for t in teams if getattr(t, "id", None)}
 
 
+# ``caller_project_ids`` not given: check the product's project with one query.
+LOOKUP = object()
+# ``caller_project_ids`` value for a caller who is a member of every project
+# (configured admin groups, as in ``is_user_project_member``).
+ALL_PROJECTS = None
+
+
+def lookup_member_project_ids(
+    db: Any, caller_email: Optional[str], caller_groups: Iterable[str]
+) -> Optional[Set[str]]:
+    """The projects the caller is a member of, in one query (``ALL_PROJECTS`` for admins).
+
+    The same rule as ``projects_manager.is_user_project_member``: a member of
+    any team assigned to the project, by email or group, case-insensitive.
+    """
+    from sqlalchemy import func
+
+    from src.common.authorization import is_user_admin
+    from src.common.config import get_settings
+    from src.db_models.projects import project_team_association
+    from src.db_models.teams import TeamMemberDb
+
+    groups = list(caller_groups or [])
+    if is_user_admin(groups, get_settings()):
+        return ALL_PROJECTS
+    identifiers = {str(i).lower() for i in [caller_email, *groups] if i}
+    if not identifiers:
+        return set()
+    rows = (
+        db.query(project_team_association.c.project_id)
+        .join(TeamMemberDb, TeamMemberDb.team_id == project_team_association.c.team_id)
+        .filter(func.lower(TeamMemberDb.member_identifier).in_(identifiers))
+        .distinct()
+        .all()
+    )
+    return {str(r[0]) for r in rows}
+
+
 def caller_owns_product(
     db: Any,
     product: Any,
@@ -68,11 +106,14 @@ def caller_owns_product(
     caller_email: Optional[str],
     caller_groups: Iterable[str],
     caller_team_ids: Optional[Set[str]] = None,
+    caller_project_ids: Any = LOOKUP,
 ) -> bool:
     """Whether the caller owns *this* product: draft owner, owning team or project member.
 
     Membership is resolved against the product only, never through a broad
-    listing scope (ONT-NEG-011). ``caller_team_ids`` is looked up when not given.
+    listing scope (ONT-NEG-011). ``caller_team_ids`` is looked up when not given;
+    ``caller_project_ids`` (from ``lookup_member_project_ids``) saves the
+    per-product project query when many products are checked.
     """
     if not caller_email:
         return False
@@ -97,6 +138,8 @@ def caller_owns_product(
             )
 
     product_project_id = getattr(product, "project_id", None)
+    if product_project_id and caller_project_ids is not LOOKUP:
+        return caller_project_ids is ALL_PROJECTS or str(product_project_id) in caller_project_ids
     if product_project_id:
         try:
             from src.common.config import get_settings
@@ -127,6 +170,7 @@ def can_read_product(
     caller_email: Optional[str],
     caller_groups: Iterable[str],
     caller_team_ids: Optional[Set[str]] = None,
+    caller_project_ids: Any = LOOKUP,
 ) -> bool:
     """The read rule for one product, with the caller's facts resolved by the caller."""
     if is_published_product(product) or is_admin:
@@ -134,4 +178,5 @@ def can_read_product(
     return caller_owns_product(
         db, product,
         caller_email=caller_email, caller_groups=caller_groups, caller_team_ids=caller_team_ids,
+        caller_project_ids=caller_project_ids,
     )

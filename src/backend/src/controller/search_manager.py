@@ -345,7 +345,7 @@ class SearchManager:
         offset: int = 0,
         include_facets: bool = True,
         fields: Optional[List[str]] = None,
-        exclude_ids: Optional[Iterable[str]] = None,
+        allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
     ) -> Dict[str, Any]:
         """MCP entry point: paginated/faceted search via the active backend.
 
@@ -356,14 +356,14 @@ class SearchManager:
         ``include_facets=False`` saves the facet-computation pass when the
         caller only wants records. ``fields=[...]`` narrows each result row to
         the requested keys (plus ``id``) so "then fetch details" flows don't
-        pay for description/tags/owner they won't use. ``exclude_ids`` (index
-        ids, e.g. the rows the caller can't read) are dropped before pagination
-        and facets.
+        pay for description/tags/owner they won't use. ``allowed_ids_by_type``
+        (index type -> the only index ids kept for that type, e.g. the products
+        the caller may read) applies before pagination and facets.
         """
         return self._backend.search(
             query, type_filter=type_filter, filters=filters,
             limit=limit, offset=offset, include_facets=include_facets, fields=fields,
-            exclude_ids=exclude_ids,
+            allowed_ids_by_type=allowed_ids_by_type,
         )
 
     def _filter_by_tag(

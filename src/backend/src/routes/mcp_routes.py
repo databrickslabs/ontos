@@ -92,6 +92,7 @@ MCP_FEATURE_ID = "mcp"
 FORWARDED_TOKEN_HEADER = "x-forwarded-access-token"
 # Client message for every identity rejection; the reason is in the audit entry.
 IDENTITY_REJECTED_MESSAGE = "The caller's identity could not be verified."
+INTERNAL_ERROR_MESSAGE = "The request failed with an unexpected error (error id {error_id})."
 
 # Session storage (in-memory for now, could be moved to Redis/DB for production)
 _sessions: Dict[str, Dict[str, Any]] = {}
@@ -245,10 +246,16 @@ class MCPHandler:
         except MCPError as e:
             return make_error_response(e.code, e.message, e.data, request_id=request_id)
         except Exception as e:
-            logger.error(f"Error handling MCP method {method}: {e}", exc_info=True)
+            # The exception's text goes to the log only, under an error id the
+            # client can quote.
+            error_id = new_error_id()
+            logger.error(
+                "Error handling MCP method %s (error id %s): %s", method, error_id, e,
+                exc_info=True,
+            )
             return make_error_response(
                 JSONRPC_INTERNAL_ERROR,
-                f"Internal error: {str(e)}",
+                INTERNAL_ERROR_MESSAGE.format(error_id=error_id),
                 request_id=request_id
             )
     
@@ -462,13 +469,9 @@ class MCPHandler:
                         "session_id": self._session_id,
                     },
                 )
-                raise MCPError(
-                    MCP_AUTH_FAILED,
-                    "Forwarded identity could not be verified. "
-                    "The forwarded access token was rejected (expired or invalid). "
-                    "Not falling back to the service principal — the request would run "
-                    "with grants the caller cannot see.",
-                )
+                # Not falling back to the service principal: the request would run
+                # with grants the caller cannot see. The reason is in the audit entry.
+                raise MCPError(MCP_AUTH_FAILED, IDENTITY_REJECTED_MESSAGE)
             self._identity_mode = "obo"
             return client
         self._identity_mode = "service_principal"

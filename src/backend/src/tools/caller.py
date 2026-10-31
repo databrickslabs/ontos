@@ -13,7 +13,11 @@ from fastapi import Request
 
 from src.common.authorization import is_user_feature_admin, resolve_effective_permissions
 from src.common.logging import get_logger
-from src.common.product_read_rule import is_product_read_admin, lookup_team_ids
+from src.common.product_read_rule import (
+    is_product_read_admin,
+    lookup_member_project_ids,
+    lookup_team_ids,
+)
 from src.models.users import UserInfo
 from src.tools.base import ToolCaller
 
@@ -64,6 +68,13 @@ async def resolve_tool_caller(
         except Exception:
             logger.error("Could not resolve the teams of %s (auth path %s)", user.email,
                          auth_path, exc_info=True)
+    project_ids: Any = set()
+    if db is not None and not products_admin:
+        try:
+            project_ids = lookup_member_project_ids(db, user.email, groups)
+        except Exception:
+            logger.error("Could not resolve the projects of %s (auth path %s)", user.email,
+                         auth_path, exc_info=True)
     return ToolCaller(
         email=user.email,
         auth_path=auth_path,
@@ -72,6 +83,7 @@ async def resolve_tool_caller(
         products_admin=products_admin,
         contracts_admin=contracts_admin,
         team_ids=team_ids,
+        project_ids=project_ids,
     )
 
 

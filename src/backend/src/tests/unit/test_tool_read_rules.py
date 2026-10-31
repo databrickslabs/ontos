@@ -330,3 +330,206 @@ class TestCallerResolution:
         user = UserInfo(email='ann@example.com', username='ann', user='Ann', ip=None, groups=[])
         caller = _run(resolve_tool_caller(user, MagicMock(), 'ask_ontos', db_session))
         assert caller.products_admin and caller.contracts_admin and caller.team_ids == set()
+
+
+# --- Review follow-ups ---------------------------------------------------------
+
+def _graph_iri(entity_type, entity_id):
+    return f'urn:ontos:{entity_type}:{entity_id}'
+
+
+class _Graph:
+    """A semantic models manager over a fixed set of neighbor rows and concepts."""
+
+    def __init__(self, neighbors, concepts=()):
+        self._neighbors = neighbors
+        self._concepts = list(concepts)
+        self.asked = []
+
+    def neighbors(self, iri, limit=200):
+        self.asked.append(iri)
+        return list(self._neighbors)
+
+    def get_concept_hierarchy(self, iri):
+        self.asked.append(iri)
+        c = SimpleNamespace(iri=iri, label='x', comment=None, concept_type='class',
+                            source_context='urn:app-entities')
+        nodes = [SimpleNamespace(iri=i, label=i, concept_type='individual')
+                 for i in self._concepts]
+        return SimpleNamespace(concept=c, ancestors=[], descendants=nodes, siblings=nodes)
+
+    def search_ontology_concepts(self, term, limit=20):
+        return [SimpleNamespace(concept=SimpleNamespace(iri=i, label=i, comment=None,
+                                                        source_context='urn:app-entities'),
+                                relevance_score=1.0, match_type='label')
+                for i in self._concepts]
+
+
+def _graph_ctx(world, caller, graph):
+    ctx = _ctx(world, caller)
+    ctx.semantic_models_manager = graph
+    return ctx
+
+
+class TestGraphNodes:
+    """get_concept_neighbors / get_concept_hierarchy / search_glossary_terms."""
+
+    def _nodes(self, world):
+        return {key: _graph_iri('data_product', row.id) for key, row in world.p.items()}
+
+    def test_neighbors_of_the_entity_type_hide_unreadable_products(self, world):
+        nodes = self._nodes(world)
+        rows = [{'direction': 'incoming', 'predicate': 'rdf:type', 'display': iri,
+                 'stepIri': iri, 'stepIsResource': True} for iri in nodes.values()]
+        for persona, readable in READABLE.items():
+            ctx = _graph_ctx(world, PERSONAS[persona], _Graph(rows))
+            res = _run(create_default_registry().execute(
+                'get_concept_neighbors', ctx,
+                {'concept_iri': 'urn:ontos:entity-type:data_product'}))
+            got = {n['step_iri'] for n in res.data['incoming']}
+            assert got == {nodes[k] for k in readable}, persona
+
+    def test_an_unreadable_product_node_is_answered_like_an_unknown_iri(self, world):
+        iri = self._nodes(world)['other_draft']
+        rows = [{'direction': 'outgoing', 'predicate': 'rdfs:label',
+                 'display': 'Other draft product', 'stepIri': None}]
+        graph = _Graph(rows)
+        res = _run(create_default_registry().execute(
+            'get_concept_neighbors', _graph_ctx(world, CONSUMER, graph), {'concept_iri': iri}))
+        assert res.success is True and res.data['outgoing'] == [] and graph.asked == []
+        assert res.denied_reason == NOT_READABLE
+        res = _run(create_default_registry().execute(
+            'get_concept_neighbors', _graph_ctx(world, ADMIN, graph), {'concept_iri': iri}))
+        assert res.data['outgoing'][0]['display'] == 'Other draft product'
+
+    def test_schema_and_property_nodes_follow_their_contract(self, world):
+        draft = world.c['other_draft'].id
+        rows = [{'direction': 'incoming', 'predicate': 'ontos:semanticAssignment',
+                 'display': iri, 'stepIri': iri, 'stepIsResource': True}
+                for iri in (_graph_iri('data_contract_schema', f'{draft}#secret'),
+                            _graph_iri('data_contract_property', f'{draft}#secret#col'),
+                            _graph_iri('data_contract_schema',
+                                       f"{world.c['published'].id}#public"))]
+        res = _run(create_default_registry().execute(
+            'get_concept_neighbors', _graph_ctx(world, CONSUMER, _Graph(rows)),
+            {'concept_iri': IRI}))
+        assert [n['step_iri'] for n in res.data['incoming']] == [rows[2]['stepIri']]
+
+    def test_hierarchy_and_glossary_search(self, world):
+        nodes = self._nodes(world)
+        graph = _Graph([], concepts=list(nodes.values()))
+        res = _run(create_default_registry().execute(
+            'get_concept_hierarchy', _graph_ctx(world, CONSUMER, graph),
+            {'concept_iri': 'urn:ontos:entity-type:data_product'}))
+        assert {d['iri'] for d in res.data['descendants']} == {nodes['published']}
+        assert {d['iri'] for d in res.data['siblings']} == {nodes['published']}
+        res = _run(create_default_registry().execute(
+            'get_concept_hierarchy', _graph_ctx(world, CONSUMER, graph),
+            {'concept_iri': nodes['own_draft']}))
+        assert res.success is False and res.error.startswith('Concept not found')
+        res = _run(create_default_registry().execute(
+            'search_glossary_terms', _graph_ctx(world, OWNER, graph), {'term': 'p'}))
+        assert {t['iri'] for t in res.data['terms']} == {nodes['published'], nodes['own_draft']}
+
+
+class TestDerivedEntities:
+    def test_schema_and_property_links_follow_their_contract(self, world):
+        draft, pub = world.c['other_draft'].id, world.c['published'].id
+        for etype, eid in (('data_contract_schema', f'{draft}#secret_schema'),
+                           ('data_contract_property', f'{draft}#secret_schema#col'),
+                           ('data_contract_schema', f'{pub}#public')):
+            world.db.add(EntitySemanticLinkDb(id=uuid.uuid4(), entity_id=eid, entity_type=etype,
+                                              iri=IRI, label='Customer', created_by='x'))
+        world.db.commit()
+        found = _call(world, 'consumer', 'find_entities_by_concept', concept_iri=IRI)
+        assert {e['entity_id'] for e in found.data['entities']} == {f'{pub}#public'}
+        admin = _call(world, 'admin', 'find_entities_by_concept', concept_iri=IRI)
+        assert len(admin.data['entities']) == 3
+        res = _call(world, 'consumer', 'list_semantic_links',
+                    entity_type='data_contract_schema', entity_id=f'{draft}#secret_schema')
+        assert res.data['total_found'] == 0
+
+
+class TestAllowList:
+    def test_an_index_entry_without_a_readable_row_is_left_out(self, world):
+        # E.g. another session's draft, indexed before its transaction commits.
+        ghost = SearchIndexItem(id='product::not-committed', type='data-product',
+                                feature_id='data-products', title='Ghost', description='x',
+                                link='/x', tags=[], extra_data={'status': 'draft'})
+        world.search.index.append(ghost)
+        res = _call(world, 'consumer', 'search_data_products', query='*')
+        assert 'not-committed' not in {r['id'] for r in res.data['products']}
+        assert res.data['total_found'] == 1
+        res = _call(world, 'admin', 'search_data_products', query='*')
+        assert 'not-committed' in {r['id'] for r in res.data['products']}
+
+
+class TestAppState:
+    def test_totals_count_only_readable_items(self, world):
+        for persona, readable in READABLE.items():
+            res = _call(world, persona, 'get_app_state')
+            assert res.data['counts']['data_products_total'] == len(readable), persona
+            assert res.data['counts']['data_contracts_total'] == len(readable), persona
+
+
+class TestOneQueryPerRequest:
+    def test_project_membership_is_resolved_once(self, world, monkeypatch):
+        from src.controller.projects_manager import projects_manager
+        from src.db_models.projects import ProjectDb, project_team_association
+        from src.db_models.teams import TeamDb, TeamMemberDb
+
+        team = TeamDb(id=str(uuid.uuid4()), name=f't{uuid.uuid4().hex[:6]}',
+                      created_by='x', updated_by='x')
+        proj = ProjectDb(id=str(uuid.uuid4()), name=f'p{uuid.uuid4().hex[:6]}',
+                         created_by='x', updated_by='x')
+        world.db.add_all([team, proj])
+        world.db.flush()
+        world.db.add(TeamMemberDb(team_id=team.id, member_type='user',
+                                  member_identifier='pat@example.com', added_by='x'))
+        world.db.execute(project_team_association.insert().values(
+            project_id=proj.id, team_id=team.id, assigned_by='x'))
+        in_project = DataProductDb(id=str(uuid.uuid4()), api_version='v1.0.0',
+                                   kind='DataProduct', name='Project draft', version='1.0.0',
+                                   status='draft', project_id=proj.id)
+        world.db.add(in_project)
+        world.db.commit()
+
+        def _no_per_product_query(**kwargs):
+            raise AssertionError('membership is resolved once per request')
+
+        monkeypatch.setattr(projects_manager, 'is_user_project_member', _no_per_product_query)
+
+        async def _levels(email, groups, request):
+            return {}
+
+        async def _not_admin(**kwargs):
+            return False
+
+        monkeypatch.setattr(tool_caller, 'resolve_effective_permissions', _levels)
+        monkeypatch.setattr(tool_caller, 'is_product_read_admin', lambda request, user: False)
+        monkeypatch.setattr(tool_caller, 'is_user_feature_admin', _not_admin)
+        user = UserInfo(email='pat@example.com', username='pat', user='Pat', ip=None, groups=[])
+        pat = _run(resolve_tool_caller(user, MagicMock(), 'ask_ontos', world.db))
+        assert pat.project_ids == {proj.id}
+
+        ctx = _ctx(world, pat)
+        res = _run(create_default_registry().execute(
+            'get_data_products', ctx, {'product_ids': [in_project.id, world.p['own_draft'].id]}))
+        assert {p['id'] for p in res.data['products']} == {in_project.id}
+
+    def test_readable_sets_are_computed_once_per_context(self, world, monkeypatch):
+        from src.tools import read_access
+
+        calls = []
+        real = read_access.can_read_product
+
+        def _counting(ctx, product):
+            calls.append(product.id)
+            return real(ctx, product)
+
+        monkeypatch.setattr(read_access, 'can_read_product', _counting)
+        ctx = _ctx(world, CONSUMER)
+        read_access.readable_ids(ctx, read_access.PRODUCT_TYPE)
+        first = len(calls)
+        read_access.readable_ids(ctx, read_access.PRODUCT_TYPE)
+        assert first == len(world.p) and len(calls) == first

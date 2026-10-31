@@ -54,6 +54,12 @@ class SearchGlossaryTermsTool(BaseTool):
             # Search concepts in the semantic models / knowledge graph
             # Results are ConceptSearchResult with nested 'concept' (OntologyConcept)
             results = ctx.semantic_models_manager.search_ontology_concepts(term, limit=20)
+            # The graph also holds product and contract nodes (labelled with
+            # their names): leave out the ones the caller can't read.
+            dropped = [r.concept.iri for r in results
+                       if read_access.iri_is_unreadable(ctx, r.concept.iri)]
+            results = [r for r in results
+                       if not read_access.iri_is_unreadable(ctx, r.concept.iri)]
             
             terms = []
             for result in results:
@@ -69,14 +75,14 @@ class SearchGlossaryTermsTool(BaseTool):
                 })
             
             logger.info(f"[search_glossary_terms] SUCCESS: Found {len(results)} matching terms")
-            return ToolResult(
+            return read_access.denied(ctx, self.name, ToolResult(
                 success=True,
                 data={
                     "terms": terms[:15],
                     "total_found": len(results),
                     "source": "knowledge_graph"
                 }
-            )
+            ), dropped)
             
         except Exception as e:
             return ToolResult(
@@ -359,14 +365,14 @@ class FindEntitiesByConceptTool(BaseTool):
             
             # Get all entities linked to this concept (explicit + inferred)
             links = manager.list_for_iri(iri=concept_iri)
-            # Products and contracts the caller can't read are left out.
-            hidden = read_access.hidden_entity_keys(ctx)
+            # Products and contracts (and their schemas and properties) the
+            # caller can't read are left out.
             dropped = [link.entity_id for link in links
-                       if (link.entity_type, link.entity_id) in hidden]
+                       if read_access.entity_is_unreadable(ctx, link.entity_type, link.entity_id)]
             
             entities = []
             for link in links:
-                if (link.entity_type, link.entity_id) in hidden:
+                if read_access.entity_is_unreadable(ctx, link.entity_type, link.entity_id):
                     continue
                 entities.append({
                     "entity_type": link.entity_type,
@@ -515,13 +521,30 @@ class GetConceptHierarchyTool(BaseTool):
             )
         
         try:
-            hierarchy = ctx.semantic_models_manager.get_concept_hierarchy(concept_iri)
+            # A product or contract node the caller can't read is answered like
+            # a missing concept, and such nodes are left out of the hierarchy.
+            unreadable = read_access.iri_is_unreadable(ctx, concept_iri)
+            hierarchy = (
+                None if unreadable
+                else ctx.semantic_models_manager.get_concept_hierarchy(concept_iri)
+            )
             
             if not hierarchy:
-                return ToolResult(
+                result = ToolResult(
                     success=False,
                     error=f"Concept not found: {concept_iri}"
                 )
+                return read_access.denied(ctx, self.name, result,
+                                          [concept_iri] if unreadable else [])
+
+            def _visible(concepts):
+                return [c for c in concepts if not read_access.iri_is_unreadable(ctx, c.iri)]
+
+            dropped = [
+                c.iri
+                for c in (*hierarchy.ancestors, *hierarchy.descendants, *hierarchy.siblings)
+                if read_access.iri_is_unreadable(ctx, c.iri)
+            ]
             
             # Format the response
             result = {
@@ -538,7 +561,7 @@ class GetConceptHierarchyTool(BaseTool):
                         "label": a.label,
                         "concept_type": a.concept_type
                     }
-                    for a in hierarchy.ancestors
+                    for a in _visible(hierarchy.ancestors)
                 ],
                 "descendants": [
                     {
@@ -546,7 +569,7 @@ class GetConceptHierarchyTool(BaseTool):
                         "label": d.label,
                         "concept_type": d.concept_type
                     }
-                    for d in hierarchy.descendants
+                    for d in _visible(hierarchy.descendants)
                 ],
                 "siblings": [
                     {
@@ -554,12 +577,13 @@ class GetConceptHierarchyTool(BaseTool):
                         "label": s.label,
                         "concept_type": s.concept_type
                     }
-                    for s in hierarchy.siblings
+                    for s in _visible(hierarchy.siblings)
                 ]
             }
             
             logger.info(f"[get_concept_hierarchy] SUCCESS: {len(hierarchy.ancestors)} ancestors, {len(hierarchy.descendants)} descendants, {len(hierarchy.siblings)} siblings")
-            return ToolResult(success=True, data=result)
+            return read_access.denied(ctx, self.name, ToolResult(success=True, data=result),
+                                      dropped)
             
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_concept_hierarchy", e))
@@ -604,13 +628,25 @@ class GetConceptNeighborsTool(BaseTool):
         max_neighbors = min(max_neighbors, 200)
         
         try:
-            neighbors = ctx.semantic_models_manager.neighbors(concept_iri, limit=max_neighbors)
+            # A product or contract node the caller can't read is answered like
+            # an unknown IRI (no neighbors), and such nodes are left out of the
+            # neighbors of any other node.
+            unreadable = read_access.iri_is_unreadable(ctx, concept_iri)
+            neighbors = (
+                [] if unreadable
+                else ctx.semantic_models_manager.neighbors(concept_iri, limit=max_neighbors)
+            )
+            dropped = [concept_iri] if unreadable else []
             
             # Separate into outgoing and incoming
             outgoing = []
             incoming = []
             
             for n in neighbors:
+                node = n.get("stepIri") or n.get("display")
+                if read_access.iri_is_unreadable(ctx, node):
+                    dropped.append(str(node))
+                    continue
                 neighbor_info = {
                     "predicate": n.get("predicate"),
                     "display": n.get("display"),
@@ -625,7 +661,7 @@ class GetConceptNeighborsTool(BaseTool):
                     incoming.append(neighbor_info)
             
             logger.info(f"[get_concept_neighbors] SUCCESS: {len(outgoing)} outgoing, {len(incoming)} incoming")
-            return ToolResult(
+            return read_access.denied(ctx, self.name, ToolResult(
                 success=True,
                 data={
                     "concept_iri": concept_iri,
@@ -634,7 +670,7 @@ class GetConceptNeighborsTool(BaseTool):
                     "total_outgoing": len(outgoing),
                     "total_incoming": len(incoming)
                 }
-            )
+            ), dropped)
             
         except Exception as e:
             return ToolResult(

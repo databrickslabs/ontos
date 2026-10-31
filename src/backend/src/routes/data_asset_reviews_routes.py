@@ -23,6 +23,7 @@ from src.controller.notifications_manager import NotificationsManager # Assuming
 from src.common.database import get_db
 from src.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
+from src.common.workspace_client import get_obo_workspace_client
 
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
@@ -349,9 +350,10 @@ async def get_asset_definition(
     asset_id: str,
     manager: DataAssetReviewManagerDep,
     # db: DBSessionDep # No longer needed here
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
-    """Get the definition (e.g., SQL) for a view or function asset."""
+    """Get the definition (e.g., SQL) for a view or function asset, read as the user."""
     logger.info(f"Getting definition for asset {asset_id} in request {request_id}")
     try:
         reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
@@ -363,7 +365,8 @@ async def get_asset_definition(
 
         definition = await manager.get_asset_definition(
             asset_fqn=reviewed_asset.asset_fqn,
-            asset_type=reviewed_asset.asset_type
+            asset_type=reviewed_asset.asset_type,
+            ws_client=user_client,
         )
 
         if definition is None:
@@ -384,7 +387,8 @@ async def get_metric_view_definition(
     request_id: str,
     asset_id: str,
     manager: DataAssetReviewManagerDep,
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
     """Get a metric view's definition: its YAML and its dimensions and measures."""
     try:
@@ -396,7 +400,9 @@ async def get_metric_view_definition(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Only metric views have a metric view definition, not {reviewed_asset.asset_type.value}",
             )
-        result = await manager.get_metric_view_definition(reviewed_asset.asset_fqn)
+        result = await manager.get_metric_view_definition(
+            reviewed_asset.asset_fqn, ws_client=user_client
+        )
         if result is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -416,9 +422,10 @@ async def get_table_preview(
     # db: DBSessionDep, # No longer needed here
     manager: DataAssetReviewManagerDep,
     limit: int = Query(25, ge=1, le=100, description="Number of rows to preview"),
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
-    """Get a preview of data for a table asset."""
+    """Get a preview of data for a table asset, read as the user."""
     logger.info(f"Getting preview for asset {asset_id} (table) in request {request_id} (limit={limit})")
     try:
         reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
@@ -430,7 +437,8 @@ async def get_table_preview(
 
         preview_data = await manager.get_table_preview(
             table_fqn=reviewed_asset.asset_fqn, 
-            limit=limit
+            limit=limit,
+            ws_client=user_client,
         )
 
         if preview_data is None:
@@ -454,9 +462,10 @@ async def analyze_asset_with_llm(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
-    """Triggers LLM analysis for a specific asset's content."""
+    """Triggers LLM analysis for a specific asset's content (read as the user)."""
     success = False
     details = {
         "params": {
@@ -486,7 +495,8 @@ async def analyze_asset_with_llm(
         # 2. Fetch the asset's definition (content) - this is an async call
         asset_content = await manager.get_asset_definition(
             asset_fqn=reviewed_asset_api.asset_fqn,
-            asset_type=reviewed_asset_api.asset_type
+            asset_type=reviewed_asset_api.asset_type,
+            ws_client=user_client,
         )
 
         if asset_content is None:

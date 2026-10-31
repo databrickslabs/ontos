@@ -741,7 +741,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return None
 
     # Add methods for getting asset content (text/data preview) using ws_client
-    async def get_metric_view_definition(self, asset_fqn: str) -> Optional[Dict[str, Any]]:
+    async def get_metric_view_definition(
+        self, asset_fqn: str, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[Dict[str, Any]]:
         """A metric view's definition: its YAML (``definition``) and the parsed
         spec (``metric_view``: source, filter, joins, dimensions, measures).
 
@@ -750,13 +752,20 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         """
         from src.common.metric_views import parse_metric_view_definition
 
-        definition = await self.get_asset_definition(asset_fqn, AssetType.METRIC)
+        definition = await self.get_asset_definition(asset_fqn, AssetType.METRIC, ws_client)
         if definition is None:
             return None
         return {'definition': definition, 'metric_view': parse_metric_view_definition(definition)}
 
-    async def get_asset_definition(self, asset_fqn: str, asset_type: AssetType) -> Optional[str]:
-        """Fetches the definition (e.g., SQL) for a view or function."""
+    async def get_asset_definition(
+        self, asset_fqn: str, asset_type: AssetType, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[str]:
+        """Fetches the definition (e.g., SQL) for a view or function.
+
+        ``ws_client`` is the requesting user's client (routes pass it, so Unity
+        Catalog decides what they may read); without it the manager's own is used.
+        """
+        client = self._ws_client if ws_client is None else ws_client
         settings: Settings = get_settings()
         is_demo_mode = settings.APP_DEMO_MODE
 
@@ -798,7 +807,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 logger.info(f"{reason_for_fallback} for asset {current_asset_fqn} (type: {current_asset_type.value}). Not in demo mode, so no sample will be loaded.")
             return None
 
-        if not self._ws_client:
+        if not client:
             logger.warning(f"Cannot fetch definition for {asset_fqn}: WorkspaceClient not available.")
             return _try_load_sample_for_demo(asset_type, asset_fqn, "WorkspaceClient not available")
             
@@ -810,16 +819,16 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             definition = None
             if asset_type in (AssetType.VIEW, AssetType.METRIC):
                  # A metric view's view_definition is its YAML spec
-                 table_info = self._ws_client.tables.get(full_name=asset_fqn)
+                 table_info = client.tables.get(full_name=asset_fqn)
                  definition = table_info.view_definition
             elif asset_type == AssetType.FUNCTION:
-                 func_info = self._ws_client.functions.get(name=asset_fqn)
+                 func_info = client.functions.get(name=asset_fqn)
                  definition = func_info.definition
             elif asset_type == AssetType.NOTEBOOK:
                 try:
                     notebook_path = asset_fqn # This might need adjustment
                     logger.info(f"Attempting to export notebook from workspace path: {notebook_path}")
-                    exported_content = self._ws_client.workspace.export_notebook(notebook_path)
+                    exported_content = client.workspace.export_notebook(notebook_path)
                     definition = exported_content
                     logger.info(f"Successfully exported notebook {asset_fqn}.")
                 except Exception as nb_export_error:
@@ -850,9 +859,12 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error fetching definition for {asset_fqn} (type: {asset_type.value}): {e}", exc_info=True)
             return _try_load_sample_for_demo(asset_type, asset_fqn, f"Unexpected error: {e}")
         
-    async def get_table_preview(self, table_fqn: str, limit: int = 25) -> Optional[Dict[str, Any]]:
-        """Fetches a preview of data from a table."""
-        if not self._ws_client:
+    async def get_table_preview(
+        self, table_fqn: str, limit: int = 25, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Fetches a preview of data from a table (with ``ws_client``, the user's, if given)."""
+        client = self._ws_client if ws_client is None else ws_client
+        if not client:
             logger.warning(f"Cannot fetch preview for {table_fqn}: WorkspaceClient not available.")
             return None
             
@@ -867,7 +879,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
              
              # --- Attempting preview via sql.execute --- #
             try:
-                table_info = self._ws_client.tables.get(full_name=table_fqn)
+                table_info = client.tables.get(full_name=table_fqn)
                 schema = table_info.columns
                 formatted_schema = [{"name": col.name, "type": col.type_text, "nullable": col.nullable} for col in schema]
                 
@@ -875,7 +887,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 # Note: This requires ws_client to be configured with appropriate
                 # credentials and potentially a host/warehouse for SQL execution.
                 # It might fail if only configured for workspace APIs.
-                result = self._ws_client.sql.execute(
+                result = client.sql.execute(
                     statement=f"SELECT * FROM {table_fqn} LIMIT {limit}",
                     # warehouse_id="YOUR_WAREHOUSE_ID" # Usually required
                 )

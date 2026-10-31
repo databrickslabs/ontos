@@ -296,6 +296,15 @@ class UpdateDataContractTool(BaseTool):
                     error=f"Data contract '{contract_id}' not found"
                 )
             
+            # The domain lives in the entity-domain associations, not on the row.
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+            assigned = entity_domain_repo.get_domains_for_entity(
+                ctx.db, entity_type="data_contract", entity_id=str(updated.id)
+            )
+            primary = next((d for d in assigned if d.is_primary), None)
+            domain_name = (primary or (assigned[0] if assigned else None))
+            domain_name = domain_name.domain_name if domain_name else None
+
             logger.info(f"[update_data_contract] SUCCESS: Updated contract id={updated.id}")
             return ToolResult(
                 success=True,
@@ -303,7 +312,7 @@ class UpdateDataContractTool(BaseTool):
                     "success": True,
                     "contract_id": updated.id,
                     "name": updated.name,
-                    "domain": updated.domain,
+                    "domain": domain_name,
                     "status": updated.status,
                     "message": f"Contract '{updated.name}' updated successfully.",
                     "url": f"/data-contracts/{updated.id}"

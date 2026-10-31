@@ -11,6 +11,10 @@
     "notApplied": "La tua decisione di revisione è stata registrata, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}",
     "requesterNotApplied": "La revisione del tuo contratto è stata decisa, ma il contratto non è stato impostato su «{{toStatus}}»: {{reason}}"
   },
+  "contractStatusChangeRequest": {
+    "title": "Richiesta di modifica dello stato in attesa",
+    "description": "{{requester}} chiede di cambiare lo stato da '{{fromStatus}}' a '{{toStatus}}'.\n\nMotivazione: {{justification}}"
+  },
   "ui": {
     "tooltip": "Notifiche",
     "loading": "Caricamento notifiche...",

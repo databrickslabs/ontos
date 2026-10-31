@@ -1240,6 +1240,26 @@
       "couldNotSubmit": "Could not submit decision"
     }
   },
+  "statusChangeRequest": {
+    "title": "Handle Status Change Request",
+    "requesterLabel": "Requester:",
+    "contractIdLabel": "Contract ID:",
+    "statusLabel": "Status change:",
+    "justificationLabel": "Justification:",
+    "responseMessageLabel": "Response Message (optional)",
+    "responseMessagePlaceholder": "Add notes about your decision...",
+    "messageHint": "This message will be sent to the requester along with your decision.",
+    "deny": "Deny",
+    "approve": "Approve",
+    "toast": {
+      "approvedTitle": "Status Change Approved",
+      "approvedDescription": "The contract is now {{toStatus}}.",
+      "deniedTitle": "Status Change Denied",
+      "deniedDescription": "The request to change the status to {{toStatus}} was denied.",
+      "failedTitle": "Failed",
+      "couldNotSubmit": "Could not submit decision"
+    }
+  },
   "stewardReview": {
     "title": "Handle Contract Review",
     "requesterLabel": "Requester:",

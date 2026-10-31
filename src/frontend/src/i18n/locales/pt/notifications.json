@@ -11,6 +11,10 @@
     "notApplied": "Sua decisão de revisão foi registrada, mas o contrato não foi alterado para \"{{toStatus}}\": {{reason}}",
     "requesterNotApplied": "A revisão do seu contrato foi decidida, mas o contrato não foi alterado para \"{{toStatus}}\": {{reason}}"
   },
+  "contractStatusChangeRequest": {
+    "title": "Solicitação de Mudança de Status Pendente",
+    "description": "{{requester}} está solicitando mudar o status de '{{fromStatus}}' para '{{toStatus}}'.\n\nJustificativa: {{justification}}"
+  },
   "ui": {
     "tooltip": "Notificações",
     "loading": "Carregando notificações...",

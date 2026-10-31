@@ -1240,6 +1240,26 @@
       "couldNotSubmit": "Kon beslissing niet indienen"
     }
   },
+  "statusChangeRequest": {
+    "title": "Verzoek om statuswijziging afhandelen",
+    "requesterLabel": "Aanvrager:",
+    "contractIdLabel": "Contract-ID:",
+    "statusLabel": "Statuswijziging:",
+    "justificationLabel": "Motivering:",
+    "responseMessageLabel": "Antwoordbericht (optioneel)",
+    "responseMessagePlaceholder": "Voeg opmerkingen over uw beslissing toe...",
+    "messageHint": "Dit bericht wordt samen met uw beslissing naar de aanvrager gestuurd.",
+    "deny": "Weigeren",
+    "approve": "Goedkeuren",
+    "toast": {
+      "approvedTitle": "Statuswijziging goedgekeurd",
+      "approvedDescription": "Het contract is nu {{toStatus}}.",
+      "deniedTitle": "Statuswijziging geweigerd",
+      "deniedDescription": "Het verzoek om de status te wijzigen naar {{toStatus}} is geweigerd.",
+      "failedTitle": "Mislukt",
+      "couldNotSubmit": "Beslissing kon niet worden verzonden"
+    }
+  },
   "stewardReview": {
     "title": "Contractbeoordeling behandelen",
     "requesterLabel": "Aanvrager:",

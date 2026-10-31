@@ -6304,7 +6304,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         notifications_manager.create_notification(notification=requester_note, db=db)
         
-        # Create notification for admins about the pending request
+        # Create notification for admins about the pending request. Its action
+        # opens the decision dialog, which calls handle-status-change.
+        from src.common.notification_i18n import notification_i18n_data
+        i18n_data = notification_i18n_data(
+            'notifications:contractStatusChangeRequest.title',
+            'notifications:contractStatusChangeRequest.description',
+            requester=requester_email,
+            fromStatus=current_status,
+            toStatus=target_status_lower,
+            justification=justification,
+        )
+        i18n_data['i18n']['statusNamespace'] = 'data-contracts'
         admin_note = Notification(
             id=str(uuid4()),
             created_at=now,
@@ -6314,6 +6325,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             description=f"{requester_email} is requesting to change status from '{current_status}' to '{target_status}'.\n\nJustification: {justification}",
             recipient="admins",
             can_delete=True,
+            action_type="handle_status_change_request",
+            action_payload={
+                "contract_id": contract_id,
+                "contract_name": contract.name,
+                "requester_email": requester_email,
+                "from_status": current_status,
+                "target_status": target_status_lower,
+                "justification": justification,
+            },
+            data=i18n_data,
         )
         notifications_manager.create_notification(notification=admin_note, db=db)
         
@@ -6389,7 +6410,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             target_status_lower = target_status.lower()
             allowed_transitions = self._get_allowed_status_transitions(from_status)
             if target_status_lower not in allowed_transitions:
-                raise ValueError(f"Invalid transition from '{from_status}' to '{target_status}'")
+                # Coded: a request decided after the status changed (e.g. a
+                # second approval) is explained in the UI language
+                from src.common.api_errors import InvalidStatusTransitionError
+                raise InvalidStatusTransitionError(
+                    f"Invalid transition from '{from_status}' to '{target_status}'",
+                    fromStatus=from_status,
+                    toStatus=target_status_lower,
+                )
 
             # Through transition_status, like a product's approved request, so
             # the before_status_change gates run and on_status_change fires.

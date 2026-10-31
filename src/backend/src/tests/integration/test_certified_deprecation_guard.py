@@ -24,6 +24,7 @@ from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_domains import DataDomain
 from src.db_models.data_products import DataProductDb
 from src.db_models.domain_associations import EntityDomainAssociationDb
+from src.db_models.notifications import NotificationDb
 
 CODE = 'certified_deprecation_requires_approval'
 
@@ -206,6 +207,73 @@ class TestApprovedRequest:
 
         assert approved.status_code == 200, approved.text
         assert _status(db_session, DataProductDb, product_id) == 'deprecated'
+
+
+def _request_contract_deprecation(client: TestClient, contract_id: str) -> None:
+    requested = client.post(
+        f'/api/data-contracts/{contract_id}/request-status-change',
+        json={'target_status': 'deprecated',
+              'justification': 'Replaced by the v2 contract, consumers moved'},
+    )
+    assert requested.status_code == 200, requested.text
+
+
+def _admin_requests(db: Session, contract_id: str):
+    """The admins' notifications of a contract's status change requests."""
+    db.expire_all()
+    notes = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'handle_status_change_request',
+    ).all()
+    return [n for n in notes if json.loads(n.action_payload)['contract_id'] == contract_id]
+
+
+class TestContractRequestNotification:
+    """The admins' notification is what the UI decides a contract's request from."""
+
+    def test_the_admin_notification_carries_the_decision_action(self, client, db_session):
+        contract_id = _contract(db_session)
+
+        _request_contract_deprecation(client, contract_id)
+
+        notes = _admin_requests(db_session, contract_id)
+        assert len(notes) == 1
+        note = notes[0]
+        assert note.recipient == 'admins' and note.read is False
+        assert json.loads(note.action_payload) == {
+            'contract_id': contract_id,
+            'contract_name': f'Contract {contract_id[:8]}',
+            'requester_email': 'test@example.com',
+            'from_status': 'active',
+            'target_status': 'deprecated',
+            'justification': 'Replaced by the v2 contract, consumers moved',
+        }
+        i18n = json.loads(note.data)['i18n']
+        assert i18n['title'] == 'notifications:contractStatusChangeRequest.title'
+        assert i18n['description'] == 'notifications:contractStatusChangeRequest.description'
+        assert i18n['statusNamespace'] == 'data-contracts'
+        assert i18n['params']['fromStatus'] == 'active'
+        assert i18n['params']['toStatus'] == 'deprecated'
+
+    def test_approving_marks_it_handled_and_a_second_approval_is_coded(
+        self, client, db_session,
+    ):
+        contract_id = _contract(db_session)
+        _request_contract_deprecation(client, contract_id)
+        body = {'decision': 'approve', 'target_status': 'deprecated',
+                'requester_email': 'test@example.com'}
+
+        approved = client.post(f'/api/data-contracts/{contract_id}/handle-status-change', json=body)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
+        assert [n.read for n in _admin_requests(db_session, contract_id)] == [True]
+
+        again = client.post(f'/api/data-contracts/{contract_id}/handle-status-change', json=body)
+
+        assert again.status_code == 409, again.text
+        detail = again.json()['detail']
+        assert detail['code'] == 'invalid_status_transition'
+        assert detail['params'] == {'fromStatus': 'deprecated', 'toStatus': 'deprecated'}
 
 
 class TestSwitchedOff:

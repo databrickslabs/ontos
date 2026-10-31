@@ -11,6 +11,10 @@
     "notApplied": "レビューの判断は記録されましたが、契約は「{{toStatus}}」に設定されませんでした: {{reason}}",
     "requesterNotApplied": "契約のレビューは決定されましたが、契約は「{{toStatus}}」に変更されませんでした: {{reason}}"
   },
+  "contractStatusChangeRequest": {
+    "title": "ステータス変更の依頼が保留中です",
+    "description": "{{requester}} がステータスを '{{fromStatus}}' から '{{toStatus}}' に変更するよう依頼しています。\n\n理由: {{justification}}"
+  },
   "ui": {
     "tooltip": "通知",
     "loading": "通知を読み込んでいます...",

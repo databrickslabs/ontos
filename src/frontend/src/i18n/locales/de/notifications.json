@@ -11,6 +11,10 @@
     "notApplied": "Ihre Prüfentscheidung wurde gespeichert, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}",
     "requesterNotApplied": "Über das Review Ihres Vertrags wurde entschieden, aber der Vertrag wurde nicht auf „{{toStatus}}“ gesetzt: {{reason}}"
   },
+  "contractStatusChangeRequest": {
+    "title": "Anfrage zur Statusänderung ausstehend",
+    "description": "{{requester}} möchte den Status von '{{fromStatus}}' auf '{{toStatus}}' ändern.\n\nBegründung: {{justification}}"
+  },
   "ui": {
     "tooltip": "Benachrichtigungen",
     "loading": "Benachrichtigungen werden geladen...",

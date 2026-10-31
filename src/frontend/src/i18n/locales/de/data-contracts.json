@@ -1240,6 +1240,26 @@
       "couldNotSubmit": "Entscheidung konnte nicht eingereicht werden"
     }
   },
+  "statusChangeRequest": {
+    "title": "Anfrage zur Statusänderung bearbeiten",
+    "requesterLabel": "Antragsteller:",
+    "contractIdLabel": "Vertrags-ID:",
+    "statusLabel": "Statusänderung:",
+    "justificationLabel": "Begründung:",
+    "responseMessageLabel": "Antwortnachricht (optional)",
+    "responseMessagePlaceholder": "Fügen Sie Anmerkungen zu Ihrer Entscheidung hinzu...",
+    "messageHint": "Diese Nachricht wird zusammen mit Ihrer Entscheidung an den Antragsteller gesendet.",
+    "deny": "Ablehnen",
+    "approve": "Genehmigen",
+    "toast": {
+      "approvedTitle": "Statusänderung genehmigt",
+      "approvedDescription": "Der Vertrag ist jetzt {{toStatus}}.",
+      "deniedTitle": "Statusänderung abgelehnt",
+      "deniedDescription": "Die Anfrage, den Status auf {{toStatus}} zu ändern, wurde abgelehnt.",
+      "failedTitle": "Fehlgeschlagen",
+      "couldNotSubmit": "Entscheidung konnte nicht eingereicht werden"
+    }
+  },
   "stewardReview": {
     "title": "Vertragsprüfung bearbeiten",
     "requesterLabel": "Antragsteller:",

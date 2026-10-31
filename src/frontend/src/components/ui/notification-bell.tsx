@@ -13,6 +13,8 @@ import HandleAccessGrantDialog from '@/components/access/handle-access-grant-dia
 import HandleStewardReviewDialog from '@/components/data-contracts/handle-steward-review-dialog';
 import HandlePublishRequestDialog from '@/components/data-contracts/handle-publish-request-dialog';
 import HandleDeployRequestDialog from '@/components/data-contracts/handle-deploy-request-dialog';
+import HandleStatusChangeRequestDialog from
+  '@/components/data-contracts/handle-status-change-request-dialog';
 import WorkflowApprovalResponseDialog, {
   type WorkflowApprovalResponseDialogPayload,
 } from '@/components/workflows/workflow-approval-response-dialog';
@@ -36,6 +38,7 @@ function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
     at === 'handle_steward_review' ||
     at === 'handle_publish_request' ||
     at === 'handle_deploy_request' ||
+    at === 'handle_status_change_request' ||
     at === 'certification_requested' ||
     at === 'publication_requested'
   );
@@ -60,6 +63,9 @@ export default function NotificationBell() {
   const [selectedPublishPayload, setSelectedPublishPayload] = useState<Record<string, any> | null>(null);
   const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false);
   const [selectedDeployPayload, setSelectedDeployPayload] = useState<Record<string, any> | null>(null);
+  const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] = useState(false);
+  const [selectedStatusChangePayload, setSelectedStatusChangePayload] =
+    useState<Record<string, any> | null>(null);
   const [isAccessGrantDialogOpen, setIsAccessGrantDialogOpen] = useState(false);
   const [selectedAccessGrantPayload, setSelectedAccessGrantPayload] = useState<Record<string, any> | null>(null);
   const [isWorkflowApprovalDialogOpen, setIsWorkflowApprovalDialogOpen] = useState(false);
@@ -127,6 +133,15 @@ export default function NotificationBell() {
     }
   };
 
+  const handleOpenStatusChangeDialog = (payload: Record<string, any> | undefined | null) => {
+    if (payload) {
+      setSelectedStatusChangePayload(payload);
+      openDialogNextFrame(setIsStatusChangeDialogOpen);
+    } else {
+      console.error("Cannot open status change dialog: payload is missing.");
+    }
+  };
+
   const handleOpenAccessGrantDialog = (payload: Record<string, any> | undefined | null) => {
     if (payload) {
       setSelectedAccessGrantPayload(payload);
@@ -170,6 +185,8 @@ export default function NotificationBell() {
     setIsPublishDialogOpen(false);
     setSelectedDeployPayload(null);
     setIsDeployDialogOpen(false);
+    setSelectedStatusChangePayload(null);
+    setIsStatusChangeDialogOpen(false);
     setSelectedAccessGrantPayload(null);
     setIsAccessGrantDialogOpen(false);
   };
@@ -364,6 +381,23 @@ export default function NotificationBell() {
                       {notification.read ? t('notifications:ui.viewDetails') : t('notifications:ui.handleDeploy')}
                     </Button>
                   )}
+                  {notification.action_type === 'handle_status_change_request'
+                    && notification.action_payload && (
+                    <Button
+                      variant={notification.read ? "outline" : "default"}
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenStatusChangeDialog(notification.action_payload);
+                      }}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      {notification.read
+                        ? t('notifications:ui.viewDetails')
+                        : t('notifications:ui.approveDeny')}
+                    </Button>
+                  )}
                   {notification.action_type === 'workflow_approval' && notification.action_payload?.execution_id && (
                     notification.action_payload?.handled ? (
                       <div className="text-xs text-muted-foreground mt-2 italic">
@@ -505,6 +539,21 @@ export default function NotificationBell() {
         requesterEmail={selectedDeployPayload.requester_email ?? t('notifications:ui.unknownUser')}
         catalog={selectedDeployPayload.catalog}
         schema={selectedDeployPayload.schema}
+        onDecisionMade={handleDecisionMade}
+      />
+    )}
+    {selectedStatusChangePayload && (
+      <HandleStatusChangeRequestDialog
+        isOpen={isStatusChangeDialogOpen}
+        onOpenChange={setIsStatusChangeDialogOpen}
+        contractId={selectedStatusChangePayload.contract_id ?? t('notifications:ui.unknownId')}
+        contractName={selectedStatusChangePayload.contract_name}
+        requesterEmail={
+          selectedStatusChangePayload.requester_email ?? t('notifications:ui.unknownUser')
+        }
+        fromStatus={selectedStatusChangePayload.from_status}
+        targetStatus={selectedStatusChangePayload.target_status ?? ''}
+        justification={selectedStatusChangePayload.justification}
         onDecisionMade={handleDecisionMade}
       />
     )}

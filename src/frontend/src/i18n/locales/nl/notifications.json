@@ -11,6 +11,10 @@
     "notApplied": "Uw reviewbeslissing is vastgelegd, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}",
     "requesterNotApplied": "Over de review van uw contract is beslist, maar het contract is niet op '{{toStatus}}' gezet: {{reason}}"
   },
+  "contractStatusChangeRequest": {
+    "title": "Verzoek om statuswijziging in behandeling",
+    "description": "{{requester}} vraagt de status te wijzigen van '{{fromStatus}}' naar '{{toStatus}}'.\n\nMotivering: {{justification}}"
+  },
   "ui": {
     "tooltip": "Meldingen",
     "loading": "Meldingen laden...",

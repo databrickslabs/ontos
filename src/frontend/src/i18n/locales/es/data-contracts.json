@@ -1240,6 +1240,26 @@
       "couldNotSubmit": "No se pudo enviar la decisión"
     }
   },
+  "statusChangeRequest": {
+    "title": "Gestionar solicitud de cambio de estado",
+    "requesterLabel": "Solicitante:",
+    "contractIdLabel": "ID del contrato:",
+    "statusLabel": "Cambio de estado:",
+    "justificationLabel": "Justificación:",
+    "responseMessageLabel": "Mensaje de respuesta (opcional)",
+    "responseMessagePlaceholder": "Añada notas sobre su decisión...",
+    "messageHint": "Este mensaje se enviará al solicitante junto con su decisión.",
+    "deny": "Denegar",
+    "approve": "Aprobar",
+    "toast": {
+      "approvedTitle": "Cambio de estado aprobado",
+      "approvedDescription": "El contrato ahora está {{toStatus}}.",
+      "deniedTitle": "Cambio de estado denegado",
+      "deniedDescription": "Se denegó la solicitud de cambiar el estado a {{toStatus}}.",
+      "failedTitle": "Error",
+      "couldNotSubmit": "No se pudo enviar la decisión"
+    }
+  },
   "stewardReview": {
     "title": "Gestionar revisión del contrato",
     "requesterLabel": "Solicitante:",

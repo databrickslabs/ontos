@@ -442,7 +442,9 @@ deprecation when the request is applied after an approval:
 - a product's request, by the approval step of the Status Change Request workflow
   (`on_request_status_change`; a run without an approval step doesn't count);
 - a product's or contract's request approved with `handle-status-change` by a user
-  with Admin on the feature.
+  with Admin on the feature. For a contract, the admins' *Status Change Request
+  Pending* notification has an *Approve/Deny* action that opens the decision dialog,
+  which calls this route.
 
 The guard runs before the status gates, which can add stricter rules on top. It can
 be switched off for domains, data products and data contracts with the same

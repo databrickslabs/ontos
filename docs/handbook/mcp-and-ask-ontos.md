@@ -220,10 +220,12 @@ applies to any authenticated app user, scope it read-only.
 **"If I create an MCP token, does that token bypass Ontos permissions?"**
 
 No. With a forwarded user token the tools act for that verified user, whose
-Ontos roles apply as in the REST API (feature levels for changes, the read
-rules for data products and contracts). With only an API key there is no user:
-the tools read published products and contracts only and refuse every change.
+Ontos roles apply as in the REST API (feature levels for changes, the
+Read-only level and the read rules for data products and contracts). With only
+an API key there is no user: the tools get Read-only on the features the
+token's scopes name, read published products and contracts only, and refuse
+every change.
 The token's scopes are an *additional* restriction — they narrow what the token
 can do, never widen it.
 
-_Last verified against codebase: 2026-10-30_
+_Last verified against codebase: 2026-10-31_

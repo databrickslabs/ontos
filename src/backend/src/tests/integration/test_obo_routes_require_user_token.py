@@ -100,6 +100,17 @@ def test_local_development_keeps_the_app_client(client, app_client, test_setting
     app_client.assert_called_once()
 
 
+def test_the_sp_fallback_setting_keeps_the_app_client(client, app_client, test_settings):
+    """Deployments without on-behalf-of auth opt in with OBO_ALLOW_SP_FALLBACK=true."""
+    test_settings.OBO_ALLOW_SP_FALLBACK = True
+    app_client.return_value.connections.list.return_value = []
+
+    response = client.get('/api/workflows/http-connections')
+
+    assert response.status_code == 200, response.text
+    app_client.assert_called_once()
+
+
 def test_the_users_token_selects_the_users_client(client, app_client, monkeypatch):
     user_client = MagicMock(name='user client')
     user_client.connections.list.return_value = []

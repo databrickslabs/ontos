@@ -15,13 +15,16 @@ from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import src.common.workspace_client as wc
+from src.common.config import Settings
 from src.common.api_errors import UserTokenRequiredError, coded_http_exception_handler
 
 USER_CLIENT = object()
 
 
-def _settings(env: str):
-    return SimpleNamespace(ENV=env, DATABRICKS_HOST='https://example.cloud.databricks.com')
+def _settings(env: str, **extra):
+    return SimpleNamespace(
+        ENV=env, DATABRICKS_HOST='https://example.cloud.databricks.com', **extra
+    )
 
 
 def _request(headers: dict):
@@ -87,6 +90,50 @@ def test_local_development_keeps_the_app_client(app_client, user_client_builder,
     assert client is app_client.return_value
     app_client.assert_called_once_with(settings, 12)
     user_client_builder.assert_not_called()
+
+
+def test_the_sp_fallback_setting_is_off_by_default():
+    assert Settings.model_fields['OBO_ALLOW_SP_FALLBACK'].default is False
+
+
+def test_with_the_sp_fallback_setting_off_the_client_is_refused(app_client):
+    with pytest.raises(HTTPException) as exc_info:
+        wc.get_obo_workspace_client(_request({}), _settings('PROD', OBO_ALLOW_SP_FALLBACK=False))
+
+    assert exc_info.value.status_code == 403
+    app_client.assert_not_called()
+
+
+def test_with_the_sp_fallback_setting_on_the_app_client_is_returned(
+    app_client, user_client_builder
+):
+    """Opt-in for deployments without on-behalf-of auth: the behaviour before."""
+    settings = _settings('PROD', OBO_ALLOW_SP_FALLBACK=True)
+
+    client = wc.get_obo_workspace_client(_request({}), settings, timeout=7)
+
+    assert client is app_client.return_value
+    app_client.assert_called_once_with(settings, 7)
+    user_client_builder.assert_not_called()
+
+
+@pytest.mark.parametrize('value', ['true', 'True', 1, MagicMock()])
+def test_only_a_real_true_opts_in(app_client, value):
+    with pytest.raises(HTTPException):
+        wc.get_obo_workspace_client(_request({}), _settings('PROD', OBO_ALLOW_SP_FALLBACK=value))
+
+    app_client.assert_not_called()
+
+
+def test_the_setting_is_read_from_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv('OBO_ALLOW_SP_FALLBACK', 'true')
+
+    settings = Settings(
+        DATABRICKS_HOST='https://example.cloud.databricks.com',
+        DATABRICKS_WAREHOUSE_ID='w', APP_AUDIT_LOG_DIR=str(tmp_path),
+    )
+
+    assert settings.OBO_ALLOW_SP_FALLBACK is True
 
 
 def test_with_the_user_token_the_users_client_is_built(app_client, user_client_builder):

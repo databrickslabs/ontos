@@ -408,14 +408,18 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
 USER_TOKEN_REQUIRED_MESSAGE = "This request needs the user's Databricks token, and it has none."
 
 
-def _local_dev_without_user_token(settings: Settings) -> bool:
+def _sp_fallback_allowed(settings: Settings) -> bool:
     """Whether a request without the user's token may use the app's own client.
 
-    Design decision: only local development (ENV=LOCAL*, the documented local setting)
-    keeps that fallback, because no Databricks Apps proxy forwards a user token there.
-    Every other ENV (PROD is the default and what app.yaml sets) refuses the request.
+    Refused by default. Two explicit opt-ins keep the fallback:
+    - ENV=LOCAL* (the documented local setting): no Databricks Apps proxy forwards
+      a user token there.
+    - OBO_ALLOW_SP_FALLBACK=true: a deployment without on-behalf-of auth enabled.
+    Neither is set in app.yaml (ENV=PROD there, and PROD is the default).
     """
-    return str(getattr(settings, 'ENV', '') or '').upper().startswith('LOCAL')
+    if str(getattr(settings, 'ENV', '') or '').upper().startswith('LOCAL'):
+        return True
+    return getattr(settings, 'OBO_ALLOW_SP_FALLBACK', False) is True
 
 
 def get_workspace_client_dependency(timeout: int = 30):
@@ -453,7 +457,8 @@ def get_obo_workspace_client(
     Raises:
         HTTPException: 403 with code ``user_token_required`` when the request has no
             x-forwarded-access-token. The app's own client is never returned in its
-            place, except with ENV=LOCAL (see ``_local_dev_without_user_token``).
+            place, except with ENV=LOCAL or OBO_ALLOW_SP_FALLBACK=true (see
+            ``_sp_fallback_allowed``).
     """
     from fastapi import HTTPException
 
@@ -467,9 +472,10 @@ def get_obo_workspace_client(
     obo_token = request.headers.get('x-forwarded-access-token')
 
     if not obo_token:
-        if _local_dev_without_user_token(settings):
+        if _sp_fallback_allowed(settings):
             logger.warning(
-                "OBO token not found in request headers; ENV=LOCAL, using the app's client"
+                "OBO token not found in request headers; ENV=LOCAL or "
+                "OBO_ALLOW_SP_FALLBACK set, falling back to the app's service principal client"
             )
             return get_workspace_client(settings, timeout)
         logger.warning("OBO token not found in request headers; on-behalf-of client refused")

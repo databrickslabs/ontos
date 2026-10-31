@@ -451,6 +451,10 @@ class TestMcpChecksTheLevel:
         assert entry['details']['error_code'] == TOOL_NOT_PERMITTED_CODE
         assert entry['details']['auth_path'] == 'mcp_forwarded_token'
         assert entry['details']['token_name'] == 'tok' and entry['details']['token_id'] == 't1'
+        # The code and its params reach the client, not only the audit.
+        assert out['structuredContent']['error_code'] == TOOL_NOT_PERMITTED_CODE
+        assert out['structuredContent']['feature_id'] == 'data-domains'
+        assert out['structuredContent']['required_level'] == 'Admin'
 
         create_calls = _recording_tool(h, 'create_domain')
         out = _run(h._handle_tools_call({'name': 'create_domain', 'arguments': {}}))
@@ -508,3 +512,24 @@ class TestMcpChecksTheLevel:
         assert resp.error.message == mcp_routes.IDENTITY_REJECTED_MESSAGE
         rejected = _audits(audit, 'IDENTITY_REJECTED')[0]['details']
         assert rejected['tool_name'] == 'get_domain' and rejected['reason'] == 'caller_unresolved'
+
+    def test_an_unexpected_failure_is_coded_too(self):
+        h = _mcp_handler({})
+
+        async def _boom(ctx, **kwargs):
+            raise RuntimeError('secret detail')
+
+        h._tool_registry.get('get_domain').execute = _boom
+        out = _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
+        assert out['isError'] is True
+        assert out['structuredContent']['error_code'] == 'tool_failed'
+        assert out['structuredContent']['error_id'] in out['content'][0]['text']
+        assert 'secret detail' not in str(out)
+
+    def test_the_test_user_header_does_not_name_the_caller(self, obo):
+        # Only the verified forwarded token names an MCP caller.
+        h = _mcp_handler({'X-Test-Token': 'tok'}, MagicMock())
+        h._settings.TEST_USER_TOKEN = 'tok'
+        calls = _recording_tool(h, 'get_domain')
+        _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
+        assert calls[0].auth_path == 'mcp_api_key' and calls[0].email is None

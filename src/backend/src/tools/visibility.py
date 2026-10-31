@@ -2,8 +2,9 @@
 
 ``visibility``:
 
-- ``published``: active items with a publication scope other than ``none``,
-  the marketplace's rule (``GET /api/data-products/published``). The MCP default.
+- ``published``: status ``active`` and a publication scope other than ``none``,
+  within the read rule. (The marketplace route ``GET /api/data-products/published``
+  checks the scope only; this also requires ``active``.) The MCP default.
 - ``readable``: everything the read rule lets the caller read
   (``src.tools.read_access``): published items plus the drafts and in-review
   items the caller owns or administers. The Ask Ontos default.
@@ -11,9 +12,11 @@
 Both stay within the read rule. ``min_certification_level`` keeps items whose
 certification level (the level order) is at least the given one, and
 ``include_history=False`` (the default, as in the REST lists) keeps one version
-per version family. Everything is applied as ``exclude_ids`` before pagination,
-counts and facets: the one-version-per-family step runs after the search's
-query and filters, so it keeps the newest version that matches. Get-by-id tools
+per version family. The result is the search's allow-list
+(``allowed_ids_by_type``: the only product and contract ids it keeps), applied
+before pagination, counts and facets; the one-version-per-family step runs after
+the search's query and filters (``SearchManager.match_ids``), so it keeps the
+newest version that matches. Get-by-id tools
 use the read rule only.
 """
 
@@ -89,7 +92,13 @@ def is_published(row: Any) -> bool:
 def _candidate_rows(ctx: ToolContext, kind: str, *, visibility: str,
                     min_certification_level: Optional[int]) -> List[Any]:
     """The rows of ``kind`` the caller may read that pass the visibility and level."""
-    rows = ctx.db.query(_model(kind)).all()
+    from sqlalchemy.orm import lazyload, load_only
+
+    model = _model(kind)
+    cols = (model.id, model.status, model.publication_scope, model.certification_level,
+            model.version_family_id, model.created_at)
+    # Only the columns the selection reads, and none of the eager relationships.
+    rows = ctx.db.query(model).options(load_only(*cols), lazyload("*")).all()
     readable = read_access.readable_ids(ctx, kind)
     if readable is not None:
         rows = [r for r in rows if str(r.id) in readable]
@@ -162,7 +171,12 @@ def entity_is_hidden(ctx: ToolContext, entity_type: str, entity_id: Any,
     kind, row_id = owner
     key = f"published_ids:{kind}"
     if key not in ctx.cache:
-        rows = ctx.db.query(_model(kind)).all()
+        from sqlalchemy.orm import lazyload, load_only
+
+        model = _model(kind)
+        rows = ctx.db.query(model).options(
+            load_only(model.id, model.status, model.publication_scope), lazyload("*")
+        ).all()
         ctx.cache[key] = {str(r.id) for r in rows if is_published(r)}
     return row_id not in ctx.cache[key]
 

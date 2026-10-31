@@ -318,9 +318,9 @@ def test_a_reviewed_metric_view_nested_too_deeply_still_returns_its_yaml():
 # --- Schema import -----------------------------------------------------------
 
 
-def test_a_metric_view_imports_as_a_view_with_its_columns():
+def test_a_metric_view_imports_as_a_metric_view_with_its_columns():
     from src.controller import schema_import_manager as sim
 
-    assert sim._TYPE_MAP[UnifiedAssetType.UC_METRIC.value] == ("View", "hasView")
+    assert sim._TYPE_MAP[UnifiedAssetType.UC_METRIC.value] == ("Metric View", "hasView")
     assert sim._display_type(UnifiedAssetType.UC_METRIC) == 'metric'
     assert UnifiedAssetType.UC_METRIC.value in sim._LEAF_ASSET_TYPES

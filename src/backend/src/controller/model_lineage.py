@@ -25,6 +25,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
+from src.models.assets import PHYSICAL_TABLE_ASSET_TYPES
 
 logger = get_logger(__name__)
 
@@ -107,7 +108,7 @@ def is_forward_flow(relationship_type: str, source_layer: Optional[str], target_
 # Hidden from lineage unless they are the center entity.
 HIDDEN_LINEAGE_TYPES = {"LogicalEntity", "LogicalAttribute"}
 
-PHYSICAL_TABLE_TYPES = ("Table", "View")
+PHYSICAL_TABLE_TYPES = PHYSICAL_TABLE_ASSET_TYPES
 MAX_CONCEPT_FANOUT = 30
 
 # Semantic-link entity_type for dedicated types

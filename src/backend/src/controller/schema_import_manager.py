@@ -18,6 +18,7 @@ from src.controller.assets_manager import AssetsManager
 from src.db_models.assets import AssetDb
 from src.db_models.connections import ConnectionDb
 from src.models.assets import (
+    METRIC_VIEW_ASSET_TYPE,
     AssetCreate,
     AssetRelationshipCreate,
     AssetStatus,
@@ -62,7 +63,7 @@ _TYPE_MAP: Dict[str, tuple] = {
     UnifiedAssetType.UC_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_VIEW.value: ("View", "hasView"),
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: ("View", "hasView"),
-    UnifiedAssetType.UC_METRIC.value: ("View", "hasView"),  # metric view
+    UnifiedAssetType.UC_METRIC.value: (METRIC_VIEW_ASSET_TYPE, "hasView"),
     UnifiedAssetType.UC_STREAMING_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_FUNCTION.value: ("System", "hasPart"),
     UnifiedAssetType.UC_MODEL.value: ("ML Model", "hasPart"),
@@ -726,6 +727,17 @@ class SchemaImportManager:
                         db, name=metadata.name, asset_type_id=at_db.id,
                         platform=platform, location=path,
                     )
+                if existing is None and ontos_type_name == METRIC_VIEW_ASSET_TYPE:
+                    # Reuse a metric view imported as a View before the Metric View
+                    # type existed (no duplicate, no retyping); import it as a View
+                    # when the Metric View type isn't seeded yet.
+                    view_db = _get_asset_type_db("View")
+                    legacy = view_db and asset_repo.get_by_identity(
+                        db, name=metadata.name, asset_type_id=view_db.id,
+                        platform=platform, location=path,
+                    )
+                    if legacy or not at_db:
+                        ontos_type_name, existing = "View", legacy or None
 
                 items.append(ImportPreviewItem(
                     path=path,
@@ -932,6 +944,7 @@ class SchemaImportManager:
             "Schema": "hasSchema",
             "Table": "hasTable",
             "View": "hasView",
+            METRIC_VIEW_ASSET_TYPE: "hasView",
             "Column": "hasColumn",
             "Dataset": "hasDataset",
             "ML Model": "hasPart",

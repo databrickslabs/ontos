@@ -390,6 +390,21 @@ ontos:View a rdfs:Class ;
     ontos:uiDisplayOrder 4 ;
     ontos:uiPersonaVisibility "admin,steward,producer" .
 
+# A subclass of View, so it inherits every relationship a view has (hasView
+# from a schema, hasColumn to its dimensions and measures, portHasView, tags,
+# ownership) while carrying its own type, status and certification.
+ontos:MetricView a rdfs:Class ;
+    ontos:modelLayer "physical" ;
+    rdfs:subClassOf ontos:View ;
+    rdfs:label "Metric View"@en ;
+    rdfs:comment "Unity Catalog metric view: governed dimensions and measures over a source, defined in YAML"@en ;
+    skos:example "catalog.sales.revenue_metrics" ;
+    ontos:modelTier "asset" ;
+    ontos:uiIcon "Eye" ;
+    ontos:uiCategory "data" ;
+    ontos:uiDisplayOrder 4 ;
+    ontos:uiPersonaVisibility "admin,steward,producer" .
+
 ontos:Column a rdfs:Class ;
     ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;

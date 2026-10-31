@@ -13,6 +13,7 @@ from src.models.assets import (
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteResult,
+    PHYSICAL_TABLE_ASSET_TYPES,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
@@ -665,7 +666,7 @@ class AssetsManager(SearchableAsset):
     # Infer schema from asset hierarchy
     # ------------------------------------------------------------------
 
-    _TABLE_LIKE_TYPES = {"Table", "View", "Dataset"}
+    _TABLE_LIKE_TYPES = {*PHYSICAL_TABLE_ASSET_TYPES, "Dataset"}
     _CONTAINER_TYPES = {"Schema", "Catalog"}
 
     def infer_schema_from_asset(

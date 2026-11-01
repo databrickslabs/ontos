@@ -153,6 +153,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
   CONTRACT_APPROVER_TOKEN,
+  ASSET_OWNER_TOKEN,
   DOMAIN_OWNER_TOKEN,
   joinRoleAndPrincipals,
   roleSelectValue,
@@ -921,6 +922,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               <>
                 <SelectItem value={DOMAIN_OWNER_TOKEN}>{t('workflows:designer.roles.domainOwners')}</SelectItem>
                 <SelectItem value={CONTRACT_APPROVER_TOKEN}>{t('workflows:designer.roles.contractApprovers')}</SelectItem>
+                <SelectItem value={ASSET_OWNER_TOKEN}>
+                  {t('workflows:designer.roles.assetOwners')}
+                </SelectItem>
               </>
             )}
           </SelectGroup>

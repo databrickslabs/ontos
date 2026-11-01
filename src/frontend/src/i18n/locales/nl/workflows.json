@@ -35,7 +35,8 @@
       "contractApprovers": "Contractgoedkeurders",
       "appRoles": "App-rollen",
       "businessRoles": "Bedrijfsrollen",
-      "noGroups": "Geen groepen"
+      "noGroups": "Geen groepen",
+      "assetOwners": "Asseteigenaren"
     },
     "messages": {
       "loadWorkflowFailed": "Kon workflow niet laden",
@@ -349,7 +350,8 @@
       "entityRejected": "{{name}} is afgewezen."
     },
     "errors": {
-      "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren."
+      "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren.",
+      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren."
     },
     "entityTypes": {
       "entity": "Entiteit",

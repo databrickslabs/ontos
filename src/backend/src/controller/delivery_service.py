@@ -55,6 +55,8 @@ class DeliveryChangeType(str, Enum):
     TAG_CREATE = "tag_create"            # Create tag namespace
     TAG_UPDATE = "tag_update"            # Update tag namespace
     TAG_DELETE = "tag_delete"            # Delete tag namespace
+    # Metric views (#1124): a new YAML definition, delivered as YAML + ALTER VIEW DDL
+    METRIC_VIEW_UPDATE = "metric_view_update"
 
 
 @dataclass
@@ -326,6 +328,9 @@ class DeliveryService:
         Returns:
             DeliveryResult
         """
+        if payload.change_type == DeliveryChangeType.METRIC_VIEW_UPDATE:
+            return self._deliver_metric_view_files(payload)
+
         if not self._git_service:
             return DeliveryResult(
                 success=False,
@@ -419,6 +424,44 @@ class DeliveryService:
                 error=str(e)
             )
     
+    def _deliver_metric_view_files(self, payload: DeliveryPayload) -> DeliveryResult:
+        """Write a metric view's YAML and its ``ALTER VIEW`` DDL to the Git working copy.
+
+        ``payload.data`` has ``fqn``, ``definition`` (the YAML, written as is) and
+        ``ddl``. One file pair per metric view (``metric_views/<fqn>.yaml`` and
+        ``.sql``), so the repository's history is the view's. Nothing is
+        committed or pushed: proposing the change as a pull request is #1106's.
+        ``details`` has the file names, or a coded ``error_code``.
+        """
+        from src.controller.metric_view_change_requests_manager import (
+            DELIVERY_SUBDIR, delivery_filename,
+        )
+
+        def failed(code: str, error: str) -> DeliveryResult:
+            return DeliveryResult(
+                success=False, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
+                entity_type=payload.entity_type, entity_id=payload.entity_id, error=error,
+                details={'error_code': code},
+            )
+
+        if not self._git_service or not self._git_service.is_cloned:
+            return failed('metric_view_delivery_git_unavailable',
+                          'Git repository not available or not cloned')
+        fqn = payload.data.get('fqn') or payload.entity_id
+        files = [
+            (delivery_filename(fqn, 'yaml'), payload.data.get('definition') or ''),
+            (delivery_filename(fqn, 'sql'), (payload.data.get('ddl') or '') + '\n'),
+        ]
+        for filename, text in files:
+            if not self._git_service.save_text(filename, text, subdir=DELIVERY_SUBDIR):
+                return failed('metric_view_delivery_write_failed', 'Failed to write a file')
+        return DeliveryResult(
+            success=True, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
+            entity_type=payload.entity_type, entity_id=payload.entity_id,
+            message="Saved to Git repository",
+            details={'files': [name for name, _ in files], 'subdir': DELIVERY_SUBDIR},
+        )
+
     def _deliver_manual(self, payload: DeliveryPayload) -> DeliveryResult:
         """Create notification for manual delivery.
         

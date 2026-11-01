@@ -35,7 +35,8 @@
       "contractApprovers": "Approbateurs du contrat",
       "appRoles": "Rôles d'application",
       "businessRoles": "Rôles métier",
-      "noGroups": "Aucun groupe"
+      "noGroups": "Aucun groupe",
+      "assetOwners": "Propriétaires de l’actif"
     },
     "messages": {
       "loadWorkflowFailed": "Échec du chargement du workflow",
@@ -349,7 +350,8 @@
       "entityRejected": "{{name}} a été rejeté."
     },
     "errors": {
-      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande."
+      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande.",
+      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification."
     },
     "entityTypes": {
       "entity": "Entité",

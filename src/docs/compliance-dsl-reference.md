@@ -32,6 +32,11 @@ MATCH (prod:data_product) # Only data products
 - Application: `data_product`, `data_contract`, `domain`, `glossary_term`, `review`
 - Generic: `Object` (matches all types)
 
+Type names ignore case and underscores: `DataProduct`, `dataProduct` and
+`data_product` all match data products. A run whose rule matches no entity
+(unknown type, or a `WHERE` that selects nothing) succeeds with the warning
+"no entities matched" instead of results.
+
 #### WHERE Clause (Optional)
 Filters entities before evaluation:
 

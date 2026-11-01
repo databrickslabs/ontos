@@ -512,6 +512,24 @@ def create_entity_iterator(
     return EntityIterator(loaders)
 
 
+def _type_key(name: str) -> str:
+    return name.replace('_', '').lower()
+
+
+def normalize_match_type(match_type: str) -> str:
+    """The entity type a MATCH type names, ignoring case and underscores.
+
+    ``DataProduct``, ``dataProduct``, ``DATA_PRODUCT`` and ``data_product`` all
+    name ``data_product``; ``OBJECT`` names ``object``. The DSL's identifiers
+    have no other separator (``data-product`` doesn't parse). A type that names
+    no loaded type is only lowercased, as before, so it still matches nothing
+    and ``validate_rule`` still flags it.
+    """
+    known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
+    by_key = {_type_key(t): t for t in known}
+    return by_key.get(_type_key(match_type), match_type.lower())
+
+
 def parse_entity_filter(rule: str, parsed: Optional[Dict[str, Any]] = None) -> EntityFilter:
     """Parse entity filter from DSL rule.
 
@@ -535,12 +553,13 @@ def parse_entity_filter(rule: str, parsed: Optional[Dict[str, Any]] = None) -> E
     entity_types = []
     match_type = parsed.get('match_type')
     if match_type:
+        entity_type = normalize_match_type(match_type)
         # Generic type 'Object' means all types
-        if match_type.lower() == 'object':
+        if entity_type == 'object':
             entity_types = ['catalog', 'schema', 'table', 'view', 'function', 'volume',
                            'data_product', 'data_contract', 'domain', 'glossary_term']
         else:
-            entity_types = [match_type.lower()]
+            entity_types = [entity_type]
 
     # If WHERE clause contains obj.type IN [...], extract specific types
     where_clause = parsed.get('where_clause')

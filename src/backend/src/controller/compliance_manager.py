@@ -844,6 +844,10 @@ class ComplianceManager:
                 warning_code, warning_params = 'rule_trailing_input', trailing
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}
+            elif success + failure == 0:
+                # Not a failure: the rule ran but selected nothing (#1150).
+                # The warning says why the run has no results.
+                warning_code = 'no_entities_matched'
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
                 warning_code=warning_code, warning_params=warning_params,

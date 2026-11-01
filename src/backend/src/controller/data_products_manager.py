@@ -828,6 +828,77 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db_session.rollback()
             raise
 
+    def check_update_allowed(
+        self,
+        product_db: Any,
+        user_email: Optional[str],
+        user_groups: List[str],
+        db: Optional[Session] = None,
+        caller_team_ids: Optional[List[str]] = None,
+        is_feature_admin: bool = False,
+    ) -> None:
+        """Raise ``PermissionError`` unless the caller may edit ``product_db``.
+
+        The ownership cascade of ``update_product_with_auth`` (documented
+        there), shared with the assistant's update tool. ``product_db`` needs
+        ``id``, ``project_id``, ``owner_team_id`` and ``draft_owner_id``.
+        """
+        from src.controller.projects_manager import projects_manager
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+
+        db_session = db if db is not None else self._db
+        settings = get_settings()
+
+        # Admin always allowed (short-circuit, also matches existing
+        # is_user_project_member behavior). This covers both workspace
+        # admins (group-based) and callers whose *feature-level*
+        # data-products permission is ADMIN — e.g. an in-app role override
+        # that grants data-products=Admin. The latter is resolved by the
+        # route (which has access to the effective-permissions/role
+        # machinery) and passed in as ``is_feature_admin``; without it an
+        # in-app admin who isn't the object owner was wrongly denied
+        # (ONT-CUJ-015).
+        if is_feature_admin or is_user_admin(user_groups, settings):
+            logger.debug("User %s is admin — bypassing ownership cascade", user_email)
+            return
+
+        authorized = False
+
+        # 1. Project membership (preserves prior fast-path semantics)
+        if product_db.project_id:
+            if projects_manager.is_user_project_member(
+                db=db_session,
+                user_identifier=user_email,
+                user_groups=user_groups,
+                project_id=product_db.project_id,
+                settings=settings,
+            ):
+                authorized = True
+
+        # 2. Team ownership
+        if not authorized and product_db.owner_team_id and caller_team_ids:
+            if product_db.owner_team_id in caller_team_ids:
+                authorized = True
+
+        # 3. Creator / single-user ownership (drafts AND non-drafts).
+        #    Case-insensitive email match — emails are not case-sensitive.
+        if not authorized and product_db.draft_owner_id and user_email:
+            if product_db.draft_owner_id.lower() == user_email.lower():
+                authorized = True
+
+        if not authorized:
+            logger.warning(
+                "User %s denied update on product %s "
+                "(project_id=%s, owner_team_id=%s, draft_owner_id=%s)",
+                user_email, product_db.id, product_db.project_id,
+                product_db.owner_team_id, product_db.draft_owner_id,
+            )
+            # Generic message — do not leak which sub-check failed.
+            raise PermissionError(
+                "Insufficient permissions to edit this data product"
+            )
+
     def update_product_with_auth(
         self,
         product_id: str,
@@ -889,66 +960,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.warning(f"Product not found for update: {product_id}")
                 return None
 
-            from src.controller.projects_manager import projects_manager
-            from src.common.authorization import is_user_admin
-            from src.common.config import get_settings
-
-            settings = get_settings()
-
-            # Admin always allowed (short-circuit, also matches existing
-            # is_user_project_member behavior). This covers both workspace
-            # admins (group-based) and callers whose *feature-level*
-            # data-products permission is ADMIN — e.g. an in-app role override
-            # that grants data-products=Admin. The latter is resolved by the
-            # route (which has access to the effective-permissions/role
-            # machinery) and passed in as ``is_feature_admin``; without it an
-            # in-app admin who isn't the object owner was wrongly denied
-            # (ONT-CUJ-015).
-            if is_feature_admin or is_user_admin(user_groups, settings):
-                logger.debug(f"User {user_email} is admin — bypassing ownership cascade")
-                return self.update_product(
-                    product_id,
-                    product_data_dict,
-                    db=db_session,
-                    user=user_email,
-                    background_tasks=background_tasks,
-                )
-
-            authorized = False
-
-            # 1. Project membership (preserves prior fast-path semantics)
-            if existing_product_db.project_id:
-                if projects_manager.is_user_project_member(
-                    db=db_session,
-                    user_identifier=user_email,
-                    user_groups=user_groups,
-                    project_id=existing_product_db.project_id,
-                    settings=settings,
-                ):
-                    authorized = True
-
-            # 2. Team ownership
-            if not authorized and existing_product_db.owner_team_id and caller_team_ids:
-                if existing_product_db.owner_team_id in caller_team_ids:
-                    authorized = True
-
-            # 3. Creator / single-user ownership (drafts AND non-drafts).
-            #    Case-insensitive email match — emails are not case-sensitive.
-            if not authorized and existing_product_db.draft_owner_id and user_email:
-                if existing_product_db.draft_owner_id.lower() == user_email.lower():
-                    authorized = True
-
-            if not authorized:
-                logger.warning(
-                    f"User {user_email} denied update on product {product_id} "
-                    f"(project_id={existing_product_db.project_id}, "
-                    f"owner_team_id={existing_product_db.owner_team_id}, "
-                    f"draft_owner_id={existing_product_db.draft_owner_id})"
-                )
-                # Generic message — do not leak which sub-check failed.
-                raise PermissionError(
-                    "Insufficient permissions to edit this data product"
-                )
+            self.check_update_allowed(
+                existing_product_db,
+                user_email=user_email,
+                user_groups=user_groups,
+                db=db_session,
+                caller_team_ids=caller_team_ids,
+                is_feature_admin=is_feature_admin,
+            )
 
             # Perform update (validation happens inside update_product)
             return self.update_product(

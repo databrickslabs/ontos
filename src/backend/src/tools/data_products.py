@@ -5,6 +5,7 @@ Tools for searching, creating, updating, and deleting data products.
 """
 
 import json
+from contextlib import contextmanager
 import uuid
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
@@ -266,6 +267,92 @@ class SearchDataProductsTool(BaseTool):
             )
 
 
+DATA_PRODUCTS_FEATURE_ID = "data-products"
+# The caller may read the product but isn't one of its owners (draft owner,
+# owning team, project member) nor a data-products admin: PUT answers 403.
+PRODUCT_EDIT_NOT_ALLOWED_CODE = "product_edit_not_allowed"
+
+
+def _caller_email(ctx: ToolContext) -> Optional[str]:
+    return ctx.caller.email if ctx.caller else None
+
+
+def _audit_change(
+    ctx: ToolContext, tool_name: str, action: str, success: bool, details: Dict[str, Any]
+) -> None:
+    """Write the data-products audit entry of the REST route doing the same change."""
+    # The module, not the function, so tests can replace log_system_action.
+    from src.controller import audit_manager
+
+    caller = ctx.caller
+    audit_manager.log_system_action(
+        username=(caller.email or caller.auth_path) if caller else "unknown",
+        feature=DATA_PRODUCTS_FEATURE_ID,
+        action=action,
+        success=success,
+        details={
+            **details,
+            "tool_name": tool_name,
+            "auth_path": caller.auth_path if caller else None,
+        },
+    )
+
+
+@contextmanager
+def _audited(ctx: ToolContext, tool_name: str, action: str, details: Dict[str, Any]):
+    """Audit the change in the block once it ends: failed unless it sets ``success``."""
+    outcome = {"success": False}
+    try:
+        yield outcome
+    finally:
+        _audit_change(ctx, tool_name, action, outcome["success"], details)
+
+
+def _transition_status(
+    ctx: ToolContext, tool_name: str, product_id: str, status: str, **kwargs: Any
+) -> None:
+    """The change-status route's call (the caller for the gates), audited as CHANGE_STATUS.
+
+    ``kwargs`` go to ``transition_status``.
+    """
+    details = {"product_id": product_id, "new_status": status}
+    with _audited(ctx, tool_name, "CHANGE_STATUS", details) as outcome:
+        ctx.data_products_manager.transition_status(
+            product_id, status, current_user=_caller_email(ctx), **kwargs
+        )
+        outcome["success"] = True
+
+
+def _edit_refusal(ctx: ToolContext, tool_name: str, product: Any) -> Optional[ToolResult]:
+    """The PUT route's ownership rule (``check_update_allowed``); None = may edit."""
+    caller = ctx.caller
+    if caller is None:
+        is_admin, groups, team_ids = False, [], []
+    else:
+        is_admin = caller.full_access or caller.products_admin
+        groups, team_ids = caller.groups, list(caller.team_ids)
+    try:
+        ctx.data_products_manager.check_update_allowed(
+            product,
+            user_email=_caller_email(ctx),
+            user_groups=groups,
+            db=ctx.db,
+            caller_team_ids=team_ids,
+            is_feature_admin=is_admin,
+        )
+        return None
+    except PermissionError:
+        _audit_change(ctx, tool_name, "UPDATE", False, {
+            "product_id": str(product.id), "error_code": PRODUCT_EDIT_NOT_ALLOWED_CODE,
+        })
+        return ToolResult(
+            success=False,
+            error="Not allowed: you can't edit this data product.",
+            error_code=PRODUCT_EDIT_NOT_ALLOWED_CODE,
+            data={"product_id": str(product.id)},
+        )
+
+
 class CreateDraftDataProductTool(BaseTool):
     """Create a new draft data product."""
     
@@ -356,11 +443,17 @@ class CreateDraftDataProductTool(BaseTool):
                 "outputPorts": output_ports
             }
             
-            # Create the product
-            created = ctx.data_products_manager.create_product(
-                product_data=product_data,
-                db=ctx.db
-            )
+            # Create the product. The caller is its draft owner, as with POST
+            # /data-products, so they can read and edit it afterwards.
+            audit_details: Dict[str, Any] = {"params": {"name": name}}
+            with _audited(ctx, self.name, "CREATE", audit_details) as outcome:
+                created = ctx.data_products_manager.create_product(
+                    product_data=product_data,
+                    db=ctx.db,
+                    user=_caller_email(ctx),
+                )
+                audit_details["created_resource_id"] = str(created.id)
+                outcome["success"] = True
             
             logger.info(f"[create_draft_data_product] SUCCESS: Created product id={created.id}, name={created.name}")
             return ToolResult(
@@ -466,6 +559,21 @@ class UpdateDataProductTool(BaseTool):
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
 
+            # A field change needs what PUT /data-products/{id} needs
+            # (update_product_with_auth): an owner or a data-products admin.
+            # Checked before the status change, so a refused call writes nothing.
+            # A status change alone needs only the level, as the change-status route.
+            if update_data:
+                target = ctx.data_products_manager.get_product(product_id)
+                if not target:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data product '{product_id}' not found"
+                    )
+                refusal = _edit_refusal(ctx, self.name, target)
+                if refusal:
+                    return refusal
+
             # A status change goes through the lifecycle transition (allowed
             # transitions, before_status_change gates), like the change-status
             # route; an update can't change it.
@@ -490,17 +598,20 @@ class UpdateDataProductTool(BaseTool):
                             success=False, error=INVALID_SUNSET_DATE,
                             error_code=INVALID_SUNSET_DATE_CODE,
                         )
-                    ctx.data_products_manager.transition_status(
-                        product_id, status, deprecation=deprecation,
+                    _transition_status(
+                        ctx, self.name, product_id, status, deprecation=deprecation,
                     )
 
             # Update the product
             if update_data:
-                updated = ctx.data_products_manager.update_product(
-                    product_id=product_id,
-                    product_data_dict=update_data,
-                    db=ctx.db
-                )
+                with _audited(ctx, self.name, "UPDATE", {"product_id": product_id}) as outcome:
+                    updated = ctx.data_products_manager.update_product(
+                        product_id=product_id,
+                        product_data_dict=update_data,
+                        db=ctx.db,
+                        user=_caller_email(ctx),
+                    )
+                    outcome["success"] = updated is not None
             else:
                 updated = ctx.data_products_manager.get_product(product_id)
             
@@ -766,7 +877,11 @@ class DeleteDataProductTool(BaseTool):
             product_name = product.name
             
             # Delete the product
-            success = ctx.data_products_manager.delete_product(product_id)
+            with _audited(ctx, self.name, "DELETE", {"product_id": product_id}) as outcome:
+                success = ctx.data_products_manager.delete_product(
+                    product_id, user=_caller_email(ctx)
+                )
+                outcome["success"] = success
             
             if not success:
                 return ToolResult(

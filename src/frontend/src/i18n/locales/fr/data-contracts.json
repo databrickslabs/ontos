@@ -1204,18 +1204,14 @@
     "responseMessageLabel": "Message de réponse (facultatif)",
     "responseMessagePlaceholder": "Ajoutez des notes sur votre décision...",
     "messageHint": "Ce message sera envoyé au demandeur avec votre décision.",
-    "executeLabel": "Exécuter le déploiement immédiatement après approbation",
-    "executeHint": "Si coché, le déploiement sera déclenché automatiquement lorsque vous approuverez cette demande.",
     "warningLabel": "Avertissement :",
     "warningText": "Le déploiement créera des actifs physiques dans Unity Catalog. Assurez-vous d'avoir examiné le schéma et la configuration du contrat.",
     "deny": "Refuser",
-    "approveAndDeploy": "Approuver et déployer",
     "toast": {
       "approvedTitle": "Déploiement approuvé",
       "deniedTitle": "Déploiement refusé",
       "approvedDescription": "La demande de déploiement a été approuvée.",
       "deniedDescription": "La demande de déploiement a été refusée.",
-      "deploymentInitiated": "Le déploiement a été lancé.",
       "failedTitle": "Échec",
       "couldNotSubmit": "Impossible de soumettre la décision"
     }

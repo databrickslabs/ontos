@@ -1204,18 +1204,14 @@
     "responseMessageLabel": "Mensagem de Resposta (opcional)",
     "responseMessagePlaceholder": "Adicione observações sobre sua decisão...",
     "messageHint": "Esta mensagem será enviada ao solicitante junto com sua decisão.",
-    "executeLabel": "Executar implantação imediatamente após aprovação",
-    "executeHint": "Se marcado, a implantação será acionada automaticamente quando você aprovar esta solicitação.",
     "warningLabel": "Aviso:",
     "warningText": "A implantação criará ativos físicos no Unity Catalog. Certifique-se de ter revisado o esquema e a configuração do contrato.",
     "deny": "Negar",
-    "approveAndDeploy": "Aprovar e Implantar",
     "toast": {
       "approvedTitle": "Implantação Aprovada",
       "deniedTitle": "Implantação Negada",
       "approvedDescription": "A solicitação de implantação foi aprovada.",
       "deniedDescription": "A solicitação de implantação foi negada.",
-      "deploymentInitiated": "A implantação foi iniciada.",
       "failedTitle": "Falha",
       "couldNotSubmit": "Não foi possível enviar a decisão"
     }

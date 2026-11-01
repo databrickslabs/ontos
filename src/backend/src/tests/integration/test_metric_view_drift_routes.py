@@ -115,3 +115,52 @@ class TestMetricViewDriftRoute:
 
         assert response.status_code == 403
         assert db_session.query(MetricViewBaselineDb).count() == 0
+
+
+MATERIALIZED = SPEC + """\
+materialization:
+  schedule: EVERY 6 HOURS
+  mode: relaxed
+  materialized_views:
+    - name: by_month
+      type: aggregated
+"""
+
+
+class TestMetricViewRefreshRoute:
+    def test_a_plain_metric_view_has_no_refresh_state(self, client, asset, user_ws):
+        body = _read(client, asset, user_ws, SPEC)
+
+        assert body['refresh'] is None
+        user_ws.pipelines.get.assert_not_called()
+
+    def test_a_materialized_view_reads_its_pipeline_as_the_user(self, client, asset, user_ws):
+        from databricks.sdk.service.pipelines import (
+            GetPipelineResponse, UpdateStateInfo, UpdateStateInfoState,
+        )
+
+        user_ws.tables.get.return_value.pipeline_id = 'pipe-1'
+        user_ws.pipelines.get.return_value = GetPipelineResponse(latest_updates=[
+            UpdateStateInfo(update_id='u1', state=UpdateStateInfoState.FAILED,
+                            creation_time='2026-10-31T06:00:00Z'),
+        ])
+
+        body = _read(client, asset, user_ws, MATERIALIZED)
+
+        user_ws.pipelines.get.assert_called_once_with(pipeline_id='pipe-1')
+        refresh = body['refresh']
+        assert refresh['status'] == 'failed'
+        assert refresh['schedule'] == 'EVERY 6 HOURS'
+        assert refresh['latest_update_at'] == '2026-10-31T06:00:00Z'
+
+    def test_a_pipeline_the_user_cannot_read_is_unknown(self, client, asset, user_ws):
+        from databricks.sdk.errors import PermissionDenied
+
+        user_ws.tables.get.return_value.pipeline_id = 'pipe-1'
+        user_ws.pipelines.get.side_effect = PermissionDenied('no CAN_VIEW on pipe-1 secret')
+
+        response = client.get(f'/api/assets/{asset.id}/metric-view', headers=TOKEN)
+
+        assert response.status_code == 200
+        assert response.json()['refresh']['status'] == 'unknown'
+        assert 'secret' not in response.text

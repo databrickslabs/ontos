@@ -405,11 +405,33 @@ class SchemaImportManager:
             if not item.will_create:
                 if item.asset_type == METRIC_VIEW_ASSET_TYPE and item.existing_asset_id:
                     # Unity Catalog reports a metric view here: convert a legacy View
-                    # asset (no-op when it already is a Metric View)
-                    self._assets.retype_asset(
-                        db, asset_id=item.existing_asset_id, from_type="View",
-                        to_type=METRIC_VIEW_ASSET_TYPE, current_user_id=current_user_id,
-                    )
+                    # asset (no-op when it already is a Metric View). In a savepoint and
+                    # without committing, so a failure drops only this conversion and the
+                    # import goes on; the conversion is committed with the import.
+                    try:
+                        with db.begin_nested():
+                            self._assets.retype_asset(
+                                db, asset_id=item.existing_asset_id, from_type="View",
+                                to_type=METRIC_VIEW_ASSET_TYPE, current_user_id=current_user_id,
+                                commit=False,
+                            )
+                    except Exception:
+                        logger.error("Failed to convert the View asset at %s to a Metric View",
+                                     item.path, exc_info=True)
+                        message = "The existing View asset could not be converted to a Metric View."
+                        result.errors += 1
+                        result.error_messages.append(f"{item.path}: {message}")
+                        result.items.append(ImportResultItem(
+                            path=item.path,
+                            name=item.name,
+                            asset_type=item.asset_type,
+                            action="error",
+                            asset_id=item.existing_asset_id,
+                            error=message,
+                            parent_path=item.parent_path,
+                        ))
+                        # Still a View: no relationships are wired to it as a Metric View
+                        continue
                 result.skipped += 1
                 result.items.append(ImportResultItem(
                     path=item.path,

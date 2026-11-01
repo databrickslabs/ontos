@@ -421,14 +421,15 @@ class AssetsManager(SearchableAsset):
 
     def retype_asset(
         self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,
-        current_user_id: str,
+        current_user_id: str, commit: bool = True,
     ) -> int:
         """Change an asset's type and the type name its entity_relationships rows carry.
 
         entity_relationships stores the asset type name in source_type / target_type, so
-        both change together (one commit, with the change-log entry). Does nothing unless
-        the asset currently has ``from_type``. Returns the number of rows rewritten, or -1
-        when nothing changed.
+        both change together (one commit, with the change-log entry). With
+        ``commit=False`` nothing is committed: the caller's transaction (or savepoint)
+        keeps or drops the change. Does nothing unless the asset currently has
+        ``from_type``. Returns the number of rows rewritten, or -1 when nothing changed.
         """
         from src.repositories.entity_relationships_repository import entity_relationship_repo
 
@@ -469,6 +470,7 @@ class AssetsManager(SearchableAsset):
                 "to_type": to_type,
                 "relationships_rewritten": rewritten,
             },
+            commit=commit,
         )
         db.refresh(db_asset)
         self._update_search_index(db_asset)

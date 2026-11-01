@@ -306,6 +306,85 @@ def test_a_legacy_view_stays_a_view_without_the_seeded_type(db_session, asset_ty
     assert _retyped_entries(db_session, asset.id) == []
 
 
+def test_a_failed_conversion_is_an_item_error_and_the_import_goes_on(
+        db_session, asset_types, monkeypatch):
+    legacy = _legacy_view(db_session, asset_types)
+    links = _links_of(db_session, legacy.id)
+    importer = _importer()
+    real_retype = importer._assets.retype_asset
+
+    def _retype_then_fail(db, **kwargs):
+        real_retype(db, **kwargs)  # writes the conversion, then something breaks
+        raise RuntimeError("secret: connection reset by db.internal:5432")
+
+    monkeypatch.setattr(importer._assets, "retype_asset", _retype_then_fail)
+
+    result = importer.execute_import(db_session, _request(), current_user_id="u@x.com")
+
+    assert result.errors == 1
+    [error] = [i for i in result.items if i.action == "error"]
+    assert error.path == METRIC_VIEW
+    assert error.error == "The existing View asset could not be converted to a Metric View."
+    assert "secret" not in " ".join(result.error_messages)
+    # The partial conversion was rolled back with its savepoint
+    asset = db_session.get(AssetDb, legacy.id)
+    db_session.refresh(asset)
+    assert asset.asset_type.name == "View"
+    assert set(links) <= set(_links_of(db_session, legacy.id))
+    assert not [link for link in _links_of(db_session, legacy.id) if "Metric View" in link]
+    assert _retyped_entries(db_session, legacy.id) == []
+    # The rest of the import went on: the columns were created
+    assert {a.name for a in _assets_at(db_session, f"{METRIC_VIEW}.Region")} == {"Region"}
+
+
+def test_the_conversion_in_an_import_does_not_commit(db_session, asset_types, monkeypatch):
+    legacy = _legacy_view(db_session, asset_types)
+    commits = []
+    real_retype = AssetsManager.retype_asset
+
+    def _spy(self, db, **kwargs):
+        monkeypatch.setattr(db, "commit", lambda: commits.append("commit"))
+        try:
+            return real_retype(self, db, **kwargs)
+        finally:
+            monkeypatch.undo()
+
+    monkeypatch.setattr(AssetsManager, "retype_asset", _spy)
+
+    result = _importer().execute_import(db_session, _request(), current_user_id="u@x.com")
+
+    assert result.errors == 0, result.error_messages
+    assert commits == []
+    assert db_session.get(AssetDb, legacy.id).asset_type.name == "Metric View"
+    assert len(_retyped_entries(db_session, legacy.id)) == 1
+
+
+def test_a_link_that_already_exists_under_the_new_type_is_merged(db_session, asset_types):
+    legacy = _legacy_view(db_session, asset_types)
+    vid = str(legacy.id)
+    # The same hasColumn link, already written once with the new type name
+    db_session.add(EntityRelationshipDb(
+        source_type="Metric View", source_id=vid, target_type="Column",
+        target_id="column-1", relationship_type="hasColumn"))
+    db_session.flush()
+    manager = AssetsManager()
+
+    rewritten = manager.retype_asset(
+        db_session, asset_id=legacy.id, from_type="View", to_type="Metric View",
+        current_user_id="u@x.com")
+
+    assert rewritten == 4
+    column_links = [
+        r for r in db_session.query(EntityRelationshipDb).all()
+        if r.source_id == vid and r.relationship_type == "hasColumn"
+    ]
+    assert [(r.source_type, r.target_id) for r in column_links] == [("Metric View", "column-1")]
+    assert not [link for link in _links_of(db_session, legacy.id) if "View" in link]
+    assert manager.retype_asset(
+        db_session, asset_id=legacy.id, from_type="View", to_type="Metric View",
+        current_user_id="u@x.com") == -1
+
+
 def test_a_converted_metric_view_works_in_the_hierarchy_and_on_ports(
         db_session, asset_types, osm):
     legacy = _legacy_view(db_session, asset_types)

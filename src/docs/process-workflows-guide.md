@@ -577,7 +577,7 @@ Creates an approval request and pauses workflow execution.
 - `project_owners` - Owners of the entity's project
 - `requester` - User who triggered the workflow
 - `user@example.com` - Specific email address
-- `group-name` - Directory group name
+- `group:group-name` - Directory group (a bare `group-name` also works unless it matches a token or a role name)
 
 **Example Configuration:**
 ```yaml
@@ -606,7 +606,7 @@ Sends notifications to specified recipients.
 - `requester` - User who triggered the workflow
 - `owner` - Entity owner
 - `user@example.com` - Specific email
-- `group-name` - Directory group
+- `group:group-name` - Directory group (a bare `group-name` also works unless it matches a token or a role name)
 
 **Available Templates:**
 - `validation_failed` - Validation failure notification

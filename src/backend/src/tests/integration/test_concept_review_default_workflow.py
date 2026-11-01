@@ -206,3 +206,47 @@ def test_unresolvable_approver_falls_back_to_admin(client, smm, db_session):
         if _payload(n).get("entity_id") == iri and _payload(n).get("workflow_name") == name
     ]
     assert [n.recipient for n in notes] == ["Admin"]
+
+
+@pytest.mark.parametrize("approvers, expected", [
+    # A group named like the reviewer token, picked in the designer (#1151 item 5)
+    ("group:reviewer", ["reviewer"]),
+    # The token itself still means the reviewer chosen at submit
+    ("reviewer", ["rita@example.com"]),
+])
+def test_group_named_reviewer_is_not_the_reviewer_token(
+    client, smm, db_session, approvers, expected,
+):
+    mgr, _ = _seeded_workflow(db_session)
+    name = f"Group approver review {uuid.uuid4().hex[:6]}"
+    mgr.create_workflow(ProcessWorkflowCreate.model_validate({
+        "name": name,
+        "trigger": {
+            "type": "on_request_status_change",
+            "entity_types": ["ontology_concept"],
+            "from_status": "draft",
+            "to_status": "under_review",
+        },
+        "scope": {"type": "all"},
+        "is_active": True,
+        "steps": [
+            {"step_id": "approve", "name": "Approve", "step_type": "approval",
+             "config": {"approvers": approvers}, "on_pass": "done"},
+            {"step_id": "done", "name": "Done", "step_type": "pass"},
+        ],
+    }))
+    iri = _make_draft_concept(client, f"Group {uuid.uuid4().hex[:6]}")
+
+    smm.submit_concept_for_review(
+        concept_iri=iri, reviewer_email="rita@example.com", submitted_by="author@example.com",
+    )
+
+    rows = db_session.query(NotificationDb).filter(
+        NotificationDb.action_type == "workflow_approval"
+    ).all()
+    notes = [
+        n for n in rows
+        if _payload(n).get("entity_id") == iri and _payload(n).get("workflow_name") == name
+    ]
+    assert [n.recipient for n in notes] == expected
+    assert all(n.recipient_role_id is None for n in notes)

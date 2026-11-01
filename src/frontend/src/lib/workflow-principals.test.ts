@@ -9,9 +9,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  GROUP_PRINCIPAL_PREFIX,
   joinRoleAndPrincipals,
   roleSelectValue,
   splitRoleAndPrincipals,
+  workflowPrincipalValue,
 } from './workflow-principals';
 
 describe('joinRoleAndPrincipals', () => {
@@ -180,5 +182,32 @@ describe('shipped role names', () => {
     expect(roleSelectValue('DomainOwner', roles)).toBe('DomainOwner');
     expect(roleSelectValue('domain_owners', roles)).toBe('DomainOwner');
     expect(roleSelectValue('ContractApprover', undefined)).toBe('ContractApprover');
+  });
+});
+
+describe('group principals (#1151 item 5)', () => {
+  it('prefixes groups and leaves users as they are', () => {
+    expect(workflowPrincipalValue({ type: 'group', id: 'reviewer', display_name: 'r' }))
+      .toBe('group:reviewer');
+    expect(workflowPrincipalValue({ type: 'user', id: 'rita@x.com', display_name: 'Rita' }))
+      .toBe('rita@x.com');
+    expect(workflowPrincipalValue({ type: 'unknown', id: 'x', display_name: 'x' })).toBe('x');
+  });
+
+  it('keeps a prefixed group on the principal side, next to the reviewer token', () => {
+    const wire = joinRoleAndPrincipals('requester', ['group:reviewer', 'group:admins']);
+    expect(wire).toBe('requester,group:reviewer,group:admins');
+    expect(splitRoleAndPrincipals(wire)).toEqual({
+      roleToken: 'requester',
+      principals: ['group:reviewer', 'group:admins'],
+    });
+  });
+
+  it('never takes a prefixed group as the role token', () => {
+    expect(splitRoleAndPrincipals('group:admins')).toEqual({
+      roleToken: '',
+      principals: ['group:admins'],
+    });
+    expect(GROUP_PRINCIPAL_PREFIX).toBe('group:');
   });
 });

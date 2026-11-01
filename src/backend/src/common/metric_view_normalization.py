@@ -10,7 +10,8 @@ would report changes nobody made, so definitions are compared in this form:
 - without ``display_name`` and ``format`` on dimensions and measures;
 - with runs of whitespace in expressions (``source``, ``filter``, a join's
   ``on`` and ``source``, a field's ``expr``, a window's ``order``, ``range``
-  and ``offset``) collapsed to one space and trimmed;
+  and ``offset``) collapsed to one space and trimmed, except inside SQL
+  string literals and quoted identifiers, where whitespace is part of the value;
 - without keys whose value is None, so an unset key equals a missing one;
 - as JSON with sorted keys, so key order doesn't count.
 
@@ -37,11 +38,19 @@ EXCLUDED_FIELD_KEYS = frozenset({'display_name', 'format'})
 EXPRESSION_KEYS = frozenset({'source', 'filter', 'on', 'expr', 'order', 'range', 'offset'})
 
 _WHITESPACE = re.compile(r'\s+')
+# SQL string literals and quoted identifiers, whose whitespace is part of the value
+_QUOTED = re.compile(r"'(?:[^'\\]|\\.|'')*'|\"(?:[^\"\\]|\\.)*\"|`(?:[^`]|``)*`")
 
 
 def collapse_whitespace(text: str) -> str:
-    """``text`` with each run of whitespace replaced by one space, trimmed."""
-    return _WHITESPACE.sub(' ', text).strip()
+    """``text`` with each run of whitespace outside quotes replaced by one space, trimmed."""
+    parts, last = [], 0
+    for quoted in _QUOTED.finditer(text):
+        parts.append(_WHITESPACE.sub(' ', text[last:quoted.start()]))
+        parts.append(quoted.group())
+        last = quoted.end()
+    parts.append(_WHITESPACE.sub(' ', text[last:]))
+    return ''.join(parts).strip()
 
 
 def _clean(value: Any, key: Optional[str] = None) -> Any:

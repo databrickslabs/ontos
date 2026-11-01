@@ -68,6 +68,17 @@ def test_whitespace_in_expressions_does_not_count():
     assert _digest(spaced) == _digest(BASE)
 
 
+@pytest.mark.parametrize('quoted', ["'New  York'", '`order  id`'])
+def test_whitespace_inside_quotes_counts(quoted):
+    single = quoted.replace('  ', ' ')
+    with_double = BASE.replace("filter: status = 'closed'",
+                               f'filter: "status = {quoted}"')
+    with_single = BASE.replace("filter: status = 'closed'",
+                               f'filter: "status  = {single}"')
+    assert normalize_definition(with_double)['filter'] == f'status = {quoted}'
+    assert _digest(with_double) != _digest(with_single)
+
+
 @pytest.mark.parametrize('extra', [
     '    display_name: Revenue\n',
     '    format:\n      type: currency\n      currency_code: USD\n',

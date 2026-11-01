@@ -19,7 +19,9 @@ from src.common.workspace_client import (
     USER_TOKEN_REQUIRED_MESSAGE,
     get_obo_workspace_client as REAL_GET_OBO_WORKSPACE_CLIENT,
 )
-from src.routes import domain_sync_routes, llm_search_routes, ontology_generator_routes
+from src.routes import (
+    domain_sync_routes, llm_search_routes, ontology_generator_routes, schema_import_routes,
+)
 
 CODED_403 = {'code': 'user_token_required', 'message': USER_TOKEN_REQUIRED_MESSAGE, 'params': {}}
 
@@ -109,6 +111,37 @@ def test_the_sp_fallback_setting_keeps_the_app_client(client, app_client, test_s
 
     assert response.status_code == 200, response.text
     app_client.assert_called_once()
+
+
+def _async_import(client, monkeypatch):
+    runs_manager = MagicMock(name='runs manager')
+    runs_manager.start_run.return_value = 'run-1'
+    monkeypatch.setattr(schema_import_routes, '_get_runs_manager', lambda request: runs_manager)
+    response = client.post('/api/schema-import/import-async', json={
+        'connection_id': str(uuid.uuid4()), 'selected_paths': ['main.sales'],
+    })
+    return response, runs_manager
+
+
+def test_the_async_schema_import_is_refused_and_starts_no_run(client, app_client, monkeypatch):
+    """The background run would build the app's client from a missing token."""
+    response, runs_manager = _async_import(client, monkeypatch)
+
+    _assert_refused(response)
+    runs_manager.start_run.assert_not_called()
+    app_client.assert_not_called()
+
+
+def test_the_async_schema_import_starts_with_the_sp_fallback_setting(
+    client, app_client, monkeypatch, test_settings
+):
+    test_settings.OBO_ALLOW_SP_FALLBACK = True
+
+    response, runs_manager = _async_import(client, monkeypatch)
+
+    assert response.status_code == 202, response.text
+    assert response.json()['run_id'] == 'run-1'
+    assert runs_manager.start_run.call_args.kwargs['user_token'] is None
 
 
 def test_the_users_token_selects_the_users_client(client, app_client, monkeypatch):

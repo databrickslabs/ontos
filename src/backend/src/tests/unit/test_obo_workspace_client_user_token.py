@@ -3,8 +3,9 @@
 ``get_obo_workspace_client`` used to return the app's own (service principal)
 client when a request had no ``x-forwarded-access-token``, so routes meant to
 read Unity Catalog as the user read it as the app. It now answers 403
-``user_token_required`` instead; only ENV=LOCAL (local development, where no
-Databricks Apps proxy forwards a token) keeps the old fallback.
+``user_token_required`` instead. Two explicit opt-ins keep the old fallback:
+ENV=LOCAL (local development, where no Databricks Apps proxy forwards a token)
+and OBO_ALLOW_SP_FALLBACK=true (deployments without on-behalf-of auth).
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -117,23 +118,41 @@ def test_with_the_sp_fallback_setting_on_the_app_client_is_returned(
     user_client_builder.assert_not_called()
 
 
-@pytest.mark.parametrize('value', ['true', 'True', 1, MagicMock()])
-def test_only_a_real_true_opts_in(app_client, value):
-    with pytest.raises(HTTPException):
-        wc.get_obo_workspace_client(_request({}), _settings('PROD', OBO_ALLOW_SP_FALLBACK=value))
-
-    app_client.assert_not_called()
-
-
-def test_the_setting_is_read_from_the_environment(monkeypatch, tmp_path):
-    monkeypatch.setenv('OBO_ALLOW_SP_FALLBACK', 'true')
-
-    settings = Settings(
+def _settings_from_env(monkeypatch, tmp_path, value: str) -> Settings:
+    monkeypatch.setenv('OBO_ALLOW_SP_FALLBACK', value)
+    monkeypatch.setenv('ENV', 'PROD')
+    return Settings(
         DATABRICKS_HOST='https://example.cloud.databricks.com',
         DATABRICKS_WAREHOUSE_ID='w', APP_AUDIT_LOG_DIR=str(tmp_path),
     )
 
+
+@pytest.mark.parametrize('value', ['true', 'True', '1', 'yes', 'on'])
+def test_a_true_value_in_the_environment_opts_in(
+    monkeypatch, tmp_path, app_client, user_client_builder, value
+):
+    settings = _settings_from_env(monkeypatch, tmp_path, value)
+
     assert settings.OBO_ALLOW_SP_FALLBACK is True
+    assert wc.get_obo_workspace_client(_request({}), settings) is app_client.return_value
+
+
+@pytest.mark.parametrize('value', ['false', 'False', '0', 'no', 'off'])
+def test_a_false_value_in_the_environment_refuses(monkeypatch, tmp_path, app_client, value):
+    settings = _settings_from_env(monkeypatch, tmp_path, value)
+
+    assert settings.OBO_ALLOW_SP_FALLBACK is False
+    with pytest.raises(HTTPException):
+        wc.get_obo_workspace_client(_request({}), settings)
+    app_client.assert_not_called()
+
+
+@pytest.mark.parametrize('value', ['', 'ture'])
+def test_an_empty_or_misspelt_value_fails_settings_validation(monkeypatch, tmp_path, value):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _settings_from_env(monkeypatch, tmp_path, value)
 
 
 def test_with_the_user_token_the_users_client_is_built(app_client, user_client_builder):

@@ -3,7 +3,7 @@ import os
 import signal
 import time
 from functools import cached_property, wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, NoReturn, Optional
 
 from databricks import sql
 from databricks.sdk import WorkspaceClient
@@ -408,7 +408,7 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
 USER_TOKEN_REQUIRED_MESSAGE = "This request needs the user's Databricks token, and it has none."
 
 
-def _sp_fallback_allowed(settings: Settings) -> bool:
+def sp_fallback_allowed(settings: Settings) -> bool:
     """Whether a request without the user's token may use the app's own client.
 
     Refused by default. Two explicit opt-ins keep the fallback:
@@ -420,6 +420,15 @@ def _sp_fallback_allowed(settings: Settings) -> bool:
     if str(getattr(settings, 'ENV', '') or '').upper().startswith('LOCAL'):
         return True
     return getattr(settings, 'OBO_ALLOW_SP_FALLBACK', False) is True
+
+
+def raise_user_token_required() -> NoReturn:
+    """Refuse a request that needs the user's token and has none (403, coded)."""
+    from fastapi import HTTPException
+
+    logger.warning("OBO token not found in request headers; on-behalf-of client refused")
+    error = UserTokenRequiredError(USER_TOKEN_REQUIRED_MESSAGE)
+    raise HTTPException(status_code=403, detail=str(error)) from error
 
 
 def get_workspace_client_dependency(timeout: int = 30):
@@ -458,7 +467,7 @@ def get_obo_workspace_client(
         HTTPException: 403 with code ``user_token_required`` when the request has no
             x-forwarded-access-token. The app's own client is never returned in its
             place, except with ENV=LOCAL or OBO_ALLOW_SP_FALLBACK=true (see
-            ``_sp_fallback_allowed``).
+            ``sp_fallback_allowed``).
     """
     from fastapi import HTTPException
 
@@ -472,15 +481,13 @@ def get_obo_workspace_client(
     obo_token = request.headers.get('x-forwarded-access-token')
 
     if not obo_token:
-        if _sp_fallback_allowed(settings):
+        if sp_fallback_allowed(settings):
             logger.warning(
                 "OBO token not found in request headers; ENV=LOCAL or "
                 "OBO_ALLOW_SP_FALLBACK set, falling back to the app's service principal client"
             )
             return get_workspace_client(settings, timeout)
-        logger.warning("OBO token not found in request headers; on-behalf-of client refused")
-        error = UserTokenRequiredError(USER_TOKEN_REQUIRED_MESSAGE)
-        raise HTTPException(status_code=403, detail=str(error)) from error
+        raise_user_token_required()
 
     # Extract user email for stable cache key
     user_email = request.headers.get('X-Forwarded-Email') or request.headers.get('X-Forwarded-User')

@@ -64,7 +64,23 @@ def test_the_latest_update_gives_the_status_time_and_pipeline_link():
     assert refresh.latest_update_at == '2026-10-30T06:00:00Z'
     assert refresh.schedule == 'EVERY 6 HOURS'
     assert refresh.pipeline_state == 'IDLE' and refresh.health == 'HEALTHY'
-    assert refresh.pipeline_url == f'https://adb-1.example.com/pipelines/{PIPELINE}'
+    # The link Databricks itself returns for a metric view's refresh
+    assert refresh.pipeline_url == f'https://adb-1.example.com/#joblist/pipelines/{PIPELINE}'
+
+
+def test_the_pipeline_id_of_a_metric_view_is_read_from_its_properties():
+    # Seen on a workspace: a materialized metric view has no TableInfo.pipeline_id;
+    # Unity Catalog keeps the pipeline id in the view's properties
+    ws = _ws(_pipeline(UpdateStateInfoState.COMPLETED))
+    table = SimpleNamespace(
+        pipeline_id=None,
+        properties={'metric_view.materialization.pipelineUuid': PIPELINE},
+    )
+
+    refresh = read_refresh_state(ws, table, MATERIALIZED)
+
+    ws.pipelines.get.assert_called_once_with(pipeline_id=PIPELINE)
+    assert refresh.pipeline_id == PIPELINE and refresh.status == 'succeeded'
 
 
 @pytest.mark.parametrize('state, status', [

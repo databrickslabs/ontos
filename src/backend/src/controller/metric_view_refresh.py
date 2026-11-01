@@ -7,16 +7,20 @@ Information") and in Catalog Explorer
 
 For the SDK the state is read in two steps:
 
-1. ``tables.get`` returns ``TableInfo.pipeline_id``, "the pipeline ID of the
-   table, applicable for tables created by pipelines (Materialized View,
-   Streaming Table, etc.)" (https://docs.databricks.com/api/workspace/tables/get).
-   **Not verified** that it is set for a materialized metric view.
+1. ``tables.get``: on a workspace, a materialized metric view has no
+   ``TableInfo.pipeline_id``; Unity Catalog keeps the pipeline id in the view's
+   ``properties`` (``metric_view.materialization.pipelineUuid``).
+   ``pipeline_id`` ("the pipeline ID of the table, applicable for tables created
+   by pipelines", https://docs.databricks.com/api/workspace/tables/get) is
+   still read first.
 2. ``pipelines.get(pipeline_id)`` returns ``state``, ``health`` and
    ``latest_updates`` ("ordered with the newest update first"), each with
    ``update_id``, ``state`` and ``creation_time``
    (https://docs.databricks.com/api/workspace/pipelines/get). ``creation_time``
-   is when the update started; whether a completed refresh has a finish time
-   in this response is **not verified** (it hasn't one in the SDK model).
+   is when the update started (seen on a workspace: before the refresh's end).
+
+The pipeline link has the form Databricks returns for a metric view's refresh
+(``<host>/#joblist/pipelines/<id>``).
 
 Both are read with the user's client, so the user sees what Unity Catalog and
 the pipeline's permissions let them see. Anything not readable is ``unknown``,
@@ -51,12 +55,25 @@ def _value(value: Any) -> Optional[str]:
     return value if isinstance(value, str) and value else None
 
 
+# Where Unity Catalog keeps a materialized metric view's pipeline id
+PIPELINE_ID_PROPERTY = 'metric_view.materialization.pipelineUuid'
+
+
+def _pipeline_id(table: Any) -> Optional[str]:
+    """``TableInfo.pipeline_id``, else the pipeline id in the view's properties."""
+    properties = getattr(table, 'properties', None)
+    from_properties = (
+        properties.get(PIPELINE_ID_PROPERTY) if isinstance(properties, dict) else None
+    )
+    return _value(getattr(table, 'pipeline_id', None)) or _value(from_properties)
+
+
 def _pipeline_url(ws_client: WorkspaceClient, pipeline_id: str) -> Optional[str]:
-    """The pipeline's page in the workspace (path not verified), or None without a host."""
+    """The pipeline's page in the workspace, or None without a host."""
     host = getattr(getattr(ws_client, 'config', None), 'host', None)
     if not isinstance(host, str) or not host.startswith('https://'):
         return None
-    return f"{host.rstrip('/')}/pipelines/{pipeline_id}"
+    return f"{host.rstrip('/')}/#joblist/pipelines/{pipeline_id}"
 
 
 def read_refresh_state(
@@ -68,7 +85,7 @@ def read_refresh_state(
     ``materialization`` block or Unity Catalog reports a pipeline for it.
     """
     materialization = (spec or {}).get('materialization')
-    pipeline_id = _value(getattr(table, 'pipeline_id', None))
+    pipeline_id = _pipeline_id(table)
     if materialization is None and pipeline_id is None:
         return None
     refresh = MetricViewRefresh(

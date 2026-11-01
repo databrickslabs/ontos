@@ -2521,12 +2521,23 @@ class EntityActionStepHandler(StepHandler):
         if not db_entity:
             return StepResult(passed=False, error=f"{entity_type} {entity_id} not found")
 
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = 'none'
         db_entity.published_at = None
         db_entity.published_by = None
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: unpublished {entity_type} {entity_id}")
+        failed_trigger = self._fire_publication_trigger(
+            resolved_type, entity_id, db_entity, 'none', was_published, context,
+        )
+        if failed_trigger:
+            # The unpublish stands; say in the step result that its workflows didn't run
+            return StepResult(
+                passed=True,
+                message=f"Unpublished; the {failed_trigger} workflows did not run",
+                data={'trigger_failed': failed_trigger},
+            )
         return StepResult(passed=True, message="Unpublished")
 
 

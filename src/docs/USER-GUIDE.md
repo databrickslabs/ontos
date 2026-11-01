@@ -2385,7 +2385,7 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Data Product Review Request** | Review Request (data_product) | Domain owner approval for products |
 | **Data Contract Deploy Request** | Deploy Request (data_contract) | Contract approver authorization for deploying to Unity Catalog |
 | **Access Grant Request** | Access Request (access_grant) | Admin approval for access |
-| **Status Change Request** | Status Change Request (dataset, data_product) | Admin approval for status changes |
+| **Status Change Request** | Status Change Request (data_product, data_contract) | Admin approval for status changes |
 | **Role Access Request** | Access Request (role) | Admin approval for role assignments |
 
 #### Notification Workflows

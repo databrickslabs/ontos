@@ -439,10 +439,10 @@ The way through is `POST /api/data-products/{id}/request-status-change` (contrac
 `POST /api/data-contracts/{id}/request-status-change`). The guard accepts the
 deprecation only when the request is applied after an approval that counts:
 
-- a product's request, at the approval step of the Status Change Request workflow
-  (`on_request_status_change`), decided by one of its approvers through
-  `POST /api/workflows/handle-approval`. A run without an approval step, or a plain
-  `POST /api/workflows/executions/{id}/resume`, doesn't count;
+- a product's or contract's request, at the approval step of the Status Change
+  Request workflow (`on_request_status_change`), decided by one of its approvers
+  through `POST /api/workflows/handle-approval`. A run without an approval step, or a
+  plain `POST /api/workflows/executions/{id}/resume`, doesn't count;
 - a product's or contract's **pending** request approved with `handle-status-change`
   by a user with Admin on the feature. Each request has a `request_id` in its
   `status_change_requested` change log entry (the record both managers write with
@@ -453,9 +453,8 @@ deprecation only when the request is applied after an approval that counts:
   keeps it open), the Status Change Request workflow's approval or rejection, and any
   transition of the entity, so a request made from a status the entity has left can't
   be approved even after the entity returns to it. Requests made before they had an
-  id are never pending. For a contract, the *Status Change Request Pending*
-  notification goes to the Admin role and has an *Approve/Deny* action that opens the
-  decision dialog; once decided it opens read-only.
+  id are never pending. In the UI, both are decided from the workflow's approval
+  notification (*Approval Required*), as any workflow approval.
 
 In both cases the approver must not be the requester. A decision that doesn't count
 is refused with `certified_deprecation_approval_refused` and a `reason`

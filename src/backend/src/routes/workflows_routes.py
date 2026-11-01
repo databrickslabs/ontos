@@ -211,7 +211,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     # ping-pong (P2). concept_changeset (bulk RDF upload gate, P3) is intentionally
     # NOT selectable — Scenario D (2026-08-18) disabled the gate; all file uploads
     # land as Draft and follow per-concept review. Re-add if gating is re-opened.
-    "on_request_status_change": ["data_product", "ontology_concept"],
+    "on_request_status_change": ["data_product", "data_contract", "ontology_concept"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],

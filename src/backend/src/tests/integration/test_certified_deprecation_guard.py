@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from src.app import app
 from src.common.authorization import get_user_details_from_sdk
+from src.controller.certified_deprecation_guard import request_is_closed
 from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.audit_log import AuditLogDb
 from src.db_models.data_contracts import DataContractDb
@@ -404,55 +405,250 @@ class TestOneDecisionPerRequest:
                                  'no_pending_request')
 
 
-def _request_contract_deprecation(client: TestClient, contract_id: str) -> None:
+def _request_contract_deprecation(client: TestClient, contract_id: str) -> dict:
     requested = client.post(
         f'/api/data-contracts/{contract_id}/request-status-change',
         json={'target_status': 'deprecated',
               'justification': 'Replaced by the v2 contract, consumers moved'},
     )
     assert requested.status_code == 200, requested.text
+    return requested.json()
 
 
-def _admin_requests(db: Session, contract_id: str):
-    """The admins' notifications of a contract's status change requests."""
+def _approvals(db: Session, contract_id: str):
+    """The workflow approval notifications of a contract's request."""
     db.expire_all()
     notes = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'handle_status_change_request',
+        NotificationDb.action_type == 'workflow_approval',
     ).all()
-    return [n for n in notes if json.loads(n.action_payload)['contract_id'] == contract_id]
+    return [n for n in notes if json.loads(n.action_payload).get('entity_id') == contract_id]
 
 
-class TestContractRequestNotification:
-    """The admins' notification is what the UI decides a contract's request from."""
+def _handle_approval(client: TestClient, execution_id: str, approved: bool = True):
+    return client.post(
+        '/api/workflows/handle-approval',
+        json={'execution_id': execution_id, 'approved': approved, 'message': 'Decided'},
+    )
 
-    def test_the_admin_notification_carries_the_decision_action(self, client, db_session):
+
+def _requester_notices(db: Session, contract_id: str):
+    db.expire_all()
+    return [
+        n for n in db.query(NotificationDb).filter(
+            NotificationDb.recipient == 'test@example.com',
+        ).all()
+        if (n.subtitle or '').endswith(f'Contract {contract_id[:8]}')
+    ]
+
+
+class TestContractRequestWorkflow:
+    """A contract's status change request goes through the Status Change Request workflow.
+
+    One mechanism for products and contracts (#1120).
+    """
+
+    def test_the_request_starts_the_workflow_and_asks_the_admin_role(self, client, db_session):
+        WorkflowsManager(db=db_session).load_from_yaml()
         contract_id = _contract(db_session)
 
-        _request_contract_deprecation(client, contract_id)
+        response = _request_contract_deprecation(client, contract_id)
 
-        notes = _admin_requests(db_session, contract_id)
-        assert len(notes) == 1
-        note = notes[0]
-        assert note.recipient == 'Admin' and note.read is False
-        assert note.recipient_role_id
-        assert json.loads(note.action_payload) == {
-            'contract_id': contract_id,
-            'contract_name': f'Contract {contract_id[:8]}',
-            'requester_email': 'test@example.com',
-            'from_status': 'active',
-            'target_status': 'deprecated',
-            'justification': 'Replaced by the v2 contract, consumers moved',
-        }
-        i18n = json.loads(note.data)['i18n']
-        assert i18n['title'] == 'notifications:contractStatusChangeRequest.title'
-        assert i18n['description'] == 'notifications:contractStatusChangeRequest.description'
-        assert i18n['statusNamespace'] == 'data-contracts'
-        assert i18n['params']['fromStatus'] == 'active'
-        assert i18n['params']['toStatus'] == 'deprecated'
+        assert response['execution_id'] and response['request_id']
+        assert response['workflow_status'] == 'paused'
+        approvals = _approvals(db_session, contract_id)
+        assert len(approvals) == 1
+        assert approvals[0].recipient == 'Admin' and approvals[0].recipient_role_id
+        payload = json.loads(approvals[0].action_payload)
+        assert payload['execution_id'] == response['execution_id']
+        assert payload['entity_type'] == 'data_contract'
+        assert payload['requester_email'] == 'test@example.com'
+        # The contract-specific notifications are gone
+        db_session.expire_all()
+        assert db_session.query(NotificationDb).filter(
+            NotificationDb.action_type == 'handle_status_change_request',
+        ).count() == 0
+        # The requester's confirmation comes from the workflow, translated
+        notices = _requester_notices(db_session, contract_id)
+        assert [json.loads(n.data)['i18n']['description'] for n in notices] == [
+            'notifications:workflowDefaults.messages.status-change-request.notify-requester',
+        ]
 
-    def test_approving_marks_it_handled_and_a_second_approval_is_coded(
-        self, client, db_session,
+    @pytest.mark.parametrize('certified', [True, False])
+    def test_an_approval_at_the_workflow_step_deprecates_the_contract(
+        self, client, db_session, certified,
     ):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        contract_id = _contract(db_session, certified=certified)
+        response = _request_contract_deprecation(client, contract_id)
+        execution_id, request_id = response['execution_id'], response['request_id']
+        assert _status(db_session, DataContractDb, contract_id) == 'active'
+
+        _act_as('steward')
+        approved = _handle_approval(client, execution_id)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
+        # The transition closed the request
+        assert request_is_closed(db_session, 'data_contract', contract_id, request_id)
+
+    def test_a_rejection_keeps_the_status_and_ends_the_request(self, client, db_session):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        contract_id = _contract(db_session)
+        execution_id = _request_contract_deprecation(client, contract_id)['execution_id']
+
+        _act_as('steward')
+        rejected = _handle_approval(client, execution_id, approved=False)
+
+        assert rejected.status_code == 200, rejected.text
+        assert _status(db_session, DataContractDb, contract_id) == 'active'
+        keys = [json.loads(n.data)['i18n'].get('description')
+                for n in _requester_notices(db_session, contract_id)]
+        assert 'notifications:workflowDefaults.messages.status-change-request.notify-rejected' \
+            in keys
+        _act_as('second_admin')
+        _assert_approval_refused(_decide(client, 'data-contracts', contract_id),
+                                 'no_pending_request')
+
+    def test_a_clarification_through_the_api_keeps_the_request_open(self, client, db_session):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        contract_id = _contract(db_session)
+        execution_id = _request_contract_deprecation(client, contract_id)['execution_id']
+        _act_as('steward')
+        clarify = client.post(
+            f'/api/data-contracts/{contract_id}/handle-status-change',
+            json={'decision': 'clarify', 'target_status': 'deprecated',
+                  'requester_email': 'test@example.com', 'message': 'Which consumers?'},
+        )
+        assert clarify.status_code == 200, clarify.text
+        assert _status(db_session, DataContractDb, contract_id) == 'active'
+
+        approved = _handle_approval(client, execution_id)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
+
+    def test_a_request_whose_contract_moved_meanwhile_is_not_applied(self, client, db_session):
+        contract_id = _contract(db_session, certified=False)
+        db_session.get(DataContractDb, contract_id).status = 'approved'
+        db_session.commit()
+        WorkflowsManager(db=db_session).load_from_yaml()
+        execution_id = _request_contract_deprecation(client, contract_id)['execution_id']
+        _change(client, 'data-contracts', contract_id, 'active')
+
+        _act_as('steward')
+        approved = _handle_approval(client, execution_id)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'active'
+        db_session.expire_all()
+        warned = db_session.query(NotificationDb).filter(
+            NotificationDb.title == 'Status change not applied',
+        ).all()
+        warned = [n for n in warned if n.subtitle == f'Contract {contract_id[:8]}']
+        assert sorted(n.recipient for n in warned) == ['steward@example.com', 'test@example.com']
+        i18n = json.loads(warned[0].data)['i18n']
+        assert i18n['description'] == 'notifications:statusChangeNotApplied.statusChanged'
+        assert i18n['statusNamespace'] == 'data-contracts'
+        assert i18n['params'] == {
+            'fromStatus': 'approved', 'toStatus': 'deprecated', 'currentStatus': 'active',
+        }
+
+    def test_a_workflow_approval_after_an_api_decision_applies_nothing(self, client, db_session):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        contract_id = _contract(db_session)
+        execution_id = _request_contract_deprecation(client, contract_id)['execution_id']
+        _act_as('steward')
+        assert _decide(client, 'data-contracts', contract_id).status_code == 200
+        _change(client, 'data-contracts', contract_id, 'active')
+
+        approved = _handle_approval(client, execution_id)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'active'
+
+    def test_the_requester_approving_their_own_request_does_not_count(self, client, db_session):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        contract_id = _contract(db_session)
+        execution_id = _request_contract_deprecation(client, contract_id)['execution_id']
+
+        approved = _handle_approval(client, execution_id)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'active'
+        db_session.expire_all()
+        refused = [
+            n for n in db_session.query(NotificationDb).filter(
+                NotificationDb.title == 'Status change not applied',
+            ).all()
+            if n.subtitle == f'Contract {contract_id[:8]}'
+        ]
+        assert len(refused) == 1
+        i18n = json.loads(refused[0].data)['i18n']
+        assert i18n['description'] == 'notifications:statusChangeNotApplied.refused'
+        assert i18n['error']['code'] == REFUSED
+        assert i18n['error']['params']['reason'] == 'self_approval'
+
+    def test_a_domain_scoped_copy_asks_the_domain_owner(self, client, db_session):
+        from src.db_models.business_owners import BusinessOwnerDb
+        from src.db_models.business_roles import BusinessRoleDb
+        from src.models.process_workflows import (
+            ProcessWorkflowCreate, ScopeType, StepType, TriggerType, WorkflowScope,
+            WorkflowStepCreate, WorkflowTrigger, EntityType,
+        )
+        from src.repositories.process_workflows_repository import process_workflow_repo
+
+        manager = WorkflowsManager(db=db_session)
+        manager.load_from_yaml()
+        default = process_workflow_repo.get_by_name(db_session, 'Status Change Request')
+        process_workflow_repo.toggle_active(db_session, default.id, False)
+        sales = _domain(db_session, 'Sales')
+        contract_id = _contract(db_session, domain_id=sales)
+        role = BusinessRoleDb(id=uuid.uuid4(), name=f'Owner {uuid.uuid4().hex[:6]}')
+        db_session.add(role)
+        db_session.flush()
+        db_session.add(BusinessOwnerDb(
+            id=uuid.uuid4(), object_type='data_domain', object_id=sales,
+            user_email='owner@example.com', role_id=role.id, is_active=True,
+        ))
+        db_session.commit()
+        manager.create_workflow(ProcessWorkflowCreate(
+            name='Sales Status Change Request',
+            trigger=WorkflowTrigger(
+                type=TriggerType.ON_REQUEST_STATUS_CHANGE,
+                entity_types=[EntityType.DATA_CONTRACT],
+            ),
+            scope=WorkflowScope(type=ScopeType.DOMAIN, ids=[sales]),
+            is_active=True,
+            steps=[
+                WorkflowStepCreate(
+                    step_id='request-approval', name='Domain owner approval',
+                    step_type=StepType.APPROVAL,
+                    config={'approvers': 'DomainOwner', 'timeout_days': 5},
+                    on_pass='success', on_fail='fail-rejected', order=0,
+                ),
+                WorkflowStepCreate(step_id='success', name='Approved',
+                                   step_type=StepType.PASS, order=1),
+                WorkflowStepCreate(step_id='fail-rejected', name='Rejected',
+                                   step_type=StepType.FAIL, order=2),
+            ],
+        ))
+
+        execution_id = _request_contract_deprecation(client, contract_id)['execution_id']
+
+        assert [n.recipient for n in _approvals(db_session, contract_id)] == [
+            'owner@example.com',
+        ]
+        # Not an admin: the owner decides it as the step's approver
+        _act_as('owner', groups=['owners'])
+        approved = _handle_approval(client, execution_id)
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
+
+
+class TestContractHandleStatusChange:
+    """``handle-status-change`` stays for API clients."""
+
+    def test_a_second_approval_is_coded(self, client, db_session):
         contract_id = _contract(db_session)
         _request_contract_deprecation(client, contract_id)
         body = {'decision': 'approve', 'target_status': 'deprecated',
@@ -463,11 +659,6 @@ class TestContractRequestNotification:
 
         assert approved.status_code == 200, approved.text
         assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
-        notes = _admin_requests(db_session, contract_id)
-        assert [n.read for n in notes] == [True]
-        # Decided, not only read: the bell opens it read-only
-        payload = json.loads(notes[0].action_payload)
-        assert payload['handled'] is True and payload['decision'] == 'approve'
 
         again = client.post(f'/api/data-contracts/{contract_id}/handle-status-change', json=body)
 
@@ -475,39 +666,6 @@ class TestContractRequestNotification:
         detail = again.json()['detail']
         assert detail['code'] == 'invalid_status_transition'
         assert detail['params'] == {'fromStatus': 'deprecated', 'toStatus': 'deprecated'}
-
-    def test_an_admin_role_member_outside_an_admins_group_sees_the_request(
-        self, client, db_session,
-    ):
-        # The Admin role's groups are the test settings' APP_ADMIN_DEFAULT_GROUPS
-        # (test_admins): no group is called "admins"
-        contract_id = _contract(db_session)
-        _request_contract_deprecation(client, contract_id)
-        _act_as('steward', groups=['test_admins'])
-
-        listed = client.get('/api/notifications')
-
-        assert listed.status_code == 200, listed.text
-        items = listed.json()
-        items = items if isinstance(items, list) else items.get('items', [])
-        assert any(
-            n.get('action_type') == 'handle_status_change_request'
-            and (n.get('action_payload') or {}).get('contract_id') == contract_id
-            for n in items
-        ), items
-
-    def test_a_user_without_the_admin_role_does_not_see_it(self, client, db_session):
-        contract_id = _contract(db_session)
-        _request_contract_deprecation(client, contract_id)
-        _act_as('reader', groups=['readers'])
-
-        listed = client.get('/api/notifications')
-
-        items = listed.json() if listed.status_code == 200 else []
-        items = items if isinstance(items, list) else items.get('items', [])
-        assert not any(
-            (n.get('action_payload') or {}).get('contract_id') == contract_id for n in items
-        )
 
 
 class TestSwitchedOff:

@@ -517,7 +517,9 @@ export default function AssetDetailView() {
           )}
 
           {/* A Unity Catalog metric view: its fields and their concept links */}
-          {mayBeMetricView(asset) && <AssetMetricViewCard assetId={asset.id} />}
+          {mayBeMetricView(asset) && (
+            <AssetMetricViewCard assetId={asset.id} assetTypeName={asset.asset_type_name} />
+          )}
 
           {/* Properties (non-type-specific fields) */}
           {!isBusinessTerm && <PropertiesCard properties={asset.properties} />}

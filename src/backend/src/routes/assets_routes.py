@@ -608,8 +608,9 @@ def get_asset_metric_view(
 
     Unity Catalog is read as the user (on-behalf-of token), never as the app,
     so the definition is only returned to users Unity Catalog lets read it.
-    403 ``user_token_required`` without the user's token, 503
-    ``user_client_unavailable`` when the user's client can't be built, 404
+    403 ``user_token_required`` without the user's token (401 when Unity Catalog
+    refuses it), 503 ``user_client_unavailable`` when the user's client can't be
+    built, 404
     ``metric_view_not_found`` when the asset isn't a metric view the user can
     read. The asset itself must be readable by the user.
     """
@@ -627,6 +628,9 @@ def get_asset_metric_view(
         return MetricViewsManager(db, links_manager).get_for_asset(asset_id, ws_client)
     except MetricViewNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        # Unity Catalog refused the user's token (expired or revoked)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
     except Exception:
         logger.exception("Failed to read the metric view of asset %s", asset_id)
         raise HTTPException(

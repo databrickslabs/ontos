@@ -6,9 +6,10 @@ import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-vi
 import { useApi } from '@/hooks/use-api';
 import type { MetricViewDefinition } from '@/types/data-asset-review';
 
-// Asset types a Unity Catalog metric view is imported as: View today, its own
-// type once the Metric View asset type exists.
-const METRIC_VIEW_ASSET_TYPES = new Set(['View', 'Metric View']);
+const METRIC_VIEW_TYPE = 'Metric View';
+// A metric view is imported as a Metric View asset; one imported before that type
+// existed is still a View until it is re-imported, so Views are asked too.
+const METRIC_VIEW_ASSET_TYPES = new Set(['View', METRIC_VIEW_TYPE]);
 
 type CardState = 'loading' | 'ready' | 'none' | 'noToken' | 'error';
 
@@ -25,8 +26,16 @@ export function mayBeMetricView(
  * concepts linked to the view and to each field, read from Unity Catalog as
  * the user. Renders nothing when the asset isn't a metric view the user can
  * read (`metric_view_not_found`).
+ *
+ * On a View asset (most are plain views) the card only appears once the
+ * metric view is loaded: loading, a missing token and errors stay silent
+ * there. A Metric View asset shows them.
  */
-export default function AssetMetricViewCard({ assetId }: { assetId: string }) {
+export default function AssetMetricViewCard({ assetId, assetTypeName }: {
+    assetId: string;
+    assetTypeName?: string | null;
+}) {
+    const quiet = assetTypeName !== METRIC_VIEW_TYPE;
     const { t } = useTranslation('assets');
     const { get } = useApi();
     const [definition, setDefinition] = useState<MetricViewDefinition | null>(null);
@@ -54,7 +63,7 @@ export default function AssetMetricViewCard({ assetId }: { assetId: string }) {
         return () => { cancelled = true; };
     }, [assetId, get]);
 
-    if (state === 'none') return null;
+    if (state === 'none' || (quiet && state !== 'ready')) return null;
 
     return (
         <Card>

@@ -9,11 +9,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from databricks.sdk.errors import NotFound, PermissionDenied
+from databricks.sdk.errors import BadRequest, NotFound, PermissionDenied, Unauthenticated
 from databricks.sdk.service.catalog import TableType
 
 from src.common.metric_views import parse_metric_view_definition
-from src.controller.metric_views_manager import MetricViewNotFoundError, MetricViewsManager
+from src.controller.metric_views_manager import (
+    MetricViewNotFoundError, MetricViewsManager, UserTokenRequiredError,
+)
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.models.semantic_links import EntitySemanticLinkCreate
@@ -121,6 +123,20 @@ class TestListForMetricView:
         assert result.view_entity_id == VIEW
         assert [link.iri for link in _field(result, 'Orders').links] == [NET_REVENUE]
 
+    def test_links_written_in_another_case_are_matched(self, links):
+        # The generic API and the assistant's tools store the name as given
+        _link(links, 'uc_table', 'Main.Sales.ORDERS_MV', SALES)
+        _link(links, 'uc_column', 'MAIN.sales.Orders_MV.total revenue', NET_REVENUE)
+        _link(links, 'uc_column', 'Main.Sales.Orders_MV.Gross Revenue', ORDER_MONTH)
+
+        result = links.list_for_metric_view(VIEW, SPEC)
+
+        assert [link.iri for link in result.view_links] == [SALES]
+        assert [link.iri for link in _field(result, 'Total Revenue').links] == [NET_REVENUE]
+        assert [(f.name, [link.iri for link in f.links]) for f in result.removed_fields] == [
+            ('Gross Revenue', [ORDER_MONTH]),
+        ]
+
     def test_unparsed_definition_returns_only_the_view_links(self, links):
         _link(links, 'uc_table', VIEW, SALES)
         _link(links, 'uc_column', f'{VIEW}.Orders', NET_REVENUE)
@@ -190,12 +206,23 @@ class TestMetricViewOfAsset:
         assert err.value.code == 'metric_view_not_found'
         assert err.value.params == {'assetId': str(asset.id)}
 
-    @pytest.mark.parametrize('error', [NotFound('gone'), PermissionDenied('no access')])
-    def test_not_found_or_denied_in_unity_catalog(self, db_session, links, error):
+    @pytest.mark.parametrize('error', [
+        NotFound('gone'), PermissionDenied('no access'), BadRequest('INVALID_PARAMETER_VALUE'),
+    ])
+    def test_not_found_denied_or_refused_in_unity_catalog(self, db_session, links, error):
         asset = _asset(db_session)
 
         with pytest.raises(MetricViewNotFoundError):
             MetricViewsManager(db_session, links).get_for_asset(asset.id, _ws(error=error))
+
+    def test_an_expired_user_token_is_a_token_error(self, db_session, links):
+        asset = _asset(db_session)
+
+        with pytest.raises(UserTokenRequiredError) as err:
+            MetricViewsManager(db_session, links).get_for_asset(
+                asset.id, _ws(error=Unauthenticated('Token expired: dapi-secret')))
+        assert err.value.code == 'user_token_required'
+        assert 'dapi-secret' not in str(err.value)
 
     @pytest.mark.parametrize('platform,location', [
         ('snowflake', VIEW),            # not a Databricks asset

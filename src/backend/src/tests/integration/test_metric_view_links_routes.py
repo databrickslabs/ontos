@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from databricks.sdk.errors import PermissionDenied
+from databricks.sdk.errors import BadRequest, PermissionDenied, Unauthenticated
 from databricks.sdk.service.catalog import TableType
 
 from src.db_models.assets import AssetDb, AssetTypeDb
@@ -150,6 +150,24 @@ class TestAssetMetricViewRoute:
         assert response.json()['detail']['code'] == 'metric_view_not_found'
         assert 'no SELECT' not in response.text
         mock_workspace_client.tables.get.assert_not_called()
+
+    def test_a_token_unity_catalog_refuses_answers_a_coded_401(self, client, asset, user_ws):
+        user_ws.tables.get.side_effect = Unauthenticated('Token expired: dapi-secret')
+
+        response = client.get(f'/api/assets/{asset.id}/metric-view', headers=TOKEN)
+
+        assert response.status_code == 401
+        assert response.json()['detail']['code'] == 'user_token_required'
+        assert 'dapi-secret' not in response.text
+
+    def test_a_name_unity_catalog_refuses_is_not_found(self, client, asset, user_ws):
+        user_ws.tables.get.side_effect = BadRequest('INVALID_PARAMETER_VALUE: bad name')
+
+        response = client.get(f'/api/assets/{asset.id}/metric-view', headers=TOKEN)
+
+        assert response.status_code == 404
+        assert response.json()['detail']['code'] == 'metric_view_not_found'
+        assert 'INVALID_PARAMETER' not in response.text
 
     def test_a_plain_view_answers_a_coded_404(self, client, asset, user_ws):
         user_ws.tables.get.return_value = _table(TableType.VIEW, 'SELECT 1')

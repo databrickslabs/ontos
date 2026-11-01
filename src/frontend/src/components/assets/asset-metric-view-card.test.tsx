@@ -49,15 +49,18 @@ describe('mayBeMetricView', () => {
     });
 });
 
+const MV = 'Metric View';
+const getResolved = () => getMock.mock.results.length > 0;
+
 describe('AssetMetricViewCard', () => {
     beforeEach(() => {
         getMock.mockReset();
         vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
     });
 
-    it('shows the fields and their concepts', async () => {
+    it.each([MV, 'View'])('shows the fields and their concepts on a %s asset', async (type) => {
         getMock.mockResolvedValue({ data: metricView });
-        render(<AssetMetricViewCard assetId="a1" />);
+        render(<AssetMetricViewCard assetId="a1" assetTypeName={type} />);
 
         expect(await screen.findByText('Total Revenue')).toBeInTheDocument();
         expect(getMock).toHaveBeenCalledWith('/api/assets/a1/metric-view');
@@ -65,40 +68,65 @@ describe('AssetMetricViewCard', () => {
         expect(screen.getByText('Net Revenue')).toBeInTheDocument();
     });
 
-    it('renders nothing for an asset that is not a metric view', async () => {
+    it.each([MV, 'View'])('renders nothing when a %s asset is not a metric view', async (type) => {
         getMock.mockResolvedValue({
             data: {},
             error: 'This asset is not a Unity Catalog metric view.',
             errorCode: 'metric_view_not_found',
         });
-        const { container } = render(<AssetMetricViewCard assetId="a1" />);
+        const { container } = render(<AssetMetricViewCard assetId="a1" assetTypeName={type} />);
 
+        await waitFor(() => expect(getResolved()).toBe(true));
         await waitFor(() => expect(container).toBeEmptyDOMElement());
     });
 
-    it('says the user token is required instead of reading as the app', async () => {
+    it('says the user token is required on a Metric View asset', async () => {
         getMock.mockResolvedValue({
             data: {},
             error: "Reading Unity Catalog needs the user's Databricks token.",
             errorCode: 'user_token_required',
         });
-        render(<AssetMetricViewCard assetId="a1" />);
+        render(<AssetMetricViewCard assetId="a1" assetTypeName={MV} />);
 
         expect(await screen.findByText(/read from Unity Catalog with your own access/))
             .toBeInTheDocument();
         expect(screen.queryByText(/could not be loaded/)).toBeNull();
     });
 
-    it('says when the definition could not be loaded, translated', async () => {
-        getMock.mockResolvedValue({ data: {}, error: 'boom', errorCode: 'internal_error' });
-        await i18n.changeLanguage('pt');
-        try {
-            render(<AssetMetricViewCard assetId="a1" />);
+    it('says when the definition of a Metric View asset could not be loaded, translated',
+        async () => {
+            getMock.mockResolvedValue({ data: {}, error: 'boom', errorCode: 'internal_error' });
+            await i18n.changeLanguage('pt');
+            try {
+                render(<AssetMetricViewCard assetId="a1" assetTypeName={MV} />);
 
-            expect(await screen.findByText('Não foi possível carregar a definição da metric view.'))
-                .toBeInTheDocument();
-        } finally {
-            await i18n.changeLanguage('en');
-        }
+                expect(await screen.findByText(
+                    'Não foi possível carregar a definição da metric view.',
+                )).toBeInTheDocument();
+            } finally {
+                await i18n.changeLanguage('en');
+            }
+        });
+
+    it.each([
+        ['user_token_required', "Reading Unity Catalog needs the user's Databricks token."],
+        ['user_client_unavailable', 'The user client could not be created.'],
+        ['internal_error', 'boom'],
+    ])('stays silent on a plain View asset when the answer is %s', async (code, error) => {
+        getMock.mockResolvedValue({ data: {}, error, errorCode: code });
+        const { container } = render(<AssetMetricViewCard assetId="a1" assetTypeName="View" />);
+
+        expect(container).toBeEmptyDOMElement(); // nothing while loading either
+        await waitFor(() => expect(getResolved()).toBe(true));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(container).toBeEmptyDOMElement();
+        expect(screen.queryByText('Metric view')).toBeNull();
+    });
+
+    it('shows the loading state on a Metric View asset only', () => {
+        getMock.mockReturnValue(new Promise(() => {}));
+        render(<AssetMetricViewCard assetId="a1" assetTypeName={MV} />);
+
+        expect(screen.getByLabelText('Loading the metric view')).toBeInTheDocument();
     });
 });

@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import NotFound, PermissionDenied
+from databricks.sdk.errors import BadRequest, NotFound, PermissionDenied, Unauthenticated
 from databricks.sdk.service.catalog import TableType
 from sqlalchemy.orm import Session
 
@@ -57,7 +57,9 @@ class MetricViewsManager:
         Raises ``MetricViewNotFoundError`` when the asset doesn't exist, isn't a
         Databricks asset with a ``catalog.schema.name`` location, or Unity
         Catalog doesn't return a ``METRIC_VIEW`` for it (not found, no access,
-        or another kind of table).
+        a name it refuses, or another kind of table), and
+        ``UserTokenRequiredError`` when Unity Catalog doesn't accept the user's
+        token (expired or revoked).
         """
         asset = asset_repo.get(self._db, id=asset_id)
         fqn = _uc_fqn(asset.location) if asset is not None else None
@@ -71,8 +73,15 @@ class MetricViewsManager:
             )
         try:
             table = ws_client.tables.get(full_name=fqn)
-        except (NotFound, PermissionDenied):
-            logger.info("Metric view %s of asset %s not found or not accessible", fqn, asset_id)
+        except Unauthenticated:
+            logger.info("Unity Catalog refused the user's token reading %s (asset %s)",
+                        fqn, asset_id)
+            raise UserTokenRequiredError(
+                "Unity Catalog didn't accept the user's Databricks token. Sign in again."
+            )
+        except (NotFound, PermissionDenied, BadRequest):
+            logger.info("Metric view %s of asset %s not found, not accessible or refused",
+                        fqn, asset_id)
             raise MetricViewNotFoundError(
                 'The metric view was not found in Unity Catalog, or access was denied.',
                 assetId=str(asset_id),

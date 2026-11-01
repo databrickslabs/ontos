@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import i18n from '@/i18n/config';
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import AssetMetricViewCard, { mayBeMetricView } from './asset-metric-view-card';
 
 const getMock = vi.fn();
@@ -66,6 +67,42 @@ describe('AssetMetricViewCard', () => {
         expect(getMock).toHaveBeenCalledWith('/api/assets/a1/metric-view');
         expect(screen.getByText('Metric view')).toBeInTheDocument();
         expect(screen.getByText('Net Revenue')).toBeInTheDocument();
+    });
+
+    it('lists the same and similar definitions of its measures once loaded', async () => {
+        const consistency = {
+            concept_iri: null, asset_id: 'a1', verdict: null, groups: [], unresolved: [],
+            threshold: 0.75,
+            measures: [{
+                error: null,
+                measure: {
+                    asset_id: 'a1', asset_name: 'orders_mv', view: VIEW, name: 'Total Revenue',
+                    display_name: null, entity_id: `${VIEW}.Total Revenue`, concepts: [],
+                    readable: true,
+                },
+                matches: [{
+                    verdict: 'duplicate', first_level: null, score: 1, differences: [],
+                    measure: {
+                        asset_id: 'a2', asset_name: 'copy_mv', view: 'dev.sales.copy_mv',
+                        name: 'Total Revenue', display_name: null,
+                        entity_id: 'dev.sales.copy_mv.Total Revenue', concepts: [],
+                        readable: true,
+                    },
+                }],
+            }],
+        };
+        getMock.mockImplementation(async (url: string) => (
+            url === '/api/assets/a1/metric-view' ? { data: metricView } : { data: consistency }
+        ));
+        render(
+            <MemoryRouter><AssetMetricViewCard assetId="a1" assetTypeName={MV} /></MemoryRouter>,
+        );
+
+        expect(await screen.findByText('Same or similar definitions')).toBeInTheDocument();
+        expect(getMock.mock.calls.map(([url]) => url)).toEqual([
+            '/api/assets/a1/metric-view', '/api/metric-views/consistency?asset_id=a1',
+        ]);
+        expect(screen.getByText('Duplicate')).toBeInTheDocument();
     });
 
     it('shows the drift and refresh state the route returns', async () => {

@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "Duplikat",
+    "link_conflict": "Mit anderem Konzept verknüpft",
+    "unrecognized_duplicate": "Nicht erkanntes Duplikat",
+    "variant": "Variante",
+    "conflict": "Konflikt",
+    "near_duplicate": "Beinahe-Duplikat"
+  },
+  "level": {
+    "expression": "Ausdruck",
+    "scope": "Geltungsbereich",
+    "full": "Fenster und Parameter"
+  },
+  "component": {
+    "expression": "Ausdruck",
+    "source": "Quelle",
+    "filter": "Filter",
+    "window": "Fenster",
+    "joins": "Joins",
+    "parameters": "Parameter",
+    "aggregation": "Aggregation",
+    "columns": "Spalten"
+  },
+  "differences": "Unterschiede",
+  "similarity": "Ähnlichkeit {{score}} %",
+  "hidden": "Sie können diese Metric View in Unity Catalog nicht lesen, daher wird ihre Definition nicht angezeigt.",
+  "concept": {
+    "title": "Kennzahlen aus Metric Views",
+    "group": "Definition {{n}}",
+    "differsAt": "Weicht von Definition 1 ab in: {{level}}",
+    "onlyIn": "Nur in {{name}}",
+    "otherConcepts": "Dieselbe Definition ist auch verknüpft mit: {{concepts}}",
+    "unresolved": "Verknüpfte Felder ohne gespeicherte Definition: {{fields}}",
+    "verdict": {
+      "consistent": "Konsistent",
+      "conflict": "Widersprüchliche Definitionen"
+    },
+    "hint": {
+      "consistent": "Alle mit diesem Konzept verknüpften Kennzahlen berechnen dasselbe.",
+      "conflict": "Die mit diesem Konzept verknüpften Kennzahlen berechnen {{count}} verschiedene Dinge. Die Unterschiede sind hervorgehoben."
+    }
+  },
+  "asset": {
+    "title": "Gleiche oder ähnliche Definitionen",
+    "hint": "Andere Kennzahlen über dieselben Daten mit gleicher oder ähnlicher Definition sowie widersprüchliche Konzeptverknüpfungen. Es wird nichts geändert.",
+    "linkedTo": "verknüpft mit {{concepts}}",
+    "onlyIn": "Nur in {{name}}",
+    "error": {
+      "reference_cycle": "Die Verweise dieser Kennzahl bilden einen Zyklus, daher kann sie nicht verglichen werden.",
+      "reference_depth": "Die Verweise dieser Kennzahl sind zu tief verschachtelt, um verglichen zu werden.",
+      "no_expression": "Diese Kennzahl hat keinen Ausdruck zum Vergleichen."
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} wurde verknüpft. Prüfen Sie die Definition",
+    "dismiss": "Schließen",
+    "hint": "Die Verknüpfung wurde erstellt. Prüfen Sie die Definitionen auf der Konzeptseite.",
+    "concept_has_other_definitions": "Bereits mit diesem Konzept verknüpfte Kennzahlen berechnen etwas anderes ({{count}}): {{measures}}",
+    "definition_linked_to_other_concepts": "Kennzahlen mit derselben Definition sind mit anderen Konzepten verknüpft ({{count}}): {{concepts}}"
+  }
+}

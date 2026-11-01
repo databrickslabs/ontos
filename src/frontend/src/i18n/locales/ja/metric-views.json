@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "重複",
+    "link_conflict": "別の概念にリンク済み",
+    "unrecognized_duplicate": "未認識の重複",
+    "variant": "バリアント",
+    "conflict": "競合",
+    "near_duplicate": "ほぼ重複"
+  },
+  "level": {
+    "expression": "式",
+    "scope": "スコープ",
+    "full": "ウィンドウとパラメーター"
+  },
+  "component": {
+    "expression": "式",
+    "source": "ソース",
+    "filter": "フィルター",
+    "window": "ウィンドウ",
+    "joins": "結合",
+    "parameters": "パラメーター",
+    "aggregation": "集計",
+    "columns": "列"
+  },
+  "differences": "差分",
+  "similarity": "類似度 {{score}}%",
+  "hidden": "Unity Catalog でこのメトリックビューを読み取る権限がないため、定義は表示されません。",
+  "concept": {
+    "title": "メトリックビューのメジャー",
+    "group": "定義 {{n}}",
+    "differsAt": "定義 1 との違い: {{level}}",
+    "onlyIn": "{{name}} のみ",
+    "otherConcepts": "同じ定義が次の概念にもリンクされています: {{concepts}}",
+    "unresolved": "定義が保存されていないリンク済みフィールド: {{fields}}",
+    "verdict": {
+      "consistent": "一貫",
+      "conflict": "定義が競合"
+    },
+    "hint": {
+      "consistent": "この概念にリンクされたメジャーはすべて同じものを計算します。",
+      "conflict": "この概念にリンクされたメジャーは {{count}} 通りの異なる計算をしています。差分を強調表示しています。"
+    }
+  },
+  "asset": {
+    "title": "同じまたは類似の定義",
+    "hint": "同じデータに対して同じまたは類似の定義を持つ他のメジャーと、競合する概念リンクです。何も変更されません。",
+    "linkedTo": "リンク先: {{concepts}}",
+    "onlyIn": "{{name}} のみ",
+    "error": {
+      "reference_cycle": "このメジャーの参照が循環しているため、比較できません。",
+      "reference_depth": "このメジャーの参照のネストが深すぎるため、比較できません。",
+      "no_expression": "このメジャーには比較する式がありません。"
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} をリンクしました。定義を確認してください",
+    "dismiss": "閉じる",
+    "hint": "リンクは作成されました。概念ページで定義を確認してください。",
+    "concept_has_other_definitions": "この概念にリンク済みのメジャーは別のものを計算しています ({{count}}): {{measures}}",
+    "definition_linked_to_other_concepts": "同じ定義のメジャーが他の概念にリンクされています ({{count}}): {{concepts}}"
+  }
+}

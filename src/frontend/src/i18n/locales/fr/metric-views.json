@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "Doublon",
+    "link_conflict": "Liée à un autre concept",
+    "unrecognized_duplicate": "Doublon non reconnu",
+    "variant": "Variante",
+    "conflict": "Conflit",
+    "near_duplicate": "Quasi-doublon"
+  },
+  "level": {
+    "expression": "expression",
+    "scope": "portée",
+    "full": "fenêtre et paramètres"
+  },
+  "component": {
+    "expression": "Expression",
+    "source": "Source",
+    "filter": "Filtre",
+    "window": "Fenêtre",
+    "joins": "Jointures",
+    "parameters": "Paramètres",
+    "aggregation": "Agrégation",
+    "columns": "Colonnes"
+  },
+  "differences": "Différences",
+  "similarity": "Similarité {{score}} %",
+  "hidden": "Vous ne pouvez pas lire cette metric view dans Unity Catalog : sa définition n'est donc pas affichée.",
+  "concept": {
+    "title": "Mesures des metric views",
+    "group": "Définition {{n}}",
+    "differsAt": "Diffère de la définition 1 par : {{level}}",
+    "onlyIn": "Uniquement dans {{name}}",
+    "otherConcepts": "La même définition est aussi liée à : {{concepts}}",
+    "unresolved": "Champs liés sans définition enregistrée : {{fields}}",
+    "verdict": {
+      "consistent": "Cohérent",
+      "conflict": "Définitions en conflit"
+    },
+    "hint": {
+      "consistent": "Toutes les mesures liées à ce concept calculent la même chose.",
+      "conflict": "Les mesures liées à ce concept calculent {{count}} choses différentes. Les différences sont mises en évidence."
+    }
+  },
+  "asset": {
+    "title": "Définitions identiques ou proches",
+    "hint": "Autres mesures sur les mêmes données avec une définition identique ou proche, et liens de concept en conflit. Rien n'est modifié.",
+    "linkedTo": "liée à {{concepts}}",
+    "onlyIn": "Uniquement dans {{name}}",
+    "error": {
+      "reference_cycle": "Les références de cette mesure forment un cycle : elle ne peut pas être comparée.",
+      "reference_depth": "Les références de cette mesure sont trop imbriquées pour être comparées.",
+      "no_expression": "Cette mesure n'a pas d'expression à comparer."
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} a été liée. Vérifiez sa définition",
+    "dismiss": "Ignorer",
+    "hint": "Le lien a été créé. Vérifiez les définitions sur la page du concept.",
+    "concept_has_other_definitions": "Des mesures déjà liées à ce concept calculent autre chose ({{count}}) : {{measures}}",
+    "definition_linked_to_other_concepts": "Des mesures de même définition sont liées à d'autres concepts ({{count}}) : {{concepts}}"
+  }
+}

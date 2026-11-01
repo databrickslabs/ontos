@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "Duplicaat",
+    "link_conflict": "Gekoppeld aan ander concept",
+    "unrecognized_duplicate": "Onherkend duplicaat",
+    "variant": "Variant",
+    "conflict": "Conflict",
+    "near_duplicate": "Bijna-duplicaat"
+  },
+  "level": {
+    "expression": "expressie",
+    "scope": "bereik",
+    "full": "venster en parameters"
+  },
+  "component": {
+    "expression": "Expressie",
+    "source": "Bron",
+    "filter": "Filter",
+    "window": "Venster",
+    "joins": "Joins",
+    "parameters": "Parameters",
+    "aggregation": "Aggregatie",
+    "columns": "Kolommen"
+  },
+  "differences": "Verschillen",
+  "similarity": "Gelijkenis {{score}}%",
+  "hidden": "U kunt deze metric view niet lezen in Unity Catalog, dus de definitie wordt niet getoond.",
+  "concept": {
+    "title": "Maten uit metric views",
+    "group": "Definitie {{n}}",
+    "differsAt": "Verschilt van definitie 1 in: {{level}}",
+    "onlyIn": "Alleen in {{name}}",
+    "otherConcepts": "Dezelfde definitie is ook gekoppeld aan: {{concepts}}",
+    "unresolved": "Gekoppelde velden zonder opgeslagen definitie: {{fields}}",
+    "verdict": {
+      "consistent": "Consistent",
+      "conflict": "Tegenstrijdige definities"
+    },
+    "hint": {
+      "consistent": "Alle maten die aan dit concept zijn gekoppeld berekenen hetzelfde.",
+      "conflict": "De maten die aan dit concept zijn gekoppeld berekenen {{count}} verschillende dingen. De verschillen zijn gemarkeerd."
+    }
+  },
+  "asset": {
+    "title": "Gelijke of vergelijkbare definities",
+    "hint": "Andere maten over dezelfde gegevens met een gelijke of vergelijkbare definitie, en tegenstrijdige conceptkoppelingen. Er wordt niets gewijzigd.",
+    "linkedTo": "gekoppeld aan {{concepts}}",
+    "onlyIn": "Alleen in {{name}}",
+    "error": {
+      "reference_cycle": "De verwijzingen van deze maat vormen een cyclus, dus ze kan niet worden vergeleken.",
+      "reference_depth": "De verwijzingen van deze maat zijn te diep genest om te vergelijken.",
+      "no_expression": "Deze maat heeft geen expressie om te vergelijken."
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} is gekoppeld. Controleer de definitie",
+    "dismiss": "Sluiten",
+    "hint": "De koppeling is gemaakt. Bekijk de definities op de conceptpagina.",
+    "concept_has_other_definitions": "Maten die al aan dit concept zijn gekoppeld berekenen iets anders ({{count}}): {{measures}}",
+    "definition_linked_to_other_concepts": "Maten met dezelfde definitie zijn gekoppeld aan andere concepten ({{count}}): {{concepts}}"
+  }
+}

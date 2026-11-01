@@ -184,6 +184,35 @@ describe('ConceptDetailView layout', () => {
     expect(last.newVersion).toEqual(expect.objectContaining({ disabled: true }));
   });
 
+  it('shows the metric view measures of the concept inside the linked assets panel', async () => {
+    const base = get.getMockImplementation()!;
+    get.mockImplementation(async (url: string) => {
+      if (url === `/api/metric-views/consistency?concept_iri=${encodeURIComponent(IRI)}`) {
+        return { data: {
+          concept_iri: IRI, asset_id: null, verdict: 'consistent', threshold: 0.75,
+          measures: [], unresolved: [],
+          groups: [{
+            full_digest: 'd', other_concepts: [], first_level: null, score: null,
+            differences: null, definition: null,
+            measures: [{
+              asset_id: 'a1', asset_name: 'mv', view: 'main.sales.mv', name: 'Customers',
+              display_name: null, entity_id: 'main.sales.mv.Customers', concepts: [IRI],
+              readable: false,
+            }],
+          }],
+        } };
+      }
+      return base(url);
+    });
+    renderPage();
+
+    const groups = await screen.findByTestId('concept-measure-groups');
+    expect(groups.closest('[data-panel]')).toHaveAttribute('data-panel', 'linked-assets');
+    expect(within(groups).getByText('main.sales.mv.Customers')).toBeInTheDocument();
+    const { names } = await panelOrder();
+    expect(names).toEqual(EXPECTED_ORDER);
+  });
+
   it('does not render a SPARQL button on the concept page', async () => {
     renderPage();
     await screen.findByTestId('concept-summary-panel');

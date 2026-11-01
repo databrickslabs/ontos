@@ -824,7 +824,7 @@ Optional.
 POST /api/data-contracts/{contract_id}/handle-deploy
 ```
 
-Decides a deployment request and, optionally, executes the deployment in the same call.
+Records the decision on a deployment request and notifies the requester. Nothing is deployed: there is no deployment trigger yet.
 
 **Authorization:** `data-contracts` — `Read/Write`
 
@@ -834,11 +834,11 @@ Decides a deployment request and, optionally, executes the deployment in the sam
 | --- | --- | --- | --- |
 | `decision` | `"approve" \| "deny"` | — | Decision on the request. Required. |
 | `message` | `string` | — | Message from the approver. |
-| `execute_deployment` | `boolean` | `false` | When `true`, actually trigger the deployment after approving. |
+| `execute_deployment` | `boolean` | `false` | Ignored. Still accepted from older clients; when `true`, the response has a warning. |
 
 #### Response
 
-`200 OK`
+`200 OK` — `{"message": "..."}`. When `execute_deployment` is `true`, the response also has `"warnings": [{"code": "deployment_not_available", "message": "...", "params": {}}]`.
 
 ## Versioning and drafts
 

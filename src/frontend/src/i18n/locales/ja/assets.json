@@ -186,6 +186,79 @@
           "failedHint": "原因はパイプラインで確認してください。",
           "notAvailable": "更新状態を読み取れませんでした。"
         }
+      },
+      "changeRequests": {
+        "title": "変更リクエスト",
+        "propose": "変更を提案",
+        "empty": "変更リクエストはまだありません。",
+        "loadError": "変更リクエストを読み込めませんでした。",
+        "requestedBy": "{{user}} が {{date}} にリクエスト",
+        "decidedBy": "{{user}} が {{date}} に決定",
+        "inReview": "承認待ち: 承認者に通知しました。",
+        "delivered": "配信済み ({{modes}})。Unity Catalog にこの定義が反映されるとベースラインになります。",
+        "applied": "{{date}} に Unity Catalog に適用されました: この定義が現在のベースラインです。",
+        "statement": "実行するステートメント",
+        "submit": "レビューに提出",
+        "cancel": "リクエストを取り消す",
+        "status": {
+          "draft": "下書き",
+          "in_review": "レビュー中",
+          "approved": "承認済み",
+          "rejected": "却下",
+          "delivered": "配信済み",
+          "failed": "配信失敗",
+          "cancelled": "取り消し済み"
+        },
+        "deliveryModes": {
+          "indirect": "Git のファイル",
+          "manual": "所有者への通知"
+        },
+        "securedKinds": {
+          "row_filter": "行フィルター",
+          "column_mask": "列マスク",
+          "abac_policy": "ABAC ポリシー"
+        },
+        "dialog": {
+          "title": "定義の変更を提案",
+          "description": "メトリックビューの YAML 定義を編集します。変更は配信前にレビューと承認を受けます。Ontos は Unity Catalog に適用しません。",
+          "definition": "YAML 定義",
+          "justification": "理由",
+          "justificationPlaceholder": "この変更が必要な理由は?",
+          "saveDraft": "下書きとして保存",
+          "saveAndSubmit": "保存してレビューに提出"
+        },
+        "errors": {
+          "generic": "操作に失敗しました。"
+        },
+        "codes": {
+          "metric_view_definition_invalid_yaml": "YAML が無効です (行 {{line}}、列 {{column}})。",
+          "metric_view_definition_invalid": "定義が有効なメトリックビュー定義ではありません。",
+          "metric_view_definition_source_missing": "定義に source がありません。",
+          "metric_view_definition_dollar_quote": "定義に $$ を含めることはできません: $$ で囲んで配信されます。",
+          "metric_view_duplicate_field": "フィールド名 {{field}} が複数回使われています。",
+          "metric_view_definition_unchanged": "提案された定義は現在の定義と同じです。",
+          "metric_view_base_unreadable": "現在の定義を読み取れないため、変更を提案できません。",
+          "metric_view_base_stale": "この下書きの作成後に Unity Catalog でメトリックビューが変更されました。新しい下書きを作成してください。",
+          "metric_view_owner_changed": "下書きの作成後に、このマテリアライズドメトリックビューの所有者が変更されました。新しい下書きを作成してください。",
+          "metric_view_materialized_group_owner": "マテリアライズドメトリックビューはグループ ({{owner}}) が所有できません。",
+          "metric_view_materialized_source_secured": "マテリアライズドメトリックビューは source {{source}} を使用できません: {{kind}} があります。",
+          "metric_view_change_request_not_found": "変更リクエストが見つかりませんでした。",
+          "metric_view_change_request_not_requester": "この操作はリクエスト者のみが行えます。",
+          "metric_view_change_request_not_draft": "提出できるのは下書きのみです。",
+          "metric_view_change_request_not_cancellable": "この変更リクエストはもう取り消せません。",
+          "metric_view_change_no_approval": "この変更の承認を求める有効なワークフローがないため、下書きのままです。管理者は Workflows で有効にできます。",
+          "metric_view_not_found": "Unity Catalog でメトリックビューが見つからないか、アクセスが拒否されました。",
+          "user_token_required": "Unity Catalog を読み取るには Databricks へのサインインが必要です。",
+          "user_client_unavailable": "Databricks への接続を作成できませんでした。",
+          "own_change_request_approval": "リクエスト者は自分の変更リクエストを承認できません。",
+          "metric_view_delivery_git_unavailable": "間接配信用の Git リポジトリを利用できません。",
+          "metric_view_delivery_write_failed": "定義を Git リポジトリに書き込めませんでした。",
+          "metric_view_delivery_notification_failed": "所有者に通知できませんでした。",
+          "metric_view_delivery_no_recipient": "ステートメントの実行を依頼できる人がいませんでした。",
+          "metric_view_delivery_failed": "変更を配信できませんでした。",
+          "metric_view_linked_field_removed": "フィールド {{field}} にはコンセプトのリンク ({{links}}) があり、削除されます。",
+          "metric_view_source_not_checked": "source {{source}} の行フィルター、列マスク、ABAC ポリシーを確認できませんでした。"
+        }
       }
     }
   },

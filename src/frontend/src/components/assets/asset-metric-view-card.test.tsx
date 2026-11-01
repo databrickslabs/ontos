@@ -68,6 +68,30 @@ describe('AssetMetricViewCard', () => {
         expect(screen.getByText('Net Revenue')).toBeInTheDocument();
     });
 
+    it('shows the drift and refresh state the route returns', async () => {
+        getMock.mockResolvedValue({
+            data: {
+                ...metricView,
+                baseline: { digest: 'abc', recorded_at: '2026-10-30T10:00:00Z' },
+                drift: { state: 'drifted', current_digest: 'def' },
+                refresh: { status: 'succeeded', schedule: 'EVERY 6 HOURS' },
+            },
+        });
+        render(<AssetMetricViewCard assetId="a1" assetTypeName={MV} />);
+
+        expect(await screen.findByText('Changed since the baseline')).toBeInTheDocument();
+        expect(screen.getByText('Succeeded')).toBeInTheDocument();
+        expect(screen.getByText('Total Revenue')).toBeInTheDocument();
+    });
+
+    it('shows no drift state when the route returns none', async () => {
+        getMock.mockResolvedValue({ data: metricView });
+        render(<AssetMetricViewCard assetId="a1" assetTypeName={MV} />);
+
+        expect(await screen.findByText('Total Revenue')).toBeInTheDocument();
+        expect(screen.queryByTestId('metric-view-status')).toBeNull();
+    });
+
     it.each([MV, 'View'])('renders nothing when a %s asset is not a metric view', async (type) => {
         getMock.mockResolvedValue({
             data: {},

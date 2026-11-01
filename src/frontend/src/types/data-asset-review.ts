@@ -139,6 +139,47 @@ export interface MetricViewField {
     expr?: string | null;
     display_name?: string | null;
     comment?: string | null;
+    /** A measure's window, only when its definition sets one */
+    window?: MetricViewWindow[];
+}
+
+/** One entry of a measure's `window`. */
+export interface MetricViewWindow {
+    order?: string | null;
+    range?: string | null;
+    semiadditive?: string | null;
+    offset?: string | number | null;
+}
+
+/** The definition a metric view's drift is checked against. */
+export interface MetricViewBaseline {
+    digest: string;
+    approved_at?: string | null; // null: recorded from the first definition read, not approved
+    request_id?: string | null;
+    recorded_at?: string | null;
+}
+
+export type MetricViewDriftState = 'in_sync' | 'drifted' | 'unknown';
+
+export interface MetricViewDrift {
+    state: MetricViewDriftState;
+    current_digest?: string | null; // null when the definition could not be parsed
+    last_checked_at?: string | null;
+}
+
+export type MetricViewRefreshStatus = 'succeeded' | 'failed' | 'running' | 'canceled' | 'unknown';
+
+/** The refresh state of a materialized metric view (its pipeline's latest update). */
+export interface MetricViewRefresh {
+    status: MetricViewRefreshStatus;
+    schedule?: string | null;
+    pipeline_id?: string | null;
+    pipeline_url?: string | null;
+    pipeline_state?: string | null;
+    health?: string | null;
+    latest_update_id?: string | null;
+    latest_update_state?: string | null;
+    latest_update_at?: string | null; // when the latest update started
 }
 
 /** The concept links of one dimension or measure (`uc_column`, `catalog.schema.view.field`). */
@@ -167,7 +208,13 @@ export interface MetricViewDefinition {
         version?: string | null;
         source?: string | null;
         filter?: string | null;
-        joins: { name?: string | null; source?: string | null; on?: string | null; using?: string[] | null }[];
+        joins: {
+            name?: string | null;
+            source?: string | null;
+            on?: string | null;
+            using?: string[] | null;
+            cardinality?: string | null; // only when the definition sets it
+        }[];
         dimensions: MetricViewField[];
         measures: MetricViewField[];
         materialization?: {
@@ -175,8 +222,13 @@ export interface MetricViewDefinition {
             mode?: string | null;
             materialized_views: { name?: string | null; type?: string | null }[];
         } | null;
+        parameters?: { name: string; data_type?: string | null; default?: unknown }[];
     } | null; // null when the YAML could not be parsed
     links?: MetricViewLinks | null;
+    // GET /api/assets/{id}/metric-view only
+    baseline?: MetricViewBaseline | null;
+    drift?: MetricViewDrift | null;
+    refresh?: MetricViewRefresh | null; // null when the view isn't materialized
 }
 
 // Type for Table Preview Data (reuse from Catalog Commander or define similarly)

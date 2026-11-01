@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
+import MetricViewStatus from '@/components/assets/metric-view-status';
 import { useApi } from '@/hooks/use-api';
 import type { MetricViewDefinition } from '@/types/data-asset-review';
 
@@ -22,10 +23,11 @@ export function mayBeMetricView(
 }
 
 /**
- * The metric view behind an asset: its dimensions and measures, and the
- * concepts linked to the view and to each field, read from Unity Catalog as
- * the user. Renders nothing when the asset isn't a metric view the user can
- * read (`metric_view_not_found`).
+ * The metric view behind an asset: its dimensions and measures, the
+ * concepts linked to the view and to each field, its drift from the baseline
+ * and its refresh state, read from Unity Catalog as the user. Renders
+ * nothing when the asset isn't a metric view the user can read
+ * (`metric_view_not_found`).
  *
  * On a View asset (most are plain views) the card only appears once the
  * metric view is loaded: loading, a missing token and errors stay silent
@@ -90,7 +92,14 @@ export default function AssetMetricViewCard({ assetId, assetTypeName }: {
                     </p>
                 )}
                 {state === 'ready' && definition && (
-                    <MetricViewDefinitionPanel definition={definition} />
+                    <>
+                        <MetricViewStatus
+                            baseline={definition.baseline}
+                            drift={definition.drift}
+                            refresh={definition.refresh}
+                        />
+                        <MetricViewDefinitionPanel definition={definition} />
+                    </>
                 )}
             </CardContent>
         </Card>

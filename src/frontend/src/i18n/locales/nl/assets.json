@@ -154,7 +154,39 @@
       "title": "Metric view",
       "loading": "Metric view laden",
       "loadError": "De definitie van de metric view kon niet worden geladen.",
-      "userTokenRequired": "Deze metric view wordt met uw eigen toegang uit Unity Catalog gelezen, en uw Databricks-aanmelding is in deze sessie niet beschikbaar."
+      "userTokenRequired": "Deze metric view wordt met uw eigen toegang uit Unity Catalog gelezen, en uw Databricks-aanmelding is in deze sessie niet beschikbaar.",
+      "state": {
+        "drift": {
+          "label": "Definitie",
+          "in_sync": "Komt overeen met de baseline",
+          "drifted": "Gewijzigd sinds de baseline",
+          "unknown": "Niet vergeleken",
+          "driftedHint": "De definitie in Unity Catalog wijkt af van de baseline in Ontos. Ontos wijzigt haar niet.",
+          "unknownHint": "De definitie kon niet met de baseline worden vergeleken."
+        },
+        "baseline": {
+          "recorded": "Baseline vastgelegd op {{date}} uit de eerste gelezen definitie; er is nog geen wijziging goedgekeurd.",
+          "approved": "Baseline goedgekeurd op {{date}}.",
+          "none": "Nog geen baseline.",
+          "digest": "digest {{digest}}"
+        },
+        "lastChecked": "Gecontroleerd op {{date}}",
+        "refresh": {
+          "label": "Vernieuwing",
+          "succeeded": "Geslaagd",
+          "failed": "Mislukt",
+          "running": "Bezig",
+          "canceled": "Geannuleerd",
+          "unknown": "Onbekend",
+          "lastStarted": "Laatste vernieuwing gestart op {{date}}",
+          "schedule": "Planning: {{schedule}}",
+          "noSchedule": "Geen planning: vernieuwingen worden handmatig gestart.",
+          "openPipeline": "Pipeline openen",
+          "failedTitle": "De laatste vernieuwing is mislukt",
+          "failedHint": "Bekijk de pipeline voor de oorzaak.",
+          "notAvailable": "De vernieuwingsstatus kon niet worden gelezen."
+        }
+      }
     }
   },
   "explorer": {

@@ -154,7 +154,39 @@
       "title": "メトリックビュー",
       "loading": "メトリックビューを読み込み中",
       "loadError": "メトリックビューの定義を読み込めませんでした。",
-      "userTokenRequired": "このメトリックビューはあなた自身のアクセス権で Unity Catalog から読み取られますが、このセッションでは Databricks のサインイン情報を利用できません。"
+      "userTokenRequired": "このメトリックビューはあなた自身のアクセス権で Unity Catalog から読み取られますが、このセッションでは Databricks のサインイン情報を利用できません。",
+      "state": {
+        "drift": {
+          "label": "定義",
+          "in_sync": "ベースラインと一致",
+          "drifted": "ベースラインから変更あり",
+          "unknown": "未比較",
+          "driftedHint": "Unity Catalog の定義が Ontos のベースラインと異なります。Ontos は定義を変更しません。",
+          "unknownHint": "定義をベースラインと比較できませんでした。"
+        },
+        "baseline": {
+          "recorded": "ベースラインは {{date}} に最初に読み取った定義から記録されました。まだ承認された変更はありません。",
+          "approved": "ベースラインは {{date}} に承認されました。",
+          "none": "ベースラインはまだありません。",
+          "digest": "ダイジェスト {{digest}}"
+        },
+        "lastChecked": "{{date}} に確認",
+        "refresh": {
+          "label": "更新",
+          "succeeded": "成功",
+          "failed": "失敗",
+          "running": "実行中",
+          "canceled": "キャンセル",
+          "unknown": "不明",
+          "lastStarted": "最後の更新の開始: {{date}}",
+          "schedule": "スケジュール: {{schedule}}",
+          "noSchedule": "スケジュールなし: 更新は手動で開始されます。",
+          "openPipeline": "パイプラインを開く",
+          "failedTitle": "最後の更新が失敗しました",
+          "failedHint": "原因はパイプラインで確認してください。",
+          "notAvailable": "更新状態を読み取れませんでした。"
+        }
+      }
     }
   },
   "explorer": {

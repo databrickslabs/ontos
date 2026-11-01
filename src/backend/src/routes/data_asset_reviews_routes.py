@@ -213,7 +213,9 @@ def update_review_request_status(
 
     try:
         logger.info(f"Updating status for review request ID: {request_id} to {status_update.status}")
-        updated_request = manager.update_review_request_status(request_id=request_id, status_update=status_update)
+        updated_request = manager.update_review_request_status(
+            request_id=request_id, update_data=status_update,
+        )
         if updated_request is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
         success = True

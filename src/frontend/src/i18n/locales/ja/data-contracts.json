@@ -1240,31 +1240,6 @@
       "couldNotSubmit": "判断を送信できませんでした"
     }
   },
-  "statusChangeRequest": {
-    "title": "ステータス変更の依頼を処理",
-    "requesterLabel": "依頼者:",
-    "contractIdLabel": "契約ID:",
-    "statusLabel": "ステータス変更:",
-    "justificationLabel": "理由:",
-    "responseMessageLabel": "返信メッセージ(任意)",
-    "responseMessagePlaceholder": "判断に関するメモを追加...",
-    "messageHint": "このメッセージは判断結果とともに依頼者に送信されます。",
-    "deny": "却下",
-    "approve": "承認",
-    "toast": {
-      "approvedTitle": "ステータス変更が承認されました",
-      "approvedDescription": "契約は現在 {{toStatus}} です。",
-      "deniedTitle": "ステータス変更が却下されました",
-      "deniedDescription": "ステータスを {{toStatus}} に変更する依頼は却下されました。",
-      "failedTitle": "失敗",
-      "couldNotSubmit": "判断を送信できませんでした"
-    },
-    "handled": {
-      "approved": "このリクエストは承認されました。",
-      "denied": "このリクエストは却下されました。",
-      "handled": "このリクエストはすでに決定されています。"
-    }
-  },
   "stewardReview": {
     "title": "コントラクトレビューを処理",
     "requesterLabel": "リクエスト元:",

@@ -11,10 +11,6 @@
     "notApplied": "Su decisión de revisión se registró, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}",
     "requesterNotApplied": "La revisión de su contrato se decidió, pero el contrato no se cambió a «{{toStatus}}»: {{reason}}"
   },
-  "contractStatusChangeRequest": {
-    "title": "Solicitud de cambio de estado pendiente",
-    "description": "{{requester}} solicita cambiar el estado de '{{fromStatus}}' a '{{toStatus}}'.\n\nJustificación: {{justification}}"
-  },
   "ui": {
     "tooltip": "Notificaciones",
     "loading": "Cargando notificaciones...",

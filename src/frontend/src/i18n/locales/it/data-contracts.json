@@ -1240,31 +1240,6 @@
       "couldNotSubmit": "Impossibile inviare la decisione"
     }
   },
-  "statusChangeRequest": {
-    "title": "Gestisci richiesta di modifica dello stato",
-    "requesterLabel": "Richiedente:",
-    "contractIdLabel": "ID contratto:",
-    "statusLabel": "Modifica dello stato:",
-    "justificationLabel": "Motivazione:",
-    "responseMessageLabel": "Messaggio di risposta (facoltativo)",
-    "responseMessagePlaceholder": "Aggiungi note sulla tua decisione...",
-    "messageHint": "Questo messaggio verrà inviato al richiedente insieme alla tua decisione.",
-    "deny": "Nega",
-    "approve": "Approva",
-    "toast": {
-      "approvedTitle": "Modifica dello stato approvata",
-      "approvedDescription": "Il contratto ora è {{toStatus}}.",
-      "deniedTitle": "Modifica dello stato negata",
-      "deniedDescription": "La richiesta di cambiare lo stato in {{toStatus}} è stata negata.",
-      "failedTitle": "Non riuscito",
-      "couldNotSubmit": "Impossibile inviare la decisione"
-    },
-    "handled": {
-      "approved": "Questa richiesta è stata approvata.",
-      "denied": "Questa richiesta è stata rifiutata.",
-      "handled": "Questa richiesta è già stata decisa."
-    }
-  },
   "stewardReview": {
     "title": "Gestisci Revisione del Contratto",
     "requesterLabel": "Richiedente:",

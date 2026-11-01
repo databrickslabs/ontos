@@ -1240,31 +1240,6 @@
       "couldNotSubmit": "Não foi possível enviar a decisão"
     }
   },
-  "statusChangeRequest": {
-    "title": "Tratar Solicitação de Mudança de Status",
-    "requesterLabel": "Solicitante:",
-    "contractIdLabel": "ID do Contrato:",
-    "statusLabel": "Mudança de status:",
-    "justificationLabel": "Justificativa:",
-    "responseMessageLabel": "Mensagem de Resposta (opcional)",
-    "responseMessagePlaceholder": "Adicione observações sobre sua decisão...",
-    "messageHint": "Esta mensagem será enviada ao solicitante junto com sua decisão.",
-    "deny": "Negar",
-    "approve": "Aprovar",
-    "toast": {
-      "approvedTitle": "Mudança de Status Aprovada",
-      "approvedDescription": "O contrato agora está {{toStatus}}.",
-      "deniedTitle": "Mudança de Status Negada",
-      "deniedDescription": "A solicitação para mudar o status para {{toStatus}} foi negada.",
-      "failedTitle": "Falha",
-      "couldNotSubmit": "Não foi possível enviar a decisão"
-    },
-    "handled": {
-      "approved": "Esta solicitação foi aprovada.",
-      "denied": "Esta solicitação foi negada.",
-      "handled": "Esta solicitação já foi decidida."
-    }
-  },
   "stewardReview": {
     "title": "Tratar Revisão de Contrato",
     "requesterLabel": "Solicitante:",

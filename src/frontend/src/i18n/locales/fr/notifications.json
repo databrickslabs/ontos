@@ -11,10 +11,6 @@
     "notApplied": "Votre décision de revue a été enregistrée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}",
     "requesterNotApplied": "La revue de votre contrat a été décidée, mais le contrat n'a pas été passé à « {{toStatus}} » : {{reason}}"
   },
-  "contractStatusChangeRequest": {
-    "title": "Demande de changement de statut en attente",
-    "description": "{{requester}} demande de passer le statut de '{{fromStatus}}' à '{{toStatus}}'.\n\nJustification : {{justification}}"
-  },
   "ui": {
     "tooltip": "Notifications",
     "loading": "Chargement des notifications...",

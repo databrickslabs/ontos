@@ -1240,31 +1240,6 @@
       "couldNotSubmit": "Impossible de soumettre la décision"
     }
   },
-  "statusChangeRequest": {
-    "title": "Traiter la demande de changement de statut",
-    "requesterLabel": "Demandeur :",
-    "contractIdLabel": "ID du contrat :",
-    "statusLabel": "Changement de statut :",
-    "justificationLabel": "Justification :",
-    "responseMessageLabel": "Message de réponse (facultatif)",
-    "responseMessagePlaceholder": "Ajoutez des notes sur votre décision...",
-    "messageHint": "Ce message sera envoyé au demandeur avec votre décision.",
-    "deny": "Refuser",
-    "approve": "Approuver",
-    "toast": {
-      "approvedTitle": "Changement de statut approuvé",
-      "approvedDescription": "Le contrat est maintenant {{toStatus}}.",
-      "deniedTitle": "Changement de statut refusé",
-      "deniedDescription": "La demande de passer le statut à {{toStatus}} a été refusée.",
-      "failedTitle": "Échec",
-      "couldNotSubmit": "Impossible d'envoyer la décision"
-    },
-    "handled": {
-      "approved": "Cette demande a été approuvée.",
-      "denied": "Cette demande a été refusée.",
-      "handled": "Cette demande a déjà été tranchée."
-    }
-  },
   "stewardReview": {
     "title": "Traiter la revue du contrat",
     "requesterLabel": "Demandeur :",

@@ -186,6 +186,79 @@
           "failedHint": "Revise el pipeline para ver la causa.",
           "notAvailable": "No se pudo leer el estado de la actualización."
         }
+      },
+      "changeRequests": {
+        "title": "Solicitudes de cambio",
+        "propose": "Proponer cambio",
+        "empty": "Todavía no hay solicitudes de cambio.",
+        "loadError": "No se pudieron cargar las solicitudes de cambio.",
+        "requestedBy": "Solicitada por {{user}} el {{date}}",
+        "decidedBy": "Decidida por {{user}} el {{date}}",
+        "inReview": "Esperando aprobación: se notificó a los aprobadores.",
+        "delivered": "Entregada ({{modes}}). Pasa a ser la línea base cuando Unity Catalog tenga esta definición.",
+        "applied": "Aplicada en Unity Catalog el {{date}}: esta definición es ahora la línea base.",
+        "statement": "Sentencia a ejecutar",
+        "submit": "Enviar a revisión",
+        "cancel": "Cancelar solicitud",
+        "status": {
+          "draft": "Borrador",
+          "in_review": "En revisión",
+          "approved": "Aprobada",
+          "rejected": "Rechazada",
+          "delivered": "Entregada",
+          "failed": "Entrega fallida",
+          "cancelled": "Cancelada"
+        },
+        "deliveryModes": {
+          "indirect": "archivos en Git",
+          "manual": "notificación a los propietarios"
+        },
+        "securedKinds": {
+          "row_filter": "filtro de filas",
+          "column_mask": "máscara de columna",
+          "abac_policy": "política ABAC"
+        },
+        "dialog": {
+          "title": "Proponer un cambio de definición",
+          "description": "Edita la definición YAML de la metric view. El cambio se revisa y se aprueba antes de entregarse; Ontos no lo aplica en Unity Catalog.",
+          "definition": "Definición YAML",
+          "justification": "Justificación",
+          "justificationPlaceholder": "¿Por qué es necesario este cambio?",
+          "saveDraft": "Guardar como borrador",
+          "saveAndSubmit": "Guardar y enviar a revisión"
+        },
+        "errors": {
+          "generic": "La acción falló."
+        },
+        "codes": {
+          "metric_view_definition_invalid_yaml": "El YAML no es válido (línea {{line}}, columna {{column}}).",
+          "metric_view_definition_invalid": "La definición no es una definición de metric view válida.",
+          "metric_view_definition_source_missing": "La definición no tiene source.",
+          "metric_view_definition_dollar_quote": "La definición no puede contener $$: se entrega entre $$.",
+          "metric_view_duplicate_field": "El nombre de campo {{field}} se usa más de una vez.",
+          "metric_view_definition_unchanged": "La definición propuesta es igual a la actual.",
+          "metric_view_base_unreadable": "La definición actual no se puede leer, así que no se puede proponer un cambio sobre ella.",
+          "metric_view_base_stale": "La metric view cambió en Unity Catalog desde que se escribió este borrador. Escribe un borrador nuevo.",
+          "metric_view_owner_changed": "El propietario de esta metric view materializada cambió desde que se escribió el borrador. Escribe un borrador nuevo.",
+          "metric_view_materialized_group_owner": "Una metric view materializada no puede pertenecer a un grupo ({{owner}}).",
+          "metric_view_materialized_source_secured": "Una metric view materializada no puede usar la source {{source}}: tiene {{kind}}.",
+          "metric_view_change_request_not_found": "No se encontró la solicitud de cambio.",
+          "metric_view_change_request_not_requester": "Solo el solicitante puede hacer esto.",
+          "metric_view_change_request_not_draft": "Solo se puede enviar un borrador.",
+          "metric_view_change_request_not_cancellable": "Esta solicitud de cambio ya no se puede cancelar.",
+          "metric_view_change_no_approval": "Ningún workflow activo pide la aprobación de este cambio, así que sigue como borrador. Un administrador puede activar uno en Workflows.",
+          "metric_view_not_found": "No se encontró la metric view en Unity Catalog, o se denegó el acceso.",
+          "user_token_required": "Leer Unity Catalog requiere tu inicio de sesión en Databricks.",
+          "user_client_unavailable": "No se pudo crear tu conexión con Databricks.",
+          "own_change_request_approval": "El solicitante no puede aprobar su propia solicitud de cambio.",
+          "metric_view_delivery_git_unavailable": "El repositorio Git de la entrega indirecta no está disponible.",
+          "metric_view_delivery_write_failed": "No se pudo escribir la definición en el repositorio Git.",
+          "metric_view_delivery_notification_failed": "No se pudo notificar a los propietarios.",
+          "metric_view_delivery_no_recipient": "No se pudo notificar a nadie para ejecutar la sentencia.",
+          "metric_view_delivery_failed": "No se pudo entregar el cambio.",
+          "metric_view_linked_field_removed": "El campo {{field}} tiene vínculos con conceptos ({{links}}) y se elimina.",
+          "metric_view_source_not_checked": "No se pudo comprobar si la source {{source}} tiene filtros de filas, máscaras de columna o políticas ABAC."
+        }
       }
     }
   },

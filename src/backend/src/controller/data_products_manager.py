@@ -121,6 +121,7 @@ from src.models.data_products import (
     OnBehalfOf,
     ONTOS_PORT_STATUS_PROPERTY,
 )
+from src.models.assets import public_properties
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
@@ -3445,7 +3446,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "name": asset.name,
                     "description": asset.description,
                     "status": asset.status,
-                    "properties": asset.properties or {},
+                    "properties": public_properties(asset.properties) or {},
                     "tags": asset.tags or [],
                     "created_at": asset.created_at.isoformat() if asset.created_at else None,
                 })
@@ -3496,7 +3497,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "name": ds_asset.name,
                 "description": ds_asset.description,
                 "status": ds_asset.status,
-                "properties": ds_asset.properties or {},
+                "properties": public_properties(ds_asset.properties) or {},
                 "tables": [],
                 "views": [],
                 "contract": None,
@@ -3525,7 +3526,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     "name": child_asset.name,
                     "location": child_asset.location,
                     "status": child_asset.status,
-                    "properties": child_asset.properties or {},
+                    "properties": public_properties(child_asset.properties) or {},
                     "columns": [],
                 }
 
@@ -3541,7 +3542,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         child_entry["columns"].append({
                             "id": str(col_asset.id),
                             "name": col_asset.name,
-                            "properties": col_asset.properties or {},
+                            "properties": public_properties(col_asset.properties) or {},
                         })
 
                 if child_rel.relationship_type == "hasTable":

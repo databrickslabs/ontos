@@ -396,13 +396,13 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
   on_request_deploy: ['data_contract'],
+  // Metric view definition change requests (#1124)
+  on_request_definition_change: ['metric_view'],
   // Concept curation: single-concept review ping-pong. concept_changeset (bulk-
   // upload gate) is NOT selectable — Scenario D (2026-08-18) disabled the gate; all
   // file uploads land as Draft and follow per-concept review. Kept in the
   // EntityType union / ALL_ENTITY_TYPES so existing data + labels still resolve.
   on_request_status_change: ['data_product', 'data_contract', 'ontology_concept'],
-  // Metric view definition change requests (#1124)
-  on_request_definition_change: ['metric_view'],
   // Job triggers
   on_job_success: ['job'],
   on_job_failure: ['job'],

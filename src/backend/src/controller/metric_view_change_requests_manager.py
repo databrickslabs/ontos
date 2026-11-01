@@ -409,7 +409,10 @@ class MetricViewChangeRequestsManager:
         self, ws_client: WorkspaceClient, table: Any, row: MetricViewChangeRequestDb,
         current: Dict[str, Any], spec: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        """The documented constraints of materialized metric views; warnings for what can't be seen."""
+        """The documented constraints of materialized metric views.
+
+        Returns warnings for what the user can't see.
+        """
         owner = getattr(table, 'owner', None)
         if (current.get('materialization') or spec.get('materialization')) \
                 and row.base_owner and owner and owner != row.base_owner:
@@ -448,7 +451,8 @@ class MetricViewChangeRequestsManager:
         secured = None
         if getattr(info, 'row_filter', None) is not None:
             secured = 'row_filter'
-        elif any(getattr(c, 'mask', None) is not None for c in getattr(info, 'columns', None) or []):
+        elif any(getattr(c, 'mask', None) is not None
+                 for c in getattr(info, 'columns', None) or []):
             secured = 'column_mask'
         else:
             try:

@@ -3502,13 +3502,6 @@ class WorkflowExecutor:
                     execution_id=execution_id,
                 )
                     
-            # Handle data product activation completion
-            elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
-                self._apply_product_review_outcome(
-                    trigger_context, entity_id, succeeded, responded_by,
-                    execution_id=execution_id,
-                )
-
             # Metric view definition change request decided: record the
             # decision and deliver an approved request (#1124)
             elif (entity_type == 'metric_view'
@@ -3520,6 +3513,13 @@ class WorkflowExecutor:
                 MetricViewChangeRequestsManager(self._db).on_workflow_completed(
                     (trigger_context.entity_data or {}).get('request_id'),
                     approved=approved, responded_by=responded_by, execution_id=execution_id,
+                )
+
+            # Handle data product activation completion
+            elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
+                self._apply_product_review_outcome(
+                    trigger_context, entity_id, succeeded, responded_by,
+                    execution_id=execution_id,
                 )
 
             # Approved status change request of a product or contract: apply

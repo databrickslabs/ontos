@@ -77,6 +77,13 @@ export function statusChangeErrorText(
       defaultValue: error,
     });
   }
+  // A decision on a certified deprecation that doesn't count as its approval
+  if (response.errorCode === CERTIFIED_APPROVAL_REFUSED_CODE) {
+    return t(`workflow-gates:certifiedApprovalRefused.${String(params?.reason ?? '')}`, {
+      name: String(params?.entityName ?? ''),
+      defaultValue: error,
+    });
+  }
   // A fail_closed gate that couldn't be evaluated (#1103)
   if (response.errorCode === 'status_change_gate_error' && params) {
     const workflows = Array.isArray(params.workflows) ? params.workflows.map(String) : [];
@@ -104,6 +111,12 @@ export function statusChangeErrorText(
  * it needs an approved status change request (the certified guard).
  */
 export const CERTIFIED_DEPRECATION_CODE = 'certified_deprecation_requires_approval';
+
+/**
+ * The code of a decision on a certified deprecation that doesn't count as its
+ * approval; `params.reason` says why (no pending request, the requester's own...).
+ */
+export const CERTIFIED_APPROVAL_REFUSED_CODE = 'certified_deprecation_approval_refused';
 
 /** Whether a failed status change can go through as a status change request instead. Pure. */
 export function needsStatusChangeRequest(

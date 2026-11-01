@@ -28,6 +28,14 @@
     "loadFailed": "Impossibile caricare la protezione dalla deprecazione degli elementi certificati",
     "notFound": "{{id}} non esiste più. Rimuovilo e salva di nuovo.",
     "missingOnSave_one": "La protezione è disattivata per {{count}} elemento che non esiste più. Rimuovilo e salva di nuovo.",
-    "missingOnSave_other": "La protezione è disattivata per {{count}} elementi che non esistono più. Rimuovili e salva di nuovo."
+    "missingOnSave_other": "La protezione è disattivata per {{count}} elementi che non esistono più. Rimuovili e salva di nuovo.",
+    "readOnly": "Solo gli amministratori dei livelli di certificazione possono modificare la protezione."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} è certificato: solo un amministratore di questa funzione può approvarne la deprecazione.",
+    "no_pending_request": "{{name}} è certificato: l'approvazione richiede una richiesta di modifica dello stato in sospeso per questa modifica, e non ce n'è nessuna.",
+    "target_mismatch": "{{name}} è certificato: la richiesta in sospeso chiede un altro stato, quindi questa approvazione non vale per essa.",
+    "self_approval": "{{name}} è certificato: hai fatto tu questa richiesta, quindi deve approvarla qualcun altro.",
+    "no_approver": "{{name}} è certificato: la deprecazione richiede la decisione di un approvatore della richiesta."
   }
 }

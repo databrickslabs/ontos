@@ -28,6 +28,14 @@
     "loadFailed": "Der Schutz vor dem Veralten zertifizierter Einträge konnte nicht geladen werden",
     "notFound": "{{id}} existiert nicht mehr. Entfernen Sie den Eintrag und speichern Sie erneut.",
     "missingOnSave_one": "Der Schutz ist für {{count}} Eintrag abgeschaltet, der nicht mehr existiert. Entfernen Sie ihn und speichern Sie erneut.",
-    "missingOnSave_other": "Der Schutz ist für {{count}} Einträge abgeschaltet, die nicht mehr existieren. Entfernen Sie sie und speichern Sie erneut."
+    "missingOnSave_other": "Der Schutz ist für {{count}} Einträge abgeschaltet, die nicht mehr existieren. Entfernen Sie sie und speichern Sie erneut.",
+    "readOnly": "Nur Admins der Zertifizierungsstufen können den Schutz ändern."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} ist zertifiziert: Nur ein Admin dieser Funktion kann das Veralten genehmigen.",
+    "no_pending_request": "{{name}} ist zertifiziert: Die Genehmigung braucht eine offene Statusänderungsanfrage für diese Änderung, und es gibt keine.",
+    "target_mismatch": "{{name}} ist zertifiziert: Die offene Anfrage verlangt einen anderen Status, daher gilt diese Genehmigung nicht für sie.",
+    "self_approval": "{{name}} ist zertifiziert: Sie haben diese Anfrage gestellt, daher muss jemand anderes sie genehmigen.",
+    "no_approver": "{{name}} ist zertifiziert: Das Veralten braucht die Entscheidung eines Genehmigenden der Anfrage."
   }
 }

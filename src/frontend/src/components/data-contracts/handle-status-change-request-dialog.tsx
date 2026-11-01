@@ -21,12 +21,16 @@ type Props = {
   targetStatus: string;
   justification?: string;
   onDecisionMade: () => void;
+  /** The request was already decided ('approve' / 'deny', or true): shown without actions. */
+  decided?: string | boolean;
 };
 
 /**
  * An admin's decision on a contract's status change request, opened from the
  * admins' notification. Approving applies the status with handle-status-change
  * (the way a certified contract is deprecated); denying notifies the requester.
+ * A decided request opens read-only. An error the API sends without a code is
+ * shown as the generic message, not as its English text.
  */
 export default function HandleStatusChangeRequestDialog({
   isOpen,
@@ -38,6 +42,7 @@ export default function HandleStatusChangeRequestDialog({
   targetStatus,
   justification,
   onDecisionMade,
+  decided,
 }: Props) {
   const { t } = useTranslation(['data-contracts', 'common']);
   const { post } = useApi();
@@ -59,9 +64,8 @@ export default function HandleStatusChangeRequestDialog({
         message: message || undefined,
       });
       if (res.error) {
-        throw new Error(contractActionErrorText(
-          res, t, t('data-contracts:statusChangeRequest.toast.couldNotSubmit'),
-        ));
+        const fallback = t('data-contracts:statusChangeRequest.toast.couldNotSubmit');
+        throw new Error(res.errorCode ? contractActionErrorText(res, t, fallback) : fallback);
       }
 
       const toStatus = statusLabel(targetStatus);
@@ -127,6 +131,16 @@ export default function HandleStatusChangeRequestDialog({
             )}
           </div>
 
+          {decided ? (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="status-change-request-decided"
+            >
+              {decided === 'approve'
+                ? label('handled.approved')
+                : decided === 'deny' ? label('handled.denied') : label('handled.handled')}
+            </p>
+          ) : (
           <div className="space-y-2">
             <Label htmlFor="status-change-message">
               {t('data-contracts:statusChangeRequest.responseMessageLabel')}
@@ -142,8 +156,15 @@ export default function HandleStatusChangeRequestDialog({
               {t('data-contracts:statusChangeRequest.messageHint')}
             </p>
           </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
+          {decided ? (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {t('common:actions.close')}
+            </Button>
+          ) : (
+          <>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t('common:actions.cancel', 'Cancel')}
           </Button>
@@ -157,6 +178,8 @@ export default function HandleStatusChangeRequestDialog({
           <Button onClick={() => submitDecision('approve')} disabled={submitting}>
             {t('data-contracts:statusChangeRequest.approve')}
           </Button>
+          </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

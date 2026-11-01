@@ -28,6 +28,14 @@
     "loadFailed": "Não foi possível carregar a proteção de descontinuação de certificados",
     "notFound": "{{id}} não existe mais. Remova-o e salve de novo.",
     "missingOnSave_one": "A proteção está desligada para {{count}} item que não existe mais. Remova-o e salve de novo.",
-    "missingOnSave_other": "A proteção está desligada para {{count}} itens que não existem mais. Remova-os e salve de novo."
+    "missingOnSave_other": "A proteção está desligada para {{count}} itens que não existem mais. Remova-os e salve de novo.",
+    "readOnly": "Só admins de níveis de certificação podem alterar a proteção."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} é certificado: só um admin desta funcionalidade pode aprovar a descontinuação.",
+    "no_pending_request": "{{name}} é certificado: aprovar exige uma solicitação de mudança de status pendente para esta mudança, e não há nenhuma.",
+    "target_mismatch": "{{name}} é certificado: a solicitação pendente pede outro status, então esta aprovação não vale para ela.",
+    "self_approval": "{{name}} é certificado: foi você quem fez esta solicitação, então outra pessoa precisa aprová-la.",
+    "no_approver": "{{name}} é certificado: a descontinuação precisa da decisão de um aprovador da solicitação."
   }
 }

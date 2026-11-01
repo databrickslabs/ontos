@@ -384,7 +384,7 @@ export default function NotificationBell() {
                   {notification.action_type === 'handle_status_change_request'
                     && notification.action_payload && (
                     <Button
-                      variant={notification.read ? "outline" : "default"}
+                      variant={notification.action_payload.handled ? "outline" : "default"}
                       size="sm"
                       className="mt-2 h-7 px-2 text-xs gap-1"
                       onClick={(e) => {
@@ -393,7 +393,8 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      {notification.read
+                      {/* Decided (not only read): the dialog opens read-only */}
+                      {notification.action_payload.handled
                         ? t('notifications:ui.viewDetails')
                         : t('notifications:ui.approveDeny')}
                     </Button>
@@ -554,6 +555,11 @@ export default function NotificationBell() {
         fromStatus={selectedStatusChangePayload.from_status}
         targetStatus={selectedStatusChangePayload.target_status ?? ''}
         justification={selectedStatusChangePayload.justification}
+        decided={
+          selectedStatusChangePayload.handled
+            ? (selectedStatusChangePayload.decision ?? true)
+            : undefined
+        }
         onDecisionMade={handleDecisionMade}
       />
     )}

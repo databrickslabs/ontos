@@ -28,6 +28,14 @@
     "loadFailed": "La protection contre l'obsolescence des éléments certifiés n'a pas pu être chargée",
     "notFound": "{{id}} n'existe plus. Retirez-le et enregistrez à nouveau.",
     "missingOnSave_one": "La protection est désactivée pour {{count}} élément qui n'existe plus. Retirez-le et enregistrez à nouveau.",
-    "missingOnSave_other": "La protection est désactivée pour {{count}} éléments qui n'existent plus. Retirez-les et enregistrez à nouveau."
+    "missingOnSave_other": "La protection est désactivée pour {{count}} éléments qui n'existent plus. Retirez-les et enregistrez à nouveau.",
+    "readOnly": "Seuls les administrateurs des niveaux de certification peuvent modifier la protection."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} est certifié : seul un administrateur de cette fonctionnalité peut approuver son obsolescence.",
+    "no_pending_request": "{{name}} est certifié : l'approbation demande une demande de changement de statut en attente pour ce changement, et il n'y en a aucune.",
+    "target_mismatch": "{{name}} est certifié : la demande en attente vise un autre statut, cette approbation ne s'y applique donc pas.",
+    "self_approval": "{{name}} est certifié : vous avez fait cette demande, quelqu'un d'autre doit donc l'approuver.",
+    "no_approver": "{{name}} est certifié : son obsolescence demande la décision d'un approbateur de la demande."
   }
 }

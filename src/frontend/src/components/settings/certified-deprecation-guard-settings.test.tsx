@@ -11,6 +11,13 @@ import CertifiedDeprecationGuardSettings, {
   GUARD_URL,
 } from './certified-deprecation-guard-settings';
 
+const perms = vi.hoisted(() => ({ admin: true }));
+vi.mock('@/stores/permissions-store', () => ({
+  usePermissions: () => ({
+    hasPermission: (_feature: string, level: string) => level !== 'Admin' || perms.admin,
+  }),
+}));
+
 const mockGet = vi.fn();
 const mockPut = vi.fn();
 const mockToast = vi.fn();
@@ -26,6 +33,7 @@ const SAVED = { domains: ['d-sales'], data_products: [], data_contracts: [] };
 describe('CertifiedDeprecationGuardSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    perms.admin = true;
     mockGet.mockResolvedValue({ data: SAVED });
     // The product and contract pickers read their lists with fetch
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] })));
@@ -80,6 +88,29 @@ describe('CertifiedDeprecationGuardSettings', () => {
     expect(mockToast.mock.calls[0][0].description).toBe(
       i18n.t('workflow-gates:certifiedGuard.missingOnSave', { count: 1 }),
     );
+  });
+
+  it('shows the switch without Save to a user who is not an admin of it', async () => {
+    perms.admin = false;
+    renderWithProviders(<CertifiedDeprecationGuardSettings />);
+
+    expect(await screen.findByText('Sales')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: i18n.t('common:actions.save') })).toBeNull();
+    expect(screen.getByTestId('certified-guard-read-only')).toHaveTextContent(
+      i18n.t('workflow-gates:certifiedGuard.readOnly'),
+    );
+  });
+
+  it('shows an error without a code as the generic message only', async () => {
+    mockPut.mockResolvedValue({ data: null, error: 'Internal stack trace', errorCode: null });
+    renderWithProviders(<CertifiedDeprecationGuardSettings />);
+
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('common:actions.save') }));
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    expect(mockToast.mock.calls[0][0]).toMatchObject({
+      title: i18n.t('workflow-gates:certifiedGuard.saveFailed'), description: undefined,
+    });
   });
 
   it('says when the switch cannot be loaded', async () => {

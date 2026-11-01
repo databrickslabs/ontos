@@ -1258,6 +1258,11 @@
       "deniedDescription": "La richiesta di cambiare lo stato in {{toStatus}} è stata negata.",
       "failedTitle": "Non riuscito",
       "couldNotSubmit": "Impossibile inviare la decisione"
+    },
+    "handled": {
+      "approved": "Questa richiesta è stata approvata.",
+      "denied": "Questa richiesta è stata rifiutata.",
+      "handled": "Questa richiesta è già stata decisa."
     }
   },
   "stewardReview": {

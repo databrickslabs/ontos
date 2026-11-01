@@ -28,6 +28,14 @@
     "loadFailed": "The certified deprecation guard couldn't be loaded",
     "notFound": "{{id}} no longer exists. Remove it and save again.",
     "missingOnSave_one": "The guard is switched off for {{count}} item that no longer exists. Remove it and save again.",
-    "missingOnSave_other": "The guard is switched off for {{count}} items that no longer exist. Remove them and save again."
+    "missingOnSave_other": "The guard is switched off for {{count}} items that no longer exist. Remove them and save again.",
+    "readOnly": "Only admins of certification levels can change the guard."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} is certified: only an admin of this feature can approve its deprecation.",
+    "no_pending_request": "{{name}} is certified: approving needs a pending status change request for this change, and there is none.",
+    "target_mismatch": "{{name}} is certified: the pending request asks for another status, so this approval doesn't apply to it.",
+    "self_approval": "{{name}} is certified: you made this request, so someone else has to approve it.",
+    "no_approver": "{{name}} is certified: its deprecation needs a decision by an approver of the request."
   }
 }

@@ -1258,6 +1258,11 @@
       "deniedDescription": "La demande de passer le statut à {{toStatus}} a été refusée.",
       "failedTitle": "Échec",
       "couldNotSubmit": "Impossible d'envoyer la décision"
+    },
+    "handled": {
+      "approved": "Cette demande a été approuvée.",
+      "denied": "Cette demande a été refusée.",
+      "handled": "Cette demande a déjà été tranchée."
     }
   },
   "stewardReview": {

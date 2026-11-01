@@ -1258,6 +1258,11 @@
       "deniedDescription": "Die Anfrage, den Status auf {{toStatus}} zu ändern, wurde abgelehnt.",
       "failedTitle": "Fehlgeschlagen",
       "couldNotSubmit": "Entscheidung konnte nicht eingereicht werden"
+    },
+    "handled": {
+      "approved": "Diese Anfrage wurde genehmigt.",
+      "denied": "Diese Anfrage wurde abgelehnt.",
+      "handled": "Über diese Anfrage wurde bereits entschieden."
     }
   },
   "stewardReview": {

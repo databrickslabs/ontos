@@ -28,6 +28,14 @@
     "loadFailed": "No se pudo cargar la protección de obsolescencia de certificados",
     "notFound": "{{id}} ya no existe. Quítelo y guarde de nuevo.",
     "missingOnSave_one": "La protección está desactivada para {{count}} elemento que ya no existe. Quítelo y guarde de nuevo.",
-    "missingOnSave_other": "La protección está desactivada para {{count}} elementos que ya no existen. Quítelos y guarde de nuevo."
+    "missingOnSave_other": "La protección está desactivada para {{count}} elementos que ya no existen. Quítelos y guarde de nuevo.",
+    "readOnly": "Solo los administradores de niveles de certificación pueden cambiar la protección."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} está certificado: solo un administrador de esta función puede aprobar que quede obsoleto.",
+    "no_pending_request": "{{name}} está certificado: aprobar requiere una solicitud de cambio de estado pendiente para este cambio, y no hay ninguna.",
+    "target_mismatch": "{{name}} está certificado: la solicitud pendiente pide otro estado, así que esta aprobación no se aplica a ella.",
+    "self_approval": "{{name}} está certificado: usted hizo esta solicitud, así que otra persona debe aprobarla.",
+    "no_approver": "{{name}} está certificado: declararlo obsoleto requiere la decisión de un aprobador de la solicitud."
   }
 }

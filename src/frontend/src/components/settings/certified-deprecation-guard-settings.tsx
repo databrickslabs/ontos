@@ -8,6 +8,8 @@ import GateExemptionsField, {
 } from '@/components/workflows/gate-exemptions-field';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 import type { GateExemptions } from '@/types/process-workflow';
 
 export const GUARD_URL = '/api/certified-deprecation-guard';
@@ -18,12 +20,15 @@ export const GUARD_URL = '/api/certified-deprecation-guard';
  * The guard refuses a direct deprecation of a certified data product or data
  * contract (it needs an approved status change request). Like a status gate,
  * it can be switched off per domain, data product or data contract; the
- * backend logs and audits each skip.
+ * backend logs and audits each skip. Changing it needs Admin on certification
+ * levels; other users see it without Save.
  */
 export default function CertifiedDeprecationGuardSettings() {
   const { t } = useTranslation(['workflow-gates', 'common']);
   const { get, put } = useApi();
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission('settings-certification-levels', FeatureAccessLevel.ADMIN);
   const [value, setValue] = useState<GateExemptions>(EMPTY_GATE_EXEMPTIONS);
   const [missing, setMissing] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,9 +68,10 @@ export default function CertifiedDeprecationGuardSettings() {
       const id = String(response.errorParams?.id ?? '');
       toast({
         title: t('workflow-gates:certifiedGuard.saveFailed'),
+        // Only coded errors are explained; any other is the title alone
         description: response.errorCode === 'gate_exemption_not_found'
           ? t('workflow-gates:certifiedGuard.notFound', { id, defaultValue: response.error })
-          : response.error,
+          : undefined,
         variant: 'destructive',
       });
       return;
@@ -93,10 +99,16 @@ export default function CertifiedDeprecationGuardSettings() {
               onMissingChange={onMissingChange}
               hint={t('workflow-gates:certifiedGuard.hint')}
             />
-            <Button onClick={save} disabled={saving} size="sm">
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('common:actions.save')}
-            </Button>
+            {canEdit ? (
+              <Button onClick={save} disabled={saving} size="sm">
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {t('common:actions.save')}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground" data-testid="certified-guard-read-only">
+                {t('workflow-gates:certifiedGuard.readOnly')}
+              </p>
+            )}
           </>
         )}
       </CardContent>

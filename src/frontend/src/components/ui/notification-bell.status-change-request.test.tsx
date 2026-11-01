@@ -104,9 +104,28 @@ describe('NotificationBell: a contract status change request', () => {
     expect(screen.getByRole('button', { name: 'Aprovar/Negar' })).toBeInTheDocument();
   });
 
-  it('keeps the action on a read notification, as View Details', async () => {
+  it('keeps Approve/Deny on a notification that was only read', async () => {
     useNotificationsStore.setState({
       notifications: [{ ...request, read: true }],
+      unreadCount: 0,
+    } as never);
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationBell />);
+    await user.click(screen.getByRole('button'));
+
+    await user.click(await screen.findByRole('button', { name: 'Approve/Deny' }));
+
+    const dialog = await screen.findByTestId('status-change-dialog');
+    const props = JSON.parse(dialog.textContent || '{}');
+    expect(props.decided).toBeUndefined();
+  });
+
+  it('opens a decided request read-only, as View Details', async () => {
+    useNotificationsStore.setState({
+      notifications: [{
+        ...request, read: true,
+        action_payload: { ...request.action_payload, handled: true, decision: 'approve' },
+      }],
       unreadCount: 0,
     } as never);
     const user = userEvent.setup();
@@ -116,6 +135,7 @@ describe('NotificationBell: a contract status change request', () => {
     await user.click(await screen.findByRole('button', { name: 'View Details' }));
 
     const dialog = await screen.findByTestId('status-change-dialog');
-    expect(dialog).toHaveTextContent('"contractId":"c1"');
+    const props = JSON.parse(dialog.textContent || '{}');
+    expect(props).toMatchObject({ contractId: 'c1', decided: 'approve' });
   });
 });

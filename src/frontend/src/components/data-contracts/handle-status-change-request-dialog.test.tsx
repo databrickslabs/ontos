@@ -118,13 +118,29 @@ describe('HandleStatusChangeRequestDialog', () => {
     expect(onDecisionMade).not.toHaveBeenCalled();
   });
 
-  it('explains the certified guard refusing an approval that is not an admin one', async () => {
+  it('explains the guard refusing the requester approving their own request', async () => {
     await i18n.changeLanguage('pt');
     api.post.mockResolvedValue({
       data: null,
-      error: "The data contract 'Orders v1' is certified: deprecating it needs an approved ...",
-      errorCode: 'certified_deprecation_requires_approval',
-      errorParams: { entityName: 'Orders v1' },
+      error: "The approval of this request doesn't count for the certified data contract ...",
+      errorCode: 'certified_deprecation_approval_refused',
+      errorParams: { entityName: 'Orders v1', reason: 'self_approval' },
+    });
+    renderDialog();
+
+    click(/^Aprovar$/);
+
+    await waitFor(() => expect(api.toast).toHaveBeenCalled());
+    expect(api.toast.mock.calls[0][0].description).toBe(
+      'Orders v1 é certificado: foi você quem fez esta solicitação, então outra pessoa '
+      + 'precisa aprová-la.',
+    );
+  });
+
+  it('shows an error without a code as the generic message, not its English text', async () => {
+    await i18n.changeLanguage('pt');
+    api.post.mockResolvedValue({
+      data: null, error: 'Contract not found', errorCode: null, errorParams: null,
     });
     renderDialog();
 
@@ -132,7 +148,21 @@ describe('HandleStatusChangeRequestDialog', () => {
 
     await waitFor(() => expect(api.toast).toHaveBeenCalled());
     const description = api.toast.mock.calls[0][0].description as string;
-    expect(description).toContain('Orders v1');
-    expect(description).not.toContain('is certified: deprecating it');
+    expect(description).toBe(i18n.t('data-contracts:statusChangeRequest.toast.couldNotSubmit'));
+    expect(description).not.toContain('Contract not found');
+  });
+
+  it.each([
+    ['approve', 'This request was approved.'],
+    ['deny', 'This request was denied.'],
+  ])('opens a request decided with %s read-only', (decided, text) => {
+    renderDialog({ decided });
+
+    expect(screen.getByTestId('status-change-request-decided')).toHaveTextContent(text);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    const names = screen.getAllByRole('button').map(b => b.textContent);
+    expect(names).not.toContain('Approve');
+    expect(names).not.toContain('Deny');
+    expect(names).toContain('Close');
   });
 });

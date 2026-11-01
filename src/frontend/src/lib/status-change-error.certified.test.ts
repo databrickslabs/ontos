@@ -5,6 +5,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import i18n from '@/i18n/config';
 import {
+  CERTIFIED_APPROVAL_REFUSED_CODE,
   CERTIFIED_DEPRECATION_CODE,
   needsStatusChangeRequest,
   statusChangeErrorText,
@@ -36,6 +37,21 @@ describe('certified deprecation refusal', () => {
       'Orders is certified, so it can only be deprecated through an approved status change '
       + 'request. Request the status change instead.',
     );
+  });
+
+  it.each([
+    ['not_admin',
+      'Orders is certified: only an admin of this feature can approve its deprecation.'],
+    ['self_approval',
+      'Orders is certified: you made this request, so someone else has to approve it.'],
+  ])('explains an approval that does not count (%s)', (reason, text) => {
+    const response = {
+      error: "The approval of this request doesn't count",
+      errorCode: CERTIFIED_APPROVAL_REFUSED_CODE,
+      errorParams: { entityName: 'Orders', reason },
+    };
+    expect(statusChangeErrorText(response, i18n.t, 'data-contracts')).toBe(text);
+    expect(needsStatusChangeRequest(response)).toBe(false);
   });
 
   it('can be sent as a request; other refusals cannot', () => {

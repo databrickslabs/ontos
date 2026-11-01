@@ -719,10 +719,10 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 ('02a00101-0002-4000-8000-000000000001', 'BCBS 239 Pre-Publish Attestation',
- 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.',
+ 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product"]}',
  '{"type": "domain", "ids": ["00000003-0002-4000-8000-000000000003"]}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 ('02a00102-0002-4000-8000-000000000002', 'AML Model Validation Gate',
  'Blocks deployment of AML monitoring updates without independent model validation.',
  '{"type": "before_update", "entity_types": ["data_product"]}',
@@ -744,6 +744,23 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  '{"approvers": "business:0f000003-0002-4000-8000-000000000003"}',
  'approve', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
+
+-- The pre-publish gates ship inactive (#996): their before_publish trigger does not
+-- exist yet, so they never run. In installs that still hold a shipped gate (its shipped
+-- name, trigger and description, still active), deactivate it, then add the note to the
+-- description of a shipped gate that is inactive. A gate an admin renamed, re-triggered,
+-- re-described, or re-activated after this change is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00101-0002-4000-8000-000000000001'
+  AND name = 'BCBS 239 Pre-Publish Attestation'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product"]}'
+  AND description = 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.'
+  AND is_active = true;
+
+UPDATE process_workflows SET description = 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00101-0002-4000-8000-000000000001'
+  AND description = 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.'
+  AND is_active = false;
 
 -- Installs that loaded an earlier version of this preset keep their workflow rows
 -- (ON CONFLICT DO NOTHING above). Rename those in place, but only the texts that

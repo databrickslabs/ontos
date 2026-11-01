@@ -1,0 +1,187 @@
+"""Reviewers can read the data product they review (#1117).
+
+The real flow: a producer requests a review naming a reviewer, the default
+"Data Product Review Request" workflow creates the asset review and pauses at
+its approval step. Whoever can decide (the named reviewer, the members of the
+role the approval is addressed to) reads the product; nobody else does, and
+nobody gains a write.
+
+A refused request rolls back the test's transaction (``get_db`` rolls back on
+any exception), so each test ends with its only refusal.
+"""
+import uuid
+
+import pytest
+
+PRODUCER = ('producer@example.com', ['data-producers'])
+# Data Consumers: read-only on data products, not addressed by the approval
+REVIEWER = ('reviewer@example.com', ['data-consumers'])
+OTHER_CONSUMER = ('other@example.com', ['data-consumers'])
+STEWARD = ('steward@example.com', ['data-stewards'])
+ADMIN = ('test@example.com', ['test_admins'])
+
+
+@pytest.fixture(autouse=True)
+def default_workflows(db_session):
+    """The default "Data Product Review Request" workflow, as at startup."""
+    from src.controller.workflows_manager import WorkflowsManager
+
+    WorkflowsManager(db=db_session).load_from_yaml()
+
+
+@pytest.fixture
+def as_user(mock_test_user):
+    def _switch(identity):
+        email, groups = identity
+        mock_test_user.email = email
+        mock_test_user.username = email
+        mock_test_user.user = email
+        mock_test_user.groups = list(groups)
+    yield _switch
+    _switch(ADMIN)
+    mock_test_user.username = 'test_user'
+    mock_test_user.user = 'test_user'
+
+
+def _create_draft(client, as_user, name):
+    as_user(PRODUCER)
+    product_id = str(uuid.uuid4())
+    response = client.post('/api/data-products', json={
+        'id': product_id, 'name': name, 'version': '1.0.0',
+        'productType': 'sourceAligned', 'status': 'draft',
+        'description': {'purpose': 'Reviewer read access test'},
+    })
+    assert response.status_code in (200, 201), response.text
+    return product_id
+
+
+def _request_review(client, as_user, product_id, reviewer_email):
+    as_user(PRODUCER)
+    response = client.post(
+        f'/api/data-products/{product_id}/request-review',
+        json={'reviewer_email': reviewer_email},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result.get('workflow_status') == 'paused', result
+    return result
+
+
+def _review_id(db_session, product_id):
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
+
+    [review] = db_session.query(DataAssetReviewRequestDb).join(ReviewedAssetDb).filter(
+        ReviewedAssetDb.asset_fqn == f'product:{product_id}',
+    ).all()
+    return review.id
+
+
+def _get(client, as_user, identity, product_id):
+    as_user(identity)
+    return client.get(f'/api/data-products/{product_id}').status_code
+
+
+@pytest.fixture
+def reviewed(client, as_user):
+    """A draft under review, ``REVIEWER`` named; the approval goes to the Data
+    Stewards (no domain owner)."""
+    product_id = _create_draft(client, as_user, 'Reviewed product')
+    return product_id, _request_review(client, as_user, product_id, REVIEWER[0])
+
+
+class TestReviewerReadsReviewedProduct:
+    def test_whoever_can_decide_reads_the_product(self, client, as_user, reviewed):
+        product_id, _ = reviewed
+
+        assert _get(client, as_user, REVIEWER, product_id) == 200
+        assert _get(client, as_user, STEWARD, product_id) == 200
+        assert _get(client, as_user, PRODUCER, product_id) == 200
+
+    def test_someone_who_cannot_decide_still_gets_404(self, client, as_user, reviewed):
+        product_id, _ = reviewed
+
+        assert _get(client, as_user, OTHER_CONSUMER, product_id) == 404
+
+    def test_the_reviewer_of_another_review_gets_404(self, client, as_user, reviewed):
+        first, _ = reviewed
+        second = _create_draft(client, as_user, 'Second product')
+        _request_review(client, as_user, second, OTHER_CONSUMER[0])
+
+        assert _get(client, as_user, REVIEWER, first) == 200
+        assert _get(client, as_user, OTHER_CONSUMER, second) == 200
+        assert _get(client, as_user, REVIEWER, second) == 404
+
+    @pytest.mark.parametrize('method', ['put', 'delete'])
+    def test_the_reviewer_gets_no_write(self, client, as_user, reviewed, method):
+        product_id, _ = reviewed
+        as_user(REVIEWER)
+        product = client.get(f'/api/data-products/{product_id}').json()
+
+        if method == 'put':
+            response = client.put(
+                f'/api/data-products/{product_id}', json={**product, 'name': 'Renamed'},
+            )
+        else:
+            response = client.delete(f'/api/data-products/{product_id}')
+
+        assert response.status_code == 403
+
+    def test_the_product_is_not_listed_for_the_reviewer(self, client, as_user, reviewed):
+        product_id, _ = reviewed
+        as_user(REVIEWER)
+
+        response = client.get('/api/data-products')
+
+        assert response.status_code == 200
+        assert product_id not in {p.get('id') for p in response.json()}
+
+    @pytest.mark.parametrize('status', ['approved', 'needs_review', 'denied', 'cancelled'])
+    def test_a_closed_review_no_longer_grants_read(
+        self, client, as_user, db_session, reviewed, status,
+    ):
+        from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
+
+        product_id, _ = reviewed
+        assert _get(client, as_user, REVIEWER, product_id) == 200
+        # Set directly: PUT /api/data-asset-reviews/{id}/status answers 500 on
+        # development (it calls the manager with a keyword the manager lacks).
+        db_session.query(DataAssetReviewRequestDb).filter_by(
+            id=_review_id(db_session, product_id),
+        ).update({'status': status})
+        db_session.commit()
+
+        assert _get(client, as_user, REVIEWER, product_id) == 404
+
+    def test_a_deleted_review_no_longer_grants_read(self, client, as_user, db_session, reviewed):
+        product_id, _ = reviewed
+        review_id = _review_id(db_session, product_id)
+        as_user(ADMIN)
+        assert client.delete(f'/api/data-asset-reviews/{review_id}').status_code == 204
+
+        assert _get(client, as_user, REVIEWER, product_id) == 404
+
+    def test_a_decided_approval_no_longer_grants_read(self, client, as_user, reviewed):
+        product_id, result = reviewed
+        assert _get(client, as_user, STEWARD, product_id) == 200
+
+        as_user(STEWARD)
+        response = client.post('/api/workflows/handle-approval', json={
+            'execution_id': result['execution_id'], 'approved': False, 'reason': 'Not yet',
+        })
+        assert response.status_code == 200, response.text
+
+        assert _get(client, as_user, STEWARD, product_id) == 404
+
+    def test_a_review_created_through_the_api_grants_nothing(self, client, as_user):
+        """``POST /api/data-asset-reviews`` takes reviewer and requester from the
+        body, so naming yourself must not open someone else's draft."""
+        product_id = _create_draft(client, as_user, 'Self-named review target')
+        as_user(STEWARD)
+        response = client.post('/api/data-asset-reviews', json={
+            'requester_email': PRODUCER[0],
+            'reviewer_email': STEWARD[0],
+            'asset_fqns': [f'product:{product_id}'],
+        })
+        assert response.status_code == 201, response.text
+
+        assert _get(client, as_user, STEWARD, product_id) == 404

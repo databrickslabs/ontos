@@ -221,7 +221,9 @@ applies to any authenticated app user, scope it read-only.
 
 No. With a forwarded user token the tools act for that verified user, whose
 Ontos roles apply as in the REST API (feature levels for changes, the
-Read-only level and the read rules for data products and contracts). With only
+Read-only level and the read rules for data products and contracts; a data
+product's fields only for its owners or a data-products admin). Each product
+change is audited under `data-products`, as through the REST API. With only
 an API key there is no user: the tools get Read-only on the features the
 token's scopes name, read published products and contracts only, and refuse
 every change.

@@ -136,6 +136,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
   on_request_certify: 'After a certification request is submitted',
   for_request_status_change: 'When a user requests status change',
   on_request_status_change: 'After a status change request is submitted',
+  on_request_definition_change: 'After a definition change request is submitted',
   for_approval_response: 'Approval response dialog',
   before_create: 'Before entity is created (validation)',
   before_update: 'Before entity is updated (validation)',
@@ -266,6 +267,7 @@ export const ALL_TRIGGER_TYPES: TriggerType[] = [
   'on_request_publish',
   'on_request_deploy',
   'on_request_status_change',
+  'on_request_definition_change',
   'on_request_certify',
   'on_certify',
   'on_decertify',
@@ -310,6 +312,7 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'ontology_concept',
   'ontology_collection',
   'concept_changeset',
+  'metric_view',
 ];
 
 /**
@@ -398,6 +401,8 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   // file uploads land as Draft and follow per-concept review. Kept in the
   // EntityType union / ALL_ENTITY_TYPES so existing data + labels still resolve.
   on_request_status_change: ['data_product', 'data_contract', 'ontology_concept'],
+  // Metric view definition change requests (#1124)
+  on_request_definition_change: ['metric_view'],
   // Job triggers
   on_job_success: ['job'],
   on_job_failure: ['job'],

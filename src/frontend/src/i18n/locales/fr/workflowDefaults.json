@@ -95,6 +95,9 @@
     },
     "conceptReviewRequest": {
       "rejected": "La revue du concept n'a pas été approuvée"
+    },
+    "metricViewChangeRequest": {
+      "rejected": "La demande de modification de la metric view a été rejetée"
     }
   },
   "workflowNames": {
@@ -128,6 +131,7 @@
     "certification-request-review": "Revue des demandes de certification",
     "publication-request-review": "Revue des demandes de publication",
     "first-access-welcome": "Bienvenue : conditions d'utilisation",
-    "on-request-access-grant-permissions-reference": "Référence : accorder SELECT UC au demandeur (on_request_access)"
+    "on-request-access-grant-permissions-reference": "Référence : accorder SELECT UC au demandeur (on_request_access)",
+    "metric-view-change-request": "Demande de modification de metric view"
   }
 }

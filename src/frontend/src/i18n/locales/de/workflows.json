@@ -35,7 +35,8 @@
       "contractApprovers": "Vertragsgenehmiger",
       "appRoles": "App-Rollen",
       "businessRoles": "Geschäftsrollen",
-      "noGroups": "Keine Gruppen"
+      "noGroups": "Keine Gruppen",
+      "assetOwners": "Asset-Eigentümer"
     },
     "messages": {
       "loadWorkflowFailed": "Workflow konnte nicht geladen werden",
@@ -346,7 +347,8 @@
       "entityRejected": "{{name}} wurde abgelehnt."
     },
     "errors": {
-      "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen."
+      "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
+      "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen."
     },
     "entityTypes": {
       "entity": "Entität",

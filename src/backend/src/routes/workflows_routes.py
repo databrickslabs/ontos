@@ -135,6 +135,7 @@ _TRIGGER_LABELS: Dict[str, str] = {
     "on_request_certify": "After a certification request is submitted",
     "for_request_status_change": "When a user requests status change",
     "on_request_status_change": "After a status change request is submitted",
+    "on_request_definition_change": "After a definition change request is submitted",
     "for_approval_response": "Approval response dialog",
     "before_create": "Before entity is created (validation)",
     "before_update": "Before entity is updated (validation)",
@@ -167,7 +168,7 @@ _TRIGGER_GROUPS_REQUEST_FLOW = {
     "for_request_status_change", "for_approval_response",
     "on_subscribe", "on_unsubscribe",
     "on_request_access", "on_request_review", "on_request_publish", "on_request_deploy",
-    "on_request_certify", "on_request_status_change",
+    "on_request_certify", "on_request_status_change", "on_request_definition_change",
     "on_revoke", "on_expiring", "on_first_access",
 }
 _TRIGGER_GROUPS_LIFECYCLE = {
@@ -212,6 +213,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     # NOT selectable — Scenario D (2026-08-18) disabled the gate; all file uploads
     # land as Draft and follow per-concept review. Re-add if gating is re-opened.
     "on_request_status_change": ["data_product", "data_contract", "ontology_concept"],
+    "on_request_definition_change": ["metric_view"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],
@@ -1434,6 +1436,31 @@ def _is_own_owner_approval(
     )
 
 
+def _is_own_definition_change_request(
+    db: Session, execution_id: str, user_info: UserInfo,
+) -> bool:
+    """Whether ``user_info`` requested the metric view definition change under review.
+
+    A definition change request (``on_request_definition_change``) is never
+    decided by its requester, whoever the approvers are (#1124).
+    """
+    from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowExecutionDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None or not execution.trigger_context:
+        return False
+    workflow = db.get(ProcessWorkflowDb, execution.workflow_id)
+    try:
+        trigger = json.loads(workflow.trigger_config) if workflow else {}
+        requester = (json.loads(execution.trigger_context) or {}).get('user_email')
+    except (TypeError, ValueError):
+        return False
+    if (trigger or {}).get('type') != TriggerType.ON_REQUEST_DEFINITION_CHANGE.value:
+        return False
+    caller = {(user_info.email or '').lower(), (user_info.username or '').lower()} - {''}
+    return bool(requester) and requester.lower() in caller
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -1482,6 +1509,15 @@ def _assert_caller_authorized_for_execution(
         raise HTTPException(
             status_code=403,
             detail="You are not an authorized approver for this execution",
+        )
+    if _is_own_definition_change_request(db, execution_id, user_info):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'own_change_request_approval',
+                'message': "You can't approve your own change request.",
+            },
         )
     if _is_own_owner_approval(db, execution_id, pending_step, user_info):
         raise HTTPException(

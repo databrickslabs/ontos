@@ -35,7 +35,8 @@
       "contractApprovers": "契約承認者",
       "appRoles": "アプリロール",
       "businessRoles": "ビジネスロール",
-      "noGroups": "グループがありません"
+      "noGroups": "グループがありません",
+      "assetOwners": "アセット所有者"
     },
     "messages": {
       "loadWorkflowFailed": "ワークフローの読み込みに失敗しました",
@@ -346,7 +347,8 @@
       "entityRejected": "{{name}} が却下されました。"
     },
     "errors": {
-      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。"
+      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
+      "own_change_request_approval": "自分の変更リクエストは承認できません。"
     },
     "entityTypes": {
       "entity": "エンティティ",

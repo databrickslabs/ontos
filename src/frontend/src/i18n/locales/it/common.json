@@ -338,7 +338,8 @@
       "for_request_access": "Richiedi accesso (procedura guidata)",
       "for_request_publish": "Richiedi pubblicazione (procedura guidata)",
       "for_request_certify": "Richiedi certificazione (procedura guidata)",
-      "for_request_status_change": "Richiedi modifica di stato (procedura guidata)"
+      "for_request_status_change": "Richiedi modifica di stato (procedura guidata)",
+      "on_request_definition_change": "Richiesta di modifica della definizione"
     },
     "entityTypes": {
       "catalog": "Catalogo",
@@ -355,7 +356,8 @@
       "data_asset_review": "Revisione asset",
       "job": "Job",
       "subscription": "Abbonamento",
-      "user": "Utente"
+      "user": "Utente",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validazione",

@@ -405,6 +405,8 @@ _OWNER_APPROVER_TOKENS = {
     'domainowner': 'DomainOwner',
     'domainowners': 'DomainOwner',
     'contractapprover': 'ContractApprover',
+    'assetowner': 'AssetOwner',
+    'assetowners': 'AssetOwner',
 }
 
 
@@ -414,9 +416,9 @@ def _owner_approvers(
     """Approvers for the 'DomainOwner' / 'ContractApprover' tokens.
 
     An app role with that name wins (an admin may have created one).
-    Otherwise 'DomainOwner' resolves to the owners of the entity's domain and
-    'ContractApprover' to the owners of the entity itself (the data
-    contract), leaving out the requester. When nobody is left, the request
+    Otherwise 'DomainOwner' resolves to the owners of the entity's domain, and
+    'ContractApprover' and 'AssetOwner' to the owners of the entity itself (the
+    data contract, the asset), leaving out the requester. When nobody is left, the request
     goes to the Data Steward and Admin roles instead of a recipient no user
     matches; handle-approval refuses the requester's own decision.
     """
@@ -621,6 +623,7 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
     "ontology_concept": "Concept",
     "ontology_collection": "Concept Scheme",
     "concept_changeset": "Concept Changeset",
+    "metric_view": "Metric View",
 }
 
 
@@ -3504,6 +3507,19 @@ class WorkflowExecutor:
                 self._apply_product_review_outcome(
                     trigger_context, entity_id, succeeded, responded_by,
                     execution_id=execution_id,
+                )
+
+            # Metric view definition change request decided: record the
+            # decision and deliver an approved request (#1124)
+            elif (entity_type == 'metric_view'
+                  and trigger_type in ('on_request_definition_change',
+                                       'ON_REQUEST_DEFINITION_CHANGE')):
+                from src.controller.metric_view_change_requests_manager import (
+                    MetricViewChangeRequestsManager,
+                )
+                MetricViewChangeRequestsManager(self._db).on_workflow_completed(
+                    (trigger_context.entity_data or {}).get('request_id'),
+                    approved=approved, responded_by=responded_by, execution_id=execution_id,
                 )
 
             # Approved status change request of a product or contract: apply

@@ -95,6 +95,9 @@
     },
     "conceptReviewRequest": {
       "rejected": "De conceptreview is niet goedgekeurd"
+    },
+    "metricViewChangeRequest": {
+      "rejected": "Het wijzigingsverzoek voor de metric view is afgewezen"
     }
   },
   "workflowNames": {
@@ -128,6 +131,7 @@
     "certification-request-review": "Beoordeling van certificeringsverzoeken",
     "publication-request-review": "Beoordeling van publicatieverzoeken",
     "first-access-welcome": "Welkom: gebruiksvoorwaarden",
-    "on-request-access-grant-permissions-reference": "Referentie: UC SELECT toekennen aan de aanvrager (on_request_access)"
+    "on-request-access-grant-permissions-reference": "Referentie: UC SELECT toekennen aan de aanvrager (on_request_access)",
+    "metric-view-change-request": "Wijzigingsverzoek metric view"
   }
 }

@@ -1,4 +1,8 @@
 {
+  "metricViewDrift": {
+    "title": "メトリックビューの定義が変更されました",
+    "description": "Unity Catalog のメトリックビュー {{fqn}} の定義が、Ontos のベースラインと一致しなくなりました。"
+  },
   "statusChangeNotApplied": {
     "title": "ステータスの変更は適用されませんでした",
     "statusChanged": "ステータスを「{{fromStatus}}」から「{{toStatus}}」に変更するリクエストは承認されましたが、現在のステータスが「{{currentStatus}}」のため、変更は適用されませんでした。まだ必要な場合は、もう一度リクエストしてください。",

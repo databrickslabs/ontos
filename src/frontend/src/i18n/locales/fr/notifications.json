@@ -1,4 +1,8 @@
 {
+  "metricViewDrift": {
+    "title": "Définition de la metric view modifiée",
+    "description": "La définition de la metric view {{fqn}} dans Unity Catalog ne correspond plus à sa référence dans Ontos."
+  },
   "statusChangeNotApplied": {
     "title": "Changement de statut non appliqué",
     "statusChanged": "La demande de changement du statut de « {{fromStatus}} » à « {{toStatus}} » a été approuvée, mais le statut est maintenant « {{currentStatus}} » : le changement n'a donc pas été appliqué. Refaites la demande si elle est toujours nécessaire.",

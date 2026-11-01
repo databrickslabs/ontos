@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { internalErrorText } from '@/lib/server-error-text';
+import { serverErrorText } from '@/lib/server-error-text';
 
 export interface ApiResponse<T> {
   data: T;
@@ -24,8 +24,9 @@ const errorParamsOf = (errorBody: any): Record<string, unknown> | null => {
   return params && typeof params === 'object' && !Array.isArray(params) ? params : null;
 };
 
-/** The error text to show: an unexpected server error in the user's language. */
-const errorTextOf = (errorBody: any, errorMsg: string): string => internalErrorText(errorBody) ?? errorMsg;
+/** The error text to show: an app-wide server error in the user's language. */
+const errorTextOf = (errorBody: any, errorMsg: string): string =>
+  serverErrorText(errorBody) ?? errorMsg;
 
 export const useApi = () => {
   const [loading, setLoading] = useState(false);

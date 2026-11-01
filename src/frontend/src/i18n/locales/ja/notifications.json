@@ -245,7 +245,10 @@
     "ownerNotice": {
       "reason": "理由: {{reason}}",
       "sunsetDate": "提供終了日: {{sunsetDate}}",
-      "replacement": "後継: {{replacementName}}"
+      "replacement": "後継: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}}「{{entity_name}}」(バージョン {{version}}) は非推奨になりました。",
+      "retiredVersion": "{{entity_type}}「{{entity_name}}」(バージョン {{version}}) は廃止されました。",
+      "replacementVersion": "後継: {{replacementName}} (バージョン {{replacementVersion}})"
     }
   }
 }

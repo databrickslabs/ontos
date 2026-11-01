@@ -245,7 +245,10 @@
     "ownerNotice": {
       "reason": "Motivo: {{reason}}",
       "sunsetDate": "Data di dismissione: {{sunsetDate}}",
-      "replacement": "Sostituto: {{replacementName}}"
+      "replacement": "Sostituto: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (versione {{version}}) è stato contrassegnato come obsoleto.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (versione {{version}}) è stato ritirato.",
+      "replacementVersion": "Sostituto: {{replacementName}} (versione {{replacementVersion}})"
     }
   }
 }

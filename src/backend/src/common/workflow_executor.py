@@ -970,11 +970,12 @@ class NotificationStepHandler(StepHandler):
                 context.entity_name or context.entity_id,
                 lambda name: substitute_template('${' + name + '}', context),
             )
+            link = None
             if not custom_message and template in LIFECYCLE_TEMPLATES:
                 # Reason, sunset date and replacement, each on its own line when set
-                message, i18n_data = lifecycle_notice(
-                    template, context.entity_type, context.entity_name or context.entity_id,
-                    context.entity or {},
+                message, i18n_data, link = lifecycle_notice(
+                    template, context.entity_type, context.entity_id,
+                    context.entity_name or context.entity_id, context.entity or {},
                 )
             
             # Determine notification type based on template
@@ -1025,6 +1026,7 @@ class NotificationStepHandler(StepHandler):
                             title=title,
                             subtitle=subtitle,
                             description=message,
+                            link=link,
                             recipient=recipient_id,
                             recipient_role_id=role_uuid,
                             action_type=action_type,

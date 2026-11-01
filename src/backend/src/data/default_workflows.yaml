@@ -1353,10 +1353,12 @@ workflows:
   # Lifecycle Notices (deprecation lifecycle, #998)
   # =========================================================================
   # Disabled by default; an admin enables them. The on_status_change payload
-  # carries deprecation_reason, sunset_date, replacement_id and
-  # replacement_name, which the entity_deprecated / entity_retired templates
-  # show on their own lines when set (a custom_message can use
-  # ${entity.<field>}). Subscribers get the built-in subscriber notice either way.
+  # carries version, deprecation_reason, sunset_date, replacement_id,
+  # replacement_name and replacement_version, which the entity_deprecated /
+  # entity_retired templates show on their own lines when set (a
+  # custom_message can use ${entity.<field>}). The subscribers of a data
+  # product get the built-in subscriber notice either way; data contracts
+  # have no subscriber notice.
 
   - id: "owner-deprecation-notice"
     name: "Owner Deprecation Notice"

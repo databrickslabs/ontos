@@ -102,3 +102,42 @@ describe('owner lifecycle notice', () => {
     );
   });
 });
+
+describe('owner lifecycle notice with versions', () => {
+  // A new version keeps the name, so the lines name the versions
+  const versioned = {
+    title: 'Deprecation Notice',
+    description: 'English fallback',
+    data: {
+      i18n: {
+        title: 'notifications:workflowDefaults.templates.entity_deprecated.title',
+        descriptionLines: [
+          {
+            key: 'notifications:lifecycle.ownerNotice.deprecatedVersion',
+            text: "data_product 'Orders' (version 1.0.0) has been deprecated.",
+            params: { entity_type: 'data_product', entity_name: 'Orders', version: '1.0.0' },
+          },
+          {
+            key: 'notifications:lifecycle.ownerNotice.replacementVersion',
+            text: 'Replacement: Orders (version 2.0.0)',
+            params: {
+              replacementName: 'Orders', replacementVersion: '2.0.0', replacementId: 'p-2',
+            },
+          },
+        ],
+      },
+    },
+  } as any;
+
+  it('renders the versions in English and Portuguese', async () => {
+    expect(notificationDescription(versioned, i18n.t)).toBe(
+      "Data Product 'Orders' (version 1.0.0) has been deprecated.\n"
+      + 'Replacement: Orders (version 2.0.0)',
+    );
+    await i18n.changeLanguage('pt');
+    expect(notificationDescription(versioned, i18n.t)).toBe(
+      "Produto de dados 'Orders' (versão 1.0.0) foi marcado como obsoleto.\n"
+      + 'Substituto: Orders (versão 2.0.0)',
+    );
+  });
+});

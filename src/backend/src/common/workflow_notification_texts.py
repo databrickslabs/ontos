@@ -258,29 +258,53 @@ LIFECYCLE_TEMPLATES = ('entity_deprecated', 'entity_retired')
 LIFECYCLE_LINE_PREFIX = 'notifications:lifecycle.ownerNotice'
 
 
+# English texts of the lines that name a version (``{version}`` filled in
+# with str.format, as the template messages are)
+LIFECYCLE_VERSION_MESSAGES: Dict[str, str] = {
+    'entity_deprecated': "{entity_type} '{entity_name}' (version {version}) has been deprecated.",
+    'entity_retired': "{entity_type} '{entity_name}' (version {version}) has been retired.",
+}
+LIFECYCLE_VERSION_KEYS = {
+    'entity_deprecated': 'deprecatedVersion',
+    'entity_retired': 'retiredVersion',
+}
+# Pages of the entities a notice links to
+ENTITY_PAGES = {'data_product': '/data-products/{id}', 'data_contract': '/data-contracts/{id}'}
+
+
 def lifecycle_notice(
     template: str,
     entity_type: Optional[str],
+    entity_id: Optional[str],
     entity_name: Optional[str],
     entity: Mapping[str, Any],
 ) -> tuple:
-    """The English message and the ``data`` of an owner lifecycle notice.
+    """The English message, the ``data`` and the link of an owner lifecycle notice.
 
     ``entity`` is the on_status_change payload, which carries the lifecycle
     fields (``lifecycle_trigger_data``). The message has one line per fact:
-    the template's message, then the reason, the sunset date and the
-    replacement, each only when set. Each line is sent in
+    the change (with the entity's version when known, since new versions
+    keep the name), then the reason, the sunset date and the replacement
+    (with its version), each only when set. Each line is sent in
     ``i18n.descriptionLines`` with its key and params, as approval
-    notifications are.
+    notifications are. The link is the replacement's page when there is
+    one, else the entity's (None for other entity types).
     """
-    first = TEMPLATE_MESSAGES[template].format(entity_type=entity_type, entity_name=entity_name)
-    lines: List[Dict[str, Any]] = [{
-        'key': template_message_key(template), 'text': first,
-        'params': {'entity_type': entity_type, 'entity_name': entity_name},
-    }]
+    version = entity.get('version')
+    params: Dict[str, Any] = {'entity_type': entity_type, 'entity_name': entity_name}
+    if version:
+        params['version'] = str(version)
+        first = LIFECYCLE_VERSION_MESSAGES[template].format(**params)
+        first_key = f"{LIFECYCLE_LINE_PREFIX}.{LIFECYCLE_VERSION_KEYS[template]}"
+    else:
+        first = TEMPLATE_MESSAGES[template].format(**params)
+        first_key = template_message_key(template)
+    lines: List[Dict[str, Any]] = [{'key': first_key, 'text': first, 'params': params}]
 
-    def add(key: str, text: str, **params: Any) -> None:
-        lines.append({'key': f"{LIFECYCLE_LINE_PREFIX}.{key}", 'text': text, 'params': params})
+    def add(key: str, text: str, **line_params: Any) -> None:
+        lines.append({
+            'key': f"{LIFECYCLE_LINE_PREFIX}.{key}", 'text': text, 'params': line_params,
+        })
 
     reason = entity.get('deprecation_reason')
     if reason:
@@ -291,7 +315,17 @@ def lifecycle_notice(
     replacement_id = entity.get('replacement_id')
     if replacement_id:
         name = str(entity.get('replacement_name') or replacement_id)
-        add('replacement', f"Replacement: {name}",
-            replacementName=name, replacementId=str(replacement_id))
+        replacement_version = entity.get('replacement_version')
+        if replacement_version:
+            add('replacementVersion', f"Replacement: {name} (version {replacement_version})",
+                replacementName=name, replacementVersion=str(replacement_version),
+                replacementId=str(replacement_id))
+        else:
+            add('replacement', f"Replacement: {name}",
+                replacementName=name, replacementId=str(replacement_id))
+    page = ENTITY_PAGES.get((entity_type or '').lower())
+    target = replacement_id or entity_id
+    link = page.format(id=target) if page and target else None
     message = '\n'.join(line['text'] for line in lines)
-    return message, {'i18n': {'title': template_title_key(template), 'descriptionLines': lines}}
+    data = {'i18n': {'title': template_title_key(template), 'descriptionLines': lines}}
+    return message, data, link

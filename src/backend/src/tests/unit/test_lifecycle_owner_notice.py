@@ -77,6 +77,8 @@ def test_a_deprecation_notice_has_a_line_per_field(db_session):
 
     assert sent.title == 'Deprecation Notice'
     assert sent.type == 'warning'
+    # The replacement's page
+    assert sent.link == '/data-products/p-2'
     assert sent.description == (
         "data_product 'Orders' has been deprecated.\nReason: Superseded\n"
         "Sunset date: 2026-12-31\nReplacement: Orders v2"
@@ -105,6 +107,38 @@ def test_a_retirement_notice_leaves_out_what_is_not_set(db_session):
     assert sent.title == 'Retirement Notice'
     assert sent.description == "data_product 'Orders' has been retired."
     assert len(sent.data['i18n']['descriptionLines']) == 1
+    # No replacement: the entity's own page
+    assert sent.link == '/data-products/p-1'
+
+
+def test_same_named_versions_are_told_apart(db_session):
+    # A new version keeps the name (clone_product_for_new_version)
+    entity = {**DEPRECATED, 'replacement_name': 'Orders', 'version': '1.0.0',
+              'replacement_version': '2.0.0'}
+    sent = _sent(db_session, 'entity_deprecated', entity)
+
+    assert sent.description == (
+        "data_product 'Orders' (version 1.0.0) has been deprecated.\nReason: Superseded\n"
+        "Sunset date: 2026-12-31\nReplacement: Orders (version 2.0.0)"
+    )
+    lines = sent.data['i18n']['descriptionLines']
+    assert (lines[0]['key'], lines[0]['params']) == (
+        'notifications:lifecycle.ownerNotice.deprecatedVersion',
+        {'entity_type': 'data_product', 'entity_name': 'Orders', 'version': '1.0.0'},
+    )
+    assert (lines[-1]['key'], lines[-1]['params']) == (
+        'notifications:lifecycle.ownerNotice.replacementVersion',
+        {'replacementName': 'Orders', 'replacementVersion': '2.0.0', 'replacementId': 'p-2'},
+    )
+    assert _rendered(sent, 'en') == sent.description
+    assert _rendered(sent, 'pt') == (
+        "data_product 'Orders' (versão 1.0.0) foi marcado como obsoleto.\nMotivo: Superseded\n"
+        "Data de desativação: 2026-12-31\nSubstituto: Orders (versão 2.0.0)"
+    )
+    retired = _sent(db_session, 'entity_retired', entity)
+    assert retired.description.splitlines()[0] == (
+        "data_product 'Orders' (version 1.0.0) has been retired."
+    )
 
 
 def test_a_custom_message_replaces_the_lines(db_session):
@@ -121,7 +155,7 @@ def test_a_custom_message_replaces_the_lines(db_session):
 def test_every_language_has_the_lines_with_their_placeholders(lang):
     en, other = _texts('en'), _texts(lang)
     keys = [key for key in en if key.startswith('notifications:lifecycle.ownerNotice.')]
-    assert len(keys) == 3
+    assert len(keys) == 6
     for key in keys:
         assert other.get(key, '').strip(), key
         assert set(PLACEHOLDER.findall(other[key])) == set(PLACEHOLDER.findall(en[key])), key
@@ -137,17 +171,18 @@ def _product(db, **values):
 
 
 def test_the_payload_of_a_deprecation_and_a_retirement(db_session):
-    replacement = _product(db_session, status='active', name='Orders v2')
+    replacement = _product(db_session, status='active', version='2.0.0')
     product = _product(
-        db_session, status='retired', deprecation_reason='Superseded',
+        db_session, status='retired', version='1.0.0', deprecation_reason='Superseded',
         sunset_date=date(2026, 12, 31), replacement_product_id=replacement.id,
     )
 
     for status in ('deprecated', 'retired'):
         assert lifecycle_trigger_data(db_session, 'data_product', product, status) == {
-            'deprecation_reason': 'Superseded', 'sunset_date': '2026-12-31',
+            'version': '1.0.0', 'deprecation_reason': 'Superseded', 'sunset_date': '2026-12-31',
             'replacement_product_id': replacement.id,
-            'replacement_id': replacement.id, 'replacement_name': 'Orders v2',
+            'replacement_id': replacement.id, 'replacement_name': 'Orders',
+            'replacement_version': '2.0.0',
         }
 
 
@@ -167,7 +202,7 @@ def test_a_contract_payload_and_a_missing_replacement(db_session):
     db_session.flush()
 
     assert lifecycle_trigger_data(db_session, 'data_contract', contract, 'deprecated') == {
-        'deprecation_reason': 'Superseded', 'sunset_date': None,
+        'version': '1.0.0', 'deprecation_reason': 'Superseded', 'sunset_date': None,
         'replacement_contract_id': 'gone',
-        'replacement_id': 'gone', 'replacement_name': 'gone',
+        'replacement_id': 'gone', 'replacement_name': 'gone', 'replacement_version': None,
     }

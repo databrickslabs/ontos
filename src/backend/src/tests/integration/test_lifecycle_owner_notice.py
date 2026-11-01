@@ -64,8 +64,11 @@ def _owner_team(db_session):
 def products(db_session):
     team_id = _owner_team(db_session)
     old, new = str(uuid4()), str(uuid4())
-    db_session.add(DataProductDb(id=old, status='active', name='Orders', owner_team_id=team_id))
-    db_session.add(DataProductDb(id=new, status='active', name='Orders v2'))
+    # A new version keeps the name (clone_product_for_new_version)
+    db_session.add(DataProductDb(
+        id=old, status='active', name='Orders', version='1.0.0', owner_team_id=team_id,
+    ))
+    db_session.add(DataProductDb(id=new, status='active', name='Orders', version='2.0.0'))
     db_session.commit()
     return old, new
 
@@ -74,9 +77,9 @@ def products(db_session):
 def contracts(db_session):
     team_id = _owner_team(db_session)
     old, new = str(uuid4()), str(uuid4())
-    for contract_id, name, owner_team in ((old, 'orders', team_id), (new, 'orders_v2', None)):
+    for contract_id, version, owner_team in ((old, '1.0.0', team_id), (new, '2.0.0', None)):
         db_session.add(DataContractDb(
-            id=contract_id, name=name, version='1.0.0', status='active',
+            id=contract_id, name='orders', version=version, status='active',
             version_family_id=contract_id, owner_team_id=owner_team,
         ))
     db_session.commit()
@@ -107,12 +110,12 @@ def _change(client, path, entity_id, new_status, **deprecation):
 DEPRECATION = {'deprecation_reason': 'Superseded by v2', 'sunset_date': SUNSET}
 
 
-@pytest.mark.parametrize('path, entities, entity_type, replacement_name', [
-    ('data-products', 'products', 'data_product', 'Orders v2'),
-    ('data-contracts', 'contracts', 'data_contract', 'orders_v2'),
+@pytest.mark.parametrize('path, entities, entity_type, name', [
+    ('data-products', 'products', 'data_product', 'Orders'),
+    ('data-contracts', 'contracts', 'data_contract', 'orders'),
 ])
 def test_enabled_notices_tell_the_owners_with_reason_sunset_and_replacement(
-    client, db_session, enabled, request, path, entities, entity_type, replacement_name,
+    client, db_session, enabled, request, path, entities, entity_type, name,
 ):
     old, new = request.getfixturevalue(entities)
 
@@ -122,18 +125,22 @@ def test_enabled_notices_tell_the_owners_with_reason_sunset_and_replacement(
     for status in ('deprecated', 'retired'):
         (notice, i18n), = _notices(db_session, status)
         lines = _lines(i18n)
-        assert lines['message'] == {
-            'entity_type': entity_type, 'entity_name': 'orders' if entities == 'contracts'
-            else 'Orders',
+        # Same name, so the versions tell the two apart
+        assert lines[f'{status}Version'] == {
+            'entity_type': entity_type, 'entity_name': name, 'version': '1.0.0',
         }
         assert lines['reason'] == {'reason': 'Superseded by v2'}
         assert lines['sunsetDate'] == {'sunsetDate': SUNSET}
-        assert lines['replacement'] == {'replacementName': replacement_name, 'replacementId': new}
+        assert lines['replacementVersion'] == {
+            'replacementName': name, 'replacementVersion': '2.0.0', 'replacementId': new,
+        }
         assert notice.type == 'warning'
+        assert notice.link == f'/{path}/{new}'
         # The English text, for clients that don't translate
-        assert notice.description.splitlines()[1:] == [
+        assert notice.description.splitlines() == [
+            f"{entity_type} '{name}' (version 1.0.0) has been {status}.",
             'Reason: Superseded by v2', f'Sunset date: {SUNSET}',
-            f'Replacement: {replacement_name}',
+            f'Replacement: {name} (version 2.0.0)',
         ]
 
 
@@ -143,10 +150,13 @@ def test_unset_fields_are_left_out(client, db_session, enabled, products):
     _change(client, 'data-products', old, 'deprecated', deprecation_reason='No longer maintained')
 
     (notice, i18n), = _notices(db_session, 'deprecated')
-    assert list(_lines(i18n)) == ['message', 'reason']
+    assert list(_lines(i18n)) == ['deprecatedVersion', 'reason']
     assert notice.description == (
-        "data_product 'Orders' has been deprecated.\nReason: No longer maintained"
+        "data_product 'Orders' (version 1.0.0) has been deprecated.\n"
+        "Reason: No longer maintained"
     )
+    # No replacement: the product's own page
+    assert notice.link == f'/data-products/{old}'
 
 
 def test_notices_are_off_by_default(client, db_session, defaults, products, contracts):

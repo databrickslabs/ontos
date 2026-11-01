@@ -245,7 +245,10 @@
     "ownerNotice": {
       "reason": "Reden: {{reason}}",
       "sunsetDate": "Einddatum: {{sunsetDate}}",
-      "replacement": "Vervanging: {{replacementName}}"
+      "replacement": "Vervanging: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (versie {{version}}) is als verouderd gemarkeerd.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (versie {{version}}) is buiten gebruik gesteld.",
+      "replacementVersion": "Vervanging: {{replacementName}} (versie {{replacementVersion}})"
     }
   }
 }

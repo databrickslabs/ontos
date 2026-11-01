@@ -27,7 +27,7 @@ function MatchRow({ match, measureName }: { match: MeasureMatch; measureName: st
                 ) : (
                     <span className="font-mono text-xs break-all">{label}</span>
                 )}
-                {match.score !== null && match.verdict !== 'duplicate' && (
+                {match.score !== null && match.score < 1 && (
                     <span className="text-xs text-muted-foreground">
                         {t('similarity', { score: Math.round(match.score * 100) })}
                     </span>

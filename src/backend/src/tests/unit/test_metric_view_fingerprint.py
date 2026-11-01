@@ -296,6 +296,26 @@ def test_count_distinct_vs_count_is_near():
     assert [d['component'] for d in sim['differences']] == ['aggregation']
 
 
+def test_window_join_and_parameter_differences_read_as_text():
+    sim = similarity(_windowed('trailing 30 day'), _windowed('trailing 90 days inclusive'))
+    assert sim['differences'] == [{
+        'component': 'window',
+        'only_a': ['order_date trailing 30 day, semiadditive last'],
+        'only_b': ['order_date trailing 90 day inclusive, semiadditive last'],
+    }]
+    joined = _one("COUNT(DISTINCT customers.id)", joins=_JOINS)
+    other = _one("COUNT(DISTINCT customers.id)",
+                 joins=_JOINS.replace('many_to_one', 'one_to_many'))
+    [diff] = similarity(joined, other)['differences']
+    assert diff['only_a'] == ['main.crm.customers ON customer_id=main.crm.customers.id '
+                              '(many_to_one)']
+    ten = _one("SUM(amount) FILTER (WHERE amount > :min_amount)", parameters=_PARAMS)
+    twenty = _one("SUM(amount) FILTER (WHERE amount > :min_amount)",
+                  parameters=_PARAMS.replace('10', '20'))
+    [diff] = similarity(ten, twenty)['differences']
+    assert (diff['only_a'], diff['only_b']) == (['min_amount int = 10'], ['min_amount int = 20'])
+
+
 def test_identical_measures_score_one():
     assert similarity(_one("SUM(amount)"), _one("sum(amount)")) == {
         'score': 1.0, 'differences': []}

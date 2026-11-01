@@ -578,16 +578,52 @@ def footprints_overlap(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     return False
 
 
+def window_text(window: Dict[str, Any]) -> str:
+    """A window entry as readable text, e.g. ``order_date trailing 30 day, semiadditive last``."""
+    r = window.get('range') or {}
+    if r.get('kind') == 'raw':
+        extent = str(r.get('value') or '')
+    else:
+        extent = ' '.join(str(x) for x in (r.get('kind'), r.get('value'), r.get('unit'))
+                          if x is not None)
+        extent += ' inclusive' if r.get('inclusive') else ''
+    parts = [' '.join(x for x in (window.get('order'), extent) if x)]
+    if window.get('semiadditive'):
+        parts.append(f"semiadditive {window['semiadditive']}")
+    if window.get('offset'):
+        parts.append(f"offset {window['offset']}")
+    return ', '.join(parts)
+
+
+def join_text(join: Dict[str, Any]) -> str:
+    """A join as readable text, e.g. ``main.crm.customers ON a=b (many_to_one)``."""
+    text = join.get('source') or ''
+    if join.get('on'):
+        text += f" ON {join['on']}"
+    if join.get('using'):
+        text += f" USING ({', '.join(join['using'])})"
+    if join.get('cardinality'):
+        text += f" ({join['cardinality']})"
+    return text
+
+
+def parameter_text(parameter: Dict[str, Any]) -> str:
+    """A parameter as readable text, e.g. ``min_amount int = 10``."""
+    head = ' '.join(x for x in (parameter.get('name'), parameter.get('data_type')) if x)
+    return f"{head} = {parameter.get('default')}"
+
+
 def _component_sets(record: Dict[str, Any]) -> Dict[str, Set[str]]:
+    """The normalized components as sets of readable tokens (what a diff shows)."""
     c, f = record['components'], record['footprint']
     return {
         'aggregation': set(f['aggregations']),
         'columns': set(f['base_columns']),
         'source': set(f['source_tables']) or {c['source']},
         'filter': set(c['filter']),
-        'window': {canonical_json(w) for w in c['window']},
-        'joins': {canonical_json(j) for j in c['joins']},
-        'parameters': {canonical_json(p) for p in c['parameters']},
+        'window': {window_text(w) for w in c['window']},
+        'joins': {join_text(j) for j in c['joins']},
+        'parameters': {parameter_text(p) for p in c['parameters']},
     }
 
 

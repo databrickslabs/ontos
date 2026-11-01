@@ -3021,7 +3021,10 @@ POST /mcp
 > that `current_user.me()` returns for that token; the `X-Forwarded-Email`
 > header never names the caller. The tools then apply the caller's Ontos roles
 > like the REST API: a tool that changes data needs the feature level of the
-> matching route, and data products and contracts are returned only when the
+> matching route (and `update_data_product` changes a product's fields only for
+> its owners or a data-products admin, as `PUT /api/data-products/{id}`; each
+> product change is audited under `data-products`), and data products and
+> contracts are returned only when the
 > caller has the feature's Read-only level (data-products, data-contracts) and
 > may read them (published ones, or drafts the caller owns or administers;
 > anything else is answered as not found). `global_search` also keeps only rows

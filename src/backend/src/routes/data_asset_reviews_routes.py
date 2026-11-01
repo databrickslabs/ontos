@@ -463,7 +463,6 @@ async def analyze_asset_with_llm(
     audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
-    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
     """Triggers LLM analysis for a specific asset's content (read as the user)."""
     success = False
@@ -476,6 +475,8 @@ async def analyze_asset_with_llm(
 
     try:
         logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")
+        # Resolved here, not as a dependency, so a refusal is audited like other failures
+        user_client = get_obo_workspace_client(request)
 
         # Extract user token from request headers (Databricks Apps context)
         user_token = request.headers.get("x-forwarded-access-token")

@@ -18,6 +18,7 @@ from src.common.workspace_client import (
     get_obo_workspace_client as REAL_GET_OBO_WORKSPACE_CLIENT,
 )
 from src.models.data_asset_reviews import AssetType
+from src.routes import data_asset_reviews_routes
 
 BASE = '/api/data-asset-reviews/request-1/assets/asset-1'
 CONTENT_ROUTES = [
@@ -34,9 +35,8 @@ def review_manager(client, monkeypatch, test_settings):
     """ENV=PROD, the real on-behalf-of helper, and the review manager's own client as a spy."""
     monkeypatch.setattr(test_settings, 'ENV', 'PROD')
     monkeypatch.setattr(config_module, '_settings', test_settings)
-    monkeypatch.setattr(
-        workspace_client_module, 'get_obo_workspace_client', REAL_GET_OBO_WORKSPACE_CLIENT
-    )
+    for module in (workspace_client_module, data_asset_reviews_routes):
+        monkeypatch.setattr(module, 'get_obo_workspace_client', REAL_GET_OBO_WORKSPACE_CLIENT)
     manager = client.app.state.data_asset_review_manager
     monkeypatch.setattr(manager, '_ws_client', _uc_client('app client'))
     return manager
@@ -116,3 +116,13 @@ def test_the_analysis_reads_the_definition_as_the_user(
     assert response.status_code == 500, response.text
     user_client.tables.get.assert_called_once_with(full_name='main.sales.revenue')
     assert review_manager._ws_client.mock_calls == []
+
+
+def test_a_refused_analysis_is_audited(client, review_manager, monkeypatch, verify_audit_log):
+    _reviewed(monkeypatch, review_manager, AssetType.VIEW)
+
+    response = client.post(f'{BASE}/analyze')
+
+    assert response.status_code == 403, response.text
+    audit = verify_audit_log(feature='data-asset-reviews', action='ANALYZE_ASSET', success=False)
+    assert audit.details['exception']['status_code'] == 403

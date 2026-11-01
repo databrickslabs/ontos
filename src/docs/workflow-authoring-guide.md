@@ -228,7 +228,7 @@ With `require_all: true`, each approver the step resolved when it paused decides
 - the execution stays paused until every approver has approved, then follows `on_pass`;
 - any rejection follows `on_fail` at once;
 - a second decision by the same approver (or by another member of a group that has decided) is refused with `409`, code `approval_already_decided`; the first one stands;
-- an admin who is none of the approvers decides for all those still pending, as admins may act on any approval.
+- only the approvers decide: anyone else, an admin included, is refused with `403`, code `approval_not_an_approver`, and nothing is recorded. An admin who is one of the approvers (or a member of an approver group or role) decides like any other. Without `require_all`, admins may still act on any approval.
 
 The decisions are stored with the step, in the `decisions` list of its step result: `approver`, `role_id`, `decision`, `decided_by`, `decided_at`, `reason`. The approvers and `require_all` are read from when the step paused, so editing the workflow doesn't change approvals already pending. Each approver's notification is marked handled when they decide; the others stay open.
 
@@ -242,7 +242,7 @@ The approval dialog (from the notification) calls `POST /api/workflows/handle-ap
 { "execution_id": "<execution id>", "approved": true, "message": "Looks good" }
 ```
 
-The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role), or an admin. Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step is decided, a second decision gets `404 Execution not found or not in paused state`. The approval notifications of the decided step are marked as handled. With `require_all`, a decision that leaves other approvers pending answers `200` with `status: paused` and `pending_approvers`.
+The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role), or an admin (with `require_all`, admins only when they are one of the approvers, see above). Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step is decided, a second decision gets `404 Execution not found or not in paused state`. The approval notifications of the decided step are marked as handled. With `require_all`, a decision that leaves other approvers pending answers `200` with `status: paused` and `pending_approvers`.
 
 ### Resuming from another system
 

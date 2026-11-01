@@ -355,7 +355,8 @@
     "errors": {
       "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
       "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
-      "approval_already_decided": "Ya has decidido esta aprobación."
+      "approval_already_decided": "Ya has decidido esta aprobación.",
+      "approval_not_an_approver": "Solo los aprobadores de este paso pueden decidirlo."
     },
     "entityTypes": {
       "entity": "Entidad",

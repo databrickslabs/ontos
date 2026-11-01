@@ -355,7 +355,8 @@
     "errors": {
       "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
       "own_change_request_approval": "Sie können Ihre eigene Änderungsanfrage nicht genehmigen.",
-      "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden."
+      "approval_already_decided": "Sie haben über diese Genehmigung bereits entschieden.",
+      "approval_not_an_approver": "Nur die Genehmigenden dieses Schritts können darüber entscheiden."
     },
     "entityTypes": {
       "entity": "Entität",

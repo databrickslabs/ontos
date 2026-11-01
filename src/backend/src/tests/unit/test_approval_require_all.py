@@ -132,7 +132,8 @@ class TestTally:
         assert first['decisions'][0]['key'] == approver_key('o2@x.com', 'br-1') == 'role:br-1'
         assert other_owner['outcome'] == 'already_decided'
 
-    def test_someone_who_is_none_of_them_decides_for_the_rest(self, db_session):
+    def test_someone_who_is_none_of_them_is_refused_and_records_nothing(self, db_session):
+        """Only the resolved approvers decide (e.g. an admin who isn't one)."""
         execution = _paused(db_session, pause_data={
             'require_all': True, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
         })
@@ -140,8 +141,22 @@ class TestTally:
 
         result = _record(db_session, execution, True, user='admin@x.com')
 
-        assert result['outcome'] == 'approved'
-        assert [d['approver'] for d in result['decisions']] == ['a@x.com', 'b@x.com']
+        assert (result['outcome'], result['pending_approvers']) == ('not_an_approver', 1)
+        stored = json.loads(db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution.id,
+        ).one().result_data)
+        assert [d['approver'] for d in stored['decisions']] == ['a@x.com']
+
+    def test_none_of_them_is_refused_before_anyone_decided(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_approvers': _users(('a@x.com', None)),
+        })
+
+        assert _record(db_session, execution, False, user='admin@x.com')['outcome'] == (
+            'not_an_approver')
+        assert 'decisions' not in json.loads(db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution.id,
+        ).one().result_data)
 
     def test_approvals_paused_before_the_upgrade_use_the_notifications(self, db_session):
         execution = _paused(db_session, pause_data={'require_all': True, 'approvers': ['?']})

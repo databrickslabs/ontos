@@ -355,7 +355,8 @@
     "errors": {
       "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
       "own_change_request_approval": "You can't approve your own change request.",
-      "approval_already_decided": "You have already decided this approval."
+      "approval_already_decided": "You have already decided this approval.",
+      "approval_not_an_approver": "Only the approvers of this step can decide it."
     },
     "entityTypes": {
       "entity": "Entity",

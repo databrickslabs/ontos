@@ -1630,6 +1630,15 @@ def _respond_to_pending_approval(
     required: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Answer a require_all decision that doesn't end the step (#1119)."""
+    if required['outcome'] == 'not_an_approver':
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'approval_not_an_approver',
+                'message': "Only the approvers of this step can decide it.",
+            },
+        )
     if required['outcome'] == 'already_decided':
         raise HTTPException(
             status_code=409,
@@ -1727,7 +1736,9 @@ async def handle_workflow_approval(
             user_email=current_user.email if current_user else None,
             reason=message,
         )
-        if required is not None and required['outcome'] in ('pending', 'already_decided'):
+        if required is not None and required['outcome'] in (
+            'pending', 'already_decided', 'not_an_approver',
+        ):
             return _respond_to_pending_approval(
                 db, request, audit_manager, current_user, execution_id, bool(approved),
                 required,

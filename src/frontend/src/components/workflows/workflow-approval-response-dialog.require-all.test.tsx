@@ -91,4 +91,17 @@ describe('WorkflowApprovalResponseDialog with require_all', () => {
     expect(toast.description).toBe('Você já decidiu esta aprovação.');
     expect(toast.variant).toBe('destructive');
   });
+
+  it('translates the refusal of someone who is not one of the approvers', async () => {
+    await i18n.changeLanguage('pt');
+    api.post.mockResolvedValue({
+      data: null, error: 'Only the approvers of this step can decide it.',
+      errorCode: 'approval_not_an_approver',
+    });
+    renderDialog();
+
+    const toast = await approve('Aprovar');
+
+    expect(toast.description).toBe('Somente os aprovadores desta etapa podem decidi-la.');
+  });
 });

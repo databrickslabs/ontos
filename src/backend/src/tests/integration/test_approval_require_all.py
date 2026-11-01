@@ -185,21 +185,23 @@ class TestRequireAll:
 
         assert _decide(client, as_user, EVE, execution_id).status_code == 403
 
-    def test_an_admin_who_is_not_an_approver_decides_the_step(
-        self, client, as_user, db_session,
-    ):
-        """Admins may act on any approval: one who is none of the approvers
-        decides for all those still pending."""
+    def test_an_admin_who_is_not_an_approver_is_refused(self, client, as_user, db_session):
+        """With require_all only the resolved approvers decide; the refusal
+        records nothing (checked in the unit tests: the refused request rolls
+        the test's transaction back)."""
         execution_id = _paused_execution(client, as_user, 'ana@example.com,ben@example.com')
         assert _decide(client, as_user, ANA, execution_id).json()['status'] == 'paused'
 
         response = _decide(client, as_user, ADMIN, execution_id)
 
-        assert response.json()['status'] == 'succeeded'
-        decisions = _approval_records(db_session, execution_id)[-1]['decisions']
-        assert [(d['approver'], d['decided_by']) for d in decisions] == [
-            ('ana@example.com', 'ana@example.com'), ('ben@example.com', 'test@example.com'),
-        ]
+        assert response.status_code == 403
+        assert response.json()['detail']['code'] == 'approval_not_an_approver'
+
+    def test_an_admin_who_is_an_approver_decides(self, client, as_user, db_session):
+        execution_id = _paused_execution(client, as_user, 'ana@example.com,test@example.com')
+        assert _decide(client, as_user, ANA, execution_id).json()['status'] == 'paused'
+
+        assert _decide(client, as_user, ADMIN, execution_id).json()['status'] == 'succeeded'
 
 
 class TestWithoutRequireAll:
@@ -214,3 +216,13 @@ class TestWithoutRequireAll:
         record = _approval_records(db_session, execution_id)[-1]
         assert 'decisions' not in record
         assert _unread_recipients(db_session, execution_id) == set()
+
+    def test_an_admin_who_is_not_an_approver_still_decides(self, client, as_user, db_session):
+        execution_id = _paused_execution(
+            client, as_user, 'ana@example.com,ben@example.com', require_all=False,
+        )
+
+        response = _decide(client, as_user, ADMIN, execution_id)
+
+        assert response.status_code == 200, response.text
+        assert response.json()['status'] == 'succeeded'

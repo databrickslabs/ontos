@@ -355,7 +355,8 @@
     "errors": {
       "own_owner_approval": "Questa approvazione spetta ai proprietari; non puoi approvare la tua stessa richiesta.",
       "own_change_request_approval": "Non puoi approvare la tua stessa richiesta di modifica.",
-      "approval_already_decided": "Hai già deciso su questa approvazione."
+      "approval_already_decided": "Hai già deciso su questa approvazione.",
+      "approval_not_an_approver": "Solo gli approvatori di questo passaggio possono decidere."
     },
     "entityTypes": {
       "entity": "Entità",

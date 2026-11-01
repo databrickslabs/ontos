@@ -3005,17 +3005,19 @@ class WorkflowExecutor:
 
         Each approver resolved when the step paused decides once: a user for
         themselves, any one member for a group or role. ``decides_for(approver,
-        role_id)`` tells which of them the caller decides for; a caller who is
-        none of them (an admin acting on any approval) decides for all those
-        still pending. The decisions are stored with the step's pause record.
+        role_id)`` tells which of them the caller decides for. Only they
+        decide: a caller who is none of them (an admin, who may act on any
+        approval without ``require_all``) is refused. The decisions are stored
+        with the step's pause record.
 
         Returns None when the execution isn't paused at an approval step with
         ``require_all`` (the decision resumes it, as before). Otherwise a dict
         with ``outcome``: ``rejected`` (any rejection fails the step),
         ``approved`` (every approver approved), ``pending`` (others still have
-        to decide) or ``already_decided`` (nothing the caller decides for is
-        pending; nothing is recorded); ``pending_approvers`` (how many) and
-        ``decisions``.
+        to decide), ``already_decided`` (nothing the caller decides for is
+        pending) or ``not_an_approver`` (the caller is none of the approvers);
+        nothing is recorded for the last two. Also ``pending_approvers`` (how
+        many) and ``decisions``.
         """
         execution = self._db.query(WorkflowExecutionDb).filter(
             WorkflowExecutionDb.id == execution_id,
@@ -3059,12 +3061,10 @@ class WorkflowExecutor:
         for approver, role_id in resolved:
             if decides_for(approver, role_id):
                 mine.setdefault(approver_key(approver, role_id), (approver, role_id))
-        if not mine:
-            mine = {k: a for k, a in approvers.items() if k not in decided}
         new = {k: a for k, a in mine.items() if k not in decided}
         if not new:
             return {
-                'outcome': 'already_decided',
+                'outcome': 'already_decided' if mine else 'not_an_approver',
                 'pending_approvers': len([k for k in approvers if k not in decided]),
                 'decisions': decisions,
             }

@@ -72,6 +72,11 @@ interface CommonProps {
   /** Optional aria-label when no surrounding <Label htmlFor=...> exists. */
   'aria-label'?: string;
   className?: string;
+  /**
+   * Value emitted for a principal picked from the directory. Defaults to
+   * its id; the Workflow Designer prefixes groups (``group:<name>``).
+   */
+  pickValue?: (p: Principal) => string;
 }
 
 type SingleProps = CommonProps & {
@@ -91,6 +96,8 @@ export type PrincipalPickerProps = SingleProps | MultiProps;
 // ----- helpers ----------------------------------------------------------------
 
 const DEFAULT_ACCEPTS: PrincipalKind[] = ['user', 'group'];
+
+const principalId = (p: Principal) => p.id;
 
 const ICON_FOR_TYPE: Record<PrincipalType, typeof User> = {
   user: User,
@@ -122,6 +129,7 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
     placeholder,
     className,
     multiple,
+    pickValue = principalId,
   } = props as PrincipalPickerProps & { multiple?: boolean };
   const { t } = useTranslation('common');
   const inputId = useId();
@@ -143,8 +151,8 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
   // underlying value is just the id string. Pre-existing values are NOT
   // resolved against the directory -- they render as plain badges.
   const [resolved, setResolved] = useState<Record<string, Principal>>({});
-  const remember = useCallback((p: Principal) => {
-    setResolved((prev) => (prev[p.id] ? prev : { ...prev, [p.id]: p }));
+  const remember = useCallback((key: string, p: Principal) => {
+    setResolved((prev) => (prev[key] ? prev : { ...prev, [key]: p }));
   }, []);
 
   // Normalise value to an array for the internal selection list.
@@ -174,11 +182,12 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
 
   const addPrincipal = useCallback(
     (p: Principal) => {
-      if (selectedIds.includes(p.id)) return;
-      remember(p);
-      emit(multiple ? [...selectedIds, p.id] : [p.id]);
+      const value = pickValue(p);
+      if (selectedIds.includes(value)) return;
+      remember(value, p);
+      emit(multiple ? [...selectedIds, value] : [value]);
     },
-    [selectedIds, multiple, emit, remember],
+    [selectedIds, multiple, emit, remember, pickValue],
   );
 
   const addManual = useCallback(
@@ -219,6 +228,7 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
             disabled={disabled}
             accepts={accepts}
             selectedIds={selectedIds}
+            pickValue={pickValue}
             onPick={addPrincipal}
             onSearchFail={markDegraded}
             ariaLabel={props['aria-label']}
@@ -252,6 +262,7 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
           onOpenChange={setDialogOpen}
           accepts={accepts}
           selectedIds={selectedIds}
+          pickValue={pickValue}
           onPick={(p) => {
             addPrincipal(p);
             if (!multiple) setDialogOpen(false);
@@ -328,6 +339,7 @@ interface ConfiguredInputProps {
   disabled?: boolean;
   accepts: PrincipalKind[];
   selectedIds: string[];
+  pickValue: (p: Principal) => string;
   onPick: (p: Principal) => void;
   onSearchFail: () => void;
   ariaLabel?: string;
@@ -339,6 +351,7 @@ function ConfiguredInput({
   disabled,
   accepts,
   selectedIds,
+  pickValue,
   onPick,
   onSearchFail,
   ariaLabel,
@@ -360,8 +373,8 @@ function ConfiguredInput({
   });
 
   const visible = useMemo(
-    () => results.filter((p) => !selectedIds.includes(p.id)),
-    [results, selectedIds],
+    () => results.filter((p) => !selectedIds.includes(pickValue(p))),
+    [results, selectedIds, pickValue],
   );
 
   // Derived open state -- no effect needed. Once the debounced query
@@ -508,6 +521,7 @@ interface PrincipalPickerDialogProps {
   onOpenChange: (open: boolean) => void;
   accepts: PrincipalKind[];
   selectedIds: string[];
+  pickValue: (p: Principal) => string;
   onPick: (p: Principal) => void;
   onSearchFail: () => void;
 }
@@ -517,6 +531,7 @@ function PrincipalPickerDialog({
   onOpenChange,
   accepts,
   selectedIds,
+  pickValue,
   onPick,
   onSearchFail,
 }: PrincipalPickerDialogProps) {
@@ -542,7 +557,7 @@ function PrincipalPickerDialog({
     onOpenChange(next);
   };
 
-  const visible = results.filter((p) => !selectedIds.includes(p.id));
+  const visible = results.filter((p) => !selectedIds.includes(pickValue(p)));
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

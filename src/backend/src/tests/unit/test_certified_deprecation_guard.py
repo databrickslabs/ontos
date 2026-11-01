@@ -8,6 +8,7 @@
   and not by the requester.
 - A stored switch that can't be read leaves the guard on.
 - Only the move to ``deprecated`` is guarded.
+- A transition closes the open requests with its own status write.
 """
 import os
 
@@ -28,10 +29,13 @@ from src.controller.certified_deprecation_guard import (
     CertifiedDeprecationApprovalRefusedError,
     CertifiedDeprecationRequiresApprovalError,
     approved_status_change,
+    close_open_requests,
     eligible_approver,
+    pending_request_id,
     workflow_approval_refusal,
     guard_exemptions,
 )
+from src.controller.change_log_manager import change_log_manager
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_contracts import DataContractDb
@@ -248,3 +252,24 @@ def test_only_the_move_to_deprecated_is_guarded(products, db_session, audited):
 
     assert _status(db_session, DataProductDb, product.id) == 'retired'
     assert audited == []
+
+
+def test_a_transition_closes_the_open_requests_with_its_status_write(db_session):
+    product = _product(db_session)
+    change_log_manager.log_change_with_details(
+        db_session, entity_type='data_product', entity_id=product.id,
+        action='status_change_requested', username='requester@example.com',
+        details={'request_id': 'r1', 'from_status': 'active', 'target_status': 'deprecated'},
+    )
+    assert pending_request_id(db_session, 'data_product', product.id) == 'r1'
+
+    # The status write fails after the gates: the request stays open
+    failed_write = db_session.begin_nested()
+    close_open_requests(db_session, 'data_product', product.id, 'retired', 'someone')
+    failed_write.rollback()
+    assert pending_request_id(db_session, 'data_product', product.id) == 'r1'
+
+    # It succeeds: the closure is committed with it
+    close_open_requests(db_session, 'data_product', product.id, 'retired', 'someone')
+    db_session.commit()
+    assert pending_request_id(db_session, 'data_product', product.id) is None

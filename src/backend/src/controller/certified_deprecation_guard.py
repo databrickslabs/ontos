@@ -220,17 +220,30 @@ def request_is_closed(
 
 def close_request(
     db: Session, entity_type: str, entity_id: str, request_id: Optional[str],
-    outcome: str, username: Optional[str],
+    outcome: str, username: Optional[str], commit: bool = True,
 ) -> None:
-    """Record that a status change request ended (``outcome``: approve, deny, transition...)."""
+    """Record that a status change request ended (``outcome``: approve, deny, transition...).
+
+    With ``commit=False`` the entry is only flushed, so it is committed (or
+    rolled back) with the caller's transaction.
+    """
     if not request_id:
+        return
+    details = {'request_id': request_id, 'outcome': outcome}
+    if not commit:
+        from src.db_models.change_log import ChangeLogDb
+
+        db.add(ChangeLogDb(
+            entity_type=entity_type, entity_id=entity_id, action=REQUEST_CLOSED,
+            username=username or 'system', details_json=json.dumps(details),
+        ))
+        db.flush()
         return
     from src.controller.change_log_manager import change_log_manager
 
     change_log_manager.log_change_with_details(
         db, entity_type=entity_type, entity_id=entity_id, action=REQUEST_CLOSED,
-        username=username or 'system',
-        details={'request_id': request_id, 'outcome': outcome},
+        username=username or 'system', details=details,
     )
 
 
@@ -241,7 +254,9 @@ def close_open_requests(
 
     Called by ``run_status_gates`` once the gates passed: a request made from
     the status the entity is leaving can no longer be approved, even if the
-    entity later returns to that status. Never raises.
+    entity later returns to that status. The entries are not committed here:
+    they land with the status write, and a failed write leaves the requests
+    open. Never raises.
     """
     try:
         closed = _closed_request_ids(db, entity_type, entity_id)
@@ -250,6 +265,7 @@ def close_open_requests(
             if request_id and request_id not in closed:
                 close_request(
                     db, entity_type, entity_id, request_id, f'transition:{to_status}', username,
+                    commit=False,
                 )
                 closed.add(request_id)
     except Exception as e:  # The bookkeeping must never stop a transition

@@ -419,6 +419,10 @@ def run_policy(
         print(f"  Passed: {run.success_count}")
         print(f"  Failed: {run.failure_count}")
         print(f"  Score: {run.score}%")
+        # A succeeded run keeps its warning code (e.g. no_entities_matched) in
+        # error_code; it is shown here and does not fail the job
+        if run.status == 'succeeded' and run.error_code:
+            print(f"  Warning: {run.error_code}")
 
         return {
             "policy_id": policy['id'],

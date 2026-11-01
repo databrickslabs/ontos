@@ -140,8 +140,8 @@ def _policy(db, rule):
     return policy
 
 
-def _run(db, policy):
-    iterator = MagicMock(**{'iterate.return_value': iter([])})
+def _run(db, policy, entities=()):
+    iterator = MagicMock(**{'iterate.return_value': iter(entities)})
     with patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator), \
             patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()):
         return ComplianceManager().run_policy_inline(db, policy=policy)
@@ -163,7 +163,9 @@ def test_a_stored_rule_with_trailing_input_still_runs_and_the_run_has_a_warning(
 
 
 def test_a_complete_rule_has_no_run_warning(db_session):
-    run = _run(db_session, _policy(db_session, COMPLETE))
+    # With an entity: a run that matches none has the no_entities_matched warning
+    table = {'type': 'table', 'id': 'main.s.x', 'name': 'x'}
+    run = _run(db_session, _policy(db_session, COMPLETE), entities=[table])
 
     assert run.status == 'succeeded'
     assert run.error_code is None and run.error_params is None

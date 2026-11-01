@@ -216,7 +216,8 @@
     "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it.",
     "notifications_failed": "The policy's notifications (NOTIFY) could not be sent for this run. The results are complete.",
     "llm_check_budget_exceeded": "{{count}} LLM checks were not run because the run reached its budget of {{budget}} model calls, so those entities failed. Run it again (cached verdicts don't count) or raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN.",
-    "llm_check_daily_quota_exceeded": "{{count}} LLM checks were not run because you used your {{limit}} model calls for today, so those entities failed. Run it again tomorrow (cached verdicts don't count) or ask an admin to raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY."
+    "llm_check_daily_quota_exceeded": "{{count}} LLM checks were not run because you used your {{limit}} model calls for today, so those entities failed. Run it again tomorrow (cached verdicts don't count) or ask an admin to raise COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY.",
+    "no_entities_matched": "No entities matched this rule, so nothing was checked. Check its MATCH type and WHERE condition."
   },
   "actionOutcomes": {
     "status": {

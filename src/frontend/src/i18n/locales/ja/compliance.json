@@ -216,7 +216,8 @@
     "rule_trailing_input": "このルールには無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。実行時には無視されるため、ルールは記述より少ない内容しか検査しない可能性があります。ルールを編集して修正してください。",
     "notifications_failed": "この実行ではポリシーの通知 (NOTIFY) を送信できませんでした。結果はすべて記録されています。",
     "llm_check_budget_exceeded": "実行がモデル呼び出しの上限 ({{budget}} 回) に達したため、{{count}} 件の LLM チェックが実行されず、それらのエンティティは失敗になりました。もう一度実行する (キャッシュ済みの判定は数えられません) か、COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN を引き上げてください。",
-    "llm_check_daily_quota_exceeded": "本日のモデル呼び出し {{limit}} 回を使い切ったため、{{count}} 件の LLM チェックが実行されず、それらのエンティティは不合格になりました。明日もう一度実行するか (キャッシュされた判定はカウントされません)、管理者に COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY を引き上げるよう依頼してください。"
+    "llm_check_daily_quota_exceeded": "本日のモデル呼び出し {{limit}} 回を使い切ったため、{{count}} 件の LLM チェックが実行されず、それらのエンティティは不合格になりました。明日もう一度実行するか (キャッシュされた判定はカウントされません)、管理者に COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_USER_PER_DAY を引き上げるよう依頼してください。",
+    "no_entities_matched": "このルールに一致するエンティティがないため、何も検査されませんでした。MATCH の型と WHERE 条件を確認してください。"
   },
   "actionOutcomes": {
     "status": {

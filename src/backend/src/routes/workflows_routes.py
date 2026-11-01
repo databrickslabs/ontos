@@ -211,13 +211,13 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
     "on_request_deploy": ["data_contract"],
+    "on_request_definition_change": ["metric_view"],
     "on_request_certify": ["data_contract", "data_product"],
     # Concept curation: ontology_concept = single-concept Request Revision / review
     # ping-pong (P2). concept_changeset (bulk RDF upload gate, P3) is intentionally
     # NOT selectable — Scenario D (2026-08-18) disabled the gate; all file uploads
     # land as Draft and follow per-concept review. Re-add if gating is re-opened.
     "on_request_status_change": ["data_product", "data_contract", "ontology_concept"],
-    "on_request_definition_change": ["metric_view"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],

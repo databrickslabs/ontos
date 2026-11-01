@@ -111,7 +111,8 @@ export default function ProposeMetricViewChangeDialog({
                             aria-describedby={error ? 'mv-change-error' : undefined}
                         />
                         {error && (
-                            <p id="mv-change-error" role="alert" className="text-sm text-destructive">
+                            <p id="mv-change-error" role="alert"
+                                className="text-sm text-destructive">
                                 {text(error.code, error.message, error.params)}
                             </p>
                         )}

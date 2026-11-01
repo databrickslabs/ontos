@@ -15,7 +15,9 @@ import { useChangeRequestText } from './metric-view-change-request-text';
 
 const PREFIX = 'detail.metricView.changeRequests';
 
-const STATUS_VARIANT: Record<MetricViewChangeRequestStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+
+const STATUS_VARIANT: Record<MetricViewChangeRequestStatus, BadgeVariant> = {
     draft: 'outline',
     in_review: 'secondary',
     approved: 'secondary',
@@ -86,7 +88,8 @@ function RequestItem({ request, isRequester, canWrite, onAction }: {
             {request.warnings.length > 0 && (
                 <ul className="space-y-0.5">
                     {request.warnings.map((w, i) => (
-                        <li key={`${w.code}-${i}`} className="flex items-start gap-1 text-amber-700">
+                        <li key={`${w.code}-${i}`}
+                            className="flex items-start gap-1 text-amber-700">
                             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
                             {text(w.code, w.message, w.params)}
                         </li>
@@ -166,7 +169,8 @@ export default function MetricViewChangeRequests({ assetId, currentDefinition }:
     return (
         <section className="mt-4 space-y-2" aria-labelledby="mv-change-requests-title">
             <div className="flex items-center justify-between">
-                <h4 id="mv-change-requests-title" className="flex items-center gap-1 text-sm font-medium">
+                <h4 id="mv-change-requests-title"
+                    className="flex items-center gap-1 text-sm font-medium">
                     <GitPullRequest className="h-4 w-4" aria-hidden />
                     {t(`${PREFIX}.title`)}
                 </h4>

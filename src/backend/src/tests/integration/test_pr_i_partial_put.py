@@ -53,8 +53,7 @@ class TestPartialPutPreservesUnmodifiedFields:
         }
         resp = client.post("/api/data-products", json=product_payload)
         assert resp.status_code == 201, resp.text
-        # POST/PUT answer with the model's snake_case aliases; GET is the
-        # read path, so every field assertion below reads the product with GET.
+        # Every field assertion below reads the product with GET.
         return product_payload, self._get(client, product_payload["id"])
 
     @staticmethod

@@ -192,7 +192,7 @@ For some trigger and entity type pairs, `GET /api/workflows/template-vars?trigge
 
 ## Recipients and Approvers
 
-Notification `recipients` and approval `approvers` take one of these values, or several separated by commas:
+Notification `recipients` and approval `approvers` take one of these values, or several separated by commas. The explicit forms (`user:<x>`, an email, an app role id, `group:<name>`) are read first, so a group or user named like a token below (`reviewer`, `admins`) is that principal, not the token:
 
 | Value | Resolves to |
 |--|--|
@@ -205,6 +205,10 @@ Notification `recipients` and approval `approvers` take one of these values, or 
 | An app role name or id | Everyone in that role's groups (case, spaces and underscores are ignored in names) |
 | `business:<role id>` | The users holding that business role for the entity |
 | An email, or `user:<email>` | That user |
+| `group:<name>` | The members of that directory group (the designer saves picked groups this way) |
+| `reviewer` | The reviewer chosen by the requester (`reviewer_email`), else the Admin role |
+
+A bare group name (saved before the designer added the prefix) still reaches the group's members, unless it matches a token or an app role name.
 
 **A value that matches nothing is used as written**: `data_stewardz` creates a notification addressed to `data_stewardz`, which nobody sees, and the step passes. Check the `recipients` / `approvers` in the step's result data after a test run (see [Debugging](#debugging-recent-executions)).
 

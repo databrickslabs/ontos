@@ -11,6 +11,7 @@ Handles step-by-step execution with branching, including:
 """
 
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -460,6 +461,15 @@ def _owner_approvers(
     )
 
 
+# Explicit principal forms in an approvers / recipients spec (see
+# ``_resolve_role_to_users``)
+_USER_PREFIX = 'user:'
+_GROUP_PREFIX = 'group:'
+_UUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
 def _resolve_role_to_users(
     db: Session,
     role_spec: str,
@@ -467,16 +477,24 @@ def _resolve_role_to_users(
 ) -> List[tuple]:
     """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
 
-    Handles:
+    Explicit forms are resolved first, so a principal named like a token or a
+    role (a group called 'reviewer' or 'admins') is never read as one:
+    - 'user:<x>' → the user ``x`` as written
+    - 'user@email.com' → direct email
+    - '<uuid>' of an app role → that role
+    - 'group:<name>' → the group ``name`` (what the Workflow Designer's
+      PrincipalPicker emits for a group)
+
+    Then:
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
     - 'reviewer' → entity reviewer_email (falls back to the Admin role)
     - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
-    - '<uuid>' → app role UUID
-    - 'user@email.com' → direct email
     - Legacy aliases like 'data_stewards', 'admins', etc.
+    - Any other name: an app role id or name, else the name as written (a bare
+      group name, as stored before the picker sent the prefix)
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -504,6 +522,23 @@ def _resolve_role_to_users(
                     seen.add(key)
                     out.append((identifier, role_uuid))
         return out
+
+    if role_spec.startswith(_USER_PREFIX):
+        user = role_spec[len(_USER_PREFIX):].strip()
+        return [(user, None)] if user else []
+
+    if '@' in role_spec:
+        # Pre-comma-split single email -- treat as a direct recipient.
+        return [(role_spec, None)]
+
+    if _UUID_RE.match(role_spec):
+        role_by_id = db.query(AppRoleDb).filter(AppRoleDb.id == role_spec).first()
+        if role_by_id:
+            return [(role_by_id.name, role_by_id.id)]
+
+    if role_spec.startswith(_GROUP_PREFIX):
+        group = role_spec[len(_GROUP_PREFIX):].strip()
+        return [(group, None)] if group else []
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
@@ -552,14 +587,6 @@ def _resolve_role_to_users(
                 if r.name.lower().replace(' ', '') == normalized:
                     return [(r.name, r.id)]
         return [(role_name, role.id if role else None)]
-
-    # Strip "user:" prefix emitted by the PrincipalPicker (e.g. "user:foo@bar.com").
-    if role_spec.startswith('user:'):
-        role_spec = role_spec[len('user:'):]
-
-    if '@' in role_spec:
-        # Pre-comma-split single email -- treat as a direct recipient.
-        return [(role_spec, None)]
 
     # Business role: prefixed with "business:"
     if role_spec.startswith('business:'):

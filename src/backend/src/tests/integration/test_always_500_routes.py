@@ -38,7 +38,9 @@ class TestCreateProductFromContract:
         body = response.json()
         assert body["name"] == "Orders Product"
         assert body["status"] == "draft"
-        assert [p["contract_id"] for p in body["output_ports"]] == [contract.id]
+        # Key format of the write routes is changing (#1238); accept either
+        ports = body.get("outputPorts") or body.get("output_ports")
+        assert [p.get("contractId") or p.get("contract_id") for p in ports] == [contract.id]
 
     def test_product_type_from_older_clients_is_accepted_and_ignored(self, client, db_session):
         contract = _contract(db_session, "approved")
@@ -60,6 +62,22 @@ class TestCreateProductFromContract:
         response = _from_contract(client, str(uuid.uuid4()))
 
         assert response.status_code == 400
+
+    def test_an_unexpected_error_answers_500_without_its_text(
+        self, client, db_session, monkeypatch,
+    ):
+        from src.controller.data_products_manager import DataProductsManager
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("internal detail")
+
+        monkeypatch.setattr(DataProductsManager, "create_from_contract", boom)
+        contract = _contract(db_session, "active")
+
+        response = _from_contract(client, contract.id)
+
+        assert response.status_code == 500
+        assert "internal detail" not in response.text
 
 
 @pytest.fixture

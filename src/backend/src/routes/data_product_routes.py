@@ -1124,9 +1124,9 @@ async def create_product_from_contract(
         raise HTTPException(status_code=400, detail="Invalid contract data for product creation")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception(f"Error creating product from contract {contract_id}")
-        raise HTTPException(status_code=500, detail=f"Failed to create product from contract: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create product from contract")
 
 
 @router.get('/data-products/by-contract/{contract_id}', response_model=List[DataProduct])

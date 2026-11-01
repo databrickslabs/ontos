@@ -275,9 +275,16 @@ class TestMcpUpdateTools:
             data_products_manager=product_manager, data_contracts_manager=contract_manager,
         )
 
-    def test_a_product_status_change_is_a_transition(self, product_manager, db_session):
+    def test_a_product_status_change_is_a_transition(
+        self, product_manager, db_session, monkeypatch
+    ):
         import asyncio
+        from src.controller import audit_manager
         from src.tools.data_products import UpdateDataProductTool
+
+        # The tool's audit entry is written in its own session, whose commit
+        # would commit this test's rows on the shared in-memory connection.
+        monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
         pid = _product(db_session, status='draft')
         result = asyncio.run(UpdateDataProductTool().execute(

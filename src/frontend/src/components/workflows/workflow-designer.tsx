@@ -2524,15 +2524,41 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           </>
                         );
                       })()}
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          id="approval-require-all"
+                          className="mt-0.5"
+                          checked={Boolean(
+                            (selectedStep.config as { require_all?: boolean })?.require_all,
+                          )}
+                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, require_all: checked === true },
+                          })}
+                        />
+                        <div className="flex flex-col">
+                          <Label htmlFor="approval-require-all" className="text-sm">
+                            {t('workflows:designer.approval.requireAll')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('workflows:designer.approval.requireAllHelp')}
+                          </p>
+                        </div>
+                      </div>
                       <div>
-                        <Label>{t('workflows:designer.approval.timeoutDays')}</Label>
+                        <Label htmlFor="approval-timeout-days">
+                          {t('workflows:designer.approval.timeoutDays')}
+                        </Label>
                         <Input
+                          id="approval-timeout-days"
                           type="number"
                           value={(selectedStep.config as { timeout_days?: number })?.timeout_days || 7}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
+                          onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, timeout_days: parseInt(e.target.value) }
                           })}
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutNotEnforced')}
+                        </p>
                       </div>
                     </>
                   )}

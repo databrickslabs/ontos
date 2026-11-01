@@ -15,7 +15,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -205,6 +205,11 @@ class StepHandler(ABC):
 
 # Step error code of an approval rejected without a reason
 APPROVAL_REJECTED = 'approval_rejected'
+
+
+def approver_key(approver: str, role_id: Optional[str]) -> str:
+    """Identifies one resolved approver of an approval step (#1119)."""
+    return f"role:{role_id}" if role_id else f"principal:{str(approver).strip().lower()}"
 
 
 class _ReviewStepRefused(Exception):
@@ -926,6 +931,10 @@ class ApprovalStepHandler(StepHandler):
                 message=f"Approval requested from: {', '.join(a[0] for a in resolved_approvers)}",
                 data={
                     'approvers': [a[0] for a in resolved_approvers],
+                    # With require_all, each of them decides once (#1119)
+                    'resolved_approvers': [
+                        {'approver': a[0], 'role_id': a[1]} for a in resolved_approvers
+                    ],
                     'timeout_days': timeout_days,
                     'require_all': require_all,
                     'status': 'pending',
@@ -2921,6 +2930,167 @@ class WorkflowExecutor:
         db_execution = workflow_execution_repo.get(self._db, db_execution.id)
         return self._db_to_model(db_execution, workflow.name)
 
+    def _approval_pause_record(self, execution_id: str, step: Any) -> Optional[Any]:
+        """The step execution recorded when the execution paused at ``step``.
+
+        Holds the step's data at that time (approvers, ``require_all``) and,
+        with ``require_all``, the decisions so far. The latest one, in case
+        the workflow came back to the same step.
+        """
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        return self._db.query(WorkflowStepExecutionDb).filter(
+            WorkflowStepExecutionDb.execution_id == execution_id,
+            (WorkflowStepExecutionDb.step_key == step.step_id)
+            | (WorkflowStepExecutionDb.step_id == step.id),
+        ).order_by(
+            WorkflowStepExecutionDb.started_at.desc(), WorkflowStepExecutionDb.id.desc(),
+        ).first()
+
+    def _required_approvers(
+        self, execution_id: str, step_key: str, pause_data: Dict[str, Any],
+    ) -> List[Tuple[str, Optional[str]]]:
+        """The approvers resolved when the step paused: (identifier, role id).
+
+        Approvals paused before they recorded them fall back to the step's
+        approval notifications, one per resolved approver.
+        """
+        stored = pause_data.get('resolved_approvers')
+        if isinstance(stored, list) and stored:
+            return [
+                (str(a.get('approver')), a.get('role_id'))
+                for a in stored if isinstance(a, dict) and a.get('approver')
+            ]
+        from src.db_models.notifications import NotificationDb
+
+        approvers: List[Tuple[str, Optional[str]]] = []
+        for row in self._db.query(NotificationDb).filter(
+            NotificationDb.action_type == 'workflow_approval',
+            NotificationDb.action_payload.contains(json.dumps(execution_id)),
+        ).all():
+            try:
+                payload = json.loads(row.action_payload or '{}')
+            except (TypeError, ValueError):
+                continue
+            if payload.get('execution_id') != execution_id:
+                continue
+            if payload.get('step_id') not in (None, step_key):
+                continue
+            if row.recipient or row.recipient_role_id:
+                entry = (row.recipient or row.recipient_role_id, row.recipient_role_id)
+                if entry not in approvers:
+                    approvers.append(entry)
+        return approvers
+
+    def _stored_decisions(self, execution_id: str, step: Any) -> List[Dict[str, Any]]:
+        """The decisions recorded on a require_all approval step so far."""
+        record = self._approval_pause_record(execution_id, step)
+        try:
+            data = json.loads(record.result_data) if record and record.result_data else {}
+        except (TypeError, ValueError):
+            return []
+        decisions = data.get('decisions') if isinstance(data, dict) else None
+        return [d for d in decisions if isinstance(d, dict)] if isinstance(decisions, list) else []
+
+    def record_required_approval(
+        self,
+        execution_id: str,
+        approved: bool,
+        *,
+        decides_for: Callable[[str, Optional[str]], bool],
+        user_email: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Record a decision on a ``require_all`` approval step (#1119).
+
+        Each approver resolved when the step paused decides once: a user for
+        themselves, any one member for a group or role. ``decides_for(approver,
+        role_id)`` tells which of them the caller decides for; a caller who is
+        none of them (an admin acting on any approval) decides for all those
+        still pending. The decisions are stored with the step's pause record.
+
+        Returns None when the execution isn't paused at an approval step with
+        ``require_all`` (the decision resumes it, as before). Otherwise a dict
+        with ``outcome``: ``rejected`` (any rejection fails the step),
+        ``approved`` (every approver approved), ``pending`` (others still have
+        to decide) or ``already_decided`` (nothing the caller decides for is
+        pending; nothing is recorded); ``pending_approvers`` (how many) and
+        ``decisions``.
+        """
+        execution = self._db.query(WorkflowExecutionDb).filter(
+            WorkflowExecutionDb.id == execution_id,
+        ).with_for_update().first()
+        if execution is None or execution.status != 'paused' or not execution.current_step_id:
+            return None
+        step = self._db.query(WorkflowStepDb).filter(
+            WorkflowStepDb.workflow_id == execution.workflow_id,
+            WorkflowStepDb.step_id == execution.current_step_id,
+        ).first()
+        if step is None or step.step_type != 'approval':
+            return None
+        record = self._approval_pause_record(execution_id, step)
+        if record is None:
+            return None
+        try:
+            data = json.loads(record.result_data) if record.result_data else {}
+        except (TypeError, ValueError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if 'require_all' in data:
+            require_all = data.get('require_all')
+        else:
+            try:
+                require_all = (json.loads(step.config or '{}') or {}).get('require_all')
+            except (TypeError, ValueError):
+                require_all = False
+        if require_all is not True and str(require_all).strip().lower() != 'true':
+            return None
+
+        # One entry per approver: the owners of a business role share its id,
+        # so any one of them decides for the role
+        resolved = self._required_approvers(execution_id, step.step_id, data)
+        approvers: Dict[str, Tuple[str, Optional[str]]] = {}
+        for approver, role_id in resolved:
+            approvers.setdefault(approver_key(approver, role_id), (approver, role_id))
+        decisions = [d for d in (data.get('decisions') or []) if isinstance(d, dict)]
+        decided = {d.get('key') for d in decisions}
+        mine: Dict[str, Tuple[str, Optional[str]]] = {}
+        for approver, role_id in resolved:
+            if decides_for(approver, role_id):
+                mine.setdefault(approver_key(approver, role_id), (approver, role_id))
+        if not mine:
+            mine = {k: a for k, a in approvers.items() if k not in decided}
+        new = {k: a for k, a in mine.items() if k not in decided}
+        if not new:
+            return {
+                'outcome': 'already_decided',
+                'pending_approvers': len([k for k in approvers if k not in decided]),
+                'decisions': decisions,
+            }
+        now = datetime.utcnow().isoformat()
+        for k, (approver, role_id) in new.items():
+            decisions.append({
+                'key': k,
+                'approver': approver,
+                'role_id': role_id,
+                'decision': 'approved' if approved else 'rejected',
+                'decided_by': user_email,
+                'decided_at': now,
+                'reason': reason,
+            })
+            decided.add(k)
+        pending = [k for k in approvers if k not in decided]
+        record.result_data = json.dumps({**data, 'decisions': decisions})
+        self._db.add(record)
+        self._db.flush()
+        outcome = 'rejected' if not approved else ('pending' if pending else 'approved')
+        logger.info(
+            "Approval of execution %s recorded for %d approver(s): %s, %d pending",
+            execution_id, len(new), outcome, len(pending),
+        )
+        return {'outcome': outcome, 'pending_approvers': len(pending), 'decisions': decisions}
+
     def resume_workflow(
         self,
         execution_id: str,
@@ -2972,8 +3142,10 @@ class WorkflowExecutor:
         
         current_step = steps_by_id[current_step_id]
         
-        # Record the approval result for the paused step
+        # Record the approval result for the paused step, with the decisions
+        # of a require_all step (#1119)
         denied_without_reason = not step_result and not (result_data or {}).get('reason')
+        decisions = self._stored_decisions(execution_id, current_step)
         workflow_execution_repo.add_step_execution(
             self._db,
             execution_id=execution_id,
@@ -2986,6 +3158,7 @@ class WorkflowExecutor:
                 'approval_result': 'approved' if step_result else 'rejected',
                 'responded_by': user_email,
                 **(result_data or {}),
+                **({'decisions': decisions} if decisions else {}),
                 # A rejection without a reason: the UI translates the code,
                 # the English text stays in error_message
                 **(

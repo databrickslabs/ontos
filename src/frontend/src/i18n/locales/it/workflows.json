@@ -216,7 +216,10 @@
       "approversRole": "Approvatori (ruolo)",
       "selectRole": "Seleziona ruolo",
       "additionalApproversAria": "Approvatori aggiuntivi",
-      "timeoutDays": "Timeout (giorni)"
+      "timeoutDays": "Timeout (giorni)",
+      "requireAll": "Richiedi tutti gli approvatori",
+      "requireAllHelp": "Ogni approvatore decide: un utente per sé, un qualsiasi membro per un gruppo o un ruolo. Qualsiasi rifiuto fa fallire il passaggio.",
+      "timeoutNotEnforced": "Non ancora applicato: un'approvazione in sospeso non scade."
     },
     "assetReview": {
       "reviewerRole": "Ruolo revisore",
@@ -344,11 +347,15 @@
       "processFailed": "Impossibile elaborare l'approvazione.",
       "processFailedRetry": "Impossibile elaborare l'approvazione. Riprova.",
       "entityApproved": "{{name}} è stato approvato.",
-      "entityRejected": "{{name}} è stato rifiutato."
+      "entityRejected": "{{name}} è stato rifiutato.",
+      "decisionRecorded": "Decisione registrata",
+      "waitingForApprovers_one": "In attesa di {{count}} altro approvatore.",
+      "waitingForApprovers_other": "In attesa di altri {{count}} approvatori."
     },
     "errors": {
       "own_owner_approval": "Questa approvazione spetta ai proprietari; non puoi approvare la tua stessa richiesta.",
-      "own_change_request_approval": "Non puoi approvare la tua stessa richiesta di modifica."
+      "own_change_request_approval": "Non puoi approvare la tua stessa richiesta di modifica.",
+      "approval_already_decided": "Hai già deciso su questa approvazione."
     },
     "entityTypes": {
       "entity": "Entità",

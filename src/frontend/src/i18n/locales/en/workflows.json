@@ -216,7 +216,10 @@
       "approversRole": "Approvers (Role)",
       "selectRole": "Select role",
       "additionalApproversAria": "Additional approvers",
-      "timeoutDays": "Timeout (days)"
+      "timeoutDays": "Timeout (days)",
+      "requireAll": "Require every approver",
+      "requireAllHelp": "Each approver decides: a user for themselves, any one member for a group or role. Any rejection fails the step.",
+      "timeoutNotEnforced": "Not enforced yet: a pending approval doesn't expire."
     },
     "assetReview": {
       "reviewerRole": "Reviewer Role",
@@ -344,11 +347,15 @@
       "processFailed": "Failed to process approval.",
       "processFailedRetry": "Failed to process approval. Please try again.",
       "entityApproved": "{{name}} has been approved.",
-      "entityRejected": "{{name}} has been rejected."
+      "entityRejected": "{{name}} has been rejected.",
+      "decisionRecorded": "Decision recorded",
+      "waitingForApprovers_one": "Waiting for {{count}} more approver.",
+      "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
       "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
-      "own_change_request_approval": "You can't approve your own change request."
+      "own_change_request_approval": "You can't approve your own change request.",
+      "approval_already_decided": "You have already decided this approval."
     },
     "entityTypes": {
       "entity": "Entity",

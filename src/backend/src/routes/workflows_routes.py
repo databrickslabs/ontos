@@ -1579,6 +1579,90 @@ def _mark_step_notifications_handled(
             continue
 
 
+def _mark_decided_approver_notifications(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    decisions: List[Dict[str, Any]],
+) -> None:
+    """Mark handled the approval notifications of the approvers who decided.
+
+    For a require_all step still waiting for others (#1119): the notification
+    of each decided approver (a user, a group, a role) is handled, the others
+    stay open.
+    """
+    from src.common.workflow_executor import approver_key
+
+    by_key = {d.get('key'): d for d in decisions}
+    for notif in db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval',
+        NotificationDb.read == False,  # noqa: E712
+    ).all():
+        try:
+            payload = json.loads(notif.action_payload or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('execution_id') != execution_id or not _is_for_step(notif, step_id):
+            continue
+        decision = by_key.get(approver_key(
+            notif.recipient or notif.recipient_role_id or '', notif.recipient_role_id,
+        ))
+        if decision is None:
+            continue
+        notif.read = True
+        payload.update({
+            'handled': True,
+            'decision': decision.get('decision'),
+            'handled_by': decision.get('decided_by'),
+            'handled_at': decision.get('decided_at'),
+        })
+        notif.action_payload = json.dumps(payload)
+        db.add(notif)
+
+
+def _respond_to_pending_approval(
+    db: Session,
+    request: Request,
+    audit_manager: Any,
+    current_user: Optional[UserInfo],
+    execution_id: str,
+    approved: bool,
+    required: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Answer a require_all decision that doesn't end the step (#1119)."""
+    if required['outcome'] == 'already_decided':
+        raise HTTPException(
+            status_code=409,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'approval_already_decided',
+                'message': "You have already decided this approval.",
+            },
+        )
+    _mark_decided_approver_notifications(
+        db, execution_id, _pending_step_id(db, execution_id), required['decisions'],
+    )
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature='process-workflows',
+        action='HANDLE_APPROVAL',
+        success=True,
+        details={
+            'execution_id': execution_id, 'approved': approved,
+            'pending_approvers': required['pending_approvers'],
+        },
+    )
+    db.commit()
+    return {
+        'execution_id': execution_id,
+        'status': 'paused',
+        'pending_approvers': required['pending_approvers'],
+        'message': "Decision recorded; waiting for the other approvers",
+    }
+
+
 @router.post("/handle-approval")
 async def handle_workflow_approval(
     request: Request,
@@ -1630,6 +1714,24 @@ async def handle_workflow_approval(
             execution_id=execution_id,
             user_info=current_user,
         )
+
+        # require_all (#1119): each resolved approver decides once (a user for
+        # themselves, any one member for a group or role). The execution stays
+        # paused until all have approved; any rejection resumes it as rejected.
+        required = executor.record_required_approval(
+            execution_id,
+            bool(approved),
+            decides_for=lambda approver, role_id: notifications_manager.user_is_recipient(
+                approver, role_id, current_user,
+            ),
+            user_email=current_user.email if current_user else None,
+            reason=message,
+        )
+        if required is not None and required['outcome'] in ('pending', 'already_decided'):
+            return _respond_to_pending_approval(
+                db, request, audit_manager, current_user, execution_id, bool(approved),
+                required,
+            )
 
         user_email = current_user.email if current_user else None
         # Resuming may pause at the next approval step and notify its

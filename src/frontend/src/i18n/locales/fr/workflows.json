@@ -216,7 +216,10 @@
       "approversRole": "Approbateurs (rôle)",
       "selectRole": "Sélectionner un rôle",
       "additionalApproversAria": "Approbateurs supplémentaires",
-      "timeoutDays": "Délai d'expiration (jours)"
+      "timeoutDays": "Délai d'expiration (jours)",
+      "requireAll": "Exiger tous les approbateurs",
+      "requireAllHelp": "Chaque approbateur décide : un utilisateur pour lui-même, n'importe quel membre pour un groupe ou un rôle. Tout refus fait échouer l'étape.",
+      "timeoutNotEnforced": "Pas encore appliqué : une approbation en attente n'expire pas."
     },
     "assetReview": {
       "reviewerRole": "Rôle du réviseur",
@@ -344,11 +347,15 @@
       "processFailed": "Échec du traitement de l'approbation.",
       "processFailedRetry": "Échec du traitement de l'approbation. Veuillez réessayer.",
       "entityApproved": "{{name}} a été approuvé.",
-      "entityRejected": "{{name}} a été rejeté."
+      "entityRejected": "{{name}} a été rejeté.",
+      "decisionRecorded": "Décision enregistrée",
+      "waitingForApprovers_one": "En attente de {{count}} autre approbateur.",
+      "waitingForApprovers_other": "En attente de {{count}} autres approbateurs."
     },
     "errors": {
       "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande.",
-      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification."
+      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification.",
+      "approval_already_decided": "Vous avez déjà pris une décision sur cette approbation."
     },
     "entityTypes": {
       "entity": "Entité",

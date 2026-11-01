@@ -309,6 +309,19 @@ export default function WorkflowApprovalResponseDialog({
         });
         return;
       }
+      // require_all: the decision is recorded and other approvers still decide
+      const decision = response.data as { status?: string; pending_approvers?: number } | null;
+      if (decision?.status === 'paused') {
+        toast({
+          title: t('workflows:approvalResponse.messages.decisionRecorded'),
+          description: t('workflows:approvalResponse.messages.waitingForApprovers', {
+            count: decision.pending_approvers ?? 0,
+          }),
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
+        return;
+      }
       toast({
         title: approved ? t('workflows:approvalResponse.approved') : t('workflows:approvalResponse.rejected'),
         description: approved

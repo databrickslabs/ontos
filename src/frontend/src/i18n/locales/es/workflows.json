@@ -216,7 +216,10 @@
       "approversRole": "Aprobadores (rol)",
       "selectRole": "Selecciona el rol",
       "additionalApproversAria": "Aprobadores adicionales",
-      "timeoutDays": "Tiempo de espera (días)"
+      "timeoutDays": "Tiempo de espera (días)",
+      "requireAll": "Requerir a todos los aprobadores",
+      "requireAllHelp": "Cada aprobador decide: un usuario por sí mismo, cualquier miembro por un grupo o rol. Cualquier rechazo hace fallar el paso.",
+      "timeoutNotEnforced": "Aún no se aplica: una aprobación pendiente no caduca."
     },
     "assetReview": {
       "reviewerRole": "Rol de revisor",
@@ -344,11 +347,15 @@
       "processFailed": "No se pudo procesar la aprobación.",
       "processFailedRetry": "No se pudo procesar la aprobación. Inténtalo de nuevo.",
       "entityApproved": "{{name}} se ha aprobado.",
-      "entityRejected": "{{name}} se ha rechazado."
+      "entityRejected": "{{name}} se ha rechazado.",
+      "decisionRecorded": "Decisión registrada",
+      "waitingForApprovers_one": "Falta {{count}} aprobador más.",
+      "waitingForApprovers_other": "Faltan {{count}} aprobadores más."
     },
     "errors": {
       "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
-      "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio."
+      "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
+      "approval_already_decided": "Ya has decidido esta aprobación."
     },
     "entityTypes": {
       "entity": "Entidad",

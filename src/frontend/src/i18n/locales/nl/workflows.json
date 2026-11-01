@@ -216,7 +216,10 @@
       "approversRole": "Goedkeurders (Rol)",
       "selectRole": "Selecteer rol",
       "additionalApproversAria": "Aanvullende goedkeurders",
-      "timeoutDays": "Time-out (dagen)"
+      "timeoutDays": "Time-out (dagen)",
+      "requireAll": "Alle goedkeurders vereisen",
+      "requireAllHelp": "Elke goedkeurder beslist: een gebruiker voor zichzelf, een willekeurig lid voor een groep of rol. Elke afwijzing laat de stap mislukken.",
+      "timeoutNotEnforced": "Nog niet afgedwongen: een openstaande goedkeuring verloopt niet."
     },
     "assetReview": {
       "reviewerRole": "Beoordelaarsrol",
@@ -344,11 +347,15 @@
       "processFailed": "Kon goedkeuring niet verwerken.",
       "processFailedRetry": "Kon goedkeuring niet verwerken. Probeer het opnieuw.",
       "entityApproved": "{{name}} is goedgekeurd.",
-      "entityRejected": "{{name}} is afgewezen."
+      "entityRejected": "{{name}} is afgewezen.",
+      "decisionRecorded": "Beslissing vastgelegd",
+      "waitingForApprovers_one": "Wacht nog op {{count}} goedkeurder.",
+      "waitingForApprovers_other": "Wacht nog op {{count}} goedkeurders."
     },
     "errors": {
       "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren.",
-      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren."
+      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren.",
+      "approval_already_decided": "U hebt al over deze goedkeuring beslist."
     },
     "entityTypes": {
       "entity": "Entiteit",

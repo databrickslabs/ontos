@@ -2307,7 +2307,7 @@ Steps are the building blocks of workflows:
 | Step Type | Description | Configuration |
 |-----------|-------------|---------------|
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
-| **Approval** | Request human approval | Approvers; timeout and require all are accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| **Approval** | Request human approval | Approvers, require all (every approver decides); timeout is accepted but not enforced yet (see [#941](https://github.com/databrickslabs/ontos/issues/941)) |
 | **Notification** | Send a notification | Recipients, template, message |
 | **Assign Tag** | Add or update a tag | Key, value or value source |
 | **Remove Tag** | Remove a tag | Key to remove |
@@ -2451,7 +2451,7 @@ A workflow whose trigger is **Manual** never fires on its own. To start it, open
 
 - **Scope** is saved but not applied yet ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
 - **Scheduled** workflows do not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)).
-- **Approval steps**: `require_all` and `timeout_days` are accepted but not enforced. The first decision resumes the workflow, and a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)).
+- **Approval steps**: `timeout_days` is accepted but not enforced: a pending approval never expires ([#941](https://github.com/databrickslabs/ontos/issues/941)). With `require_all`, every approver decides and any rejection fails the step.
 
 #### Blocking vs Non-Blocking
 

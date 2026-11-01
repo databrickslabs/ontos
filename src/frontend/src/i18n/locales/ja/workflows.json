@@ -216,7 +216,10 @@
       "approversRole": "承認者（ロール）",
       "selectRole": "ロールを選択",
       "additionalApproversAria": "追加の承認者",
-      "timeoutDays": "タイムアウト（日）"
+      "timeoutDays": "タイムアウト（日）",
+      "requireAll": "すべての承認者を必須にする",
+      "requireAllHelp": "各承認者が判断します。ユーザーは本人が、グループまたはロールはそのメンバーの誰か 1 人が判断します。1 件でも却下されるとステップは失敗します。",
+      "timeoutNotEnforced": "まだ適用されません: 保留中の承認は期限切れになりません。"
     },
     "assetReview": {
       "reviewerRole": "レビュー担当者ロール",
@@ -344,11 +347,15 @@
       "processFailed": "承認の処理に失敗しました。",
       "processFailedRetry": "承認の処理に失敗しました。もう一度お試しください。",
       "entityApproved": "{{name}} が承認されました。",
-      "entityRejected": "{{name}} が却下されました。"
+      "entityRejected": "{{name}} が却下されました。",
+      "decisionRecorded": "判断を記録しました",
+      "waitingForApprovers_one": "あと {{count}} 人の承認者を待っています。",
+      "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
       "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
-      "own_change_request_approval": "自分の変更リクエストは承認できません。"
+      "own_change_request_approval": "自分の変更リクエストは承認できません。",
+      "approval_already_decided": "この承認はすでに判断済みです。"
     },
     "entityTypes": {
       "entity": "エンティティ",

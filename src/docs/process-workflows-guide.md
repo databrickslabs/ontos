@@ -569,8 +569,8 @@ Creates an approval request and pauses workflow execution.
 | Config Key | Type | Description |
 |------------|------|-------------|
 | `approvers` | String | Approver specification (email, group, or role) |
-| `timeout_days` | Integer | Days before approval expires (accepted, not enforced yet: a pending approval never expires, [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
-| `require_all` | Boolean | Require all approvers (vs. any one) (accepted, not enforced yet: the first decision resumes the workflow, [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| `timeout_days` | Integer | Days before approval expires (accepted, not enforced yet: a pending approval never expires, [#941](https://github.com/databrickslabs/ontos/issues/941)) |
+| `require_all` | Boolean | Every resolved approver must approve (a user for themselves, any one member for a group or role); any rejection fails the step. Default `false`: the first decision resumes the workflow |
 
 **Approver Specifications:**
 - `domain_owners` - Owners of the entity's domain
@@ -1604,7 +1604,7 @@ If the server restarts while a workflow is executing (status `running` or `pause
 Overdue approval steps should support automatic escalation to a higher role (e.g., if a `DataSteward` hasn't responded in 3 days, escalate to `Admin`). This requires an `escalation_role` field on the approval step config and a scheduled checker.
 
 ### Parallel Approval Gates
-The current `require_all` flag on approval steps is conceptual but not fully implemented for concurrent multi-approver scenarios. Supporting `n-of-m` approval quorums (e.g., 2 of 3 approvers must agree) would enable richer governance patterns.
+`require_all` makes every resolved approver decide (any rejection fails the step). Supporting `n-of-m` approval quorums (e.g., 2 of 3 approvers must agree) would enable richer governance patterns.
 
 ### Audit Trail
 Workflow executions are logged but not easily queryable. A dedicated `workflow_audit_log` table with structured fields (execution_id, step_id, action, actor, timestamp, outcome) would enable compliance reporting and execution history search.

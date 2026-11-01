@@ -255,8 +255,56 @@ class NotificationsManager:
         # Admins can access any notification
         if is_admin:
             return True
-        
+
         return False
+
+    def user_is_recipient(
+        self, recipient: Optional[str], recipient_role_id: Optional[str], user_info: UserInfo,
+    ) -> bool:
+        """Whether the user is this recipient: the user, a member of the group,
+        or a member of the role (by id, or by name for legacy recipients).
+
+        As ``can_user_access_notification`` without its admin and broadcast
+        fallbacks: an admin is a recipient only of the Admin role, or of a role
+        without groups. Used to tell which approver a decision is for (#1119).
+        """
+        if not user_info or not (recipient or recipient_role_id):
+            return False
+        groups = set(user_info.groups or [])
+        try:
+            roles = list(self._settings_manager.list_app_roles())
+        except Exception:
+            logger.error("Failed to retrieve roles for the recipient check", exc_info=True)
+            roles = []
+        by_id = {role.id: role for role in roles}
+        by_name: Dict[str, Any] = {}
+        for role in roles:
+            by_name[role.name] = role
+            by_name[role.name.lower().replace(' ', '')] = role
+            by_name[''.join(word.capitalize() for word in role.name.split())] = role
+        admin_role = by_name.get('Admin')
+        is_admin = bool(
+            admin_role and admin_role.assigned_groups
+            and groups.intersection(admin_role.assigned_groups)
+        )
+
+        def member_of(role: Any) -> bool:
+            if role.assigned_groups:
+                return bool(groups.intersection(role.assigned_groups))
+            return is_admin
+
+        if recipient_role_id:
+            role = by_id.get(recipient_role_id)
+            if role is not None:
+                return member_of(role)
+        identities = {
+            str(v).strip().lower() for v in (user_info.email, user_info.username) if v
+        }
+        if recipient and recipient.strip().lower() in identities:
+            return True
+        if recipient in by_name:
+            return member_of(by_name[recipient])
+        return bool(not recipient_role_id and recipient in groups)
 
     async def create_user_notification(
         self,

@@ -187,10 +187,11 @@ async def update_certified_deprecation_guard(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker(SETTINGS_FEATURE_ID, FeatureAccessLevel.ADMIN)),
 ):
     """Switch the certified deprecation guard off for domains, products and contracts.
 
+    Needs Admin on certification levels: it lifts a governance control.
     Every listed entity must exist (``gate_exemption_not_found`` otherwise).
     """
     try:

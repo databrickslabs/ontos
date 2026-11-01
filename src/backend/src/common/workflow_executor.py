@@ -3512,14 +3512,14 @@ class WorkflowExecutor:
                     trigger_context.entity_data or {}
                 ).get('target_status')
                 if approved_request and target_status:
-                    # An approver's decision lets a certified product be
-                    # deprecated; a run without an approval step doesn't
+                    # A certified product is deprecated only by an approver's
+                    # decision through handle-approval, not the requester's;
+                    # a run without an approval step or a plain resume doesn't count
                     from src.controller.certified_deprecation_guard import (
-                        approved_status_change,
+                        approved_status_change, workflow_approval_refusal,
                     )
-                    with approved_status_change(
-                        'data_product', entity_id, accepted=approved is True,
-                    ):
+                    refusal = workflow_approval_refusal(approved, trigger_context.user_email)
+                    with approved_status_change('data_product', entity_id, refusal):
                         self._apply_requested_status_change(
                             trigger_context, entity_id, target_status, responded_by,
                             execution_id=execution_id,

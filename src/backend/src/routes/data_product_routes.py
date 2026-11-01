@@ -1004,7 +1004,8 @@ async def deprecate_product(
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error deprecating product %s: %s", product_id, e)
-        raise HTTPException(status_code=409, detail=str(e))
+        from src.controller.certified_deprecation_guard import guard_refusal_status
+        raise HTTPException(status_code=guard_refusal_status(e, 409), detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -2943,12 +2944,20 @@ async def handle_status_change_response(
     Only admins/owners can approve or deny status change requests. Deprecating
     a certified product this way needs Admin on data products (certified guard).
     """
-    from src.controller.certified_deprecation_guard import approved_status_change
+    from src.controller.certified_deprecation_guard import (
+        approved_status_change, handle_decision_refusal,
+    )
     by_admin = await has_feature_permission(
         DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, current_user, request,
     )
+    # Counts for the certified guard only as an admin's approval of a pending
+    # request made by someone else
+    refusal = handle_decision_refusal(
+        db, 'data_product', product_id, payload.target_status, by_admin,
+        current_user.email, current_user.username,
+    )
     try:
-        with approved_status_change('data_product', product_id, accepted=by_admin):
+        with approved_status_change('data_product', product_id, refusal):
             result = manager.handle_status_change_response(
                 db=db,
                 notifications_manager=notifications,

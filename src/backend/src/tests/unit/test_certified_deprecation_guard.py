@@ -2,7 +2,10 @@
 
 - An approval accepts the deprecation of its own entity only.
 - A Status Change Request run without an approver's decision doesn't count.
-- A decision that isn't an admin's (``accepted=False``) doesn't count.
+- A decision with a refusal reason (not an admin's, no pending request, the
+  requester's own) is refused with that reason.
+- A workflow approval counts only through handle-approval (``eligible_approver``)
+  and not by the requester.
 - A stored switch that can't be read leaves the guard on.
 - Only the move to ``deprecated`` is guarded.
 """
@@ -22,8 +25,11 @@ from src.common.workflow_executor import WorkflowExecutor
 from src.controller import audit_manager
 from src.controller.certified_deprecation_guard import (
     GUARD_SETTING_KEY,
+    CertifiedDeprecationApprovalRefusedError,
     CertifiedDeprecationRequiresApprovalError,
     approved_status_change,
+    eligible_approver,
+    workflow_approval_refusal,
     guard_exemptions,
 )
 from src.controller.data_contracts_manager import DataContractsManager
@@ -108,17 +114,21 @@ def test_the_approval_ends_with_its_block(products, db_session):
         products.transition_status(product.id, 'deprecated')
 
 
-def test_a_decision_that_does_not_count_accepts_nothing(products, contracts, db_session):
+def test_a_decision_that_does_not_count_is_refused_with_its_reason(
+    products, contracts, db_session,
+):
     product, contract = _product(db_session), _contract(db_session)
 
-    with approved_status_change('data_product', product.id, accepted=False):
-        with pytest.raises(CertifiedDeprecationRequiresApprovalError):
+    with approved_status_change('data_product', product.id, 'not_admin'):
+        with pytest.raises(CertifiedDeprecationApprovalRefusedError) as refused_product:
             products.transition_status(product.id, 'deprecated')
-    with approved_status_change('data_contract', contract.id, accepted=False):
-        with pytest.raises(CertifiedDeprecationRequiresApprovalError) as refused:
+    with approved_status_change('data_contract', contract.id, 'self_approval'):
+        with pytest.raises(CertifiedDeprecationApprovalRefusedError) as refused:
             contracts.transition_status(db_session, contract.id, 'deprecated')
 
-    assert refused.value.code == 'certified_deprecation_requires_approval'
+    assert refused_product.value.params['reason'] == 'not_admin'
+    assert refused.value.code == 'certified_deprecation_approval_refused'
+    assert refused.value.params['reason'] == 'self_approval'
     assert refused.value.params['entityType'] == 'data_contract'
     assert _status(db_session, DataProductDb, product.id) == 'active'
     assert _status(db_session, DataContractDb, contract.id) == 'active'
@@ -133,7 +143,8 @@ def test_an_approved_contract_request_is_accepted(contracts, db_session):
     assert _status(db_session, DataContractDb, contract.id) == 'deprecated'
 
 
-def _complete(db, product, approved, succeeded=True):
+def _complete(db, product, approved, succeeded=True, approver=None):
+    """End a Status Change Request run; ``approver`` decides it through handle-approval."""
     context = TriggerContext(
         entity_type='data_product', entity_id=product.id, entity_name=product.name,
         trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
@@ -144,18 +155,56 @@ def _complete(db, product, approved, succeeded=True):
         name='Status Change Request',
         trigger=SimpleNamespace(type=TriggerType.ON_REQUEST_STATUS_CHANGE),
     )
-    WorkflowExecutor(db)._handle_workflow_completion(
-        trigger_context=context, workflow=workflow, succeeded=succeeded,
-        responded_by='approver@example.com', approved=approved,
-    )
+    def run():
+        WorkflowExecutor(db)._handle_workflow_completion(
+            trigger_context=context, workflow=workflow, succeeded=succeeded,
+            responded_by='approver@example.com', approved=approved,
+        )
+
+    if approver:
+        with eligible_approver(approver, None):
+            run()
+    else:
+        run()
 
 
 def test_an_approvers_decision_deprecates_a_certified_product(db_session):
     product = _product(db_session)
 
-    _complete(db_session, product, approved=True)
+    _complete(db_session, product, approved=True, approver='approver@example.com')
 
     assert _status(db_session, DataProductDb, product.id) == 'deprecated'
+
+
+def test_an_approval_not_given_through_handle_approval_does_not_count(db_session):
+    product = _product(db_session)
+
+    _complete(db_session, product, approved=True)
+
+    assert _status(db_session, DataProductDb, product.id) == 'active'
+
+
+def test_the_requester_approving_does_not_count(db_session):
+    product = _product(db_session)
+
+    _complete(db_session, product, approved=True, approver='Requester@Example.com')
+
+    assert _status(db_session, DataProductDb, product.id) == 'active'
+
+
+@pytest.mark.parametrize('approved, approver, requester, expected', [
+    (True, 'a@x.com', 'r@x.com', None),
+    (True, 'r@x.com', 'r@x.com', 'self_approval'),
+    (True, None, 'r@x.com', 'no_approver'),
+    (None, 'a@x.com', 'r@x.com', 'no_approver'),
+    (False, 'a@x.com', 'r@x.com', 'no_approver'),
+])
+def test_workflow_approval_refusal(approved, approver, requester, expected):
+    if approver:
+        with eligible_approver(approver):
+            assert workflow_approval_refusal(approved, requester) == expected
+    else:
+        assert workflow_approval_refusal(approved, requester) == expected
 
 
 def test_a_request_run_without_an_approval_step_does_not_count(db_session):

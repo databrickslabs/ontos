@@ -1579,18 +1579,25 @@ async def handle_workflow_approval(
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
 
-        # Resume the workflow
-        result = executor.resume_workflow(
-            execution_id=execution_id,
-            step_result=approved,
-            result_data={
-                'message': message,
-                'reason': message,
-                'decision': 'approved' if approved else 'rejected',
-            },
-            user_email=user_email,
-        )
-        
+        # Resume the workflow. The caller passed the per-execution check, so
+        # the decision counts as the approval step's (e.g. for the certified
+        # deprecation guard); a plain resume doesn't.
+        from src.controller.certified_deprecation_guard import eligible_approver
+        with eligible_approver(
+            current_user.email if current_user else None,
+            current_user.username if current_user else None,
+        ):
+            result = executor.resume_workflow(
+                execution_id=execution_id,
+                step_result=approved,
+                result_data={
+                    'message': message,
+                    'reason': message,
+                    'decision': 'approved' if approved else 'rejected',
+                },
+                user_email=user_email,
+            )
+
         if not result:
             raise HTTPException(
                 status_code=404,

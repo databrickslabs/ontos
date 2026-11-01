@@ -437,14 +437,27 @@ not transitions, so they are not guarded.
 
 The way through is `POST /api/data-products/{id}/request-status-change` (contracts:
 `POST /api/data-contracts/{id}/request-status-change`). The guard accepts the
-deprecation when the request is applied after an approval:
+deprecation only when the request is applied after an approval that counts:
 
-- a product's request, by the approval step of the Status Change Request workflow
-  (`on_request_status_change`; a run without an approval step doesn't count);
-- a product's or contract's request approved with `handle-status-change` by a user
-  with Admin on the feature. For a contract, the admins' *Status Change Request
-  Pending* notification has an *Approve/Deny* action that opens the decision dialog,
-  which calls this route.
+- a product's request, at the approval step of the Status Change Request workflow
+  (`on_request_status_change`), decided by one of its approvers through
+  `POST /api/workflows/handle-approval`. A run without an approval step, or a plain
+  `POST /api/workflows/executions/{id}/resume`, doesn't count;
+- a product's or contract's **pending** request approved with `handle-status-change`
+  by a user with Admin on the feature. Pending means the latest
+  `status_change_requested` change log entry of the entity asks for that status, was
+  made from the entity's current status and hasn't been approved or denied yet (the
+  change log is the record both managers write with every request; notifications
+  can be deleted, and a product's request has none). For a contract, the *Status
+  Change Request Pending* notification goes to the Admin role and has an
+  *Approve/Deny* action that opens the decision dialog; once decided it opens
+  read-only.
+
+In both cases the approver must not be the requester. A decision that doesn't count
+is refused with `certified_deprecation_approval_refused` and a `reason`
+(`not_admin`, `no_pending_request`, `target_mismatch`, `self_approval`,
+`no_approver`), translated in the UI. Every route answers the guard's refusals with
+400.
 
 The guard runs before the status gates, which can add stricter rules on top. It can
 be switched off for domains, data products and data contracts with the same
@@ -453,8 +466,9 @@ deprecation guard*; API `GET`/`PUT /api/certified-deprecation-guard`). The value
 stored in the app settings, since the guard is not a workflow. As for a gate, a
 domain covers its products and contracts (not its subdomains), saving checks the ids
 exist, and each skip is logged and audited as `GATE_SKIPPED`, with
-`guard: certified_deprecation` instead of a workflow. Who can edit certification
-levels can change it.
+`guard: certified_deprecation` instead of a workflow. Changing it needs Admin on
+certification levels; others see it read-only. A domain switch is only as strong as
+the entities' domain assignment, as for status gates.
 
 ### TriggerEvent Dataclass
 

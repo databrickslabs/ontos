@@ -6316,6 +6316,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             justification=justification,
         )
         i18n_data['i18n']['statusNamespace'] = 'data-contracts'
+        # Addressed to the Admin role (its groups), as a product's Status Change
+        # Request workflow addresses its "Admin" approvers; "admins" only
+        # matched a workspace group of that name
+        from src.repositories.settings_repository import app_role_repo
+        admin_role = app_role_repo.get_by_name(db, name='Admin')
         admin_note = Notification(
             id=str(uuid4()),
             created_at=now,
@@ -6323,7 +6328,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             title="Status Change Request Pending",
             subtitle=f"Contract: {contract.name}",
             description=f"{requester_email} is requesting to change status from '{current_status}' to '{target_status}'.\n\nJustification: {justification}",
-            recipient="admins",
+            recipient="Admin",
+            recipient_role_id=str(admin_role.id) if admin_role else None,
             can_delete=True,
             action_type="handle_status_change_request",
             action_payload={
@@ -6446,6 +6452,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 db=db,
                 action_type="handle_status_change_request",
                 action_payload={"contract_id": contract_id},
+                # The decision dialog opens read-only for a decided request
+                handled=(
+                    {"handled": True, "decision": decision}
+                    if decision in ('approve', 'deny') else None
+                ),
             )
         except Exception:
             pass

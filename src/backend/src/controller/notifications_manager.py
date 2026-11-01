@@ -348,8 +348,16 @@ class NotificationsManager:
             # Fail open: a duplicate notification is preferable to silently dropping a request.
             return False
 
-    def handle_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
-        """Finds notifications by action type/payload and marks them as read using the repository."""
+    def handle_actionable_notification(
+        self, db: Session, action_type: str, action_payload: Dict,
+        handled: Optional[Dict] = None,
+    ) -> bool:
+        """Finds notifications by action type/payload and marks them as read using the repository.
+
+        ``handled`` (e.g. ``{"handled": True, "decision": "approve"}``) is merged
+        into the payload of each match, so the UI can tell a decided request
+        from one that was only read.
+        """
         logger.debug(f"Attempting to handle notification: type={action_type}, payload={action_payload}")
         try:
             # Assuming repo has a method to find by action (might need creating)
@@ -377,6 +385,10 @@ class NotificationsManager:
                      # Check if provided payload is subset of DB payload
                      all(item in payload_db.items() for item in action_payload.items())):
                     
+                    if handled:
+                        self._repo.update(db=db, db_obj=notification_db, obj_in={
+                            "action_payload": json.dumps({**payload_db, **handled}),
+                        })
                     if not notification_db.read:
                         # Mark as read using the update method
                         self._repo.update(db=db, db_obj=notification_db, obj_in={"read": True})

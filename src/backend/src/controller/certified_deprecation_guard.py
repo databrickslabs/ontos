@@ -10,12 +10,17 @@ a workflow, so it holds in every installation without admin action.
 
 The way through is a status change request. Its approval applies the status
 inside ``approved_status_change`` (for that entity only), which the guard
-accepts:
+accepts when the decision counts as an approval:
 
-- a product's request, approved in the Status Change Request workflow
-  (``on_request_status_change``), applied by the workflow executor;
-- a product's or contract's request approved with ``handle-status-change``
+- a product's request, approved at the approval step of the Status Change
+  Request workflow (``on_request_status_change``) by one of its approvers,
+  through ``handle-approval`` (not a plain resume of the execution);
+- a product's or contract's pending request (the ``status_change_requested``
+  change log entry, same target status) approved with ``handle-status-change``
   by a user with Admin on the feature.
+
+In both, the approver must not be the requester. Otherwise the guard refuses
+with ``certified_deprecation_approval_refused`` and the reason.
 
 The guard can be switched off per domain, data product or data contract with
 a ``GateExemptions`` value, the same ``disabled_for`` switch status gates
@@ -27,7 +32,7 @@ never transition them, so they are not guarded.
 import json
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Iterator, Optional, Tuple
+from typing import Any, Iterable, Iterator, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -54,16 +59,52 @@ def _entity_model(entity_type: str):
         return DataContractDb
     return None
 
-# The (entity_type, entity_id) whose approved status change is being applied
-_approved_change: ContextVar[Optional[Tuple[str, str]]] = ContextVar(
+# The (entity_type, entity_id) whose status change decision is being applied,
+# and why it doesn't count as an approval (None when it does)
+_approved_change: ContextVar[Optional[Tuple[str, str, Optional[str]]]] = ContextVar(
     'certified_deprecation_approved_change', default=None,
 )
+
+# Set while the handle-approval route resumes a workflow: the approval step is
+# being decided by one of its approvers (checked per execution there), not by
+# a plain resume of the execution. Holds the approver's email and username.
+_eligible_approver: ContextVar[Optional[frozenset]] = ContextVar(
+    'certified_deprecation_eligible_approver', default=None,
+)
+
+# Why a status change decision doesn't count as an approval for the guard
+NOT_ADMIN = 'not_admin'
+NO_PENDING_REQUEST = 'no_pending_request'
+TARGET_MISMATCH = 'target_mismatch'
+SELF_APPROVAL = 'self_approval'
+NO_APPROVER = 'no_approver'
 
 
 class CertifiedDeprecationRequiresApprovalError(CodedValueError):
     """A certified product or contract can't be deprecated directly."""
 
     code = 'certified_deprecation_requires_approval'
+
+
+class CertifiedDeprecationApprovalRefusedError(CodedValueError):
+    """A decision on a certified deprecation that doesn't count as an approval.
+
+    ``reason``: ``not_admin``, ``no_pending_request``, ``target_mismatch``,
+    ``self_approval`` or ``no_approver`` (the approval step wasn't decided by
+    one of its approvers).
+    """
+
+    code = 'certified_deprecation_approval_refused'
+
+
+def guard_refusal_status(error: Exception, default: int) -> int:
+    """The HTTP status of a refused status change: 400 for the guard's refusals.
+
+    Every route answers the guard with 400, as Change Status answers an
+    invalid transition; other errors keep the route's ``default``.
+    """
+    refusals = (CertifiedDeprecationRequiresApprovalError, CertifiedDeprecationApprovalRefusedError)
+    return 400 if isinstance(error, refusals) else default
 
 
 class GateExemptionNotFoundError(CodedValueError):
@@ -74,23 +115,126 @@ class GateExemptionNotFoundError(CodedValueError):
 
 @contextmanager
 def approved_status_change(
-    entity_type: str, entity_id: str, accepted: bool = True,
+    entity_type: str, entity_id: str, refusal: Optional[str] = None,
 ) -> Iterator[None]:
-    """Apply an approved status change request of one entity.
+    """Apply a decided status change request of one entity.
 
     Inside, the guard accepts the deprecation of that entity (and of no
     other, so a workflow that the change fires can't deprecate another
-    certified entity unasked). ``accepted=False`` makes it a no-op, for a
-    decision that doesn't count as an approval (e.g. not by an admin).
+    certified entity unasked). With a ``refusal`` (one of the reasons above)
+    the decision doesn't count as an approval: the guard refuses it with
+    ``certified_deprecation_approval_refused`` and that reason.
     """
-    if not accepted:
-        yield
-        return
-    token = _approved_change.set((entity_type, str(entity_id)))
+    token = _approved_change.set((entity_type, str(entity_id), refusal))
     try:
         yield
     finally:
         _approved_change.reset(token)
+
+
+def _identities(ids: Iterable[Optional[str]]) -> frozenset:
+    return frozenset(str(i).strip().lower() for i in ids if i)
+
+
+@contextmanager
+def eligible_approver(*approver_ids: Optional[str]) -> Iterator[None]:
+    """Mark a workflow resume as decided by an approver of its approval step.
+
+    Entered by ``POST /api/workflows/handle-approval`` after its per-execution
+    check, with the approver's email and username; a resume through any other
+    route doesn't count for the guard.
+    """
+    token = _eligible_approver.set(_identities(approver_ids))
+    try:
+        yield
+    finally:
+        _eligible_approver.reset(token)
+
+
+def workflow_approval_refusal(approved: Optional[bool], requester: Optional[str]) -> Optional[str]:
+    """Why a Status Change Request run's ending doesn't approve a certified deprecation.
+
+    It counts when the approval step was decided (``approved is True``) by
+    one of its approvers through handle-approval, who isn't the requester.
+    """
+    approver = _eligible_approver.get()
+    if approved is not True or approver is None:
+        return NO_APPROVER
+    if requester and requester.strip().lower() in approver:
+        return SELF_APPROVAL
+    return None
+
+
+def handle_decision_refusal(
+    db: Session,
+    entity_type: str,
+    entity_id: str,
+    target_status: str,
+    by_admin: bool,
+    *approver_ids: Optional[str],
+) -> Optional[str]:
+    """Why a ``handle-status-change`` approval doesn't count for the guard, or None.
+
+    Only an admin of the feature approves, and only a pending request of
+    someone else (``status_change_decision_refusal``).
+    """
+    if not by_admin:
+        return NOT_ADMIN
+    return status_change_decision_refusal(db, entity_type, entity_id, target_status, approver_ids)
+
+
+def _decided_target(entry: Any) -> str:
+    return str((entry.details or {}).get('target_status') or '').lower()
+
+
+def status_change_decision_refusal(
+    db: Session,
+    entity_type: str,
+    entity_id: str,
+    target_status: str,
+    approver_ids: Iterable[Optional[str]],
+) -> Optional[str]:
+    """Why approving with ``handle-status-change`` doesn't count for the guard, or None.
+
+    The request record is the ``status_change_requested`` change log entry
+    both managers write with every request (notifications can be deleted,
+    and products' requests have none). It counts when the latest request
+    of the entity asks for ``target_status``, was made from the entity's
+    current status, hasn't been decided yet (fewer ``status_change_approve``
+    / ``status_change_deny`` entries for that target than requests) and
+    wasn't made by the approver (``approver_ids``: their email and username).
+    """
+    from src.controller.change_log_manager import change_log_manager
+
+    target = (target_status or '').lower()
+    requests = change_log_manager.get_changes_for_entity(
+        db, entity_type, entity_id, action='status_change_requested', limit=200,
+    )
+    if not requests:
+        return NO_PENDING_REQUEST
+    latest = requests[0].details or {}
+    if _decided_target(requests[0]) != target:
+        return TARGET_MISMATCH
+    model = _entity_model(entity_type)
+    entity = db.get(model, entity_id) if model is not None else None
+    requested_from = str(latest.get('from_status') or latest.get('current_status') or '')
+    current = str(getattr(entity, 'status', '') or 'draft').lower()
+    if requested_from and requested_from.lower() != current:
+        return NO_PENDING_REQUEST
+    decided = sum(
+        1
+        for action in ('status_change_approve', 'status_change_deny')
+        for entry in change_log_manager.get_changes_for_entity(
+            db, entity_type, entity_id, action=action, limit=200,
+        )
+        if _decided_target(entry) == target
+    )
+    if decided >= sum(1 for entry in requests if _decided_target(entry) == target):
+        return NO_PENDING_REQUEST
+    requester = str(latest.get('requester_email') or '').strip().lower()
+    if requester and requester in _identities(approver_ids):
+        return SELF_APPROVAL
+    return None
 
 
 def guard_exemptions(db: Session) -> GateExemptions:
@@ -175,8 +319,19 @@ def check_certified_deprecation(db: Session, event: Any) -> None:
     entity = db.get(model, entity_id)
     if entity is None or entity.certification_level is None:
         return
-    if _approved_change.get() == (entity_type, entity_id):
-        return
+    decision = _approved_change.get()
+    if decision is not None and decision[:2] == (entity_type, entity_id):
+        if decision[2] is None:
+            return
+        raise CertifiedDeprecationApprovalRefusedError(
+            f"The approval of this request doesn't count for the certified "
+            f"{entity_type.replace('_', ' ')} '{entity.name}' ({decision[2]}): it needs a "
+            f"pending status change request, approved by an admin who didn't make it.",
+            reason=decision[2],
+            entityType=entity_type,
+            entityId=entity_id,
+            entityName=entity.name,
+        )
     from src.common.workflow_triggers import gate_exemption
 
     reason = gate_exemption(db, event, guard_exemptions(db))

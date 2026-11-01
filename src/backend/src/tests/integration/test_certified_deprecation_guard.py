@@ -18,6 +18,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from src.app import app
+from src.common.authorization import get_user_details_from_sdk
 from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.audit_log import AuditLogDb
 from src.db_models.data_contracts import DataContractDb
@@ -25,8 +27,24 @@ from src.db_models.data_domains import DataDomain
 from src.db_models.data_products import DataProductDb
 from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.db_models.notifications import NotificationDb
+from src.models.users import UserInfo
 
 CODE = 'certified_deprecation_requires_approval'
+REFUSED = 'certified_deprecation_approval_refused'
+
+
+def _act_as(username: str, groups=('test_admins',)) -> UserInfo:
+    """Send the next requests as another user (an admin by default)."""
+    user = UserInfo(
+        username=username, email=f'{username}@example.com', user=username,
+        ip='127.0.0.1', groups=list(groups),
+    )
+
+    async def _user():
+        return user
+
+    app.dependency_overrides[get_user_details_from_sdk] = _user
+    return user
 
 
 def _domain(db: Session, name: str) -> str:
@@ -86,7 +104,7 @@ def _deprecate_contract(client: TestClient, contract_id: str):
 
 
 def _assert_refused(response, entity_type: str, entity_id: str) -> None:
-    assert response.status_code in (400, 409), response.text
+    assert response.status_code == 400, response.text
     detail = response.json()['detail']
     assert detail['code'] == CODE
     assert detail['params']['entityType'] == entity_type
@@ -154,21 +172,41 @@ class TestDirectDeprecation:
         assert _status(db_session, DataProductDb, product_id) == 'active'
 
 
+def _request(client: TestClient, kind: str, entity_id: str, target: str = 'deprecated'):
+    requested = client.post(
+        f'/api/{kind}/{entity_id}/request-status-change',
+        json={'target_status': target,
+              'justification': 'Replaced by the v2 version, consumers moved'},
+    )
+    assert requested.status_code == 200, requested.text
+    return requested.json()
+
+
+def _decide(client: TestClient, kind: str, entity_id: str, target: str = 'deprecated'):
+    return client.post(
+        f'/api/{kind}/{entity_id}/handle-status-change',
+        json={'decision': 'approve', 'target_status': target,
+              'requester_email': 'test@example.com'},
+    )
+
+
+def _assert_approval_refused(response, reason: str) -> None:
+    assert response.status_code == 400, response.text
+    detail = response.json()['detail']
+    assert detail['code'] == REFUSED
+    assert detail['params']['reason'] == reason
+
+
 class TestApprovedRequest:
     def test_an_approved_product_request_deprecates_it(self, client, db_session):
         WorkflowsManager(db=db_session).load_from_yaml()
         product_id = _product(db_session)
 
-        requested = client.post(
-            f'/api/data-products/{product_id}/request-status-change',
-            json={'target_status': 'deprecated',
-                  'justification': 'Replaced by the v2 product, consumers moved'},
-        )
-        assert requested.status_code == 200, requested.text
-        execution_id = requested.json().get('execution_id')
-        assert execution_id, requested.json()
+        execution_id = _request(client, 'data-products', product_id).get('execution_id')
+        assert execution_id
         assert _status(db_session, DataProductDb, product_id) == 'active'
 
+        _act_as('steward')
         approved = client.post(
             '/api/workflows/handle-approval',
             json={'execution_id': execution_id, 'approved': True, 'message': 'OK'},
@@ -177,36 +215,99 @@ class TestApprovedRequest:
         assert approved.status_code == 200, approved.text
         assert _status(db_session, DataProductDb, product_id) == 'deprecated'
 
-    def test_an_admin_approving_a_contract_request_deprecates_it(self, client, db_session):
-        contract_id = _contract(db_session)
-        requested = client.post(
-            f'/api/data-contracts/{contract_id}/request-status-change',
-            json={'target_status': 'deprecated',
-                  'justification': 'Replaced by the v2 contract, consumers moved'},
-        )
-        assert requested.status_code == 200, requested.text
-        assert _status(db_session, DataContractDb, contract_id) == 'active'
-
-        approved = client.post(
-            f'/api/data-contracts/{contract_id}/handle-status-change',
-            json={'decision': 'approve', 'target_status': 'deprecated',
-                  'requester_email': 'test@example.com'},
-        )
-
-        assert approved.status_code == 200, approved.text
-        assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
-
-    def test_an_admin_approving_a_product_request_deprecates_it(self, client, db_session):
+    def test_the_requester_approving_their_own_product_request_does_not_count(
+        self, client, db_session,
+    ):
+        WorkflowsManager(db=db_session).load_from_yaml()
         product_id = _product(db_session)
+        execution_id = _request(client, 'data-products', product_id)['execution_id']
 
         approved = client.post(
-            f'/api/data-products/{product_id}/handle-status-change',
-            json={'decision': 'approve', 'target_status': 'deprecated',
-                  'requester_email': 'test@example.com'},
+            '/api/workflows/handle-approval',
+            json={'execution_id': execution_id, 'approved': True, 'message': 'OK'},
         )
 
         assert approved.status_code == 200, approved.text
-        assert _status(db_session, DataProductDb, product_id) == 'deprecated'
+        assert _status(db_session, DataProductDb, product_id) == 'active'
+
+    def test_resuming_the_execution_is_not_an_approval(self, client, db_session):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        product_id = _product(db_session)
+        execution_id = _request(client, 'data-products', product_id)['execution_id']
+
+        _act_as('steward')
+        resumed = client.post(
+            f'/api/workflows/executions/{execution_id}/resume', json={'approved': True},
+        )
+
+        assert resumed.status_code == 200, resumed.text
+        assert _status(db_session, DataProductDb, product_id) == 'active'
+
+    @pytest.mark.parametrize('kind, model, make', [
+        ('data-products', DataProductDb, _product),
+        ('data-contracts', DataContractDb, _contract),
+    ])
+    def test_another_admin_approving_a_pending_request_applies_it(
+        self, client, db_session, kind, model, make,
+    ):
+        entity_id = make(db_session)
+        _request(client, kind, entity_id)
+        assert _status(db_session, model, entity_id) == 'active'
+
+        _act_as('steward')
+        approved = _decide(client, kind, entity_id)
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, model, entity_id) == 'deprecated'
+
+    @pytest.mark.parametrize('kind, entity_type, make', [
+        ('data-products', 'data_product', _product),
+        ('data-contracts', 'data_contract', _contract),
+    ])
+    def test_an_approval_without_a_request_is_refused(
+        self, client, db_session, kind, entity_type, make,
+    ):
+        entity_id = make(db_session)
+
+        _assert_approval_refused(_decide(client, kind, entity_id), 'no_pending_request')
+
+    @pytest.mark.parametrize('kind, model, make', [
+        ('data-products', DataProductDb, _product), ('data-contracts', DataContractDb, _contract),
+    ])
+    def test_an_approval_for_another_target_is_refused(
+        self, client, db_session, kind, model, make,
+    ):
+        # Approved entities may go to active or deprecated: the request is for active
+        entity_id = make(db_session)
+        db_session.get(model, entity_id).status = 'approved'
+        db_session.commit()
+        _request(client, kind, entity_id, target='active')
+
+        _act_as('steward')
+        _assert_approval_refused(_decide(client, kind, entity_id), 'target_mismatch')
+
+    @pytest.mark.parametrize('kind, make', [
+        ('data-products', _product), ('data-contracts', _contract),
+    ])
+    def test_approving_ones_own_request_is_refused(self, client, db_session, kind, make):
+        entity_id = make(db_session)
+        _request(client, kind, entity_id)
+
+        _assert_approval_refused(_decide(client, kind, entity_id), 'self_approval')
+
+    def test_a_decided_request_cannot_be_approved_again(self, client, db_session):
+        product_id = _product(db_session)
+        _request(client, 'data-products', product_id)
+        _act_as('steward')
+        denied = client.post(
+            f'/api/data-products/{product_id}/handle-status-change',
+            json={'decision': 'deny', 'target_status': 'deprecated',
+                  'requester_email': 'test_user'},
+        )
+        assert denied.status_code == 200, denied.text
+
+        _assert_approval_refused(_decide(client, 'data-products', product_id),
+                                 'no_pending_request')
 
 
 def _request_contract_deprecation(client: TestClient, contract_id: str) -> None:
@@ -238,7 +339,8 @@ class TestContractRequestNotification:
         notes = _admin_requests(db_session, contract_id)
         assert len(notes) == 1
         note = notes[0]
-        assert note.recipient == 'admins' and note.read is False
+        assert note.recipient == 'Admin' and note.read is False
+        assert note.recipient_role_id
         assert json.loads(note.action_payload) == {
             'contract_id': contract_id,
             'contract_name': f'Contract {contract_id[:8]}',
@@ -261,12 +363,17 @@ class TestContractRequestNotification:
         _request_contract_deprecation(client, contract_id)
         body = {'decision': 'approve', 'target_status': 'deprecated',
                 'requester_email': 'test@example.com'}
+        _act_as('steward')
 
         approved = client.post(f'/api/data-contracts/{contract_id}/handle-status-change', json=body)
 
         assert approved.status_code == 200, approved.text
         assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
-        assert [n.read for n in _admin_requests(db_session, contract_id)] == [True]
+        notes = _admin_requests(db_session, contract_id)
+        assert [n.read for n in notes] == [True]
+        # Decided, not only read: the bell opens it read-only
+        payload = json.loads(notes[0].action_payload)
+        assert payload['handled'] is True and payload['decision'] == 'approve'
 
         again = client.post(f'/api/data-contracts/{contract_id}/handle-status-change', json=body)
 
@@ -274,6 +381,39 @@ class TestContractRequestNotification:
         detail = again.json()['detail']
         assert detail['code'] == 'invalid_status_transition'
         assert detail['params'] == {'fromStatus': 'deprecated', 'toStatus': 'deprecated'}
+
+    def test_an_admin_role_member_outside_an_admins_group_sees_the_request(
+        self, client, db_session,
+    ):
+        # The Admin role's groups are the test settings' APP_ADMIN_DEFAULT_GROUPS
+        # (test_admins): no group is called "admins"
+        contract_id = _contract(db_session)
+        _request_contract_deprecation(client, contract_id)
+        _act_as('steward', groups=['test_admins'])
+
+        listed = client.get('/api/notifications')
+
+        assert listed.status_code == 200, listed.text
+        items = listed.json()
+        items = items if isinstance(items, list) else items.get('items', [])
+        assert any(
+            n.get('action_type') == 'handle_status_change_request'
+            and (n.get('action_payload') or {}).get('contract_id') == contract_id
+            for n in items
+        ), items
+
+    def test_a_user_without_the_admin_role_does_not_see_it(self, client, db_session):
+        contract_id = _contract(db_session)
+        _request_contract_deprecation(client, contract_id)
+        _act_as('reader', groups=['readers'])
+
+        listed = client.get('/api/notifications')
+
+        items = listed.json() if listed.status_code == 200 else []
+        items = items if isinstance(items, list) else items.get('items', [])
+        assert not any(
+            (n.get('action_payload') or {}).get('contract_id') == contract_id for n in items
+        )
 
 
 class TestSwitchedOff:
@@ -326,6 +466,19 @@ class TestSwitchedOff:
         assert _guard_skips(db_session, exempt)[0]['disabled_for'] == {
             'kind': 'data_product', 'id': exempt,
         }
+
+    def test_the_switch_needs_admin_on_certification_levels(self, client, db_session):
+        role = client.post('/api/settings/roles', json={
+            'name': f'Cert editor {uuid.uuid4().hex[:6]}', 'description': 'test',
+            'assigned_groups': ['cert_editors'],
+            'feature_permissions': {'settings-certification-levels': 'Read/Write'},
+        })
+        assert role.status_code == 201, role.text
+        _act_as('editor', groups=['cert_editors'])
+        body = {'domains': [], 'data_products': [], 'data_contracts': []}
+
+        assert client.get('/api/certified-deprecation-guard').status_code == 200
+        assert client.put('/api/certified-deprecation-guard', json=body).status_code == 403
 
     def test_an_unknown_entity_is_refused_with_a_code(self, client, db_session):
         response = client.put(

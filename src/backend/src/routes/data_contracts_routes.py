@@ -1253,7 +1253,7 @@ async def handle_status_change_response(
     (certified guard).
     """
     from src.controller.certified_deprecation_guard import (
-        approved_status_change, handle_decision_refusal,
+        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
     )
     by_admin = await has_feature_permission(
         'data-contracts', FeatureAccessLevel.ADMIN, current_user, request,
@@ -1265,6 +1265,7 @@ async def handle_status_change_response(
         current_user.email if current_user else None,
         current_user.username if current_user else None,
     )
+    request_id = pending_request_id(db, 'data_contract', contract_id)
     try:
         with approved_status_change('data_contract', contract_id, refusal):
             result = manager.handle_status_change_response(
@@ -1278,6 +1279,11 @@ async def handle_status_change_response(
                 message=payload.message,
                 current_user=current_user.username if current_user else None
             )
+        # The decision ends the request it was about
+        record_decision(
+            db, 'data_contract', contract_id, request_id, payload.decision,
+            current_user.username if current_user else None,
+        )
         
         # Audit
         audit_manager.log_action(

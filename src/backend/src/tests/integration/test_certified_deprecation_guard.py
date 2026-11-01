@@ -310,6 +310,100 @@ class TestApprovedRequest:
                                  'no_pending_request')
 
 
+def _change(client: TestClient, kind: str, entity_id: str, status: str) -> None:
+    changed = client.post(f'/api/{kind}/{entity_id}/change-status', json={'new_status': status})
+    assert changed.status_code == 200, changed.text
+
+
+KINDS = [
+    ('data-products', DataProductDb, _product),
+    ('data-contracts', DataContractDb, _contract),
+]
+
+
+class TestOneDecisionPerRequest:
+    """A decision is tied to one request: once decided, or once the entity moved, it is gone."""
+
+    def test_a_request_rejected_in_the_workflow_cannot_be_approved_later(
+        self, client, db_session,
+    ):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        product_id = _product(db_session)
+        execution_id = _request(client, 'data-products', product_id)['execution_id']
+        _act_as('steward')
+        rejected = client.post(
+            '/api/workflows/handle-approval',
+            json={'execution_id': execution_id, 'approved': False, 'message': 'No'},
+        )
+        assert rejected.status_code == 200, rejected.text
+
+        _act_as('second_admin')
+        _assert_approval_refused(_decide(client, 'data-products', product_id),
+                                 'no_pending_request')
+
+    def test_a_workflow_approval_after_the_request_was_decided_elsewhere_applies_nothing(
+        self, client, db_session,
+    ):
+        WorkflowsManager(db=db_session).load_from_yaml()
+        product_id = _product(db_session)
+        execution_id = _request(client, 'data-products', product_id)['execution_id']
+        _act_as('steward')
+        assert _decide(client, 'data-products', product_id).status_code == 200
+        _change(client, 'data-products', product_id, 'active')
+
+        approved = client.post(
+            '/api/workflows/handle-approval',
+            json={'execution_id': execution_id, 'approved': True, 'message': 'OK'},
+        )
+
+        assert approved.status_code == 200, approved.text
+        assert _status(db_session, DataProductDb, product_id) == 'active'
+
+    @pytest.mark.parametrize('kind, model, make', KINDS)
+    def test_a_request_outlived_by_a_transition_is_not_pending(
+        self, client, db_session, kind, model, make,
+    ):
+        # Requested while uncertified; deprecated and reactivated directly; then
+        # certified: the old request must not deprecate it now
+        entity_id = make(db_session, certified=False)
+        _request(client, kind, entity_id)
+        _change(client, kind, entity_id, 'deprecated')
+        _change(client, kind, entity_id, 'active')
+        db_session.get(model, entity_id).certification_level = 1
+        db_session.commit()
+
+        _act_as('steward')
+        _assert_approval_refused(_decide(client, kind, entity_id), 'no_pending_request')
+
+    @pytest.mark.parametrize('kind, model, make', KINDS)
+    def test_a_second_request_does_not_deprecate_again_after_a_reactivation(
+        self, client, db_session, kind, model, make,
+    ):
+        entity_id = make(db_session)
+        _request(client, kind, entity_id)
+        _request(client, kind, entity_id)
+        _act_as('steward')
+        assert _decide(client, kind, entity_id).status_code == 200
+        assert _status(db_session, model, entity_id) == 'deprecated'
+        _change(client, kind, entity_id, 'active')
+
+        _assert_approval_refused(_decide(client, kind, entity_id), 'no_pending_request')
+
+    def test_a_contract_request_denied_cannot_be_approved_later(self, client, db_session):
+        contract_id = _contract(db_session)
+        _request(client, 'data-contracts', contract_id)
+        _act_as('steward')
+        denied = client.post(
+            f'/api/data-contracts/{contract_id}/handle-status-change',
+            json={'decision': 'deny', 'target_status': 'deprecated',
+                  'requester_email': 'test@example.com'},
+        )
+        assert denied.status_code == 200, denied.text
+
+        _assert_approval_refused(_decide(client, 'data-contracts', contract_id),
+                                 'no_pending_request')
+
+
 def _request_contract_deprecation(client: TestClient, contract_id: str) -> None:
     requested = client.post(
         f'/api/data-contracts/{contract_id}/request-status-change',

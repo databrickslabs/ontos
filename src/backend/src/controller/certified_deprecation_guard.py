@@ -183,8 +183,122 @@ def handle_decision_refusal(
     return status_change_decision_refusal(db, entity_type, entity_id, target_status, approver_ids)
 
 
-def _decided_target(entry: Any) -> str:
-    return str((entry.details or {}).get('target_status') or '').lower()
+# Change log action that ends a status change request: its decision (approve,
+# deny, a workflow's rejection) or any later transition of the entity
+REQUEST_CLOSED = 'status_change_request_closed'
+
+
+def _requests(db: Session, entity_type: str, entity_id: str) -> list:
+    from src.controller.change_log_manager import change_log_manager
+
+    return change_log_manager.get_changes_for_entity(
+        db, entity_type, entity_id, action='status_change_requested', limit=200,
+    )
+
+
+def _closed_request_ids(db: Session, entity_type: str, entity_id: str) -> set:
+    from src.controller.change_log_manager import change_log_manager
+
+    return {
+        (entry.details or {}).get('request_id')
+        for entry in change_log_manager.get_changes_for_entity(
+            db, entity_type, entity_id, action=REQUEST_CLOSED, limit=500,
+        )
+    }
+
+
+def request_is_closed(
+    db: Session, entity_type: str, entity_id: str, request_id: Optional[str],
+) -> bool:
+    """Whether the request was decided, or the entity transitioned after it.
+
+    A request without an id (made before requests had one) counts as closed:
+    nothing ties a decision to it.
+    """
+    return not request_id or request_id in _closed_request_ids(db, entity_type, entity_id)
+
+
+def close_request(
+    db: Session, entity_type: str, entity_id: str, request_id: Optional[str],
+    outcome: str, username: Optional[str],
+) -> None:
+    """Record that a status change request ended (``outcome``: approve, deny, transition...)."""
+    if not request_id:
+        return
+    from src.controller.change_log_manager import change_log_manager
+
+    change_log_manager.log_change_with_details(
+        db, entity_type=entity_type, entity_id=entity_id, action=REQUEST_CLOSED,
+        username=username or 'system',
+        details={'request_id': request_id, 'outcome': outcome},
+    )
+
+
+def close_open_requests(
+    db: Session, entity_type: str, entity_id: str, to_status: str, username: Optional[str],
+) -> None:
+    """End every open status change request of an entity that is about to transition.
+
+    Called by ``run_status_gates`` once the gates passed: a request made from
+    the status the entity is leaving can no longer be approved, even if the
+    entity later returns to that status. Never raises.
+    """
+    try:
+        closed = _closed_request_ids(db, entity_type, entity_id)
+        for entry in _requests(db, entity_type, entity_id):
+            request_id = (entry.details or {}).get('request_id')
+            if request_id and request_id not in closed:
+                close_request(
+                    db, entity_type, entity_id, request_id, f'transition:{to_status}', username,
+                )
+                closed.add(request_id)
+    except Exception as e:  # The bookkeeping must never stop a transition
+        logger.error(
+            "Could not close the status change requests of %s %s: %s",
+            entity_type, entity_id, e, exc_info=True,
+        )
+
+
+def pending_request(db: Session, entity_type: str, entity_id: str) -> Optional[dict]:
+    """The entity's pending status change request (its change log details), or None.
+
+    The request record is the ``status_change_requested`` change log entry
+    both managers write with every request (notifications can be deleted,
+    and products' requests have none). A request is pending when it is the
+    latest one, has a ``request_id``, no ``status_change_request_closed``
+    entry names it (no decision, no transition since), and the entity still
+    has the status it was made from.
+    """
+    requests = _requests(db, entity_type, entity_id)
+    if not requests:
+        return None
+    latest = requests[0].details or {}
+    if request_is_closed(db, entity_type, entity_id, latest.get('request_id')):
+        return None
+    model = _entity_model(entity_type)
+    entity = db.get(model, entity_id) if model is not None else None
+    requested_from = str(latest.get('from_status') or latest.get('current_status') or '')
+    current = str(getattr(entity, 'status', '') or 'draft').lower()
+    if requested_from.lower() != current:
+        return None
+    return latest
+
+
+def pending_request_id(db: Session, entity_type: str, entity_id: str) -> Optional[str]:
+    """The id of the entity's pending status change request, if any."""
+    return (pending_request(db, entity_type, entity_id) or {}).get('request_id')
+
+
+def record_decision(
+    db: Session, entity_type: str, entity_id: str, request_id: Optional[str],
+    decision: str, username: Optional[str],
+) -> None:
+    """Close the decided request (approve or deny; a clarification keeps it open)."""
+    decision = (decision or '').lower()
+    if decision in ('approve', 'deny') and not request_is_closed(
+        db, entity_type, entity_id, request_id,
+    ):
+        close_request(db, entity_type, entity_id, request_id, decision, username)
 
 
 def status_change_decision_refusal(
@@ -196,42 +310,16 @@ def status_change_decision_refusal(
 ) -> Optional[str]:
     """Why approving with ``handle-status-change`` doesn't count for the guard, or None.
 
-    The request record is the ``status_change_requested`` change log entry
-    both managers write with every request (notifications can be deleted,
-    and products' requests have none). It counts when the latest request
-    of the entity asks for ``target_status``, was made from the entity's
-    current status, hasn't been decided yet (fewer ``status_change_approve``
-    / ``status_change_deny`` entries for that target than requests) and
-    wasn't made by the approver (``approver_ids``: their email and username).
+    It counts for the entity's pending request (``pending_request``) when that
+    asks for ``target_status`` and wasn't made by the approver
+    (``approver_ids``: their email and username).
     """
-    from src.controller.change_log_manager import change_log_manager
-
-    target = (target_status or '').lower()
-    requests = change_log_manager.get_changes_for_entity(
-        db, entity_type, entity_id, action='status_change_requested', limit=200,
-    )
-    if not requests:
+    request = pending_request(db, entity_type, entity_id)
+    if request is None:
         return NO_PENDING_REQUEST
-    latest = requests[0].details or {}
-    if _decided_target(requests[0]) != target:
+    if str(request.get('target_status') or '').lower() != (target_status or '').lower():
         return TARGET_MISMATCH
-    model = _entity_model(entity_type)
-    entity = db.get(model, entity_id) if model is not None else None
-    requested_from = str(latest.get('from_status') or latest.get('current_status') or '')
-    current = str(getattr(entity, 'status', '') or 'draft').lower()
-    if requested_from and requested_from.lower() != current:
-        return NO_PENDING_REQUEST
-    decided = sum(
-        1
-        for action in ('status_change_approve', 'status_change_deny')
-        for entry in change_log_manager.get_changes_for_entity(
-            db, entity_type, entity_id, action=action, limit=200,
-        )
-        if _decided_target(entry) == target
-    )
-    if decided >= sum(1 for entry in requests if _decided_target(entry) == target):
-        return NO_PENDING_REQUEST
-    requester = str(latest.get('requester_email') or '').strip().lower()
+    requester = str(request.get('requester_email') or '').strip().lower()
     if requester and requester in _identities(approver_ids):
         return SELF_APPROVAL
     return None

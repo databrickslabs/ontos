@@ -2945,7 +2945,7 @@ async def handle_status_change_response(
     a certified product this way needs Admin on data products (certified guard).
     """
     from src.controller.certified_deprecation_guard import (
-        approved_status_change, handle_decision_refusal,
+        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
     )
     by_admin = await has_feature_permission(
         DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, current_user, request,
@@ -2956,6 +2956,7 @@ async def handle_status_change_response(
         db, 'data_product', product_id, payload.target_status, by_admin,
         current_user.email, current_user.username,
     )
+    request_id = pending_request_id(db, 'data_product', product_id)
     try:
         with approved_status_change('data_product', product_id, refusal):
             result = manager.handle_status_change_response(
@@ -2968,6 +2969,10 @@ async def handle_status_change_response(
                 message=payload.message,
                 current_user=current_user.username
             )
+        # The decision ends the request it was about
+        record_decision(
+            db, 'data_product', product_id, request_id, payload.decision, current_user.username,
+        )
         
         audit_manager.log_action(
             db=db,

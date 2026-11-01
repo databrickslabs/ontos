@@ -3511,19 +3511,37 @@ class WorkflowExecutor:
                 target_status = trigger_context.to_status or (
                     trigger_context.entity_data or {}
                 ).get('target_status')
+                from src.controller.certified_deprecation_guard import (
+                    NO_PENDING_REQUEST, approved_status_change, close_request,
+                    request_is_closed, workflow_approval_refusal,
+                )
+                request_id = (trigger_context.entity_data or {}).get('request_id')
                 if approved_request and target_status:
                     # A certified product is deprecated only by an approver's
-                    # decision through handle-approval, not the requester's;
-                    # a run without an approval step or a plain resume doesn't count
-                    from src.controller.certified_deprecation_guard import (
-                        approved_status_change, workflow_approval_refusal,
-                    )
+                    # decision through handle-approval, not the requester's,
+                    # on a request still open (not decided elsewhere, no
+                    # transition since); a run without an approval step or a
+                    # plain resume doesn't count
                     refusal = workflow_approval_refusal(approved, trigger_context.user_email)
+                    if refusal is None and request_id and request_is_closed(
+                        self._db, 'data_product', entity_id, request_id,
+                    ):
+                        refusal = NO_PENDING_REQUEST
                     with approved_status_change('data_product', entity_id, refusal):
                         self._apply_requested_status_change(
                             trigger_context, entity_id, target_status, responded_by,
                             execution_id=execution_id,
                         )
+                # The run decided the request (approved or rejected): it ends
+                # here, so nothing can approve it later
+                if request_id and not request_is_closed(
+                    self._db, 'data_product', entity_id, request_id,
+                ):
+                    close_request(
+                        self._db, 'data_product', entity_id, request_id,
+                        'workflow_approved' if approved_request else 'workflow_rejected',
+                        responded_by,
+                    )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)

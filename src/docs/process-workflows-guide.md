@@ -444,14 +444,18 @@ deprecation only when the request is applied after an approval that counts:
   `POST /api/workflows/handle-approval`. A run without an approval step, or a plain
   `POST /api/workflows/executions/{id}/resume`, doesn't count;
 - a product's or contract's **pending** request approved with `handle-status-change`
-  by a user with Admin on the feature. Pending means the latest
-  `status_change_requested` change log entry of the entity asks for that status, was
-  made from the entity's current status and hasn't been approved or denied yet (the
-  change log is the record both managers write with every request; notifications
-  can be deleted, and a product's request has none). For a contract, the *Status
-  Change Request Pending* notification goes to the Admin role and has an
-  *Approve/Deny* action that opens the decision dialog; once decided it opens
-  read-only.
+  by a user with Admin on the feature. Each request has a `request_id` in its
+  `status_change_requested` change log entry (the record both managers write with
+  every request; notifications can be deleted, and a product's request has none). A
+  request is pending when it is the entity's latest one, the entity still has the
+  status it was made from, and no `status_change_request_closed` entry names it. Its
+  decision writes that entry: `handle-status-change` approve or deny (a clarification
+  keeps it open), the Status Change Request workflow's approval or rejection, and any
+  transition of the entity, so a request made from a status the entity has left can't
+  be approved even after the entity returns to it. Requests made before they had an
+  id are never pending. For a contract, the *Status Change Request Pending*
+  notification goes to the Admin role and has an *Approve/Deny* action that opens the
+  decision dialog; once decided it opens read-only.
 
 In both cases the approver must not be the requester. A decision that doesn't count
 is refused with `certified_deprecation_approval_refused` and a `reason`

@@ -6354,6 +6354,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             username=current_user,
             details={
                 "requester_email": requester_email,
+                # Ties the decision to this request (certified deprecation guard)
+                "request_id": str(uuid4()),
                 "current_status": current_status,
                 "target_status": target_status,
                 "justification": justification,

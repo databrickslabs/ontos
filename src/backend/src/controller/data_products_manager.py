@@ -1499,6 +1499,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             username=current_user or "anonymous",
             details={
                 "requester_email": requester_email,
+                # Ties the decision to this request (certified deprecation guard)
+                "request_id": request_id,
                 "from_status": from_status,
                 "target_status": target_status,
                 "justification": justification,

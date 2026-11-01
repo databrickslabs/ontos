@@ -186,7 +186,8 @@ def test_a_rejection_keeps_the_baseline(client, db_session, asset, user_ws, work
     row = db_session.get(MetricViewChangeRequestDb, uuid.UUID(request['id']))
     db_session.refresh(row)
     assert row.status == 'rejected' and row.delivered_at is None
-    baseline = db_session.query(MetricViewBaselineDb).one()
+    assert row.decided_by == OWNER and row.decision_message == 'checked'
+    baseline =db_session.query(MetricViewBaselineDb).one()
     assert baseline.digest == baseline_digest and baseline.request_id is None
 
 

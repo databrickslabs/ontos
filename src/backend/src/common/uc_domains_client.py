@@ -14,7 +14,6 @@ Key UC facts this wrapper encodes (see the SDK 0.137 surface):
   securable membership in the domain. We default it to a slug of the name.
 """
 
-import re
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -30,6 +29,7 @@ class DomainPermissionError(PermissionError):
 @dataclass
 class UcDomain:
     """A UC domain, decoupled from the SDK's ``Domain`` type."""
+
     domain_id: Optional[str]
     name: str
     tag_key: Optional[str] = None
@@ -41,21 +41,13 @@ class UcDomain:
         return bool(self.parent_domain_id)
 
 
-def slugify_tag_key(name: str) -> str:
-    """Derive a UC tag key from a domain name.
-
-    UC requires a ``tag_key`` on every domain. We produce a stable, lowercase,
-    underscore-separated key from the name (e.g. "Sales & Marketing" ->
-    "sales_marketing"). Falls back to "domain" if the name has no usable chars.
-    """
-    key = re.sub(r"[^0-9a-zA-Z]+", "_", (name or "").strip().lower()).strip("_")
-    return key or "domain"
-
-
 def _to_uc_domain(sdk_domain) -> UcDomain:
+    # ``Domain.name`` is the API resource name (``domains/{domain_id}``), not
+    # the human-readable domain label. Unity Catalog uses ``tag_key`` as the
+    # display label and as the governed tag associated with the domain.
     return UcDomain(
         domain_id=getattr(sdk_domain, "domain_id", None),
-        name=getattr(sdk_domain, "name", None) or "",
+        name=getattr(sdk_domain, "tag_key", None) or "",
         tag_key=getattr(sdk_domain, "tag_key", None),
         description=getattr(sdk_domain, "description", None),
         parent_domain_id=getattr(sdk_domain, "parent_domain_id", None),
@@ -102,8 +94,7 @@ class UcDomainsClient:
         from databricks.sdk.service.domains import Domain
 
         domain = Domain(
-            name=name,
-            tag_key=tag_key or slugify_tag_key(name),
+            tag_key=tag_key or name,
             description=description,
             parent_domain_id=parent_domain_id,
         )
@@ -131,7 +122,7 @@ class UcDomainsClient:
 
         paths = []
         if name is not None:
-            paths.append("name")
+            paths.append("tag_key")
         if description is not None:
             paths.append("description")
         if not paths:
@@ -141,7 +132,10 @@ class UcDomainsClient:
         # Domain() requires tag_key even though we don't change it; carry the
         # current value so construction succeeds and the server keeps it.
         current = self.get_domain(domain_id)
-        domain = Domain(tag_key=current.tag_key, name=name, description=description)
+        domain = Domain(
+            tag_key=name if name is not None else current.tag_key,
+            description=description,
+        )
         # update_mask is the SDK's FieldMask wrapper (the API calls .ToJsonString());
         # build it from a comma-separated field list.
         mask = FieldMask()

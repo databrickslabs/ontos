@@ -5,7 +5,7 @@
 # Usage: ./scripts/lock-requirements.sh
 set -euo pipefail
 
-PYTHON_VERSION="3.10"
+PYTHON_VERSION="3.11"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Optional: set UV_DEFAULT_INDEX to use a PyPI mirror (e.g. internal proxy).

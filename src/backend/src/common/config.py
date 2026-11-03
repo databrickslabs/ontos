@@ -156,6 +156,13 @@ class Settings(BaseSettings):
     MOCK_USER_GROUPS: Optional[str] = Field(None, env='MOCK_USER_GROUPS')
     MOCK_USER_IP: Optional[str] = Field(None, env='MOCK_USER_IP')
 
+    # Requests without the user's on-behalf-of token (x-forwarded-access-token).
+    # False (default): routes that call Databricks as the user answer 403
+    # (user_token_required). True: they use the app's service principal client
+    # instead, for deployments where on-behalf-of auth isn't enabled. ENV=LOCAL*
+    # always uses the app's client (no Apps proxy forwards a token locally).
+    OBO_ALLOW_SP_FALLBACK: bool = Field(False, env='OBO_ALLOW_SP_FALLBACK')
+
     # Testing flag (replaces ad-hoc os.environ.get('TESTING') reads)
     TESTING: bool = Field(False, env='TESTING')
 

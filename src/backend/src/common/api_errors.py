@@ -53,6 +53,12 @@ class InvalidStatusTransitionError(CodedValueError):
     code = 'invalid_status_transition'
 
 
+class UserTokenRequiredError(CodedValueError):
+    """The request has no user (on-behalf-of) token to call Databricks with."""
+
+    code = 'user_token_required'
+
+
 def _coded_cause(exc: BaseException) -> Optional[CodedValueError]:
     """The ``CodedValueError`` an HTTP error was raised from, if it carries its message."""
     seen = set()

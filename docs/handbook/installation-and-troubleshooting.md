@@ -70,9 +70,15 @@ conceptually:
   gets `READ_WRITE` on the volume after first deploy.
 - **On-behalf-of (OBO) authentication enabled** on the workspace's
   Apps service. OBO is in Public Preview at time of writing; the
-  toggle lives in workspace Previews. Without OBO, the app falls back
-  to SP-only auth and most lifecycle actions fail because they need
-  the calling user's permissions to grant securely.
+  toggle lives in workspace Previews. With OBO enabled no setting is
+  needed: the proxy forwards each user's token and Ontos calls
+  Databricks as that user. A deployment without OBO must set
+  `OBO_ALLOW_SP_FALLBACK=true`; then the routes that call Databricks as
+  the user (Data Catalog, Catalog Commander, schema import, Ask Ontos,
+  the ontology generator, domain sync, asset review content) use the
+  app's service principal instead. Without it they answer 403
+  (`user_token_required`). Most lifecycle actions still fail without
+  OBO, because they need the calling user's permissions.
 - Optionally, a **Marketplace listing** in the workspace's regional
   Marketplace feed.
 

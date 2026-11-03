@@ -33,6 +33,11 @@ class ToolContext:
     semantic_models_manager: Optional[Any] = None
     costs_manager: Optional[Any] = None
     search_manager: Optional[Any] = None
+    # Calling user + request, used by ToolRegistry.execute to enforce the
+    # user's Ontos feature permissions (LLM chat path). MCP enforces token
+    # scopes in mcp_routes instead and calls tools directly.
+    user: Optional[Any] = None
+    request: Optional[Any] = None
 
 
 @dataclass

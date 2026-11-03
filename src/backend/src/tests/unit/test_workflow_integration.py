@@ -378,10 +378,10 @@ class TestStatusGatingFlow:
 # =========================================================================
 
 class TestScriptWithSubstitutionFlow:
-    """Python script step that uses entity data and returns a result."""
+    """Python script steps are disabled (in-process exec() cannot be sandboxed)."""
 
-    def test_script_accesses_entity_and_produces_result(self, db_session):
-        """Script reads entity data, computes something, sets result."""
+    def test_python_script_step_fails_workflow(self, db_session):
+        """A workflow containing a Python script step fails instead of executing it."""
         _create_workflow_in_db(
             db_session,
             trigger_config=json.dumps({
@@ -432,7 +432,7 @@ class TestScriptWithSubstitutionFlow:
 
         assert len(executions) == 1
         exe = executions[0]
-        assert exe.status == ExecutionStatus.SUCCEEDED
+        assert exe.status == ExecutionStatus.FAILED
 
 
 # =========================================================================

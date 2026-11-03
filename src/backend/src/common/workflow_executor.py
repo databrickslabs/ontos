@@ -11,11 +11,12 @@ Handles step-by-step execution with branching, including:
 """
 
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -52,7 +53,11 @@ def _render_template_value(value: Any) -> str:
     return str(value)
 
 
-def substitute_template(template: str, context: 'StepContext') -> str:
+def substitute_template(
+    template: str,
+    context: 'StepContext',
+    render: Optional[Callable[[str], str]] = None,
+) -> str:
     """Replace ${variable} and {{variable}} placeholders with context values.
 
     Supports:
@@ -65,6 +70,10 @@ def substitute_template(template: str, context: 'StepContext') -> str:
                                      (e.g. ${context.on_behalf_of.value}).
                                      Top-level scalar attrs like
                                      ${context.entity_type} also work.
+
+    ``render``, if given, maps each resolved value to its replacement text
+    (used by SQL steps to emit bind-parameter markers instead of raw values).
+    Unresolved placeholders are left intact either way.
     """
     import re
 
@@ -130,12 +139,18 @@ def substitute_template(template: str, context: 'StepContext') -> str:
                 resolved = _lookup_context(parts)
                 if resolved is not None:
                     return resolved
-        # leave placeholder intact when unresolved
-        return match.group(0)
+        return None
+
+    def _sub(match):
+        value = _replace(match)
+        if value is None:
+            # leave placeholder intact when unresolved
+            return match.group(0)
+        return render(value) if render else value
 
     # Support both ${var} and {{var}} syntax
-    result = re.sub(r'\$\{([^}]+)\}', _replace, template)
-    result = re.sub(r'\{\{([^}]+)\}\}', _replace, result)
+    result = re.sub(r'\$\{([^}]+)\}', _sub, template)
+    result = re.sub(r'\{\{([^}]+)\}\}', _sub, result)
     return result
 
 
@@ -1034,7 +1049,12 @@ class ScriptStepHandler(StepHandler):
         
         try:
             if language == 'python':
-                result = self._execute_python(code, context, timeout_seconds)
+                # In-process exec() cannot be sandboxed (restricted __builtins__
+                # is escapable via attribute access), so Python steps are disabled.
+                return StepResult(
+                    passed=False,
+                    error="Python script steps are disabled for security reasons; use a SQL step or a webhook/job step instead",
+                )
             elif language == 'sql':
                 result = self._execute_sql(code, context, timeout_seconds)
             else:
@@ -1044,61 +1064,6 @@ class ScriptStepHandler(StepHandler):
         except Exception as e:
             logger.exception(f"Script step failed: {e}")
             return StepResult(passed=False, error=str(e))
-
-    _SAFE_BUILTINS = {
-        'len': len, 'str': str, 'int': int, 'float': float, 'bool': bool,
-        'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
-        'range': range, 'enumerate': enumerate, 'zip': zip,
-        'sorted': sorted, 'reversed': reversed,
-        'min': min, 'max': max, 'sum': sum, 'abs': abs, 'round': round,
-        'any': any, 'all': all,
-        'isinstance': isinstance, 'type': type,
-        'print': print, 'repr': repr, 'hasattr': hasattr, 'getattr': getattr,
-        'ValueError': ValueError, 'TypeError': TypeError, 'KeyError': KeyError,
-        'True': True, 'False': False, 'None': None,
-    }
-
-    def _execute_python(self, code: str, context: StepContext, timeout: int) -> StepResult:
-        """Execute Python code with safe builtins and a thread-based timeout."""
-        import threading
-
-        safe_globals = {
-            '__builtins__': self._SAFE_BUILTINS,
-            'entity': context.entity.copy(),
-            'entity_type': context.entity_type,
-            'entity_id': context.entity_id,
-            'entity_name': context.entity_name,
-            'user_email': context.user_email,
-            'step_results': context.step_results.copy(),
-        }
-
-        local_vars: Dict[str, Any] = {}
-        exec_error: List[Exception] = []
-
-        def _run():
-            try:
-                exec(code, safe_globals, local_vars)
-            except Exception as e:
-                exec_error.append(e)
-
-        thread = threading.Thread(target=_run, daemon=True)
-        thread.start()
-        thread.join(timeout=timeout)
-
-        if thread.is_alive():
-            return StepResult(passed=False, error=f"Script timed out after {timeout}s")
-
-        if exec_error:
-            return StepResult(passed=False, error=str(exec_error[0]))
-
-        result = local_vars.get('result', {'passed': True})
-        if isinstance(result, dict):
-            return StepResult(
-                passed=result.get('passed', True),
-                message=result.get('message'),
-                data=result.get('data'),
-            )
-        return StepResult(passed=bool(result))
 
     def _execute_sql(self, code: str, context: StepContext, timeout: int) -> StepResult:
         """Execute SQL via Databricks statement_execution API."""
@@ -1114,12 +1079,25 @@ class ScriptStepHandler(StepHandler):
                 return StepResult(passed=False, error="No SQL warehouse configured in Settings")
             warehouse_id = wh_row.value.strip().strip('"')
 
-            # Substitute variables in SQL
-            resolved_sql = substitute_template(code, context)
+            # Bind substituted values as named parameters (never paste them
+            # into the SQL text). Quotes around a placeholder are dropped since
+            # the parameter is already a string literal; for identifiers write
+            # IDENTIFIER(${entity.full_name}).
+            from databricks.sdk.service.sql import StatementParameterListItem
+            parameters: List[StatementParameterListItem] = []
+
+            def _bind(value: str) -> str:
+                name = f"p{len(parameters)}"
+                parameters.append(StatementParameterListItem(name=name, value=value))
+                return f":{name}"
+
+            unquoted = re.sub(r"'(\$\{[^}']+\}|\{\{[^}']+\}\})'", r"\1", code)
+            resolved_sql = substitute_template(unquoted, context, render=_bind)
 
             resp = ws.statement_execution.execute_statement(
                 statement=resolved_sql,
                 warehouse_id=warehouse_id,
+                parameters=parameters or None,
                 wait_timeout="50s",
             )
 

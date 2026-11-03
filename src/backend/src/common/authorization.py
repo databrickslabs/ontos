@@ -1,3 +1,4 @@
+import hmac
 from typing import Optional, Dict, List
 
 from fastapi import Depends, HTTPException, Request, status
@@ -199,7 +200,7 @@ def _try_resolve_test_override(
     if not settings.TEST_USER_TOKEN:
         return None
     presented = request.headers.get(TEST_TOKEN_HEADER)
-    if not presented or presented != settings.TEST_USER_TOKEN:
+    if not presented or not hmac.compare_digest(presented.encode(), settings.TEST_USER_TOKEN.encode()):
         return None
 
     email = request.headers.get(TEST_USER_EMAIL_HEADER)

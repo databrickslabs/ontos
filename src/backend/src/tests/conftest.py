@@ -43,6 +43,21 @@ from src.models.data_products import DataProduct
 from src.db_models.data_domains import DataDomain  # Add this
 from src.db_models.settings import AppRoleDb  # Already created by settings fixture but good to be explicit
 import uuid
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import sqltypes
+
+
+@compiles(sqltypes.UUID, "sqlite")
+def _uuid_as_char32_on_sqlite(type_, compiler, **kw):
+    """Store UUID columns as text on SQLite.
+
+    The models use the Postgres UUID type, which SQLite renders as ``UUID``.
+    That name gives the column NUMERIC affinity, so a uuid4 whose hex is all
+    digits, or digits with one ``e``, is stored as a number and fails to read
+    back (``'float' object has no attribute 'replace'``). ``CHAR(32)``, what
+    SQLAlchemy uses for its generic ``Uuid`` on SQLite, has TEXT affinity.
+    """
+    return "CHAR(32)"
 
 
 # In-memory SQLite database for testing

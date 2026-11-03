@@ -9,6 +9,7 @@
     "delete": "Excluir",
     "deleteSelected": "Excluir selecionados ({{count}})",
     "edit": "Editar",
+    "rename": "Renomear",
     "add": "Adicionar",
     "create": "Criar",
     "update": "Atualizar",
@@ -355,7 +356,10 @@
       "data_asset_review": "Revisão de ativos",
       "job": "Job",
       "subscription": "Assinatura",
-      "user": "Usuário"
+      "user": "Usuário",
+      "ontology_concept": "Conceito",
+      "ontology_collection": "Coleção",
+      "concept_changeset": "Conjunto de alterações de conceitos"
     },
     "stepTypes": {
       "validation": "Validação",

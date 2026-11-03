@@ -150,5 +150,14 @@
       "savedWithWarnings": "Salvo com avisos",
       "decisionFailed": "Falha na decisão"
     }
+  },
+  "runResult": {
+    "title": "Execução concluída",
+    "loading": "Reunindo correspondências sugeridas…",
+    "found": "{{count}} correspondência(s) sugerida(s) encontrada(s) para revisão.",
+    "none": "Nenhuma correspondência foi encontrada nesta execução. Nada para revisar.",
+    "reviewMatches": "Revisar correspondências",
+    "requestReview": "Solicitar revisão",
+    "thisRun": "esta execução"
   }
 }

@@ -85,3 +85,20 @@ def test_authored_glossary_is_a_selectable_mapping_context(client: TestClient, m
     # And the internal indexes are NOT offered (would be noise).
     assert "urn:meta:sources" not in route_ctxs
     assert "urn:semantic-links" not in route_ctxs
+
+
+def test_demo_context_is_selectable_and_empty_contexts_are_hidden(managers):
+    smm, tmm = managers
+    from rdflib import RDF, URIRef
+    from rdflib.namespace import SKOS
+
+    demo = smm._graph.get_context(URIRef("urn:demo"))
+    demo.add((URIRef("urn:demo#Address"), RDF.type, SKOS.Concept))
+    stale = smm._graph.get_context(URIRef("urn:ontology:e2e-auto-cleaned"))
+    stale.add((URIRef("urn:e2e#Removed"), RDF.type, SKOS.Concept))
+    stale.remove((None, None, None))
+
+    contexts = {row["context"]: row for row in tmm.list_selectable_contexts()}
+
+    assert contexts["urn:demo"]["concept_count"] == 1
+    assert "urn:ontology:e2e-auto-cleaned" not in contexts

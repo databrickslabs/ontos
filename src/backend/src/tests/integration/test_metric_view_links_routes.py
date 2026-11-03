@@ -7,6 +7,9 @@ import pytest
 from databricks.sdk.errors import BadRequest, PermissionDenied, Unauthenticated
 from databricks.sdk.service.catalog import TableType
 
+from src.common.workspace_client import (
+    get_obo_workspace_client as REAL_GET_OBO_WORKSPACE_CLIENT,
+)
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 from src.db_models.semantic_links import EntitySemanticLinkDb
@@ -186,9 +189,22 @@ class TestAssetMetricViewRoute:
         assert response.json()['detail']['code'] == 'metric_view_not_found'
 
 
+@pytest.fixture
+def review_user_client(client, metric_view):
+    """The user's client for the review routes, which take it with Depends.
+
+    The integration conftest swaps the module attributes only, so the route would
+    still call the real helper and, without ENV=LOCAL, need a real user token.
+    """
+    overrides = client.app.dependency_overrides
+    overrides[REAL_GET_OBO_WORKSPACE_CLIENT] = lambda: metric_view
+    yield metric_view
+    overrides.pop(REAL_GET_OBO_WORKSPACE_CLIENT, None)
+
+
 class TestReviewMetricViewRoute:
     def test_the_review_definition_carries_the_links(
-        self, client, db_session, metric_view, links
+        self, client, db_session, review_user_client, links
     ):
         request_id, asset_id = str(uuid.uuid4()), str(uuid.uuid4())
         db_session.add(DataAssetReviewRequestDb(
@@ -200,7 +216,10 @@ class TestReviewMetricViewRoute:
         ))
         db_session.flush()
 
-        response = client.get(f'/api/data-asset-reviews/{request_id}/assets/{asset_id}/metric-view')
+        response = client.get(
+            f'/api/data-asset-reviews/{request_id}/assets/{asset_id}/metric-view',
+            headers=TOKEN,
+        )
 
         assert response.status_code == 200, response.text
         body = response.json()

@@ -70,13 +70,13 @@ interface ConceptsTabProps {
 // Bulk "Set status" targets → the real lifecycle transition endpoints. Only
 // the safe, always-available forward transitions are offered here; the backend
 // still enforces VALID_TRANSITIONS and returns an error for invalid ones.
-const BULK_STATUS_ACTIONS: { action: string; labelKey: string; defaultLabel: string }[] = [
-  { action: 'submit-review', labelKey: 'semantic-models:bulk.status.submitReview', defaultLabel: 'Submit for review' },
-  { action: 'approve', labelKey: 'semantic-models:bulk.status.approve', defaultLabel: 'Approve' },
-  { action: 'publish', labelKey: 'semantic-models:bulk.status.publish', defaultLabel: 'Publish' },
-  { action: 'certify', labelKey: 'semantic-models:bulk.status.certify', defaultLabel: 'Certify' },
-  { action: 'deprecate', labelKey: 'semantic-models:bulk.status.deprecate', defaultLabel: 'Deprecate' },
-  { action: 'archive', labelKey: 'semantic-models:bulk.status.archive', defaultLabel: 'Archive' },
+const BULK_STATUS_ACTIONS: { action: string; from: string[]; labelKey: string; defaultLabel: string }[] = [
+  { action: 'submit-review', from: ['draft'], labelKey: 'semantic-models:bulk.status.submitReview', defaultLabel: 'Submit for review' },
+  { action: 'approve', from: ['under_review'], labelKey: 'semantic-models:bulk.status.approve', defaultLabel: 'Approve' },
+  { action: 'publish', from: ['approved'], labelKey: 'semantic-models:bulk.status.publish', defaultLabel: 'Publish' },
+  { action: 'certify', from: ['published'], labelKey: 'semantic-models:bulk.status.certify', defaultLabel: 'Certify' },
+  { action: 'deprecate', from: ['published', 'certified'], labelKey: 'semantic-models:bulk.status.deprecate', defaultLabel: 'Deprecate' },
+  { action: 'archive', from: ['certified', 'deprecated'], labelKey: 'semantic-models:bulk.status.archive', defaultLabel: 'Archive' },
 ];
 
 // Sentinel group key for concepts that carry no source_file when grouping by
@@ -266,21 +266,36 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     });
   }, []);
 
-  // Bulk "Set status": POST the chosen lifecycle transition for every selected
-  // concept. The backend enforces VALID_TRANSITIONS, so concepts in a state
-  // that can't take the transition come back as errors — we count and report
-  // successes vs failures rather than assuming all succeed.
+  const selectedConcepts = useMemo(() => {
+    const byIri = new Map(filteredConcepts.map((concept) => [concept.iri, concept]));
+    return Array.from(selectedIris).flatMap((iri) => {
+      const concept = byIri.get(iri);
+      return concept ? [concept] : [];
+    });
+  }, [filteredConcepts, selectedIris]);
+
+  const eligibleForBulkAction = useCallback(
+    (action: string) => {
+      const allowed = BULK_STATUS_ACTIONS.find((candidate) => candidate.action === action)?.from ?? [];
+      return selectedConcepts.filter((concept) => allowed.includes(concept.status || 'draft'));
+    },
+    [selectedConcepts],
+  );
+
+  // Bulk "Set status": only call the endpoint for concepts whose current state
+  // permits the transition. Mixed selections remain useful; inapplicable rows
+  // are left unchanged and reported as skipped rather than generating errors.
   const runBulkStatus = useCallback(
     async (action: string, label: string) => {
-      const iris = Array.from(selectedIris);
-      if (iris.length === 0) return;
+      const eligible = eligibleForBulkAction(action);
+      if (eligible.length === 0) return;
       setBulkBusy(true);
       let ok = 0;
       let failed = 0;
-      for (const iri of iris) {
+      for (const concept of eligible) {
         try {
           const res = await fetch(
-            `/api/knowledge/concepts/by-iri/${action}?iri=${encodeURIComponent(iri)}`,
+            `/api/knowledge/concepts/by-iri/${action}?iri=${encodeURIComponent(concept.iri)}`,
             { method: 'POST' },
           );
           if (res.ok) ok += 1;
@@ -298,14 +313,14 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
         description: t(
           'semantic-models:bulk.statusResult',
           '{{label}}: {{ok}} updated, {{failed}} skipped',
-          { label, ok, failed },
+          { label, ok, failed: failed + (selectedConcepts.length - eligible.length) },
         ),
         variant: failed > 0 && ok === 0 ? 'destructive' : undefined,
       });
       setSelectedIris(new Set());
       onConceptsChanged?.();
     },
-    [selectedIris, toast, t, onConceptsChanged],
+    [eligibleForBulkAction, selectedConcepts.length, toast, t, onConceptsChanged],
   );
 
   // Per-IRI mapping status, fetched in one batch from the read-model endpoint.
@@ -1084,9 +1099,20 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           <DropdownMenuContent align="end">
             {BULK_STATUS_ACTIONS.map((a) => {
               const label = t(a.labelKey, a.defaultLabel);
+              const eligibleCount = eligibleForBulkAction(a.action).length;
               return (
-                <DropdownMenuItem key={a.action} onClick={() => runBulkStatus(a.action, label)}>
+                <DropdownMenuItem
+                  key={a.action}
+                  data-testid={`bulk-status-${a.action}`}
+                  disabled={eligibleCount === 0}
+                  onClick={() => runBulkStatus(a.action, label)}
+                >
                   {label}
+                  {eligibleCount > 0 && eligibleCount < selectedConcepts.length && (
+                    <span className="ml-auto pl-4 text-xs text-muted-foreground">
+                      {eligibleCount}/{selectedConcepts.length}
+                    </span>
+                  )}
                 </DropdownMenuItem>
               );
             })}

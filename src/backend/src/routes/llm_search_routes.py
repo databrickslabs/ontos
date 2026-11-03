@@ -127,7 +127,7 @@ async def get_llm_search_manager(request: Request, db: DBSessionDep) -> LLMSearc
     search_manager = getattr(request.app.state, 'search_manager', None)
     
     # Get OBO workspace client - uses user's token for proper access control
-    # Falls back to SP client if OBO token not available (local dev)
+    # Without the user's token: 403, or the SP client with ENV=LOCAL / OBO_ALLOW_SP_FALLBACK
     obo_ws_client = get_obo_workspace_client(request, settings)
     
     # Create new instance for each request with current db session

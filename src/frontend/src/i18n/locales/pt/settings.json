@@ -595,6 +595,7 @@
       "title": "Usando tokens MCP",
       "description": "Tokens MCP permitem que assistentes de IA interajam com sua plataforma de governança de dados. Cada token tem escopos específicos que controlam quais ferramentas podem ser acessadas.",
       "endpoint": "Endpoint:",
+      "endpointAlias": "(alias legado: /api/mcp)",
       "header": "Cabeçalho:"
     },
     "createDialog": {

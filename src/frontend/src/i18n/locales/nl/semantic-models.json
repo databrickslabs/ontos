@@ -55,7 +55,22 @@
     "allTypes": "Alle types",
     "allScopes": "Alle scopes",
     "allCollections": "Alle conceptschema's",
-    "labelLanguage": "Labeltaal"
+    "labelLanguage": "Labeltaal",
+    "showSystemSources": "Systeemontologieën tonen",
+    "groupByNone": "Geen",
+    "groupByScheme": "Schema",
+    "groupByDimSource": "Bron",
+    "groupByDimDomain": "Domein",
+    "noSourceFile": "Geen bronbestand",
+    "searchSchemes": "Schema's zoeken...",
+    "sortBy": "Sorteren op",
+    "sortName": "Naam",
+    "sortSize": "Grootte",
+    "groupTypeGlossary": "WOORDENLIJSTEN",
+    "groupTypeTaxonomy": "TAXONOMIEËN",
+    "groupTypeOntology": "ONTOLOGIEËN",
+    "groupTypeOther": "OVERIG",
+    "importedDisable": "Geïmporteerd — kan niet worden verwijderd"
   },
   "groupBy": {
     "collection": "Op conceptschema",
@@ -101,7 +116,12 @@
     "linkAdded": "Koppeling succesvol toegevoegd",
     "linkRemoved": "Koppeling succesvol verwijderd",
     "saveFailed": "Opslaan van concept mislukt",
-    "deleteConceptFailed": "Verwijderen van concept mislukt"
+    "deleteConceptFailed": "Verwijderen van concept mislukt",
+    "submitReview": "Ingediend ter beoordeling",
+    "submitReviewGoverned": "Ingediend ter beoordeling — wacht op goedkeuring.",
+    "changesRequested": "Met uw opmerking teruggestuurd naar de eigenaar.",
+    "withdrawReview": "Beoordeling ingetrokken",
+    "statusChanged": "Status bijgewerkt"
   },
   "status": {
     "draft": "Concept",
@@ -142,7 +162,8 @@
     "scope": "Scope",
     "concepts": "Concepten",
     "source": "Bron",
-    "sourceUrl": "Bron-URL"
+    "sourceUrl": "Bron-URL",
+    "sourceFile": "Geïmporteerd uit"
   },
   "form": {
     "createTitle": "Term Aanmaken",
@@ -197,6 +218,17 @@
     "linkEditor": {
       "title": "Koppeling aanmaken",
       "description": "Definieer een relatie tussen twee concepten"
+    },
+    "deleteScheme": {
+      "title": "Schema verwijderen",
+      "description": "Weet u zeker dat u \"{{label}}\" wilt verwijderen? Hiermee worden alle concepten in dit schema verwijderd. Dit kan niet ongedaan worden gemaakt."
+    },
+    "deprecate": {
+      "title": "Concept als verouderd markeren",
+      "description": "Geef optioneel een of meer opvolgende concepten op om aan te geven waardoor dit concept is vervangen.",
+      "successors": "Opvolgende concepten",
+      "noSuccessors": "Niets geselecteerd",
+      "addSuccessor": "+ Opvolger toevoegen"
     }
   },
   "rdfSources": {
@@ -237,7 +269,37 @@
     "supportedFormats": "Ondersteund: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
     "targetCollection": "Doelconceptschema",
     "title": "Concepten importeren",
-    "readOnlyHint": "Alleen bewerkbare conceptschema's kunnen imports ontvangen. Geïmporteerde en systeemschema's zijn alleen-lezen."
+    "readOnlyHint": "Alleen bewerkbare conceptschema's kunnen imports ontvangen. Geïmporteerde en systeemschema's zijn alleen-lezen.",
+    "descriptionMulti": "Sleep een of meer ontologiebestanden hierheen en kies hoe ze worden geïmporteerd. Het bestand is slechts een drager.",
+    "sourceFiles": "Bronbestanden",
+    "addMoreFiles": "Meer bestanden toevoegen…",
+    "chooseFiles": "Bestanden kiezen…",
+    "howLand": "Hoe moeten deze worden geïmporteerd?",
+    "oneScheme": "Eén schema",
+    "oneSchemeDesc": "Voeg alle bestanden samen in één conceptschema.",
+    "oneSchemePerFile": "Eén schema per bestand",
+    "oneSchemePerFileDesc": "Elk bestand wordt een eigen conceptschema.",
+    "perFileTodo": "Eén schema per bestand vereist een backend die per bestand een schema aanmaakt; voorlopig komen alle bestanden in het onderstaande schema terecht.",
+    "createNewScheme": "＋ Nieuw schema aanmaken…",
+    "newSchemeName": "Naam nieuw schema (bijv. Financiële ontologie)",
+    "reconcileNote": "Overlappende of dubbele termen tussen schema's worden later afgestemd in Data Asset Beoordelingen. Importeren brengt alleen de graaf binnen.",
+    "summary": "{{files}} bestand(en) geïmporteerd, in totaal {{count}} triples.",
+    "summaryPending": "Upload ingediend ter goedkeuring ({{files}} bestand(en))",
+    "fileOk": "{{count}} triples",
+    "filePending": "Wacht op goedkeuring",
+    "allFailed": "Er konden geen bestanden worden geïmporteerd. Zie de fouten per bestand hieronder.",
+    "computingDiff": "Wijzigingen berekenen…",
+    "changelogTitle": "Toegepaste wijzigingen uit {{file}}",
+    "previewTitle": "Wijzigingen uit {{file}}",
+    "changelogSummary": "Wijzigt {{modified}}, voegt {{added}} toe, verwijdert {{removed}} ({{unchanged}} ongewijzigd).",
+    "bucketModified": "Gewijzigd (nieuwe versie)",
+    "bucketNew": "Nieuw",
+    "bucketRemoved": "Verwijderd (als verouderd gemarkeerd, niet gewist)",
+    "stillReferenced": "gebruikt door {{count}}",
+    "submitMulti": "{{count}} bestand(en) importeren",
+    "conflict": {
+      "alreadyIn": "Al aanwezig in {{scheme}}"
+    }
   },
   "propertyTypes": {
     "object": "Object-eigenschap",
@@ -488,10 +550,82 @@
   },
   "explore": {
     "emptyTitle": "Nog niets om te verkennen",
-    "emptyBody": "Importeer bestanden of maak concepten aan op het tabblad Define.",
-    "emptyCta": "Ga naar Define"
+    "emptyBody": "Importeer bestanden of maak concepten aan op het tabblad Definiëren.",
+    "emptyCta": "Ga naar Definiëren"
   },
   "define": {
     "requiresWrite": "Schrijftoegang vereist"
+  },
+  "lifecycle": {
+    "changeStatus": "Status wijzigen",
+    "submitReview": "Indienen ter beoordeling",
+    "withdrawReview": "Beoordeling intrekken",
+    "approve": "Goedkeuren",
+    "requestChanges": "Wijzigingen aanvragen",
+    "publish": "Publiceren",
+    "certify": "Certificeren",
+    "deprecate": "Als verouderd markeren",
+    "archive": "Archiveren"
+  },
+  "requestChanges": {
+    "title": "Wijzigingen aanvragen",
+    "description": "Stuur dit concept als concept-versie terug naar de eigenaar, met uw opmerking.",
+    "comment": "Opmerking voor de eigenaar",
+    "placeholder": "Wat moet er veranderen voordat dit kan worden goedgekeurd?",
+    "submit": "Terugsturen"
+  },
+  "submitReview": {
+    "title": "Indienen ter beoordeling",
+    "description": "Wijs optioneel een beoordelaar toe en voeg notities toe.",
+    "reviewer": "Beoordelaar (optioneel)",
+    "reviewerPlaceholder": "Selecteer een beoordelaar...",
+    "notes": "Notities (optioneel)",
+    "notesPlaceholder": "Voeg context of instructies toe...",
+    "submit": "Indienen",
+    "checking": "Controleren op goedkeuringsworkflow…",
+    "governedBanner": "Dit concept valt onder de goedkeuringsworkflow '{{workflow}}'. Bij indienen start die goedkeuring: het concept gaat naar In beoordeling en wacht op akkoord van de goedkeurder.",
+    "governedBannerMulti": "Dit concept valt onder {{count}} goedkeuringsworkflows. Bij indienen start die goedkeuring: het concept gaat naar In beoordeling en wacht op akkoord van de goedkeurder.",
+    "ungovernedBanner": "Er is geen goedkeuringsworkflow gekoppeld. Bij indienen gaat dit concept direct naar In beoordeling; elke gebruiker met schrijfrechten kan het daarna goedkeuren."
+  },
+  "concept": {
+    "inReview": "In beoordeling",
+    "reviewerComment": "Opmerking van beoordelaar",
+    "sparql": "SPARQL",
+    "sparqlTitle": "SPARQL-query",
+    "sparqlDescription": "Doorzoek de kennisgraaf. Vooraf ingevuld met dit concept."
+  },
+  "hierarchy": {
+    "title": "Hiërarchie",
+    "parent": "Bovenliggend",
+    "children": "Onderliggend",
+    "none": "Geen bredere of nauwere concepten.",
+    "viewLabel": "Hiërarchieweergave",
+    "list": "Lijst",
+    "graph": "Graaf"
+  },
+  "versionDiff": {
+    "compare": "Vergelijken"
+  },
+  "versionHistory": {
+    "title": "Versiegeschiedenis",
+    "saveNewVersion": "Nieuwe versie opslaan",
+    "saveDescription": "Bewerk de definitie en sla deze op als nieuwe versie. De vorige definitie blijft bewaard in de geschiedenis.",
+    "willCreate": "Hiermee wordt v{{next}} aangemaakt.",
+    "whatChanged": "Wat is er gewijzigd?",
+    "notePlaceholder": "bijv. formulering aangescherpt voor meer duidelijkheid",
+    "saved": "Nieuwe versie opgeslagen",
+    "current": "Huidig",
+    "previous": "Vorige versie",
+    "previousDefinition": "Vorige definitie:",
+    "noDefinition": "Geen definitie vastgelegd voor deze versie.",
+    "editedBy": "Bewerkt door {{who}} op {{when}}",
+    "unknownEditor": "iemand",
+    "none": "Nog geen eerdere versies.",
+    "unavailable": "Versiegeschiedenis is niet beschikbaar.",
+    "replacedBy": "Vervangen door {{label}}",
+    "saveNewVersionDraftLocked": "Beschikbaar nadat dit concept is goedgekeurd (v1 moet zijn goedgekeurd voordat er een nieuwe versie kan komen)."
+  },
+  "columns": {
+    "fromFile": "uit {{file}}"
   }
 }

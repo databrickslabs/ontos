@@ -44,7 +44,8 @@
     "remove": "Verwijderen",
     "link": "Koppelen",
     "unlink": "Ontkoppelen",
-    "assign": "Toewijzen"
+    "assign": "Toewijzen",
+    "rename": "Hernoemen"
   },
   "labels": {
     "name": "Naam",
@@ -355,7 +356,10 @@
       "data_asset_review": "Asset Beoordeling",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Gebruiker"
+      "user": "Gebruiker",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collectie",
+      "concept_changeset": "Concept-wijzigingsset"
     },
     "stepTypes": {
       "validation": "Validatie",

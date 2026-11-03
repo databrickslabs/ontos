@@ -150,5 +150,14 @@
       "savedWithWarnings": "Opgeslagen met waarschuwingen",
       "decisionFailed": "Beslissing mislukt"
     }
+  },
+  "runResult": {
+    "title": "Uitvoering voltooid",
+    "loading": "Voorgestelde matches verzamelen…",
+    "found": "{{count}} voorgestelde match(es) gevonden om te beoordelen.",
+    "none": "Geen matches gevonden voor deze uitvoering. Er is niets te beoordelen.",
+    "reviewMatches": "Matches beoordelen",
+    "requestReview": "Beoordeling aanvragen",
+    "thisRun": "deze uitvoering"
   }
 }

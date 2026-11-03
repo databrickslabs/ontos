@@ -4,7 +4,25 @@
     "collections": "Esquemas de conceitos",
     "browser": "Conceitos",
     "search": "Pesquisa",
+    "searchSparql": "Pesquisa / SPARQL",
     "graph": "Grafo",
-    "hierarchy": "Hierarquia"
+    "hierarchy": "Hierarquia",
+    "generator": "Gerador",
+    "import": "Importar",
+    "mapping": "Mapeamento"
+  },
+  "sections": {
+    "label": "Seções de conceitos",
+    "define": "Definir",
+    "explore": "Explorar",
+    "enrich": "Enriquecer"
+  },
+  "explore": {
+    "viewLabel": "Visualizações de exploração",
+    "viewList": "Lista",
+    "viewTree": "Árvore",
+    "viewGraph": "Grafo",
+    "createConcept": "Novo conceito",
+    "createScheme": "Novo esquema de conceitos"
   }
 }

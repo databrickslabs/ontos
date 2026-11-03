@@ -190,6 +190,13 @@
     "messages": {
       "saveSuccess": "Instellingen succesvol opgeslagen",
       "saveError": "Kon instellingen niet opslaan"
+    },
+    "schemaImporter": {
+      "title": "Schema-importeur",
+      "childLimit": {
+        "label": "Max. aantal opgehaalde objecten per niveau",
+        "help": "Maximaal aantal tabellen/views/objecten dat de importeur per catalogus of schema ophaalt tijdens het bladeren (1–10000). Verhoog dit voor grote omgevingen; voorbij deze limiet is er geen paginering."
+      }
     }
   },
   "databricks": {
@@ -570,7 +577,8 @@
       "actions": "Acties",
       "never": "Nooit",
       "moreScopes": "+{{count}} meer",
-      "createdBy": "door {{name}}"
+      "createdBy": "door {{name}}",
+      "keylessDefault": "Standaard zonder sleutel"
     },
     "status": {
       "active": "Actief",
@@ -578,13 +586,17 @@
       "expired": "Verlopen"
     },
     "tooltips": {
-      "revokeToken": "Token intrekken"
+      "revokeToken": "Token intrekken",
+      "setKeylessDefault": "Maak dit de standaardtoken voor toegang zonder sleutel",
+      "clearKeylessDefault": "Standaard zonder sleutel wissen (schakelt toegang zonder sleutel uit)",
+      "keylessDefaultBadge": "Via de app-gate geauthenticeerde MCP-verzoeken zonder X-API-Key krijgen de scopes van deze token, toegeschreven aan de aanroepende gebruiker. De scopes gelden voor elke geauthenticeerde app-gebruiker."
     },
     "info": {
       "title": "MCP Tokens Gebruiken",
       "description": "MCP tokens stellen AI assistenten in staat om te communiceren met je data governance platform. Elk token heeft specifieke scopes die bepalen welke tools toegankelijk zijn.",
       "endpoint": "Endpoint:",
-      "header": "Header:"
+      "header": "Header:",
+      "endpointAlias": "(verouderde alias: /api/mcp)"
     },
     "createDialog": {
       "title": "MCP Token Aanmaken",
@@ -599,7 +611,10 @@
       "selectedScopes": "Geselecteerd:",
       "cancel": "Annuleren",
       "create": "Token Aanmaken",
-      "creating": "Aanmaken..."
+      "creating": "Aanmaken...",
+      "keylessDefault": "Gebruiken als standaard zonder sleutel",
+      "keylessDefaultHelp": "Koppel via de app-gate geauthenticeerde MCP-verzoeken zonder X-API-Key aan deze token. Vervangt een eventuele bestaande standaard.",
+      "keylessDefaultWarning": "De scopes van deze token gelden voor ELKE app-gebruiker die /mcp zonder sleutel bereikt. Globaal zoeken omzeilt toegangscontroles per gebruiker, dus verleen alleen-lezen scopes (geen schrijfrechten, SPARQL of volledige toegang)."
     },
     "createdDialog": {
       "title": "Token Succesvol Aangemaakt",
@@ -626,7 +641,10 @@
       "createError": "Kon token niet aanmaken",
       "copied": "Token gekopieerd naar klembord",
       "revoked": "Token \"{{name}}\" is ingetrokken",
-      "revokeError": "Kon token niet intrekken"
+      "revokeError": "Kon token niet intrekken",
+      "keylessDefaultSet": "\"{{name}}\" is nu de standaardtoken zonder sleutel",
+      "keylessDefaultCleared": "Standaard zonder sleutel gewist — toegang zonder sleutel is uitgeschakeld",
+      "keylessDefaultError": "Bijwerken van standaard zonder sleutel mislukt"
     }
   },
   "uiCustomization": {

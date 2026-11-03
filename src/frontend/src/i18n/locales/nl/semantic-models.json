@@ -224,7 +224,7 @@
       "description": "Weet u zeker dat u \"{{label}}\" wilt verwijderen? Hiermee worden alle concepten in dit schema verwijderd. Dit kan niet ongedaan worden gemaakt."
     },
     "deprecate": {
-      "title": "Concept afschaffen",
+      "title": "Concept als verouderd markeren",
       "description": "Geef optioneel een of meer opvolgende concepten op om aan te geven waardoor dit concept is vervangen.",
       "successors": "Opvolgende concepten",
       "noSuccessors": "Niets geselecteerd",
@@ -282,7 +282,7 @@
     "perFileTodo": "Eén schema per bestand vereist een backend die per bestand een schema aanmaakt; voorlopig komen alle bestanden in het onderstaande schema terecht.",
     "createNewScheme": "＋ Nieuw schema aanmaken…",
     "newSchemeName": "Naam nieuw schema (bijv. Financiële ontologie)",
-    "reconcileNote": "Overlappende of dubbele termen tussen schema's worden later afgestemd in het Review Board. Importeren brengt alleen de graaf binnen.",
+    "reconcileNote": "Overlappende of dubbele termen tussen schema's worden later afgestemd in Data Asset Beoordelingen. Importeren brengt alleen de graaf binnen.",
     "summary": "{{files}} bestand(en) geïmporteerd, in totaal {{count}} triples.",
     "summaryPending": "Upload ingediend ter goedkeuring ({{files}} bestand(en))",
     "fileOk": "{{count}} triples",
@@ -294,7 +294,7 @@
     "changelogSummary": "Wijzigt {{modified}}, voegt {{added}} toe, verwijdert {{removed}} ({{unchanged}} ongewijzigd).",
     "bucketModified": "Gewijzigd (nieuwe versie)",
     "bucketNew": "Nieuw",
-    "bucketRemoved": "Verwijderd (afgeschaft, niet gewist)",
+    "bucketRemoved": "Verwijderd (als verouderd gemarkeerd, niet gewist)",
     "stillReferenced": "gebruikt door {{count}}",
     "submitMulti": "{{count}} bestand(en) importeren",
     "conflict": {
@@ -550,8 +550,8 @@
   },
   "explore": {
     "emptyTitle": "Nog niets om te verkennen",
-    "emptyBody": "Importeer bestanden of maak concepten aan op het tabblad Define.",
-    "emptyCta": "Ga naar Define"
+    "emptyBody": "Importeer bestanden of maak concepten aan op het tabblad Definiëren.",
+    "emptyCta": "Ga naar Definiëren"
   },
   "define": {
     "requiresWrite": "Schrijftoegang vereist"
@@ -564,7 +564,7 @@
     "requestChanges": "Wijzigingen aanvragen",
     "publish": "Publiceren",
     "certify": "Certificeren",
-    "deprecate": "Afschaffen",
+    "deprecate": "Als verouderd markeren",
     "archive": "Archiveren"
   },
   "requestChanges": {

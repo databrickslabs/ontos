@@ -358,7 +358,7 @@
       "subscription": "Assinatura",
       "user": "Usuário",
       "ontology_concept": "Conceito",
-      "ontology_collection": "Coleção",
+      "ontology_collection": "Esquema de conceitos",
       "concept_changeset": "Conjunto de alterações de conceitos"
     },
     "stepTypes": {

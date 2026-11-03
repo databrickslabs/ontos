@@ -614,7 +614,7 @@
       "creating": "Aanmaken...",
       "keylessDefault": "Gebruiken als standaard zonder sleutel",
       "keylessDefaultHelp": "Koppel via de app-gate geauthenticeerde MCP-verzoeken zonder X-API-Key aan deze token. Vervangt een eventuele bestaande standaard.",
-      "keylessDefaultWarning": "De scopes van deze token gelden voor ELKE app-gebruiker die /mcp zonder sleutel bereikt. Globaal zoeken omzeilt toegangscontroles per gebruiker, dus verleen alleen alleen-lezen scopes (geen schrijfrechten, SPARQL of volledige toegang)."
+      "keylessDefaultWarning": "De scopes van deze token gelden voor ELKE app-gebruiker die /mcp zonder sleutel bereikt. Globaal zoeken omzeilt toegangscontroles per gebruiker, dus verleen alleen-lezen scopes (geen schrijfrechten, SPARQL of volledige toegang)."
     },
     "createdDialog": {
       "title": "Token Succesvol Aangemaakt",

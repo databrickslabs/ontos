@@ -110,7 +110,7 @@
     "submitReview": "Enviado para revisão",
     "submitReviewGoverned": "Enviado para revisão — aguardando aprovação.",
     "changesRequested": "Devolvido ao proprietário com o seu comentário.",
-    "withdrawReview": "Revisão retirada",
+    "withdrawReview": "Retirado da revisão",
     "enterReviewerEmail": "Informe o e-mail do revisor:",
     "conceptPromoted": "Conceito promovido com sucesso",
     "conceptMigrated": "Conceito migrado com sucesso",
@@ -220,7 +220,7 @@
       "description": "Defina um relacionamento entre dois conceitos"
     },
     "deleteScheme": {
-      "title": "Excluir esquema",
+      "title": "Excluir esquema de conceitos",
       "description": "Tem certeza de que deseja excluir \"{{label}}\"? Isso excluirá todos os conceitos deste esquema e não poderá ser desfeito."
     },
     "deprecate": {
@@ -263,7 +263,7 @@
     "chooseFile": "Escolher arquivo…",
     "file": "Arquivo",
     "noEditableCollections": "Nenhum esquema de conceitos editável disponível. Crie um primeiro.",
-    "reconcileNote": "Termos sobrepostos ou duplicados entre esquemas são conciliados posteriormente no Painel de Revisão. A importação apenas traz o grafo.",
+    "reconcileNote": "Termos sobrepostos ou duplicados entre esquemas são conciliados posteriormente em Revisões de Ativos de Dados. A importação apenas traz o grafo.",
     "summary": "{{files}} arquivo(s) importado(s), {{count}} triplas no total.",
     "summaryPending": "Upload enviado para aprovação ({{files}} arquivo(s))",
     "fileOk": "{{count}} triplas",
@@ -279,8 +279,8 @@
     "stillReferenced": "usado por {{count}}",
     "submitMulti": "Importar {{count}} arquivo(s)",
     "selectCollection": "Selecione um esquema de conceitos…",
-    "createNewScheme": "＋ Criar um novo esquema…",
-    "newSchemeName": "Nome do novo esquema (ex.: Ontologia de Finanças)",
+    "createNewScheme": "＋ Criar um novo esquema de conceitos…",
+    "newSchemeName": "Nome do novo esquema de conceitos (ex.: Ontologia de Finanças)",
     "submit": "Importar",
     "success": "Importação bem-sucedida",
     "supportedFormats": "Compatíveis: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
@@ -550,8 +550,8 @@
   },
   "explore": {
     "emptyTitle": "Ainda não há nada para explorar",
-    "emptyBody": "Importe arquivos ou crie conceitos na aba Define.",
-    "emptyCta": "Ir para Define"
+    "emptyBody": "Importe arquivos ou crie conceitos na aba Definir.",
+    "emptyCta": "Ir para Definir"
   },
   "define": {
     "requiresWrite": "Requer acesso de gravação"
@@ -559,7 +559,7 @@
   "lifecycle": {
     "changeStatus": "Alterar status",
     "submitReview": "Enviar para revisão",
-    "withdrawReview": "Retirar revisão",
+    "withdrawReview": "Retirar da revisão",
     "approve": "Aprovar",
     "requestChanges": "Solicitar alterações",
     "publish": "Publicar",
@@ -579,12 +579,12 @@
     "description": "Atribua um revisor opcional e adicione observações.",
     "reviewer": "Revisor (opcional)",
     "reviewerPlaceholder": "Selecione um revisor...",
-    "notes": "Observações (opcional)",
+    "notes": "Notas (opcional)",
     "notesPlaceholder": "Adicione contexto ou instruções...",
     "submit": "Enviar",
     "checking": "Verificando fluxo de aprovação…",
-    "governedBanner": "Este conceito é regido pelo fluxo de aprovação '{{workflow}}'. O envio iniciará essa aprovação — o conceito passa para Em revisão e aguarda a aprovação dos aprovadores.",
-    "governedBannerMulti": "Este conceito é regido por {{count}} fluxos de aprovação. O envio iniciará essa aprovação — o conceito passa para Em revisão e aguarda a aprovação dos aprovadores.",
+    "governedBanner": "Este conceito é governado pelo fluxo de aprovação '{{workflow}}'. O envio iniciará essa aprovação — o conceito passa para Em revisão e aguarda a aprovação dos aprovadores.",
+    "governedBannerMulti": "Este conceito é governado por {{count}} fluxos de aprovação. O envio iniciará essa aprovação — o conceito passa para Em revisão e aguarda a aprovação dos aprovadores.",
     "ungovernedBanner": "Nenhum fluxo de aprovação está associado. O envio move este conceito diretamente para Em revisão; qualquer usuário com acesso de escrita poderá então aprová-lo."
   },
   "concept": {

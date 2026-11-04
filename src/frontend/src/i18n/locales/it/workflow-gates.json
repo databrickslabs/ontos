@@ -16,5 +16,26 @@
   "certifiedIsNotAStatus": "Certificato non è uno stato: la certificazione si imposta con Certifica, su un'entità attiva.",
   "invalidStatus": "{{status}} non è uno stato del ciclo di vita. Usa uno di: {{allowed}}.",
   "gateError": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare il gate del workflow {{workflows}}. Chiedi a un amministratore di controllare il workflow.",
-  "gateErrorUnnamed": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare un gate del workflow. Chiedi a un amministratore di controllare il workflow."
+  "gateErrorUnnamed": "Il cambio di stato da {{fromStatus}} a {{toStatus}} è stato rifiutato: non è stato possibile valutare un gate del workflow. Chiedi a un amministratore di controllare il workflow.",
+  "certifiedDeprecationRequiresApproval": "{{name}} è certificato, quindi può essere deprecato solo tramite una richiesta di modifica dello stato approvata. Richiedi invece la modifica dello stato.",
+  "requestInstead": "Richiedi la modifica dello stato",
+  "certifiedGuard": {
+    "title": "Protezione dalla deprecazione degli elementi certificati",
+    "description": "Un prodotto dati o un contratto dati certificato può essere deprecato solo tramite una richiesta di modifica dello stato approvata. La protezione vale ovunque, a meno che non la disattivi qui sotto.",
+    "hint": "La protezione non vale per i domini, i prodotti dati e i contratti dati elencati qui (un dominio comprende i suoi prodotti e contratti): i loro elementi certificati vengono deprecati direttamente. Ogni salto viene registrato e sottoposto ad audit.",
+    "saved": "Protezione dalla deprecazione degli elementi certificati salvata",
+    "saveFailed": "Impossibile salvare la protezione dalla deprecazione degli elementi certificati",
+    "loadFailed": "Impossibile caricare la protezione dalla deprecazione degli elementi certificati",
+    "notFound": "{{id}} non esiste più. Rimuovilo e salva di nuovo.",
+    "missingOnSave_one": "La protezione è disattivata per {{count}} elemento che non esiste più. Rimuovilo e salva di nuovo.",
+    "missingOnSave_other": "La protezione è disattivata per {{count}} elementi che non esistono più. Rimuovili e salva di nuovo.",
+    "readOnly": "Solo gli amministratori dei livelli di certificazione possono modificare la protezione."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} è certificato: solo un amministratore di questa funzione può approvarne la deprecazione.",
+    "no_pending_request": "{{name}} è certificato: l'approvazione richiede una richiesta di modifica dello stato in sospeso per questa modifica, e non ce n'è nessuna.",
+    "target_mismatch": "{{name}} è certificato: la richiesta in sospeso chiede un altro stato, quindi questa approvazione non vale per essa.",
+    "self_approval": "{{name}} è certificato: hai fatto tu questa richiesta, quindi deve approvarla qualcun altro.",
+    "no_approver": "{{name}} è certificato: la deprecazione richiede la decisione di un approvatore della richiesta."
+  }
 }

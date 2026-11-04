@@ -6255,28 +6255,36 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         requester_email: str,
         current_user: Optional[str] = None
     ) -> dict:
-        """Request approval to change the status of a contract.
-        
-        Creates notifications for admins and logs the request.
-        
+        """Request approval to change the status of a contract via workflow.
+
+        Fires ON_REQUEST_STATUS_CHANGE with the payload a product's request has
+        (``from_status``, ``target_status``, ``justification``, ``request_id``),
+        so the Status Change Request workflow confirms the request to the
+        requester and asks its approvers; its approval applies the status
+        (``WorkflowExecutor._apply_requested_status_change``). The request is
+        logged in the change log, which ties a decision to it.
+
         Args:
             db: Database session
-            notifications_manager: Notifications manager instance
+            notifications_manager: Unused (kept for backward compat)
             contract_id: Contract ID to request status change for
             target_status: Requested target status
             justification: Justification for the status change
             requester_email: Email of user requesting the change
             current_user: Username requesting the change
-            
+
         Returns:
-            Dict with message
-            
+            Dict with message, request_id and the workflow outcome
+
         Raises:
             ValueError: If contract not found or invalid status transition
         """
         from datetime import datetime
-        from src.models.notifications import NotificationType, Notification
-        
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
+        from src.models.process_workflows import EntityType
+
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
@@ -6290,32 +6298,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Invalid transition from '{current_status}' to '{target_status}'")
         
         now = datetime.utcnow()
-        
-        # Create notification for the requester
-        requester_note = Notification(
-            id=str(uuid4()),
-            created_at=now,
-            type=NotificationType.INFO,
-            title="Status Change Request Submitted",
-            subtitle=f"Contract: {contract.name}",
-            description=f"Your request to change status from '{current_status}' to '{target_status}' has been submitted for approval.",
-            recipient=requester_email,
-            can_delete=True,
+        # Ties the decision to this request (certified deprecation guard)
+        request_id = str(uuid4())
+
+        executions = get_trigger_registry(db).on_request_status_change(
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            from_status=current_status,
+            to_status=target_status_lower,
+            entity_name=contract.name,
+            entity_data={
+                "contract_id": contract_id,
+                "contract_name": contract.name,
+                "from_status": current_status,
+                "target_status": target_status_lower,
+                "justification": justification,
+                "request_id": request_id,
+            },
+            user_email=requester_email,
         )
-        notifications_manager.create_notification(notification=requester_note, db=db)
-        
-        # Create notification for admins about the pending request
-        admin_note = Notification(
-            id=str(uuid4()),
-            created_at=now,
-            type=NotificationType.ACTION_REQUIRED,
-            title="Status Change Request Pending",
-            subtitle=f"Contract: {contract.name}",
-            description=f"{requester_email} is requesting to change status from '{current_status}' to '{target_status}'.\n\nJustification: {justification}",
-            recipient="admins",
-            can_delete=True,
-        )
-        notifications_manager.create_notification(notification=admin_note, db=db)
+        outcome = request_workflow_outcome(executions)
         
         # Log change
         from src.controller.change_log_manager import change_log_manager
@@ -6327,15 +6329,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             username=current_user,
             details={
                 "requester_email": requester_email,
+                "request_id": request_id,
                 "current_status": current_status,
                 "target_status": target_status,
                 "justification": justification,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change from '{current_status}' to '{target_status}' requested by {requester_email}",
+                **outcome,
             },
         )
         
-        return {"message": "Status change request submitted successfully"}
+        result = {
+            "message": request_submitted_message("Status change", outcome),
+            "request_id": request_id,
+        }
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
+        return result
     
     def handle_status_change_response(
         self,
@@ -6389,7 +6398,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             target_status_lower = target_status.lower()
             allowed_transitions = self._get_allowed_status_transitions(from_status)
             if target_status_lower not in allowed_transitions:
-                raise ValueError(f"Invalid transition from '{from_status}' to '{target_status}'")
+                # Coded: a request decided after the status changed (e.g. a
+                # second approval) is explained in the UI language
+                from src.common.api_errors import InvalidStatusTransitionError
+                raise InvalidStatusTransitionError(
+                    f"Invalid transition from '{from_status}' to '{target_status}'",
+                    fromStatus=from_status,
+                    toStatus=target_status_lower,
+                )
 
             # Through transition_status, like a product's approved request, so
             # the before_status_change gates run and on_status_change fires.
@@ -6412,7 +6428,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if message:
             notification_desc += f"\n\nReviewer message: {message}"
         
-        # Mark actionable notification as handled
+        # Mark actionable notification as handled (requests made before they
+        # went through the Status Change Request workflow)
         try:
             notifications_manager.handle_actionable_notification(
                 db=db,

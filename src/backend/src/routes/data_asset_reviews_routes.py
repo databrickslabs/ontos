@@ -53,7 +53,7 @@ def create_review_request(
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
-    """Create a new data asset review request."""
+    """Create a new data asset review request (Unity Catalog assets typed as the user)."""
     success = False
     details = {
         "params": {
@@ -65,7 +65,14 @@ def create_review_request(
 
     try:
         logger.info(f"Received request to create data asset review from {request_data.requester_email} for {request_data.reviewer_email}")
-        created_request = manager.create_review_request(request_data=request_data)
+        # Typed with the user's client, so a review doesn't reveal the type of an object
+        # they can't see. Resolved here, not as a dependency, so a refusal is audited.
+        user_client = None
+        if manager.reads_catalog(request_data.asset_fqns):
+            user_client = get_obo_workspace_client(request)
+        created_request = manager.create_review_request(
+            request_data=request_data, ws_client=user_client
+        )
         success = True
         details["request_id"] = created_request.id
         return created_request

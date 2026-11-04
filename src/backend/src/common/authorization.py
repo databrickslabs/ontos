@@ -630,6 +630,24 @@ async def enforce_feature_permission(
         )
 
 
+async def has_feature_permission(
+    feature_id: str,
+    required_level: FeatureAccessLevel,
+    user_details: UserInfo,
+    request: Request,
+) -> bool:
+    """Whether the user has ``required_level`` on the feature, resolved as
+    :func:`enforce_feature_permission` does (role override, team override,
+    groups), for a route that only changes what it does when it hasn't."""
+    try:
+        await enforce_feature_permission(feature_id, required_level, user_details, request)
+    except HTTPException as e:
+        if e.status_code == status.HTTP_403_FORBIDDEN:
+            return False
+        raise
+    return True
+
+
 def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
     """Return True if the caller may adopt an entity's UUID from an imported file.
 

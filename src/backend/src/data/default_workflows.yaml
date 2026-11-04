@@ -645,11 +645,12 @@ workflows:
   # Status Change Request (Generic)
   - id: "status-change-request"
     name: "Status Change Request"
-    description: "Handles status change requests for data products that require approval."
+    description: "Handles status change requests for data products and data contracts that require approval."
     trigger:
       type: "on_request_status_change"
       entity_types:
         - "data_product"
+        - "data_contract"
     scope:
       type: "all"
     is_active: true

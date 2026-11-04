@@ -3503,18 +3503,50 @@ class WorkflowExecutor:
                     execution_id=execution_id,
                 )
 
-            # Approved status change request: apply the requested transition,
-            # with the same validation and gates as a direct status change
-            elif (entity_type == 'data_product'
+            # Approved status change request of a product or contract: apply
+            # the requested transition, with the same validation and gates as
+            # a direct status change
+            elif (entity_type in ('data_product', 'data_contract')
                   and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')):
                 approved_request = succeeded if approved is None else approved
                 target_status = trigger_context.to_status or (
                     trigger_context.entity_data or {}
                 ).get('target_status')
+                from src.controller.certified_deprecation_guard import (
+                    NO_PENDING_REQUEST, approved_status_change, close_request,
+                    request_is_closed, workflow_approval_refusal,
+                )
+                request_id = (trigger_context.entity_data or {}).get('request_id')
                 if approved_request and target_status:
-                    self._apply_requested_status_change(
-                        trigger_context, entity_id, target_status, responded_by,
-                        execution_id=execution_id,
+                    # A certified entity is deprecated only by an approver's
+                    # decision through handle-approval, not the requester's,
+                    # on a request still open (not decided elsewhere, no
+                    # transition since); a run without an approval step or a
+                    # plain resume doesn't count
+                    refusal = workflow_approval_refusal(approved, trigger_context.user_email)
+                    if refusal is None and request_id and request_is_closed(
+                        self._db, entity_type, entity_id, request_id,
+                    ):
+                        refusal = NO_PENDING_REQUEST
+                    apply = (
+                        self._apply_requested_contract_status_change
+                        if entity_type == 'data_contract'
+                        else self._apply_requested_status_change
+                    )
+                    with approved_status_change(entity_type, entity_id, refusal):
+                        apply(
+                            trigger_context, entity_id, target_status, responded_by,
+                            execution_id=execution_id,
+                        )
+                # The run decided the request (approved or rejected): it ends
+                # here, so nothing can approve it later
+                if request_id and not request_is_closed(
+                    self._db, entity_type, entity_id, request_id,
+                ):
+                    close_request(
+                        self._db, entity_type, entity_id, request_id,
+                        'workflow_approved' if approved_request else 'workflow_rejected',
+                        responded_by,
                     )
                     
         except Exception as e:
@@ -3687,30 +3719,10 @@ class WorkflowExecutor:
                 product_id, target_status,
             )
             return
-        requested_from = trigger_context.from_status or (
-            trigger_context.entity_data or {}
-        ).get('from_status')
-        if requested_from and current_status != requested_from.lower():
-            logger.warning(
-                "Approved status change of data product %s from '%s' to '%s' not applied: "
-                "its status is now '%s'",
-                product_id, requested_from, target_status, current_status,
-            )
-            # The "approved" notice of this run would contradict the one below
-            self._withdraw_approval_notices(execution_id, trigger_context.user_email)
-            self._notify_status_change_not_applied(
-                trigger_context, product_id,
-                f"The request to change the status from '{requested_from}' to "
-                f"'{target_status}' was approved, but the status is now "
-                f"'{current_status}', so the change was not applied. "
-                f"Request it again if it is still needed.",
-                recipients=[trigger_context.user_email, responded_by],
-                description_key='statusChanged',
-                params={
-                    'fromStatus': requested_from, 'toStatus': target_status,
-                    'currentStatus': current_status,
-                },
-            )
+        if self._requested_status_changed(
+            trigger_context, product_id, current_status, target_status, responded_by,
+            execution_id,
+        ):
             return
 
         manager = DataProductsManager(
@@ -3740,6 +3752,114 @@ class WorkflowExecutor:
         logger.info(
             "Data product %s moved to '%s' after its status change request was approved",
             product_id, target_status,
+        )
+
+    def _requested_status_changed(
+        self,
+        trigger_context: TriggerContext,
+        entity_id: str,
+        current_status: str,
+        target_status: str,
+        responded_by: Optional[str],
+        execution_id: Optional[str],
+    ) -> bool:
+        """Whether the entity left the status its approved request was made from.
+
+        If so, the approval was about a different situation: nothing is
+        applied, this run's "approved" notice is withdrawn, and the requester
+        and approver are told.
+        """
+        requested_from = trigger_context.from_status or (
+            trigger_context.entity_data or {}
+        ).get('from_status')
+        if not requested_from or current_status == requested_from.lower():
+            return False
+        logger.warning(
+            "Approved status change of %s %s from '%s' to '%s' not applied: "
+            "its status is now '%s'",
+            trigger_context.entity_type, entity_id, requested_from, target_status,
+            current_status,
+        )
+        # The "approved" notice of this run would contradict the one below
+        self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+        self._notify_status_change_not_applied(
+            trigger_context, entity_id,
+            f"The request to change the status from '{requested_from}' to "
+            f"'{target_status}' was approved, but the status is now "
+            f"'{current_status}', so the change was not applied. "
+            f"Request it again if it is still needed.",
+            recipients=[trigger_context.user_email, responded_by],
+            description_key='statusChanged',
+            params={
+                'fromStatus': requested_from, 'toStatus': target_status,
+                'currentStatus': current_status,
+            },
+        )
+        return True
+
+    def _apply_requested_contract_status_change(
+        self,
+        trigger_context: TriggerContext,
+        contract_id: str,
+        target_status: str,
+        responded_by: Optional[str],
+        execution_id: Optional[str] = None,
+    ) -> None:
+        """Apply an approved status change request to a data contract.
+
+        As ``_apply_requested_status_change`` does for a product: through the
+        live ``DataContractsManager.transition_status`` (gates, certified
+        guard, on_status_change, search index), only while the contract still
+        has the status the request was made from, and a refusal is told to
+        the requester.
+        """
+        from src.controller.data_contracts_manager import get_live_contracts_manager
+        from src.db_models.data_contracts import DataContractDb
+
+        contract = self._db.get(DataContractDb, contract_id)
+        if contract is None:
+            logger.warning(
+                "Approved status change of data contract %s: the contract no longer exists",
+                contract_id,
+            )
+            return
+        current_status = (contract.status or '').lower()
+        target_status = target_status.lower()
+        if current_status == target_status:
+            logger.info(
+                "Data contract %s already has status '%s'; approved status change "
+                "not reapplied", contract_id, target_status,
+            )
+            return
+        if self._requested_status_changed(
+            trigger_context, contract_id, current_status, target_status, responded_by,
+            execution_id,
+        ):
+            return
+        try:
+            get_live_contracts_manager().transition_status(
+                db=self._db, contract_id=contract_id, new_status=target_status,
+                current_user=responded_by,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Approved status change of data contract %s to '%s' could not be "
+                "applied: %s", contract_id, target_status, e,
+            )
+            self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+            self._notify_status_change_not_applied(
+                trigger_context, contract_id,
+                f"Your request to change the status to '{target_status}' was approved, "
+                f"but the change could not be applied: {e}",
+                recipients=[trigger_context.user_email],
+                description_key='refused',
+                params={'toStatus': target_status, 'reason': str(e)},
+                error=e,
+            )
+            return
+        logger.info(
+            "Data contract %s moved to '%s' after its status change request was approved",
+            contract_id, target_status,
         )
 
     def _notify_status_change_not_applied(
@@ -3780,7 +3900,10 @@ class WorkflowExecutor:
                     'title': 'notifications:statusChangeNotApplied.title',
                     'description': f'notifications:statusChangeNotApplied.{description_key}',
                     'params': params,
-                    'statusNamespace': 'data-products',
+                    'statusNamespace': (
+                        'data-contracts' if trigger_context.entity_type == 'data_contract'
+                        else 'data-products'
+                    ),
                     **self._coded_error_i18n(error),
                 }},
             ))

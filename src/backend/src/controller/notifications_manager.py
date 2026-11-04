@@ -348,8 +348,10 @@ class NotificationsManager:
             # Fail open: a duplicate notification is preferable to silently dropping a request.
             return False
 
-    def handle_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
-        """Finds notifications by action type/payload and marks them as read using the repository."""
+    def handle_actionable_notification(
+        self, db: Session, action_type: str, action_payload: Dict,
+    ) -> bool:
+        """Finds notifications by action type/payload and marks them as read."""
         logger.debug(f"Attempting to handle notification: type={action_type}, payload={action_payload}")
         try:
             # Assuming repo has a method to find by action (might need creating)

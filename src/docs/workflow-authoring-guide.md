@@ -74,7 +74,7 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 | `before_status_change` | Before a product or contract changes status | `data_product`, `data_contract` | Yes |
 | `on_status_change` | After a product, contract or asset review changes status | `data_product`, `data_contract`, `data_asset_review` | No |
 | `on_request_review` | A review is requested | `data_product`, `data_contract`, `data_asset_review` | No |
-| `on_request_status_change` | A status change is requested | `data_product` | No |
+| `on_request_status_change` | A status change is requested | `data_product`, `data_contract` | No |
 | `on_request_publish`, `on_request_certify` | Publication or certification is requested | `data_product`, `data_contract` | No |
 | `on_request_deploy` | A contract deployment is requested | `data_contract` | No |
 | `on_request_access` | Access is requested | `access_grant`, `project`, `role` | No |
@@ -184,6 +184,7 @@ After an approval, the fields of the latest completed request wizard for the sam
 | Trigger | Payload fields |
 |--|--|
 | `on_request_status_change` (product) | `product_id`, `product_name`, `from_status`, `target_status`, `justification`, `request_id` |
+| `on_request_status_change` (contract) | `contract_id`, `contract_name`, `from_status`, `target_status`, `justification`, `request_id` |
 | `on_request_review` (product) | `product_id`, `product_name`, `from_status`, `to_status`, `message`, `reviewer_email`, `request_id` |
 | `manual` | `id`, `name`, `type` |
 
@@ -246,7 +247,7 @@ When a request workflow resumes after an approval and ends, Ontos applies the de
 
 | Workflow trigger | Entity | After approval | After rejection |
 |--|--|--|--|
-| `on_request_status_change` | data product | Applies the requested status, through the same checks and gates as a direct change | Nothing |
+| `on_request_status_change` | data product, data contract | Applies the requested status, through the same checks and gates as a direct change | Nothing |
 | `on_request_review` | data contract | Contract approved | Contract back to draft |
 | `on_request_review` | data product | Product active | Product back to draft |
 | `on_request_deploy` | data contract | Records `deploy_approve` in the change log (no status change) | Records `deploy_deny` |

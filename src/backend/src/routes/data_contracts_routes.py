@@ -53,6 +53,7 @@ from src.models.data_contracts_api import (
 from src.common.api_errors import CodedValueError
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.authorization import has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
@@ -1246,18 +1247,42 @@ async def handle_status_change_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a status change request decision (approve/deny/clarify)."""
+    """Handle a status change request decision (approve/deny/clarify).
+
+    Deprecating a certified contract this way needs Admin on data contracts
+    (certified guard).
+    """
+    from src.controller.certified_deprecation_guard import (
+        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
+    )
+    by_admin = await has_feature_permission(
+        'data-contracts', FeatureAccessLevel.ADMIN, current_user, request,
+    )
+    # Counts for the certified guard only as an admin's approval of a pending
+    # request made by someone else
+    refusal = handle_decision_refusal(
+        db, 'data_contract', contract_id, payload.target_status, by_admin,
+        current_user.email if current_user else None,
+        current_user.username if current_user else None,
+    )
+    request_id = pending_request_id(db, 'data_contract', contract_id)
     try:
-        result = manager.handle_status_change_response(
-            db=db,
-            notifications_manager=notifications,
-            contract_id=contract_id,
-            approver_email=current_user.email if current_user else None,
-            decision=payload.decision,
-            target_status=payload.target_status,
-            requester_email=payload.requester_email,
-            message=payload.message,
-            current_user=current_user.username if current_user else None
+        with approved_status_change('data_contract', contract_id, refusal):
+            result = manager.handle_status_change_response(
+                db=db,
+                notifications_manager=notifications,
+                contract_id=contract_id,
+                approver_email=current_user.email if current_user else None,
+                decision=payload.decision,
+                target_status=payload.target_status,
+                requester_email=payload.requester_email,
+                message=payload.message,
+                current_user=current_user.username if current_user else None
+            )
+        # The decision ends the request it was about
+        record_decision(
+            db, 'data_contract', contract_id, request_id, payload.decision,
+            current_user.username if current_user else None,
         )
         
         # Audit
@@ -1280,6 +1305,8 @@ async def handle_status_change_response(
     except ValueError as e:
         logger.error("Handle status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
+        from src.controller.certified_deprecation_guard import guard_refusal_status
+        error_status = guard_refusal_status(e, error_status)
         raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise

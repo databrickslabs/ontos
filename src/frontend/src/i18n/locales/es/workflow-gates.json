@@ -16,5 +16,26 @@
   "certifiedIsNotAStatus": "Certificado no es un estado: la certificación se establece con Certificar, en una entidad activa.",
   "invalidStatus": "{{status}} no es un estado del ciclo de vida. Usa uno de: {{allowed}}.",
   "gateError": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar la compuerta del flujo de trabajo {{workflows}}. Pida a un administrador que revise el flujo de trabajo.",
-  "gateErrorUnnamed": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar una compuerta del flujo de trabajo. Pida a un administrador que revise el flujo de trabajo."
+  "gateErrorUnnamed": "Se rechazó el cambio de estado de {{fromStatus}} a {{toStatus}}: no se pudo evaluar una compuerta del flujo de trabajo. Pida a un administrador que revise el flujo de trabajo.",
+  "certifiedDeprecationRequiresApproval": "{{name}} está certificado, por lo que solo puede declararse obsoleto mediante una solicitud de cambio de estado aprobada. Solicite el cambio de estado.",
+  "requestInstead": "Solicitar el cambio de estado",
+  "certifiedGuard": {
+    "title": "Protección de obsolescencia de certificados",
+    "description": "Un producto de datos o contrato de datos certificado solo puede declararse obsoleto mediante una solicitud de cambio de estado aprobada. La protección se aplica en todas partes, salvo que la desactive abajo.",
+    "hint": "La protección no se aplica a los dominios, productos de datos y contratos de datos indicados aquí (un dominio abarca sus productos y contratos): sus elementos certificados se declaran obsoletos directamente. Cada omisión se registra y se audita.",
+    "saved": "Protección de obsolescencia de certificados guardada",
+    "saveFailed": "No se pudo guardar la protección de obsolescencia de certificados",
+    "loadFailed": "No se pudo cargar la protección de obsolescencia de certificados",
+    "notFound": "{{id}} ya no existe. Quítelo y guarde de nuevo.",
+    "missingOnSave_one": "La protección está desactivada para {{count}} elemento que ya no existe. Quítelo y guarde de nuevo.",
+    "missingOnSave_other": "La protección está desactivada para {{count}} elementos que ya no existen. Quítelos y guarde de nuevo.",
+    "readOnly": "Solo los administradores de niveles de certificación pueden cambiar la protección."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} está certificado: solo un administrador de esta función puede aprobar que quede obsoleto.",
+    "no_pending_request": "{{name}} está certificado: aprobar requiere una solicitud de cambio de estado pendiente para este cambio, y no hay ninguna.",
+    "target_mismatch": "{{name}} está certificado: la solicitud pendiente pide otro estado, así que esta aprobación no se aplica a ella.",
+    "self_approval": "{{name}} está certificado: usted hizo esta solicitud, así que otra persona debe aprobarla.",
+    "no_approver": "{{name}} está certificado: declararlo obsoleto requiere la decisión de un aprobador de la solicitud."
+  }
 }

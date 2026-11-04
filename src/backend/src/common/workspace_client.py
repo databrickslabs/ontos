@@ -441,6 +441,22 @@ def get_workspace_client_dependency(timeout: int = 30):
 
     return _get_ws_client
 
+def build_user_token_workspace_client(host: str, token: str) -> WorkspaceClient:
+    """Build a WorkspaceClient that authenticates with this user token only.
+
+    auth_type="pat" makes the SDK use just this token and ignore the app's OAuth env
+    vars (DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET / DATABRICKS_AUTH_TYPE)
+    without touching os.environ, which concurrent service-principal builds read.
+    """
+    return WorkspaceClient(
+        host=host,
+        token=token,
+        auth_type="pat",
+        product="ontos",
+        product_version=__version__,
+    )
+
+
 def get_obo_workspace_client(
     request: Request,
     settings: Optional[Settings] = None,
@@ -520,33 +536,7 @@ def get_obo_workspace_client(
     masked_token = f"{obo_token[:4]}...{obo_token[-4:]}"
     logger.info(f"Initializing NEW OBO workspace client for user: {user_email or 'unknown'}, host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
-    # Create client with user's token
-    # Temporarily clear OAuth env vars to prevent SDK from using them.
-    # TODO(obo-env-race): popping and restoring process-global env vars is a
-    # race surface — a concurrent task that builds an SP WorkspaceClient while
-    # this block runs will see the vars gone and fail to authenticate. The MCP
-    # path hits this helper on every forwarded-token request, so the window is
-    # much wider than it was for Ask Ontos. A proper fix is to pass the SDK a
-    # per-call `credentials_strategy` (or construct the client without reading
-    # env at all) so no process-global state is touched. Tracked for a
-    # follow-up PR; leaving the pattern in place here keeps the OBO scope
-    # minimal and consistent with the existing Ask Ontos helper.
-    saved_client_id = os.environ.pop('DATABRICKS_CLIENT_ID', None)
-    saved_client_secret = os.environ.pop('DATABRICKS_CLIENT_SECRET', None)
-
-    try:
-        client = WorkspaceClient(
-            host=settings.DATABRICKS_HOST,
-            token=obo_token,
-            product="ontos",
-            product_version=__version__
-        )
-    finally:
-        # Restore OAuth env vars
-        if saved_client_id:
-            os.environ['DATABRICKS_CLIENT_ID'] = saved_client_id
-        if saved_client_secret:
-            os.environ['DATABRICKS_CLIENT_SECRET'] = saved_client_secret
+    client = build_user_token_workspace_client(settings.DATABRICKS_HOST, obo_token)
 
     # Verify connectivity and set telemetry headers
     # Use lighter verification for OBO tokens (skip cluster check due to limited scopes)

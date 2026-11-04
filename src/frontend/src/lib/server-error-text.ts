@@ -25,3 +25,30 @@ export function internalErrorText(body: unknown): string | null {
   const params = error.params && typeof error.params === 'object' ? error.params : {};
   return String(i18n.t('errors:internalError', { ...params, defaultValue: english }));
 }
+
+/** Code of a request that needs the user's Databricks token and has none. */
+export const USER_TOKEN_REQUIRED_CODE = 'user_token_required';
+
+/**
+ * The text of a request refused for a missing user token
+ * (`{detail: {code: 'user_token_required', message}}`) in the user's language,
+ * or `null` for any other error. Takes the parsed JSON body or its raw text.
+ */
+export function userTokenRequiredText(body: unknown): string | null {
+  const error = parsed(body);
+  const detail = error && typeof error === 'object' ? error.detail : null;
+  if (!detail || typeof detail !== 'object' || detail.code !== USER_TOKEN_REQUIRED_CODE) {
+    return null;
+  }
+  const english = typeof detail.message === 'string' ? detail.message : '';
+  if (!i18n.isInitialized) return english || null;
+  return String(i18n.t('errors:userTokenRequired', { defaultValue: english }));
+}
+
+/**
+ * An app-wide server error (an unexpected error, a missing user token) in the
+ * user's language, or `null` for any other error.
+ */
+export function serverErrorText(body: unknown): string | null {
+  return internalErrorText(body) ?? userTokenRequiredText(body);
+}

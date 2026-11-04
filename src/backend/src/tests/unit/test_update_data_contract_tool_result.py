@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.common.features import FeatureAccessLevel
+from src.controller import audit_manager
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_domains import DataDomain
@@ -28,7 +29,10 @@ from src.tools.data_contracts import UpdateDataContractTool
 
 
 @pytest.fixture
-def manager() -> DataContractsManager:
+def manager(monkeypatch) -> DataContractsManager:
+    # The tool's audit entry is written in its own session, whose commit would
+    # commit this test's rows on the shared in-memory connection.
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
     mgr = DataContractsManager(data_dir=Path('/tmp'))
     mgr._update_search_index = lambda *a, **k: None
     mgr._queue_delivery = lambda *a, **k: None

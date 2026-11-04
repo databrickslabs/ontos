@@ -17,6 +17,7 @@ import pytest
 import src.tools.caller as tool_caller
 from src.common.features import FeatureAccessLevel
 from src.common.search_interfaces import SearchIndexItem
+from src.controller import audit_manager
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.search_manager import SearchManager
@@ -69,8 +70,11 @@ class _Index:
 
 
 @pytest.fixture
-def world(db_session):
+def world(db_session, monkeypatch):
     """Two products and three contracts per readable class, indexed for search."""
+    # A write tool's audit entry is written in its own session, whose commit
+    # would commit this test's rows on the shared in-memory connection.
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
     def _product(name, status, **kw):
         row = DataProductDb(id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
                             name=name, version='1.0.0', status=status, **kw)

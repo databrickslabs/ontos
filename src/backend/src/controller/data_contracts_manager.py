@@ -4277,7 +4277,82 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error deleting property authoritative definition: {e}", exc_info=True)
             raise
-    
+
+    # --- Workflow Triggers of a Contract Change ---
+    # Run by the REST routes and the assistant tools alike: the blocking
+    # before_update gates before an update; on_create / on_update / on_delete
+    # once the change succeeded (not blocking, a failing workflow only logged).
+
+    @staticmethod
+    def run_update_gates(
+        db: Session, contract: Any, changes: Dict[str, Any], user_email: Optional[str]
+    ) -> tuple[bool, List[Any]]:
+        """Run the before_update gates of an update; ``(passed, executions)``.
+
+        ``changes`` are the fields sent. A gate that raises is logged and lets
+        the update proceed (``(True, [])``).
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType
+        try:
+            return get_trigger_registry(db).before_update(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=str(contract.id),
+                entity_name=getattr(contract, 'name', None),
+                entity_data=changes,
+                user_email=user_email,
+            )
+        except Exception as e:
+            logger.warning(f"before_update trigger failed for contract {contract.id}: {e}")
+            return True, []
+
+    @staticmethod
+    def fire_create_trigger(db: Session, contract: Any, user_email: Optional[str]) -> None:
+        """Fire on_create for a contract just created."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(contract.id),
+            entity_name=contract.name,
+            entity_data={
+                "contract_id": str(contract.id), "name": contract.name,
+                "status": getattr(contract, 'status', 'draft'),
+            },
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_update_trigger(
+        db: Session, contract_id: str, contract: Any, changes: Dict[str, Any],
+        user_email: Optional[str],
+    ) -> None:
+        """Fire on_update for a contract just updated; ``changes`` are the fields sent."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=getattr(contract, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_delete_trigger(db: Session, contract_id: str, user_email: Optional[str]) -> None:
+        """Fire on_delete for a contract just deleted."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_data={"contract_id": contract_id},
+            user_email=user_email,
+        )
+
     # --- Workflow Transition Methods ---
     
     def transition_status(

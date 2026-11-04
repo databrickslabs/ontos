@@ -54,8 +54,10 @@ INVALID_TRANSITION_CODE = "invalid_status_transition"
 def invalid_transition(current: str, new: str, allowed: List[str]) -> Dict[str, str]:
     """The client-facing part of a status change the lifecycle doesn't allow.
 
-    Checked by the update tools before the manager, whose ValueError would only
-    reach the client as the generic failure. Spread like ``tool_failure``.
+    Checked by the contract update tool before the manager, whose plain
+    ValueError would only reach the client as the generic failure (the product
+    manager raises a coded ``InvalidStatusTransitionError`` itself). Spread
+    like ``tool_failure``.
     """
     return {
         "error": (

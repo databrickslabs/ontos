@@ -12,9 +12,7 @@ from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.controller import search_scoring
 from src.controller.lifecycle_fields import deprecation_details_from_strings
-from src.tools.base import (
-    BaseTool, ToolContext, ToolResult, invalid_transition, tool_failure,
-)
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
@@ -459,13 +457,8 @@ class UpdateDataProductTool(BaseTool):
                 current_status = getattr(current.status, 'value', current.status) or 'draft'
                 current_status = str(current_status).lower()
                 if current_status != status.lower():
-                    from src.models.lifecycle import DATA_PRODUCT_TRANSITIONS
-                    allowed = DATA_PRODUCT_TRANSITIONS.get(current_status, [])
-                    if status.lower() not in allowed:
-                        return ToolResult(
-                            success=False,
-                            **invalid_transition(current_status, status.lower(), allowed),
-                        )
+                    # transition_status checks the transition: a refused one is a
+                    # coded InvalidStatusTransitionError (handled below)
                     try:
                         deprecation = deprecation_details_from_strings(
                             deprecation_reason, sunset_date, replacement_id

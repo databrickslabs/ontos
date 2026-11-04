@@ -176,6 +176,10 @@ describe('workflow-labels', () => {
     it('reports on_first_access + table as unsupported', () => {
       expect(isTriggerEntitySupported('on_first_access', 'table')).toBe(false);
     });
+
+    it('reports a contract status change request as supported (#1120)', () => {
+      expect(isTriggerEntitySupported('on_request_status_change', 'data_contract')).toBe(true);
+    });
   });
 });
 

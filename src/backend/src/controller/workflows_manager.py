@@ -45,6 +45,18 @@ logger = get_logger(__name__)
 # Advisory lock key for loading the default workflows (any constant, unique in the app)
 _DEFAULTS_LOCK_KEY = 7_340_001_016
 
+# Entity types a shipped default workflow gained after installs already had it
+# stored: (app_settings key, workflow name, entity type). Startup seeding skips
+# workflows that exist, so ``add_default_entity_types`` adds each type to the
+# stored default once, and nothing else of it, keeping the admin's edits
+# (steps, approvers, activation). The key records that it ran, so a type an
+# admin removes later stays removed.
+_DEFAULT_ENTITY_TYPE_ADDITIONS = (
+    # Contract status change requests go through the product's workflow (#1120)
+    ('default_workflow_added_status_change_request_data_contract',
+     'Status Change Request', 'data_contract'),
+)
+
 # Trigger types no event fires: manual runs go by workflow id
 # (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
 # so two active workflows of these types can't consume the same event.
@@ -124,6 +136,37 @@ class WorkflowsManager:
             return self._load_workflows(
                 workflows_data, result, update_existing, requests_only_active
             )
+
+    def add_default_entity_types(self) -> int:
+        """Add the entity types of ``_DEFAULT_ENTITY_TYPE_ADDITIONS`` not added yet.
+
+        Only to a stored default (``is_default``) that lists entity types (an
+        empty list already matches every type) without this one. Run at
+        startup after the defaults are seeded; a fresh install has the type
+        from the YAML already, and only records the key. Returns how many
+        workflows changed.
+        """
+        from src.repositories.app_settings_repository import app_settings_repo
+
+        changed = 0
+        with self._defaults_lock():
+            for key, name, entity_type in _DEFAULT_ENTITY_TYPE_ADDITIONS:
+                if app_settings_repo.get_by_key(self._db, key):
+                    continue
+                workflow = process_workflow_repo.get_by_name(self._db, name)
+                trigger = _json_object(workflow.trigger_config) if workflow else {}
+                types = list(trigger.get('entity_types') or [])
+                if workflow is not None and workflow.is_default and types \
+                        and entity_type not in types:
+                    trigger['entity_types'] = [*types, entity_type]
+                    workflow.trigger_config = json.dumps(trigger)
+                    workflow.version += 1
+                    workflow.updated_by = 'system'
+                    changed += 1
+                    logger.info("Default workflow '%s' now covers %s", name, entity_type)
+                # Commits the workflow change with the key
+                app_settings_repo.set(self._db, key, 'done')
+        return changed
 
     @contextmanager
     def _defaults_lock(self):
@@ -605,25 +648,17 @@ class WorkflowsManager:
                 "data product or data contract (disabled_for)",
                 'gate_exemptions_wrong_trigger', triggerType=trigger.type.value,
             )]
-        from src.db_models.data_domains import DataDomain as DataDomainDb
-        from src.db_models.data_products import DataProductDb
-        from src.db_models.data_contracts import DataContractDb
+        from src.common.workflow_triggers import unknown_gate_exemptions
 
-        errors = []
-        for label, kind, model, ids in (
-            ('domain', 'domain', DataDomainDb, exemptions.domains),
-            ('data product', 'data_product', DataProductDb, exemptions.data_products),
-            ('data contract', 'data_contract', DataContractDb, exemptions.data_contracts),
-        ):
-            if not ids:
-                continue
-            found = {row[0] for row in self._db.query(model.id).filter(model.id.in_(ids)).all()}
-            for missing in [i for i in ids if i not in found]:
-                errors.append(CodedMessage(
-                    f"disabled_for: unknown {label} '{missing}'",
-                    'gate_exemption_not_found', kind=kind, id=missing,
-                ))
-        return errors
+        labels = {'domain': 'domain', 'data_product': 'data product',
+                  'data_contract': 'data contract'}
+        return [
+            CodedMessage(
+                f"disabled_for: unknown {labels[kind]} '{missing}'",
+                'gate_exemption_not_found', kind=kind, id=missing,
+            )
+            for kind, missing in unknown_gate_exemptions(self._db, exemptions)
+        ]
 
     def _validate_step_config(self, step: WorkflowStepCreate) -> List[str]:
         """Validate step configuration based on type."""

@@ -397,7 +397,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   // upload gate) is NOT selectable — Scenario D (2026-08-18) disabled the gate; all
   // file uploads land as Draft and follow per-concept review. Kept in the
   // EntityType union / ALL_ENTITY_TYPES so existing data + labels still resolve.
-  on_request_status_change: ['data_product', 'ontology_concept'],
+  on_request_status_change: ['data_product', 'data_contract', 'ontology_concept'],
   // Job triggers
   on_job_success: ['job'],
   on_job_failure: ['job'],

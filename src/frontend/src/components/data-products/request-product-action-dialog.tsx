@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
-import { statusChangeErrorText } from '@/lib/status-change-error';
+import { needsStatusChangeRequest, statusChangeErrorText } from '@/lib/status-change-error';
 import { useApprovalWizardTrigger, type AppActionTriggerType } from '@/hooks/use-approval-wizard-trigger';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Rocket, RefreshCw, ShieldCheck, Info } from 'lucide-react';
@@ -99,7 +99,7 @@ export default function RequestProductActionDialog({
   productName,
   productStatus,
   onSuccess,
-  canDirectStatusChange = false,
+  canDirectStatusChange: allowDirectStatusChange = false,
   defaultRequestType = 'access'
 }: RequestProductActionDialogProps) {
   const { t } = useTranslation(['data-products', 'common']);
@@ -121,6 +121,11 @@ export default function RequestProductActionDialog({
   const [certificationLevel, setCertificationLevel] = useState<number | null>(null);
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevelOption[]>([]);
   const [publicationScope, setPublicationScope] = useState('organization');
+  // A direct change the API refused because the product is certified: the
+  // user can send it as a status change request instead (certified guard)
+  const [canRequestInstead, setCanRequestInstead] = useState(false);
+  const [requestInstead, setRequestInstead] = useState(false);
+  const canDirectStatusChange = allowDirectStatusChange && !requestInstead;
 
   // Approval wizard launch state.
   // When a `for_request_*` workflow is configured, we open the wizard before
@@ -158,6 +163,8 @@ export default function RequestProductActionDialog({
       setCertificationLevel(null);
       setPublicationScope('organization');
       setWizardWorkflowId(null);
+      setCanRequestInstead(false);
+      setRequestInstead(false);
     }
   }, [isOpen, defaultRequestType]);
 
@@ -340,10 +347,12 @@ export default function RequestProductActionDialog({
     { keepOpen = false }: { keepOpen?: boolean } = {},
   ): Promise<boolean> => {
     setError(null);
+    setCanRequestInstead(false);
     setSubmitting(true);
     try {
       const response = await post(endpoint, payload);
       if (response.error) {
+        setCanRequestInstead(type === 'status_change' && needsStatusChangeRequest(response));
         throw new Error(statusChangeErrorText(response, t, 'data-products'));
       }
       // The request type as a word of the toasts' sentences, in the UI language
@@ -794,7 +803,24 @@ export default function RequestProductActionDialog({
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {canRequestInstead && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 block"
+                    onClick={() => {
+                      setRequestInstead(true);
+                      setCanRequestInstead(false);
+                      setError(null);
+                    }}
+                  >
+                    {t('workflow-gates:requestInstead')}
+                  </Button>
+                )}
+              </AlertDescription>
             </Alert>
           )}
         </div>

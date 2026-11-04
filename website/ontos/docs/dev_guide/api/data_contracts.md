@@ -587,6 +587,8 @@ POST /api/data-contracts/{contract_id}/request-status-change
 
 Asks an approver to move the contract to a target status. Requires only `Read-only` access — requesting is not itself a mutation of the contract.
 
+The request fires `on_request_status_change`, so the default *Status Change Request* workflow confirms it to the requester and asks its approvers (the Admin role by default) in the notification bell. Its approval applies the status through the same checks and gates as a direct change, only while the contract still has the status the request was made from. The response has `message` and `request_id`, plus `execution_id` and `workflow_status` when a workflow ran.
+
 **Authorization:** `data-contracts` — `Read-only`
 
 #### Request body

@@ -424,6 +424,55 @@ contracts with `disabled_for` on its trigger (Designer: *Switched off for*):
 - Saving a workflow checks the ids exist, and only `before_status_change`
   workflows accept the setting. Who can edit workflows can change it.
 
+#### Certified Deprecation Guard
+
+Deprecating a **certified** data product or data contract (`certification_level`
+set) needs an approved status change request. This is enforced in the transition
+code, not by a workflow, so it holds in every installation: Change Status, the
+product's Deprecate action and any other caller of the transition are refused with
+`certified_deprecation_requires_approval` (translated in the UI, which offers to send
+the status change request instead). Uncertified entities deprecate directly; other
+transitions of a certified entity are not affected; imports create entities and are
+not transitions, so they are not guarded.
+
+The way through is `POST /api/data-products/{id}/request-status-change` (contracts:
+`POST /api/data-contracts/{id}/request-status-change`). The guard accepts the
+deprecation only when the request is applied after an approval that counts:
+
+- a product's or contract's request, at the approval step of the Status Change
+  Request workflow (`on_request_status_change`), decided by one of its approvers
+  through `POST /api/workflows/handle-approval`. A run without an approval step, or a
+  plain `POST /api/workflows/executions/{id}/resume`, doesn't count;
+- a product's or contract's **pending** request approved with `handle-status-change`
+  by a user with Admin on the feature. Each request has a `request_id` in its
+  `status_change_requested` change log entry (the record both managers write with
+  every request; notifications can be deleted, and a product's request has none). A
+  request is pending when it is the entity's latest one, the entity still has the
+  status it was made from, and no `status_change_request_closed` entry names it. Its
+  decision writes that entry: `handle-status-change` approve or deny (a clarification
+  keeps it open), the Status Change Request workflow's approval or rejection, and any
+  transition of the entity, so a request made from a status the entity has left can't
+  be approved even after the entity returns to it. Requests made before they had an
+  id are never pending. In the UI, both are decided from the workflow's approval
+  notification (*Approval Required*), as any workflow approval.
+
+In both cases the approver must not be the requester. A decision that doesn't count
+is refused with `certified_deprecation_approval_refused` and a `reason`
+(`not_admin`, `no_pending_request`, `target_mismatch`, `self_approval`,
+`no_approver`), translated in the UI. Every route answers the guard's refusals with
+400.
+
+The guard runs before the status gates, which can add stricter rules on top. It can
+be switched off for domains, data products and data contracts with the same
+`disabled_for` value as a status gate (Settings > Certification Levels, *Certified
+deprecation guard*; API `GET`/`PUT /api/certified-deprecation-guard`). The value is
+stored in the app settings, since the guard is not a workflow. As for a gate, a
+domain covers its products and contracts (not its subdomains), saving checks the ids
+exist, and each skip is logged and audited as `GATE_SKIPPED`, with
+`guard: certified_deprecation` instead of a workflow. Changing it needs Admin on
+certification levels; others see it read-only. A domain switch is only as strong as
+the entities' domain assignment, as for status gates.
+
 ### TriggerEvent Dataclass
 
 ```python

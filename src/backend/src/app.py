@@ -119,8 +119,9 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 
 def _seed_default_workflows() -> None:
     """Create the default workflows that don't exist yet; existing ones are left
-    untouched. Without them, publish / review / access / certification /
-    status change requests start no workflow. Only request workflows are
+    untouched, except for entity types a default gained since
+    (``add_default_entity_types``). Without them, publish / review / access /
+    certification / status change requests start no workflow. Only request workflows are
     created active, so an upgrade doesn't turn on automatic workflows or UI
     wizards; admins enable those in the Workflows page.
     """
@@ -128,7 +129,10 @@ def _seed_default_workflows() -> None:
         from src.common.database import get_session_factory
         from src.controller.workflows_manager import WorkflowsManager
         with get_session_factory()() as db:
-            counts = WorkflowsManager(db).load_from_yaml(requests_only_active=True)
+            manager = WorkflowsManager(db)
+            counts = manager.load_from_yaml(requests_only_active=True)
+            # Entity types a stored default gained since (e.g. data_contract)
+            counts['entity_types_added'] = manager.add_default_entity_types()
         logger.info("Default workflows seeded: %s", counts)
     except Exception as e:
         logger.warning("Failed seeding default workflows: %s", e, exc_info=True)

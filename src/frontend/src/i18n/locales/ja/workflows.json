@@ -355,8 +355,9 @@
     "errors": {
       "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
       "own_change_request_approval": "自分の変更リクエストは承認できません。",
-      "approval_already_decided": "この承認はすでに判断済みです。",
-      "approval_not_an_approver": "このステップは承認者だけが判断できます。"
+      "approval_already_decided": "この承認はすでにあなたが判断済みです。",
+      "approval_not_an_approver": "このステップは承認者だけが判断できます。",
+      "approval_no_longer_pending": "この承認はすでに判断済みです。"
     },
     "entityTypes": {
       "entity": "エンティティ",

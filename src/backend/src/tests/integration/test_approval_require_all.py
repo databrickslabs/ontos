@@ -1,8 +1,9 @@
 """``require_all`` on an approval step (#1119), through the API.
 
-Each resolved approver decides once: a user for themselves, any one member for
-a group. The execution stays paused until all have approved; any rejection
-fails the step. Decisions are stored with the step. ``require_all: false``
+Each resolved notification target decides once: a user for themselves, any one
+member for a group; one person fills one target. The execution stays paused
+until all have approved; any rejection fails the step. Decisions are stored with
+the step. A decision on a step that has ended gets 409. ``require_all: false``
 keeps "first decision resumes".
 
 A refused request rolls back the test's transaction (``get_db`` rolls back on
@@ -35,8 +36,13 @@ def as_user(mock_test_user):
     mock_test_user.user = 'test_user'
 
 
-def _paused_execution(client, as_user, approvers, require_all=True):
+def _paused_execution(client, as_user, approvers, require_all=True, then=None):
+    """``then``: approvers of a second approval step after this one."""
     as_user(ADMIN)
+    second = [{
+        'step_id': 'second', 'name': 'Second', 'step_type': 'approval',
+        'config': {'approvers': then}, 'on_pass': 'ok', 'on_fail': 'no',
+    }] if then else []
     response = client.post('/api/workflows', json={
         'name': f'Require all {uuid.uuid4().hex[:8]}',
         'trigger': {'type': 'manual', 'entity_types': ['data_product']},
@@ -45,8 +51,9 @@ def _paused_execution(client, as_user, approvers, require_all=True):
             {
                 'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
                 'config': {'approvers': approvers, 'require_all': require_all},
-                'on_pass': 'ok', 'on_fail': 'no',
+                'on_pass': 'second' if then else 'ok', 'on_fail': 'no',
             },
+            *second,
             {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
             {'step_id': 'no', 'name': 'Rejected', 'step_type': 'fail'},
         ],
@@ -62,11 +69,15 @@ def _paused_execution(client, as_user, approvers, require_all=True):
     return execution['id']
 
 
-def _decide(client, as_user, identity, execution_id, approved=True, reason=None):
+def _decide(
+    client, as_user, identity, execution_id, approved=True, reason=None, step_id=None,
+):
     as_user(identity)
     body = {'execution_id': execution_id, 'approved': approved}
     if reason:
         body['reason'] = reason
+    if step_id:
+        body['step_id'] = step_id
     return client.post('/api/workflows/handle-approval', json=body)
 
 
@@ -117,10 +128,15 @@ class TestRequireAll:
         assert second.status_code == 200, second.text
         assert second.json()['status'] == 'succeeded'
         assert _status(db_session, execution_id) == 'succeeded'
-        decision = _approval_records(db_session, execution_id)[-1]
+        records = _approval_records(db_session, execution_id)
+        # The pause record keeps the targets resolved when the step paused
+        assert [t['target'] for t in records[0]['resolved_targets']] == [
+            'ana@example.com', 'ben@example.com',
+        ]
+        decision = records[-1]
         assert decision['approval_result'] == 'approved'
         assert decision['responded_by'] == 'ben@example.com'
-        assert [(d['approver'], d['decision'], d['decided_by']) for d in decision['decisions']] == [
+        assert [(d['target'], d['decision'], d['decided_by']) for d in decision['decisions']] == [
             ('ana@example.com', 'approved', 'ana@example.com'),
             ('ben@example.com', 'approved', 'ben@example.com'),
         ]
@@ -166,7 +182,7 @@ class TestRequireAll:
 
         assert response.json()['status'] == 'succeeded'
         decisions = _approval_records(db_session, execution_id)[-1]['decisions']
-        assert [(d['approver'], d['decided_by']) for d in decisions] == [
+        assert [(d['target'], d['decided_by']) for d in decisions] == [
             ('team-x', 'carl@example.com'), ('ana@example.com', 'ana@example.com'),
         ]
 
@@ -179,6 +195,34 @@ class TestRequireAll:
         response = _decide(client, as_user, DORA, execution_id)
 
         assert response.status_code == 409
+        assert response.json()['detail']['code'] == 'approval_no_longer_pending'
+
+    def test_one_person_fills_one_target(self, client, as_user, db_session):
+        """Carl is a user target and a member of the group target: his
+        decision fills his own target, the group still needs another member."""
+        execution_id = _paused_execution(client, as_user, 'carl@example.com,team-x')
+
+        first = _decide(client, as_user, CARL, execution_id)
+
+        assert first.json()['status'] == 'paused', first.text
+        assert first.json()['pending_approvers'] == 1
+        assert _unread_recipients(db_session, execution_id) == {'team-x'}
+        response = _decide(client, as_user, DORA, execution_id)
+
+        assert response.json()['status'] == 'succeeded'
+        decisions = _approval_records(db_session, execution_id)[-1]['decisions']
+        assert [(d['target'], d['decided_by']) for d in decisions] == [
+            ('carl@example.com', 'carl@example.com'), ('team-x', 'dora@example.com'),
+        ]
+
+    def test_the_same_person_does_not_fill_a_second_target(self, client, as_user, db_session):
+        execution_id = _paused_execution(client, as_user, 'carl@example.com,team-x')
+        assert _decide(client, as_user, CARL, execution_id).json()['status'] == 'paused'
+
+        again = _decide(client, as_user, CARL, execution_id)
+
+        assert again.status_code == 409
+        assert again.json()['detail']['code'] == 'approval_already_decided'
 
     def test_someone_who_is_not_an_approver_is_refused(self, client, as_user, db_session):
         execution_id = _paused_execution(client, as_user, 'ana@example.com,ben@example.com')
@@ -204,6 +248,61 @@ class TestRequireAll:
         assert _decide(client, as_user, ADMIN, execution_id).json()['status'] == 'succeeded'
 
 
+class TestLateApprover:
+    """A decision on a step that has ended: 409, not 404."""
+
+    def test_after_everyone_approved(self, client, as_user, db_session):
+        execution_id = _paused_execution(client, as_user, 'ana@example.com,ben@example.com')
+        assert _decide(client, as_user, ANA, execution_id).json()['status'] == 'paused'
+        assert _decide(client, as_user, BEN, execution_id).json()['status'] == 'succeeded'
+
+        late = _decide(client, as_user, ANA, execution_id)
+
+        assert late.status_code == 409
+        assert late.json()['detail']['code'] == 'approval_no_longer_pending'
+
+    def test_after_a_rejection(self, client, as_user, db_session):
+        execution_id = _paused_execution(client, as_user, 'ana@example.com,team-x')
+        assert _decide(client, as_user, ANA, execution_id, approved=False).json()[
+            'status'] == 'failed'
+
+        late = _decide(client, as_user, CARL, execution_id)
+
+        assert late.status_code == 409
+        assert late.json()['detail']['code'] == 'approval_no_longer_pending'
+
+    def test_once_the_execution_waits_at_a_later_step(self, client, as_user, db_session):
+        execution_id = _paused_execution(
+            client, as_user, 'ana@example.com,ben@example.com', then='carl@example.com',
+        )
+        assert _decide(client, as_user, ANA, execution_id).json()['status'] == 'paused'
+        assert _decide(client, as_user, BEN, execution_id).json()['status'] == 'paused'
+
+        late = _decide(client, as_user, ANA, execution_id, step_id='approve')
+
+        assert late.status_code == 409
+        assert late.json()['detail']['code'] == 'approval_no_longer_pending'
+
+    def test_the_next_step_is_decided_with_its_step_id(self, client, as_user, db_session):
+        execution_id = _paused_execution(
+            client, as_user, 'ana@example.com,ben@example.com', then='carl@example.com',
+        )
+        _decide(client, as_user, ANA, execution_id)
+        _decide(client, as_user, BEN, execution_id)
+
+        response = _decide(client, as_user, CARL, execution_id, step_id='second')
+
+        assert response.json()['status'] == 'succeeded', response.text
+
+    def test_someone_who_was_never_an_approver_still_gets_403(
+        self, client, as_user, db_session,
+    ):
+        execution_id = _paused_execution(client, as_user, 'ana@example.com,ben@example.com')
+        _decide(client, as_user, ANA, execution_id, approved=False)
+
+        assert _decide(client, as_user, EVE, execution_id).status_code == 403
+
+
 class TestWithoutRequireAll:
     def test_the_first_decision_still_resumes(self, client, as_user, db_session):
         execution_id = _paused_execution(
@@ -226,3 +325,14 @@ class TestWithoutRequireAll:
 
         assert response.status_code == 200, response.text
         assert response.json()['status'] == 'succeeded'
+
+    def test_a_late_approver_gets_409(self, client, as_user, db_session):
+        execution_id = _paused_execution(
+            client, as_user, 'ana@example.com,ben@example.com', require_all=False,
+        )
+        assert _decide(client, as_user, ANA, execution_id).json()['status'] == 'succeeded'
+
+        late = _decide(client, as_user, BEN, execution_id)
+
+        assert late.status_code == 409
+        assert late.json()['detail']['code'] == 'approval_no_longer_pending'

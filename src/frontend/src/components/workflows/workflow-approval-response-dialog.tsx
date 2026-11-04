@@ -44,6 +44,9 @@ interface DefaultResponseWorkflowStep {
 
 export interface WorkflowApprovalResponseDialogPayload {
   execution_id: string;
+  // The approval step the notification is for: a decision after that step
+  // has ended gets 409 approval_no_longer_pending
+  step_id?: string;
   entity_name?: string;
   // Structured request context populated by the backend approval step
   // (see ApprovalStepHandler in workflow_executor.py). All optional — only
@@ -295,6 +298,7 @@ export default function WorkflowApprovalResponseDialog({
       // coded "Request denied" (approval_rejected) that each user sees in
       // their own language, not the approver's word for it.
       const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      if (payload.step_id) body.step_id = payload.step_id;
       if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
       if (grantedPermission) body.permission_level = grantedPermission;

@@ -1585,15 +1585,15 @@ def _mark_decided_approver_notifications(
     step_id: Optional[str],
     decisions: List[Dict[str, Any]],
 ) -> None:
-    """Mark handled the approval notifications of the approvers who decided.
+    """Mark handled the approval notifications of the targets that decided.
 
     For a require_all step still waiting for others (#1119): the notification
-    of each decided approver (a user, a group, a role) is handled, the others
+    of each decided target (a user, a group, a role) is handled, the others
     stay open.
     """
     from src.common.workflow_executor import approver_key
 
-    by_key = {d.get('key'): d for d in decisions}
+    by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
     for notif in db.query(NotificationDb).filter(
         NotificationDb.action_type == 'workflow_approval',
         NotificationDb.read == False,  # noqa: E712
@@ -1614,10 +1614,60 @@ def _mark_decided_approver_notifications(
             'handled': True,
             'decision': decision.get('decision'),
             'handled_by': decision.get('decided_by'),
-            'handled_at': decision.get('decided_at'),
+            'handled_at': decision.get('at'),
         })
         notif.action_payload = json.dumps(payload)
         db.add(notif)
+
+
+def _no_longer_pending() -> HTTPException:
+    """409 for a decision on an approval that is no longer pending (#1119)."""
+    return HTTPException(
+        status_code=409,
+        # code: translated by the UI (workflows:approvalResponse.errors.*)
+        detail={
+            'code': 'approval_no_longer_pending',
+            'message': "This approval has already been decided.",
+        },
+    )
+
+
+def _assert_approval_still_pending(
+    db: Session,
+    notifications_manager: NotificationsManager,
+    execution_id: str,
+    step_id: Optional[str],
+    user_info: UserInfo,
+) -> None:
+    """Refuse with 409 a decision on an approval step that has ended (#1119).
+
+    The step ended when the execution is no longer paused (every approver
+    approved, someone rejected, or it was cancelled), or, when the caller
+    names the step (``step_id``, from the notification), when the execution
+    has moved on to another step. Only callers who were approvers of that
+    step get the 409; anyone else gets the 403 of the per-execution check
+    (a decision for an ended step never applies to the current one).
+    """
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None:
+        return
+    if execution.status == 'paused' and (not step_id or step_id == execution.current_step_id):
+        return
+    for notification in _find_approval_notifications_for_execution(db, execution_id):
+        if not (notification.recipient or notification.recipient_role_id):
+            continue
+        if step_id and not _is_for_step(notification, step_id):
+            continue
+        if notifications_manager.can_user_access_notification(
+            db=db, notification=notification, user_info=user_info,
+        ):
+            raise _no_longer_pending()
+    raise HTTPException(
+        status_code=403,
+        detail="You are not an authorized approver for this execution",
+    )
 
 
 def _respond_to_pending_approval(
@@ -1648,6 +1698,8 @@ def _respond_to_pending_approval(
                 'message': "You have already decided this approval.",
             },
         )
+    if required['outcome'] == 'no_longer_pending':
+        raise _no_longer_pending()
     _mark_decided_approver_notifications(
         db, execution_id, _pending_step_id(db, execution_id), required['decisions'],
     )
@@ -1710,9 +1762,16 @@ async def handle_workflow_approval(
         execution_id = body.get('execution_id')
         approved = body.get('approved', False)
         message = body.get('message') or body.get('reason')
+        # The step the caller decides, from the notification (optional)
+        step_id = body.get('step_id') if isinstance(body.get('step_id'), str) else None
 
         if not execution_id:
             raise HTTPException(status_code=400, detail="execution_id is required")
+
+        # A late decision, on a step that has ended: 409, not 404 (#1119)
+        _assert_approval_still_pending(
+            db, notifications_manager, execution_id, step_id, current_user,
+        )
 
         # Per-execution authorization (PR K). Raises 403 if the caller
         # isn't a recipient/role-member of any approval notification for
@@ -1734,10 +1793,11 @@ async def handle_workflow_approval(
                 approver, role_id, current_user,
             ),
             user_email=current_user.email if current_user else None,
+            username=current_user.username if current_user else None,
             reason=message,
         )
         if required is not None and required['outcome'] in (
-            'pending', 'already_decided', 'not_an_approver',
+            'pending', 'already_decided', 'no_longer_pending', 'not_an_approver',
         ):
             return _respond_to_pending_approval(
                 db, request, audit_manager, current_user, execution_id, bool(approved),
@@ -1769,11 +1829,15 @@ async def handle_workflow_approval(
             )
 
         if not result:
+            # Another decision ended the step meanwhile: 409, as above
+            _assert_approval_still_pending(
+                db, notifications_manager, execution_id, step_id, current_user,
+            )
             raise HTTPException(
                 status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
         _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
 
         audit_manager.log_action(

@@ -56,7 +56,13 @@ def _paused(db, *, pause_data, config=None, status='paused', step_type='approval
 
 
 def _users(*entries):
-    return [{'approver': a, 'role_id': r} for a, r in entries]
+    return [{'target': a, 'role_id': r} for a, r in entries]
+
+
+def _stored(db, execution):
+    return json.loads(db.query(WorkflowStepExecutionDb).filter_by(
+        execution_id=execution.id,
+    ).one().result_data)
 
 
 def _decides_for(*names):
@@ -72,7 +78,7 @@ def _record(db, execution, approved=True, *names, user='u@example.com'):
 class TestTally:
     def test_pending_until_everyone_approved(self, db_session):
         execution = _paused(db_session, pause_data={
-            'require_all': True, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
         })
 
         first = _record(db_session, execution, True, 'a@x.com', user='a@x.com')
@@ -80,76 +86,153 @@ class TestTally:
 
         assert (first['outcome'], first['pending_approvers']) == ('pending', 1)
         assert (second['outcome'], second['pending_approvers']) == ('approved', 0)
-        stored = json.loads(db_session.query(WorkflowStepExecutionDb).filter_by(
-            execution_id=execution.id,
-        ).one().result_data)
-        assert [(d['key'], d['decided_by']) for d in stored['decisions']] == [
-            ('principal:a@x.com', 'a@x.com'), ('principal:b@x.com', 'b@x.com'),
+        stored = _stored(db_session, execution)
+        assert [(d['target'], d['decided_by']) for d in stored['decisions']] == [
+            ('a@x.com', 'a@x.com'), ('b@x.com', 'b@x.com'),
         ]
         # The pause record keeps its own data
-        assert stored['require_all'] is True and len(stored['resolved_approvers']) == 2
+        assert stored['require_all'] is True and len(stored['resolved_targets']) == 2
 
     def test_a_rejection_ends_it(self, db_session):
         execution = _paused(db_session, pause_data={
-            'require_all': True, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
         })
 
         assert _record(db_session, execution, False, 'a@x.com')['outcome'] == 'rejected'
 
     def test_the_same_approver_twice(self, db_session):
         execution = _paused(db_session, pause_data={
-            'require_all': True, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
         })
-        _record(db_session, execution, True, 'a@x.com')
+        _record(db_session, execution, True, 'a@x.com', user='a@x.com')
 
-        again = _record(db_session, execution, False, 'a@x.com')
+        again = _record(db_session, execution, False, 'a@x.com', user='a@x.com')
 
         assert again['outcome'] == 'already_decided'
         assert [d['decision'] for d in again['decisions']] == ['approved']
 
-    def test_a_caller_who_is_several_approvers_decides_for_each(self, db_session):
+    def test_a_caller_who_is_several_targets_fills_their_own_user_target(self, db_session):
+        """One person fills one target: their own user target first."""
         execution = _paused(db_session, pause_data={
             'require_all': True,
-            'resolved_approvers': _users(('a@x.com', None), ('team', None), ('b@x.com', None)),
+            'resolved_targets': _users(('team', None), ('a@x.com', None), ('b@x.com', None)),
         })
 
-        result = _record(db_session, execution, True, 'a@x.com', 'team')
+        result = _record(db_session, execution, True, 'team', 'a@x.com', user='a@x.com')
 
-        assert (result['outcome'], result['pending_approvers']) == ('pending', 1)
+        assert (result['outcome'], result['pending_approvers']) == ('pending', 2)
+        assert [d['target'] for d in result['decisions']] == ['a@x.com']
+
+    def test_a_caller_in_two_groups_fills_the_first_pending_one(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True,
+            'resolved_targets': _users(('team-1', None), ('team-2', None), ('b@x.com', None)),
+        })
+
+        first = _record(db_session, execution, True, 'team-1', 'team-2', user='c@x.com')
+        second = _record(db_session, execution, True, 'team-1', 'team-2', user='d@x.com')
+
+        assert (first['outcome'], first['pending_approvers']) == ('pending', 2)
+        assert (second['outcome'], second['pending_approvers']) == ('pending', 1)
+        assert [(d['target'], d['decided_by']) for d in second['decisions']] == [
+            ('team-1', 'c@x.com'), ('team-2', 'd@x.com'),
+        ]
+
+    def test_the_same_person_does_not_fill_a_second_target(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True,
+            'resolved_targets': _users(('a@x.com', None), ('team', None), ('b@x.com', None)),
+        })
+        _record(db_session, execution, True, 'a@x.com', 'team', user='A@x.com')
+
+        again = _record(db_session, execution, True, 'a@x.com', 'team', user='a@x.com')
+
+        assert (again['outcome'], again['pending_approvers']) == ('already_decided', 2)
+        assert [d['target'] for d in _stored(db_session, execution)['decisions']] == [
+            'a@x.com',
+        ]
+
+    def test_the_same_person_by_username(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_targets': _users(('team', None), ('b@x.com', None)),
+        })
+        WorkflowExecutor(db_session).record_required_approval(
+            execution.id, True, decides_for=_decides_for('team'), user_email=None,
+            username='svc-user',
+        )
+
+        again = WorkflowExecutor(db_session).record_required_approval(
+            execution.id, True, decides_for=_decides_for('team', 'b@x.com'),
+            user_email=None, username='SVC-user',
+        )
+
+        assert again['outcome'] == 'already_decided'
+
+    def test_another_member_of_a_decided_group_is_too_late(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_targets': _users(('team', None), ('b@x.com', None)),
+        })
+        _record(db_session, execution, True, 'team', user='c@x.com')
+
+        late = _record(db_session, execution, True, 'team', user='d@x.com')
+
+        assert (late['outcome'], late['pending_approvers']) == ('no_longer_pending', 1)
+
+    def test_the_decision_record(self, db_session):
+        """Per target: {target, decided_by, decision, at} (#1119), plus the
+        role id of a role target and the reason."""
+        execution = _paused(db_session, pause_data={
+            'require_all': True,
+            'resolved_targets': _users(('Data Steward', 'role-1'), ('b@x.com', None)),
+        })
+
+        result = WorkflowExecutor(db_session).record_required_approval(
+            execution.id, False, decides_for=_decides_for('Data Steward'),
+            user_email='s@x.com', reason='Missing owner',
+        )
+
+        assert result['outcome'] == 'rejected'
+        (decision,) = _stored(db_session, execution)['decisions']
+        assert set(decision) == {'target', 'role_id', 'decided_by', 'decision', 'at', 'reason'}
+        assert (decision['target'], decision['role_id'], decision['decided_by']) == (
+            'Data Steward', 'role-1', 's@x.com')
+        assert (decision['decision'], decision['reason']) == ('rejected', 'Missing owner')
+        assert decision['at']
 
     def test_the_owners_of_a_business_role_decide_once_for_it(self, db_session):
         execution = _paused(db_session, pause_data={
             'require_all': True,
-            'resolved_approvers': _users(
+            'resolved_targets': _users(
                 ('o1@x.com', 'br-1'), ('o2@x.com', 'br-1'), ('a@x.com', None),
             ),
         })
 
-        first = _record(db_session, execution, True, 'o2@x.com')
-        other_owner = _record(db_session, execution, True, 'o1@x.com')
+        first = _record(db_session, execution, True, 'o2@x.com', user='o2@x.com')
+        other_owner = _record(db_session, execution, True, 'o1@x.com', user='o1@x.com')
 
         assert (first['outcome'], first['pending_approvers']) == ('pending', 1)
-        assert first['decisions'][0]['key'] == approver_key('o2@x.com', 'br-1') == 'role:br-1'
-        assert other_owner['outcome'] == 'already_decided'
+        assert (first['decisions'][0]['target'], first['decisions'][0]['role_id']) == (
+            'o2@x.com', 'br-1')
+        assert approver_key('o2@x.com', 'br-1') == 'role:br-1'
+        assert other_owner['outcome'] == 'no_longer_pending'
 
     def test_someone_who_is_none_of_them_is_refused_and_records_nothing(self, db_session):
         """Only the resolved approvers decide (e.g. an admin who isn't one)."""
         execution = _paused(db_session, pause_data={
-            'require_all': True, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
         })
-        _record(db_session, execution, True, 'a@x.com')
+        _record(db_session, execution, True, 'a@x.com', user='a@x.com')
 
         result = _record(db_session, execution, True, user='admin@x.com')
 
         assert (result['outcome'], result['pending_approvers']) == ('not_an_approver', 1)
-        stored = json.loads(db_session.query(WorkflowStepExecutionDb).filter_by(
-            execution_id=execution.id,
-        ).one().result_data)
-        assert [d['approver'] for d in stored['decisions']] == ['a@x.com']
+        assert [d['target'] for d in _stored(db_session, execution)['decisions']] == [
+            'a@x.com',
+        ]
 
     def test_none_of_them_is_refused_before_anyone_decided(self, db_session):
         execution = _paused(db_session, pause_data={
-            'require_all': True, 'resolved_approvers': _users(('a@x.com', None)),
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None)),
         })
 
         assert _record(db_session, execution, False, user='admin@x.com')['outcome'] == (
@@ -171,7 +254,8 @@ class TestTally:
         result = _record(db_session, execution, True, 'Data Steward')
 
         assert (result['outcome'], result['pending_approvers']) == ('pending', 1)
-        assert result['decisions'][0]['key'] == 'role:role-1'
+        assert (result['decisions'][0]['target'], result['decisions'][0]['role_id']) == (
+            'Data Steward', 'role-1')
 
 
 class TestNotRequireAll:
@@ -192,7 +276,7 @@ class TestNotRequireAll:
     ])
     def test_require_all_from_the_config_or_a_string(self, db_session, pause_data, config):
         execution = _paused(db_session, pause_data={
-            **pause_data, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
+            **pause_data, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
         }, config=config)
 
         assert _record(db_session, execution, True, 'a@x.com')['outcome'] == 'pending'
@@ -217,7 +301,7 @@ class TestResume:
         guard) is applied once, by the decision that ends the step, with
         that approver as the responder."""
         execution = _paused(db_session, pause_data={
-            'require_all': True, 'resolved_approvers': _users(('a@x.com', None), ('b@x.com', None)),
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
         })
         executor = WorkflowExecutor(db_session)
 
@@ -238,7 +322,7 @@ class TestResume:
         ).order_by(WorkflowStepExecutionDb.started_at.desc()).all()
         recorded = [json.loads(r.result_data) for r in latest if 'approval_result' in (
             r.result_data or '')]
-        assert [d['approver'] for d in recorded[0]['decisions']] == ['a@x.com', 'b@x.com']
+        assert [d['target'] for d in recorded[0]['decisions']] == ['a@x.com', 'b@x.com']
 
 
 def _manager(roles):

@@ -13,9 +13,10 @@ Handles step-by-step execution with branching, including:
 import json
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -207,9 +208,9 @@ class StepHandler(ABC):
 APPROVAL_REJECTED = 'approval_rejected'
 
 
-def approver_key(approver: str, role_id: Optional[str]) -> str:
-    """Identifies one resolved approver of an approval step (#1119)."""
-    return f"role:{role_id}" if role_id else f"principal:{str(approver).strip().lower()}"
+def approver_key(target: str, role_id: Optional[str]) -> str:
+    """Identifies one resolved notification target of an approval step (#1119)."""
+    return f"role:{role_id}" if role_id else f"principal:{str(target).strip().lower()}"
 
 
 class _ReviewStepRefused(Exception):
@@ -931,9 +932,9 @@ class ApprovalStepHandler(StepHandler):
                 message=f"Approval requested from: {', '.join(a[0] for a in resolved_approvers)}",
                 data={
                     'approvers': [a[0] for a in resolved_approvers],
-                    # With require_all, each of them decides once (#1119)
-                    'resolved_approvers': [
-                        {'approver': a[0], 'role_id': a[1]} for a in resolved_approvers
+                    # With require_all, each target decides once (#1119)
+                    'resolved_targets': [
+                        {'target': a[0], 'role_id': a[1]} for a in resolved_approvers
                     ],
                     'timeout_days': timeout_days,
                     'require_all': require_all,
@@ -2950,16 +2951,17 @@ class WorkflowExecutor:
     def _required_approvers(
         self, execution_id: str, step_key: str, pause_data: Dict[str, Any],
     ) -> List[Tuple[str, Optional[str]]]:
-        """The approvers resolved when the step paused: (identifier, role id).
+        """The notification targets resolved when the step paused: (target,
+        role id).
 
         Approvals paused before they recorded them fall back to the step's
-        approval notifications, one per resolved approver.
+        approval notifications, one per resolved target.
         """
-        stored = pause_data.get('resolved_approvers')
+        stored = pause_data.get('resolved_targets')
         if isinstance(stored, list) and stored:
             return [
-                (str(a.get('approver')), a.get('role_id'))
-                for a in stored if isinstance(a, dict) and a.get('approver')
+                (str(a.get('target')), a.get('role_id'))
+                for a in stored if isinstance(a, dict) and a.get('target')
             ]
         from src.db_models.notifications import NotificationDb
 
@@ -2999,25 +3001,31 @@ class WorkflowExecutor:
         *,
         decides_for: Callable[[str, Optional[str]], bool],
         user_email: Optional[str] = None,
+        username: Optional[str] = None,
         reason: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Record a decision on a ``require_all`` approval step (#1119).
 
-        Each approver resolved when the step paused decides once: a user for
-        themselves, any one member for a group or role. ``decides_for(approver,
-        role_id)`` tells which of them the caller decides for. Only they
-        decide: a caller who is none of them (an admin, who may act on any
-        approval without ``require_all``) is refused. The decisions are stored
-        with the step's pause record.
+        Every notification target resolved when the step paused must decide:
+        a user target needs that user's decision, a group or role target one
+        decision from any member. ``decides_for(target, role_id)`` tells which
+        targets the caller can fill. One person fills at most one target per
+        step: their own user target if it is pending, else the first pending
+        group or role target in the order the step resolved them. Only the
+        targets decide: a caller who is none of them (an admin, who may act on
+        any approval without ``require_all``) is refused. The decisions are
+        stored with the step's pause record, one per target: ``target``,
+        ``role_id``, ``decided_by``, ``decision``, ``at``, ``reason``.
 
         Returns None when the execution isn't paused at an approval step with
         ``require_all`` (the decision resumes it, as before). Otherwise a dict
         with ``outcome``: ``rejected`` (any rejection fails the step),
-        ``approved`` (every approver approved), ``pending`` (others still have
-        to decide), ``already_decided`` (nothing the caller decides for is
-        pending) or ``not_an_approver`` (the caller is none of the approvers);
-        nothing is recorded for the last two. Also ``pending_approvers`` (how
-        many) and ``decisions``.
+        ``approved`` (every target approved), ``pending`` (others still have
+        to decide), ``already_decided`` (the caller has filled a target of
+        this step), ``no_longer_pending`` (others have filled every target the
+        caller could) or ``not_an_approver`` (the caller is none of the
+        targets); nothing is recorded for the last three. Also
+        ``pending_approvers`` (how many targets) and ``decisions``.
         """
         execution = self._db.query(WorkflowExecutionDb).filter(
             WorkflowExecutionDb.id == execution_id,
@@ -3049,46 +3057,49 @@ class WorkflowExecutor:
         if require_all is not True and str(require_all).strip().lower() != 'true':
             return None
 
-        # One entry per approver: the owners of a business role share its id,
-        # so any one of them decides for the role
+        # One entry per target: the owners of a business role share its id
+        # (one notification per recipient_role_id), so any one of them fills it
         resolved = self._required_approvers(execution_id, step.step_id, data)
-        approvers: Dict[str, Tuple[str, Optional[str]]] = {}
-        for approver, role_id in resolved:
-            approvers.setdefault(approver_key(approver, role_id), (approver, role_id))
+        targets: Dict[str, Tuple[str, Optional[str]]] = {}
+        for target, role_id in resolved:
+            targets.setdefault(approver_key(target, role_id), (target, role_id))
         decisions = [d for d in (data.get('decisions') or []) if isinstance(d, dict)]
-        decided = {d.get('key') for d in decisions}
+        decided = {approver_key(d.get('target') or '', d.get('role_id')) for d in decisions}
+        pending = [k for k in targets if k not in decided]
         mine: Dict[str, Tuple[str, Optional[str]]] = {}
-        for approver, role_id in resolved:
-            if decides_for(approver, role_id):
-                mine.setdefault(approver_key(approver, role_id), (approver, role_id))
-        new = {k: a for k, a in mine.items() if k not in decided}
-        if not new:
-            return {
-                'outcome': 'already_decided' if mine else 'not_an_approver',
-                'pending_approvers': len([k for k in approvers if k not in decided]),
-                'decisions': decisions,
-            }
-        now = datetime.utcnow().isoformat()
-        for k, (approver, role_id) in new.items():
-            decisions.append({
-                'key': k,
-                'approver': approver,
-                'role_id': role_id,
-                'decision': 'approved' if approved else 'rejected',
-                'decided_by': user_email,
-                'decided_at': now,
-                'reason': reason,
-            })
-            decided.add(k)
-        pending = [k for k in approvers if k not in decided]
-        record.result_data = json.dumps({**data, 'decisions': decisions})
-        self._db.add(record)
-        self._db.flush()
-        outcome = 'rejected' if not approved else ('pending' if pending else 'approved')
-        logger.info(
-            "Approval of execution %s recorded for %d approver(s): %s, %d pending",
-            execution_id, len(new), outcome, len(pending),
-        )
+        for target, role_id in resolved:
+            if decides_for(target, role_id):
+                mine.setdefault(approver_key(target, role_id), (target, role_id))
+        caller = {str(v).strip().lower() for v in (user_email, username) if v}
+        if not mine:
+            outcome = 'not_an_approver'
+        elif any(str(d.get('decided_by') or '').strip().lower() in caller for d in decisions):
+            outcome = 'already_decided'
+        else:
+            open_targets = [(k, t) for k, t in mine.items() if k not in decided]
+            if not open_targets:
+                outcome = 'no_longer_pending'
+            else:
+                # Their own user target first, else the first pending group/role
+                own = [(k, t) for k, t in open_targets if not t[1] and t[0].lower() in caller]
+                key, (target, role_id) = (own or open_targets)[0]
+                decisions.append({
+                    'target': target,
+                    'role_id': role_id,
+                    'decided_by': user_email or username,
+                    'decision': 'approved' if approved else 'rejected',
+                    'at': datetime.utcnow().isoformat(),
+                    'reason': reason,
+                })
+                pending.remove(key)
+                record.result_data = json.dumps({**data, 'decisions': decisions})
+                self._db.add(record)
+                self._db.flush()
+                outcome = 'rejected' if not approved else ('pending' if pending else 'approved')
+                logger.info(
+                    "Approval of execution %s recorded: %s, %d target(s) pending",
+                    execution_id, outcome, len(pending),
+                )
         return {'outcome': outcome, 'pending_approvers': len(pending), 'decisions': decisions}
 
     def resume_workflow(

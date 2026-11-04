@@ -1,6 +1,7 @@
 /**
  * With require_all (#1119) a decision can leave other approvers pending: the
- * dialog says so, and translates the refusal of a second decision.
+ * dialog says so, and translates the refusal of a second or late decision. It
+ * sends the notification's step so a decision on an ended step gets 409.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -17,13 +18,15 @@ const api = vi.hoisted(() => ({
 vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get: api.get, post: api.post }) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: api.toast }) }));
 
-function renderDialog(onDecisionMade = vi.fn(), onOpenChange = vi.fn()) {
+function renderDialog(
+  onDecisionMade = vi.fn(), onOpenChange = vi.fn(), extra: Record<string, unknown> = {},
+) {
   render(
     <WorkflowApprovalResponseDialog
       isOpen
       onOpenChange={onOpenChange}
       onDecisionMade={onDecisionMade}
-      payload={{ execution_id: 'e-1', entity_name: 'Product' } as never}
+      payload={{ execution_id: 'e-1', entity_name: 'Product', ...extra } as never}
     />,
   );
   return { onDecisionMade, onOpenChange };
@@ -103,5 +106,42 @@ describe('WorkflowApprovalResponseDialog with require_all', () => {
     const toast = await approve('Aprovar');
 
     expect(toast.description).toBe('Somente os aprovadores desta etapa podem decidi-la.');
+  });
+
+  it('sends the step of the notification', async () => {
+    api.post.mockResolvedValue({ data: { status: 'succeeded' } });
+    renderDialog(vi.fn(), vi.fn(), { step_id: 'approve' });
+
+    await approve();
+
+    expect(api.post).toHaveBeenCalledWith('/api/workflows/handle-approval', {
+      execution_id: 'e-1', approved: true, step_id: 'approve',
+    });
+  });
+
+  it('sends no step when the notification has none', async () => {
+    api.post.mockResolvedValue({ data: { status: 'succeeded' } });
+    renderDialog();
+
+    await approve();
+
+    expect(api.post.mock.calls[0][1]).toEqual({ execution_id: 'e-1', approved: true });
+  });
+
+  it.each([
+    ['en', 'Approve', 'This approval has already been decided.'],
+    ['pt', 'Aprovar', 'Esta aprovação já foi decidida.'],
+  ])('translates a late decision (%s)', async (lang, label, text) => {
+    await i18n.changeLanguage(lang);
+    api.post.mockResolvedValue({
+      data: null, error: 'This approval has already been decided.',
+      errorCode: 'approval_no_longer_pending',
+    });
+    renderDialog();
+
+    const toast = await approve(label);
+
+    expect(toast.description).toBe(text);
+    expect(toast.variant).toBe('destructive');
   });
 });

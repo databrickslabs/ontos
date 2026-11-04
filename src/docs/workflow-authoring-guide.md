@@ -222,27 +222,30 @@ The approval step appears twice in the execution's step history: once when it as
 
 Without `require_all` (the default), the first decision resumes the execution.
 
-With `require_all: true`, each approver the step resolved when it paused decides once:
+With `require_all: true`, every notification target the step resolved when it paused must decide:
 
-- a user decides for themselves; any one member decides for a group or a role (one decision covers every approver the caller is, e.g. their email and a group they belong to). The owners of a business role decide once for the role;
-- the execution stays paused until every approver has approved, then follows `on_pass`;
+- a user target needs that user's decision; a group or role target needs one decision from any member. The owners of a business role are one target (one decision for the role). To require N named people, list them as users;
+- one person fills at most one target per step: their own user target if it is still pending, else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member;
+- the execution stays paused until every target has approved, then follows `on_pass`;
 - any rejection follows `on_fail` at once;
-- a second decision by the same approver (or by another member of a group that has decided) is refused with `409`, code `approval_already_decided`; the first one stands;
-- only the approvers decide: anyone else, an admin included, is refused with `403`, code `approval_not_an_approver`, and nothing is recorded. An admin who is one of the approvers (or a member of an approver group or role) decides like any other. Without `require_all`, admins may still act on any approval.
+- a second decision by someone who has filled a target of the step is refused with `409`, code `approval_already_decided`; the first one stands. Someone whose targets have all been filled by others (e.g. another member of a group that has decided) gets `409`, code `approval_no_longer_pending`;
+- only the targets decide: anyone else, an admin included, is refused with `403`, code `approval_not_an_approver`, and nothing is recorded. An admin who is one of the targets (or a member of an approver group or role) decides like any other. Without `require_all`, admins may still act on any approval.
 
-The decisions are stored with the step, in the `decisions` list of its step result: `approver`, `role_id`, `decision`, `decided_by`, `decided_at`, `reason`. The approvers and `require_all` are read from when the step paused, so editing the workflow doesn't change approvals already pending. Each approver's notification is marked handled when they decide; the others stay open.
+The decisions are stored with the step, one per target, in the `decisions` list of its step result: `target` (the user, group or role name; for a business role, the owner who decided), `role_id` (for a role target), `decided_by`, `decision` (`approved` / `rejected`), `at`, `reason`. The targets and `require_all` are read from when the step paused (`resolved_targets` in the pause record), so editing the workflow doesn't change approvals already pending. Each target's notification is marked handled when it is filled; the others stay open.
 
-`timeout_days` is stored with the step but not enforced yet: a paused execution waits until it is decided or an admin cancels it. Expiry needs the scheduler of #941; the designer marks the field "not enforced yet".
+`timeout_days` is stored with the step but not enforced yet: a paused execution waits until it is decided or an admin cancels it. `0` means no timeout; without the key the default is 7 days. Expiry is the second part of #1119; the designer marks the field "not enforced yet".
 
 ### Who can decide
 
 The approval dialog (from the notification) calls `POST /api/workflows/handle-approval`:
 
 ```json
-{ "execution_id": "<execution id>", "approved": true, "message": "Looks good" }
+{ "execution_id": "<execution id>", "approved": true, "message": "Looks good", "step_id": "approve" }
 ```
 
-The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role), or an admin (with `require_all`, admins only when they are one of the approvers, see above). Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step is decided, a second decision gets `404 Execution not found or not in paused state`. The approval notifications of the decided step are marked as handled. With `require_all`, a decision that leaves other approvers pending answers `200` with `status: paused` and `pending_approvers`.
+`step_id` (optional) is the approval step the notification is for; the dialog sends it from the notification.
+
+The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role), or an admin (with `require_all`, admins only when they are one of the approvers, see above). Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step has ended (every approver approved, someone rejected, or the execution was cancelled; or, when the request names the step in `step_id`, the execution has moved on to another step), a decision by one of its approvers gets `409`, code `approval_no_longer_pending`, with or without `require_all`; anyone else still gets `403`. The approval notifications of the decided step are marked as handled. With `require_all`, a decision that leaves other approvers pending answers `200` with `status: paused` and `pending_approvers`.
 
 ### Resuming from another system
 
@@ -464,7 +467,7 @@ As of this version:
 - `scheduled` triggers are not run (see #941).
 - Workflow scopes are saved but not applied.
 - A gate whose evaluation errors lets the change through, and a `PUT` that changes `status` skips gates (STATUS_PR adds `on_error` and refuses that `PUT`).
-- An approval step's `timeout_days` is not enforced (#941).
+- An approval step's `timeout_days` is not enforced (#1119).
 - Saving a workflow's steps removes the step results of its past executions (fixed by WORKFLOWS_PR).
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
 - Reload All Defaults also resets the defaults' active flag to the shipped value.

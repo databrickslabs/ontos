@@ -353,6 +353,10 @@ def _db_with(rows: list, pending_step: str | None) -> MagicMock:
     db.query.side_effect = lambda what: (
         execution if getattr(what, 'class_', None) is WorkflowExecutionDb else notifications
     )
+    # The execution is paused (the late-decision check reads it, #1119)
+    db.get.return_value = SimpleNamespace(
+        status='paused', current_step_id=pending_step, trigger_context=None,
+    )
     return db
 
 

@@ -110,13 +110,11 @@ def readable_contract_rows(ctx: ToolContext, rows: Iterable[Any]) -> List[Any]:
         return []
     manager = ctx.data_contracts_manager
     if manager is None or not hasattr(manager, "readable_contracts"):
-        # Without the manager only the consumer part of the rule can be applied.
+        # Without the manager only the consumer part of the rule can be applied:
+        # published rows (a personal draft never is one), whatever their owner stamp.
         from src.controller.data_contracts_manager import DataContractsManager
 
-        return [
-            r for r in rows
-            if not r.draft_owner_id and DataContractsManager._visible_to_non_admin(r, set())
-        ]
+        return [r for r in rows if DataContractsManager._visible_to_non_admin(r, set())]
     return manager.readable_contracts(
         ctx.db,
         rows,

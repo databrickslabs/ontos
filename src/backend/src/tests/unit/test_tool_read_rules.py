@@ -752,3 +752,34 @@ class TestReadLevelThroughMcp:
         err, data = self._call(consumer, 'search_data_products', query='*')
         assert {p['id'] for p in data['products']} == {pub}
         assert self._call(consumer, 'get_data_product', product_id=pub)[0] is False
+
+
+class TestPublishedContractWithADraftOwner:
+    """An owner stamp hides only a personal draft; a published row stays readable."""
+
+    def _rows(self, db_session):
+        rows = {
+            'active': DataContractDb(id=str(uuid.uuid4()), name='Owned active', version='1.0.0',
+                                     status='active', draft_owner_id='olga@example.com'),
+            'deprecated': DataContractDb(id=str(uuid.uuid4()), name='Owned deprecated',
+                                         version='1.0.0', status='deprecated',
+                                         draft_owner_id='olga@example.com'),
+            'personal_draft': DataContractDb(id=str(uuid.uuid4()), name='Olga draft',
+                                             version='1.0.0', status='draft',
+                                             draft_owner_id='olga@example.com'),
+        }
+        db_session.add_all(rows.values())
+        db_session.commit()
+        return rows
+
+    @pytest.mark.parametrize('with_manager', [True, False], ids=['manager', 'no manager'])
+    def test_a_consumer_reads_it_by_id(self, db_session, with_manager):
+        from src.tools import read_access
+
+        rows = self._rows(db_session)
+        ctx = ToolContext(db=db_session, settings=MagicMock(), caller=CONSUMER,
+                          data_contracts_manager=(
+                              DataContractsManager(data_dir=Path('/tmp')) if with_manager
+                              else None))
+        readable = read_access.readable_contract_rows(ctx, rows.values())
+        assert [r.id for r in readable] == [rows['active'].id, rows['deprecated'].id]

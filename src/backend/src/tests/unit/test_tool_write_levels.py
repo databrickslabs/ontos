@@ -155,10 +155,19 @@ class TestRegistryChecksTheLevel:
         _assert_refused(res, 'data-products', ADMIN)
         assert calls == []
 
-    def test_the_api_key_policy_caller_runs_every_write_tool(self, fake_registry):
+    def test_the_api_key_policy_caller_is_refused_every_write_tool(self, fake_registry):
         registry, calls = fake_registry
         caller = mcp_api_key_caller(SimpleNamespace(created_by='admin@example.com'))
-        assert caller.email == 'admin@example.com' and caller.auth_path == 'mcp_api_key'
+        # Consumer-only: no identity (not the token's creator), no levels.
+        assert caller.email is None and caller.auth_path == 'mcp_api_key'
+        assert not caller.full_access and caller.permissions == {}
+        for name, (feature, level) in EXPECTED.items():
+            _assert_refused(_run(registry.execute(name, _ctx(caller=caller), {})), feature, level)
+        assert calls == []
+
+    def test_a_full_access_caller_runs_every_write_tool(self, fake_registry):
+        registry, calls = fake_registry
+        caller = ToolCaller(email=None, auth_path='test', full_access=True)
         for name in EXPECTED:
             assert _run(registry.execute(name, _ctx(caller=caller), {})).success is True
         assert sorted(calls) == sorted(EXPECTED)
@@ -394,7 +403,7 @@ def _audits(audit_manager, action):
 
 
 class TestMcpChecksTheLevel:
-    def test_an_api_key_without_a_forwarded_user_follows_the_policy(self, monkeypatch):
+    def test_an_api_key_without_a_forwarded_user_is_consumer_only(self, monkeypatch):
         async def _no_lookup(*a, **k):
             raise AssertionError('no user lookup without a forwarded user')
 
@@ -403,9 +412,15 @@ class TestMcpChecksTheLevel:
         h = _mcp_handler({}, audit)
         calls = _recording_tool(h, 'delete_domain')
         out = _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
-        assert out['isError'] is False
-        assert calls[0].auth_path == 'mcp_api_key' and calls[0].email == 'admin@example.com'
-        assert _audits(audit, 'TOOL_CALL')[0]['details']['auth_path'] == 'mcp_api_key'
+        assert out['isError'] is True and calls == []
+        assert out['structuredContent']['error_code'] == TOOL_NOT_PERMITTED_CODE
+        details = _audits(audit, 'TOOL_CALL')[0]['details']
+        assert details['auth_path'] == 'mcp_api_key'
+        assert details['error_code'] == TOOL_NOT_PERMITTED_CODE
+        # Read tools still run (they don't resolve a caller yet).
+        read_calls = _recording_tool(h, 'get_domain')
+        out = _run(h._handle_tools_call({'name': 'get_domain', 'arguments': {}}))
+        assert out['isError'] is False and len(read_calls) == 1
 
     def test_a_forwarded_user_below_the_level_is_refused_and_audited(self, monkeypatch):
         async def _user(request, settings, manager):
@@ -507,7 +522,9 @@ class TestMcpChecksTheLevel:
         assert calls[0].email == 'persona@example.com' and calls[0].auth_path == 'mcp_test_user'
 
         # Without TEST_USER_TOKEN the header is ignored: the API-key policy applies.
-        h = _mcp_handler({'X-Test-Token': 'tok'}, MagicMock())
+        audit = MagicMock()
+        h = _mcp_handler({'X-Test-Token': 'tok'}, audit)
         calls = _recording_tool(h, 'delete_domain')
-        _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
-        assert calls[0].auth_path == 'mcp_api_key'
+        out = _run(h._handle_tools_call({'name': 'delete_domain', 'arguments': {}}))
+        assert out['isError'] is True and calls == []
+        assert _audits(audit, 'TOOL_CALL')[0]['details']['auth_path'] == 'mcp_api_key'

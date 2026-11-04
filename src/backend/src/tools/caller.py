@@ -5,7 +5,7 @@ in ``src.tools.base``), so the levels are resolved here once per request, the
 same way as the REST routes' ``PermissionChecker``.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import Request
 
@@ -46,11 +46,11 @@ async def resolve_tool_caller(user: UserInfo, request: Request, auth_path: str) 
 def mcp_api_key_caller(token_info: Any) -> ToolCaller:
     """The caller of an MCP request that has an API key and no forwarded user.
 
-    # Open decision: what an API-key client with no forwarded user may do.
-    # Today it acts as the token's creator (only Ontos admins mint tokens) with
-    # no feature checks, limited by the token's scopes only; that is kept here.
-    # The alternative under discussion is to resolve the creator's levels or to
-    # give such clients consumer visibility only. Change it here, nowhere else.
+    # Open decision (the policy for API-key clients without a user, decided as
+    # consumer-only on 2026-10-30): the caller has no identity (not the token's
+    # creator) and no feature levels, so every tool that changes data is
+    # refused; the token's scopes still limit which tools it may call. The
+    # previous behaviour (act as the token's creator, with no checks) is
+    # ``ToolCaller(..., full_access=True)``. Change it here, nowhere else.
     """
-    created_by: Optional[str] = getattr(token_info, "created_by", None)
-    return ToolCaller(email=created_by, auth_path=MCP_API_KEY_AUTH_PATH, full_access=True)
+    return ToolCaller(email=None, auth_path=MCP_API_KEY_AUTH_PATH)

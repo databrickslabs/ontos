@@ -112,8 +112,8 @@ class ToolCaller:
     same way as ``PermissionChecker`` (role override, team role, groups).
     ``auth_path`` says where the identity came from (``ask_ontos``,
     ``mcp_forwarded_token``, ...) for logs and audit entries.
-    ``full_access`` skips the feature checks; only the MCP API-key policy
-    (``src.tools.caller.mcp_api_key_caller``) sets it.
+    ``full_access`` skips the feature checks; no caller sets it today (see
+    ``src.tools.caller.mcp_api_key_caller``).
     """
     email: Optional[str]
     auth_path: str

@@ -431,20 +431,26 @@ class DeliveryService:
         ``ddl``. One file pair per metric view (``metric_views/<fqn>.yaml`` and
         ``.sql``), so the repository's history is the view's. Nothing is
         committed or pushed: proposing the change as a pull request is #1106's.
-        ``details`` has the file names, or a coded ``error_code``.
+        ``details`` has the file names, or a coded ``error_code`` with its
+        ``error_params``.
+
+        The pair is written all or nothing: when a write fails, the files are
+        put back as they were (removed when they were new); a file that can't be
+        is ``metric_view_delivery_restore_failed`` with its path in ``files``.
         """
         from src.controller.metric_view_change_requests_manager import (
             DELIVERY_SUBDIR, delivery_filename,
         )
 
-        def failed(code: str, error: str) -> DeliveryResult:
+        def failed(code: str, error: str, **params: Any) -> DeliveryResult:
             return DeliveryResult(
                 success=False, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
                 entity_type=payload.entity_type, entity_id=payload.entity_id, error=error,
-                details={'error_code': code},
+                details={'error_code': code, 'error_params': params},
             )
 
-        if not self._git_service or not self._git_service.is_cloned:
+        git_service = self._git_service
+        if not git_service or not git_service.is_cloned:
             return failed('metric_view_delivery_git_unavailable',
                           'Git repository not available or not cloned')
         fqn = payload.data.get('fqn') or payload.entity_id
@@ -452,15 +458,53 @@ class DeliveryService:
             (delivery_filename(fqn, 'yaml'), payload.data.get('definition') or ''),
             (delivery_filename(fqn, 'sql'), (payload.data.get('ddl') or '') + '\n'),
         ]
-        for filename, text in files:
-            if not self._git_service.save_text(filename, text, subdir=DELIVERY_SUBDIR):
-                return failed('metric_view_delivery_write_failed', 'Failed to write a file')
+        try:
+            # What each file holds now (None: missing), to put it back on a failure
+            earlier = {name: git_service.load_text(name, subdir=DELIVERY_SUBDIR)
+                       for name, _ in files}
+        except Exception:
+            logger.error("Could not read the metric view files of %s", fqn, exc_info=True)
+            return failed('metric_view_delivery_write_failed', 'Failed to read a file')
+        for done, (filename, text) in enumerate(files, start=1):
+            if git_service.save_text(filename, text, subdir=DELIVERY_SUBDIR):
+                continue
+            # The one that failed too: a failed write may have truncated it
+            attempted = [name for name, _ in files[:done]]
+            unrestored = self._restore_files(earlier, attempted, DELIVERY_SUBDIR)
+            if unrestored:
+                listed = ', '.join(f"{DELIVERY_SUBDIR}/{name}" for name in unrestored)
+                logger.error("Metric view files not put back after a failed write: %s", listed)
+                return failed('metric_view_delivery_restore_failed',
+                              'Failed to write a file and to put back the files written',
+                              files=listed)
+            return failed('metric_view_delivery_write_failed', 'Failed to write a file')
         return DeliveryResult(
             success=True, mode=DeliveryMode.INDIRECT, change_type=payload.change_type,
             entity_type=payload.entity_type, entity_id=payload.entity_id,
             message="Saved to Git repository",
             details={'files': [name for name, _ in files], 'subdir': DELIVERY_SUBDIR},
         )
+
+    def _restore_files(
+        self, earlier: Dict[str, Optional[str]], filenames: List[str], subdir: str
+    ) -> List[str]:
+        """Put files back to their ``earlier`` text (removed when None); those that can't be."""
+        unrestored = []
+        for filename in filenames:
+            before = earlier[filename]
+            try:
+                if self._git_service.load_text(filename, subdir=subdir) == before:
+                    continue
+                if before is None:
+                    restored = self._git_service.delete_file(filename, subdir=subdir)
+                else:
+                    restored = self._git_service.save_text(filename, before, subdir=subdir)
+            except Exception:
+                logger.error("Could not put back %s/%s", subdir, filename, exc_info=True)
+                restored = False
+            if not restored:
+                unrestored.append(filename)
+        return unrestored
 
     def _deliver_manual(self, payload: DeliveryPayload) -> DeliveryResult:
         """Create notification for manual delivery.

@@ -253,6 +253,7 @@
           "own_change_request_approval": "Il richiedente non può approvare la propria richiesta di modifica.",
           "metric_view_delivery_git_unavailable": "Il repository Git per la consegna indiretta non è disponibile.",
           "metric_view_delivery_write_failed": "Impossibile scrivere la definizione nel repository Git.",
+          "metric_view_delivery_restore_failed": "Impossibile scrivere la definizione nel repository Git e ripristinare questi file: {{files}}.",
           "metric_view_delivery_notification_failed": "Impossibile notificare i proprietari.",
           "metric_view_delivery_no_recipient": "Non è stato possibile notificare nessuno per eseguire l’istruzione.",
           "metric_view_delivery_failed": "Impossibile consegnare la modifica.",

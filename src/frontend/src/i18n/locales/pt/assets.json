@@ -253,6 +253,7 @@
           "own_change_request_approval": "O solicitante não pode aprovar a própria solicitação de alteração.",
           "metric_view_delivery_git_unavailable": "O repositório Git da entrega Indireta não está disponível.",
           "metric_view_delivery_write_failed": "Não foi possível gravar a definição no repositório Git.",
+          "metric_view_delivery_restore_failed": "Não foi possível gravar a definição no repositório Git, e estes arquivos não puderam ser restaurados: {{files}}.",
           "metric_view_delivery_notification_failed": "Não foi possível notificar os proprietários.",
           "metric_view_delivery_no_recipient": "Ninguém pôde ser notificado para executar o comando.",
           "metric_view_delivery_failed": "Não foi possível entregar a alteração.",

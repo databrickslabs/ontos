@@ -253,6 +253,7 @@
           "own_change_request_approval": "El solicitante no puede aprobar su propia solicitud de cambio.",
           "metric_view_delivery_git_unavailable": "El repositorio Git de la entrega indirecta no está disponible.",
           "metric_view_delivery_write_failed": "No se pudo escribir la definición en el repositorio Git.",
+          "metric_view_delivery_restore_failed": "No se pudo escribir la definición en el repositorio Git, y estos archivos no se pudieron restaurar: {{files}}.",
           "metric_view_delivery_notification_failed": "No se pudo notificar a los propietarios.",
           "metric_view_delivery_no_recipient": "No se pudo notificar a nadie para ejecutar la sentencia.",
           "metric_view_delivery_failed": "No se pudo entregar el cambio.",

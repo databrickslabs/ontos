@@ -635,16 +635,18 @@ class MetricViewChangeRequestsManager:
         details: Dict[str, Any] = {}
         references: List[str] = []
         try:
-            # A savepoint: a failed delivery drops the notifications it created
+            # A savepoint: a failed delivery drops the notifications it created. The
+            # files of Indirect come last (it puts them back itself when a write
+            # fails), so no later step can fail and leave them behind.
             with self._db.begin_nested():
-                if 'indirect' in modes:
-                    files = self._deliver_indirect(row, ddl)
-                    details['indirect'] = {'files': files}
-                    references += files
                 if 'manual' in modes:
                     recipients = self._deliver_manual(row, ddl)
                     details['manual'] = {'recipients': recipients}
                     references += recipients
+                if 'indirect' in modes:
+                    files = self._deliver_indirect(row, ddl)
+                    details['indirect'] = {'files': files}
+                    references = files + references
         except Exception as exc:
             e = exc if isinstance(exc, _DeliveryError) else _DeliveryError(
                 'metric_view_delivery_failed', 'The change could not be delivered.')
@@ -655,7 +657,9 @@ class MetricViewChangeRequestsManager:
                 self._db.rollback()
             row.status = 'failed'
             row.delivery_mode = ','.join(modes)
-            row.delivery_details = details or None
+            # Undone: the savepoint dropped the notifications and Indirect put its
+            # files back (its error names any it could not)
+            row.delivery_details = None
             row.error_code = e.code
             row.error_params = {'message': e.message, **e.params}
             self._db.commit()
@@ -692,8 +696,12 @@ class MetricViewChangeRequestsManager:
         if result is None or not result.success:
             code = (result.details.get('error_code') if result else None) \
                 or 'metric_view_delivery_failed'
-            raise _DeliveryError(code, 'The definition could not be written to the Git '
-                                       'repository.')
+            params = (result.details.get('error_params') if result else None) or {}
+            message = 'The definition could not be written to the Git repository.'
+            if code == 'metric_view_delivery_restore_failed':
+                message += (f" These files could not be put back as they were: "
+                            f"{params.get('files')}.")
+            raise _DeliveryError(code, message, **params)
         return [f"{DELIVERY_SUBDIR}/{name}" for name in result.details.get('files') or []]
 
     def _deliver_manual(self, row: MetricViewChangeRequestDb, ddl: str) -> List[str]:

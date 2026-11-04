@@ -253,6 +253,7 @@
           "own_change_request_approval": "Le demandeur ne peut pas approuver sa propre demande de modification.",
           "metric_view_delivery_git_unavailable": "Le dépôt Git de la livraison indirecte n’est pas disponible.",
           "metric_view_delivery_write_failed": "La définition n’a pas pu être écrite dans le dépôt Git.",
+          "metric_view_delivery_restore_failed": "La définition n’a pas pu être écrite dans le dépôt Git, et ces fichiers n’ont pas pu être restaurés : {{files}}.",
           "metric_view_delivery_notification_failed": "Les propriétaires n’ont pas pu être notifiés.",
           "metric_view_delivery_no_recipient": "Personne n’a pu être notifié pour exécuter l’instruction.",
           "metric_view_delivery_failed": "La modification n’a pas pu être livrée.",

@@ -110,9 +110,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         if not self._ws_client:
              logger.warning("WorkspaceClient was not provided to DataAssetReviewManager. SDK operations will fail.")
 
-    def _determine_asset_type(self, fqn: str) -> AssetType:
-        """Tries to determine the asset type using the Databricks SDK."""
-        # Handle special protocol-based FQNs
+    @staticmethod
+    def _app_asset_type(fqn: str) -> Optional[AssetType]:
+        """The type of an FQN that names no Unity Catalog object (a protocol or an app entity)."""
         if fqn.startswith('mdm://'):
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
@@ -121,11 +121,28 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.KNOWLEDGE_CONCEPT
         if fqn.startswith('concept-changeset://'):
             return AssetType.CONCEPT_CHANGESET
-        app_entity_type = app_entity_asset_type(fqn)
-        if app_entity_type:
-            return app_entity_type
+        return app_entity_asset_type(fqn)
 
-        if not self._ws_client:
+    def reads_catalog(self, fqns: List[str]) -> bool:
+        """Whether typing these FQNs reads Unity Catalog (some is ``catalog.schema.name``)."""
+        return any(
+            self._app_asset_type(fqn) is None and len(fqn.split('.')) == 3 for fqn in fqns
+        )
+
+    def _determine_asset_type(
+        self, fqn: str, ws_client: Optional[WorkspaceClient] = None
+    ) -> AssetType:
+        """Tries to determine the asset type using the Databricks SDK.
+
+        ``ws_client`` is the requesting user's client: an object they can't see is
+        typed TABLE, like one that doesn't exist. Without it the manager's own is used.
+        """
+        app_type = self._app_asset_type(fqn)
+        if app_type:
+            return app_type
+
+        client = self._ws_client if ws_client is None else ws_client
+        if not client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")
             # Default or raise error? For now, default to TABLE as a fallback.
             return AssetType.TABLE
@@ -140,7 +157,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             # Try fetching as Table first (most common)
             try:
-                table_info = self._ws_client.tables.get(full_name=fqn)
+                table_info = client.tables.get(full_name=fqn)
                 if table_info.table_type == TableType.METRIC_VIEW:
                     return AssetType.METRIC
                 if table_info.table_type == TableType.VIEW or table_info.table_type == TableType.MATERIALIZED_VIEW:
@@ -154,7 +171,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             
             # Try fetching as Function
             try:
-                self._ws_client.functions.get(name=fqn)
+                client.functions.get(name=fqn)
                 return AssetType.FUNCTION
             except DatabricksError as e:
                 if "NOT_FOUND" not in str(e) and "PERMISSION_DENIED" not in str(e):
@@ -183,12 +200,19 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected SDK error determining asset type for {fqn}: {e}. Defaulting to TABLE.", exc_info=True)
             return AssetType.TABLE
 
-    def create_review_request(self, request_data: DataAssetReviewRequestCreate, db: Optional[Session] = None) -> DataAssetReviewRequestApi:
+    def create_review_request(
+        self,
+        request_data: DataAssetReviewRequestCreate,
+        db: Optional[Session] = None,
+        ws_client: Optional[WorkspaceClient] = None,
+    ) -> DataAssetReviewRequestApi:
         """Creates a new data asset review request.
         
         Args:
             request_data: The review request data
             db: Optional database session. If not provided, uses the manager's internal session.
+            ws_client: The requesting user's client, to type Unity Catalog assets as
+                them (the route passes it). If not provided, the manager's own is used.
         """
         # Use provided db session or fall back to instance session
         db_session = db if db is not None else self._db
@@ -203,7 +227,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     logger.warning(f"Duplicate FQN '{fqn}' in request, skipping.")
                     continue
                 
-                asset_type = self._determine_asset_type(fqn)
+                asset_type = self._determine_asset_type(fqn, ws_client)
                 assets_to_review.append(
                     ReviewedAssetApi(
                         id=str(uuid.uuid4()),

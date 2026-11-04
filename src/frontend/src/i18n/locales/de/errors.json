@@ -25,6 +25,7 @@
     "retry": "Erneut versuchen"
   },
   "internalError": "Ein unerwarteter Fehler ist aufgetreten. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}}).",
+  "userTokenRequired": "Diese Anfrage benötigt Ihr Databricks-Zugriffstoken, es wurde aber keines empfangen. Laden Sie die Seite neu; wenn das Problem bleibt, bitten Sie einen Administrator, die Benutzerautorisierung für die App zu aktivieren.",
   "subscription": {
     "productNotSubscribable": "'{{productName}}' kann nicht abonniert werden: Der Status ist '{{status}}'. Nur aktive Produkte nehmen neue Abonnements an."
   }

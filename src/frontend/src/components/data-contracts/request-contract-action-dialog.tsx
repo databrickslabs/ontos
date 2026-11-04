@@ -893,6 +893,10 @@ export default function RequestContractActionDialog({
                     size="sm"
                     className="mt-2 block"
                     onClick={() => {
+                      // The reason given for the direct change is the request's justification
+                      if (targetStatus === 'deprecated' && !justification.trim()) {
+                        setJustification(deprecation.deprecationReason.trim());
+                      }
                       setRequestInstead(true);
                       setCanRequestInstead(false);
                       setError(null);

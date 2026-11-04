@@ -1,7 +1,8 @@
 /**
  * Deprecating a certified contract directly is refused by the certified guard
  * (`certified_deprecation_requires_approval`): the dialog shows the error in
- * the UI language and offers to send a status change request instead.
+ * the UI language and offers to send a status change request instead, with the
+ * reason given for the direct change as its justification.
  *
  * The Radix Select hangs in jsdom, so it is replaced by a native select.
  */
@@ -32,6 +33,8 @@ vi.mock('@/components/ui/select', () => ({
   SelectContent: ({ children }: any) => <>{children}</>,
   SelectItem: ({ value }: any) => <option value={value}>{value}</option>,
 }));
+
+const REASON = 'Replaced by Orders v2; every consumer has moved.';
 
 const REFUSED = {
   data: {},
@@ -76,6 +79,10 @@ describe('RequestContractActionDialog certified deprecation', () => {
 
     fireEvent.change(selectWith('status_change'), { target: { value: 'status_change' } });
     fireEvent.change(selectWith('deprecated'), { target: { value: 'deprecated' } });
+    // A direct deprecation needs a reason
+    fireEvent.change(document.getElementById('deprecation-reason') as HTMLTextAreaElement, {
+      target: { value: REASON },
+    });
     fireEvent.click(screen.getByRole('button', {
       name: i18n.t('data-contracts:requests.statusChange.changeTitle'),
     }));
@@ -87,9 +94,7 @@ describe('RequestContractActionDialog certified deprecation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Solicitar a mudança de status' }));
     const justification = document.getElementById('status-justification') as HTMLTextAreaElement;
-    fireEvent.change(justification, {
-      target: { value: 'Replaced by Orders v2; every consumer has moved.' },
-    });
+    expect(justification).toHaveValue(REASON);
     fireEvent.click(screen.getByRole('button', {
       name: i18n.t('data-contracts:requests.sendRequest'),
     }));
@@ -97,7 +102,7 @@ describe('RequestContractActionDialog certified deprecation', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2));
     expect(mockPost.mock.calls[1][0]).toBe('/api/data-contracts/c-1/request-status-change');
     expect(mockPost.mock.calls[1][1]).toMatchObject({
-      target_status: 'deprecated', current_status: 'active',
+      target_status: 'deprecated', justification: REASON, current_status: 'active',
     });
   });
 });

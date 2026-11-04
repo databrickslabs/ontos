@@ -5,10 +5,13 @@ The same Read/Write user, through ``PUT /api/data-products/{id}`` and through
 - a published product they don't own: PUT answers 403, the tool refuses and the
   product is unchanged;
 - a draft they create through the chat: they are its draft owner, so PUT lets
-  them edit it, as a draft created with ``POST /api/data-products``.
+  them edit it, as a draft created with ``POST /api/data-products``;
+- a create and an update fire the same on_create / on_update workflows for the
+  user, through the chat and through the REST routes.
 """
 import json
 import uuid
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -18,6 +21,9 @@ from src.common import config as config_module
 from src.common.authorization import get_user_details_from_sdk
 from src.controller.llm_search_manager import LLMSearchManager
 from src.db_models.data_products import DataProductDb
+from src.db_models.process_workflows import (
+    ProcessWorkflowDb, WorkflowExecutionDb, WorkflowStepDb,
+)
 from src.db_models.settings import AppRoleDb
 from src.models.users import UserInfo
 
@@ -121,3 +127,59 @@ def test_the_creator_of_a_chat_draft_edits_it_with_put(
     resp = _put(client, created.id, name='Chat draft renamed', status='draft')
     assert resp.status_code == 200, resp.text
     assert app.state.data_products_manager.get_product(created.id).name == 'Chat draft renamed'
+
+
+def _workflow(db, trigger):
+    """An active one-step workflow on ``trigger`` for data products."""
+    now = datetime.utcnow()
+    wf_id = str(uuid.uuid4())
+    db.add(ProcessWorkflowDb(
+        id=wf_id, name=f'{trigger} {wf_id[:6]}', description='test',
+        trigger_config=json.dumps({'type': trigger, 'entity_types': ['data_product']}),
+        scope_config=json.dumps({'type': 'all'}), is_active=True, is_default=False,
+        workflow_type='process', created_at=now, updated_at=now,
+    ))
+    db.flush()
+    db.add(WorkflowStepDb(
+        id=str(uuid.uuid4()), workflow_id=wf_id, step_id='only', name='Only step',
+        step_type='pass', config='{}', on_pass=None, on_fail=None, order=0,
+        created_at=now, updated_at=now,
+    ))
+    db.commit()
+    return wf_id
+
+
+def _runs(db, wf_id):
+    """(entity_id, triggered_by) of each execution of the workflow, sorted."""
+    db.expire_all()
+    rows = db.query(WorkflowExecutionDb).filter_by(workflow_id=wf_id).all()
+    return sorted((json.loads(r.trigger_context)['entity_id'], r.triggered_by) for r in rows)
+
+
+def test_the_chat_and_the_routes_fire_the_same_workflows(
+    client, db_session, writer, monkeypatch
+):
+    on_create = _workflow(db_session, 'on_create')
+    on_update = _workflow(db_session, 'on_update')
+
+    name = f'Chat draft {uuid.uuid4().hex[:6]}'
+    source = _chat(client, monkeypatch, 'create_draft_data_product',
+                   {'name': name, 'description': 'made in the chat', 'domain': 'Sales'})
+    assert source['success'] is True, source
+    chat_id = db_session.query(DataProductDb).filter_by(name=name).one().id
+    source = _chat(client, monkeypatch, 'update_data_product',
+                   {'product_id': chat_id, 'description': 'edited in the chat'})
+    assert source['success'] is True, source
+
+    resp = client.post('/api/data-products', json={
+        'apiVersion': 'v1.0.0', 'kind': 'DataProduct', 'id': str(uuid.uuid4()),
+        'name': f'REST draft {uuid.uuid4().hex[:6]}', 'version': '0.1.0', 'status': 'draft',
+    })
+    assert resp.status_code == 201, resp.text
+    rest_id = resp.json()['id']
+    resp = _put(client, rest_id, name='REST draft renamed', status='draft')
+    assert resp.status_code == 200, resp.text
+
+    expected = sorted([(chat_id, writer.email), (rest_id, writer.email)])
+    assert _runs(db_session, on_create) == expected
+    assert _runs(db_session, on_update) == expected

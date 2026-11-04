@@ -1120,3 +1120,25 @@ def test_a_product_that_fails_after_its_flush_is_no_replacement(db_session, monk
     item_a = next(i for i in result.items if i.source_id == a_id)
     assert item_a.code == 'imported_replacement_dropped'
     assert db_session.get(DataProductDb, item_a.entity_id).replacement_product_id is None
+
+
+@pytest.mark.parametrize('kind', ['product', 'contract'])
+def test_each_import_file_is_parsed_once(db_session, monkeypatch, kind):
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    if kind == 'product':
+        manager, method = DataProductsManager(db=db_session), '_parse_products_content'
+        files = _product_files(_odps(a_id, ontosReplacedBy=b_id), _odps(b_id))
+    else:
+        manager, method = DataContractsManager(data_dir=Path('/tmp')), 'parse_uploaded_entities'
+        files = _contract_files(_odcs(a_id, ontosReplacedBy=b_id), _odcs(b_id))
+    parsed = []
+    real = getattr(manager, method)
+    monkeypatch.setattr(manager, method, lambda *a: parsed.append(a[1]) or real(*a))
+
+    if kind == 'product':
+        result = manager.create_products_from_files(files, adopt_ids=False)
+    else:
+        result = manager.create_contracts_from_files(db_session, files, adopt_ids=False)
+
+    assert result.created == 2
+    assert sorted(parsed) == ['0.json', '1.json']

@@ -3298,10 +3298,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             except Exception as log_err:
                 logger.warning(f"Failed to log change for contract import: {log_err}")
 
-            if import_links is None:
-                for note in links.finish(db, username=current_user).values():
-                    logger.warning("Contract %s imported: %s", created.id, note.message)
-                db.commit()
             db.refresh(created)  # the change log commit expired it
             self._update_search_index(created, db)
             return created
@@ -3358,16 +3354,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return [parsed]
         raise ValueError("File must contain an ODCS object or an array of ODCS objects.")
 
-    def _import_replacement_entries(self, files):
-        """``(id, ontosReplacedBy)`` of every contract in the import files, for
-        ``ImportLinks.plan``; files that don't parse are skipped here and
-        reported by the import itself."""
+    @staticmethod
+    def _import_replacement_entries(parsed_files):
+        """``(id, ontosReplacedBy)`` of every contract in the parsed import files,
+        for ``ImportLinks.plan``; files that didn't parse are left out (the
+        import reports them)."""
         entries = []
-        for filename, content_text, content_type in files:
-            try:
-                entities = self.parse_uploaded_entities(content_text, filename, content_type)
-            except Exception:
-                continue
+        for _filename, entities, _error in parsed_files:
             for entity in entities or []:
                 if isinstance(entity, dict):
                     entries.append((
@@ -3409,16 +3402,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             its own transaction inside `create_from_upload`).
         """
         result = BatchImportResult()
-        links = ImportLinks('data_contract')
-        links.plan(self._import_replacement_entries(files))
-        index = 0
+        # Each file is parsed once: the replacement links of the whole import
+        # are planned before any contract is created
+        parsed_files = []
         for filename, content_text, content_type in files:
             try:
-                entities = self.parse_uploaded_entities(content_text, filename, content_type)
+                parsed_files.append((
+                    filename,
+                    self.parse_uploaded_entities(content_text, filename, content_type),
+                    None,
+                ))
             except Exception as e:  # pragma: no cover - defensive; parse falls back to text
+                parsed_files.append((filename, None, e))
+        links = ImportLinks('data_contract')
+        links.plan(self._import_replacement_entries(parsed_files))
+        index = 0
+        for filename, entities, parse_error in parsed_files:
+            if parse_error is not None:  # pragma: no cover - see above
                 result.add(ImportItemResult(
                     index=index, source_file=filename, status="failed",
-                    message=f"Could not parse file: {e}",
+                    message=f"Could not parse file: {parse_error}",
                 ))
                 index += 1
                 continue

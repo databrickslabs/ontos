@@ -1950,16 +1950,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             return data
         raise ValueError("File must contain a JSON object/array or YAML mapping/list of data products")
 
-    def _import_replacement_entries(self, files):
-        """``(id, ontosReplacedBy)`` of every product in the import files, for
-        ``ImportLinks.plan``; files that don't parse are skipped here and
-        reported by the import itself."""
+    @staticmethod
+    def _import_replacement_entries(parsed_files):
+        """``(id, ontosReplacedBy)`` of every product in the parsed import files,
+        for ``ImportLinks.plan``; files that didn't parse are left out (the
+        import reports them)."""
         entries = []
-        for filename, content in files:
-            try:
-                data_list = self._parse_products_content(content, filename)
-            except ValueError:
-                continue
+        for _filename, data_list, _error in parsed_files:
             for product_data in data_list or []:
                 if isinstance(product_data, dict):
                     entries.append((
@@ -1997,15 +1994,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             individually and never abort the batch.
         """
         result = BatchImportResult()
-        links = ImportLinks('data_product')
-        links.plan(self._import_replacement_entries(files))
-        index = 0
+        # Each file is parsed once: the replacement links of the whole import
+        # are planned before any product is created
+        parsed_files = []
         for filename, content in files:
             try:
                 data_list = self._parse_products_content(content, filename)
+                parsed_files.append((filename, data_list, None))
             except ValueError as e:
+                parsed_files.append((filename, None, e))
+        links = ImportLinks('data_product')
+        links.plan(self._import_replacement_entries(parsed_files))
+        index = 0
+        for filename, data_list, parse_error in parsed_files:
+            if parse_error is not None:
                 result.add(ImportItemResult(
-                    index=index, source_file=filename, status="failed", message=str(e),
+                    index=index, source_file=filename, status="failed",
+                    message=str(parse_error),
                 ))
                 index += 1
                 continue

@@ -98,6 +98,13 @@ def _approval_notifications(db_session, execution_id):
     ]
 
 
+def _queued_product_ids(client, as_user, identity):
+    as_user(identity)
+    response = client.get('/api/approvals/queue')
+    assert response.status_code == 200, response.text
+    return {p['id'] for p in response.json()['products']}
+
+
 class TestReviewerReadsReviewedProduct:
     def test_the_named_reviewer_reads_the_product(self, client, as_user, reviewed):
         product_id, _ = reviewed
@@ -217,3 +224,61 @@ class TestReviewerReadsReviewedProduct:
 
         assert _get(client, as_user, STEWARD, product_id) == 404
 
+
+class TestApprovalsQueue:
+    """``GET /api/approvals/queue`` lists a product only to who may open it (#1117)."""
+
+    def test_whoever_can_decide_sees_the_product(self, client, as_user, reviewed):
+        product_id, _ = reviewed
+
+        for identity in (REVIEWER, STEWARD, PRODUCER, ADMIN):
+            assert product_id in _queued_product_ids(client, as_user, identity), identity
+
+    def test_someone_who_cannot_open_it_does_not(self, client, as_user, reviewed):
+        product_id, _ = reviewed
+
+        assert product_id not in _queued_product_ids(client, as_user, OTHER_CONSUMER)
+
+    def test_the_entry_goes_once_the_approval_is_decided(self, client, as_user, reviewed):
+        product_id, result = reviewed
+        assert product_id in _queued_product_ids(client, as_user, STEWARD)
+
+        as_user(STEWARD)
+        response = client.post('/api/workflows/handle-approval', json={
+            'execution_id': result['execution_id'], 'approved': False, 'reason': 'Not yet',
+        })
+        assert response.status_code == 200, response.text
+
+        assert product_id not in _queued_product_ids(client, as_user, STEWARD)
+
+    def test_a_proposed_product_without_a_review_is_listed_to_its_owner_only(
+        self, client, as_user,
+    ):
+        product_id = _create_draft(client, as_user, 'Submitted without a workflow')
+        as_user(PRODUCER)
+        response = client.post(f'/api/data-products/{product_id}/submit-review')
+        assert response.status_code == 200, response.text
+
+        assert product_id in _queued_product_ids(client, as_user, PRODUCER)
+        assert product_id in _queued_product_ids(client, as_user, ADMIN)
+        assert product_id not in _queued_product_ids(client, as_user, STEWARD)
+        assert product_id not in _queued_product_ids(client, as_user, OTHER_CONSUMER)
+
+    def test_contracts_are_still_listed_to_contract_readers(
+        self, client, as_user, db_session,
+    ):
+        """``GET /api/data-contracts/{id}`` has no gate beyond data-contracts
+        read on this branch, so the queue keeps listing contracts."""
+        from src.db_models.data_contracts import DataContractDb
+
+        contract_id = str(uuid.uuid4())
+        db_session.add(DataContractDb(
+            id=contract_id, name='Proposed contract', version='1.0.0', status='proposed',
+        ))
+        db_session.commit()
+        as_user(OTHER_CONSUMER)
+
+        response = client.get('/api/approvals/queue')
+
+        assert response.status_code == 200, response.text
+        assert contract_id in {c['id'] for c in response.json()['contracts']}

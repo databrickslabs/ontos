@@ -679,7 +679,8 @@
     },
     "errors": {
       "cannotRequest": "「{{requestType}}」はステータス {{productStatus}} のプロダクトでは利用できません。",
-      "failedToSubmit": "リクエストの送信に失敗しました"
+      "failedToSubmit": "リクエストの送信に失敗しました",
+      "notProductOwner": "このプロダクトのレビューを依頼できるのは、プロダクトのオーナーまたは管理者のみです。"
     },
     "toast": {
       "statusChanged": "ステータスを変更しました",

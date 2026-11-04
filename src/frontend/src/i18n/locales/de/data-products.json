@@ -679,7 +679,8 @@
     },
     "errors": {
       "cannotRequest": "\"{{requestType}}\" ist für ein Produkt mit Status {{productStatus}} nicht verfügbar.",
-      "failedToSubmit": "Anfrage konnte nicht gesendet werden"
+      "failedToSubmit": "Anfrage konnte nicht gesendet werden",
+      "notProductOwner": "Nur die Eigentümer des Produkts oder ein Administrator können seine Prüfung anfordern."
     },
     "toast": {
       "statusChanged": "Status geändert",

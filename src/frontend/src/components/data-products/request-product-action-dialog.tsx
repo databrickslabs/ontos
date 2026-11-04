@@ -40,6 +40,9 @@ interface CertificationLevelOption {
   color: string | null;
 }
 
+/** The code of a review requested by someone who doesn't own the product. */
+const NOT_PRODUCT_OWNER_CODE = 'not_product_owner';
+
 interface RequestProductActionDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -353,7 +356,12 @@ export default function RequestProductActionDialog({
       const response = await post(endpoint, payload);
       if (response.error) {
         setCanRequestInstead(type === 'status_change' && needsStatusChangeRequest(response));
-        throw new Error(statusChangeErrorText(response, t, 'data-products'));
+        // Only a product's owners or an admin may request its review (#1117)
+        throw new Error(response.errorCode === NOT_PRODUCT_OWNER_CODE
+          ? t('data-products:requestAction.errors.notProductOwner', {
+            defaultValue: response.error,
+          })
+          : statusChangeErrorText(response, t, 'data-products'));
       }
       // The request type as a word of the toasts' sentences, in the UI language
       const typeName = t(`data-products:requestAction.toast.requestTypes.${type}`, { defaultValue: type });

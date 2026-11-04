@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { OntologyConcept } from '@/types/ontology';
 
 // ---------------------------------------------------------------------------
@@ -184,5 +185,20 @@ describe('ConceptsTab search (list view)', () => {
     render(<ConceptsTab {...props} viewMode="tree" />);
     expect(screen.getByTestId('concept-row-urn:customer')).toBeInTheDocument();
     expect(screen.queryByTestId('concept-row-urn:account')).not.toBeInTheDocument();
+  });
+});
+
+describe('ConceptsTab bulk lifecycle actions', () => {
+  it('grays out transitions that do not apply to the selected status', async () => {
+    const user = userEvent.setup();
+    const published = { ...PARENT, status: 'published' } as unknown as OntologyConcept;
+    render(<ConceptsTab {...baseProps} filteredConcepts={[published]} viewMode="list" />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select' }));
+    await user.click(screen.getByRole('button', { name: /Set status/ }));
+
+    expect(screen.getByTestId('bulk-status-certify')).not.toHaveAttribute('data-disabled');
+    expect(screen.getByTestId('bulk-status-publish')).toHaveAttribute('data-disabled');
+    expect(screen.getByTestId('bulk-status-approve')).toHaveAttribute('data-disabled');
   });
 });

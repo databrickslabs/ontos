@@ -47,6 +47,7 @@ SHIPPED_OPT_IN_CONTEXTS: Set[str] = {
 # Uploaded RDF sources land here; kept as a named constant for messages and
 # back-compat, but it is no longer the ONLY valid concept source (see below).
 CUSTOMER_CONTEXT_PREFIX = "urn:semantic-model:"
+DEMO_CONTEXT = "urn:demo"
 
 # Any concept scheme is a valid source: authored/imported schemes
 # (urn:glossary / urn:taxonomy / urn:ontology) and uploaded RDF sources
@@ -70,7 +71,7 @@ def is_customer_context(ctx: str) -> bool:
     is not an internal index and not a shipped opt-in taxonomy."""
     if ctx in INTERNAL_BLOCKED_CONTEXTS or ctx in SHIPPED_OPT_IN_CONTEXTS:
         return False
-    return ctx.startswith(CONCEPT_SCHEME_PREFIXES)
+    return ctx == DEMO_CONTEXT or ctx.startswith(CONCEPT_SCHEME_PREFIXES)
 
 
 def is_shipped_context(ctx: str) -> bool:
@@ -275,6 +276,10 @@ def list_selectable_contexts(
         concept_count = sum(1 for _ in _classes_in_context(ctx)) + sum(
             1 for _ in _properties_in_context(ctx)
         )
+        # RDFLib stores may retain an empty named context after its triples are
+        # removed. Do not expose those stale contexts in the mapping picker.
+        if concept_count == 0:
+            continue
         out.append(
             {
                 "context": name,

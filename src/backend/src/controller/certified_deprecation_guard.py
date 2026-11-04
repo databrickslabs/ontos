@@ -3,7 +3,8 @@
 The certified guard of the lifecycle PRD (``prd-lifecycle-tag-automation-and-
 deprecation.md``, *Approvals and notices*). ``transition_status`` of products
 and contracts runs it through ``run_status_gates``, before the gates
-(``check_certified_deprecation``): a direct move to
+(``check_certified_deprecation``, and before the deprecation fields are
+checked, so a missing reason doesn't hide the refusal): a direct move to
 ``deprecated`` of an entity whose ``certification_level`` is set is refused
 with ``certified_deprecation_requires_approval``. It is enforced in code, not
 a workflow, so it holds in every installation without admin action.

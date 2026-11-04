@@ -318,7 +318,8 @@ def check_lifecycle_fields(
 ) -> None:
     """Raise ValueError if the deprecation details don't allow ``new_status``.
 
-    Called before the transition's gates run, so nothing is written yet.
+    Called after the certified deprecation guard and before the transition's
+    gates (``run_status_gates(before_gates=...)``), so nothing is written yet.
     """
     if new_status != 'deprecated':
         return

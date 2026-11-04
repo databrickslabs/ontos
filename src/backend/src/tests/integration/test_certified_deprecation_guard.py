@@ -5,7 +5,10 @@ refuses a direct move to ``deprecated`` when ``certification_level`` is set,
 with the code ``certified_deprecation_requires_approval``. The approved status
 change request applies it; uncertified entities deprecate directly; the guard
 can be switched off per domain or entity (``disabled_for``), and each skip is
-audited as ``GATE_SKIPPED``.
+audited as ``GATE_SKIPPED``. The guard decides before the deprecation reason
+(#1042) is checked: a certified entity is told to request the change even
+without one, and where the guard lets the change through the reason is still
+required. The tests about the guard give a reason.
 
 Through the routes, on the test database, with the app's managers. A refused
 contract request rolls back the test's transaction (the route's session is
@@ -32,6 +35,7 @@ from src.models.users import UserInfo
 
 CODE = 'certified_deprecation_requires_approval'
 REFUSED = 'certified_deprecation_approval_refused'
+REASON = 'Replaced by the v2 version, consumers moved'
 
 
 def _act_as(username: str, groups=('test_admins',)) -> UserInfo:
@@ -92,15 +96,21 @@ def _status(db: Session, model, entity_id: str) -> str:
     return db.get(model, entity_id).status
 
 
-def _deprecate_product(client: TestClient, product_id: str):
+def _deprecation(reason=REASON) -> dict:
+    return {'deprecation_reason': reason} if reason else {}
+
+
+def _deprecate_product(client: TestClient, product_id: str, reason=REASON):
     return client.post(
-        f'/api/data-products/{product_id}/change-status', json={'new_status': 'deprecated'},
+        f'/api/data-products/{product_id}/change-status',
+        json={'new_status': 'deprecated', **_deprecation(reason)},
     )
 
 
-def _deprecate_contract(client: TestClient, contract_id: str):
+def _deprecate_contract(client: TestClient, contract_id: str, reason=REASON):
     return client.post(
-        f'/api/data-contracts/{contract_id}/change-status', json={'new_status': 'deprecated'},
+        f'/api/data-contracts/{contract_id}/change-status',
+        json={'new_status': 'deprecated', **_deprecation(reason)},
     )
 
 
@@ -139,10 +149,39 @@ class TestDirectDeprecation:
     def test_the_deprecate_route_of_a_product_is_refused_too(self, client, db_session):
         product_id = _product(db_session)
 
-        response = client.post(f'/api/data-products/{product_id}/deprecate')
+        response = client.post(
+            f'/api/data-products/{product_id}/deprecate', json=_deprecation(),
+        )
 
         _assert_refused(response, 'data_product', product_id)
         assert _status(db_session, DataProductDb, product_id) == 'active'
+
+    def test_a_certified_entity_is_refused_by_the_guard_even_without_a_reason(
+        self, client, db_session,
+    ):
+        product_id, contract_id = _product(db_session), _contract(db_session)
+
+        _assert_refused(_deprecate_product(client, product_id, reason=None),
+                        'data_product', product_id)
+        _assert_refused(
+            client.post(f'/api/data-products/{product_id}/deprecate'),
+            'data_product', product_id,
+        )
+        _assert_refused(_deprecate_contract(client, contract_id, reason=None),
+                        'data_contract', contract_id)
+
+    @pytest.mark.parametrize('kind, make', [
+        ('data-products', _product), ('data-contracts', _contract),
+    ])
+    def test_an_uncertified_entity_still_needs_a_reason(self, client, db_session, kind, make):
+        entity_id = make(db_session, certified=False)
+
+        response = client.post(
+            f'/api/{kind}/{entity_id}/change-status', json={'new_status': 'deprecated'},
+        )
+
+        assert response.status_code == 400, response.text
+        assert response.json()['detail']['code'] == 'deprecation_reason_required'
 
     def test_an_uncertified_product_deprecates_directly(self, client, db_session):
         product_id = _product(db_session, certified=False)
@@ -176,8 +215,7 @@ class TestDirectDeprecation:
 def _request(client: TestClient, kind: str, entity_id: str, target: str = 'deprecated'):
     requested = client.post(
         f'/api/{kind}/{entity_id}/request-status-change',
-        json={'target_status': target,
-              'justification': 'Replaced by the v2 version, consumers moved'},
+        json={'target_status': target, 'justification': REASON},
     )
     assert requested.status_code == 200, requested.text
     return requested.json()
@@ -312,7 +350,8 @@ class TestApprovedRequest:
 
 
 def _change(client: TestClient, kind: str, entity_id: str, status: str) -> None:
-    changed = client.post(f'/api/{kind}/{entity_id}/change-status', json={'new_status': status})
+    body = {'new_status': status, **(_deprecation() if status == 'deprecated' else {})}
+    changed = client.post(f'/api/{kind}/{entity_id}/change-status', json=body)
     assert changed.status_code == 200, changed.text
 
 
@@ -488,6 +527,10 @@ class TestContractRequestWorkflow:
 
         assert approved.status_code == 200, approved.text
         assert _status(db_session, DataContractDb, contract_id) == 'deprecated'
+        # The request's justification is the deprecation reason
+        assert db_session.get(DataContractDb, contract_id).deprecation_reason == (
+            'Replaced by the v2 contract, consumers moved'
+        )
         # The transition closed the request
         assert request_is_closed(db_session, 'data_contract', contract_id, request_id)
 
@@ -718,6 +761,16 @@ class TestSwitchedOff:
         assert _guard_skips(db_session, exempt)[0]['disabled_for'] == {
             'kind': 'data_product', 'id': exempt,
         }
+
+    def test_a_switched_off_entity_still_needs_a_reason(self, client, db_session):
+        exempt = _product(db_session)
+        self._switch_off(client, data_products=[exempt])
+
+        response = _deprecate_product(client, exempt, reason=None)
+
+        assert response.status_code == 400, response.text
+        assert response.json()['detail']['code'] == 'deprecation_reason_required'
+        assert _status(db_session, DataProductDb, exempt) == 'active'
 
     def test_the_switch_needs_admin_on_certification_levels(self, client, db_session):
         role = client.post('/api/settings/roles', json={

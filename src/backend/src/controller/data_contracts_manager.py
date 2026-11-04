@@ -4319,10 +4319,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if current_status in valid_transitions:
                 raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
 
-        check_lifecycle_fields(db, 'data_contract', contract_id, new_status, deprecation)
-        
         # Run before_status_change workflows (gating)
-        # (a gate that errors refuses the transition when it is fail_closed, #1103)
+        # (a gate that errors refuses the transition when it is fail_closed, #1103);
+        # the deprecation fields are checked after the certified guard, before the gates
         from src.common.workflow_triggers import run_status_gates
         from src.models.process_workflows import EntityType as WFEntityType
         run_status_gates(
@@ -4334,6 +4333,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             entity_name=contract.name,
             entity_data={"name": contract.name, "status": current_status},
             user_email=current_user,
+            before_gates=lambda: check_lifecycle_fields(
+                db, 'data_contract', contract_id, new_status, deprecation
+            ),
         )
         
         try:

@@ -1075,12 +1075,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     fromStatus=current_status, toStatus=new_status_lower, allowed=list(allowed),
                 )
 
-            check_lifecycle_fields(
-                self._db, 'data_product', product_id, new_status_lower, deprecation
-            )
-            
             # Run before_status_change workflows (gating)
-            # (a gate that errors refuses the transition when it is fail_closed, #1103)
+            # (a gate that errors refuses the transition when it is fail_closed, #1103);
+            # the deprecation fields are checked after the certified guard, before the gates
             from src.common.workflow_triggers import run_status_gates
             from src.models.process_workflows import EntityType as WFEntityType
             run_status_gates(
@@ -1092,6 +1089,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 entity_name=product_db.name,
                 entity_data={"name": product_db.name, "status": current_status},
                 user_email=current_user,
+                before_gates=lambda: check_lifecycle_fields(
+                    self._db, 'data_product', product_id, new_status_lower, deprecation
+                ),
             )
             
             # Update status

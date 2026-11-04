@@ -14,6 +14,8 @@ import uuid
 import pytest
 
 PRODUCER = ('producer@example.com', ['data-producers'])
+# Data Producer too (data-products read/write), but doesn't own the product
+OTHER_PRODUCER = ('other.producer@example.com', ['data-producers'])
 # Data Consumers: read-only on data products, not addressed by the approval
 REVIEWER = ('reviewer@example.com', ['data-consumers'])
 OTHER_CONSUMER = ('other@example.com', ['data-consumers'])
@@ -135,6 +137,31 @@ class TestReviewerReadsReviewedProduct:
 
         assert _get(client, as_user, STEWARD, product_id) == 404
 
+    @pytest.mark.parametrize('case', ['deleted-role', 'roles-unreadable'])
+    def test_an_unresolvable_approval_role_grants_nothing(
+        self, client, as_user, db_session, monkeypatch, reviewed, case,
+    ):
+        """An approval addressed by role id only, whose role can't be resolved
+        (deleted, or the roles can't be read), must not read as a broadcast."""
+        product_id, result = reviewed
+        for notification in _approval_notifications(db_session, result['execution_id']):
+            notification.recipient = None
+            if case == 'deleted-role':
+                notification.recipient_role_id = 'deleted-role'
+        db_session.commit()
+        if case == 'roles-unreadable':
+            from unittest.mock import MagicMock
+
+            # Only the approval check's role lookup fails
+            unreadable = MagicMock()
+            unreadable.list_app_roles.side_effect = RuntimeError('roles unavailable')
+            monkeypatch.setattr(
+                client.app.state.notifications_manager, '_settings_manager', unreadable,
+            )
+
+        assert _get(client, as_user, REVIEWER, product_id) == 200  # the asset review
+        assert _get(client, as_user, OTHER_CONSUMER, product_id) == 404
+
     def test_someone_who_cannot_decide_still_gets_404(self, client, as_user, reviewed):
         product_id, _ = reviewed
 
@@ -223,6 +250,35 @@ class TestReviewerReadsReviewedProduct:
         assert response.status_code == 201, response.text
 
         assert _get(client, as_user, STEWARD, product_id) == 404
+
+
+class TestRequestReviewNeedsOwnership:
+    """Requesting a review names the reviewer, who then reads the product, so
+    only the product's owners (or an admin) may request it (#1117)."""
+
+    def test_an_admin_may_request_the_review_of_any_draft(self, client, as_user):
+        product_id = _create_draft(client, as_user, 'Admin-requested review')
+        as_user(ADMIN)
+        response = client.post(
+            f'/api/data-products/{product_id}/request-review',
+            json={'reviewer_email': REVIEWER[0]},
+        )
+        assert response.status_code == 200, response.text
+
+        assert _get(client, as_user, REVIEWER, product_id) == 200
+
+    def test_a_writer_who_does_not_own_the_draft_is_refused(self, client, as_user):
+        product_id = _create_draft(client, as_user, 'Not yours to submit')
+        as_user(OTHER_PRODUCER)
+        response = client.post(
+            f'/api/data-products/{product_id}/request-review',
+            json={'reviewer_email': OTHER_PRODUCER[0]},
+        )
+
+        # Same answer as reading it: the draft's existence isn't disclosed. That
+        # nothing changed is checked by the route's unit test (a refusal rolls
+        # back this test's transaction).
+        assert response.status_code == 404, response.text
 
 
 class TestApprovalsQueue:

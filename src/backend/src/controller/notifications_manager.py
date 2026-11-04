@@ -149,7 +149,10 @@ class NotificationsManager:
 
         return filtered_notifications
 
-    def can_user_access_notification(self, db: Session, notification: Notification, user_info: UserInfo) -> bool:
+    def can_user_access_notification(
+        self, db: Session, notification: Notification, user_info: UserInfo,
+        *, strict: bool = False,
+    ) -> bool:
         """Check if a user can access/modify a specific notification.
         
         Uses the same logic as get_notifications for role-based access checks.
@@ -158,6 +161,10 @@ class NotificationsManager:
             db: Database session
             notification: The notification to check access for
             user_info: The user's info including email and groups
+            strict: Fail closed, for decisions that grant access to something
+                else (#1117): no broadcast, and nothing when the roles can't be
+                read or ``recipient_role_id`` names no role. The default (the
+                bell) treats an unresolvable role as a broadcast.
             
         Returns:
             True if user can access the notification, False otherwise
@@ -184,6 +191,8 @@ class NotificationsManager:
                 role_by_name[camel_case] = role
         except Exception as e:
             logger.error(f"Failed to retrieve roles for notification access check: {e}")
+            if strict:
+                return False
             role_by_id = {}
             role_by_name = {}
         
@@ -199,10 +208,18 @@ class NotificationsManager:
         # Check recipient_role_id first (new, preferred method)
         if notification.recipient_role_id and notification.recipient_role_id in role_by_id:
             target_role = role_by_id[notification.recipient_role_id]
-        
+        elif notification.recipient_role_id and strict:
+            # Role ids are UUIDs, the notification stores the text form
+            target_role = next(
+                (r for r in all_roles if str(r.id) == str(notification.recipient_role_id)),
+                None,
+            )
+            if target_role is None:
+                return False  # A role that no longer exists addresses nobody
+
         # Broadcast notification - anyone can access
         if not recipient and not target_role:
-            return True
+            return not strict
         
         # Direct email match
         if user_email and recipient == user_email:

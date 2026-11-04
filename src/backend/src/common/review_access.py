@@ -17,10 +17,14 @@ caller:
   /api/workflows/handle-approval`` (recipient, group or role member of the
   step's approval notification; not the requester of an owner approval).
   An approval notification with neither a recipient nor a role is a broadcast
-  (everyone may see it) and grants nothing.
+  (everyone may see it) and grants nothing; nor does one whose role can't be
+  resolved (deleted, or the roles can't be read), or one already handled.
 
-This only answers "may read"; it never grants a write, and it ends when the
-review is closed or the approval decided. Every check fails closed.
+This only answers "may read"; it never grants a write. It ends when the review
+is closed, and for an approver when their approval notification is handled:
+when the step is decided, or, on a step that waits for several approvers,
+when they have decided. Every check fails closed, and runs in a savepoint so a
+failed lookup doesn't abort the caller's transaction.
 """
 import json
 from typing import Any, Iterable, Optional, Set
@@ -46,10 +50,17 @@ def _identities(user: Any) -> Set[str]:
 
 
 def _created_by_workflow(db: Session, review_id: str) -> bool:
-    """Whether a ``create_asset_review`` step execution created ``review_id``."""
-    from src.db_models.process_workflows import WorkflowStepExecutionDb
+    """Whether a ``create_asset_review`` step execution created ``review_id``.
 
-    rows = db.query(WorkflowStepExecutionDb.result_data).filter(
+    Only that step type counts: others store request input in their result
+    (an approval step keeps the approver's request body).
+    """
+    from src.db_models.process_workflows import WorkflowStepDb, WorkflowStepExecutionDb
+
+    rows = db.query(WorkflowStepExecutionDb.result_data).join(
+        WorkflowStepDb, WorkflowStepDb.id == WorkflowStepExecutionDb.step_id,
+    ).filter(
+        WorkflowStepDb.step_type == 'create_asset_review',
         WorkflowStepExecutionDb.result_data.contains(json.dumps(review_id)),
     ).all()
     for (raw,) in rows:
@@ -96,9 +107,10 @@ def _can_decide_pending_approval(
 ) -> bool:
     """The caller may decide a paused approval of a workflow run for the entity.
 
-    ``_assert_caller_authorized_for_execution`` only considers the approval
-    notifications of the step the run waits at that have a recipient or a role,
-    and checks them with ``can_user_access_notification``.
+    ``_assert_caller_authorized_for_execution`` (``for_read``) only considers
+    the open approval notifications of the step the run waits at that have a
+    recipient or a role, and checks them with the strict
+    ``can_user_access_notification``.
     """
     from fastapi import HTTPException
 
@@ -132,6 +144,7 @@ def _can_decide_pending_approval(
                 notifications_manager=notifications_manager,
                 execution_id=execution.id,
                 user_info=user,
+                for_read=True,
             )
             return True
         except HTTPException:
@@ -153,11 +166,14 @@ def caller_is_pending_reviewer(
     if not user or not entity_id:
         return False
     try:
-        if _is_open_asset_reviewer(db, user, entity_type, entity_id):
-            return True
-        return _can_decide_pending_approval(
-            db, notifications_manager, user, entity_type, entity_id,
-        )
+        # Savepoint: on Postgres a failed statement would otherwise abort the
+        # caller's transaction (the approvals queue checks row after row).
+        with db.begin_nested():
+            if _is_open_asset_reviewer(db, user, entity_type, entity_id):
+                return True
+            return _can_decide_pending_approval(
+                db, notifications_manager, user, entity_type, entity_id,
+            )
     except Exception:
         logger.exception("Reviewer access check failed for %s %s; denying", entity_type, entity_id)
         return False

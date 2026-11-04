@@ -5,10 +5,12 @@ and data contracts).
 """
 import json
 import uuid
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import event
 
 from src.common import review_access
 from src.common.review_access import caller_is_pending_reviewer
@@ -23,6 +25,34 @@ ENTITY_ID = 'e-1'
 # entity type -> asset FQN prefix in an asset review
 FQN_PREFIX = {'data_product': 'product:', 'data_contract': 'contract:'}
 ROLE_ID = 'role-stewards'
+
+
+@contextmanager
+def postgres_aborts(db):
+    """Make the test connection behave like Postgres after a failed statement:
+    every later statement fails until a ``ROLLBACK`` (to a savepoint)."""
+    connection = db.connection()
+    state = {'running': False, 'aborted': False}
+
+    def _before(conn, cursor, statement, *args):
+        if state['running']:  # the previous statement raised
+            state['aborted'] = True
+        if state['aborted']:
+            if not statement.lstrip().upper().startswith('ROLLBACK'):
+                raise RuntimeError('current transaction is aborted')
+            state['aborted'] = False
+        state['running'] = True
+
+    def _after(*args):
+        state['running'] = False
+
+    event.listen(connection, 'before_cursor_execute', _before)
+    event.listen(connection, 'after_cursor_execute', _after)
+    try:
+        yield
+    finally:
+        event.remove(connection, 'before_cursor_execute', _before)
+        event.remove(connection, 'after_cursor_execute', _after)
 
 
 @pytest.fixture(params=sorted(FQN_PREFIX))
@@ -53,10 +83,28 @@ def _workflow(db, step_type='approval'):
     return workflow
 
 
+def _step_result(db, step_type, result_data):
+    """A step execution of a ``step_type`` step that stored ``result_data``."""
+    workflow = _workflow(db, step_type=step_type)
+    step = db.query(WorkflowStepDb).filter_by(workflow_id=workflow.id).one()
+    execution = WorkflowExecutionDb(
+        id=str(uuid.uuid4()), workflow_id=workflow.id, status='paused',
+    )
+    db.add(execution)
+    db.flush()
+    db.add(WorkflowStepExecutionDb(
+        id=str(uuid.uuid4()), execution_id=execution.id, step_id=step.id,
+        status='succeeded', passed=True, result_data=json.dumps(result_data),
+    ))
+    db.flush()
+
+
 def _asset_review(
     db, entity_type, *, reviewer='rev@example.com', requester='owner@example.com',
-    entity_id=ENTITY_ID, status='queued', by_workflow=True,
+    entity_id=ENTITY_ID, status='queued', by_workflow='create_asset_review',
 ):
+    """An asset review of the entity; ``by_workflow``: the type of the step whose
+    result names the review (falsy: no step result names it)."""
     review = DataAssetReviewRequestDb(
         id=str(uuid.uuid4()), requester_email=requester, reviewer_email=reviewer, status=status,
     )
@@ -67,16 +115,7 @@ def _asset_review(
         asset_fqn=f'{FQN_PREFIX[entity_type]}{entity_id}', asset_type=entity_type,
     ))
     if by_workflow:
-        workflow = _workflow(db, step_type='create_asset_review')
-        execution = WorkflowExecutionDb(
-            id=str(uuid.uuid4()), workflow_id=workflow.id, status='paused',
-        )
-        db.add(execution)
-        db.flush()
-        db.add(WorkflowStepExecutionDb(
-            id=str(uuid.uuid4()), execution_id=execution.id, status='succeeded', passed=True,
-            result_data=json.dumps({'review_id': review.id, 'reviewer_email': reviewer}),
-        ))
+        _step_result(db, by_workflow, {'review_id': review.id, 'reviewer_email': reviewer})
     db.flush()
     return review
 
@@ -84,6 +123,7 @@ def _asset_review(
 def _paused_approval(
     db, entity_type, *, entity_id=ENTITY_ID, status='paused',
     recipient='approver@example.com', role_id=None, requester='owner@example.com',
+    handled=False,
 ):
     workflow = _workflow(db)
     execution = WorkflowExecutionDb(
@@ -93,13 +133,22 @@ def _paused_approval(
         }),
     )
     db.add(execution)
+    _approval_notification(
+        db, execution, recipient=recipient, role_id=role_id, handled=handled,
+    )
+    return execution
+
+
+def _approval_notification(db, execution, *, recipient, role_id=None, handled=False):
+    payload = {'execution_id': execution.id, 'step_id': 'approve'}
+    if handled:
+        payload.update({'handled': True, 'decision': 'approved', 'handled_by': recipient})
     db.add(NotificationDb(
         id=str(uuid.uuid4()), type='action_required', title='Approval Required',
         recipient=recipient, recipient_role_id=role_id, action_type='workflow_approval',
-        action_payload=json.dumps({'execution_id': execution.id, 'step_id': 'approve'}),
+        action_payload=json.dumps(payload), read=handled,
     ))
     db.flush()
-    return execution
 
 
 def _notifications(*, grants=None, role_members=()):
@@ -107,7 +156,7 @@ def _notifications(*, grants=None, role_members=()):
     the recipient, or a member (``role_members``) of the notification's role."""
     manager = MagicMock()
 
-    def _access(db, notification, user_info):
+    def _access(db, notification, user_info, **kwargs):
         if grants is not None:
             return grants
         if notification.recipient_role_id == ROLE_ID and user_info.email in role_members:
@@ -116,6 +165,21 @@ def _notifications(*, grants=None, role_members=()):
 
     manager.can_user_access_notification.side_effect = _access
     return manager
+
+
+def _real_notifications(roles=None):
+    """The real access check; ``roles=None``: the roles can't be read."""
+    from src.controller.notifications_manager import NotificationsManager
+
+    settings = MagicMock()
+    if roles is None:
+        settings.list_app_roles.side_effect = RuntimeError('roles unavailable')
+    else:
+        settings.list_app_roles.return_value = list(roles)
+    return NotificationsManager(settings_manager=settings)
+
+
+STEWARD_ROLE = SimpleNamespace(id=ROLE_ID, name='Data Steward', assigned_groups=['stewards'])
 
 
 class TestAssetReviewer:
@@ -152,7 +216,14 @@ class TestAssetReviewer:
         assert _reads(db_session, 'rev@example.com', entity_type) is False
 
     def test_a_review_no_workflow_created_does_not_count(self, db_session, entity_type):
-        _asset_review(db_session, entity_type, by_workflow=False)
+        _asset_review(db_session, entity_type, by_workflow=None)
+
+        assert _reads(db_session, 'rev@example.com', entity_type) is False
+
+    def test_a_review_id_in_another_step_result_does_not_count(self, db_session, entity_type):
+        """An approval step stores the approver's request body in its result,
+        so a ``review_id`` there doesn't mean a workflow created the review."""
+        _asset_review(db_session, entity_type, by_workflow='approval')
 
         assert _reads(db_session, 'rev@example.com', entity_type) is False
 
@@ -217,6 +288,46 @@ class TestPendingApproval:
             db_session, 'approver@example.com', entity_type, _notifications(grants=True),
         ) is False
 
+    def test_a_handled_notification_grants_nothing(self, db_session, entity_type):
+        """An approver who already decided (with ``require_all`` the run stays
+        paused for the others) no longer reads through that approval."""
+        _paused_approval(db_session, entity_type, handled=True)
+
+        assert _reads(db_session, 'approver@example.com', entity_type, _notifications()) is False
+
+    def test_the_approvers_still_to_decide_keep_reading(self, db_session, entity_type):
+        execution = _paused_approval(db_session, entity_type, handled=True)
+        _approval_notification(db_session, execution, recipient='second@example.com')
+
+        assert _reads(db_session, 'second@example.com', entity_type, _notifications()) is True
+        assert _reads(db_session, 'approver@example.com', entity_type, _notifications()) is False
+
+    def test_a_member_of_a_known_role_reads(self, db_session, entity_type):
+        _paused_approval(db_session, entity_type, recipient=None, role_id=ROLE_ID)
+        steward = _user('steward@example.com', ['stewards'])
+
+        assert caller_is_pending_reviewer(
+            db_session, steward, entity_type, ENTITY_ID, _real_notifications([STEWARD_ROLE]),
+        ) is True
+
+    def test_an_unknown_role_grants_nothing(self, db_session, entity_type):
+        """A deleted role: its id resolves to no role, which must not read as a broadcast."""
+        _paused_approval(db_session, entity_type, recipient=None, role_id='deleted-role')
+
+        assert _reads(
+            db_session, 'anyone@example.com', entity_type, _real_notifications([STEWARD_ROLE]),
+        ) is False
+
+    def test_unreadable_roles_grant_nothing(self, db_session, entity_type):
+        _paused_approval(db_session, entity_type, recipient=None, role_id=ROLE_ID)
+        steward = _user('steward@example.com', ['stewards'])
+        notifications = _real_notifications(roles=None)
+
+        assert caller_is_pending_reviewer(
+            db_session, steward, entity_type, ENTITY_ID, notifications,
+        ) is False
+        assert _reads(db_session, 'anyone@example.com', entity_type, notifications) is False
+
     def test_no_notifications_manager_denies(self, db_session, entity_type):
         _paused_approval(db_session, entity_type)
 
@@ -231,6 +342,22 @@ class TestFailsClosed:
         monkeypatch.setattr(review_access, '_is_open_asset_reviewer', _boom)
 
         assert _reads(MagicMock(), 'rev@example.com', 'data_product') is False
+
+    def test_a_failed_lookup_leaves_the_session_usable(self, db_session, monkeypatch):
+        """The failed statement is rolled back to a savepoint, so the caller's
+        session (and, on Postgres, its transaction) keeps working."""
+        from sqlalchemy import text
+
+        def _bad_sql(db, *args):
+            db.execute(text('SELECT * FROM no_such_table'))
+
+        _asset_review(db_session, 'data_product')
+        with postgres_aborts(db_session):
+            monkeypatch.setattr(review_access, '_is_open_asset_reviewer', _bad_sql)
+            assert _reads(db_session, 'rev@example.com', 'data_product') is False
+            monkeypatch.undo()
+
+            assert _reads(db_session, 'rev@example.com', 'data_product') is True
 
     def test_no_user_denies(self):
         assert caller_is_pending_reviewer(MagicMock(), None, 'data_product', ENTITY_ID) is False
@@ -266,3 +393,62 @@ class TestProductReadGateUsesIt:
         assert _caller_can_read_product(
             self._request(), db_session, _user('other@example.com'), None, product,
         ) is False
+
+    def test_an_error_before_the_ownership_checks_denies(self, db_session, monkeypatch):
+        from src.common import version_visibility
+        from src.routes.data_product_routes import _caller_can_read_product
+
+        def _boom(row):
+            raise RuntimeError('status check failed')
+
+        monkeypatch.setattr(version_visibility, 'is_visible_consumer', _boom)
+        product = SimpleNamespace(
+            id=ENTITY_ID, status='draft', draft_owner_id='owner@example.com',
+            owner_team_id=None, project_id=None,
+        )
+
+        assert _caller_can_read_product(
+            self._request(), db_session, _user('owner@example.com'), None, product,
+        ) is False
+
+    def test_a_failing_check_does_not_hide_later_rows(self, db_session, monkeypatch):
+        """On Postgres a failed statement aborts the transaction: without a
+        savepoint per check, every later row of the queue would fail and be hidden."""
+        from sqlalchemy import text
+
+        from src.controller.approvals_manager import ApprovalsManager
+        from src.db_models.data_products import DataProductDb
+        from src.routes.data_product_routes import _caller_can_read_product
+
+        failing, fine = 'p-failing', 'p-fine'
+        for product_id in (failing, fine):
+            db_session.add(DataProductDb(
+                id=product_id, name=product_id, version='1', status='under_review',
+                draft_owner_id='owner@example.com',
+            ))
+            _asset_review(db_session, 'data_product', entity_id=product_id)
+        db_session.flush()
+        real_check = review_access._is_open_asset_reviewer
+        checked = []
+
+        def _check(db, user, entity_type, entity_id):
+            checked.append(entity_id)
+            if entity_id == failing:
+                db.execute(text('SELECT * FROM no_such_table'))
+            return real_check(db, user, entity_type, entity_id)
+
+        monkeypatch.setattr(review_access, '_is_open_asset_reviewer', _check)
+        reviewer = _user('rev@example.com')
+        request = self._request()
+
+        with postgres_aborts(db_session):
+            queue = ApprovalsManager().get_approvals_queue(
+                db_session,
+                can_see_contract=lambda contract: True,
+                can_see_product=lambda product: _caller_can_read_product(
+                    request, db_session, reviewer, None, product,
+                ),
+            )
+
+        assert checked == [failing, fine]
+        assert [p['id'] for p in queue['products']] == [fine]

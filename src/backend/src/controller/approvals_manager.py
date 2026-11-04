@@ -6,10 +6,15 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _shown(can_see: Callable[[Any], bool], row: Any) -> bool:
-    """Whether the caller may see ``row``; an error hides it (fail closed)."""
+def _shown(db: Session, can_see: Callable[[Any], bool], row: Any) -> bool:
+    """Whether the caller may see ``row``; an error hides it (fail closed).
+
+    Each check runs in a savepoint: on Postgres a failed statement would
+    otherwise abort the transaction, and every later row would be hidden.
+    """
     try:
-        return bool(can_see(row))
+        with db.begin_nested():
+            return bool(can_see(row))
     except Exception:
         logger.exception("Approvals queue: visibility check failed for %s; hiding it", row.id)
         return False
@@ -55,7 +60,7 @@ class ApprovalsManager:
                 DataContractDb.status.in_(['proposed', 'under_review'])
             )
             for c in q.all():
-                if not _shown(can_see_contract, c):
+                if not _shown(db, can_see_contract, c):
                     continue
                 items['contracts'].append({
                     'id': c.id,
@@ -79,7 +84,7 @@ class ApprovalsManager:
                 DataProductDb.status.in_(['proposed', 'under_review'])
             )
             for p in q.all():
-                if not _shown(can_see_product, p):
+                if not _shown(db, can_see_product, p):
                     continue
                 items['products'].append({
                     'id': p.id,

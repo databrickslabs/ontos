@@ -1803,9 +1803,7 @@ async def handle_workflow_approval(
         required = executor.record_required_approval(
             execution_id,
             bool(approved),
-            decides_for=lambda approver, role_id: notifications_manager.user_is_recipient(
-                approver, role_id, current_user,
-            ),
+            decides_for=notifications_manager.recipient_matcher(current_user),
             user_email=current_user.email if current_user else None,
             username=current_user.username if current_user else None,
             reason=message,
@@ -1819,6 +1817,14 @@ async def handle_workflow_approval(
             )
 
         user_email = current_user.email if current_user else None
+        # require_all: the step's outcome follows every stored decision, so a
+        # rejection stored earlier fails it even if this decision approves
+        rejection = (required or {}).get('rejection')
+        if required is not None:
+            approved = required['outcome'] == 'approved'
+            if rejection:
+                user_email = rejection.get('decided_by') or user_email
+                message = rejection.get('reason')
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)

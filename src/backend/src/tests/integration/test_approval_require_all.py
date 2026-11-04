@@ -248,6 +248,76 @@ class TestRequireAll:
         assert _decide(client, as_user, ADMIN, execution_id).json()['status'] == 'succeeded'
 
 
+def _role_with_users(db_session, users):
+    """An app role with individually assigned users and no groups (#760)."""
+    from src.db_models.settings import AppRoleDb
+
+    role = AppRoleDb(
+        id=str(uuid.uuid4()), name=f'Reviewers {uuid.uuid4().hex[:8]}',
+        feature_permissions='{}', assigned_groups='[]', assigned_users=json.dumps(users),
+        home_sections='[]', approval_privileges='{}', is_admin=False,
+    )
+    db_session.add(role)
+    db_session.commit()
+    return role
+
+
+class TestReviewFollowUps:
+    """The #1307 review: role members through assigned_users, and the
+    outcome from every stored decision."""
+
+    def test_a_user_assigned_to_the_role_decides_for_it(self, client, as_user, db_session):
+        role = _role_with_users(db_session, ['eve@example.com'])
+        execution_id = _paused_execution(client, as_user, f'{role.id},ana@example.com')
+
+        # Eve sees the role's notification and decides for the role
+        as_user(EVE)
+        listed = client.get('/api/notifications')
+        assert listed.status_code == 200, listed.text
+        assert any(
+            n.get('recipient_role_id') == role.id
+            and (n.get('action_payload') or {}).get('execution_id') == execution_id
+            for n in listed.json()
+        )
+        first = _decide(client, as_user, EVE, execution_id)
+        assert first.status_code == 200, first.text
+        assert first.json()['pending_approvers'] == 1
+        second = _decide(client, as_user, ANA, execution_id)
+
+        assert second.json()['status'] == 'succeeded'
+        decisions = _approval_records(db_session, execution_id)[-1]['decisions']
+        assert [(d['role_id'], d['decided_by']) for d in decisions] == [
+            (role.id, 'eve@example.com'), (None, 'ana@example.com'),
+        ]
+
+    def test_a_stored_rejection_fails_the_step(self, client, as_user, db_session):
+        """A rejection stored earlier whose resume didn't take effect: the
+        last approval doesn't make the run follow on_pass."""
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        execution_id = _paused_execution(client, as_user, 'ana@example.com,ben@example.com')
+        db_session.expire_all()
+        record = db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution_id, step_key='approve',
+        ).one()
+        data = json.loads(record.result_data)
+        data['decisions'] = [{
+            'target': 'ana@example.com', 'role_id': None, 'decided_by': 'ana@example.com',
+            'decision': 'rejected', 'at': '2026-11-04T10:00:00', 'reason': 'No',
+        }]
+        record.result_data = json.dumps(data)
+        db_session.commit()
+
+        response = _decide(client, as_user, BEN, execution_id)
+
+        assert response.status_code == 200, response.text
+        assert response.json()['status'] == 'failed'
+        decision = _approval_records(db_session, execution_id)[-1]
+        assert decision['approval_result'] == 'rejected'
+        assert decision['responded_by'] == 'ana@example.com'
+        assert decision['reason'] == 'No'
+
+
 class TestLateApprover:
     """A decision on a step that has ended: 409, not 404."""
 

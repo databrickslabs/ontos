@@ -2,6 +2,7 @@
 ``WorkflowExecutor.record_required_approval`` and the recipient check of
 ``NotificationsManager.user_is_recipient``."""
 import json
+from datetime import datetime
 import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -448,3 +449,270 @@ class TestUserIsRecipient:
     ])
     def test_cases(self, recipient, role_id, user, expected):
         assert _manager(self.ROLES).user_is_recipient(recipient, role_id, user) is expected
+
+
+class TestStoredRejection:
+    """The outcome follows every stored decision (#1307 review): a rejection
+    stored before, whose resume didn't take effect, fails the step."""
+
+    def _with_rejection(self, db):
+        return _paused(db, pause_data={
+            'require_all': True, 'status': 'pending',
+            'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
+            'decisions': [{
+                'target': 'a@x.com', 'role_id': None, 'decided_by': 'a@x.com',
+                'decision': 'rejected', 'at': '2026-11-04T10:00:00', 'reason': 'No',
+            }],
+        })
+
+    def test_the_last_approval_does_not_approve_it(self, db_session):
+        execution = self._with_rejection(db_session)
+
+        result = _record(db_session, execution, True, 'b@x.com', user='b@x.com')
+
+        assert result['outcome'] == 'rejected'
+        assert result['rejection']['decided_by'] == 'a@x.com'
+        assert [d['decision'] for d in result['decisions']] == ['rejected', 'approved']
+
+    def test_the_rejecter_again_completes_it(self, db_session):
+        execution = self._with_rejection(db_session)
+
+        result = _record(db_session, execution, False, 'a@x.com', user='a@x.com')
+
+        assert result['outcome'] == 'rejected'
+
+    def test_someone_who_is_none_of_them_is_still_refused(self, db_session):
+        execution = self._with_rejection(db_session)
+
+        assert _record(db_session, execution, True, user='z@x.com')['outcome'] == (
+            'not_an_approver')
+
+
+def _raw_update(db, sql, **params):
+    """Change a row behind the session's back, as another transaction that
+    committed while this one waited for the lock."""
+    from sqlalchemy import text
+
+    db.execute(text(sql), params)
+
+
+class TestConcurrentDecisions:
+    """Two decisions together act on the step once (#1307 review): the row
+    lock reads the execution and the pause record afresh, and the first
+    commit after it already moves the execution out of 'paused'."""
+
+    def _two_approvers(self, db):
+        return _paused(db, pause_data={
+            'require_all': True, 'status': 'pending',
+            'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
+        })
+
+    def test_a_decision_sees_the_status_another_one_set(self, db_session):
+        execution = self._two_approvers(db_session)
+        assert execution.status == 'paused'  # what the session holds
+        _raw_update(
+            db_session, "UPDATE workflow_executions SET status = 'failed' WHERE id = :id",
+            id=execution.id,
+        )
+
+        assert _record(db_session, execution, True, 'b@x.com', user='b@x.com') is None
+        assert WorkflowExecutor(db_session).resume_workflow(execution.id, True) is None
+
+    def test_a_decision_sees_the_decisions_another_one_stored(self, db_session):
+        execution = self._two_approvers(db_session)
+        record = db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution.id,
+        ).one()
+        data = json.loads(record.result_data)
+        data['decisions'] = [{
+            'target': 'a@x.com', 'role_id': None, 'decided_by': 'a@x.com',
+            'decision': 'approved', 'at': '2026-11-04T10:00:00', 'reason': None,
+        }]
+        _raw_update(
+            db_session, "UPDATE workflow_step_executions SET result_data = :d WHERE id = :id",
+            d=json.dumps(data), id=record.id,
+        )
+
+        result = _record(db_session, execution, True, 'b@x.com', user='b@x.com')
+
+        assert (result['outcome'], result['pending_approvers']) == ('approved', 0)
+        assert [d['decided_by'] for d in result['decisions']] == ['a@x.com', 'b@x.com']
+
+    @pytest.mark.parametrize('require_all', [True, False])
+    def test_the_first_commit_already_ends_the_pause(self, db_session, require_all):
+        from sqlalchemy import event
+
+        execution = _paused(db_session, pause_data={
+            'require_all': require_all, 'status': 'pending',
+            'resolved_targets': _users(('a@x.com', None)),
+        })
+        statuses = []
+
+        def at_commit(session):
+            statuses.append(session.get(WorkflowExecutionDb, execution.id).status)
+
+        event.listen(db_session, 'before_commit', at_commit)
+        try:
+            executor = WorkflowExecutor(db_session)
+            if require_all:
+                assert _record(db_session, execution, True, 'a@x.com', user='a@x.com')[
+                    'outcome'] == 'approved'
+            with patch.object(WorkflowExecutor, '_handle_workflow_completion'):
+                assert executor.resume_workflow(execution.id, True).status.value == 'succeeded'
+        finally:
+            event.remove(db_session, 'before_commit', at_commit)
+
+        assert statuses and statuses[0] != 'paused'
+
+
+class TestRoundsOfTheSameStep:
+    """A workflow that comes back to the same approval step (#1307 review):
+    the new round's pause record is the one, whatever the timestamps."""
+
+    def test_the_pending_record_wins_over_a_decided_one_with_the_same_time(self, db_session):
+        execution = _paused(db_session, pause_data=None)
+        step = db_session.query(WorkflowStepDb).filter_by(
+            workflow_id=execution.workflow_id, step_id='approve',
+        ).one()
+        same_time = datetime(2026, 11, 4, 10, 0, 0)
+        # Round 1 (a decided) sorts first by id; round 2 is the open one
+        for record_id, data in (
+            ('f' * 32, {'require_all': True, 'status': 'decided',
+                        'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
+                        'decisions': [{'target': 'a@x.com', 'decided_by': 'a@x.com',
+                                       'decision': 'approved'}]}),
+            ('e' * 32, {'approval_result': 'rejected', 'decision': 'rejected'}),
+            ('0' * 32, {'require_all': True, 'status': 'pending',
+                        'resolved_targets': _users(('a@x.com', None), ('b@x.com', None))}),
+        ):
+            db_session.add(WorkflowStepExecutionDb(
+                id=record_id, execution_id=execution.id, step_id=step.id, step_key='approve',
+                status='succeeded', passed=True, result_data=json.dumps(data),
+                started_at=same_time,
+            ))
+        db_session.flush()
+
+        result = _record(db_session, execution, True, 'a@x.com', user='a@x.com')
+
+        assert (result['outcome'], result['pending_approvers']) == ('pending', 1)
+
+    def test_the_resume_closes_the_pause_record(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'status': 'pending',
+            'resolved_targets': _users(('a@x.com', None)),
+        })
+        _record(db_session, execution, True, 'a@x.com', user='a@x.com')
+
+        with patch.object(WorkflowExecutor, '_handle_workflow_completion'):
+            WorkflowExecutor(db_session).resume_workflow(execution.id, True)
+
+        records = [
+            json.loads(r.result_data) for r in db_session.query(WorkflowStepExecutionDb)
+            .filter_by(execution_id=execution.id, step_key='approve').all()
+        ]
+        pause = [d for d in records if 'approval_result' not in d]
+        assert [d['status'] for d in pause] == ['decided']
+        assert [d['decided_by'] for d in pause[0]['decisions']] == ['a@x.com']
+
+
+class TestOnlyNotifiedTargets:
+    """A target whose notification failed is not waited for (#1307 review)."""
+
+    def test_resolved_targets(self, db_session):
+        from src.common.workflow_executor import ApprovalStepHandler, StepContext
+        from src.repositories.notification_repository import notification_repo
+
+        real_create = notification_repo.create
+
+        def create(db, obj_in):
+            if obj_in.recipient == 'b@x.com':
+                raise RuntimeError('boom')
+            return real_create(db=db, obj_in=obj_in)
+
+        context = StepContext(
+            entity={}, entity_type='data_product', entity_id='p1', entity_name='P',
+            user_email='requester@x.com', trigger_context=None, execution_id='exec-1',
+            workflow_id='wf-1', workflow_name='WF', step_results={},
+        )
+        with patch.object(notification_repo, 'create', side_effect=create):
+            result = ApprovalStepHandler(
+                db_session, {'approvers': 'a@x.com,b@x.com', 'require_all': True},
+            ).execute(context)
+
+        assert result.blocking is True
+        assert result.data['resolved_targets'] == [{'target': 'a@x.com', 'role_id': None}]
+        assert result.data['notifications_created'] == 1
+
+
+def _user_role(role_id, name, groups=(), users=()):
+    return SimpleNamespace(
+        id=role_id, name=name, assigned_groups=list(groups), assigned_users=list(users),
+    )
+
+
+class TestRoleAssignedUsers:
+    """Users assigned to a role individually (``assigned_users``, #760) are
+    its members for notifications and approvals (#1307 review)."""
+
+    ROLES = [
+        _user_role('r-admin', 'Admin', ['admins'], ['chief@x.com']),
+        _user_role('r-rev', 'Reviewers', [], ['Eve@x.com']),
+        _user_role('r-mixed', 'Mixed', ['stewards'], ['eve@x.com']),
+        _user_role('r-empty', 'Empty Role'),
+    ]
+
+    @pytest.mark.parametrize('recipient, role_id, user, expected', [
+        ('Reviewers', 'r-rev', _user('eve@x.com'), True),
+        ('Reviewers', None, _user('eve@x.com'), True),  # legacy role name
+        ('Reviewers', 'r-rev', _user('ana@x.com'), False),
+        # The role has a member: no admin fallback
+        ('Reviewers', 'r-rev', _user('boss@x.com', ['admins']), False),
+        ('Mixed', 'r-mixed', _user('eve@x.com'), True),
+        ('Mixed', 'r-mixed', _user('ana@x.com', ['stewards']), True),
+        # An admin through assigned_users is an admin
+        ('Empty Role', 'r-empty', _user('chief@x.com'), True),
+        ('Empty Role', 'r-empty', _user('eve@x.com'), False),
+    ])
+    def test_user_is_recipient(self, recipient, role_id, user, expected):
+        assert _manager(self.ROLES).user_is_recipient(recipient, role_id, user) is expected
+
+    @pytest.mark.parametrize('user, expected', [
+        (_user('eve@x.com'), True),
+        (_user('ana@x.com'), False),
+        (_user('chief@x.com'), True),  # admin through assigned_users
+    ])
+    def test_can_access_the_role_notification(self, user, expected):
+        notification = SimpleNamespace(recipient='Reviewers', recipient_role_id='r-rev')
+
+        assert _manager(self.ROLES).can_user_access_notification(
+            db=None, notification=notification, user_info=user,
+        ) is expected
+
+    def test_the_role_notification_is_listed_for_them(self):
+        from datetime import datetime as dt
+
+        from src.models.notifications import Notification, NotificationType
+
+        manager = _manager(self.ROLES)
+        notification = Notification(
+            id='n-1', created_at=dt.utcnow(), type=NotificationType.ACTION_REQUIRED,
+            title='Approval Required', recipient='Reviewers', recipient_role_id='r-rev',
+        )
+        manager._repo = MagicMock()
+        manager._repo.get_multi.return_value = [notification]
+
+        listed = manager.get_notifications(db=None, user_info=_user('eve@x.com'))
+        hidden = manager.get_notifications(db=None, user_info=_user('ana@x.com'))
+
+        assert [n.id for n in listed] == ['n-1']
+        assert listed[0].recipient_role_name == 'Reviewers'
+        assert hidden == []
+
+    def test_the_matcher_loads_the_roles_once(self):
+        manager = _manager(self.ROLES)
+        matcher = manager.recipient_matcher(_user('eve@x.com'))
+
+        assert [matcher(r, i) for r, i in (
+            ('Reviewers', 'r-rev'), ('Mixed', 'r-mixed'), ('a@x.com', None),
+        )] == [True, True, False]
+        assert manager._settings_manager.list_app_roles.call_count == 1

@@ -11,6 +11,7 @@ from typing import Iterable, List, Optional, Any, Dict, Set, Union
 import json
 
 from src.common.repository import CRUDBase, coerce_uuid
+from src.common.version_visibility import not_others_personal_draft
 from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_products import (
@@ -971,8 +972,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         """Return every version in a family that's visible to the caller, newest first.
 
         Visibility rules:
-          - Personal drafts (draft_owner_id IS NOT NULL) are visible only to
-            their owner, regardless of role.
+          - Personal drafts (``draft`` status with a draft_owner_id) are
+            visible only to their owner, regardless of role.
+          - The owner stamp hides no row in any other status: an active or
+            deprecated version that still carries another user's
+            draft_owner_id is listed for everyone.
           - Admins see everything; other users see all non-personal-draft rows.
 
         Args:
@@ -987,12 +991,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         try:
             query = db.query(self.model).filter(self.model.version_family_id == family_id)
             if not is_admin:
-                query = query.filter(
-                    or_(
-                        self.model.draft_owner_id.is_(None),
-                        self.model.draft_owner_id == user_email,
-                    )
-                )
+                # Hide other users' personal drafts.
+                query = query.filter(not_others_personal_draft(self.model, user_email))
             return query.order_by(self.model.created_at.desc()).all()
         except Exception as e:
             logger.error(f"Error fetching family versions for {family_id}: {e}", exc_info=True)

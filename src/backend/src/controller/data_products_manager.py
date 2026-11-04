@@ -1217,6 +1217,54 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             user_email=current_user,
         )
 
+    # The on_create / on_update / on_delete workflow triggers of a product change,
+    # fired once the change succeeded by the REST routes and the assistant tools
+    # alike (as the routes: not blocking, a failing workflow is only logged).
+
+    @staticmethod
+    def fire_create_trigger(db: Session, product: Any, user_email: Optional[str]) -> None:
+        """Fire on_create for a product just created."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        name = getattr(product, 'name', None)
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(product.id),
+            entity_name=name,
+            entity_data={"product_id": str(product.id), "name": name},
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_update_trigger(
+        db: Session, product: Any, changes: Dict[str, Any], user_email: Optional[str]
+    ) -> None:
+        """Fire on_update for a product just updated; ``changes`` are the fields sent."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(product.id),
+            entity_name=getattr(product, 'name', None),
+            entity_data=changes,
+            user_email=user_email,
+        )
+
+    @staticmethod
+    def fire_delete_trigger(db: Session, product_id: str, user_email: Optional[str]) -> None:
+        """Fire on_delete for a product just deleted."""
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            entity_data={"product_id": product_id},
+            user_email=user_email,
+        )
+
     def move_to_sandbox(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
         Move a draft product to sandbox for testing (draft → sandbox).

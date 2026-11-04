@@ -1872,14 +1872,9 @@ async def create_data_product(
         created_product_response = manager.create_product(payload, db=db, user=current_user.username if current_user else None)
         success = True
 
-        # Fire on_create workflow trigger
-        fire_trigger_safe(
-            db, "on_create",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=str(created_product_response.id) if created_product_response else str(payload.get('id', '')),
-            entity_name=getattr(created_product_response, 'name', None),
-            entity_data={"product_id": str(created_product_response.id), "name": getattr(created_product_response, 'name', None)},
-            user_email=current_user.email if current_user else None,
+        # Fire on_create workflow trigger (shared with the assistant tools)
+        manager.fire_create_trigger(
+            db, created_product_response, current_user.email if current_user else None
         )
 
         if created_product_response and hasattr(created_product_response, 'id'):
@@ -2330,14 +2325,10 @@ async def update_data_product(
         success = True
         response_status_code = 200
 
-        # Fire on_update workflow trigger
-        fire_trigger_safe(
-            db, "on_update",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=product_id,
-            entity_name=getattr(updated_product_response, 'name', None),
-            entity_data=product_dict,
-            user_email=current_user.email if current_user else None,
+        # Fire on_update workflow trigger (shared with the assistant tools)
+        manager.fire_update_trigger(
+            db, updated_product_response, product_dict,
+            current_user.email if current_user else None,
         )
 
         logger.info(f"Successfully updated data product with ID: {product_id}")
@@ -2417,13 +2408,9 @@ async def delete_data_product(
         success = True
         response_status_code = 204 # Standard for successful DELETE
 
-        # Fire on_delete workflow trigger
-        fire_trigger_safe(
-            db, "on_delete",
-            entity_type=EntityType.DATA_PRODUCT,
-            entity_id=product_id,
-            entity_data={"product_id": product_id},
-            user_email=current_user.email if current_user else None,
+        # Fire on_delete workflow trigger (shared with the assistant tools)
+        manager.fire_delete_trigger(
+            db, product_id, current_user.email if current_user else None
         )
 
         logger.info(f"Successfully deleted data product with ID: {product_id}")

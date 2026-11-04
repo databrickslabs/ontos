@@ -499,7 +499,8 @@
     "stepErrors": {
       "approval_rejected": "Anfrage abgelehnt",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
+      "cancelled_by_admin": "Von einem Administrator abgebrochen ({{by}})"
     },
     "states": {
       "pending": "Ausstehend",
@@ -769,6 +770,7 @@
       "loadDefaultsFailed": "Standard-Workflows konnten nicht geladen werden",
       "cancelSuccess": "Ausführung erfolgreich abgebrochen",
       "cancelFailed": "Ausführung konnte nicht abgebrochen werden",
+      "approvalCancelled": "Genehmigung abgebrochen. Der Workflow ist seinem Ablehnungspfad gefolgt; Status: {{status}}.",
       "retryStarted": "Wiederholung der Ausführung gestartet",
       "retryFailed": "Ausführung konnte nicht wiederholt werden",
       "executionDeleteSuccess": "Ausführung erfolgreich gelöscht",
@@ -779,6 +781,7 @@
       "approveFailed": "Workflow konnte nicht genehmigt werden",
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
+      "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

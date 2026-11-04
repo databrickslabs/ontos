@@ -499,7 +499,8 @@
     "stepErrors": {
       "approval_rejected": "Verzoek afgewezen",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd",
+      "cancelled_by_admin": "Geannuleerd door een beheerder ({{by}})"
     },
     "states": {
       "pending": "In Afwachting",
@@ -769,6 +770,7 @@
       "loadDefaultsFailed": "Kon standaardworkflows niet laden",
       "cancelSuccess": "Uitvoering succesvol geannuleerd",
       "cancelFailed": "Kon uitvoering niet annuleren",
+      "approvalCancelled": "Goedkeuring geannuleerd. De workflow volgde het afwijzingspad; status: {{status}}.",
       "retryStarted": "Nieuwe poging voor uitvoering gestart",
       "retryFailed": "Kon uitvoering niet opnieuw proberen",
       "executionDeleteSuccess": "Uitvoering succesvol verwijderd",
@@ -779,6 +781,7 @@
       "approveFailed": "Kon workflow niet goedkeuren",
       "rejectResumeSuccess": "Workflow afgewezen en hervat",
       "rejectFailed": "Kon workflow niet afwijzen",
+      "forceDecisionRequireAll": "Alleen de goedkeurders kunnen over deze stap beslissen (iedereen moet beslissen). Je kunt de uitvoering in plaats daarvan annuleren.",
       "noChanges": "Geen Wijzigingen",
       "allAlreadyEnabled": "Alle geselecteerde workflows zijn al ingeschakeld.",
       "allAlreadyDisabled": "Alle geselecteerde workflows zijn al uitgeschakeld.",

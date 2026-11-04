@@ -499,7 +499,8 @@
     "stepErrors": {
       "approval_rejected": "Solicitação negada",
       "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada",
+      "cancelled_by_admin": "Cancelado por um administrador ({{by}})"
     },
     "states": {
       "pending": "Pendente",
@@ -769,6 +770,7 @@
       "loadDefaultsFailed": "Falha ao carregar fluxos de trabalho padrão",
       "cancelSuccess": "Execução cancelada com sucesso",
       "cancelFailed": "Falha ao cancelar execução",
+      "approvalCancelled": "Aprovação cancelada. O fluxo de trabalho seguiu o caminho de rejeição; status: {{status}}.",
       "retryStarted": "Nova tentativa de execução iniciada",
       "retryFailed": "Falha ao tentar executar novamente",
       "executionDeleteSuccess": "Execução excluída com sucesso",
@@ -779,6 +781,7 @@
       "approveFailed": "Falha ao aprovar fluxo de trabalho",
       "rejectResumeSuccess": "Fluxo de trabalho rejeitado e retomado",
       "rejectFailed": "Falha ao rejeitar fluxo de trabalho",
+      "forceDecisionRequireAll": "Somente os aprovadores podem decidir esta etapa (todos precisam decidir). Em vez disso, você pode cancelar a execução.",
       "noChanges": "Nenhuma alteração",
       "allAlreadyEnabled": "Todos os fluxos de trabalho selecionados já estão habilitados.",
       "allAlreadyDisabled": "Todos os fluxos de trabalho selecionados já estão desabilitados.",

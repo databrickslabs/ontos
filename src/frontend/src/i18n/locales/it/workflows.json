@@ -499,7 +499,8 @@
     "stepErrors": {
       "approval_rejected": "Richiesta rifiutata",
       "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata",
+      "cancelled_by_admin": "Annullato da un amministratore ({{by}})"
     },
     "states": {
       "pending": "In sospeso",
@@ -769,6 +770,7 @@
       "loadDefaultsFailed": "Impossibile caricare i workflow predefiniti",
       "cancelSuccess": "Esecuzione annullata correttamente",
       "cancelFailed": "Impossibile annullare l'esecuzione",
+      "approvalCancelled": "Approvazione annullata. Il workflow ha seguito il percorso di rifiuto; stato: {{status}}.",
       "retryStarted": "Nuovo tentativo di esecuzione avviato",
       "retryFailed": "Impossibile riprovare l'esecuzione",
       "executionDeleteSuccess": "Esecuzione eliminata correttamente",
@@ -779,6 +781,7 @@
       "approveFailed": "Impossibile approvare il workflow",
       "rejectResumeSuccess": "Workflow rifiutato e ripreso",
       "rejectFailed": "Impossibile rifiutare il workflow",
+      "forceDecisionRequireAll": "Solo gli approvatori possono decidere questo passaggio (tutti devono decidere). Puoi invece annullare l'esecuzione.",
       "noChanges": "Nessuna modifica",
       "allAlreadyEnabled": "Tutti i workflow selezionati sono già abilitati.",
       "allAlreadyDisabled": "Tutti i workflow selezionati sono già disabilitati.",

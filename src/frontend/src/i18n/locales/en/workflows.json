@@ -499,7 +499,8 @@
     "stepErrors": {
       "approval_rejected": "Request denied",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated",
+      "cancelled_by_admin": "Cancelled by an admin ({{by}})"
     },
     "states": {
       "pending": "Pending",
@@ -769,6 +770,7 @@
       "loadDefaultsFailed": "Failed to load default workflows",
       "cancelSuccess": "Execution cancelled successfully",
       "cancelFailed": "Failed to cancel execution",
+      "approvalCancelled": "Approval cancelled. The workflow followed its rejection path; status: {{status}}.",
       "retryStarted": "Execution retry started",
       "retryFailed": "Failed to retry execution",
       "executionDeleteSuccess": "Execution deleted successfully",
@@ -779,6 +781,7 @@
       "approveFailed": "Failed to approve workflow",
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
+      "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

@@ -444,7 +444,8 @@ class CreateDraftDataProductTool(BaseTool):
             }
             
             # Create the product. The caller is its draft owner, as with POST
-            # /data-products, so they can read and edit it afterwards.
+            # /data-products, so they can read and edit it afterwards; the manager
+            # fires the on_create workflows for them.
             audit_details: Dict[str, Any] = {"params": {"name": name}}
             with _audited(ctx, self.name, "CREATE", audit_details) as outcome:
                 created = ctx.data_products_manager.create_product(
@@ -454,8 +455,6 @@ class CreateDraftDataProductTool(BaseTool):
                 )
                 audit_details["created_resource_id"] = str(created.id)
                 outcome["success"] = True
-            # The on_create workflows of POST /data-products.
-            ctx.data_products_manager.fire_create_trigger(ctx.db, created, _caller_email(ctx))
             
             logger.info(f"[create_draft_data_product] SUCCESS: Created product id={created.id}, name={created.name}")
             return ToolResult(
@@ -604,7 +603,8 @@ class UpdateDataProductTool(BaseTool):
                         ctx, self.name, product_id, status, deprecation=deprecation,
                     )
 
-            # Update the product
+            # Update the product (the manager fires the on_update workflows; a
+            # status change alone fires on_status_change only, as change-status)
             if update_data:
                 with _audited(ctx, self.name, "UPDATE", {"product_id": product_id}) as outcome:
                     updated = ctx.data_products_manager.update_product(
@@ -614,12 +614,6 @@ class UpdateDataProductTool(BaseTool):
                         user=_caller_email(ctx),
                     )
                     outcome["success"] = updated is not None
-                if updated is not None:
-                    # The on_update workflows of PUT /data-products/{id}; a status
-                    # change alone fires on_status_change only, as change-status.
-                    ctx.data_products_manager.fire_update_trigger(
-                        ctx.db, updated, update_data, _caller_email(ctx)
-                    )
             else:
                 updated = ctx.data_products_manager.get_product(product_id)
             
@@ -884,10 +878,10 @@ class DeleteDataProductTool(BaseTool):
             
             product_name = product.name
             
-            # Delete the product
+            # Delete the product (the manager fires the on_delete workflows)
             with _audited(ctx, self.name, "DELETE", {"product_id": product_id}) as outcome:
                 success = ctx.data_products_manager.delete_product(
-                    product_id, user=_caller_email(ctx)
+                    product_id, user=_caller_email(ctx), db=ctx.db
                 )
                 outcome["success"] = success
             
@@ -896,10 +890,6 @@ class DeleteDataProductTool(BaseTool):
                     success=False,
                     error=f"Failed to delete data product '{product_id}'"
                 )
-            # The on_delete workflows of DELETE /data-products/{id}.
-            ctx.data_products_manager.fire_delete_trigger(
-                ctx.db, product_id, _caller_email(ctx)
-            )
 
             logger.info(f"[delete_data_product] SUCCESS: Deleted product {product_name}")
             return ToolResult(

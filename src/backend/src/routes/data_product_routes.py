@@ -80,7 +80,7 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
     Unpublished products (draft/proposed/under_review/approved/...) are only
     readable by data-products admins (incl. via an in-app role override), by
     owners (draft_owner / owning team / project member) and by whoever can
-    decide an open review or approval of it (``caller_reviews_entity``, #1117).
+    decide an open review or approval of it (``caller_is_pending_reviewer``, #1117).
     This stops a consumer from reading an unpublished product by its id
     (ONT-NEG-011). Fails closed on error.
     """
@@ -174,14 +174,14 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
 
         # Whoever can decide an open review or approval of this product can read
         # it (#1117). Read only: no write route consults this gate.
-        from src.common.review_access import caller_reviews_entity
+        from src.common.review_access import caller_is_pending_reviewer
 
-        return caller_reviews_entity(
+        return caller_is_pending_reviewer(
             db,
-            getattr(request.app.state, "notifications_manager", None),
             current_user,
             "data_product",
             product_id,
+            getattr(request.app.state, "notifications_manager", None),
         )
     except Exception:
         logger.exception("Product read gate failed for %s; denying", product_id)

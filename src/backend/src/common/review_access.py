@@ -1,8 +1,10 @@
-"""Read access for the reviewers of an entity (#1117).
+"""Read access for the pending reviewers of an entity (#1117).
 
 Whoever can decide an open review of an entity can read that entity, even when
 the read gate would otherwise deny it (an unpublished data product they don't
-own). Two facts count, both created by the server, never by the caller:
+own), and sees it in the approvals queue. Entities: ``data_product`` and
+``data_contract``. Two facts count, both created by the server, never by the
+caller:
 
 * an open asset review (``queued`` / ``in_review``) of the entity whose
   reviewer is the caller and that a workflow's ``create_asset_review`` step
@@ -14,8 +16,11 @@ own). Two facts count, both created by the server, never by the caller:
   that the caller may decide: the same check as ``POST
   /api/workflows/handle-approval`` (recipient, group or role member of the
   step's approval notification; not the requester of an owner approval).
+  An approval notification with neither a recipient nor a role is a broadcast
+  (everyone may see it) and grants nothing.
 
-This only answers "may read"; it never grants a write. Every check fails closed.
+This only answers "may read"; it never grants a write, and it ends when the
+review is closed or the approval decided. Every check fails closed.
 """
 import json
 from typing import Any, Iterable, Optional, Set
@@ -89,7 +94,12 @@ def _is_open_asset_reviewer(
 def _can_decide_pending_approval(
     db: Session, notifications_manager: Any, user: Any, entity_type: str, entity_id: str,
 ) -> bool:
-    """The caller may decide a paused approval of a workflow run for the entity."""
+    """The caller may decide a paused approval of a workflow run for the entity.
+
+    ``_assert_caller_authorized_for_execution`` only considers the approval
+    notifications of the step the run waits at that have a recipient or a role,
+    and checks them with ``can_user_access_notification``.
+    """
     from fastapi import HTTPException
 
     from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
@@ -129,10 +139,17 @@ def _can_decide_pending_approval(
     return False
 
 
-def caller_reviews_entity(
-    db: Session, notifications_manager: Any, user: Any, entity_type: str, entity_id: str,
+def caller_is_pending_reviewer(
+    db: Session,
+    user: Any,
+    entity_type: str,
+    entity_id: str,
+    notifications_manager: Any = None,
 ) -> bool:
-    """Whether ``user`` can decide an open review or approval of the entity."""
+    """Whether ``user`` can decide an open review or approval of the entity.
+
+    Without ``notifications_manager`` only the asset-review fact is checked.
+    """
     if not user or not entity_id:
         return False
     try:

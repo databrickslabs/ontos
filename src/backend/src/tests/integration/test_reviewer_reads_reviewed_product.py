@@ -89,13 +89,44 @@ def reviewed(client, as_user):
     return product_id, _request_review(client, as_user, product_id, REVIEWER[0])
 
 
+def _approval_notifications(db_session, execution_id):
+    from src.db_models.notifications import NotificationDb
+
+    return [
+        n for n in db_session.query(NotificationDb).filter_by(action_type='workflow_approval')
+        if execution_id in (n.action_payload or '')
+    ]
+
+
 class TestReviewerReadsReviewedProduct:
-    def test_whoever_can_decide_reads_the_product(self, client, as_user, reviewed):
+    def test_the_named_reviewer_reads_the_product(self, client, as_user, reviewed):
         product_id, _ = reviewed
 
         assert _get(client, as_user, REVIEWER, product_id) == 200
-        assert _get(client, as_user, STEWARD, product_id) == 200
         assert _get(client, as_user, PRODUCER, product_id) == 200
+
+    def test_a_member_of_the_approval_role_reads_the_product(
+        self, client, as_user, db_session, reviewed,
+    ):
+        product_id, result = reviewed
+        # The approval is addressed to the Data Steward role, not to the steward
+        notifications = _approval_notifications(db_session, result['execution_id'])
+        assert notifications
+        assert all(n.recipient_role_id and n.recipient != STEWARD[0] for n in notifications)
+
+        assert _get(client, as_user, STEWARD, product_id) == 200
+
+    def test_a_broadcast_approval_grants_nothing(self, client, as_user, db_session, reviewed):
+        """An approval notification with no recipient and no role is visible to
+        everyone, so it must not open the product to anyone."""
+        product_id, result = reviewed
+        assert _get(client, as_user, STEWARD, product_id) == 200
+        for notification in _approval_notifications(db_session, result['execution_id']):
+            notification.recipient = None
+            notification.recipient_role_id = None
+        db_session.commit()
+
+        assert _get(client, as_user, STEWARD, product_id) == 404
 
     def test_someone_who_cannot_decide_still_gets_404(self, client, as_user, reviewed):
         product_id, _ = reviewed
@@ -185,3 +216,4 @@ class TestReviewerReadsReviewedProduct:
         assert response.status_code == 201, response.text
 
         assert _get(client, as_user, STEWARD, product_id) == 404
+

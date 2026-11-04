@@ -253,6 +253,7 @@
           "own_change_request_approval": "The requester can't approve their own change request.",
           "metric_view_delivery_git_unavailable": "The Git repository for Indirect delivery is not available.",
           "metric_view_delivery_write_failed": "The definition could not be written to the Git repository.",
+          "metric_view_delivery_restore_failed": "The definition could not be written to the Git repository, and these files could not be put back as they were: {{files}}.",
           "metric_view_delivery_notification_failed": "The owners could not be notified.",
           "metric_view_delivery_no_recipient": "Nobody could be notified to run the statement.",
           "metric_view_delivery_failed": "The change could not be delivered.",

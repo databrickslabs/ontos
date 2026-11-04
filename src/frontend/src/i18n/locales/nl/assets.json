@@ -253,6 +253,7 @@
           "own_change_request_approval": "De aanvrager kan zijn eigen wijzigingsverzoek niet goedkeuren.",
           "metric_view_delivery_git_unavailable": "De Git-repository voor indirecte levering is niet beschikbaar.",
           "metric_view_delivery_write_failed": "De definitie kon niet naar de Git-repository worden geschreven.",
+          "metric_view_delivery_restore_failed": "De definitie kon niet naar de Git-repository worden geschreven, en deze bestanden konden niet worden hersteld: {{files}}.",
           "metric_view_delivery_notification_failed": "De eigenaren konden niet op de hoogte worden gebracht.",
           "metric_view_delivery_no_recipient": "Niemand kon worden gevraagd het statement uit te voeren.",
           "metric_view_delivery_failed": "De wijziging kon niet worden geleverd.",

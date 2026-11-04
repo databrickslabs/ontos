@@ -13,6 +13,7 @@ import pytest
 from databricks.sdk.errors import NotFound, PermissionDenied
 from databricks.sdk.service.catalog import TableType
 
+from src.common.git import GitCloneStatus, GitService
 from src.common.metric_views import parse_metric_view_definition
 from src.controller import delivery_service as delivery_module
 from src.controller import metric_view_change_requests_manager as module
@@ -353,16 +354,37 @@ class TestSubmitPreChecks:
 
 
 class _FakeGit:
-    def __init__(self, cloned=True, fail=False):
+    """A working copy in memory; ``failing_saves`` are the ``save_text`` calls that fail."""
+
+    def __init__(self, cloned=True, fail=False, files=None, failing_saves=(),
+                 delete_fails=False):
         self.is_cloned = cloned
         self.fail = fail
-        self.files = {}
+        self.failing_saves = failing_saves
+        self.delete_fails = delete_fails
+        self.files = dict(files or {})
+        self.saves = 0
 
     def save_text(self, filename, text, subdir=None):
-        if self.fail:
+        self.saves += 1
+        if self.fail or self.saves in self.failing_saves:
             return False
         self.files[f'{subdir}/{filename}'] = text
         return True
+
+    def load_text(self, filename, subdir=None):
+        return self.files.get(f'{subdir}/{filename}')
+
+    def delete_file(self, filename, subdir=None):
+        if self.delete_fails or f'{subdir}/{filename}' not in self.files:
+            return False
+        del self.files[f'{subdir}/{filename}']
+        return True
+
+
+YAML_FILE = 'metric_views/main.sales.orders_mv.yaml'
+SQL_FILE = 'metric_views/main.sales.orders_mv.sql'
+EARLIER_FILES = {YAML_FILE: BASE, SQL_FILE: build_ddl(VIEW, BASE) + '\n'}
 
 
 @pytest.fixture
@@ -473,6 +495,78 @@ class TestDecisionAndDelivery:
         assert audits[-1]['action'] == 'METRIC_VIEW_CHANGE_REQUEST_DELIVERY_FAILED'
         assert audits[-1]['success'] is False and audits[-1]['details']['error_code'] == code
 
+    @pytest.mark.parametrize('earlier', [{}, EARLIER_FILES], ids=['new', 'existing'])
+    def test_a_failed_second_write_puts_the_first_file_back(
+        self, db_session, manager, asset, ws, review, delivery, earlier
+    ):
+        delivery.settings.DELIVERY_MODE_INDIRECT = True
+        delivery.settings.DELIVERY_MODE_MANUAL = False
+        git = _FakeGit(files=earlier, failing_saves=(2,))
+        delivery_module._delivery_service.set_git_service(git)
+        request = _in_review(db_session, manager, asset, ws)
+
+        manager.on_workflow_completed(str(request.id), approved=True, responded_by=APPROVER)
+
+        row = db_session.get(MetricViewChangeRequestDb, request.id)
+        assert row.status == 'failed' and row.error_code == 'metric_view_delivery_write_failed'
+        # The YAML was written, then put back as it was (removed when it was new)
+        assert git.saves >= 2 and git.files == earlier
+
+    @pytest.mark.parametrize('git', [
+        _FakeGit(failing_saves=(2,), delete_fails=True),
+        _FakeGit(files={YAML_FILE: BASE}, failing_saves=(2, 3)),
+    ], ids=['new', 'existing'])
+    def test_a_file_that_cannot_be_put_back_is_told(
+        self, db_session, manager, asset, ws, review, delivery, audits, git
+    ):
+        delivery.settings.DELIVERY_MODE_INDIRECT = True
+        delivery.settings.DELIVERY_MODE_MANUAL = False
+        delivery_module._delivery_service.set_git_service(git)
+        request = _in_review(db_session, manager, asset, ws)
+
+        manager.on_workflow_completed(str(request.id), approved=True, responded_by=APPROVER)
+
+        row = db_session.get(MetricViewChangeRequestDb, request.id)
+        code = 'metric_view_delivery_restore_failed'
+        assert row.status == 'failed' and row.error_code == code
+        assert git.files[YAML_FILE] == PROPOSED
+        error = manager.get(asset.id, request.id).error
+        assert error.code == code and error.params['files'] == YAML_FILE
+        assert YAML_FILE in error.message
+        assert audits[-1]['details']['error_code'] == code
+
+    def test_a_failed_manual_delivery_writes_no_file(
+        self, db_session, manager, asset, ws, review, delivery, monkeypatch
+    ):
+        delivery.settings.DELIVERY_MODE_INDIRECT = True
+        request = _in_review(db_session, manager, asset, ws)
+
+        def refuse(*args, **kwargs):
+            raise RuntimeError('notifications are down')
+
+        monkeypatch.setattr(module.notification_repo, 'create', refuse)
+        manager.on_workflow_completed(str(request.id), approved=True, responded_by=APPROVER)
+
+        row = db_session.get(MetricViewChangeRequestDb, request.id)
+        assert row.status == 'failed'
+        assert row.error_code == 'metric_view_delivery_notification_failed'
+        assert delivery.git.files == {}
+
+    def test_both_modes_deliver_the_files_and_the_notification(
+        self, db_session, manager, asset, ws, review, delivery
+    ):
+        delivery.settings.DELIVERY_MODE_INDIRECT = True
+        request = _in_review(db_session, manager, asset, ws)
+
+        manager.on_workflow_completed(str(request.id), approved=True, responded_by=APPROVER)
+
+        row = db_session.get(MetricViewChangeRequestDb, request.id)
+        assert row.status == 'delivered' and row.delivery_mode == 'indirect,manual'
+        assert row.delivery_reference == f'{YAML_FILE}, {SQL_FILE}, {OWNER}'
+        assert set(delivery.git.files) == {YAML_FILE, SQL_FILE}
+        assert [n.recipient for n in _notifications(db_session, module.MANUAL_TITLE_KEY)] \
+            == [OWNER]
+
     def test_a_rejection_delivers_nothing(
         self, db_session, manager, asset, ws, review, delivery, audits
     ):
@@ -564,6 +658,40 @@ def test_the_delivery_service_writes_both_files_of_a_metric_view():
     assert result.details == {'files': ['main.sales.orders_mv.yaml', 'main.sales.orders_mv.sql'],
                               'subdir': 'metric_views'}
     assert git.files['metric_views/main.sales.orders_mv.sql'] == 'ALTER VIEW x\n'
+
+
+class _WorkingCopy(GitService):
+    """A cloned working copy in ``repo_dir`` whose ``.sql`` writes fail."""
+
+    def __init__(self, repo_dir):
+        super().__init__(SimpleNamespace(GIT_REPO_URL=None))
+        self._repo_dir, self._repo = repo_dir, object()
+        self._clone_status = GitCloneStatus.CLONED
+
+    def save_text(self, filename, text, subdir=None):
+        return not filename.endswith('.sql') and super().save_text(filename, text, subdir)
+
+
+@pytest.mark.parametrize('earlier', [None, 'version: 0.1\n'], ids=['new', 'existing'])
+def test_the_working_copy_keeps_its_files_when_the_second_write_fails(tmp_path, earlier):
+    yaml_path = tmp_path / YAML_FILE
+    if earlier is not None:
+        yaml_path.parent.mkdir()
+        yaml_path.write_text(earlier, encoding='utf-8')
+    service = DeliveryService(settings=MagicMock(), git_service=_WorkingCopy(tmp_path))
+
+    result = service.deliver(DeliveryPayload(
+        change_type=DeliveryChangeType.METRIC_VIEW_UPDATE, entity_type='MetricView',
+        entity_id=VIEW, data={'fqn': VIEW, 'definition': PROPOSED, 'ddl': 'ALTER VIEW x'},
+    ), modes=[DeliveryMode.INDIRECT]).results[0]
+
+    assert not result.success
+    assert result.details['error_code'] == 'metric_view_delivery_write_failed'
+    if earlier is None:
+        assert not yaml_path.exists()
+    else:
+        assert yaml_path.read_text(encoding='utf-8') == earlier
+    assert not (tmp_path / SQL_FILE).exists()
 
 
 def test_cancel_is_for_the_requester_or_an_admin(db_session, manager, asset, ws):

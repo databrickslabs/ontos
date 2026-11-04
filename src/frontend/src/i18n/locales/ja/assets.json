@@ -253,6 +253,7 @@
           "own_change_request_approval": "リクエスト者は自分の変更リクエストを承認できません。",
           "metric_view_delivery_git_unavailable": "間接配信用の Git リポジトリを利用できません。",
           "metric_view_delivery_write_failed": "定義を Git リポジトリに書き込めませんでした。",
+          "metric_view_delivery_restore_failed": "定義を Git リポジトリに書き込めず、次のファイルを元に戻せませんでした: {{files}}。",
           "metric_view_delivery_notification_failed": "所有者に通知できませんでした。",
           "metric_view_delivery_no_recipient": "ステートメントの実行を依頼できる人がいませんでした。",
           "metric_view_delivery_failed": "変更を配信できませんでした。",

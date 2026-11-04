@@ -253,6 +253,7 @@
           "own_change_request_approval": "Der Antragsteller kann seine eigene Änderungsanfrage nicht genehmigen.",
           "metric_view_delivery_git_unavailable": "Das Git-Repository für die indirekte Auslieferung ist nicht verfügbar.",
           "metric_view_delivery_write_failed": "Die Definition konnte nicht in das Git-Repository geschrieben werden.",
+          "metric_view_delivery_restore_failed": "Die Definition konnte nicht in das Git-Repository geschrieben werden, und diese Dateien konnten nicht wiederhergestellt werden: {{files}}.",
           "metric_view_delivery_notification_failed": "Die Eigentümer konnten nicht benachrichtigt werden.",
           "metric_view_delivery_no_recipient": "Niemand konnte benachrichtigt werden, die Anweisung auszuführen.",
           "metric_view_delivery_failed": "Die Änderung konnte nicht ausgeliefert werden.",

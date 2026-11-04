@@ -808,6 +808,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         """
         from src.db_models.entity_relationships import EntityRelationshipDb
         from src.db_models.assets import AssetDb, AssetTypeDb
+        from src.models.assets import PHYSICAL_TABLE_ASSET_TYPES
 
         contract = data_contract_repo.get_with_all(db_session, id=contract_id)
         if not contract:
@@ -816,10 +817,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not contract.schema_objects:
             return {"matched": 0, "created": [], "skipped": []}
 
-        table_type = db_session.query(AssetTypeDb).filter(AssetTypeDb.name == "Table").first()
-        view_type = db_session.query(AssetTypeDb).filter(AssetTypeDb.name == "View").first()
-
-        asset_type_ids = [t.id for t in [table_type, view_type] if t]
+        # Table, View and Metric View assets, by type id
+        type_names = {
+            t.id: t.name
+            for t in db_session.query(AssetTypeDb)
+            .filter(AssetTypeDb.name.in_(PHYSICAL_TABLE_ASSET_TYPES))
+            .all()
+        }
+        asset_type_ids = list(type_names)
         if not asset_type_ids:
             return {"matched": 0, "created": [], "skipped": ["No Table/View asset types found"]}
 
@@ -849,7 +854,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             existing = (
                 db_session.query(EntityRelationshipDb)
                 .filter(
-                    EntityRelationshipDb.source_type.in_(["Table", "View"]),
+                    EntityRelationshipDb.source_type.in_(PHYSICAL_TABLE_ASSET_TYPES),
                     EntityRelationshipDb.source_id == str(asset.id),
                     EntityRelationshipDb.target_type == "DataContract",
                     EntityRelationshipDb.target_id == contract_id,
@@ -861,9 +866,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 skipped.append(f"Relationship already exists for '{match_name}'")
                 continue
 
-            asset_type_name = "Table"
-            if view_type and asset.asset_type_id == view_type.id:
-                asset_type_name = "View"
+            asset_type_name = type_names.get(asset.asset_type_id, "Table")
 
             rel = EntityRelationshipDb(
                 source_type=asset_type_name,

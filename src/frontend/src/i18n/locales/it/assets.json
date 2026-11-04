@@ -149,6 +149,12 @@
       "relationships": "Relazioni",
       "lineage": "Lineage",
       "impact": "Analisi d'impatto"
+    },
+    "metricView": {
+      "title": "Metric view",
+      "loading": "Caricamento della metric view",
+      "loadError": "Impossibile caricare la definizione della metric view.",
+      "userTokenRequired": "Questa metric view viene letta da Unity Catalog con il tuo accesso, e il tuo accesso a Databricks non è disponibile in questa sessione."
     }
   },
   "explorer": {

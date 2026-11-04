@@ -155,7 +155,17 @@
       "yaml": "YAML 定義",
       "materialization": "マテリアライズ",
       "materializationSummary_one": "{{schedule}}、マテリアライズドビュー {{count}} 件",
-      "materializationSummary_other": "{{schedule}}、マテリアライズドビュー {{count}} 件"
+      "materializationSummary_other": "{{schedule}}、マテリアライズドビュー {{count}} 件",
+      "concepts": "コンセプト",
+      "viewConcepts": "メトリックビューにリンクされたコンセプト",
+      "linkConcept": "コンセプトをリンク",
+      "linkConceptTo": "{{name}} にコンセプトをリンク",
+      "linked": "コンセプトを {{name}} にリンクしました。",
+      "unlinked": "コンセプトのリンクを削除しました。",
+      "linkError": "コンセプトをリンクできませんでした。",
+      "unlinkError": "コンセプトのリンクを削除できませんでした。",
+      "removedFields": "定義にもう存在しないリンク済みフィールド",
+      "removedFieldsHint": "これらのフィールドにはコンセプトのリンクがありますが、メトリックビューの定義にはもう存在しません。リンクは保持されます。該当しなくなった場合は削除してください。"
     },
     "noPreviewAvailable": "このアセットタイプにはプレビューまたは定義がないか、コンテンツを読み込み中です。",
     "messages": {

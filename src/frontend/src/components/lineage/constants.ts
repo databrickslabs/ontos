@@ -24,6 +24,11 @@ export const TYPE_COLOR: Record<string, { bg: string; border: string; text: stri
   Policy:           { bg: 'bg-red-500/10',      border: 'border-red-500/40',     text: 'text-red-600 dark:text-red-400',         minimap: '#ef4444', hex: '#ef4444' },
   Table:            { bg: 'bg-orange-500/10',    border: 'border-orange-500/40',  text: 'text-orange-600 dark:text-orange-400',   minimap: '#f97316', hex: '#f97316' },
   View:             { bg: 'bg-teal-500/10',     border: 'border-teal-500/40',    text: 'text-teal-600 dark:text-teal-400',       minimap: '#14b8a6', hex: '#14b8a6' },
+  // A Metric View is a View (ontos:MetricView is a subclass of ontos:View)
+  'Metric View': {
+    bg: 'bg-teal-500/10', border: 'border-teal-500/40', text: 'text-teal-600 dark:text-teal-400',
+    minimap: '#14b8a6', hex: '#14b8a6',
+  },
   Column:           { bg: 'bg-slate-500/10',    border: 'border-slate-500/40',   text: 'text-slate-600 dark:text-slate-400',     minimap: '#64748b', hex: '#64748b' },
   Schema:           { bg: 'bg-violet-500/10',   border: 'border-violet-500/40',  text: 'text-violet-600 dark:text-violet-400',   minimap: '#8b5cf6', hex: '#8b5cf6' },
   DataContract:     { bg: 'bg-pink-500/10',     border: 'border-pink-500/40',    text: 'text-pink-600 dark:text-pink-400',       minimap: '#ec4899', hex: '#ec4899' },

@@ -542,6 +542,15 @@ class AssetTypeCategory(str, Enum):
     CUSTOM = "custom"
 
 
+# Name of the persisted asset type seeded from ontos:MetricView (a subclass of
+# ontos:View). Imported Unity Catalog metric views get this type.
+METRIC_VIEW_ASSET_TYPE = "Metric View"
+
+# Persisted asset types that are tables with columns: Table, View and its
+# Metric View subclass. Used where Ontos lists or matches physical tables.
+PHYSICAL_TABLE_ASSET_TYPES = ("Table", "View", METRIC_VIEW_ASSET_TYPE)
+
+
 class AssetStatus(str, Enum):
     """Asset lifecycle status. Aligned with EntityStatus."""
     DRAFT = "draft"

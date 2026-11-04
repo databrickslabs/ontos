@@ -155,7 +155,17 @@
       "yaml": "Definição em YAML",
       "materialization": "Materialização",
       "materializationSummary_one": "{{schedule}}, {{count}} view materializada",
-      "materializationSummary_other": "{{schedule}}, {{count}} views materializadas"
+      "materializationSummary_other": "{{schedule}}, {{count}} views materializadas",
+      "concepts": "Conceitos",
+      "viewConcepts": "Conceitos vinculados à metric view",
+      "linkConcept": "Vincular conceito",
+      "linkConceptTo": "Vincular um conceito a {{name}}",
+      "linked": "Conceito vinculado a {{name}}.",
+      "unlinked": "Vínculo com o conceito removido.",
+      "linkError": "Não foi possível vincular o conceito.",
+      "unlinkError": "Não foi possível remover o vínculo com o conceito.",
+      "removedFields": "Campos vinculados que não estão mais na definição",
+      "removedFieldsHint": "Estes campos têm vínculos com conceitos, mas não estão mais na definição da metric view. Os vínculos são mantidos; remova-os se não se aplicarem mais."
     },
     "noPreviewAvailable": "Nenhuma pré-visualização ou definição disponível para este tipo de ativo, ou o conteúdo ainda está carregando.",
     "messages": {

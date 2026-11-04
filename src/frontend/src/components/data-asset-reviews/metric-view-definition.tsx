@@ -1,11 +1,100 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MetricViewDefinition, MetricViewField } from '@/types/data-asset-review';
+import { AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
+import { useApi } from '@/hooks/use-api';
+import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
+import type { EntitySemanticLink } from '@/types/semantic-link';
+import {
+    MetricViewDefinition,
+    MetricViewField,
+    MetricViewFieldLinks,
+    MetricViewLinks,
+} from '@/types/data-asset-review';
 
 interface MetricViewDefinitionPanelProps {
     definition: MetricViewDefinition;
 }
 
-function FieldTable({ title, fields, empty }: { title: string; fields: MetricViewField[]; empty: string }) {
+/** What a concept is linked to: the view (`uc_table`) or one of its fields (`uc_column`). */
+interface LinkTarget {
+    entityType: 'uc_table' | 'uc_column';
+    entityId: string;
+    name: string;
+}
+
+/** The links with `link` added to the view or the field whose entity id is `entityId`. */
+function withLink(
+    links: MetricViewLinks, entityId: string, link: EntitySemanticLink,
+): MetricViewLinks {
+    const add = (list: EntitySemanticLink[]) =>
+        list.some((l) => l.id === link.id) ? list : [...list, link];
+    const addToField = (f: MetricViewFieldLinks) =>
+        f.entity_id === entityId ? { ...f, links: add(f.links) } : f;
+    return {
+        ...links,
+        view_links: links.view_entity_id === entityId ? add(links.view_links) : links.view_links,
+        fields: links.fields.map(addToField),
+        removed_fields: links.removed_fields.map(addToField),
+    };
+}
+
+/** The links without the link `linkId`. */
+function withoutLink(links: MetricViewLinks, linkId: string): MetricViewLinks {
+    const drop = (list: EntitySemanticLink[]) => list.filter((l) => l.id !== linkId);
+    const dropFromField = (f: MetricViewFieldLinks) => ({ ...f, links: drop(f.links) });
+    return {
+        ...links,
+        view_links: drop(links.view_links),
+        fields: links.fields.map(dropFromField),
+        removed_fields: links.removed_fields.map(dropFromField),
+    };
+}
+
+function ConceptCell({ links, target, canEdit, onAdd, onRemove }: {
+    links: EntitySemanticLink[];
+    target: LinkTarget;
+    canEdit: boolean;
+    onAdd: (target: LinkTarget) => void;
+    onRemove: (linkId: string) => void;
+}) {
+    const { t } = useTranslation('data-asset-reviews');
+    return (
+        <LinkedConceptChips
+            links={links}
+            onRemove={canEdit ? onRemove : undefined}
+            trailing={canEdit ? (
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs"
+                    aria-label={t('editor.metricView.linkConceptTo', { name: target.name })}
+                    onClick={() => onAdd(target)}
+                >
+                    {t('editor.metricView.linkConcept')}
+                </Button>
+            ) : undefined}
+        />
+    );
+}
+
+interface FieldLinksProps {
+    linksByName: Map<string, MetricViewFieldLinks> | null;
+    canEdit: boolean;
+    onAdd: (target: LinkTarget) => void;
+    onRemove: (linkId: string) => void;
+}
+
+function FieldTable({ title, fields, empty, linksByName, canEdit, onAdd, onRemove }: {
+    title: string;
+    fields: MetricViewField[];
+    empty: string;
+} & FieldLinksProps) {
     const { t } = useTranslation('data-asset-reviews');
     return (
         <div className="space-y-1">
@@ -18,18 +107,49 @@ function FieldTable({ title, fields, empty }: { title: string; fields: MetricVie
                         <tr>
                             <th className="text-left p-2 font-medium">{t('editor.metricView.name')}</th>
                             <th className="text-left p-2 font-medium">{t('editor.metricView.expression')}</th>
+                            {linksByName && (
+                                <th className="text-left p-2 font-medium">
+                                    {t('editor.metricView.concepts')}
+                                </th>
+                            )}
                         </tr>
                     </thead>
                     <tbody>
-                        {fields.map((field) => (
-                            <tr key={field.name} className="border-t align-top">
-                                <td className="p-2">
-                                    <div className="font-medium">{field.display_name || field.name}</div>
-                                    {field.comment && <div className="text-muted-foreground">{field.comment}</div>}
-                                </td>
-                                <td className="p-2 font-mono break-all">{field.expr ?? ''}</td>
-                            </tr>
-                        ))}
+                        {fields.map((field) => {
+                            const fieldLinks = linksByName?.get(field.name);
+                            return (
+                                <tr key={field.name} className="border-t align-top">
+                                    <td className="p-2">
+                                        <div className="font-medium">
+                                            {field.display_name || field.name}
+                                        </div>
+                                        {field.comment && (
+                                            <div className="text-muted-foreground">
+                                                {field.comment}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="p-2 font-mono break-all">{field.expr ?? ''}</td>
+                                    {linksByName && (
+                                        <td className="p-2">
+                                            {fieldLinks && (
+                                                <ConceptCell
+                                                    links={fieldLinks.links}
+                                                    target={{
+                                                        entityType: 'uc_column',
+                                                        entityId: fieldLinks.entity_id,
+                                                        name: field.display_name || field.name,
+                                                    }}
+                                                    canEdit={canEdit}
+                                                    onAdd={onAdd}
+                                                    onRemove={onRemove}
+                                                />
+                                            )}
+                                        </td>
+                                    )}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             )}
@@ -37,13 +157,82 @@ function FieldTable({ title, fields, empty }: { title: string; fields: MetricVie
     );
 }
 
-/** A Unity Catalog metric view's spec: its source, dimensions and measures, and the YAML. */
+/**
+ * A Unity Catalog metric view's spec: its source, dimensions and measures, and the YAML.
+ *
+ * When the definition carries `links`, the concepts linked to the view and to
+ * each dimension and measure are shown, and users who can edit semantic links
+ * can link and unlink them. Links of fields that are no longer in the
+ * definition are listed apart, so they can be reviewed and removed.
+ */
 export default function MetricViewDefinitionPanel({ definition }: MetricViewDefinitionPanelProps) {
     const { t } = useTranslation('data-asset-reviews');
+    const { post, delete: apiDelete } = useApi();
+    const { toast } = useToast();
+    const { hasPermission } = usePermissions();
+    const canEdit = hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
     const spec = definition.metric_view;
+
+    const [links, setLinks] = useState<MetricViewLinks | null>(definition.links ?? null);
+    const [target, setTarget] = useState<LinkTarget | null>(null);
+    useEffect(() => setLinks(definition.links ?? null), [definition]);
+
+    const linksOf = (kind: 'dimension' | 'measure') =>
+        links ? new Map(links.fields.filter((f) => f.kind === kind).map((f) => [f.name, f])) : null;
+
+    const linkedIris = (entityId: string): string[] => {
+        if (!links) return [];
+        if (entityId === links.view_entity_id) return links.view_links.map((l) => l.iri);
+        const field = [...links.fields, ...links.removed_fields]
+            .find((f) => f.entity_id === entityId);
+        return field ? field.links.map((l) => l.iri) : [];
+    };
+
+    const addLink = async (iri: string) => {
+        if (!target) return;
+        const res = await post<EntitySemanticLink>('/api/semantic-links/', {
+            entity_type: target.entityType,
+            entity_id: target.entityId,
+            iri,
+        });
+        if (res.error || !res.data?.id) {
+            toast({ title: t('editor.metricView.linkError'), variant: 'destructive' });
+            return;
+        }
+        setLinks((current) => (current ? withLink(current, target.entityId, res.data) : current));
+        toast({ title: t('editor.metricView.linked', { name: target.name }) });
+        setTarget(null);
+    };
+
+    const removeLink = async (linkId: string) => {
+        const res = await apiDelete(`/api/semantic-links/${linkId}`);
+        if (res.error) {
+            toast({ title: t('editor.metricView.unlinkError'), variant: 'destructive' });
+            return;
+        }
+        setLinks((current) => (current ? withoutLink(current, linkId) : current));
+        toast({ title: t('editor.metricView.unlinked') });
+    };
+
+    const fieldLinkProps = { canEdit, onAdd: setTarget, onRemove: removeLink };
+    const removedWithLinks = links ? links.removed_fields.filter((f) => f.links.length > 0) : [];
 
     return (
         <div className="space-y-4">
+            {links && (
+                <div className="space-y-1">
+                    <h4 className="text-sm font-semibold">{t('editor.metricView.viewConcepts')}</h4>
+                    <ConceptCell
+                        links={links.view_links}
+                        target={{
+                            entityType: 'uc_table',
+                            entityId: links.view_entity_id,
+                            name: links.view_entity_id,
+                        }}
+                        {...fieldLinkProps}
+                    />
+                </div>
+            )}
             {spec ? (
                 <>
                     <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-sm">
@@ -94,20 +283,54 @@ export default function MetricViewDefinitionPanel({ definition }: MetricViewDefi
                         title={t('editor.metricView.dimensions')}
                         fields={spec.dimensions}
                         empty={t('editor.metricView.noDimensions')}
+                        linksByName={linksOf('dimension')}
+                        {...fieldLinkProps}
                     />
                     <FieldTable
                         title={t('editor.metricView.measures')}
                         fields={spec.measures}
                         empty={t('editor.metricView.noMeasures')}
+                        linksByName={linksOf('measure')}
+                        {...fieldLinkProps}
                     />
                 </>
             ) : (
                 <p className="text-sm text-muted-foreground">{t('editor.metricView.unparsed')}</p>
             )}
+            {removedWithLinks.length > 0 && (
+                <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>{t('editor.metricView.removedFields')}</AlertTitle>
+                    <AlertDescription className="space-y-2">
+                        <p>{t('editor.metricView.removedFieldsHint')}</p>
+                        {removedWithLinks.map((field) => (
+                            <div
+                                key={field.entity_id}
+                                className="flex flex-wrap items-center gap-2"
+                            >
+                                <span className="font-medium text-xs">{field.name}</span>
+                                <LinkedConceptChips
+                                    links={field.links}
+                                    onRemove={canEdit ? removeLink : undefined}
+                                />
+                            </div>
+                        ))}
+                    </AlertDescription>
+                </Alert>
+            )}
             <details open={!spec}>
                 <summary className="text-sm cursor-pointer">{t('editor.metricView.yaml')}</summary>
                 <pre className="mt-2 border rounded bg-muted/30 p-2 text-xs overflow-auto max-h-96">{definition.definition}</pre>
             </details>
+            <ConceptSelectDialog
+                isOpen={target !== null}
+                onOpenChange={(open) => { if (!open) setTarget(null); }}
+                onSelect={addLink}
+                excludeIris={target ? linkedIris(target.entityId) : undefined}
+                title={target
+                    ? t('editor.metricView.linkConceptTo', { name: target.name })
+                    : undefined}
+            />
         </div>
     );
 }

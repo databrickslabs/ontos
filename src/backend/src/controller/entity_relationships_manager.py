@@ -83,10 +83,11 @@ class EntityRelationshipsManager:
         return f"{ONTOS_NS}{relationship_type}"
 
     def _normalize_entity_type(self, entity_type: str) -> str:
-        """Accept both local names ('DataProduct') and full IRIs."""
+        """Accept local names ('DataProduct'), asset type names ('Metric View') and IRIs."""
         if entity_type.startswith("http://") or entity_type.startswith("https://"):
             return entity_type
-        return f"{ONTOS_NS}{entity_type}"
+        # Asset type names are the class labels ('Metric View' -> ontos:MetricView)
+        return f"{ONTOS_NS}{entity_type.replace(' ', '')}"
 
     def _validate_relationship(
         self, source_type: str, target_type: str, relationship_type: str

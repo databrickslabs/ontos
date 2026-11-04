@@ -114,22 +114,22 @@ share `asset-detail.tsx`. Panels must be **conditionally rendered** based on
 
 Legend: **Y** = show | **—** = hide | **Σ** = summary only
 
-| Panel / Table | Catalog | Schema | Table | View | Column | Dataset | Dashboard | Notebook | ML Model | API Endpoint | Stream | Policy | Business Term | Logical Entity | Logical Attribute | Delivery Channel | System |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Costs** | — | — | - | - | — | - | - | — | - | — | - | — | — | — | — | — | - |
-| **Quality** | — | — | Y | Y | — | Y | — | — | Y | — | — | — | — | — | — | — | — |
-| **Comments** | — | — | Y | Y | — | Y | Y | Y | Y | Y | - | — | Y | — | — | — | — |
-| **Ratings** | — | — | — | — | — | Y | Y | — | Y | — | — | — | — | — | — | — | — |
-| **Relationships** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
-| **Subscriptions** | — | — | — | — | — | Y | — | — | — | — | — | — | — | — | — | — | — |
-| **Tags** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | — | — | — | Y |
-| **Semantic Links** | — | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | Y |
-| **Metadata (rich/link/doc)** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
-| **Change Log** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
-| **Access Grants** | — | — | Y | Y | — | Y | — | — | — | — | — | — | — | — | — | — | — |
-| **Ownership** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
-| **Lineage** | — | — | Y | Y | — | Y | — | — | Y | — | Y | — | — | — | — | — | — |
-| **Impact Analysis** | — | — | — | — | — | — | — | — | — | — | — | Y | Y | Y | — | — | — |
+| Panel / Table | Catalog | Schema | Table | View | Metric View | Column | Dataset | Dashboard | Notebook | ML Model | API Endpoint | Stream | Policy | Business Term | Logical Entity | Logical Attribute | Delivery Channel | System |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Costs** | — | — | - | - | - | — | - | - | — | - | — | - | — | — | — | — | — | - |
+| **Quality** | — | — | Y | Y | — | — | Y | — | — | Y | — | — | — | — | — | — | — | — |
+| **Comments** | — | — | Y | Y | Y | — | Y | Y | Y | Y | Y | - | — | Y | — | — | — | — |
+| **Ratings** | — | — | — | — | — | — | Y | Y | — | Y | — | — | — | — | — | — | — | — |
+| **Relationships** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| **Subscriptions** | — | — | — | — | — | — | Y | — | — | — | — | — | — | — | — | — | — | — |
+| **Tags** | Y | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | — | — | — | Y |
+| **Semantic Links** | — | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | Y |
+| **Metadata (rich/link/doc)** | Y | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
+| **Change Log** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| **Access Grants** | — | — | Y | Y | Y | — | Y | — | — | — | — | — | — | — | — | — | — | — |
+| **Ownership** | Y | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
+| **Lineage** | — | — | Y | Y | Y | — | Y | — | — | Y | — | Y | — | — | — | — | — | — |
+| **Impact Analysis** | — | — | — | — | — | — | — | — | — | — | — | — | Y | Y | Y | — | — | — |
 
 ### Notes – Tier 2
 
@@ -146,6 +146,9 @@ Legend: **Y** = show | **—** = hide | **Σ** = summary only
 - **Table / View**: Physical data assets. They carry costs (compute, storage), can
   have lineage, comments, tags, ownership, and access grants. They don't carry
   ratings (rate the DataProduct instead).
+- **Metric View**: A Unity Catalog metric view (`ontos:MetricView`, a subclass of
+  `ontos:View`). Same panels as View, except Quality: quality checks run `SELECT`,
+  which a metric view refuses without `MEASURE()`.
 - **Dataset**: An output-port implementation. Treated like a first-class data asset
   with most panels enabled.
 - **Dashboard / ML Model**: Consumable outputs. Ratings and costs apply.

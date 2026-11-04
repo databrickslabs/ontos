@@ -56,6 +56,7 @@ const ASSET_TYPE_ICONS: Record<string, React.ElementType> = {
   Dataset: Database,
   Table: Table2,
   View: Eye,
+  'Metric View': Eye,
   'Delivery Channel': Radio,
   Dashboard: LayoutDashboard,
   Notebook: BookOpen,

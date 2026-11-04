@@ -155,7 +155,17 @@
       "yaml": "YAML-Definition",
       "materialization": "Materialisierung",
       "materializationSummary_one": "{{schedule}}, {{count}} materialisierte Ansicht",
-      "materializationSummary_other": "{{schedule}}, {{count}} materialisierte Ansichten"
+      "materializationSummary_other": "{{schedule}}, {{count}} materialisierte Ansichten",
+      "concepts": "Konzepte",
+      "viewConcepts": "Mit der Metric View verknüpfte Konzepte",
+      "linkConcept": "Konzept verknüpfen",
+      "linkConceptTo": "Ein Konzept mit {{name}} verknüpfen",
+      "linked": "Konzept mit {{name}} verknüpft.",
+      "unlinked": "Konzeptverknüpfung entfernt.",
+      "linkError": "Das Konzept konnte nicht verknüpft werden.",
+      "unlinkError": "Die Konzeptverknüpfung konnte nicht entfernt werden.",
+      "removedFields": "Verknüpfte Felder, die nicht mehr in der Definition sind",
+      "removedFieldsHint": "Diese Felder haben Konzeptverknüpfungen, sind aber nicht mehr in der Definition der Metric View. Die Verknüpfungen bleiben erhalten; entfernen Sie sie, wenn sie nicht mehr zutreffen."
     },
     "noPreviewAvailable": "Keine Vorschau oder Definition für diesen Asset-Typ verfügbar, oder der Inhalt wird noch geladen.",
     "messages": {

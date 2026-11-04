@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, TYPE_CHECKING, Dict
+from typing import Any, List, Optional, Union, TYPE_CHECKING, Dict
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -6,6 +6,8 @@ import re
 
 from src.db_models.semantic_links import EntitySemanticLinkDb
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate, MappingStatus
+from src.models.metric_views import MetricViewFieldLinks, MetricViewLinks
+from src.common.metric_views import metric_view_entity_id
 from src.repositories.semantic_links_repository import entity_semantic_links_repo
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
@@ -164,6 +166,57 @@ class SemanticLinksManager:
     def list_for_entity_prefix(self, entity_id_prefix: str, entity_type: str) -> List[EntitySemanticLink]:
         items = entity_semantic_links_repo.list_for_entity_prefix(self._db, entity_id_prefix, entity_type)
         return [self._to_api(it) for it in items]
+
+    def list_for_metric_view(
+        self, view_fqn: str, spec: Optional[Dict[str, Any]]
+    ) -> MetricViewLinks:
+        """The concept links of a metric view and of each of its dimensions and measures.
+
+        ``spec`` is the parsed definition (``parse_metric_view_definition``).
+        A ``uc_column`` link under the view whose field is not in ``spec`` is
+        kept and listed in ``removed_fields``. When ``spec`` is None (the YAML
+        could not be parsed), field links can't be matched and only the view's
+        own links are returned.
+
+        Unity Catalog names are case-insensitive and links to UC objects are
+        stored as their writer spelled them, so the view and the fields are
+        matched ignoring case.
+        """
+        view_id = metric_view_entity_id(view_fqn)
+        view_links = [
+            self._to_api(it) for it in entity_semantic_links_repo.list_for_entity_ignoring_case(
+                self._db, view_id, 'uc_table')
+        ]
+        if spec is None:
+            return MetricViewLinks(view_entity_id=view_id, view_links=view_links)
+
+        prefix = f"{view_id}."
+        # casefolded field name -> (field name as stored, links)
+        by_field: Dict[str, List[EntitySemanticLink]] = {}
+        stored_name: Dict[str, str] = {}
+        for it in entity_semantic_links_repo.list_for_entity_prefix_ignoring_case(
+                self._db, prefix, 'uc_column'):
+            name = it.entity_id[len(prefix):]
+            by_field.setdefault(name.casefold(), []).append(self._to_api(it))
+            stored_name.setdefault(name.casefold(), name)
+
+        fields: List[MetricViewFieldLinks] = []
+        for kind, key in (('dimension', 'dimensions'), ('measure', 'measures')):
+            for field in spec.get(key) or []:
+                name = field['name']
+                fields.append(MetricViewFieldLinks(
+                    name=name, kind=kind, entity_id=prefix + name,
+                    links=by_field.get(name.casefold(), []),
+                ))
+        current = {f.name.casefold() for f in fields}
+        removed = [
+            MetricViewFieldLinks(name=stored_name[key], entity_id=prefix + stored_name[key],
+                                 links=links)
+            for key, links in sorted(by_field.items()) if key not in current
+        ]
+        return MetricViewLinks(
+            view_entity_id=view_id, view_links=view_links, fields=fields, removed_fields=removed,
+        )
 
     def list_for_iri(self, iri: str) -> List[EntitySemanticLink]:
         """Get all entities linked to an IRI, including both explicit links and inferred type relationships.

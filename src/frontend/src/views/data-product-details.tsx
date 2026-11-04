@@ -254,6 +254,8 @@ export function isProductActive(status: string | undefined | null): boolean {
 export const PORT_TO_ASSET_PREDICATE: Readonly<Record<string, string>> = {
   Table: 'portHasTable',
   View: 'portHasView',
+  // ontos:MetricView is a subclass of ontos:View, so a port delivers it as a view
+  'Metric View': 'portHasView',
   Dataset: 'portHasDataset',
   APIEndpoint: 'portHasEndpoint',
   MLModel: 'portHasModel',

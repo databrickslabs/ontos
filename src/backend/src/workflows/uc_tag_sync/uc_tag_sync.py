@@ -397,7 +397,14 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
 
 
 def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Read UC-taggable assets (Table, View) with their domain, contract, product, and semantic link metadata."""
+    """Read UC-taggable assets (Table, View, Metric View) with their links.
+
+    Each row carries the asset's domain, contract, product and semantic link metadata.
+
+    The type names mirror PHYSICAL_TABLE_ASSET_TYPES in src/models/assets.py, written out as
+    literals because this job runs without the app package. Metric views get the tag DDL views
+    get today; ALTER VIEW for both is phase 4 of the UC semantic view lifecycle PRD.
+    """
     sql = (
         """
         SELECT a.id::text    AS asset_id,
@@ -438,7 +445,7 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
         LEFT JOIN data_domains d ON d.id = ada.domain_id
         LEFT JOIN entity_relationships er
           ON er.source_id = a.id::text
-         AND er.source_type IN ('Table', 'View')
+         AND er.source_type IN ('Table', 'View', 'Metric View')
          AND er.target_type = 'DataContract'
          AND er.relationship_type = 'implementsContract'
         LEFT JOIN data_contracts c ON er.target_id = c.id
@@ -454,7 +461,7 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
         LEFT JOIN entity_semantic_links esl
           ON esl.entity_id = a.id::text
          AND esl.entity_type = 'asset'
-        WHERE at.name IN ('Table', 'View')
+        WHERE at.name IN ('Table', 'View', 'Metric View')
           AND a.status = 'active'
           AND a.location IS NOT NULL
         """
@@ -1229,6 +1236,29 @@ class SyncResult:
     delivered: DeliveryState = field(
         default_factory=lambda: {t: {} for t in DELIVERY_OBJECT_TYPES}
     )
+    # Objects not tagged on purpose, with the reason. They don't fail the run.
+    skipped: List[str] = field(default_factory=list)
+
+
+# Unity Catalog documents no column tag DDL for a metric view's dimensions and measures:
+# ALTER VIEW has no ALTER COLUMN clause, and neither ALTER TABLE ... ALTER COLUMN nor
+# SET TAG ON COLUMN names metric views. Their fields are left untagged until the job
+# writes metric view tags with a documented statement.
+METRIC_VIEW_TABLE_TYPE = "METRIC_VIEW"
+METRIC_VIEW_FIELD_SKIP_REASON = (
+    "metric view field; Unity Catalog documents no column tag DDL for metric views"
+)
+
+
+def _table_type(ws: WorkspaceClient, table_fqn: str) -> Optional[str]:
+    """Unity Catalog table type of ``table_fqn``, or None when it can't be read."""
+    try:
+        table_type = ws.tables.get(full_name=table_fqn).table_type
+    except Exception as e:
+        print(f"[WARN] Could not read the table type of {table_fqn}: {e}")
+        return None
+    value = getattr(table_type, "value", table_type)
+    return value if isinstance(value, str) else None
 
 
 def read_cleanup_legacy_status(engine: Engine) -> Dict[str, Any]:
@@ -1662,9 +1692,20 @@ def sync_tags(
     )
 
     # Column-level (concepts linked directly to a UC column)
+    table_types: Dict[str, Optional[str]] = {}
     for col in direct.columns:
         desired = build_desired_for_links(col.semantic_links, tag_sync_configs)
         if not desired:
+            continue
+        if col.table_fqn not in table_types:
+            table_types[col.table_fqn] = _table_type(ws, col.table_fqn)
+        if table_types[col.table_fqn] == METRIC_VIEW_TABLE_TYPE:
+            result.skipped.append(f"COLUMN {col.fqn}: {METRIC_VIEW_FIELD_SKIP_REASON}")
+            print(f"[INFO] Skipped COLUMN {col.fqn}: {METRIC_VIEW_FIELD_SKIP_REASON}")
+            # Keep what an earlier run recorded there; the field is still linked.
+            kept = (previous or {}).get("COLUMN", {}).get(col.fqn)
+            if kept:
+                result.delivered["COLUMN"][col.fqn] = dict(kept)
             continue
         u, r = apply("COLUMN", col.fqn, desired)
         if verbose:
@@ -2036,7 +2077,12 @@ def main() -> None:
 
     print("\n" + "=" * 80)
     msg = f"Summary: updated={updated_total} removed={removed_total} errors="
-    print(f"{msg}{len(all_errors)}")
+    print(f"{msg}{len(all_errors)} skipped={len(result.skipped)}")
+
+    if result.skipped:
+        print(f"\n{len(result.skipped)} object(s) skipped (not errors):")
+        for item in result.skipped:
+            print(f"  - {item}")
 
     if all_errors:
         print(f"\n{len(all_errors)} error(s) occurred during tag sync:")

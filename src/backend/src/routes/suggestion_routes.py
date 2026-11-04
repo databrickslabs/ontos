@@ -63,6 +63,7 @@ def get_link_candidates(
             label_map = {
                 "Table": "Table",
                 "View": "View",
+                "MetricView": "Metric View",
                 "Column": "Column",
                 "Schema": "Schema",
                 "BusinessTerm": "Business Term",

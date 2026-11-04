@@ -158,12 +158,19 @@ CASES = [
     ("under_review", "feature_admin", 200),
     ("active", "consumer", 200),
     ("deprecated", "consumer", 200),
+    # Published rows that still carry another user's draft_owner_id
+    ("owned_active", "consumer", 200),
+    ("owned_active", "teammate", 200),
+    ("owned_deprecated", "consumer", 200),
 ]
 
 
 def _make(db_session, team, kind):
     if kind == "personal_draft":
         return _contract(db_session, status="draft", draft_owner=OWNER, team_id=team.id)
+    if kind.startswith("owned_"):
+        return _contract(db_session, status=kind.removeprefix("owned_"), draft_owner=OWNER,
+                         team_id=team.id)
     if kind == "team_draft":
         return _contract(db_session, status="draft", team_id=team.id)
     return _contract(db_session, status=kind, team_id=team.id)
@@ -252,6 +259,8 @@ PRODUCT_CASES = [
     ("proposed", "team", "feature_admin", 200),
     ("active", "team", "consumer", 200),
     ("deprecated", "team", "consumer", 200),
+    ("active", "draft_owner", "consumer", 200),
+    ("deprecated", "draft_owner", "consumer", 200),
 ]
 
 

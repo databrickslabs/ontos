@@ -6606,6 +6606,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return True
         return not is_admin_only_status(contract) and is_visible_consumer(contract)
 
+    @staticmethod
+    def _is_others_personal_draft(contract, caller_email: Optional[str]) -> bool:
+        """Whether ``contract`` is another user's personal draft (tier 1, PRD #442).
+
+        A personal draft is a row in ``draft`` status with a ``draft_owner_id``;
+        only its owner reads it, even inside an elevated family. The owner stamp
+        doesn't hide a row in any other status: an active or deprecated contract
+        that still carries it is published, and readable by everyone.
+        """
+        status = (contract.status or "").strip().lower()
+        return (
+            status == "draft"
+            and bool(contract.draft_owner_id)
+            and contract.draft_owner_id != caller_email
+        )
+
     def readable_contracts(
         self,
         db,
@@ -6620,14 +6636,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Same rule as the list (:meth:`_query_contracts`): feature admins read
         everything; for anyone else a contract is readable when it is published
         or when the caller is elevated for its version family (draft owner or
-        owning-team member of any version). Another user's personal draft is
-        never readable.
+        owning-team member of any version). On top of the list, another user's
+        personal draft (see :meth:`_is_others_personal_draft`) is never readable.
         """
         if is_admin:
             return list(contracts)
         candidates = [
-            c for c in contracts
-            if not c.draft_owner_id or c.draft_owner_id == caller_email
+            c for c in contracts if not self._is_others_personal_draft(c, caller_email)
         ]
         if all(self._visible_to_non_admin(c, set()) for c in candidates):
             return candidates

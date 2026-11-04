@@ -51,6 +51,20 @@ def test_another_users_personal_draft_is_not_readable_even_for_the_team(manager,
     assert not _can_read(manager, db_session, row, teams=["team-1"])
 
 
+@pytest.mark.parametrize("status", ["active", "deprecated"])
+def test_published_contracts_with_another_users_draft_owner_are_readable(
+        manager, db_session, status):
+    """The owner stamp only makes a draft personal; a published row is readable by everyone."""
+    row = _contract(db_session, status=status, draft_owner=OTHER)
+    assert _can_read(manager, db_session, row)
+
+
+def test_only_the_personal_draft_of_another_user_is_dropped(manager, db_session):
+    published = _contract(db_session, status="active", draft_owner=OTHER)
+    personal = _contract(db_session, status="draft", draft_owner=OTHER)
+    assert _readable(manager, db_session, [personal, published]) == [published]
+
+
 def test_own_personal_draft_is_readable(manager, db_session):
     assert _can_read(manager, db_session, _contract(db_session, status="draft", draft_owner=ME))
 
@@ -90,9 +104,12 @@ def test_readable_contracts_keeps_the_order_and_drops_the_rest(manager, db_sessi
 
 
 def test_list_uses_the_same_rule(manager, db_session):
-    """The list keeps what the rule allows (no personal-draft row from another user here)."""
+    """The list keeps what the rule allows (no personal draft of another user here: the list
+    and the read rule differ only there)."""
     rows = [
         _contract(db_session, status="active"),
+        _contract(db_session, status="active", draft_owner=OTHER),
+        _contract(db_session, status="deprecated", draft_owner=OTHER),
         _contract(db_session, status="proposed"),
         _contract(db_session, status="proposed", team="team-1"),
         _contract(db_session, status="retired"),

@@ -2551,11 +2551,26 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         <Input
                           id="approval-timeout-days"
                           type="number"
-                          value={(selectedStep.config as { timeout_days?: number })?.timeout_days || 7}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, timeout_days: parseInt(e.target.value) }
-                          })}
+                          min={0}
+                          // 0 means no timeout; empty (unset) means the default, 7 days
+                          placeholder="7"
+                          value={
+                            (selectedStep.config as { timeout_days?: number })?.timeout_days ?? ''
+                          }
+                          onChange={(e) => {
+                            const days = parseInt(e.target.value, 10);
+                            const { timeout_days: _unset, ...rest } =
+                              selectedStep.config as { timeout_days?: number };
+                            updateStep(selectedStep.step_id, {
+                              config: Number.isNaN(days)
+                                ? rest
+                                : { ...rest, timeout_days: Math.max(days, 0) },
+                            });
+                          }}
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutDaysHelp')}
+                        </p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {t('workflows:designer.approval.timeoutNotEnforced')}
                         </p>

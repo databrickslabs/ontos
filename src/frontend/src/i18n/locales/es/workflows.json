@@ -217,6 +217,7 @@
       "selectRole": "Selecciona el rol",
       "additionalApproversAria": "Aprobadores adicionales",
       "timeoutDays": "Tiempo de espera (días)",
+      "timeoutDaysHelp": "0 significa sin tiempo de espera; déjalo vacío para el valor predeterminado (7 días).",
       "requireAll": "Requerir a todos los aprobadores",
       "requireAllHelp": "Cada aprobador decide: un usuario por sí mismo, cualquier miembro por un grupo o rol. Cualquier rechazo hace fallar el paso.",
       "timeoutNotEnforced": "Aún no se aplica: una aprobación pendiente no caduca."

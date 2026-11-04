@@ -217,6 +217,7 @@
       "selectRole": "Sélectionner un rôle",
       "additionalApproversAria": "Approbateurs supplémentaires",
       "timeoutDays": "Délai d'expiration (jours)",
+      "timeoutDaysHelp": "0 signifie aucun délai ; laissez vide pour la valeur par défaut (7 jours).",
       "requireAll": "Exiger tous les approbateurs",
       "requireAllHelp": "Chaque approbateur décide : un utilisateur pour lui-même, n'importe quel membre pour un groupe ou un rôle. Tout refus fait échouer l'étape.",
       "timeoutNotEnforced": "Pas encore appliqué : une approbation en attente n'expire pas."

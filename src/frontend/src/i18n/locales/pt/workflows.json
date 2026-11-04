@@ -217,6 +217,7 @@
       "selectRole": "Selecionar papel",
       "additionalApproversAria": "Aprovadores adicionais",
       "timeoutDays": "Tempo limite (dias)",
+      "timeoutDaysHelp": "0 significa sem tempo limite; deixe vazio para o padrão (7 dias).",
       "requireAll": "Exigir todos os aprovadores",
       "requireAllHelp": "Cada aprovador decide: um usuário por si mesmo, qualquer membro por um grupo ou papel. Qualquer rejeição reprova a etapa.",
       "timeoutNotEnforced": "Ainda não aplicado: uma aprovação pendente não expira."

@@ -217,6 +217,7 @@
       "selectRole": "ロールを選択",
       "additionalApproversAria": "追加の承認者",
       "timeoutDays": "タイムアウト（日）",
+      "timeoutDaysHelp": "0 はタイムアウトなしを意味します。空欄にすると既定値（7 日）になります。",
       "requireAll": "すべての承認者を必須にする",
       "requireAllHelp": "各承認者が判断します。ユーザーは本人が、グループまたはロールはそのメンバーの誰か 1 人が判断します。1 件でも却下されるとステップは失敗します。",
       "timeoutNotEnforced": "まだ適用されません: 保留中の承認は期限切れになりません。"

@@ -217,6 +217,7 @@
       "selectRole": "Selecteer rol",
       "additionalApproversAria": "Aanvullende goedkeurders",
       "timeoutDays": "Time-out (dagen)",
+      "timeoutDaysHelp": "0 betekent geen time-out; laat leeg voor de standaardwaarde (7 dagen).",
       "requireAll": "Alle goedkeurders vereisen",
       "requireAllHelp": "Elke goedkeurder beslist: een gebruiker voor zichzelf, een willekeurig lid voor een groep of rol. Elke afwijzing laat de stap mislukken.",
       "timeoutNotEnforced": "Nog niet afgedwongen: een openstaande goedkeuring verloopt niet."

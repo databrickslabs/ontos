@@ -217,6 +217,7 @@
       "selectRole": "Rolle auswählen",
       "additionalApproversAria": "Zusätzliche Genehmiger",
       "timeoutDays": "Zeitlimit (Tage)",
+      "timeoutDaysHelp": "0 bedeutet kein Zeitlimit; leer lassen für den Standardwert (7 Tage).",
       "requireAll": "Alle Genehmigenden erforderlich",
       "requireAllHelp": "Jeder Genehmigende entscheidet: ein Benutzer für sich selbst, ein beliebiges Mitglied für eine Gruppe oder Rolle. Jede Ablehnung lässt den Schritt fehlschlagen.",
       "timeoutNotEnforced": "Noch nicht durchgesetzt: Eine ausstehende Genehmigung läuft nicht ab."

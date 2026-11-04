@@ -217,6 +217,7 @@
       "selectRole": "Seleziona ruolo",
       "additionalApproversAria": "Approvatori aggiuntivi",
       "timeoutDays": "Timeout (giorni)",
+      "timeoutDaysHelp": "0 significa nessun timeout; lascia vuoto per il valore predefinito (7 giorni).",
       "requireAll": "Richiedi tutti gli approvatori",
       "requireAllHelp": "Ogni approvatore decide: un utente per sé, un qualsiasi membro per un gruppo o un ruolo. Qualsiasi rifiuto fa fallire il passaggio.",
       "timeoutNotEnforced": "Non ancora applicato: un'approvazione in sospeso non scade."

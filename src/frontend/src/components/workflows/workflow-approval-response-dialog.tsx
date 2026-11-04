@@ -313,13 +313,16 @@ export default function WorkflowApprovalResponseDialog({
         });
         return;
       }
-      // require_all: the decision is recorded and other approvers still decide
+      // require_all: the decision is recorded and other approvers still decide.
+      // Only then is there a count: a step that moves on to another approval
+      // step is 'paused' too, but this decision was the step's.
       const decision = response.data as { status?: string; pending_approvers?: number } | null;
-      if (decision?.status === 'paused') {
+      const pendingApprovers = decision?.pending_approvers;
+      if (typeof pendingApprovers === 'number' && pendingApprovers > 0) {
         toast({
           title: t('workflows:approvalResponse.messages.decisionRecorded'),
           description: t('workflows:approvalResponse.messages.waitingForApprovers', {
-            count: decision.pending_approvers ?? 0,
+            count: pendingApprovers,
           }),
         });
         onOpenChange(false);

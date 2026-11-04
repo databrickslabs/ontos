@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import i18n from '@/i18n/config';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import WorkflowApprovalResponseDialog from './workflow-approval-response-dialog';
 
 const api = vi.hoisted(() => ({
@@ -70,6 +71,38 @@ describe('WorkflowApprovalResponseDialog with require_all', () => {
 
     expect(toast.title).toBe('Decisão registrada');
     expect(toast.description).toBe('Aguardando mais 1 aprovador.');
+  });
+
+  // Without require_all, a decision that moves the run on to a second
+  // approval step also answers 'paused', with no approvers left to wait for
+  it.each([
+    ['en', 'Approve', 'Approved', 'Product has been approved.'],
+    ['pt', 'Aprovar', 'Aprovado', 'Product foi aprovado.'],
+  ])('a run paused at the next approval step is approved (%s)', async (
+    lang, label, title, description,
+  ) => {
+    await i18n.changeLanguage(lang);
+    api.post.mockResolvedValue({
+      data: { execution_id: 'e-1', status: 'paused', message: 'Request approved successfully' },
+    });
+    const { onDecisionMade, onOpenChange } = renderDialog();
+
+    const toast = await approve(label);
+
+    expect(toast.title).toBe(title);
+    expect(toast.description).toBe(description);
+    expect(onDecisionMade).toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('refreshes a concept when its run moves on to the next approval step', async () => {
+    const before = useKnowledgeGraphStore.getState().refreshNonce;
+    api.post.mockResolvedValue({ data: { execution_id: 'e-1', status: 'paused' } });
+    renderDialog(vi.fn(), vi.fn(), { entity_type: 'ontology_concept' });
+
+    await approve();
+
+    expect(useKnowledgeGraphStore.getState().refreshNonce).toBe(before + 1);
   });
 
   it('keeps the approved message when the decision ends the step', async () => {

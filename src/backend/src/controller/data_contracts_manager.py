@@ -6455,6 +6455,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "target_status": target_status_lower,
                 "justification": justification,
                 "request_id": request_id,
+                # The approval applies them (the change log entry is written after)
+                **requested,
             },
             user_email=requester_email,
         )

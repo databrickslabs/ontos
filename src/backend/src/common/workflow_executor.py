@@ -15,7 +15,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -33,6 +33,9 @@ from src.models.process_workflows import (
     WorkflowStepExecutionResult,
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
+
+if TYPE_CHECKING:
+    from src.controller.lifecycle_fields import DeprecationDetails
 from src.common.logging import get_logger
 from src.common.workflow_notification_texts import (
     DEFAULT_TEMPLATE_MESSAGE,
@@ -3731,29 +3734,11 @@ class WorkflowExecutor:
         search_manager = get_app_state_manager('search_manager')
         if search_manager:
             manager.set_search_manager(search_manager)
-        # A requested deprecation uses the request's justification as its
-        # reason, as handle-status-change does
-        # (and its sunset date and replacement, when the requester gave them)
-        from src.controller.lifecycle_fields import (
-            audit_approved_lifecycle_change, deprecation_details_from_strings,
-            requested_deprecation,
+        from src.controller.lifecycle_fields import audit_approved_lifecycle_change
+
+        request_id, deprecation = self._requested_deprecation(
+            trigger_context, 'data_product', product_id, target_status,
         )
-        logged_request_id, deprecation = requested_deprecation(
-            self._db, 'data_product', product_id, target_status
-        )
-        entity_data = trigger_context.entity_data or {}
-        request_id = entity_data.get('request_id') or logged_request_id
-        if entity_data.get('justification'):
-            try:
-                deprecation = deprecation_details_from_strings(
-                    entity_data.get('justification'),
-                    entity_data.get('sunset_date') or (
-                        deprecation.sunset_date.isoformat() if deprecation.sunset_date else None
-                    ),
-                    entity_data.get('replacement_id') or deprecation.replacement_id,
-                )
-            except ValueError:
-                deprecation.reason = entity_data.get('justification')
         try:
             manager.transition_status(
                 product_id, target_status, responded_by, deprecation=deprecation,
@@ -3782,6 +3767,42 @@ class WorkflowExecutor:
             "Data product %s moved to '%s' after its status change request was approved",
             product_id, target_status,
         )
+
+    def _requested_deprecation(
+        self,
+        trigger_context: TriggerContext,
+        entity_type: str,
+        entity_id: str,
+        target_status: str,
+    ) -> Tuple[Optional[str], 'DeprecationDetails']:
+        """Id of the approved request and the deprecation it asked for.
+
+        A requested deprecation uses the request's justification as its
+        reason, as handle-status-change does, and its sunset date and
+        replacement when the requester gave them: from the run's payload,
+        else from the request's change log entry.
+        """
+        from src.controller.lifecycle_fields import (
+            deprecation_details_from_strings, requested_deprecation,
+        )
+
+        logged_request_id, deprecation = requested_deprecation(
+            self._db, entity_type, entity_id, target_status
+        )
+        entity_data = trigger_context.entity_data or {}
+        request_id = entity_data.get('request_id') or logged_request_id
+        if entity_data.get('justification'):
+            try:
+                deprecation = deprecation_details_from_strings(
+                    entity_data.get('justification'),
+                    entity_data.get('sunset_date') or (
+                        deprecation.sunset_date.isoformat() if deprecation.sunset_date else None
+                    ),
+                    entity_data.get('replacement_id') or deprecation.replacement_id,
+                )
+            except ValueError:
+                deprecation.reason = entity_data.get('justification')
+        return request_id, deprecation
 
     def _requested_status_changed(
         self,
@@ -3865,10 +3886,15 @@ class WorkflowExecutor:
             execution_id,
         ):
             return
+        from src.controller.lifecycle_fields import audit_approved_lifecycle_change
+
+        request_id, deprecation = self._requested_deprecation(
+            trigger_context, 'data_contract', contract_id, target_status,
+        )
         try:
             get_live_contracts_manager().transition_status(
                 db=self._db, contract_id=contract_id, new_status=target_status,
-                current_user=responded_by,
+                current_user=responded_by, deprecation=deprecation,
             )
         except ValueError as e:
             logger.warning(
@@ -3886,6 +3912,10 @@ class WorkflowExecutor:
                 error=e,
             )
             return
+        audit_approved_lifecycle_change(
+            self._db, 'data_contract', contract_id, current_status, target_status,
+            request_id, responded_by,
+        )
         logger.info(
             "Data contract %s moved to '%s' after its status change request was approved",
             contract_id, target_status,

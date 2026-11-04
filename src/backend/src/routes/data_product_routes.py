@@ -34,7 +34,7 @@ from src.common.authorization import has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
-from src.controller.lifecycle_fields import LifecycleFieldError
+from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -58,10 +58,6 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Data Products"])
-
-
-# Audit actions for lifecycle moves (see the deprecation lifecycle PRD)
-_STATUS_AUDIT_ACTIONS = {'deprecated': 'DEPRECATE', 'retired': 'RETIRE'}
 
 
 def _deprecation_audit(payload: DeprecationPayload) -> dict:
@@ -2884,7 +2880,7 @@ async def change_product_status(
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action=_STATUS_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
+            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
             details={'product_id': product_id, 'new_status': payload.new_status,
                      **(_deprecation_audit(payload) if new_status == 'deprecated' else {})},

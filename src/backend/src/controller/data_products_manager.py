@@ -1583,7 +1583,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 "from_status": from_status,
                 "target_status": target_status,
                 "justification": justification,
-                "request_id": request_id,
                 **requested_deprecation,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change requested from {from_status} to {target_status} by {current_user}",

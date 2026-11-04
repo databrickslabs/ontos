@@ -59,7 +59,7 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.lifecycle_status import check_status_unchanged
-from src.controller.lifecycle_fields import LifecycleFieldError
+from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_products import DeprecationPayload
@@ -457,9 +457,7 @@ async def change_contract_status(
             username=current_user.username if current_user else 'anonymous',
             ip_address=request.client.host if request.client else None,
             feature='data-contracts',
-            action={'deprecated': 'DEPRECATE', 'retired': 'RETIRE'}.get(
-                new_status, 'CHANGE_STATUS'
-            ),
+            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
             details={'contract_id': contract_id, 'from': from_status, 'to': updated.status,
                      **lifecycle_audit},

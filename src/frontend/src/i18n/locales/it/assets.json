@@ -154,7 +154,39 @@
       "title": "Metric view",
       "loading": "Caricamento della metric view",
       "loadError": "Impossibile caricare la definizione della metric view.",
-      "userTokenRequired": "Questa metric view viene letta da Unity Catalog con il tuo accesso, e il tuo accesso a Databricks non è disponibile in questa sessione."
+      "userTokenRequired": "Questa metric view viene letta da Unity Catalog con il tuo accesso, e il tuo accesso a Databricks non è disponibile in questa sessione.",
+      "state": {
+        "drift": {
+          "label": "Definizione",
+          "in_sync": "Corrisponde alla baseline",
+          "drifted": "Modificata rispetto alla baseline",
+          "unknown": "Non confrontata",
+          "driftedHint": "La definizione in Unity Catalog è diversa dalla baseline in Ontos. Ontos non la modifica.",
+          "unknownHint": "Impossibile confrontare la definizione con la baseline."
+        },
+        "baseline": {
+          "recorded": "Baseline registrata il {{date}} dalla prima definizione letta; nessuna modifica è stata ancora approvata.",
+          "approved": "Baseline approvata il {{date}}.",
+          "none": "Ancora nessuna baseline.",
+          "digest": "digest {{digest}}"
+        },
+        "lastChecked": "Verificata il {{date}}",
+        "refresh": {
+          "label": "Aggiornamento",
+          "succeeded": "Riuscito",
+          "failed": "Non riuscito",
+          "running": "In esecuzione",
+          "canceled": "Annullato",
+          "unknown": "Sconosciuto",
+          "lastStarted": "Ultimo aggiornamento avviato il {{date}}",
+          "schedule": "Pianificazione: {{schedule}}",
+          "noSchedule": "Nessuna pianificazione: gli aggiornamenti vengono avviati manualmente.",
+          "openPipeline": "Apri pipeline",
+          "failedTitle": "L'ultimo aggiornamento non è riuscito",
+          "failedHint": "Controlla la pipeline per la causa.",
+          "notAvailable": "Impossibile leggere lo stato dell'aggiornamento."
+        }
+      }
     }
   },
   "explorer": {

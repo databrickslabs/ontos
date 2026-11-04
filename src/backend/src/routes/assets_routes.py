@@ -604,7 +604,8 @@ def get_asset_metric_view(
     manager=Depends(get_assets_manager),
 ):
     """The Unity Catalog metric view behind an asset: its YAML, its dimensions and
-    measures, and the concept links of the view and of each field.
+    measures, the concept links of the view and of each field, and its baseline
+    and drift state (an unparseable definition is drift ``unknown``, not an error).
 
     Unity Catalog is read as the user (on-behalf-of token), never as the app,
     so the definition is only returned to users Unity Catalog lets read it.
@@ -625,7 +626,9 @@ def get_asset_metric_view(
         db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
     )
     try:
-        return MetricViewsManager(db, links_manager).get_for_asset(asset_id, ws_client)
+        return MetricViewsManager(db, links_manager).get_for_asset(
+            asset_id, ws_client, user_email=getattr(current_user, 'email', None),
+        )
     except MetricViewNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except UserTokenRequiredError as e:

@@ -13,7 +13,13 @@ built on it, e.g.::
     measures:
       - name: Total Revenue
         expr: SUM(amount)
+
+Measures may carry a ``window`` (``order``, ``range``, ``semiadditive``,
+``offset``), joins a ``cardinality``, and the view top-level ``parameters``
+(``name``, ``data_type``, ``default``): see the YAML reference,
+https://docs.databricks.com/aws/en/metric-views/data-modeling/syntax
 """
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -24,6 +30,8 @@ logger = get_logger(__name__)
 
 # Optional keys a dimension or measure may carry besides name and expr
 _FIELD_EXTRAS = ('display_name', 'comment', 'format', 'synonyms')
+# The keys of a measure's window entry
+_WINDOW_KEYS = ('order', 'range', 'semiadditive', 'offset')
 
 # Definitions longer than this aren't parsed (the raw YAML is still shown)
 MAX_DEFINITION_LENGTH = 256 * 1024
@@ -31,8 +39,29 @@ MAX_DEFINITION_LENGTH = 256 * 1024
 MAX_JOINS = 1000
 
 
+def _scalar(value: Any) -> Any:
+    """A YAML scalar as JSON can hold it: YAML reads ``2024-01-01`` as a date."""
+    return value.isoformat() if isinstance(value, date) else value
+
+
+def _window(entries: Any) -> List[Dict[str, Any]]:
+    """A measure's window as ``[{order, range, semiadditive, offset}]`` (None when not set).
+
+    The docs define ``window`` as a list; a single mapping is read as a list of one.
+    """
+    if isinstance(entries, dict):
+        entries = [entries]
+    return [
+        {key: _scalar(entry.get(key)) for key in _WINDOW_KEYS}
+        for entry in entries if isinstance(entry, dict)
+    ] if isinstance(entries, list) else []
+
+
 def _fields(entries: Any) -> List[Dict[str, Any]]:
-    """Dimensions or measures as ``{name, expr, ...}`` dicts; entries without a name are skipped."""
+    """Dimensions or measures as ``{name, expr, ...}`` dicts; entries without a name are skipped.
+
+    A field carries ``window`` only when its definition sets one.
+    """
     fields: List[Dict[str, Any]] = []
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict) or not entry.get('name'):
@@ -41,12 +70,27 @@ def _fields(entries: Any) -> List[Dict[str, Any]]:
         for key in _FIELD_EXTRAS:
             if entry.get(key) is not None:
                 field[key] = entry[key]
+        if entry.get('window') is not None:
+            field['window'] = _window(entry['window'])
         fields.append(field)
     return fields
 
 
+def _parameters(entries: Any) -> List[Dict[str, Any]]:
+    """The top-level parameters as ``{name, data_type, default}`` (entries need a name)."""
+    return [
+        {'name': str(entry['name']), 'data_type': entry.get('data_type'),
+         'default': _scalar(entry.get('default'))}
+        for entry in (entries if isinstance(entries, list) else [])
+        if isinstance(entry, dict) and entry.get('name')
+    ]
+
+
 def _joins(entries: Any) -> List[Dict[str, Any]]:
     """Joins as ``{name, source, on, using}``, nested joins flattened after their parent.
+
+    A join carries ``cardinality`` (``many_to_one``, ``one_to_many``) only when its
+    definition sets one.
 
     Walked with a stack rather than recursion, so deep nesting can't exhaust the
     call stack; a list of joins seen before (a YAML alias, possibly to itself)
@@ -66,13 +110,16 @@ def _joins(entries: Any) -> List[Dict[str, Any]]:
         if not isinstance(entry, dict):
             continue
         using = entry.get('using')
-        joins.append({
+        join = {
             'name': entry.get('name'),
             'source': entry.get('source'),
             # YAML 1.1 reads a bare `on:` key as the boolean True
             'on': entry.get('on', entry.get(True)),
             'using': [str(c) for c in using] if isinstance(using, list) else None,
-        })
+        }
+        if entry.get('cardinality') is not None:
+            join['cardinality'] = str(entry['cardinality'])
+        joins.append(join)
         stack.append(entry.get('joins'))
     return joins
 
@@ -92,7 +139,9 @@ def parse_metric_view_definition(definition: Optional[str]) -> Optional[Dict[str
     """Parse a metric view's YAML definition.
 
     Returns ``{version, source, filter, joins, dimensions, measures,
-    materialization}`` (joins as ``{name, source, on, using}``), or None when the
+    materialization, parameters}`` (joins as ``{name, source, on, using}``, plus
+    ``cardinality`` when set; a measure with a ``window`` carries it; ``parameters``
+    is ``[]`` without any), or None when the
     definition is missing, longer than ``MAX_DEFINITION_LENGTH``, nested too
     deeply for the YAML parser, or isn't a YAML mapping. ``fields`` is read as a
     synonym of ``dimensions`` (the term the current metric view docs use).
@@ -123,6 +172,7 @@ def parse_metric_view_definition(definition: Optional[str]) -> Optional[Dict[str
         'dimensions': _fields(dimensions),
         'measures': _fields(spec.get('measures')),
         'materialization': _materialization(spec.get('materialization')),
+        'parameters': _parameters(spec.get('parameters')),
     }
 
 

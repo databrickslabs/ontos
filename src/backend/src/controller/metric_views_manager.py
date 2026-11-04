@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.metric_views import parse_metric_view_definition
+from src.controller.metric_view_baselines_manager import MetricViewBaselinesManager
+from src.controller.metric_view_refresh import read_refresh_state
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.metric_views import MetricViewRead
 from src.repositories.assets_repository import asset_repo
@@ -48,11 +50,17 @@ class MetricViewsManager:
         self._db = db
         self._links = links_manager
 
-    def get_for_asset(self, asset_id: UUID, ws_client: Optional[WorkspaceClient]) -> MetricViewRead:
+    def get_for_asset(
+        self, asset_id: UUID, ws_client: Optional[WorkspaceClient],
+        user_email: Optional[str] = None,
+    ) -> MetricViewRead:
         """The metric view an asset points at (its ``location`` is the view's FQN).
 
         ``ws_client`` is the requesting user's client, so Unity Catalog decides
-        whether they may read the definition.
+        whether they may read the definition. The definition read is checked
+        for drift against the view's baseline (``MetricViewBaselinesManager``);
+        ``user_email`` is recorded on a baseline this read creates. A
+        materialized view's refresh state is read with the same client.
 
         Raises ``MetricViewNotFoundError`` when the asset doesn't exist, isn't a
         Databricks asset with a ``catalog.schema.name`` location, or Unity
@@ -92,8 +100,14 @@ class MetricViewsManager:
             )
         definition = getattr(table, 'view_definition', None) or ''
         spec = parse_metric_view_definition(definition)
+        baseline, drift = MetricViewBaselinesManager(self._db).check(
+            fqn, spec, asset_id=asset_id, user_email=user_email,
+        )
         return MetricViewRead(
             definition=definition,
             metric_view=spec,
             links=self._links.list_for_metric_view(fqn, spec),
+            baseline=baseline,
+            drift=drift,
+            refresh=read_refresh_state(ws_client, table, spec),
         )

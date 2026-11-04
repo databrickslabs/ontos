@@ -154,7 +154,39 @@
       "title": "Metric view",
       "loading": "Chargement de la metric view",
       "loadError": "La définition de la metric view n'a pas pu être chargée.",
-      "userTokenRequired": "Cette metric view est lue depuis Unity Catalog avec votre propre accès, et votre connexion Databricks n'est pas disponible dans cette session."
+      "userTokenRequired": "Cette metric view est lue depuis Unity Catalog avec votre propre accès, et votre connexion Databricks n'est pas disponible dans cette session.",
+      "state": {
+        "drift": {
+          "label": "Définition",
+          "in_sync": "Conforme à la référence",
+          "drifted": "Modifiée depuis la référence",
+          "unknown": "Non comparée",
+          "driftedHint": "La définition dans Unity Catalog diffère de la référence dans Ontos. Ontos ne la modifie pas.",
+          "unknownHint": "La définition n'a pas pu être comparée à la référence."
+        },
+        "baseline": {
+          "recorded": "Référence enregistrée le {{date}} à partir de la première définition lue ; aucune modification n'a encore été approuvée.",
+          "approved": "Référence approuvée le {{date}}.",
+          "none": "Pas encore de référence.",
+          "digest": "empreinte {{digest}}"
+        },
+        "lastChecked": "Vérifiée le {{date}}",
+        "refresh": {
+          "label": "Actualisation",
+          "succeeded": "Réussie",
+          "failed": "Échouée",
+          "running": "En cours",
+          "canceled": "Annulée",
+          "unknown": "Inconnue",
+          "lastStarted": "Dernière actualisation lancée le {{date}}",
+          "schedule": "Planification : {{schedule}}",
+          "noSchedule": "Pas de planification : les actualisations sont lancées manuellement.",
+          "openPipeline": "Ouvrir le pipeline",
+          "failedTitle": "La dernière actualisation a échoué",
+          "failedHint": "Consultez le pipeline pour en connaître la cause.",
+          "notAvailable": "L'état de l'actualisation n'a pas pu être lu."
+        }
+      }
     }
   },
   "explorer": {

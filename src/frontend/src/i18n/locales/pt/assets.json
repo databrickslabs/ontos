@@ -154,7 +154,39 @@
       "title": "Metric view",
       "loading": "Carregando a metric view",
       "loadError": "Não foi possível carregar a definição da metric view.",
-      "userTokenRequired": "Esta metric view é lida do Unity Catalog com o seu próprio acesso, e o seu login do Databricks não está disponível nesta sessão."
+      "userTokenRequired": "Esta metric view é lida do Unity Catalog com o seu próprio acesso, e o seu login do Databricks não está disponível nesta sessão.",
+      "state": {
+        "drift": {
+          "label": "Definição",
+          "in_sync": "Igual à linha de base",
+          "drifted": "Alterada desde a linha de base",
+          "unknown": "Não comparada",
+          "driftedHint": "A definição no Unity Catalog difere da linha de base no Ontos. O Ontos não a altera.",
+          "unknownHint": "Não foi possível comparar a definição com a linha de base."
+        },
+        "baseline": {
+          "recorded": "Linha de base registrada em {{date}} a partir da primeira definição lida; nenhuma alteração foi aprovada ainda.",
+          "approved": "Linha de base aprovada em {{date}}.",
+          "none": "Ainda sem linha de base.",
+          "digest": "digest {{digest}}"
+        },
+        "lastChecked": "Verificada em {{date}}",
+        "refresh": {
+          "label": "Atualização",
+          "succeeded": "Concluída",
+          "failed": "Falhou",
+          "running": "Em execução",
+          "canceled": "Cancelada",
+          "unknown": "Desconhecida",
+          "lastStarted": "Última atualização iniciada em {{date}}",
+          "schedule": "Agendamento: {{schedule}}",
+          "noSchedule": "Sem agendamento: as atualizações são iniciadas manualmente.",
+          "openPipeline": "Abrir pipeline",
+          "failedTitle": "A última atualização falhou",
+          "failedHint": "Verifique o pipeline para ver a causa.",
+          "notAvailable": "Não foi possível ler o estado da atualização."
+        }
+      }
     }
   },
   "explorer": {

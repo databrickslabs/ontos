@@ -201,15 +201,9 @@ class JobsManager:
             job_settings_kwargs['continuous'] = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
 
         if 'parameters' in wf_def:
-            params = wf_def['parameters']
-            if isinstance(params, dict):
-                # Convert dict to list of JobParameter objects with default values
-                job_settings_kwargs['parameters'] = [
-                    jobs.JobParameter(name=key, default=str(value))
-                    for key, value in params.items()
-                ]
-            else:
-                job_settings_kwargs['parameters'] = params
+            job_settings_kwargs['parameters'] = self._build_persisted_job_parameters(
+                workflow_id, wf_def
+            )
 
         if 'tags' in wf_def:
             job_settings_kwargs['tags'] = wf_def['tags']
@@ -319,15 +313,9 @@ class JobsManager:
             job_settings.continuous = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
         
         if 'parameters' in wf_def:
-            params = wf_def['parameters']
-            if isinstance(params, dict):
-                # Convert dict to list of JobParameter objects with default values
-                job_settings.parameters = [
-                    jobs.JobParameter(name=key, default=str(value))
-                    for key, value in params.items()
-                ]
-            else:
-                job_settings.parameters = params
+            job_settings.parameters = self._build_persisted_job_parameters(
+                workflow_id, wf_def
+            )
         
         if 'tags' in wf_def:
             job_settings.tags = wf_def['tags']
@@ -494,10 +482,51 @@ class JobsManager:
             configuration=configuration
         )
         self._db.commit()
+
+        # A Databricks schedule starts the job directly and therefore does not pass
+        # through run_job(), where Ontos normally injects saved configuration and
+        # app database parameters. Keep the installed job defaults in sync so
+        # scheduled runs receive the same effective parameters as manual runs.
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is not None:
+            wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
+            if 'parameters' in wf_def:
+                self._client.jobs.update(
+                    job_id=int(installation.job_id),
+                    new_settings=jobs.JobSettings(
+                        parameters=self._build_persisted_job_parameters(
+                            workflow_id, wf_def
+                        )
+                    ),
+                )
         
         # Return as Pydantic model
         config_dict = workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
         return WorkflowConfiguration(workflow_id=workflow_id, configuration=config_dict or {})
+
+    def _build_persisted_job_parameters(
+        self, workflow_id: str, wf_def: Dict[str, Any]
+    ) -> Any:
+        """Build job defaults that also work when Databricks starts a schedule.
+
+        YAML defaults define the parameter set. Saved user configuration and
+        auto-detected app database values replace those defaults, matching the
+        parameters supplied by :meth:`run_job` for an Ontos-initiated run.
+        """
+        params = wf_def.get('parameters')
+        if not isinstance(params, dict):
+            return params
+
+        effective = self.get_merged_job_parameters(workflow_id)
+        return [
+            jobs.JobParameter(
+                name=name,
+                default=effective.get(name, str(yaml_default)),
+            )
+            for name, yaml_default in params.items()
+        ]
     
     def get_merged_job_parameters(self, workflow_id: str, ad_hoc_params: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """Merge saved configuration with ad-hoc parameters for job execution.

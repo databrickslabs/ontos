@@ -7,7 +7,9 @@ The same Read/Write user, through ``PUT /api/data-products/{id}`` and through
 - a draft they create through the chat: they are its draft owner, so PUT lets
   them edit it, as a draft created with ``POST /api/data-products``;
 - a create and an update fire the same on_create / on_update workflows for the
-  user, through the chat and through the REST routes.
+  user, through the chat and through the REST routes;
+- an ODPS import and an unpublish fire on_create / on_unpublish for the user too (the
+  manager fires them, whatever the entry point).
 """
 import json
 import uuid
@@ -183,3 +185,27 @@ def test_the_chat_and_the_routes_fire_the_same_workflows(
     expected = sorted([(chat_id, writer.email), (rest_id, writer.email)])
     assert _runs(db_session, on_create) == expected
     assert _runs(db_session, on_update) == expected
+
+
+def test_an_odps_import_and_an_unpublish_fire_their_workflows(client, db_session, writer):
+    # The manager fires them, so the routes that never did (the import) do now.
+    on_create = _workflow(db_session, 'on_create')
+    on_unpublish = _workflow(db_session, 'on_unpublish')
+
+    name = f'Imported {uuid.uuid4().hex[:6]}'
+    product = {'apiVersion': 'v1.0.0', 'kind': 'DataProduct', 'id': str(uuid.uuid4()),
+               'name': name, 'version': '1.0.0', 'status': 'draft'}
+    resp = client.post('/api/data-products/upload', files={
+        'files': ('product.json', json.dumps(product).encode(), 'application/json'),
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()['created'] == 1, resp.text
+    imported = db_session.query(DataProductDb).filter_by(name=name).one().id
+    assert _runs(db_session, on_create) == [(imported, writer.email)]
+
+    # on_unpublish fires only for a published product
+    db_session.get(DataProductDb, imported).publication_scope = 'organization'
+    db_session.commit()
+    resp = client.post(f'/api/data-products/{imported}/unpublish')
+    assert resp.status_code == 200, resp.text
+    assert _runs(db_session, on_unpublish) == [(imported, writer.email)]

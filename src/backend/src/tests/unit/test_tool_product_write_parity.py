@@ -166,9 +166,9 @@ class TestCreateAndDelete:
         seen = {}
         delete = world.products.delete_product
 
-        def _delete(product_id, user=None):
+        def _delete(product_id, user=None, **kwargs):
             seen['user'] = user
-            return delete(product_id, user=user)
+            return delete(product_id, user=user, **kwargs)
 
         monkeypatch.setattr(world.products, 'delete_product', _delete)
         res = _call(world, ADMIN, 'delete_data_product', product_id=world.row.id)

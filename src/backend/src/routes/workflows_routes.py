@@ -1237,7 +1237,19 @@ async def resume_workflow_execution(
         reason = body.get('reason')
         
         user_email = current_user.email if current_user else None
-        
+
+        # require_all (#1119): only the step's approvers decide it, through
+        # handle-approval; an admin may cancel the execution instead
+        if executor.paused_at_required_approval(execution_id):
+            raise HTTPException(
+                status_code=403,
+                # code: translated by the UI (workflows:view.messages.*)
+                detail={
+                    'code': 'approval_not_an_approver',
+                    'message': "Only the approvers of this step can decide it.",
+                },
+            )
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1546,11 +1558,13 @@ def _mark_step_notifications_handled(
     step_id: Optional[str],
     approved: bool,
     user_email: Optional[str],
+    decision: Optional[str] = None,
 ) -> None:
     """Mark the unread approval notifications of ``step_id`` as handled.
 
     Notifications of later steps, created while the workflow resumed, stay
-    open for their approvers.
+    open for their approvers. ``decision`` overrides approved / rejected
+    (``cancelled`` when an admin cancels the step).
     """
     notifications = db.query(NotificationDb).filter(
         NotificationDb.action_type == 'workflow_approval',
@@ -1570,7 +1584,7 @@ def _mark_step_notifications_handled(
                 notif.read = True
                 # Mark the action as handled with decision info
                 payload['handled'] = True
-                payload['decision'] = 'approved' if approved else 'rejected'
+                payload['decision'] = decision or ('approved' if approved else 'rejected')
                 payload['handled_by'] = user_email
                 payload['handled_at'] = datetime.utcnow().isoformat()
                 notif.action_payload = json.dumps(payload)
@@ -1871,6 +1885,59 @@ async def handle_workflow_approval(
 # Execution Administration Endpoints
 # ============================================================================
 
+def _cancel_paused_approval(
+    db: Session,
+    request: Request,
+    audit_manager: Any,
+    current_user: Optional[UserInfo],
+    executor: WorkflowExecutor,
+    execution_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Cancel an execution paused at an approval step: an admin override (#1119).
+
+    Admins may cancel a waiting approval, never decide it for the approvers:
+    the step ends as failed with reason ``cancelled_by_admin``, the workflow
+    follows its ``on_fail`` (so the requester is told when the workflow does
+    so), the step's open approval notifications are handled as ``cancelled``
+    and the cancel is audited as an override. A later decision gets 409.
+    Returns None when the execution isn't paused at an approval step.
+    """
+    cancelled_by = (current_user.email or current_user.username) if current_user else None
+    step_id = _pending_step_id(db, execution_id)
+    result = executor.cancel_paused_approval(execution_id, cancelled_by=cancelled_by)
+    if result is None:
+        return None
+    _mark_step_notifications_handled(
+        db, execution_id, step_id, False, cancelled_by, decision='cancelled',
+    )
+    db.commit()
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature='process-workflows',
+        action='CANCEL_EXECUTION',
+        success=True,
+        details={
+            'execution_id': execution_id, 'override': True,
+            'reason': 'cancelled_by_admin', 'step_id': step_id,
+            'status': result.status.value,
+        },
+    )
+    logger.info(
+        "Approval step %s of execution %s cancelled by %s, now %s",
+        step_id, execution_id, cancelled_by, result.status.value,
+    )
+    return {
+        'execution_id': result.id,
+        'status': result.status.value,
+        # code: translated by the UI (workflows:view.messages.*)
+        'code': 'cancelled_by_admin',
+        'params': {'status': result.status.value},
+        'message': "Approval cancelled; the workflow followed its failure path",
+    }
+
+
 @router.post("/executions/{execution_id}/cancel")
 async def cancel_execution(
     execution_id: str,
@@ -1878,14 +1945,24 @@ async def cancel_execution(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    executor: WorkflowExecutor = Depends(get_workflow_executor),
     _: bool = Depends(PermissionChecker('process-workflows', FeatureAccessLevel.ADMIN)),
 ) -> Dict[str, Any]:
     """Cancel a running or paused workflow execution.
     
     Requires ADMIN permission. Running and paused executions can be cancelled.
+    An execution paused at an approval step isn't just stopped: the step fails
+    with reason ``cancelled_by_admin`` and the workflow follows its ``on_fail``
+    (#1119), see ``_cancel_paused_approval``.
     """
     user_email = current_user.email if current_user else None
-    
+
+    cancelled = _cancel_paused_approval(
+        db, request, audit_manager, current_user, executor, execution_id,
+    )
+    if cancelled is not None:
+        return cancelled
+
     result = workflow_execution_repo.cancel(db, execution_id, cancelled_by=user_email)
     
     if not result:

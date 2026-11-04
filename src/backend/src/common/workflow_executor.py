@@ -206,6 +206,8 @@ class StepHandler(ABC):
 
 # Step error code of an approval rejected without a reason
 APPROVAL_REJECTED = 'approval_rejected'
+# An admin cancelled a paused approval (#1119): the step's reason and error code
+APPROVAL_CANCELLED_BY_ADMIN = 'cancelled_by_admin'
 
 
 def approver_key(target: str, role_id: Optional[str]) -> str:
@@ -2994,6 +2996,90 @@ class WorkflowExecutor:
         decisions = data.get('decisions') if isinstance(data, dict) else None
         return [d for d in decisions if isinstance(d, dict)] if isinstance(decisions, list) else []
 
+    def _paused_approval(
+        self, execution_id: str, *, lock: bool = False,
+    ) -> Optional[Tuple[Any, Optional[Any], Dict[str, Any]]]:
+        """The approval step an execution is paused at: (step, pause record,
+        the record's data), or None when it isn't paused at an approval step.
+
+        ``lock`` locks the execution row until the transaction ends, so two
+        decisions (or a decision and a cancel) are taken one after the other.
+        """
+        query = self._db.query(WorkflowExecutionDb).filter(
+            WorkflowExecutionDb.id == execution_id,
+        )
+        execution = (query.with_for_update() if lock else query).first()
+        if execution is None or execution.status != 'paused' or not execution.current_step_id:
+            return None
+        step = self._db.query(WorkflowStepDb).filter(
+            WorkflowStepDb.workflow_id == execution.workflow_id,
+            WorkflowStepDb.step_id == execution.current_step_id,
+        ).first()
+        if step is None or step.step_type != 'approval':
+            return None
+        record = self._approval_pause_record(execution_id, step)
+        try:
+            data = json.loads(record.result_data) if record and record.result_data else {}
+        except (TypeError, ValueError):
+            data = {}
+        return step, record, data if isinstance(data, dict) else {}
+
+    @staticmethod
+    def _requires_every_approver(step: Any, pause_data: Dict[str, Any]) -> bool:
+        """``require_all`` of a paused approval step: from the pause record,
+        else from the step's config."""
+        if 'require_all' in pause_data:
+            require_all = pause_data.get('require_all')
+        else:
+            try:
+                require_all = (json.loads(step.config or '{}') or {}).get('require_all')
+            except (TypeError, ValueError, AttributeError):
+                require_all = False
+        return require_all is True or str(require_all).strip().lower() == 'true'
+
+    def paused_at_required_approval(self, execution_id: str) -> bool:
+        """Whether the execution waits at a ``require_all`` approval step,
+        which only its approvers decide (#1119)."""
+        paused = self._paused_approval(execution_id)
+        if paused is None:
+            return False
+        step, record, data = paused
+        return record is not None and self._requires_every_approver(step, data)
+
+    def cancel_paused_approval(
+        self, execution_id: str, *, cancelled_by: Optional[str],
+    ) -> Optional[WorkflowExecution]:
+        """An admin cancels an execution paused at an approval step (#1119).
+
+        The admin decides for no approver: the step ends as failed with
+        reason ``cancelled_by_admin`` and the execution follows the step's
+        ``on_fail``, as after a rejection, so whatever the workflow does then
+        (e.g. tell the requester) runs once. The step's decision record keeps
+        the approvers' decisions so far and says who cancelled.
+
+        Returns None when the execution isn't paused at an approval step (the
+        caller cancels it as before).
+        """
+        if self._paused_approval(execution_id, lock=True) is None:
+            return None
+        by = cancelled_by or 'unknown'
+        return self.resume_workflow(
+            execution_id,
+            False,
+            result_data={
+                'approval_result': 'cancelled',
+                'decision': 'cancelled',
+                'reason': APPROVAL_CANCELLED_BY_ADMIN,
+                'cancelled_by': cancelled_by,
+                'responded_by': None,
+                # The UI translates the code, the English text stays in error_message
+                'error_code': APPROVAL_CANCELLED_BY_ADMIN,
+                'error_params': {'by': by},
+            },
+            user_email=cancelled_by,
+            failure_message=f"Cancelled by an admin ({by})",
+        )
+
     def record_required_approval(
         self,
         execution_id: str,
@@ -3027,34 +3113,11 @@ class WorkflowExecutor:
         targets); nothing is recorded for the last three. Also
         ``pending_approvers`` (how many targets) and ``decisions``.
         """
-        execution = self._db.query(WorkflowExecutionDb).filter(
-            WorkflowExecutionDb.id == execution_id,
-        ).with_for_update().first()
-        if execution is None or execution.status != 'paused' or not execution.current_step_id:
+        paused = self._paused_approval(execution_id, lock=True)
+        if paused is None:
             return None
-        step = self._db.query(WorkflowStepDb).filter(
-            WorkflowStepDb.workflow_id == execution.workflow_id,
-            WorkflowStepDb.step_id == execution.current_step_id,
-        ).first()
-        if step is None or step.step_type != 'approval':
-            return None
-        record = self._approval_pause_record(execution_id, step)
-        if record is None:
-            return None
-        try:
-            data = json.loads(record.result_data) if record.result_data else {}
-        except (TypeError, ValueError):
-            data = {}
-        if not isinstance(data, dict):
-            data = {}
-        if 'require_all' in data:
-            require_all = data.get('require_all')
-        else:
-            try:
-                require_all = (json.loads(step.config or '{}') or {}).get('require_all')
-            except (TypeError, ValueError):
-                require_all = False
-        if require_all is not True and str(require_all).strip().lower() != 'true':
+        step, record, data = paused
+        if record is None or not self._requires_every_approver(step, data):
             return None
 
         # One entry per target: the owners of a business role share its id
@@ -3109,6 +3172,7 @@ class WorkflowExecutor:
         *,
         result_data: Optional[Dict[str, Any]] = None,
         user_email: Optional[str] = None,
+        failure_message: Optional[str] = None,
     ) -> Optional[WorkflowExecution]:
         """Resume a paused workflow after approval/external action.
         
@@ -3121,6 +3185,8 @@ class WorkflowExecutor:
             step_result: Result of the paused step (True=approved, False=rejected)
             result_data: Additional result data from the approval response
             user_email: Email of user who responded to the approval
+            failure_message: Error text of a failed step instead of the
+                reason (e.g. an admin's cancel)
             
         Returns:
             Updated WorkflowExecution, or None if execution not found/not paused
@@ -3178,7 +3244,9 @@ class WorkflowExecutor:
                 ),
             },
             # The approve routes send reason None when the approver wrote none
-            error_message=None if step_result else ((result_data or {}).get('reason') or 'Request denied'),
+            error_message=None if step_result else (
+                failure_message or (result_data or {}).get('reason') or 'Request denied'
+            ),
             duration_ms=0,  # Approval duration not tracked this way
         )
         
@@ -3334,7 +3402,9 @@ class WorkflowExecutor:
                 final_status = ExecutionStatus.SUCCEEDED
             else:
                 final_status = ExecutionStatus.FAILED
-                error_message = (result_data or {}).get('reason') or 'Request denied'
+                error_message = (
+                    failure_message or (result_data or {}).get('reason') or 'Request denied'
+                )
         
         while next_step_id:
             step = steps_by_id.get(next_step_id)

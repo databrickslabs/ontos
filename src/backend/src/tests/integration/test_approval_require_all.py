@@ -336,3 +336,243 @@ class TestWithoutRequireAll:
 
         assert late.status_code == 409
         assert late.json()['detail']['code'] == 'approval_no_longer_pending'
+
+
+REQUESTER = 'requester@example.com'
+
+
+def _paused_with_notice(client, as_user, db_session, approvers, require_all=True):
+    """Paused at an approval whose ``on_fail`` tells the requester, then fails."""
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    as_user(ADMIN)
+    response = client.post('/api/workflows', json={
+        'name': f'Cancel {uuid.uuid4().hex[:8]}',
+        'trigger': {'type': 'manual', 'entity_types': ['data_product']},
+        'is_active': True,
+        'steps': [
+            {
+                'step_id': 'approve', 'name': 'Approve', 'step_type': 'approval',
+                'config': {'approvers': approvers, 'require_all': require_all},
+                'on_pass': 'ok', 'on_fail': 'tell',
+            },
+            {
+                'step_id': 'tell', 'name': 'Tell the requester', 'step_type': 'notification',
+                'config': {
+                    'recipients': 'requester', 'template': 'request_rejected',
+                    'custom_message': 'Your request was not approved.',
+                },
+                'on_pass': 'no',
+            },
+            {'step_id': 'ok', 'name': 'Approved', 'step_type': 'pass'},
+            {'step_id': 'no', 'name': 'Rejected', 'step_type': 'fail'},
+        ],
+    })
+    assert response.status_code == 200, response.text
+    response = client.post(
+        f"/api/workflows/{response.json()['id']}/execute",
+        params={'entity_type': 'data_product', 'entity_id': str(uuid.uuid4())},
+    )
+    assert response.status_code == 200, response.text
+    execution_id = response.json()['id']
+    assert response.json()['status'] == 'paused'
+    # The admin started it; the requester is someone else
+    execution = db_session.get(WorkflowExecutionDb, execution_id)
+    context = json.loads(execution.trigger_context)
+    execution.trigger_context = json.dumps({**context, 'user_email': REQUESTER})
+    db_session.flush()
+    return execution_id
+
+
+def _cancel(client, as_user, identity, execution_id):
+    as_user(identity)
+    return client.post(f'/api/workflows/executions/{execution_id}/cancel')
+
+
+def _approval_notifications(db_session, execution_id):
+    from src.db_models.notifications import NotificationDb
+
+    db_session.expire_all()
+    rows = db_session.query(NotificationDb).filter_by(action_type='workflow_approval').all()
+    return {
+        n.recipient: (n.read, json.loads(n.action_payload or '{}')) for n in rows
+        if json.loads(n.action_payload or '{}').get('execution_id') == execution_id
+    }
+
+
+def _requester_notices(db_session):
+    from src.db_models.notifications import NotificationDb
+
+    db_session.expire_all()
+    return db_session.query(NotificationDb).filter(
+        NotificationDb.recipient == REQUESTER,
+        NotificationDb.action_type.is_(None) | (NotificationDb.action_type != 'workflow_approval'),
+    ).all()
+
+
+def _cancel_audits(db_session, execution_id):
+    from src.db_models.audit_log import AuditLogDb
+
+    db_session.expire_all()
+    rows = db_session.query(AuditLogDb).filter_by(
+        feature='process-workflows', action='CANCEL_EXECUTION',
+    ).all()
+    details = [
+        r.details if isinstance(r.details, dict) else json.loads(r.details or '{}')
+        for r in rows
+    ]
+    return [d for d in details if d.get('execution_id') == execution_id]
+
+
+class TestAdminCancel:
+    """Admins may cancel a paused approval, never decide it (#1119)."""
+
+    def test_cancel_follows_on_fail_and_records_the_override(
+        self, client, as_user, db_session,
+    ):
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com',
+        )
+        assert _decide(client, as_user, ANA, execution_id).json()['status'] == 'paused'
+
+        response = _cancel(client, as_user, ADMIN, execution_id)
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        # The status is the one on_fail leads to (tell the requester, then fail)
+        assert body['status'] == 'failed'
+        assert body['code'] == 'cancelled_by_admin'
+        assert _status(db_session, execution_id) == 'failed'
+        # The on_fail path ran once: the requester is told
+        assert len(_requester_notices(db_session)) == 1
+        # The step ended as failed, with the reason and who cancelled; the
+        # admin filled no approver's target
+        decision = _approval_records(db_session, execution_id)[-1]
+        assert decision['approval_result'] == 'cancelled'
+        assert decision['decision'] == 'cancelled'
+        assert decision['reason'] == 'cancelled_by_admin'
+        assert decision['cancelled_by'] == 'test@example.com'
+        assert decision['error_code'] == 'cancelled_by_admin'
+        assert [(d['target'], d['decided_by']) for d in decision['decisions']] == [
+            ('ana@example.com', 'ana@example.com'),
+        ]
+        # Ben's open notification is handled as cancelled; Ana's keeps her decision
+        notifications = _approval_notifications(db_session, execution_id)
+        assert notifications['ben@example.com'][0] is True
+        assert notifications['ben@example.com'][1]['decision'] == 'cancelled'
+        assert notifications['ben@example.com'][1]['handled_by'] == 'test@example.com'
+        assert notifications['ana@example.com'][1]['decision'] == 'approved'
+        # Audited as an override
+        audits = _cancel_audits(db_session, execution_id)
+        assert len(audits) == 1
+        assert audits[0]['override'] is True
+        assert audits[0]['reason'] == 'cancelled_by_admin'
+        assert audits[0]['step_id'] == 'approve'
+
+    def test_the_step_failed_record(self, client, as_user, db_session):
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com',
+        )
+
+        assert _cancel(client, as_user, ADMIN, execution_id).status_code == 200
+
+        db_session.expire_all()
+        rows = db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution_id, step_key='approve',
+        ).all()
+        # The pause record, then the decision record: failed
+        decided = [r for r in rows if 'approval_result' in (r.result_data or '')]
+        assert [(r.status, r.passed) for r in decided] == [('failed', False)]
+        steps = {r.step_key for r in db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution_id,
+        ).all()}
+        assert steps == {'approve', 'tell', 'no'}
+
+    def test_a_late_approver_gets_409(self, client, as_user, db_session):
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com',
+        )
+        assert _cancel(client, as_user, ADMIN, execution_id).status_code == 200
+
+        late = _decide(client, as_user, BEN, execution_id)
+
+        assert late.status_code == 409
+        assert late.json()['detail']['code'] == 'approval_no_longer_pending'
+
+    def test_without_require_all_cancel_also_follows_on_fail(
+        self, client, as_user, db_session,
+    ):
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com', require_all=False,
+        )
+
+        response = _cancel(client, as_user, ADMIN, execution_id)
+
+        assert response.json()['status'] == 'failed', response.text
+        assert len(_requester_notices(db_session)) == 1
+        assert _unread_recipients(db_session, execution_id) == set()
+        assert 'decisions' not in _approval_records(db_session, execution_id)[-1]
+
+    def test_someone_who_is_not_an_admin_cannot_cancel(self, client, as_user, db_session):
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com',
+        )
+
+        assert _cancel(client, as_user, ANA, execution_id).status_code == 403
+
+    def test_an_admin_cannot_force_a_decision(self, client, as_user, db_session):
+        """The execution view's force approve / reject (``/resume``) decides
+        for the approvers: refused with require_all."""
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com',
+        )
+        as_user(ADMIN)
+
+        response = client.post(
+            f'/api/workflows/executions/{execution_id}/resume', json={'approved': True},
+        )
+
+        assert response.status_code == 403
+        assert response.json()['detail']['code'] == 'approval_not_an_approver'
+
+    def test_without_require_all_an_admin_still_forces_a_decision(
+        self, client, as_user, db_session,
+    ):
+        execution_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com', require_all=False,
+        )
+        as_user(ADMIN)
+
+        response = client.post(
+            f'/api/workflows/executions/{execution_id}/resume', json={'approved': True},
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()['status'] == 'succeeded'
+
+
+class TestCancelNotAtAnApproval:
+    """A running execution, or one paused elsewhere, is cancelled as before."""
+
+    @pytest.mark.parametrize('status, step', [('running', None), ('paused', 'ok')])
+    def test_status_cancelled(self, client, as_user, db_session, status, step):
+        from src.db_models.process_workflows import WorkflowExecutionDb
+
+        paused_id = _paused_with_notice(
+            client, as_user, db_session, 'ana@example.com,ben@example.com',
+        )
+        execution = db_session.get(WorkflowExecutionDb, paused_id)
+        execution.status, execution.current_step_id = status, step
+        db_session.flush()
+
+        response = _cancel(client, as_user, ADMIN, paused_id)
+
+        assert response.status_code == 200, response.text
+        assert response.json()['status'] == 'cancelled'
+        assert 'code' not in response.json()
+        assert _status(db_session, paused_id) == 'cancelled'
+        assert _requester_notices(db_session) == []
+        audits = _cancel_audits(db_session, paused_id)
+        assert len(audits) == 1 and 'override' not in audits[0]

@@ -325,6 +325,89 @@ class TestResume:
         assert [d['target'] for d in recorded[0]['decisions']] == ['a@x.com', 'b@x.com']
 
 
+class TestCancelPausedApproval:
+    """An admin cancels a paused approval (#1119): the step fails with reason
+    ``cancelled_by_admin`` and the execution follows ``on_fail``."""
+
+    def test_follows_on_fail_with_the_reason(self, db_session):
+        execution = _paused(db_session, pause_data={
+            'require_all': True, 'resolved_targets': _users(('a@x.com', None), ('b@x.com', None)),
+        })
+        _record(db_session, execution, True, 'a@x.com', user='a@x.com')
+
+        with patch.object(WorkflowExecutor, '_handle_workflow_completion') as completion:
+            result = WorkflowExecutor(db_session).cancel_paused_approval(
+                execution.id, cancelled_by='admin@x.com',
+            )
+
+        assert result.status.value == 'failed'
+        completion.assert_called_once()
+        assert completion.call_args.kwargs['approved'] is False
+        record = db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution.id, step_key='approve', status='failed',
+        ).one()
+        data = json.loads(record.result_data)
+        assert record.passed is False
+        assert (data['approval_result'], data['decision'], data['reason']) == (
+            'cancelled', 'cancelled', 'cancelled_by_admin')
+        assert data['cancelled_by'] == 'admin@x.com'
+        assert data['responded_by'] is None
+        assert (data['error_code'], data['error_params']) == (
+            'cancelled_by_admin', {'by': 'admin@x.com'})
+        # The approvers' decisions so far; the admin filled no target
+        assert [d['decided_by'] for d in data['decisions']] == ['a@x.com']
+        assert record.error_message == 'Cancelled by an admin (admin@x.com)'
+        # The fail step ran
+        assert db_session.query(WorkflowStepExecutionDb).filter_by(
+            execution_id=execution.id, step_key='no',
+        ).count() == 1
+
+    def test_the_reason_is_the_execution_error_without_on_fail(self, db_session):
+        execution = _paused(db_session, pause_data={'require_all': False})
+        step = db_session.query(WorkflowStepDb).filter_by(
+            workflow_id=execution.workflow_id, step_id='approve',
+        ).one()
+        step.on_fail = None
+        db_session.flush()
+
+        result = WorkflowExecutor(db_session).cancel_paused_approval(
+            execution.id, cancelled_by='admin@x.com',
+        )
+
+        assert result.status.value == 'failed'
+        assert result.error_message == 'Cancelled by an admin (admin@x.com)'
+
+    @pytest.mark.parametrize('kwargs', [
+        {'status': 'running'}, {'status': 'succeeded'}, {'step_type': 'notification'},
+    ])
+    def test_not_paused_at_an_approval(self, db_session, kwargs):
+        execution = _paused(db_session, pause_data={'require_all': True}, **kwargs)
+
+        assert WorkflowExecutor(db_session).cancel_paused_approval(
+            execution.id, cancelled_by='admin@x.com',
+        ) is None
+        db_session.refresh(execution)
+        assert execution.status == kwargs.get('status', 'paused')
+
+
+class TestPausedAtRequiredApproval:
+    @pytest.mark.parametrize('pause_data, kwargs, expected', [
+        ({'require_all': True}, {}, True),
+        ({'require_all': 'true'}, {}, True),
+        ({}, {'config': {'require_all': True}}, True),
+        ({'require_all': False}, {'config': {'require_all': True}}, False),
+        ({}, {}, False),
+        ({'require_all': True}, {'status': 'running'}, False),
+        ({'require_all': True}, {'step_type': 'notification'}, False),
+        (None, {'config': {'require_all': True}}, False),
+    ])
+    def test_cases(self, db_session, pause_data, kwargs, expected):
+        execution = _paused(db_session, pause_data=pause_data, **kwargs)
+
+        assert WorkflowExecutor(db_session).paused_at_required_approval(
+            execution.id) is expected
+
+
 def _manager(roles):
     settings_manager = MagicMock()
     settings_manager.list_app_roles.return_value = roles

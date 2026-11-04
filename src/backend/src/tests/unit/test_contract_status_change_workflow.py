@@ -41,6 +41,15 @@ DEFAULT_WORKFLOWS = Path(__file__).resolve().parents[2] / 'data' / 'default_work
 UPGRADE_KEY = 'default_workflow_added_status_change_request_data_contract'
 
 
+@pytest.fixture(autouse=True)
+def audited(monkeypatch):
+    # An approved deprecation is audited (#1042) in a session of its own, whose
+    # commit would keep this test's rows in the shared test database.
+    entries = []
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: entries.append(kw))
+    return entries
+
+
 def _contract(db, status='active'):
     contract = DataContractDb(
         id=str(uuid.uuid4()), name=f'c-{uuid.uuid4().hex[:8]}', version='1.0.0', status=status,
@@ -149,11 +158,7 @@ def test_it_goes_through_the_contracts_transition_status(db_session):
     )
 
 
-def test_an_approval_applies_the_requested_deprecation_and_audits_it(
-    db_session, monkeypatch,
-):
-    audited = []
-    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: audited.append(kw))
+def test_an_approval_applies_the_requested_deprecation_and_audits_it(db_session, audited):
     contract, replacement = _contract(db_session), _contract(db_session)
     sunset = utc_today() + timedelta(days=30)
 

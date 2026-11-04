@@ -5,10 +5,10 @@ Tools for searching, creating, updating, and deleting data products.
 """
 
 import json
-from contextlib import contextmanager
 import uuid
 from typing import Any, Dict, List, Optional
 from src.common.features import FeatureAccessLevel
+from src.tools.write_audit import audit_change, audited, caller_email as _caller_email
 from src.tools import read_access
 from src.tools import visibility as vis
 
@@ -292,39 +292,16 @@ DATA_PRODUCTS_FEATURE_ID = "data-products"
 PRODUCT_EDIT_NOT_ALLOWED_CODE = "product_edit_not_allowed"
 
 
-def _caller_email(ctx: ToolContext) -> Optional[str]:
-    return ctx.caller.email if ctx.caller else None
-
-
 def _audit_change(
     ctx: ToolContext, tool_name: str, action: str, success: bool, details: Dict[str, Any]
 ) -> None:
     """Write the data-products audit entry of the REST route doing the same change."""
-    # The module, not the function, so tests can replace log_system_action.
-    from src.controller import audit_manager
-
-    caller = ctx.caller
-    audit_manager.log_system_action(
-        username=(caller.email or caller.auth_path) if caller else "unknown",
-        feature=DATA_PRODUCTS_FEATURE_ID,
-        action=action,
-        success=success,
-        details={
-            **details,
-            "tool_name": tool_name,
-            "auth_path": caller.auth_path if caller else None,
-        },
-    )
+    audit_change(ctx, DATA_PRODUCTS_FEATURE_ID, tool_name, action, success, details)
 
 
-@contextmanager
 def _audited(ctx: ToolContext, tool_name: str, action: str, details: Dict[str, Any]):
     """Audit the change in the block once it ends: failed unless it sets ``success``."""
-    outcome = {"success": False}
-    try:
-        yield outcome
-    finally:
-        _audit_change(ctx, tool_name, action, outcome["success"], details)
+    return audited(ctx, DATA_PRODUCTS_FEATURE_ID, tool_name, action, details)
 
 
 def _transition_status(

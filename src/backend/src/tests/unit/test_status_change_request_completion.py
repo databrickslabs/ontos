@@ -311,3 +311,79 @@ def test_an_approved_deprecation_applies_the_requested_sunset_date_and_replaceme
     assert product.deprecation_reason == 'Moving to v2'
     assert product.sunset_date.isoformat() == sunset
     assert product.replacement_product_id == replacement.id
+
+
+def _complete_request(db, product, **entity_data):
+    context = TriggerContext(
+        entity_type='data_product', entity_id=product.id, entity_name=product.name,
+        trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
+        from_status=product.status, to_status='deprecated',
+        entity_data={'target_status': 'deprecated', **entity_data},
+    )
+    workflow = SimpleNamespace(
+        name='Status Change Request',
+        trigger=SimpleNamespace(type=TriggerType.ON_REQUEST_STATUS_CHANGE),
+    )
+    WorkflowExecutor(db)._handle_workflow_completion(
+        trigger_context=context, workflow=workflow, succeeded=True,
+        responded_by='approver@example.com', approved=True,
+    )
+
+
+def _log_request(db, product, request_id, justification, **requested):
+    from src.controller.change_log_manager import change_log_manager
+
+    return change_log_manager.log_change_with_details(
+        db, entity_type='data_product', entity_id=product.id,
+        action='status_change_requested', username='requester@example.com',
+        details={'target_status': 'deprecated', 'justification': justification,
+                 'request_id': request_id, **requested},
+    )
+
+
+def test_a_synchronous_run_does_not_take_an_earlier_requests_details(db_session):
+    """The run completes before its request is logged: an earlier (denied) request
+    with a sunset date and a replacement must not lend them to this one."""
+    from datetime import timedelta
+
+    from src.controller.lifecycle_fields import utc_today
+
+    product, replacement = _product(db_session), _product(db_session)
+    _log_request(
+        db_session, product, 'req-old', 'Old reason',
+        sunset_date=(utc_today() + timedelta(days=9)).isoformat(),
+        replacement_id=replacement.id,
+    )
+
+    _complete_request(db_session, product, justification='New reason', request_id='req-new')
+
+    db_session.refresh(product)
+    assert product.status == 'deprecated'
+    assert (product.deprecation_reason, product.sunset_date, product.replacement_product_id) == (
+        'New reason', None, None,
+    )
+
+
+def test_a_run_completed_later_reads_its_own_logged_request(db_session):
+    """A payload without the details (e.g. an older run) takes them from the
+    log entry of its own request, not from the latest one."""
+    from datetime import timedelta
+
+    from src.controller.lifecycle_fields import utc_today
+
+    product, replacement = _product(db_session), _product(db_session)
+    sunset = utc_today() + timedelta(days=12)
+    own = _log_request(
+        db_session, product, 'req-1', 'Own reason',
+        sunset_date=sunset.isoformat(), replacement_id=replacement.id,
+    )
+    later = _log_request(db_session, product, 'req-2', 'Later reason')
+    own.timestamp = later.timestamp - timedelta(minutes=5)
+    db_session.flush()
+
+    _complete_request(db_session, product, request_id='req-1')
+
+    db_session.refresh(product)
+    assert (product.deprecation_reason, product.sunset_date, product.replacement_product_id) == (
+        'Own reason', sunset, replacement.id,
+    )

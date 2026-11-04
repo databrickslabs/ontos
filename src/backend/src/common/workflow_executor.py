@@ -3779,29 +3779,35 @@ class WorkflowExecutor:
 
         A requested deprecation uses the request's justification as its
         reason, as handle-status-change does, and its sunset date and
-        replacement when the requester gave them: from the run's payload,
-        else from the request's change log entry.
+        replacement when the requester gave them. They come from the run's
+        payload, which carries the request's id: a run that completes at once
+        (no approval step) does so before the request's change log entry is
+        written, so only that request's own entry fills what the payload
+        lacks, never an earlier request's. A payload without an id (a run
+        started before requests had one) falls back to the latest request.
         """
         from src.controller.lifecycle_fields import (
-            deprecation_details_from_strings, requested_deprecation,
+            DeprecationDetails, deprecation_details_from_strings, requested_deprecation,
         )
 
-        logged_request_id, deprecation = requested_deprecation(
-            self._db, entity_type, entity_id, target_status
-        )
         entity_data = trigger_context.entity_data or {}
-        request_id = entity_data.get('request_id') or logged_request_id
-        if entity_data.get('justification'):
-            try:
-                deprecation = deprecation_details_from_strings(
-                    entity_data.get('justification'),
-                    entity_data.get('sunset_date') or (
-                        deprecation.sunset_date.isoformat() if deprecation.sunset_date else None
-                    ),
-                    entity_data.get('replacement_id') or deprecation.replacement_id,
-                )
-            except ValueError:
-                deprecation.reason = entity_data.get('justification')
+        request_id, logged = requested_deprecation(
+            self._db, entity_type, entity_id, target_status,
+            request_id=entity_data.get('request_id') or None,
+        )
+        justification = entity_data.get('justification') or logged.reason
+        sunset_date = entity_data.get('sunset_date') or (
+            logged.sunset_date.isoformat() if logged.sunset_date else None
+        )
+        replacement_id = entity_data.get('replacement_id') or logged.replacement_id
+        try:
+            deprecation = deprecation_details_from_strings(
+                justification, sunset_date, replacement_id,
+            )
+        except ValueError:
+            deprecation = DeprecationDetails(
+                reason=justification or None, replacement_id=replacement_id or None,
+            )
         return request_id, deprecation
 
     def _requested_status_changed(

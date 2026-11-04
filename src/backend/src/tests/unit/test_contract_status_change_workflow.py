@@ -179,6 +179,28 @@ def test_an_approval_applies_the_requested_deprecation_and_audits_it(db_session,
     assert entry['details']['replacement_contract_id'] == replacement.id
 
 
+def test_a_synchronous_run_does_not_take_an_earlier_requests_details(db_session):
+    # The run completes before its request is logged; an earlier request's
+    # sunset date and replacement are not this request's
+    from src.controller.change_log_manager import change_log_manager
+
+    contract, replacement = _contract(db_session), _contract(db_session)
+    change_log_manager.log_change_with_details(
+        db_session, entity_type='data_contract', entity_id=contract.id,
+        action='status_change_requested', username='requester@example.com',
+        details={'target_status': 'deprecated', 'justification': 'Old reason',
+                 'request_id': 'r-old', 'replacement_id': replacement.id,
+                 'sunset_date': (utc_today() + timedelta(days=9)).isoformat()},
+    )
+
+    _complete(db_session, contract, True, request_id='r-new')
+
+    db_session.refresh(contract)
+    assert contract.status == 'deprecated'
+    assert (contract.deprecation_reason, contract.sunset_date,
+            contract.replacement_contract_id) == ('Moving to v2', None, None)
+
+
 def test_a_request_made_from_another_status_is_not_applied(db_session):
     # Requested approved -> deprecated; meanwhile the contract went active
     contract = _contract(db_session, status='active')

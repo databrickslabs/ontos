@@ -32,7 +32,6 @@ from src.controller.lifecycle_fields import (
     lifecycle_custom_properties,
     pop_lifecycle_custom_properties,
     requested_deprecation,
-    requested_status_change_justification,
     set_lifecycle_columns,
     utc_today,
 )
@@ -283,13 +282,13 @@ def test_the_latest_status_change_request_gives_the_reason(db_session):
         entry.timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
     db_session.flush()
 
-    assert requested_status_change_justification(
+    assert requested_deprecation(
         db_session, 'data_product', product.id
-    ) == 'latest request'
+    )[1].reason == 'latest request'
 
 
 def test_no_request_gives_no_reason(db_session):
-    assert requested_status_change_justification(db_session, 'data_product', 'none') is None
+    assert requested_deprecation(db_session, 'data_product', 'none')[1].reason is None
 
 
 # --- ODPS / ODCS round-trip ------------------------------------------------
@@ -689,9 +688,9 @@ def test_the_reason_comes_from_the_latest_request_to_that_status(db_session):
         entry.timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago)
     db_session.flush()
 
-    assert requested_status_change_justification(
+    assert requested_deprecation(
         db_session, 'data_product', product.id, 'deprecated'
-    ) == 'Superseded by v2'
+    )[1].reason == 'Superseded by v2'
 
 
 def test_a_contract_update_does_not_write_lifecycle_columns(db_session):
@@ -1018,3 +1017,50 @@ def test_the_approver_gets_the_replacement_name_with_the_request(db_session):
     assert (entity_data['replacement_id'], entity_data['replacement_name']) == (
         replacement.id, 'Orders v2',
     )
+
+
+# --- Review of 2026-11-04 ---------------------------------------------------
+
+def test_a_request_behind_many_other_changes_is_still_found(db_session, monkeypatch):
+    """More than 100 other entries since the request: it is still found, in one read."""
+    product = _product(db_session)
+    now = datetime.now(timezone.utc)
+    request = _request(db_session, 'data_product', product.id, 'deprecated', 'Superseded by v2',
+                       request_id='req-old')
+    request.timestamp = now - timedelta(days=1)
+    for i in range(120):
+        entry = change_log_manager.log_change_with_details(
+            db_session, entity_type='data_product', entity_id=product.id, action='UPDATE',
+            username='bob', details={'n': i}, commit=False,
+        )
+        entry.timestamp = now - timedelta(minutes=i)
+    db_session.flush()
+    reads = []
+    real = change_log_manager.list_changes_for_entity
+    monkeypatch.setattr(change_log_manager, 'list_changes_for_entity',
+                        lambda *a, **kw: reads.append(kw) or real(*a, **kw))
+
+    request_id, details = requested_deprecation(
+        db_session, 'data_product', product.id, 'deprecated'
+    )
+
+    assert (request_id, details.reason) == ('req-old', 'Superseded by v2')
+    assert len(reads) == 1
+
+
+def test_a_request_is_found_by_its_id(db_session):
+    product = _product(db_session)
+    first = _request(db_session, 'data_product', product.id, 'deprecated', 'First',
+                     request_id='req-1', sunset_date=_TOMORROW.isoformat())
+    second = _request(db_session, 'data_product', product.id, 'deprecated', 'Second',
+                      request_id='req-2')
+    first.timestamp = second.timestamp - timedelta(minutes=1)
+    db_session.flush()
+
+    assert requested_deprecation(
+        db_session, 'data_product', product.id, 'deprecated', request_id='req-1'
+    ) == ('req-1', DeprecationDetails(reason='First', sunset_date=_TOMORROW))
+    assert requested_deprecation(
+        db_session, 'data_product', product.id, 'deprecated', request_id='req-9'
+    ) == ('req-9', DeprecationDetails())
+

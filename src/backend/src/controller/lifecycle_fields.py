@@ -82,76 +82,66 @@ def _entity_model(entity_type: str):
     return DataContractDb
 
 
-def requested_status_change(
-    db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
-) -> Tuple[Optional[str], Optional[str]]:
-    """Id and justification of the latest status change request (to
-    ``target_status``, when given); ``(None, None)`` when there is none.
+def requested_deprecation(
+    db: Session,
+    entity_type: str,
+    entity_id: str,
+    target_status: Optional[str] = None,
+    request_id: Optional[str] = None,
+) -> Tuple[Optional[str], DeprecationDetails]:
+    """Id of a status change request and the deprecation it asked for.
 
-    The id is the request id the request returned (products), else the id of
-    its change log entry (contract requests have no id of their own)."""
+    The request is the one with ``request_id`` when given, else the latest one
+    (to ``target_status``, when given); ``(request_id, DeprecationDetails())``
+    when there is none. Its justification is the reason; its sunset date and
+    replacement, when the requester gave them, come with it. The id is the
+    one the request returned, else the id of its change log entry (requests
+    logged before they had one).
+
+    The entity's ``status_change_requested`` entries are read once, filtered
+    in SQL, so a request behind many other changes is still found.
+    """
     from src.controller.change_log_manager import change_log_manager
 
     try:
         changes = change_log_manager.list_changes_for_entity(
-            db, entity_type=entity_type, entity_id=entity_id
+            db, entity_type=entity_type, entity_id=entity_id,
+            action='status_change_requested', limit=200,
         )
     except Exception as e:
         logger.warning("Could not read status change requests for %s %s: %s",
                        entity_type, entity_id, e)
-        return None, None
+        return request_id, DeprecationDetails()
     for change in changes:  # newest first
-        if change.action != 'status_change_requested':
-            continue
         try:
             details = json.loads(change.details_json or '{}') or {}
         except ValueError:
             continue
-        requested = (details.get('target_status') or '').lower()
-        if target_status and requested and requested != target_status.lower():
-            continue
-        request_id = details.get('request_id') or (
+        logged_id = details.get('request_id') or (
             str(change.id) if change.id is not None else None
         )
-        return request_id, details.get('justification')
-    return None, None
-
-
-def requested_deprecation(
-    db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
-) -> Tuple[Optional[str], 'DeprecationDetails']:
-    """Id of the latest status change request and the deprecation it asked for.
-
-    The request's justification is the reason; its sunset date and
-    replacement, when the requester gave them, come with it.
-    """
-    from src.controller.change_log_manager import change_log_manager
-
-    request_id, justification = requested_status_change(db, entity_type, entity_id, target_status)
-    sunset_date = replacement_id = None
-    try:
-        for change in change_log_manager.list_changes_for_entity(
-            db, entity_type=entity_type, entity_id=entity_id
-        ):
-            if change.action != 'status_change_requested':
+        if request_id is not None:
+            if logged_id != request_id:
                 continue
-            details = json.loads(change.details_json or '{}') or {}
+        else:
             requested = (details.get('target_status') or '').lower()
             if target_status and requested and requested != target_status.lower():
                 continue
-            sunset_date = details.get('sunset_date')
-            replacement_id = details.get('replacement_id')
-            break
-    except Exception as e:  # the justification alone still deprecates
-        logger.warning("Could not read the requested deprecation of %s %s: %s",
-                       entity_type, entity_id, e)
-    details = DeprecationDetails(reason=justification)
-    try:
-        details = deprecation_details_from_strings(justification, sunset_date, replacement_id)
-    except ValueError:
-        logger.warning("Ignoring the invalid requested sunset date %r of %s %s",
-                       sunset_date, entity_type, entity_id)
-    return request_id, details
+        justification = details.get('justification')
+        sunset_date = details.get('sunset_date')
+        try:
+            deprecation = deprecation_details_from_strings(
+                justification, sunset_date, details.get('replacement_id'),
+            )
+        except ValueError:
+            logger.warning("Ignoring the invalid requested sunset date %r of %s %s",
+                           sunset_date, entity_type, entity_id)
+            deprecation = DeprecationDetails(
+                reason=justification or None,
+                replacement_id=details.get('replacement_id') or None,
+            )
+        return logged_id, deprecation
+    return request_id, DeprecationDetails()
 
 
 def check_requested_deprecation(
@@ -185,14 +175,6 @@ def requested_deprecation_data(
         replacement = db.get(_entity_model(entity_type), details.replacement_id)
         data['replacement_name'] = getattr(replacement, 'name', None)
     return data
-
-
-def requested_status_change_justification(
-    db: Session, entity_type: str, entity_id: str, target_status: Optional[str] = None
-) -> Optional[str]:
-    """Justification of the latest status change request (to ``target_status``,
-    when given), used as the deprecation reason when that request is approved."""
-    return requested_status_change(db, entity_type, entity_id, target_status)[1]
 
 
 # Audit actions of lifecycle moves, as the change-status and deprecate routes write them

@@ -34,6 +34,7 @@ from src.common.authorization import has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
+from src.controller.lifecycle_fields import LifecycleFieldError
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -1022,6 +1023,11 @@ async def deprecate_product(
         )
         
         return {'status': updated_product.status}
+    except LifecycleFieldError as e:
+        # Missing reason, past sunset date, unusable replacement: 400 with the
+        # code, as on change-status (409 stays for a status that can't deprecate)
+        logger.info("Refused deprecation of product %s: %s", product_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error deprecating product %s: %s", product_id, e)
         from src.controller.certified_deprecation_guard import guard_refusal_status
@@ -2933,6 +2939,11 @@ async def request_status_change(
         )
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. a replacement that doesn't exist): its
+        # code, never the 404 of a missing product
+        logger.info("Refused status change request for product %s: %s", product_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error(f"Request status change validation error for product {product_id}: {e}")
         error_status = 404 if "not found" in str(e).lower() else 400
@@ -3000,6 +3011,11 @@ async def handle_status_change_response(
         )
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. the requested replacement is gone): its
+        # code, never the 404 of a missing product
+        logger.info("Refused status change decision for product %s: %s", product_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error(f"Handle status change validation error for product {product_id}: {e}")
         error_status = 404 if "not found" in str(e).lower() else 400

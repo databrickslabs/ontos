@@ -59,6 +59,7 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.lifecycle_status import check_status_unchanged
+from src.controller.lifecycle_fields import LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_products import DeprecationPayload
@@ -703,6 +704,11 @@ async def request_status_change(
         
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. a replacement that doesn't exist): its
+        # code, never the 404 of a missing contract
+        logger.info("Refused status change request for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Request status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (403 if "denied" in str(e).lower() or "permission" in str(e).lower() else 409)
@@ -1318,6 +1324,11 @@ async def handle_status_change_response(
         
         return result
         
+    except LifecycleFieldError as e:
+        # The requested deprecation no longer holds (e.g. its replacement is
+        # gone): 400 with the code, never the 404 of a missing contract
+        logger.info("Refused status change decision for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Handle status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)

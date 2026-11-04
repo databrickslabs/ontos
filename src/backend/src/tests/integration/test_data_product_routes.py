@@ -436,7 +436,8 @@ class TestDataProductRoutes:
 
         response = client.post(f"/api/data-products/{product_id}/deprecate")
 
-        assert response.status_code == 409
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "deprecation_reason_required"
 
     # =================================================================
     # Utility Endpoints

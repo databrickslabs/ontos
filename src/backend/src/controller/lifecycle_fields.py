@@ -507,11 +507,17 @@ class ImportLinks:
                     continue
                 setattr(entity, column, target)
                 db.flush()
-                change_log_manager.log_change_with_details(
-                    db, entity_type=self.entity_type, entity_id=entity_id, action='UPDATE',
-                    username=username,
-                    details={column: target, 'summary': 'Replacement linked by the import'},
-                )
+                # The entities are committed: a failed entry doesn't fail the
+                # import, as for the other change log entries of an import
+                try:
+                    change_log_manager.log_change_with_details(
+                        db, entity_type=self.entity_type, entity_id=entity_id, action='UPDATE',
+                        username=username,
+                        details={column: target, 'summary': 'Replacement linked by the import'},
+                    )
+                except Exception as e:
+                    logger.warning("Failed to log the replacement link of %s %s: %s",
+                                   self.entity_type, entity_id, e)
                 continue
             notes[entity_id] = ImportNote(
                 f"ontosReplacedBy {replacement_id} not linked: no such entity here",

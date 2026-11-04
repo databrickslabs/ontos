@@ -1064,3 +1064,59 @@ def test_a_request_is_found_by_its_id(db_session):
         db_session, 'data_product', product.id, 'deprecated', request_id='req-9'
     ) == ('req-9', DeprecationDetails())
 
+
+@pytest.mark.parametrize('kind', ['product', 'contract'])
+def test_a_failed_link_log_write_keeps_the_import(db_session, monkeypatch, kind):
+    """The link of a replacement imported later is made after the entities are
+    committed; its change log entry failing doesn't fail the import."""
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    real = change_log_manager.log_change_with_details
+
+    def failing_link_log(db, **kw):
+        if kw.get('action') == 'UPDATE':
+            raise RuntimeError('change log unavailable')
+        return real(db, **kw)
+
+    monkeypatch.setattr(change_log_manager, 'log_change_with_details', failing_link_log)
+    if kind == 'product':
+        files = _product_files(_odps(a_id, ontosReplacedBy=b_id),
+                               {**_odps(b_id), 'status': 'active'})
+        result = DataProductsManager(db=db_session).create_products_from_files(
+            files, adopt_ids=False)
+        model, column = DataProductDb, 'replacement_product_id'
+    else:
+        files = _contract_files(_odcs(a_id, ontosReplacedBy=b_id),
+                                {**_odcs(b_id), 'status': 'active'})
+        result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+            db_session, files, adopt_ids=False)
+        model, column = DataContractDb, 'replacement_contract_id'
+
+    assert (result.created, result.failed) == (2, 0)
+    by_source = {i.source_id: i.entity_id for i in result.items}
+    assert getattr(db_session.get(model, by_source[a_id]), column) == by_source[b_id]
+
+
+def test_a_product_that_fails_after_its_flush_is_no_replacement(db_session, monkeypatch):
+    """B is flushed, then fails (here: its domains); A, naming B as its
+    replacement, must not be linked to the id B would have had."""
+    a_id, b_id = str(uuid.uuid4()), str(uuid.uuid4())
+    files = _product_files(
+        _odps(a_id, ontosDeprecationReason='Replaced by B', ontosReplacedBy=b_id),
+        {**_odps(b_id), 'name': 'B', 'status': 'active'},
+    )
+    manager = DataProductsManager(db=db_session)
+    real = manager._resolve_product_domain_assignment
+
+    def failing_for_b(product_data, **kw):
+        if product_data.get('name') == 'B':
+            raise ValueError('domain lookup failed')
+        return real(product_data, **kw)
+
+    monkeypatch.setattr(manager, '_resolve_product_domain_assignment', failing_for_b)
+
+    result = manager.create_products_from_files(files, adopt_ids=False)
+
+    assert (result.created, result.failed) == (1, 1)
+    item_a = next(i for i in result.items if i.source_id == a_id)
+    assert item_a.code == 'imported_replacement_dropped'
+    assert db_session.get(DataProductDb, item_a.entity_id).replacement_product_id is None

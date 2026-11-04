@@ -427,8 +427,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if lifecycle_columns:
                 set_lifecycle_columns(created_db_obj, lifecycle_columns)
                 db_session.flush()
-            if import_links is not None:
-                import_links.record(incoming_id, created_db_obj.id)
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
@@ -473,6 +471,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for product creation: {log_err}")
+
+            # Only a product that was created can be a replacement of the
+            # import: one that fails before this point leaves no link
+            if import_links is not None:
+                import_links.record(incoming_id, created_db_obj.id)
             
             # Queue delivery for active modes
             self._queue_delivery(
@@ -2136,6 +2139,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 index += 1
 
         add_import_notes(result, links.finish(self._db, username=user))
+        # The links are kept even when their change log entry couldn't be written
+        self._db.commit()
         logger.info(
             "Product batch import complete: %d created, %d skipped, %d failed (%d total)",
             result.created, result.skipped, result.failed, result.total,

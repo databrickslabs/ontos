@@ -19,6 +19,51 @@ from src.tools.base import (
 
 logger = get_logger(__name__)
 
+# Scope prefix -> Ontos feature whose permission the calling user needs.
+# None = no feature gate (analytics runs on the user's OBO client, so Unity
+# Catalog grants apply; search/user are per-user reads).
+SCOPE_FEATURES: Dict[str, Optional[str]] = {
+    "data-products": "data-products",
+    "contracts": "data-contracts",
+    "semantic": "semantic-models",
+    "sparql": "semantic-models",
+    "domains": "data-domains",
+    "costs": "data-domains",  # matches costs_routes FEATURE_ID
+    "teams": "teams",
+    "projects": "projects",
+    "tags": "tags",
+    "analytics": None,
+    "search": None,
+    "user": None,
+}
+
+
+async def _permission_error(tool: BaseTool, ctx: ToolContext) -> Optional[str]:
+    """Return an error message if the context's user may not run this tool."""
+    from fastapi import HTTPException
+    from src.common.authorization import enforce_feature_permission
+    from src.common.features import FeatureAccessLevel
+
+    scope = tool.required_scope
+    if scope is None:
+        return None
+    prefix, _, action = scope.partition(":")
+    if prefix not in SCOPE_FEATURES:
+        # Unknown or admin-only ("*") scope: fail closed.
+        return f"Tool '{tool.name}' is not available in chat"
+    feature_id = SCOPE_FEATURES[prefix]
+    if feature_id is None:
+        return None
+    if ctx.user is None or ctx.request is None:
+        return f"Permission denied for tool '{tool.name}': no user context"
+    # sparql:query matches the READ_WRITE gate on /semantic-models/query.
+    level = FeatureAccessLevel.READ_ONLY if action == "read" else FeatureAccessLevel.READ_WRITE
+    try:
+        await enforce_feature_permission(feature_id, level, ctx.user, ctx.request)
+    except HTTPException:
+        return f"Permission denied: '{tool.name}' requires {level.value} on '{feature_id}'"
+    return None
+
 
 class ToolRegistry:
     """
@@ -164,6 +209,11 @@ class ToolRegistry:
                 error=f"Unknown tool: {name}"
             )
         
+        denied = await _permission_error(tool, ctx)
+        if denied:
+            logger.warning(f"Tool {name} blocked: {denied}")
+            return ToolResult(success=False, error=denied)
+
         try:
             logger.info(f"Executing tool: {name} with args: {args}")
             result = await tool.execute(ctx, **(args or {}))

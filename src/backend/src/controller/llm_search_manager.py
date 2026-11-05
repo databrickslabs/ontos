@@ -399,6 +399,9 @@ class LLMSearchManager:
         # ``None`` afterwards so the manager is safe to reuse across
         # requests within a process.
         self._chat_context: Optional[Dict[str, Any]] = None
+        # Calling user + request for per-tool permission checks; set by chat().
+        self._user_details: Optional[Any] = None
+        self._request: Optional[Any] = None
 
         # Initialize tool registry with all default tools
         self._tool_registry = create_default_registry()
@@ -415,7 +418,9 @@ class LLMSearchManager:
             data_contracts_manager=self._data_contracts_manager,
             semantic_models_manager=self._semantic_models_manager,
             costs_manager=self._costs_manager,
-            search_manager=self._search_manager
+            search_manager=self._search_manager,
+            user=self._user_details,
+            request=self._request,
         )
     
     def _get_latest_user_message(self, session: ConversationSession) -> str:
@@ -486,6 +491,8 @@ class LLMSearchManager:
         page_url: Optional[str] = None,
         feature_id: Optional[str] = None,
         selected_entity: Optional[Dict[str, Any]] = None,
+        user_details: Optional[Any] = None,
+        request: Optional[Any] = None,
     ) -> ChatResponse:
         """
         Process a chat message and return the assistant's response.
@@ -506,10 +513,15 @@ class LLMSearchManager:
                 prompt today.
             selected_entity: Entity the user has selected in the UI
                 (Phase 3). Dict with optional ``type``, ``name``, ``id``.
+            user_details: Calling user (UserInfo). Tools that need an Ontos
+                feature permission are refused without it.
+            request: The FastAPI request, needed to resolve permissions.
 
         Returns:
             ChatResponse with the assistant's message
         """
+        self._user_details = user_details
+        self._request = request
         # Stash context for the LLM-processing pass to read. Cleared
         # in the ``finally`` below so a long-lived manager instance
         # can't leak one request's context into the next.
@@ -529,6 +541,8 @@ class LLMSearchManager:
             )
         finally:
             self._chat_context = None
+            self._user_details = None
+            self._request = None
 
     async def _chat_inner(
         self,

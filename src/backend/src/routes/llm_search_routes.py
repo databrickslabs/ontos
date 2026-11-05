@@ -231,6 +231,8 @@ async def chat(
             page_url=message.page_url,
             feature_id=message.feature_id,
             selected_entity=selected_entity_dict,
+            user_details=current_user,
+            request=request,
         )
 
         success = True

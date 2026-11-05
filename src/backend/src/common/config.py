@@ -287,19 +287,25 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode='after')
-    def warn_test_token_in_prod(self) -> 'Settings':
-        """Warn loudly if TEST_USER_TOKEN is set in a production environment.
+    def reject_test_identity_in_prod(self) -> 'Settings':
+        """Refuse to start if test-identity settings are enabled in PROD.
 
-        The shared-secret design intentionally permits enabling header overrides
-        anywhere (so testers can hit cloud test deployments), but doing so in
-        PROD is almost always a misconfiguration.
+        TEST_USER_TOKEN (header impersonation with caller-chosen groups) and
+        MOCK_USER_DETAILS (every request becomes a mock admin) are allowed on
+        LOCAL/DEV test deployments, but in PROD either one lets anyone act as admin.
         """
-        if self.TEST_USER_TOKEN and self.ENV.upper() == "PROD":
-            logger.warning(
-                "TEST_USER_TOKEN is set while ENV=PROD. Per-request user impersonation "
-                "via X-Test-Token headers is ENABLED. Unset TEST_USER_TOKEN unless this "
-                "is intentional."
-            )
+        if self.ENV.upper() == "PROD":
+            enabled = [
+                name for name, on in (
+                    ("TEST_USER_TOKEN", bool(self.TEST_USER_TOKEN)),
+                    ("MOCK_USER_DETAILS", self.MOCK_USER_DETAILS),
+                ) if on
+            ]
+            if enabled:
+                raise ValueError(
+                    f"{', '.join(enabled)} must not be set when ENV=PROD "
+                    "(enables user impersonation)."
+                )
         return self
 
     @model_validator(mode='after')

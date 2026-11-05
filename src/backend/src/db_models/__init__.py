@@ -30,6 +30,7 @@ from . import process_workflows
 from . import projects
 from . import quality
 from . import rdf_triples
+from . import scheduler_claims
 from . import semantic_links
 from . import semantic_models
 from . import settings

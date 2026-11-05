@@ -143,6 +143,13 @@ class Settings(BaseSettings):
     # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
     SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
 
+    # Workflow scheduler (#941): runs active workflows with a `scheduled` trigger.
+    # The thread reads the database only while such a workflow exists, and then
+    # only when a run is due or a workflow changed. The tick is the longest it
+    # sleeps between checks of its in-memory schedules (no database access).
+    WORKFLOW_SCHEDULER_ENABLED: bool = Field(True, env='WORKFLOW_SCHEDULER_ENABLED')
+    WORKFLOW_SCHEDULER_TICK_SECONDS: int = Field(60, env='WORKFLOW_SCHEDULER_TICK_SECONDS')
+
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
 

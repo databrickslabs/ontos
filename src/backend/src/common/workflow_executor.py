@@ -2766,6 +2766,7 @@ class WorkflowExecutor:
         trigger_context: Optional[TriggerContext] = None,
         blocking: bool = True,
         execution_id: Optional[str] = None,
+        triggered_by: Optional[str] = None,
     ) -> WorkflowExecution:
         """Execute a workflow against an entity.
         
@@ -2779,6 +2780,9 @@ class WorkflowExecutor:
             trigger_context: Full trigger context
             blocking: If True, run synchronously; if False, queue for async execution
             execution_id: Optional existing execution ID to reuse (for retries)
+            triggered_by: Recorded as the execution's ``triggered_by`` instead of
+                ``user_email``, for runs no user started (``system:scheduler``);
+                ``user_email`` stays the requester the steps resolve
             
         Returns:
             WorkflowExecution with results
@@ -2800,7 +2804,7 @@ class WorkflowExecutor:
             execution_create = WorkflowExecutionCreate(
                 workflow_id=workflow.id,
                 trigger_context=trigger_context,
-                triggered_by=user_email,
+                triggered_by=triggered_by or user_email,
             )
             db_execution = workflow_execution_repo.create(self._db, execution_create)
         

@@ -817,7 +817,9 @@
       "secretScope": "Secret-scope",
       "secretKey": "Secret-sleutel",
       "caBundlePath": "Pad naar CA-bundel",
-      "caBundlePathHelp": "Optioneel. PEM-bundel voor Tableau Server met een private certificaatautoriteit."
+      "caBundlePathHelp": "Optioneel. PEM-bundel voor Tableau Server met een private certificaatautoriteit.",
+      "defaultCatalog": "Standaardcatalogus",
+      "defaultCatalogHelp": "Optioneel. Unity Catalog-catalogus voor Databricks-tabellen die Tableau alleen als schema.tabel benoemt."
     }
   },
   "schemaImporter": {

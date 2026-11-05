@@ -14,7 +14,7 @@ import {
 export const TABLEAU_CONFIG_FIELDS = [
   'server_url', 'site_content_url', 'auth_mode',
   'client_id', 'secret_id', 'username', 'pat_name',
-  'secret_scope', 'secret_key', 'ca_bundle_path',
+  'secret_scope', 'secret_key', 'ca_bundle_path', 'default_catalog',
 ] as const;
 
 interface Props<T extends FieldValues> {
@@ -114,6 +114,13 @@ export function TableauConnectionFields<T extends FieldValues>({ control }: Prop
           authMode === 'pat' ? 'tableau-pat' : 'tableau-connected-app',
         )}
       </div>
+
+      {textField(
+        'default_catalog',
+        t('settings:connectors.tableau.defaultCatalog'),
+        'main',
+        t('settings:connectors.tableau.defaultCatalogHelp'),
+      )}
 
       {textField(
         'ca_bundle_path',

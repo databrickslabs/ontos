@@ -68,6 +68,7 @@ const formSchema = z.object({
   secret_scope: z.string().optional(),
   secret_key: z.string().optional(),
   ca_bundle_path: z.string().optional(),
+  default_catalog: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -200,6 +201,7 @@ export function ConnectionFormDialog({
         secret_scope: cfg.secret_scope || '',
         secret_key: cfg.secret_key || '',
         ca_bundle_path: cfg.ca_bundle_path || '',
+        default_catalog: cfg.default_catalog || '',
       });
     }
   }, [isOpen, initialConnection]); // eslint-disable-line react-hooks/exhaustive-deps

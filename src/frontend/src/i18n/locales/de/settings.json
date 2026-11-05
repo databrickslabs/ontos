@@ -799,7 +799,9 @@
       "secretScope": "Secret-Scope",
       "secretKey": "Secret-Key",
       "caBundlePath": "Pfad zum CA-Bundle",
-      "caBundlePathHelp": "Optional. PEM-Bundle für Tableau Server mit privater Zertifizierungsstelle."
+      "caBundlePathHelp": "Optional. PEM-Bundle für Tableau Server mit privater Zertifizierungsstelle.",
+      "defaultCatalog": "Standardkatalog",
+      "defaultCatalogHelp": "Optional. Unity-Catalog-Katalog für Databricks-Tabellen, die Tableau nur als schema.tabelle benennt."
     }
   },
   "schemaImporter": {

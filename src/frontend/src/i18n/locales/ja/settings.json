@@ -799,7 +799,9 @@
       "secretScope": "シークレットスコープ",
       "secretKey": "シークレットキー",
       "caBundlePath": "CA バンドルのパス",
-      "caBundlePathHelp": "任意。プライベート認証局を使用する Tableau Server 用の PEM バンドル。"
+      "caBundlePathHelp": "任意。プライベート認証局を使用する Tableau Server 用の PEM バンドル。",
+      "defaultCatalog": "既定のカタログ",
+      "defaultCatalogHelp": "任意。Tableau が schema.table とだけ表記する Databricks テーブルの Unity Catalog カタログ。"
     }
   },
   "schemaImporter": {

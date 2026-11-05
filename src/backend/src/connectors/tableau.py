@@ -32,6 +32,7 @@ from src.connectors.base import (
     ConnectorConfig,
     ConnectorConnectionError,
     ConnectorPermissionError,
+    LineageLink,
     ListAssetsOptions,
 )
 from src.connectors.tableau_client import (
@@ -82,6 +83,9 @@ class TableauConnectorConfig(ConnectorConfig):
     # Optional CA bundle path for Tableau Server with a private CA
     ca_bundle_path: Optional[str] = None
     include_hidden_views: bool = False
+    # Catalog for Databricks tables Tableau names with two parts (schema.table),
+    # e.g. connections that set a default catalog instead of naming it
+    default_catalog: Optional[str] = None
 
     # Workspace client injected at build time for secret access
     workspace_client: Optional[Any] = None
@@ -124,6 +128,51 @@ def _parse_ts(value: Optional[str]):
         return None
 
 
+_UC_CONNECTION_TYPES = {"databricks", "spark"}
+_TABLE_ASSET_TYPES = ["Table", "View", "Metric View"]
+
+
+def parse_bracketed_name(full_name: Optional[str]) -> List[str]:
+    """``"[samples].[tpch].[orders]"`` → ``["samples", "tpch", "orders"]`` (``]]`` escapes ``]``)."""
+    if not full_name:
+        return []
+    parts: List[str] = []
+    buf: List[str] = []
+    in_brackets = False
+    i = 0
+    while i < len(full_name):
+        ch = full_name[i]
+        if in_brackets:
+            if ch == "]":
+                if full_name[i + 1:i + 2] == "]":
+                    buf.append("]")
+                    i += 2
+                    continue
+                in_brackets = False
+            else:
+                buf.append(ch)
+        elif ch == "[":
+            in_brackets = True
+        elif ch == ".":
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+        i += 1
+    parts.append("".join(buf))
+    return [p for p in parts if p]
+
+
+def uc_table_name(table: Dict[str, Any], default_catalog: Optional[str] = None) -> Optional[str]:
+    """Unity Catalog ``catalog.schema.table`` for a Tableau DatabaseTable, or None."""
+    if (table.get("connectionType") or "").lower() not in _UC_CONNECTION_TYPES:
+        return None
+    parts = parse_bracketed_name(table.get("fullName"))
+    if len(parts) == 2 and default_catalog:
+        parts = [default_catalog] + parts
+    return ".".join(parts) if len(parts) == 3 else None
+
+
 # ============================================================================
 # Listing cache (module level: connectors are rebuilt per request)
 # ============================================================================
@@ -146,7 +195,7 @@ query DatasourceFields($luid: String!) {
     upstreamTables { name schema fullName connectionType }
     fields {
       __typename name description
-      ... on ColumnField { role dataType columns { name remoteType } }
+      ... on ColumnField { role dataType columns { name remoteType table { ... on DatabaseTable { fullName connectionType } } } }
       ... on CalculatedField { role dataType formula fields { name } }
     }
   }
@@ -156,9 +205,16 @@ query DatasourceFields($luid: String!) {
 _WORKBOOK_VIEWS_QUERY = """
 query WorkbookViews($luid: String!) {
   workbooks(filter: {luid: $luid}) {
-    dashboards { luid name }
-    sheets { luid name }
+    upstreamTables { fullName connectionType }
+    dashboards { luid name upstreamDatasources { ...ViewDatasource } }
+    sheets { luid name upstreamDatasources { ...ViewDatasource } }
   }
+}
+
+# A view reads an embedded data source, which proxies the published one
+fragment ViewDatasource on Datasource {
+  ... on PublishedDatasource { luid }
+  ... on EmbeddedDatasource { upstreamDatasources { luid } }
 }
 """
 
@@ -303,27 +359,62 @@ class TableauConnector(AssetConnector):
             )), workbook_luid,
         )
 
-    def _view_kinds(self, workbook_luid: str) -> Dict[str, UnifiedAssetType]:
-        """View luid → dashboard/sheet, from the Metadata API (REST views don't say)."""
+    def _workbook_graph(self, workbook_luid: str) -> Dict[str, Any]:
+        """Metadata API view of a workbook: view kinds, view → published data sources, upstream tables.
+
+        Empty when the Metadata API is unavailable; callers then fall back to REST-only data.
+        """
         client = self._ensure_client()
 
-        def load() -> Dict[str, UnifiedAssetType]:
+        def load() -> Dict[str, Any]:
             try:
                 result = client.graphql(_WORKBOOK_VIEWS_QUERY, {"luid": workbook_luid})
             except TableauAPIError as exc:
-                logger.info(f"Metadata API unavailable for workbook {workbook_luid}: {exc}")
+                logger.warning(f"Metadata API query for workbook {workbook_luid} failed: {exc}")
                 return {}
-            kinds: Dict[str, UnifiedAssetType] = {}
+            graph: Dict[str, Any] = {"kinds": {}, "datasources": {}, "upstream_tables": []}
             for wb in result.data.get("workbooks") or []:
-                for d in wb.get("dashboards") or []:
-                    if d.get("luid"):
-                        kinds[d["luid"]] = UnifiedAssetType.TABLEAU_DASHBOARD
-                for s in wb.get("sheets") or []:
-                    if s.get("luid"):
-                        kinds.setdefault(s["luid"], UnifiedAssetType.TABLEAU_SHEET)
-            return kinds
+                graph["upstream_tables"].extend(t for t in wb.get("upstreamTables") or [] if t)
+                for kind, views in ((UnifiedAssetType.TABLEAU_DASHBOARD, wb.get("dashboards")),
+                                    (UnifiedAssetType.TABLEAU_SHEET, wb.get("sheets"))):
+                    for view in views or []:
+                        if not view.get("luid"):
+                            continue
+                        graph["kinds"].setdefault(view["luid"], kind)
+                        published = graph["datasources"].setdefault(view["luid"], set())
+                        for ds in view.get("upstreamDatasources") or []:
+                            if not ds:
+                                continue
+                            if ds.get("luid"):
+                                published.add(ds["luid"])
+                            published.update(
+                                up["luid"] for up in ds.get("upstreamDatasources") or [] if up and up.get("luid")
+                            )
+            graph["datasources"] = {k: sorted(v) for k, v in graph["datasources"].items()}
+            return graph
 
-        return self._cached("view_kinds", load, workbook_luid)
+        return self._cached("workbook_graph", load, workbook_luid)
+
+    def _view_kinds(self, workbook_luid: str) -> Dict[str, UnifiedAssetType]:
+        """View luid → dashboard/sheet, from the Metadata API (REST views don't say)."""
+        return self._workbook_graph(workbook_luid).get("kinds", {})
+
+    def _project_path(self, project_luid: Optional[str]) -> Optional[str]:
+        """Connector path of a project (``p~root.p~child``), from the project hierarchy."""
+        by_id = {p["id"]: p for p in self._projects()}
+        chain: List[str] = []
+        current = project_luid
+        while current and current in by_id and len(chain) < 50:
+            chain.append(make_segment(PROJECT, current))
+            current = by_id[current].get("parentProjectId")
+        if not chain or current:
+            return None
+        return ".".join(reversed(chain))
+
+    def _datasource_path(self, datasource_luid: str) -> Optional[str]:
+        ds = next((d for d in self._datasources() if d.get("id") == datasource_luid), None)
+        project_path = self._project_path((ds or {}).get("project", {}).get("id")) if ds else None
+        return f"{project_path}.{make_segment(DATASOURCE, datasource_luid)}" if project_path else None
 
     def _view_url(self, view: Dict[str, Any]) -> Optional[str]:
         content_url = view.get("contentUrl") or ""
@@ -503,6 +594,10 @@ class TableauConnector(AssetConnector):
                 "tableau_project": (wb.get("project") or {}).get("name"),
                 "tableau_content_url": wb.get("contentUrl"),
                 "tableau_default_view_luid": wb.get("defaultViewId"),
+                "upstream_tables": [
+                    {k: t.get(k) for k in ("fullName", "connectionType")}
+                    for t in self._workbook_graph(luid).get("upstream_tables", [])
+                ],
             },
             created_at=_parse_ts(wb.get("createdAt")), updated_at=_parse_ts(wb.get("updatedAt")),
         )
@@ -527,6 +622,9 @@ class TableauConnector(AssetConnector):
                 "dashboardUrl": url,
                 "dashboardPlatform": "tableau",
                 "view_count": int((usage or {}).get("totalViewCount") or 0) if usage else None,
+                "upstream_datasource_luids": (
+                    self._workbook_graph(workbook_luid).get("datasources", {}).get(luid) if workbook_luid else None
+                ),
             },
             created_at=_parse_ts(view.get("createdAt")), updated_at=_parse_ts(view.get("updatedAt")),
         )
@@ -560,7 +658,7 @@ class TableauConnector(AssetConnector):
                 for f in node.get("fields") or []:
                     columns.append(self._field_column(f))
         except TableauAPIError as exc:
-            logger.info(f"Metadata API unavailable for data source {luid}: {exc}")
+            logger.warning(f"Metadata API query for data source {luid} failed: {exc}")
             properties["metadata_api_error"] = str(exc)
 
         return AssetMetadata(
@@ -572,8 +670,7 @@ class TableauConnector(AssetConnector):
             created_at=_parse_ts(ds.get("createdAt")), updated_at=_parse_ts(ds.get("updatedAt")),
         )
 
-    @staticmethod
-    def _field_column(field: Dict[str, Any]) -> ColumnInfo:
+    def _field_column(self, field: Dict[str, Any]) -> ColumnInfo:
         typename = field.get("__typename") or "Field"
         remote_columns = field.get("columns") or []
         remote_type = next((c.get("remoteType") for c in remote_columns if c.get("remoteType")), None)
@@ -590,12 +687,74 @@ class TableauConnector(AssetConnector):
             props["referenced_fields"] = [f.get("name") for f in field.get("fields") or [] if f.get("name")]
         if remote_columns:
             props["upstream_columns"] = [c.get("name") for c in remote_columns if c.get("name")]
+            refs = []
+            for c in remote_columns:
+                table = uc_table_name(c.get("table") or {}, self._cfg.default_catalog)
+                if table and c.get("name"):
+                    refs.append(f"{table}.{c['name']}")
+            if refs:
+                props["upstream_column_refs"] = refs
         return ColumnInfo(
             name=field.get("name") or "",
             data_type=str(data_type),
             description=field.get("description") or None,
             properties={k: v for k, v in props.items() if v is not None},
         )
+
+    # ------------------------------------------------------------------
+    # Import hooks
+    # ------------------------------------------------------------------
+
+    def import_properties(self, metadata: AssetMetadata) -> Dict[str, Any]:
+        props = {k: v for k, v in (metadata.properties or {}).items() if v not in (None, [], {})}
+        if metadata.url:
+            props["url"] = metadata.url
+        if metadata.updated_at:
+            props["source_updated_at"] = metadata.updated_at.isoformat()
+        return props
+
+    def import_column_properties(self, column: Any) -> Dict[str, Any]:
+        return dict(getattr(column, "properties", None) or {})
+
+    def lineage_links(self, path: str, metadata: AssetMetadata) -> List[LineageLink]:
+        """Semantic model → UC tables, fields → UC columns / other fields, views → data sources,
+        workbooks → UC tables (covers embedded data sources)."""
+        props = metadata.properties or {}
+        links: List[LineageLink] = []
+        catalog = self._cfg.default_catalog
+
+        def table_links(source: str) -> None:
+            for table in props.get("upstream_tables") or []:
+                name = uc_table_name(table, catalog)
+                if name:
+                    links.append(LineageLink(
+                        source_path=source, relationship_type="consumesFrom",
+                        target_location=name, target_asset_types=_TABLE_ASSET_TYPES,
+                    ))
+
+        if metadata.asset_type == UnifiedAssetType.TABLEAU_DATASOURCE:
+            table_links(path)
+            for column in (metadata.schema_info.columns if metadata.schema_info else []):
+                column_path = f"{path}.{column.name}"
+                for ref in column.properties.get("upstream_column_refs") or []:
+                    links.append(LineageLink(
+                        source_path=column_path, relationship_type="derivedFrom",
+                        target_location=ref, target_asset_types=["Column"],
+                    ))
+                for referenced in column.properties.get("referenced_fields") or []:
+                    if referenced != column.name:
+                        links.append(LineageLink(
+                            source_path=column_path, relationship_type="derivedFrom",
+                            target_path=f"{path}.{referenced}",
+                        ))
+        elif metadata.asset_type == UnifiedAssetType.TABLEAU_WORKBOOK:
+            table_links(path)
+        elif metadata.asset_type in (UnifiedAssetType.TABLEAU_DASHBOARD, UnifiedAssetType.TABLEAU_SHEET):
+            for ds_luid in props.get("upstream_datasource_luids") or []:
+                ds_path = self._datasource_path(ds_luid)
+                if ds_path:
+                    links.append(LineageLink(source_path=path, relationship_type="consumesFrom", target_path=ds_path))
+        return links
 
     def validate_asset_exists(self, identifier: str) -> AssetValidationResult:
         try:

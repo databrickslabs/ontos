@@ -534,6 +534,10 @@ contourpy==1.3.2 \
     --hash=sha256:f939a054192ddc596e031e50bb13b657ce318cf13d264f095ce9db7dc6ae81c0 \
     --hash=sha256:fd93cc7f3139b6dd7aab2f26a90dde0aa9fc264dbf70f6740d498a70b860b82c
     # via matplotlib
+croniter==6.2.4 \
+    --hash=sha256:8ef3d544107a5c05a150a2d78f8bf5a8eb9c5c4d93405a736b824109574e3f4d \
+    --hash=sha256:fc124f751b1b04805c2a04b061898b436b45ab2320b045e1e052ea895de65189
+    # via -r src/backend/requirements.in
 cryptography==46.0.6 \
     --hash=sha256:02fad249cb0e090b574e30b276a3da6a149e04ee2f049725b1f69e7b8351ec70 \
     --hash=sha256:063b67749f338ca9c5a0b7fe438a52c25f9526b851e24e6c9310e7195aad3b4d \
@@ -2528,6 +2532,7 @@ python-dateutil==2.9.0.post0 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
     # via
     #   -r src/backend/requirements.in
+    #   croniter
     #   databricks-sql-connector
     #   google-cloud-bigquery
     #   graphene

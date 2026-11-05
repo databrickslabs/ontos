@@ -49,12 +49,6 @@ class FakeHttp:
                 return responses.pop(0) if len(responses) > 1 else responses[0]
         raise AssertionError(f"unexpected {method} {url}")
 
-    def get(self, url, **kwargs):
-        return self._answer("GET", url, **kwargs)
-
-    def post(self, url, **kwargs):
-        return self._answer("POST", url, **kwargs)
-
     def request(self, method, url, **kwargs):
         return self._answer(method, url, **kwargs)
 
@@ -170,3 +164,14 @@ def test_get_bytes_accepts_any_content_type():
 def test_auth_repr_hides_secrets():
     assert "s3cret" not in repr(PatAuth("ontos", "s3cret"))
     assert "shh" not in repr(ConnectedAppAuth("cid", "kid", "shh", "svc@example.com"))
+
+
+def test_transport_errors_become_api_errors():
+    import requests
+
+    class Broken:
+        def request(self, *args, **kwargs):
+            raise requests.exceptions.SSLError("certificate verify failed")
+
+    with pytest.raises(TableauAPIError, match="Cannot reach Tableau"):
+        TableauClient(SERVER, "mysite", PatAuth("ontos", "s"), http=Broken()).server_info()

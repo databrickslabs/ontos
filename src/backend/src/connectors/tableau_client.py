@@ -196,12 +196,18 @@ class TableauClient:
     def _cache_key(self) -> Tuple[str, str, str]:
         return (self.server_url, self.site_content_url, self._auth.identity)
 
+    def _send(self, method: str, url: str, **kwargs) -> requests.Response:
+        """Send a request; transport failures (TLS, DNS, timeouts) become TableauAPIError."""
+        try:
+            return self._http.request(method, url, verify=self._verify, timeout=self._timeout, **kwargs)
+        except requests.RequestException as exc:
+            raise TableauAPIError(f"Cannot reach Tableau at {self.server_url}: {exc}") from exc
+
     def server_info(self) -> Dict[str, Any]:
         """``GET /serverinfo`` (no auth): product version and REST API version."""
         version = self._api_version or _DISCOVERY_API_VERSION
-        resp = self._http.get(
-            f"{self.server_url}/api/{version}/serverinfo",
-            headers={"Accept": "application/json"}, verify=self._verify, timeout=self._timeout,
+        resp = self._send(
+            "GET", f"{self.server_url}/api/{version}/serverinfo", headers={"Accept": "application/json"},
         )
         self._raise_for_status(resp, "serverinfo")
         return resp.json().get("serverInfo", {})
@@ -232,11 +238,10 @@ class TableauClient:
         else:
             credentials = {"jwt": build_connected_app_jwt(self._auth)}
         credentials["site"] = {"contentUrl": self.site_content_url}
-        resp = self._http.post(
-            f"{self.server_url}/api/{version}/auth/signin",
+        resp = self._send(
+            "POST", f"{self.server_url}/api/{version}/auth/signin",
             json={"credentials": credentials},
             headers={"Accept": "application/json", "Content-Type": "application/json"},
-            verify=self._verify, timeout=self._timeout,
         )
         self._raise_for_status(resp, "sign-in")
         cred = resp.json()["credentials"]
@@ -255,11 +260,11 @@ class TableauClient:
         if session is None:
             return
         try:
-            self._http.post(
-                f"{self.server_url}/api/{session.api_version}/auth/signout",
-                headers={"X-Tableau-Auth": session.token}, verify=self._verify, timeout=self._timeout,
+            self._send(
+                "POST", f"{self.server_url}/api/{session.api_version}/auth/signout",
+                headers={"X-Tableau-Auth": session.token},
             )
-        except requests.RequestException as exc:
+        except TableauAPIError as exc:
             logger.debug(f"Tableau sign-out failed: {exc}")
 
     # -- requests ------------------------------------------------------------
@@ -297,10 +302,9 @@ class TableauClient:
             session = self.session(force_new=force_new)
             force_new = False
             target = url or f"{self.server_url}/api/{session.api_version}/sites/{session.site_id}{site_path}"
-            resp = self._http.request(
+            resp = self._send(
                 method, target, params=params, json=json_body,
                 headers={"X-Tableau-Auth": session.token, "Accept": accept},
-                verify=self._verify, timeout=self._timeout,
             )
             if resp.status_code == 401 and attempt == 0:
                 force_new = True

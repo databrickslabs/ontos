@@ -125,16 +125,17 @@ class TestAssetMetadataRoutes:
 
     @pytest.fixture
     def mock_ws(self, monkeypatch):
+        """Workspace client for uploads, via get_workspace_client's MOCK_WORKSPACE_CLIENT hook."""
+        import time
         from unittest.mock import MagicMock
-        from src.app import app
-        from src.common.workspace_client import get_workspace_client
+        from src.common import workspace_client
         from src.controller.metadata_manager import MetadataManager
 
         ws = MagicMock()
+        monkeypatch.setenv("MOCK_WORKSPACE_CLIENT", "true")
+        monkeypatch.setitem(workspace_client._CLIENT_CACHE, "mock_ws", (ws, "mock", time.time()))
         monkeypatch.setattr(MetadataManager, "ensure_volume_path", lambda self, ws, settings, base_dir: "/Volumes/c/s/v")
-        app.dependency_overrides[get_workspace_client] = lambda: ws
-        yield ws
-        app.dependency_overrides.pop(get_workspace_client, None)
+        return ws
 
     def test_create_rich_text_for_asset(self, client: TestClient):
         response = client.post(

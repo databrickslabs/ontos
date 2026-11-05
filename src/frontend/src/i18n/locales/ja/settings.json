@@ -771,11 +771,35 @@
       "testError": "接続テストのエラー",
       "deleteSuccess": "接続を削除しました",
       "testSuccessProject": "プロジェクト: {{project}}",
-      "deleteFailed": "削除に失敗しました"
+      "deleteFailed": "削除に失敗しました",
+      "testSuccessWithWarnings": "接続しました（警告あり）"
     },
     "badges": {
       "system": "システム",
       "default": "デフォルト"
+    },
+    "tableau": {
+      "configTitle": "Tableau の設定",
+      "serverUrl": "サーバー URL",
+      "serverUrlHelp": "Tableau Cloud のポッド URL（ブラウザに表示されるもの）または Tableau Server の URL。",
+      "site": "サイト",
+      "siteHelp": "アドレスバーのサイトのコンテンツ URL（…/site/<サイト>/…）。Tableau Server の既定サイトでは空欄。",
+      "authSectionTitle": "認証",
+      "authSectionHelp": "Connected App のシークレット値（または PAT のシークレット）を Databricks Secret に保存し、そのスコープとキーを下に指定します。サイト管理者アカウントを使用してください。そうでない場合、Tableau はアカウントが所有していないコンテンツのテーブル名と列名を非表示にします。",
+      "authMode": "認証方式",
+      "authConnectedApp": "Connected App（推奨）",
+      "authConnectedAppHelp": "直接信頼の Connected App。Ontos が下のユーザー用に有効期間の短いトークンに署名します。セッションは同時に実行できます。",
+      "authPat": "個人用アクセストークン",
+      "authPatHelp": "開発用。同じトークンで再度サインインすると以前のセッションが終了するため、専用のトークンを使用してください。",
+      "patName": "トークン名",
+      "clientId": "クライアント ID",
+      "secretId": "シークレット ID",
+      "username": "ユーザー名",
+      "usernameHelp": "Connected App がサインインする Tableau ユーザー（Tableau Cloud ではメールアドレス）。",
+      "secretScope": "シークレットスコープ",
+      "secretKey": "シークレットキー",
+      "caBundlePath": "CA バンドルのパス",
+      "caBundlePathHelp": "任意。プライベート認証局を使用する Tableau Server 用の PEM バンドル。"
     }
   },
   "schemaImporter": {

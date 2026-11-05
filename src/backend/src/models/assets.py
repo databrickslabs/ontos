@@ -131,6 +131,15 @@ class UnifiedAssetType(str, Enum):
     POWERBI_DASHBOARD = "powerbi_dashboard"
     POWERBI_REPORT = "powerbi_report"
     POWERBI_DATAFLOW = "powerbi_dataflow"
+
+    # -------------------------------------------------------------------------
+    # Tableau - Visualization & Semantic Assets
+    # -------------------------------------------------------------------------
+    TABLEAU_PROJECT = "tableau_project"
+    TABLEAU_WORKBOOK = "tableau_workbook"
+    TABLEAU_DASHBOARD = "tableau_dashboard"
+    TABLEAU_SHEET = "tableau_sheet"
+    TABLEAU_DATASOURCE = "tableau_datasource"
     
     # -------------------------------------------------------------------------
     # Cloud Storage - Storage Assets
@@ -203,6 +212,13 @@ ASSET_TYPE_CATEGORIES: Dict[UnifiedAssetType, AssetCategory] = {
     UnifiedAssetType.POWERBI_DASHBOARD: AssetCategory.VISUALIZATION,
     UnifiedAssetType.POWERBI_REPORT: AssetCategory.VISUALIZATION,
     UnifiedAssetType.POWERBI_DATAFLOW: AssetCategory.DATA,
+
+    # Tableau
+    UnifiedAssetType.TABLEAU_PROJECT: AssetCategory.OTHER,
+    UnifiedAssetType.TABLEAU_WORKBOOK: AssetCategory.VISUALIZATION,
+    UnifiedAssetType.TABLEAU_DASHBOARD: AssetCategory.VISUALIZATION,
+    UnifiedAssetType.TABLEAU_SHEET: AssetCategory.VISUALIZATION,
+    UnifiedAssetType.TABLEAU_DATASOURCE: AssetCategory.SEMANTIC,
     # Cloud Storage
     UnifiedAssetType.S3_BUCKET: AssetCategory.STORAGE,
     UnifiedAssetType.S3_OBJECT: AssetCategory.STORAGE,
@@ -234,6 +250,7 @@ SCHEMA_SUPPORTING_TYPES: set = {
     UnifiedAssetType.KAFKA_TOPIC,  # If using Schema Registry
     UnifiedAssetType.POWERBI_DATASET,
     UnifiedAssetType.POWERBI_SEMANTIC_MODEL,
+    UnifiedAssetType.TABLEAU_DATASOURCE,
 }
 
 # Mapping of connector types to supported asset types
@@ -280,6 +297,13 @@ CONNECTOR_ASSET_TYPES: Dict[str, List[UnifiedAssetType]] = {
         UnifiedAssetType.POWERBI_DASHBOARD,
         UnifiedAssetType.POWERBI_REPORT,
         UnifiedAssetType.POWERBI_DATAFLOW,
+    ],
+    "tableau": [
+        UnifiedAssetType.TABLEAU_PROJECT,
+        UnifiedAssetType.TABLEAU_WORKBOOK,
+        UnifiedAssetType.TABLEAU_DASHBOARD,
+        UnifiedAssetType.TABLEAU_SHEET,
+        UnifiedAssetType.TABLEAU_DATASOURCE,
     ],
     "s3": [
         UnifiedAssetType.S3_BUCKET,

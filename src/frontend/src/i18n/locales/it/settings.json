@@ -771,11 +771,35 @@
       "testError": "Errore nel test della connessione",
       "deleteSuccess": "Connessione eliminata",
       "testSuccessProject": "Progetto: {{project}}",
-      "deleteFailed": "Eliminazione non riuscita"
+      "deleteFailed": "Eliminazione non riuscita",
+      "testSuccessWithWarnings": "Connesso, con avvisi"
     },
     "badges": {
       "system": "Sistema",
       "default": "Predefinito"
+    },
+    "tableau": {
+      "configTitle": "Configurazione Tableau",
+      "serverUrl": "URL del server",
+      "serverUrlHelp": "URL del pod di Tableau Cloud (come nel browser) o URL di Tableau Server.",
+      "site": "Sito",
+      "siteHelp": "URL del contenuto del sito dalla barra degli indirizzi (…/site/<sito>/…). Vuoto per il sito predefinito di Tableau Server.",
+      "authSectionTitle": "Autenticazione",
+      "authSectionHelp": "Salva il valore segreto della Connected App (o il segreto del PAT) come Databricks Secret, poi indica scope e chiave qui sotto. Usa un account amministratore del sito, altrimenti Tableau nasconde i nomi di tabelle e colonne dei contenuti che non gli appartengono.",
+      "authMode": "Metodo di autenticazione",
+      "authConnectedApp": "Connected App (consigliato)",
+      "authConnectedAppHelp": "Connected App con trust diretto. Ontos firma un token di breve durata per l'utente indicato sotto; le sessioni possono essere simultanee.",
+      "authPat": "Token di accesso personale",
+      "authPatHelp": "Per lo sviluppo. Un nuovo accesso con lo stesso token chiude la sessione precedente: usa un token dedicato.",
+      "patName": "Nome del token",
+      "clientId": "ID client",
+      "secretId": "ID del segreto",
+      "username": "Nome utente",
+      "usernameHelp": "Utente Tableau con cui accede la Connected App (e-mail su Tableau Cloud).",
+      "secretScope": "Scope del segreto",
+      "secretKey": "Chiave del segreto",
+      "caBundlePath": "Percorso del bundle CA",
+      "caBundlePathHelp": "Facoltativo. Bundle PEM per Tableau Server con un'autorità di certificazione privata."
     }
   },
   "schemaImporter": {

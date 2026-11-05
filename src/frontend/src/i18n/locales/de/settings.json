@@ -771,11 +771,35 @@
       "testError": "Fehler beim Verbindungstest",
       "deleteSuccess": "Verbindung gelöscht",
       "testSuccessProject": "Projekt: {{project}}",
-      "deleteFailed": "Löschen fehlgeschlagen"
+      "deleteFailed": "Löschen fehlgeschlagen",
+      "testSuccessWithWarnings": "Verbunden, mit Warnungen"
     },
     "badges": {
       "system": "System",
       "default": "Standard"
+    },
+    "tableau": {
+      "configTitle": "Tableau-Konfiguration",
+      "serverUrl": "Server-URL",
+      "serverUrlHelp": "Pod-URL von Tableau Cloud (wie im Browser) oder URL von Tableau Server.",
+      "site": "Site",
+      "siteHelp": "Site-Content-URL aus der Adressleiste (…/site/<site>/…). Leer für die Standard-Site von Tableau Server.",
+      "authSectionTitle": "Authentifizierung",
+      "authSectionHelp": "Speichern Sie den Secret-Wert der Connected App (oder das PAT-Secret) als Databricks Secret und geben Sie unten Scope und Key an. Verwenden Sie ein Site-Administrator-Konto, sonst blendet Tableau Tabellen- und Spaltennamen fremder Inhalte aus.",
+      "authMode": "Authentifizierungsmethode",
+      "authConnectedApp": "Connected App (empfohlen)",
+      "authConnectedAppHelp": "Connected App mit Direct Trust. Ontos signiert ein kurzlebiges Token für den unten angegebenen Benutzer; Sitzungen können parallel laufen.",
+      "authPat": "Persönliches Zugriffstoken",
+      "authPatHelp": "Für die Entwicklung. Eine erneute Anmeldung mit demselben Token beendet dessen vorherige Sitzung – verwenden Sie ein eigenes Token.",
+      "patName": "Token-Name",
+      "clientId": "Client-ID",
+      "secretId": "Secret-ID",
+      "username": "Benutzername",
+      "usernameHelp": "Tableau-Benutzer, als der sich die Connected App anmeldet (bei Tableau Cloud die E-Mail-Adresse).",
+      "secretScope": "Secret-Scope",
+      "secretKey": "Secret-Key",
+      "caBundlePath": "Pfad zum CA-Bundle",
+      "caBundlePathHelp": "Optional. PEM-Bundle für Tableau Server mit privater Zertifizierungsstelle."
     }
   },
   "schemaImporter": {

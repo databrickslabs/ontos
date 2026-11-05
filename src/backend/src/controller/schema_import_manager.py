@@ -1052,6 +1052,12 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW.value: "view",
     UnifiedAssetType.SNOWFLAKE_FUNCTION.value: "function",
     UnifiedAssetType.SNOWFLAKE_PROCEDURE.value: "procedure",
+    # Tableau
+    UnifiedAssetType.TABLEAU_PROJECT.value: "project",
+    UnifiedAssetType.TABLEAU_WORKBOOK.value: "workbook",
+    UnifiedAssetType.TABLEAU_DASHBOARD.value: "dashboard",
+    UnifiedAssetType.TABLEAU_SHEET.value: "sheet",
+    UnifiedAssetType.TABLEAU_DATASOURCE.value: "datasource",
 }
 
 
@@ -1111,4 +1117,7 @@ def _has_children(asset_type: Optional[UnifiedAssetType]) -> bool:
         UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW.value,
         UnifiedAssetType.SNOWFLAKE_FUNCTION.value,
         UnifiedAssetType.SNOWFLAKE_PROCEDURE.value,
+        # Tableau: workbooks hold views, published data sources hold fields
+        UnifiedAssetType.TABLEAU_WORKBOOK.value,
+        UnifiedAssetType.TABLEAU_DATASOURCE.value,
     }

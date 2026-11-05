@@ -177,15 +177,14 @@ def _refused(code, trigger_type, entity_type):
 
 
 _DEMO_PAIRS_REFUSED = {
-    ('demo_data_retail.sql', 'Pre-Creation Compliance Validation'):
-        _refused('trigger_entity_type_unsupported', 'before_create', 'view'),
-    ('demo_data_retail.sql', 'Contract Purpose Gate'):
-        _refused('trigger_entity_type_unknown', 'before_update', 'dataset'),
-    ('demo_data_retail.sql', 'Full Governance Pre-Check'):
-        _refused('trigger_entity_type_unsupported', 'before_create', 'view'),
+    # No code fires before_update for data products (only PUT /data-contracts/{id} does), so
+    # there is no pair to move this gate to; it stays as shipped until one exists.
     ('demo_data_fsi.sql', 'AML Model Validation Gate'):
         _refused('trigger_entity_type_unsupported', 'before_update', 'data_product'),
 }
+# Retail workflows that used to list "view" (no before_create site) or the removed "dataset"
+_DEMO_FIXED = ('Pre-Creation Compliance Validation', 'Contract Purpose Gate',
+               'Full Governance Pre-Check')
 _DEMO_ROW = re.compile(
     r"\('(?P<id>[0-9a-f-]{36})',\s*'(?P<name>(?:[^']|'')*)',\s*'(?:[^']|'')*',"
     r"\s*'(?P<trigger>\{(?:[^']|'')*\})'",
@@ -261,3 +260,13 @@ def test_emptying_a_trigger_of_only_unknown_types_is_refused(db_session):
 ])
 def test_other_updates_are_not_refused(db_session, stored, new):
     assert _manager(db_session).trigger_widening_errors(stored, new) == []
+
+
+def test_the_fixed_retail_demo_workflows_pass_the_create_check(db_session):
+    manager = _manager(db_session)
+    rows = {name: trigger for file_name, name, trigger in _demo_workflows()
+            if file_name == 'demo_data_retail.sql'}
+    for name in _DEMO_FIXED:
+        trigger = WorkflowTrigger.model_validate(json.loads(rows[name]))
+        assert trigger.unknown_entity_types == [], name
+        assert manager.trigger_save_errors(trigger) == [], name

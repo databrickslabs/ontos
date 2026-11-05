@@ -321,5 +321,16 @@
     "preview": "Anteprima",
     "previewing": "Anteprima in corso…",
     "previewNote": "Solo anteprima: ecco cosa farebbe Importa. Non è stato salvato nulla."
+  },
+  "inherited": {
+    "title": "Ereditato",
+    "description": "Metadati di sola lettura ereditati dai contratti e dagli asset di questa entità. Modificali all'origine.",
+    "refresh": "Aggiorna i metadati ereditati",
+    "fromContract": "dal contratto {{name}}",
+    "fromAsset": "dall'asset {{name}}",
+    "shared": "condiviso",
+    "table": {
+      "source": "Origine"
+    }
   }
 }

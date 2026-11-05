@@ -321,5 +321,16 @@
     "preview": "Pré-visualizar",
     "previewing": "Pré-visualizando…",
     "previewNote": "Apenas pré-visualização: é isto que Importar faria. Nada foi salvo."
+  },
+  "inherited": {
+    "title": "Herdado",
+    "description": "Metadados somente leitura herdados dos contratos e ativos desta entidade. Edite-os na origem.",
+    "refresh": "Atualizar metadados herdados",
+    "fromContract": "do contrato {{name}}",
+    "fromAsset": "do ativo {{name}}",
+    "shared": "compartilhado",
+    "table": {
+      "source": "Origem"
+    }
   }
 }

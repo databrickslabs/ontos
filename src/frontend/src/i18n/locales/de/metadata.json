@@ -321,5 +321,16 @@
     "preview": "Vorschau",
     "previewing": "Vorschau wird erstellt…",
     "previewNote": "Nur Vorschau: So würde Importieren vorgehen. Es wurde nichts gespeichert."
+  },
+  "inherited": {
+    "title": "Geerbt",
+    "description": "Schreibgeschützte Metadaten, die von den Verträgen und Assets dieser Entität geerbt werden. Bearbeiten Sie sie an der Quelle.",
+    "refresh": "Geerbte Metadaten aktualisieren",
+    "fromContract": "aus Vertrag {{name}}",
+    "fromAsset": "aus Asset {{name}}",
+    "shared": "geteilt",
+    "table": {
+      "source": "Quelle"
+    }
   }
 }

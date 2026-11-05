@@ -321,5 +321,16 @@
     "preview": "Preview",
     "previewing": "Previewing…",
     "previewNote": "Preview only: this is what Import would do. Nothing was saved."
+  },
+  "inherited": {
+    "title": "Inherited",
+    "description": "Read-only metadata inherited from this entity's contracts and assets. Edit it at its source.",
+    "refresh": "Refresh inherited metadata",
+    "fromContract": "from contract {{name}}",
+    "fromAsset": "from asset {{name}}",
+    "shared": "shared",
+    "table": {
+      "source": "Source"
+    }
   }
 }

@@ -33,17 +33,49 @@ def _get_config_classes() -> Dict[str, Any]:
         from src.connectors.snowflake import SnowflakeConnectorConfig
         from src.connectors.kafka import KafkaConnectorConfig
         from src.connectors.powerbi import PowerBIConnectorConfig
+        from src.connectors.tableau import TableauConnectorConfig
         _CONFIG_CLASSES = {
             "bigquery": BigQueryConnectorConfig,
             "snowflake": SnowflakeConnectorConfig,
             "kafka": KafkaConnectorConfig,
             "powerbi": PowerBIConnectorConfig,
+            "tableau": TableauConnectorConfig,
         }
     return _CONFIG_CLASSES
 
 
 # Fields that must not be persisted or returned to clients
 _INTERNAL_FIELDS = {"workspace_client", "credentials"}
+
+# Config values that look like secrets are masked in API responses. Connectors
+# should reference secrets via a Databricks secret scope instead; this protects
+# configs that still carry one (e.g. stub connectors with a client_secret field).
+SECRET_MASK = "********"
+_SECRET_KEY_MARKERS = ("password", "secret", "token", "private_key", "api_key")
+# References to secrets (scope/key names, ids) are not secrets themselves
+_SECRET_REFERENCE_SUFFIXES = ("_scope", "_key_name", "_id", "_name")
+_SECRET_REFERENCE_KEYS = {"secret_scope", "secret_key", "credentials_secret_scope", "credentials_secret_key"}
+
+
+def _is_secret_field(name: str) -> bool:
+    lowered = name.lower()
+    if lowered in _SECRET_REFERENCE_KEYS or lowered.endswith(_SECRET_REFERENCE_SUFFIXES):
+        return False
+    return any(marker in lowered for marker in _SECRET_KEY_MARKERS)
+
+
+def redact_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Copy of ``config`` with secret-like values masked."""
+    return {
+        k: (SECRET_MASK if _is_secret_field(k) and v not in (None, "") else v)
+        for k, v in (config or {}).items()
+    }
+
+
+def _to_response(db_obj: ConnectionDb) -> ConnectionResponse:
+    response = ConnectionResponse.model_validate(db_obj)
+    response.config = redact_config(response.config)
+    return response
 
 
 class ConnectionsManager:
@@ -64,13 +96,13 @@ class ConnectionsManager:
             rows = connections_repo.get_by_connector_type(self._db, connector_type)
         else:
             rows = connections_repo.get_all(self._db)
-        return [ConnectionResponse.model_validate(r) for r in rows]
+        return [_to_response(r) for r in rows]
 
     def get_connection(self, connection_id: UUID) -> Optional[ConnectionResponse]:
         row = connections_repo.get(self._db, connection_id)
         if row is None:
             return None
-        return ConnectionResponse.model_validate(row)
+        return _to_response(row)
 
     def create_connection(
         self, data: ConnectionCreate, created_by: Optional[str] = None
@@ -94,7 +126,7 @@ class ConnectionsManager:
         self._db.commit()
         self._db.refresh(db_obj)
         logger.info(f"Created connection '{data.name}' (type={data.connector_type})")
-        return ConnectionResponse.model_validate(db_obj)
+        return _to_response(db_obj)
 
     def update_connection(
         self, connection_id: UUID, data: ConnectionUpdate
@@ -109,8 +141,11 @@ class ConnectionsManager:
             connections_repo.clear_default_for_type(self._db, db_obj.connector_type)
 
         if "config" in update_data and update_data["config"] is not None:
+            stored = dict(db_obj.config or {})
             update_data["config"] = {
-                k: v for k, v in update_data["config"].items() if k not in _INTERNAL_FIELDS
+                # A masked value sent back from the UI means "unchanged"
+                k: (stored.get(k) if v == SECRET_MASK else v)
+                for k, v in update_data["config"].items() if k not in _INTERNAL_FIELDS
             }
 
         for field, value in update_data.items():
@@ -119,7 +154,7 @@ class ConnectionsManager:
         self._db.commit()
         self._db.refresh(db_obj)
         logger.info(f"Updated connection '{db_obj.name}' (id={connection_id})")
-        return ConnectionResponse.model_validate(db_obj)
+        return _to_response(db_obj)
 
     def delete_connection(self, connection_id: UUID) -> bool:
         db_obj = connections_repo.get(self._db, connection_id)
@@ -157,12 +192,12 @@ class ConnectionsManager:
                 return DatabricksConnector(workspace_client=self._ws_client)
             return registry._connector_instances[connector_type]
 
-        # Inject workspace client for connectors that need it
-        if connector_type == "bigquery" and self._ws_client:
-            config_dict["workspace_client"] = self._ws_client
-
         config_classes = _get_config_classes()
         config_cls = config_classes.get(connector_type, ConnectorConfig)
+
+        # Inject the workspace client for connectors that read UC connections/secrets
+        if self._ws_client and "workspace_client" in config_cls.model_fields:
+            config_dict["workspace_client"] = self._ws_client
         typed_config = config_cls(**config_dict)
 
         if connector_type in registry._connector_classes:

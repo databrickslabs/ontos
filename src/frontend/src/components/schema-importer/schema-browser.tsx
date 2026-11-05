@@ -14,6 +14,10 @@ import {
   Library,
   HardDrive,
   BarChart3,
+  BookOpen,
+  LayoutDashboard,
+  LineChart,
+  Layers,
   X,
   Search,
   AlertCircle,
@@ -70,6 +74,11 @@ const nodeIconMap: Record<string, typeof Database> = {
   model: Box,
   volume: HardDrive,
   metric: BarChart3,
+  // Tableau
+  workbook: BookOpen,
+  dashboard: LayoutDashboard,
+  sheet: LineChart,
+  datasource: Layers,
 };
 
 function getNodeIcon(nodeType: string) {
@@ -78,7 +87,7 @@ function getNodeIcon(nodeType: string) {
 }
 
 /** Container node types that are navigational, not leaf assets */
-const CONTAINER_TYPES = new Set(['catalog', 'schema', 'database', 'dataset', 'project']);
+const CONTAINER_TYPES = new Set(['catalog', 'schema', 'database', 'dataset', 'project', 'workbook']);
 
 function findNodeByPath(nodes: TreeNode[], path: string): TreeNode | undefined {
   for (const n of nodes) {

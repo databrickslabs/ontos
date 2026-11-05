@@ -295,3 +295,25 @@ def test_snapshot_failures_are_import_warnings(db_session, asset_types, uc_order
     result = _import(db_session, WB_PATH, snapshots=RecordingSnapshots(status="auth_expired"))
     assert result.errors == 0
     assert f"{WB_PATH}.v~v1: snapshot auth_expired (refresh token)" in result.warnings
+
+
+def test_reimport_refreshes_snapshots_with_the_current_source_timestamp(db_session, asset_types, uc_orders):
+    _import(db_session, WB_PATH)
+    dashboard = _asset(db_session, f"{WB_PATH}.v~v1")
+    dashboard.properties = {k: v for k, v in dashboard.properties.items() if k not in ("connection_id", "source_updated_at")}
+    db_session.flush()
+
+    snapshots = RecordingSnapshots()
+    _import(db_session, WB_PATH, snapshots=snapshots)
+
+    assert snapshots.captured == [f"{WB_PATH}.v~v1"]
+    assert dashboard.properties["connection_id"]
+
+
+def test_a_failing_snapshot_does_not_fail_the_import(db_session, asset_types, uc_orders):
+    class Broken(RecordingSnapshots):
+        def capture(self, db, **kwargs):
+            raise RuntimeError("volume not writable")
+    result = _import(db_session, WB_PATH, snapshots=Broken())
+    assert result.errors == 0
+    assert f"{WB_PATH}.v~v1: snapshot failed (volume not writable)" in result.warnings

@@ -11,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, LineageLink, ListAssetsOptions
@@ -540,7 +541,10 @@ class SchemaImportManager:
         )
 
         # 6. Snapshots of the dashboards the connector renders
-        self._capture_snapshots(db, connector, preview_items, created_assets, metadata_cache, result, current_user_id)
+        self._capture_snapshots(
+            db, connector, preview_items, created_assets, metadata_cache, result, current_user_id,
+            connection_id=request.connection_id,
+        )
 
         return result
 
@@ -655,6 +659,7 @@ class SchemaImportManager:
         metadata_cache: Dict[str, Any],
         result: ImportResult,
         current_user_id: str,
+        connection_id: Optional[UUID] = None,
     ) -> None:
         """Capture snapshots of imported dashboards; failures are warnings and never stop the import."""
         for item in preview_items:
@@ -672,6 +677,16 @@ class SchemaImportManager:
             asset = asset_repo.get(db, id=created_assets[item.path])
             if asset is None:
                 continue
+            # Assets imported earlier: current source timestamp (so changed dashboards
+            # are re-rendered) and the connection (so they can be refreshed later)
+            fresh = _connector_hook(connector, "import_properties", meta, default={}).get("source_updated_at")
+            props = dict(asset.properties or {})
+            if (fresh and props.get("source_updated_at") != fresh) or (connection_id and not props.get("connection_id")):
+                props["source_updated_at"] = fresh or props.get("source_updated_at")
+                props.setdefault("connection_id", str(connection_id) if connection_id else None)
+                asset.properties = props
+                flag_modified(asset, "properties")
+                db.flush()
             try:
                 with db.begin_nested():
                     state = self._snapshots.capture(db, asset=asset, connector=connector, current_user=current_user_id)

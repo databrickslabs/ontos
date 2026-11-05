@@ -846,13 +846,17 @@ class TableauConnector(AssetConnector):
         if not workbook_luid:
             return []
         graph = self._workbook_graph(workbook_luid)
+        if "kinds" not in graph:
+            # Fail closed: without the Metadata API, user filters cannot be ruled out
+            return ["Could not check the calculations for user filters (Metadata API unavailable)"]
         formulas = list(graph.get("formulas") or [])
+        risks = []
         for ds_luid in graph.get("datasources", {}).get(view_luid) or []:
             try:
                 formulas.extend(self._datasource_formulas(ds_luid))
-            except ConnectorConnectionError as exc:
+            except Exception as exc:
                 logger.warning(f"Could not read formulas of data source {ds_luid}: {exc}")
-        risks = []
+                risks.append(f"Could not check the calculations of data source {ds_luid} for user filters")
         for name, formula in formulas:
             match = _USER_FUNCTION_RE.search(formula or "")
             if match:

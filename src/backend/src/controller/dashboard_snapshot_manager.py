@@ -104,9 +104,22 @@ class DashboardSnapshotManager:
         db.flush()
         return state
 
+    @staticmethod
+    def _discard(db: Session, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove the stored image document and preview note, so neither the asset nor
+        products inheriting from it show a snapshot that must not be shown."""
+        for model, key in ((DocumentMetadataDb, "document_id"), (RichTextMetadataDb, "note_id")):
+            row = db.get(model, _as_uuid(state.get(key))) if state.get(key) else None
+            if row is not None:
+                db.delete(row)
+        db.flush()
+        return {**state, "document_id": None, "note_id": None}
+
     def set_opt_out(self, db: Session, asset: AssetDb, opt_out: bool) -> Dict[str, Any]:
         props = dict(asset.properties or {})
         props[OPT_OUT_PROPERTY] = bool(opt_out)
+        if opt_out:
+            props[SNAPSHOT_PROPERTY] = {**self._discard(db, self.state(asset)), "status": STATUS_OPTED_OUT}
         asset.properties = props
         flag_modified(asset, "properties")
         db.flush()
@@ -132,12 +145,14 @@ class DashboardSnapshotManager:
         source_updated_at = props.get("source_updated_at")
 
         if props.get(OPT_OUT_PROPERTY):
-            return self._save_state(db, asset, {**previous, "status": STATUS_OPTED_OUT})
+            return self._save_state(db, asset, {**self._discard(db, previous), "status": STATUS_OPTED_OUT})
 
         if not force:
             risks = connector.snapshot_risks(asset.location)
             if risks:
-                return self._save_state(db, asset, {**previous, "status": STATUS_USER_FILTERS, "risks": risks})
+                # An earlier image may show rows filtered for the importer's account
+                state = {**self._discard(db, previous), "status": STATUS_USER_FILTERS, "risks": risks}
+                return self._save_state(db, asset, state)
             if (previous.get("status") == STATUS_OK and previous.get("document_id")
                     and source_updated_at and previous.get("source_updated_at") == source_updated_at):
                 return previous

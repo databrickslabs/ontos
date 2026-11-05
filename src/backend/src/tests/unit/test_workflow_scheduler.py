@@ -451,3 +451,23 @@ def test_timezone_is_kept_on_read_and_duplicate(db_session):
     assert manager.get_workflow(workflow.id).trigger.timezone == 'Europe/Berlin'
     copy = manager.duplicate_workflow(workflow.id, 'Copy')
     assert (copy.trigger.schedule, copy.trigger.timezone) == ('0 30 2 * * ?', 'Europe/Berlin')
+
+
+@pytest.mark.parametrize('state', ['deleted', 'inactive'])
+def test_a_workflow_gone_after_the_claim_is_skipped(db_session, sessions, state):
+    # Deleted or turned off between the re-read and the run (e.g. through another
+    # instance): the claim is kept as skipped and nothing runs.
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    original = WorkflowsManager.get_workflow
+
+    def reread(self, workflow_id):
+        if state == 'deleted':
+            return None
+        return original(self, workflow_id).model_copy(update={'is_active': False})
+
+    with patch.object(WorkflowsManager, 'get_workflow', reread):
+        _scheduler(sessions).run_once(_at(minute=0, second=1))
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.outcome == {'status': 'skipped', 'coalesced_slots': 1}
+    assert claim.execution_id is None
+    assert _executions(db_session, workflow.id) == []

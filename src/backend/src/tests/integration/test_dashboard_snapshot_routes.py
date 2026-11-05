@@ -44,3 +44,45 @@ def test_refresh_needs_a_source_connection(client: TestClient, dashboard):
 
 def test_unknown_asset_is_404(client: TestClient):
     assert client.get(f"/api/assets/{uuid4()}/snapshot").status_code == 404
+
+
+@pytest.fixture
+def imported(dashboard, db_session):
+    dashboard.properties = {**dashboard.properties, "connection_id": str(uuid4())}
+    db_session.flush()
+    return dashboard
+
+
+def _refresh(client, asset, monkeypatch, connector, capture):
+    from src.app import app
+    from src.controller.connections_manager import ConnectionsManager
+    from src.routes import dashboard_snapshot_routes as routes
+    monkeypatch.setattr(ConnectionsManager, "get_connector_for_connection", lambda self, cid: connector)
+
+    class Manager:
+        def capture(self, db, *, asset, connector, current_user, force=False):
+            return capture(asset)
+
+    app.dependency_overrides[routes._get_snapshot_manager] = lambda: Manager()
+    try:
+        return client.post(f"/api/assets/{asset.id}/snapshot")
+    finally:
+        app.dependency_overrides.pop(routes._get_snapshot_manager, None)
+
+
+def test_refresh_captures_through_the_connection(client: TestClient, imported, monkeypatch):
+    def capture(asset):
+        asset.properties = {**asset.properties, "snapshot": {"status": "auth_expired"}}
+    response = _refresh(client, imported, monkeypatch, object(), capture)
+    assert response.status_code == 200, response.text
+    assert response.json()["snapshot"]["status"] == "auth_expired"
+
+
+def test_refresh_with_a_deleted_connection_is_404(client: TestClient, imported, monkeypatch):
+    assert _refresh(client, imported, monkeypatch, None, lambda a: None).status_code == 404
+
+
+def test_refresh_failure_is_502(client: TestClient, imported, monkeypatch):
+    def capture(asset):
+        raise RuntimeError("boom")
+    assert _refresh(client, imported, monkeypatch, object(), capture).status_code == 502

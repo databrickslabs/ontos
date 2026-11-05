@@ -234,3 +234,26 @@ def test_only_dashboards_get_snapshots_on_import():
         return AssetMetadata(identifier=PATH, name="x", asset_type=t, connector_type="tableau")
     assert connector.wants_snapshot(meta(UnifiedAssetType.TABLEAU_DASHBOARD)) is True
     assert connector.wants_snapshot(meta(UnifiedAssetType.TABLEAU_SHEET)) is False
+
+
+def test_opting_out_removes_the_stored_snapshot(db_session, manager, dashboard):
+    manager.capture(db_session, asset=dashboard, connector=FakeConnector(), current_user=None)
+    state = manager.set_opt_out(db_session, dashboard, True)["snapshot"]
+    assert state["status"] == "opted_out" and state["document_id"] is None
+    assert _doc_and_note(db_session, dashboard) == ([], [])
+
+
+def test_user_filters_found_later_remove_the_earlier_snapshot(db_session, manager, dashboard):
+    manager.capture(db_session, asset=dashboard, connector=FakeConnector(), current_user=None)
+    dashboard.properties = {**dashboard.properties, "source_updated_at": "2026-11-07T00:00:00+00:00"}
+    state = manager.capture(db_session, asset=dashboard, connector=FakeConnector(risks=["'X' uses USERNAME()"]), current_user=None)
+    assert state["status"] == "skipped_user_filters" and state["document_id"] is None
+    assert _doc_and_note(db_session, dashboard) == ([], [])
+
+
+def test_risk_check_fails_closed_without_the_metadata_api():
+    class NoMetadata(RenderClient):
+        def graphql(self, query, variables=None):
+            raise TableauAPIError("Metadata API disabled", 400)
+    risks = _tableau(NoMetadata()).snapshot_risks(PATH)
+    assert risks and "Metadata API unavailable" in risks[0]

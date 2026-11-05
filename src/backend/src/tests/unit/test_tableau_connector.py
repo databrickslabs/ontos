@@ -6,7 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.connectors.base import ConnectorAuthenticationError, ListAssetsOptions
+from src.connectors.base import (
+    ConnectorAuthenticationError,
+    ConnectorConnectionError,
+    ConnectorPermissionError,
+    ListAssetsOptions,
+)
 from src.connectors.tableau import (
     TableauConnector,
     TableauConnectorConfig,
@@ -47,6 +52,7 @@ DS_FIELDS = {
 class FakeClient:
     server_url = "https://10xx.online.tableau.com"
     site_content_url = "mysite"
+    identity = "pat:ontos"
 
     def __init__(self, graphql_data=None, site_role="SiteAdministratorCreator", metadata_api=True):
         self.graphql_data = graphql_data or {}
@@ -191,3 +197,41 @@ def test_missing_secret_configuration_is_an_auth_error():
     with pytest.raises(ConnectorAuthenticationError):
         connector._build_auth()
     assert connector.health_check()["healthy"] is False
+
+
+class FailingClient(FakeClient):
+    def __init__(self, status):
+        super().__init__()
+        self.status = status
+
+    def get_json(self, path, params=None):
+        raise TableauAPIError(f"failed {self.status}", self.status)
+
+
+@pytest.mark.parametrize("status,error", [
+    (401, ConnectorAuthenticationError),
+    (403, ConnectorPermissionError),
+    (500, ConnectorConnectionError),
+])
+def test_api_errors_map_to_connector_errors(status, error):
+    with pytest.raises(error):
+        _connector(FailingClient(status)).get_asset_metadata("p~p1.wb~wb1")
+
+
+def test_not_found_is_none_but_outages_are_not_reported_missing():
+    assert _connector(FailingClient(404)).get_asset_metadata("p~p1.wb~wb1") is None
+    assert _connector(FailingClient(404)).validate_asset_exists("p~p1.wb~wb1").exists is False
+
+    outage = _connector(FailingClient(503)).validate_asset_exists("p~p1.wb~wb1")
+    assert outage.exists is False and outage.validated is False
+
+
+def test_listing_cache_is_per_identity():
+    class OtherUser(FakeClient):
+        identity = "pat:other"
+
+        def paginate(self, path, collection, item, params=None):
+            return [] if path == "/projects" else super().paginate(path, collection, item, params)
+
+    assert len(_connector().list_containers(None)) == 2
+    assert _connector(OtherUser()).list_containers(None) == []

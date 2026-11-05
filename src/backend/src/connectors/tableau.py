@@ -244,20 +244,35 @@ class TableauConnector(AssetConnector):
             )
         return self._client
 
+    def _translate(self, exc: TableauAPIError) -> Exception:
+        """Connector error for a Tableau API error: 401 → auth, 403 → permission, else connection."""
+        if exc.status == 401:
+            return ConnectorAuthenticationError(str(exc), connector_type=self.connector_type)
+        if exc.status == 403:
+            return ConnectorPermissionError(str(exc), connector_type=self.connector_type)
+        return ConnectorConnectionError(str(exc), connector_type=self.connector_type)
+
     def _call(self, fn, *args, **kwargs):
         """Run a client call, translating API errors to connector errors."""
         try:
             return fn(*args, **kwargs)
         except TableauAPIError as exc:
-            if exc.status in (401,):
-                raise ConnectorAuthenticationError(str(exc), connector_type=self.connector_type) from exc
-            if exc.status in (403,):
-                raise ConnectorPermissionError(str(exc), connector_type=self.connector_type) from exc
-            raise ConnectorConnectionError(str(exc), connector_type=self.connector_type) from exc
+            raise self._translate(exc) from exc
+
+    def _get_or_none(self, site_path: str) -> Optional[Dict[str, Any]]:
+        """GET a REST resource; None only when Tableau says it does not exist (404)."""
+        client = self._ensure_client()
+        try:
+            return client.get_json(site_path)
+        except TableauAPIError as exc:
+            if exc.status == 404:
+                return None
+            raise self._translate(exc) from exc
 
     def _cached(self, kind: str, loader, *key_parts):
         client = self._ensure_client()
-        key = (client.server_url, client.site_content_url, kind) + tuple(key_parts)
+        # Per identity: different accounts may see different content
+        key = (client.server_url, client.site_content_url, client.identity, kind) + tuple(key_parts)
         hit = _LISTING_CACHE.get(key)
         ttl = self._cfg.cache_ttl_seconds
         if hit and time.time() - hit[0] < ttl:
@@ -475,11 +490,10 @@ class TableauConnector(AssetConnector):
         )
 
     def _workbook_metadata(self, identifier: str, luid: str) -> Optional[AssetMetadata]:
-        client = self._ensure_client()
-        try:
-            wb = self._call(client.get_json, f"/workbooks/{luid}").get("workbook") or {}
-        except ConnectorConnectionError:
+        body = self._get_or_none(f"/workbooks/{luid}")
+        if body is None:
             return None
+        wb = body.get("workbook") or {}
         return AssetMetadata(
             identifier=identifier, name=wb.get("name", ""), asset_type=UnifiedAssetType.TABLEAU_WORKBOOK,
             connector_type=self.connector_type, description=wb.get("description") or None, path=identifier,
@@ -494,11 +508,10 @@ class TableauConnector(AssetConnector):
         )
 
     def _view_metadata(self, identifier: str, luid: str, workbook_luid: Optional[str]) -> Optional[AssetMetadata]:
-        client = self._ensure_client()
-        try:
-            view = self._call(client.get_json, f"/views/{luid}").get("view") or {}
-        except ConnectorConnectionError:
+        body = self._get_or_none(f"/views/{luid}")
+        if body is None:
             return None
+        view = body.get("view") or {}
         workbook_luid = workbook_luid or (view.get("workbook") or {}).get("id")
         view_type = self._view_kinds(workbook_luid).get(luid, UnifiedAssetType.TABLEAU_SHEET) if workbook_luid else UnifiedAssetType.TABLEAU_SHEET
         usage = next((v.get("usage") for v in self._workbook_views(workbook_luid) if v.get("id") == luid), None) if workbook_luid else None
@@ -520,10 +533,10 @@ class TableauConnector(AssetConnector):
 
     def _datasource_metadata(self, identifier: str, luid: str) -> Optional[AssetMetadata]:
         client = self._ensure_client()
-        try:
-            ds = self._call(client.get_json, f"/datasources/{luid}").get("datasource") or {}
-        except ConnectorConnectionError:
+        body = self._get_or_none(f"/datasources/{luid}")
+        if body is None:
             return None
+        ds = body.get("datasource") or {}
 
         columns: List[ColumnInfo] = []
         properties: Dict[str, Any] = {

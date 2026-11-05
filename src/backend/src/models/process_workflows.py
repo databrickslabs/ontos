@@ -224,7 +224,16 @@ class WorkflowTrigger(BaseModel):
     to_status: Optional[str] = Field(None, description="Status to transition to (for status change triggers)")
 
     # For scheduled
-    schedule: Optional[str] = Field(None, description="Cron expression for scheduled triggers")
+    schedule: Optional[str] = Field(
+        None,
+        description=(
+            "scheduled only: Quartz cron expression (sec min hour day-of-month month "
+            "day-of-week [year]), e.g. '0 30 2 * * ?'; see common/quartz_cron.py"
+        ),
+    )
+    timezone: Optional[str] = Field(
+        None, description="scheduled only: IANA timezone of the schedule; empty means UTC",
+    )
 
     # For before_status_change
     on_error: GateErrorMode = Field(

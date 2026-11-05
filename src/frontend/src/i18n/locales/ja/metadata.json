@@ -251,5 +251,16 @@
     "goToDetails": "詳細へ移動",
     "alreadySubscribed": "登録済み",
     "subscribe": "登録"
+  },
+  "inherited": {
+    "title": "継承",
+    "description": "このエンティティの契約とアセットから継承された読み取り専用のメタデータです。編集は継承元で行ってください。",
+    "refresh": "継承されたメタデータを更新",
+    "fromContract": "契約 {{name}} から",
+    "fromAsset": "アセット {{name}} から",
+    "shared": "共有",
+    "table": {
+      "source": "継承元"
+    }
   }
 }

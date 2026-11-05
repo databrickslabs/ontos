@@ -618,15 +618,17 @@ async def get_merged_metadata(
     entity_type: str,
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
-    max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
+    max_level: Optional[int] = Query(None, ge=0, le=999, description="Maximum inheritance level (defaults to the product's max_level_inheritance, else 99)"),
     db: DBSessionDep = None,
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """
-    Get merged metadata for an entity, including inherited metadata from contracts.
-    
-    For Data Products and Datasets, pass contract_ids to include inherited metadata.
+    Get merged metadata for an entity, including inherited metadata.
+
+    Inheritance sources are resolved server-side: a contract inherits from the
+    assets that implement it, a product from its output ports' contracts and
+    assets. ``contract_ids`` adds further contracts.
     Only metadata with level <= max_level and inheritable=True will be inherited.
     """
     contract_id_list = [cid.strip() for cid in contract_ids.split(",")] if contract_ids else None

@@ -200,3 +200,42 @@ def test_the_interval_check_is_fast_enough_for_every_save():
     started = datetime.now()
     validate_schedule('0 0/5 * * * ?', 'UTC', now=START)
     assert datetime.now() - started < timedelta(seconds=2)
+
+
+# --- DST and the interval check ----------------------------------------------------
+
+def test_a_schedule_stays_valid_just_before_a_dst_change():
+    # New York skips 02:00-03:00 on 2026-03-08 and repeats 01:00-02:00 on 2026-11-01.
+    for now in (datetime(2026, 3, 8, 6, 55, tzinfo=UTC), datetime(2026, 10, 31, 23, tzinfo=UTC)):
+        for expr in ('0 0/30 * * * ?', '0 0/30 2 * * ?', '0 0/5 * * * ?'):
+            assert validate_schedule(expr, 'America/New_York', now=now) == expr
+
+
+def test_runs_on_the_same_instant_count_once(monkeypatch):
+    """Should croniter map several wall-clock runs to one instant, it is one run."""
+    from src.common import quartz_cron
+
+    instants = [datetime(2026, 3, 8, 7, tzinfo=UTC)] * 3 + [
+        datetime(2026, 3, 8, 7, 30, tzinfo=UTC), datetime(2026, 3, 8, 7, 15, tzinfo=UTC),
+        datetime(2026, 3, 8, 8, tzinfo=UTC),
+    ]
+
+    class Fake:
+        def __init__(self):
+            self._runs = iter(instants)
+
+        def get_next(self, _type):
+            try:
+                return next(self._runs)
+            except StopIteration:
+                raise CroniterError('no more') from None
+
+    monkeypatch.setattr(quartz_cron, '_iterator', lambda cron, start: Fake())
+    expr = '0 0/30 * * * ?'
+    assert next_runs(expr, 'America/New_York', after=START, count=5) == [
+        datetime(2026, 3, 8, 7, tzinfo=UTC), datetime(2026, 3, 8, 7, 30, tzinfo=UTC),
+        datetime(2026, 3, 8, 8, tzinfo=UTC),
+    ]
+    assert validate_schedule(expr, 'America/New_York', now=START) == expr
+    end = datetime(2026, 3, 9, tzinfo=UTC)
+    assert count_runs(expr, 'America/New_York', START, end, limit=100) == 3

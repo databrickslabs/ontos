@@ -18,14 +18,15 @@ which supports a subset of Quartz. This module accepts exactly that subset:
 Runs are computed in an IANA timezone (``zoneinfo``). In the hour a DST change
 skips, a run moves to the first valid time after it; in the hour a DST change
 repeats, a run in that hour happens in both occurrences (croniter's behaviour,
-covered by the tests).
+covered by the tests). Runs that land on the same instant count once.
 
 Errors are ``QuartzCronError`` (a ``CodedValueError``) with a code and params, so
 the UI can translate them.
 """
 import re
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from itertools import islice
+from typing import Iterator, List, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import CroniterError, croniter
@@ -161,6 +162,24 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _distinct_runs(cron: str, start: datetime) -> Iterator[datetime]:
+    """Runs after ``start`` as UTC instants, each once and increasing.
+
+    Around a DST change several wall-clock runs can map to one instant (or an
+    earlier one); those are dropped, so a DST shift never reads as a 0-minute gap.
+    """
+    iterator = _iterator(cron, start)
+    last: Optional[datetime] = None
+    try:
+        while True:
+            run = _as_utc(iterator.get_next(datetime))
+            if last is None or run > last:
+                last = run
+                yield run
+    except CroniterError:
+        return  # e.g. a year field that has no later year
+
+
 def next_runs(
     expr: str, tz: Optional[str] = None, *, after: Optional[datetime] = None, count: int = 3,
 ) -> List[datetime]:
@@ -168,14 +187,7 @@ def next_runs(
     _, cron = _parse(expr)
     zone = resolve_timezone(tz)
     start = _as_utc(after or datetime.now(timezone.utc)).astimezone(zone)
-    iterator = _iterator(cron, start)
-    runs = []
-    try:
-        for _ in range(count):
-            runs.append(_as_utc(iterator.get_next(datetime)))
-    except CroniterError:
-        pass  # e.g. a year field that has no later year
-    return runs
+    return list(islice(_distinct_runs(cron, start), count))
 
 
 def previous_run(expr: str, tz: Optional[str], at: datetime) -> Optional[datetime]:
@@ -195,13 +207,12 @@ def count_runs(expr: str, tz: Optional[str], after: datetime, until: datetime, l
     _, cron = _parse(expr)
     zone = resolve_timezone(tz)
     end = _as_utc(until)
-    iterator = _iterator(cron, _as_utc(after).astimezone(zone))
+    runs = _distinct_runs(cron, _as_utc(after).astimezone(zone))
     count = 0
-    try:
-        while count < limit and _as_utc(iterator.get_next(datetime)) <= end:
-            count += 1
-    except CroniterError:
-        pass
+    for run in runs:
+        if count >= limit or run > end:
+            break
+        count += 1
     return count
 
 

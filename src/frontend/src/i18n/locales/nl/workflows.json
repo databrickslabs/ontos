@@ -612,7 +612,9 @@
     "unknownBadge": "Onbekend entiteitstype: {{type}}",
     "removeUnknown": "{{type}} verwijderen",
     "unknownNotice_one": "Deze trigger bevat een entiteitstype dat niet meer bestaat. Het komt met niets overeen: verwijder het om op te slaan.",
-    "unknownNotice_other": "Deze trigger bevat {{count}} entiteitstypen die niet meer bestaan. Ze komen met niets overeen: verwijder ze om op te slaan."
+    "unknownNotice_other": "Deze trigger bevat {{count}} entiteitstypen die niet meer bestaan. Ze komen met niets overeen: verwijder ze om op te slaan.",
+    "unknownOnSave": "De trigger bevat het onbekende entiteitstype \"{{type}}\": verwijder het in de triggerconfiguratie om op te slaan.",
+    "unsupportedOnSave": "\"{{trigger}}\" wordt nooit geactiveerd voor {{type}}: kies een entiteitstype dat deze trigger ondersteunt."
   },
   "triggerPicker": {
     "label": "Wordt geactiveerd bij",

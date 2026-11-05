@@ -51,8 +51,11 @@ router = APIRouter(prefix="/api/workflows", tags=["Process Workflows"])
 
 
 def get_workflows_manager(db: Session = Depends(get_db)) -> WorkflowsManager:
-    """Get WorkflowsManager instance."""
-    return WorkflowsManager(db)
+    """Get WorkflowsManager instance.
+
+    It gets the trigger/entity map, so saving a pair no code fires is refused.
+    """
+    return WorkflowsManager(db, trigger_entity_types=_TRIGGER_ENTITY_TYPES)
 
 
 def get_workflow_executor(db: Session = Depends(get_db)) -> WorkflowExecutor:
@@ -197,6 +200,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_unpublish": ["data_contract", "data_product"],
     "on_certify": ["data_contract", "data_product"],
     "on_decertify": ["data_contract", "data_product"],
+    "on_maturity_change": ["data_contract", "data_product"],  # maturity_evaluator
     # Validation gates
     "before_create": ["catalog", "schema", "table"],
     "before_update": ["data_contract"],

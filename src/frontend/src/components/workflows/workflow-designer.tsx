@@ -1563,6 +1563,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         if (typeof failedStep === 'string') {
           setInvalidStepId(failedStep);
           setSelectedNodeId(failedStep);
+        } else if (issues?.some(issue => issue.code.startsWith('trigger_entity_type_'))) {
+          setSelectedNodeId('trigger');  // where the entity types are fixed
         }
         toast({
           title: t('workflows:designer.messages.validationError'),

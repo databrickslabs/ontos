@@ -2893,7 +2893,7 @@ async def request_status_change(
             product_id=product_id,
             target_status=payload.target_status,
             justification=payload.justification,
-            requester_email=current_user.username,
+            requester_email=current_user.email or current_user.username,
             current_user=current_user.username
         )
         

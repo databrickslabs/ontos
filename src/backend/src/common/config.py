@@ -152,6 +152,11 @@ class Settings(BaseSettings):
     # sleeps between checks of its in-memory schedules (no database access).
     WORKFLOW_SCHEDULER_ENABLED: bool = Field(True, env='WORKFLOW_SCHEDULER_ENABLED')
     WORKFLOW_SCHEDULER_TICK_SECONDS: int = Field(60, env='WORKFLOW_SCHEDULER_TICK_SECONDS')
+    # While no scheduled workflow is known, how often to look for ones created
+    # through another app instance (one query; wakes an idle Lakebase). 0 = never.
+    WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS: int = Field(
+        900, env='WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS',
+    )
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')

@@ -210,7 +210,7 @@ def test_unresolvable_approver_falls_back_to_admin(client, smm, db_session):
 
 @pytest.mark.parametrize("approvers, expected", [
     # A group named like the reviewer token, picked in the designer (#1151 item 5)
-    ("group:reviewer", ["reviewer"]),
+    ("group:reviewer", ["group:reviewer"]),
     # The token itself still means the reviewer chosen at submit
     ("reviewer", ["rita@example.com"]),
 ])
@@ -250,3 +250,72 @@ def test_group_named_reviewer_is_not_the_reviewer_token(
     ]
     assert [n.recipient for n in notes] == expected
     assert all(n.recipient_role_id is None for n in notes)
+
+
+def _act_as(email: str, groups):
+    from src.common.authorization import get_user_details_from_sdk
+    from src.models.users import UserInfo
+
+    user = UserInfo(
+        username=email.split("@")[0], email=email, user=email, ip="127.0.0.1",
+        groups=list(groups),
+    )
+
+    async def _user():
+        return user
+
+    app.dependency_overrides[get_user_details_from_sdk] = _user
+
+
+@pytest.mark.parametrize("email, groups, status", [
+    # A member of the group, with no role
+    ("gina@example.com", ["Data Steward"], 200),
+    # A Data Steward role member outside the group. A refused request rolls back
+    # the test's transaction, so each caller gets its own run.
+    ("rolf@example.com", ["data-stewards"], 403),
+])
+def test_a_group_named_like_a_role_decides_not_the_role(
+    client, smm, db_session, email, groups, status,
+):
+    """``group:Data Steward``: its members may decide, the Data Steward role's
+    members outside the group may not (#1151 item 5)."""
+    from src.db_models.settings import AppRoleDb
+
+    steward = db_session.query(AppRoleDb).filter(AppRoleDb.name == "Data Steward").first()
+    assert steward is not None
+    steward.assigned_groups = json.dumps(["data-stewards"])
+    db_session.commit()
+    mgr, _ = _seeded_workflow(db_session)
+    name = f"Group named like a role {uuid.uuid4().hex[:6]}"
+    mgr.create_workflow(ProcessWorkflowCreate.model_validate({
+        "name": name,
+        "trigger": {
+            "type": "on_request_status_change",
+            "entity_types": ["ontology_concept"],
+            "from_status": "draft",
+            "to_status": "under_review",
+        },
+        "scope": {"type": "all"},
+        "is_active": True,
+        "steps": [
+            {"step_id": "approve", "name": "Approve", "step_type": "approval",
+             "config": {"approvers": "group:Data Steward"}, "on_pass": "done"},
+            {"step_id": "done", "name": "Done", "step_type": "pass"},
+        ],
+    }))
+    iri = _make_draft_concept(client, f"Steward {uuid.uuid4().hex[:6]}")
+    smm.submit_concept_for_review(
+        concept_iri=iri, reviewer_email=None, submitted_by="author@example.com",
+    )
+    notes = [
+        n for n in db_session.query(NotificationDb).filter(
+            NotificationDb.action_type == "workflow_approval"
+        ).all()
+        if _payload(n).get("entity_id") == iri and _payload(n).get("workflow_name") == name
+    ]
+    assert [(n.recipient, n.recipient_role_id) for n in notes] == [("group:Data Steward", None)]
+    body = {"execution_id": _payload(notes[0])["execution_id"], "approved": True, "message": "OK"}
+
+    _act_as(email, groups)
+    response = client.post("/api/workflows/handle-approval", json=body)
+    assert response.status_code == status, response.text

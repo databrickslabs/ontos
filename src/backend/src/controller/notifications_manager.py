@@ -27,6 +27,12 @@ logger = get_logger(__name__)
 # (informational ones, and decided approvals/requests). Pending ones are never capped (#1526).
 BELL_HISTORY_LIMIT = 500
 
+# Explicit principals of the workflow resolver (``_resolve_role_to_users``):
+# ``user:<x>`` / ``group:<name>`` never name an app role. A notification stores
+# them with their prefix; they match only that user or that group's members.
+_EXPLICIT_PREFIXES = ('user:', 'group:')
+
+
 class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
 
@@ -69,8 +75,17 @@ class _RecipientMembership:
         return self.is_admin
 
     def is_user(self, recipient: Optional[str]) -> bool:
-        """Whether the recipient names the user (email or username)."""
-        return bool(recipient) and recipient.strip().lower() in self._identities
+        """Whether the recipient names the user: email or username, or a
+        ``user:<x>`` / ``group:<name>`` principal naming the user or a group
+        of the user."""
+        if not recipient:
+            return False
+        if recipient.startswith(_EXPLICIT_PREFIXES):
+            kind, _, name = recipient.partition(':')
+            if kind == 'group':
+                return name in self._groups
+            return name.strip().lower() in self._identities
+        return recipient.strip().lower() in self._identities
 
     def role_of(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> Optional[Any]:
         """The app role a recipient names: by id, else by name (legacy)."""
@@ -81,9 +96,12 @@ class _RecipientMembership:
     def recipient_keys(self) -> RecipientKeys:
         """What this user can match in the recipient fields, for the SQL prefilter."""
         names = set(self._groups)
+        names.update(f'group:{group}' for group in self._groups)
         names.update(key for key, role in self._role_by_name.items() if self.member_of(role))
         return RecipientKeys(
-            identities=frozenset(self._identities),
+            identities=frozenset(
+                self._identities | {f'user:{identity}' for identity in self._identities}
+            ),
             names=frozenset(names),
             role_ids=frozenset(
                 role_id for role_id, role in self.role_by_id.items() if self.member_of(role)
@@ -98,6 +116,8 @@ class _RecipientMembership:
             return False
         if self.is_user(recipient):
             return True
+        if recipient and recipient.startswith(_EXPLICIT_PREFIXES):
+            return False  # an explicit principal never names an app role
         role = self.role_of(recipient, recipient_role_id)
         if role is not None:
             return self.member_of(role)
@@ -689,3 +709,4 @@ class NotificationsManager:
         except Exception as e:
             logger.error(f"Error getting pending delivery notifications: {e}", exc_info=True)
             return []
+

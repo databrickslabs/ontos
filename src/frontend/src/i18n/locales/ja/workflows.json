@@ -606,6 +606,12 @@
     "matches_other": "{{count}} 件の一致",
     "noMatch": "一致する変数がありません"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "不明なエンティティタイプ: {{type}}",
+    "removeUnknown": "{{type}} を削除",
+    "unknownNotice_one": "このトリガーには、存在しなくなったエンティティタイプが含まれています。何にも一致しません。保存するには削除してください。",
+    "unknownNotice_other": "このトリガーには、存在しなくなったエンティティタイプが{{count}}件含まれています。何にも一致しません。保存するには削除してください。"
+  },
   "triggerPicker": {
     "label": "発動条件",
     "helper": "どのアクションでこのワークフローが実行されるか",

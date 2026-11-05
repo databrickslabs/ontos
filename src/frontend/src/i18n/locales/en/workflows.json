@@ -606,6 +606,12 @@
     "matches_other": "{{count}} matches",
     "noMatch": "No variables match"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Unknown entity type: {{type}}",
+    "removeUnknown": "Remove {{type}}",
+    "unknownNotice_one": "This trigger lists an entity type that no longer exists. It matches nothing: remove it to save.",
+    "unknownNotice_other": "This trigger lists {{count}} entity types that no longer exist. They match nothing: remove them to save."
+  },
   "triggerPicker": {
     "label": "Fires on",
     "helper": "What action makes this workflow run",

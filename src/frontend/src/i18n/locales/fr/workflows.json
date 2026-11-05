@@ -606,6 +606,12 @@
     "matches_other": "{{count}} correspondances",
     "noMatch": "Aucune variable ne correspond"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Type d'entité inconnu : {{type}}",
+    "removeUnknown": "Retirer {{type}}",
+    "unknownNotice_one": "Ce déclencheur contient un type d'entité qui n'existe plus. Il ne correspond à rien : retirez-le pour enregistrer.",
+    "unknownNotice_other": "Ce déclencheur contient {{count}} types d'entité qui n'existent plus. Ils ne correspondent à rien : retirez-les pour enregistrer."
+  },
   "triggerPicker": {
     "label": "Se déclenche sur",
     "helper": "Quelle action déclenche l'exécution de ce workflow",

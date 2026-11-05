@@ -606,6 +606,12 @@
     "matches_other": "{{count}} matches",
     "noMatch": "Geen variabelen komen overeen"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Onbekend entiteitstype: {{type}}",
+    "removeUnknown": "{{type}} verwijderen",
+    "unknownNotice_one": "Deze trigger bevat een entiteitstype dat niet meer bestaat. Het komt met niets overeen: verwijder het om op te slaan.",
+    "unknownNotice_other": "Deze trigger bevat {{count}} entiteitstypen die niet meer bestaan. Ze komen met niets overeen: verwijder ze om op te slaan."
+  },
   "triggerPicker": {
     "label": "Wordt geactiveerd bij",
     "helper": "Welke actie deze workflow laat uitvoeren",

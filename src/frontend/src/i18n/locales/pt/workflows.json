@@ -606,6 +606,12 @@
     "matches_other": "{{count}} correspondências",
     "noMatch": "Nenhuma variável corresponde"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Tipo de entidade desconhecido: {{type}}",
+    "removeUnknown": "Remover {{type}}",
+    "unknownNotice_one": "Este gatilho lista um tipo de entidade que não existe mais. Ele não corresponde a nada: remova-o para salvar.",
+    "unknownNotice_other": "Este gatilho lista {{count}} tipos de entidade que não existem mais. Eles não correspondem a nada: remova-os para salvar."
+  },
   "triggerPicker": {
     "label": "Acionado em",
     "helper": "Qual ação faz este fluxo de trabalho executar",

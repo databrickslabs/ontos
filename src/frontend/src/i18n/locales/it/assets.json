@@ -226,5 +226,30 @@
       "system": "Sistemi",
       "custom": "Personalizzato"
     }
+  },
+  "snapshot": {
+    "title": "Anteprima visiva",
+    "rlsNotice": "Un'istantanea della dashboard come la vede l'account di servizio di Ontos. Non è in tempo reale; chi ha la sicurezza a livello di riga può vedere valori diversi.",
+    "imageAlt": "Istantanea della dashboard",
+    "none": "Ancora nessuna istantanea.",
+    "thumbnailNotice": "Miniatura: l'ultimo rendering non è riuscito, l'immagine potrebbe non essere aggiornata.",
+    "risksTitle": "Non acquisita automaticamente: questi calcoli filtrano in base all'utente connesso",
+    "capturedAt": "Acquisita",
+    "openLive": "Apri la dashboard dal vivo",
+    "refresh": "Aggiorna istantanea",
+    "refreshFailed": "Impossibile acquisire un'istantanea",
+    "optOut": "Non acquisire mai istantanee",
+    "status": {
+      "ok": "Aggiornata",
+      "auth_expired": "Credenziali scadute",
+      "not_connected": "Origine dati non connessa",
+      "forbidden": "Nessuna autorizzazione",
+      "empty": "Immagine vuota",
+      "error": "Rendering non riuscito",
+      "opted_out": "Istantanee disattivate",
+      "skipped_user_filters": "Filtri utente",
+      "unsupported": "Non supportato",
+      "none": "Nessuna istantanea"
+    }
   }
 }

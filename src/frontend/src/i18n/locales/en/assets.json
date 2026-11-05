@@ -226,5 +226,30 @@
       "system": "Systems",
       "custom": "Custom"
     }
+  },
+  "snapshot": {
+    "title": "Visual preview",
+    "rlsNotice": "A snapshot of the dashboard as Ontos's service account sees it. Not live; people with row-level security may see different figures.",
+    "imageAlt": "Dashboard snapshot",
+    "none": "No snapshot yet.",
+    "thumbnailNotice": "Thumbnail: the last render failed, so this image may be outdated.",
+    "risksTitle": "Not captured automatically: these calculations filter by the signed-in user",
+    "capturedAt": "Captured",
+    "openLive": "Open live dashboard",
+    "refresh": "Refresh snapshot",
+    "refreshFailed": "Could not capture a snapshot",
+    "optOut": "Never capture snapshots",
+    "status": {
+      "ok": "Up to date",
+      "auth_expired": "Credentials expired",
+      "not_connected": "Data source not connected",
+      "forbidden": "No permission",
+      "empty": "Empty image",
+      "error": "Render failed",
+      "opted_out": "Snapshots off",
+      "skipped_user_filters": "User filters",
+      "unsupported": "Not supported",
+      "none": "No snapshot"
+    }
   }
 }

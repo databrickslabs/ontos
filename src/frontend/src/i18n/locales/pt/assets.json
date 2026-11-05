@@ -226,5 +226,30 @@
       "system": "Sistemas",
       "custom": "Personalizado"
     }
+  },
+  "snapshot": {
+    "title": "Pré-visualização",
+    "rlsNotice": "Um instantâneo do painel como a conta de serviço do Ontos o vê. Não é ao vivo; pessoas com segurança em nível de linha podem ver números diferentes.",
+    "imageAlt": "Instantâneo do painel",
+    "none": "Ainda não há instantâneo.",
+    "thumbnailNotice": "Miniatura: a última renderização falhou, então a imagem pode estar desatualizada.",
+    "risksTitle": "Não capturado automaticamente: estes cálculos filtram pelo usuário conectado",
+    "capturedAt": "Capturado",
+    "openLive": "Abrir painel ao vivo",
+    "refresh": "Atualizar instantâneo",
+    "refreshFailed": "Não foi possível capturar um instantâneo",
+    "optOut": "Nunca capturar instantâneos",
+    "status": {
+      "ok": "Atualizado",
+      "auth_expired": "Credenciais expiradas",
+      "not_connected": "Fonte de dados não conectada",
+      "forbidden": "Sem permissão",
+      "empty": "Imagem vazia",
+      "error": "Falha na renderização",
+      "opted_out": "Instantâneos desativados",
+      "skipped_user_filters": "Filtros de usuário",
+      "unsupported": "Não compatível",
+      "none": "Sem instantâneo"
+    }
   }
 }

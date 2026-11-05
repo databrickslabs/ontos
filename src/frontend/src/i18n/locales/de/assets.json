@@ -226,5 +226,30 @@
       "system": "Systeme",
       "custom": "Benutzerdefiniert"
     }
+  },
+  "snapshot": {
+    "title": "Visuelle Vorschau",
+    "rlsNotice": "Ein Snapshot des Dashboards aus Sicht des Ontos-Dienstkontos. Nicht live; Personen mit Zeilensicherheit sehen ggf. andere Werte.",
+    "imageAlt": "Dashboard-Snapshot",
+    "none": "Noch kein Snapshot.",
+    "thumbnailNotice": "Miniaturbild: Das letzte Rendern ist fehlgeschlagen, das Bild kann veraltet sein.",
+    "risksTitle": "Nicht automatisch erfasst: Diese Berechnungen filtern nach dem angemeldeten Benutzer",
+    "capturedAt": "Erfasst",
+    "openLive": "Live-Dashboard öffnen",
+    "refresh": "Snapshot aktualisieren",
+    "refreshFailed": "Snapshot konnte nicht erfasst werden",
+    "optOut": "Nie Snapshots erfassen",
+    "status": {
+      "ok": "Aktuell",
+      "auth_expired": "Anmeldedaten abgelaufen",
+      "not_connected": "Datenquelle nicht verbunden",
+      "forbidden": "Keine Berechtigung",
+      "empty": "Leeres Bild",
+      "error": "Rendern fehlgeschlagen",
+      "opted_out": "Snapshots aus",
+      "skipped_user_filters": "Benutzerfilter",
+      "unsupported": "Nicht unterstützt",
+      "none": "Kein Snapshot"
+    }
   }
 }

@@ -144,9 +144,18 @@ class SchemaImportManager:
         self,
         connections_manager: ConnectionsManager,
         assets_manager: AssetsManager,
+        snapshot_manager: Optional[Any] = None,
     ):
         self._connections = connections_manager
         self._assets = assets_manager
+        self._snapshot_manager = snapshot_manager
+
+    @property
+    def _snapshots(self):
+        if self._snapshot_manager is None:
+            from src.controller.dashboard_snapshot_manager import DashboardSnapshotManager
+            self._snapshot_manager = DashboardSnapshotManager()
+        return self._snapshot_manager
 
     def _child_limit(self, db: Session) -> int:
         """Resolve the per-path child fetch limit.
@@ -467,6 +476,7 @@ class SchemaImportManager:
                     current_user_id=current_user_id,
                     _type_cache=type_cache,
                     _metadata_cache=metadata_cache,
+                    connection_id=request.connection_id,
                 )
                 created_assets[item.path] = asset_read.id
                 result.created += 1
@@ -528,6 +538,9 @@ class SchemaImportManager:
         self._wire_lineage(
             db, connector, preview_items, created_assets, path_to_type, metadata_cache, result, current_user_id,
         )
+
+        # 6. Snapshots of the dashboards the connector renders
+        self._capture_snapshots(db, connector, preview_items, created_assets, metadata_cache, result, current_user_id)
 
         return result
 
@@ -632,6 +645,44 @@ class SchemaImportManager:
                     rel_type=link.relationship_type,
                     current_user_id=current_user_id,
                 )
+
+    def _capture_snapshots(
+        self,
+        db: Session,
+        connector: AssetConnector,
+        preview_items: List[ImportPreviewItem],
+        created_assets: Dict[str, UUID],
+        metadata_cache: Dict[str, Any],
+        result: ImportResult,
+        current_user_id: str,
+    ) -> None:
+        """Capture snapshots of imported dashboards; failures are warnings and never stop the import."""
+        for item in preview_items:
+            if item.asset_type == "Column" or item.path not in created_assets:
+                continue
+            meta = metadata_cache.get(item.path)
+            if meta is None and item.asset_type == "Dashboard":
+                # Already imported earlier: its snapshot may still need a refresh
+                try:
+                    meta = connector.get_asset_metadata(item.path)
+                except Exception as exc:
+                    logger.debug(f"No metadata for snapshot of '{item.path}': {exc}")
+            if meta is None or not _connector_hook(connector, "wants_snapshot", meta, default=False):
+                continue
+            asset = asset_repo.get(db, id=created_assets[item.path])
+            if asset is None:
+                continue
+            try:
+                with db.begin_nested():
+                    state = self._snapshots.capture(db, asset=asset, connector=connector, current_user=current_user_id)
+            except Exception as exc:
+                logger.warning(f"Snapshot of '{item.path}' failed: {exc}", exc_info=True)
+                result.warnings.append(f"{item.path}: snapshot failed ({exc})")
+                continue
+            status = state.get("status")
+            if status not in ("ok", "opted_out"):
+                detail = "; ".join(state.get("risks") or []) or state.get("error") or ""
+                result.warnings.append(f"{item.path}: snapshot {status}" + (f" ({detail})" if detail else ""))
 
     @staticmethod
     def _resolve_lineage_target(
@@ -976,6 +1027,7 @@ class SchemaImportManager:
         current_user_id: str,
         _type_cache: Optional[Dict[str, Any]] = None,
         _metadata_cache: Optional[Dict[str, Any]] = None,
+        connection_id: Optional[UUID] = None,
     ):
         """Create a single Ontos asset from a preview item."""
         if _type_cache is not None and item.asset_type in _type_cache:
@@ -1041,6 +1093,9 @@ class SchemaImportManager:
                         properties["source_tags"] = meta.tags
                     properties["source_path"] = item.path
                     properties["connector_type"] = connector.connector_type
+                    if connection_id:
+                        # Lets later actions (e.g. snapshot refresh) reach the source again
+                        properties["connection_id"] = str(connection_id)
                     if item.asset_type == METRIC_VIEW_ASSET_TYPE:
                         # The parsed spec and its measure fingerprints (#1263)
                         stored = build_stored_metric_view(

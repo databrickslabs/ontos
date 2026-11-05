@@ -777,7 +777,8 @@
       "contractAssignment": "Contracttoewijzing",
       "accessAndPrivacy": "Toegang & Privacy",
       "containsPii": "Bevat PII",
-      "autoApprove": "Automatisch goedkeuren"
+      "autoApprove": "Automatisch goedkeuren",
+      "dashboard": "Dashboard"
     },
     "placeholders": {
       "name": "bijv. Dagelijkse Churn Rate",
@@ -785,7 +786,8 @@
       "description": "Beschrijf wat deze levering biedt",
       "type": "bijv. table, api, stream",
       "status": "bijv. active, draft",
-      "chooseContract": "Kies een contract..."
+      "chooseContract": "Kies een contract...",
+      "noDashboard": "Geen dashboard geselecteerd"
     },
     "contractOptions": {
       "noContract": "Geen contract",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "Opslaan van levering mislukt"
     },
     "actions": {
-      "addDeliverable": "Levering toevoegen"
+      "addDeliverable": "Levering toevoegen",
+      "chooseDashboard": "Dashboard kiezen"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "Kon leveringsmethoden niet laden"
+    },
+    "dashboardPicker": {
+      "title": "Kies een dashboard",
+      "description": "Kies het dashboard dat deze deliverable levert."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Product Aangemaakt",
       "productCreatedDesc": "Dataproduct \"{{productName}}\" succesvol aangemaakt vanuit contract."
-    }
+    },
+    "includeDashboardsLabel": "De dashboards op basis van dit contract als deliverables toevoegen",
+    "includeDashboardsHint": "Ze lezen het semantische model van het contract. De productbeschrijving wordt ermee ingevuld."
   },
   "createVersion": {
     "title": "Nieuwe versie aanmaken",

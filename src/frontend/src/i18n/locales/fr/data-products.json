@@ -777,7 +777,8 @@
       "contractAssignment": "Affectation de contrat",
       "accessAndPrivacy": "Accès et confidentialité",
       "containsPii": "Contient des données PII",
-      "autoApprove": "Approbation automatique"
+      "autoApprove": "Approbation automatique",
+      "dashboard": "Tableau de bord"
     },
     "placeholders": {
       "name": "par ex. Taux d'attrition quotidien",
@@ -785,7 +786,8 @@
       "description": "Décrivez ce que fournit ce livrable",
       "type": "par ex. table, api, flux",
       "status": "par ex. actif, brouillon",
-      "chooseContract": "Choisir un contrat..."
+      "chooseContract": "Choisir un contrat...",
+      "noDashboard": "Aucun tableau de bord sélectionné"
     },
     "contractOptions": {
       "noContract": "Aucun contrat",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "Échec de l'enregistrement du livrable"
     },
     "actions": {
-      "addDeliverable": "Ajouter un livrable"
+      "addDeliverable": "Ajouter un livrable",
+      "chooseDashboard": "Choisir un tableau de bord"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "Impossible de charger les méthodes de livraison"
+    },
+    "dashboardPicker": {
+      "title": "Choisir un tableau de bord",
+      "description": "Choisissez le tableau de bord fourni par ce livrable."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Produit créé",
       "productCreatedDesc": "Produit de données \"{{productName}}\" créé avec succès à partir du contrat."
-    }
+    },
+    "includeDashboardsLabel": "Ajouter comme livrables les tableaux de bord construits sur ce contrat",
+    "includeDashboardsHint": "Ils lisent le modèle sémantique du contrat. La description du produit est préremplie à partir d'eux."
   },
   "createVersion": {
     "title": "Créer une nouvelle version",

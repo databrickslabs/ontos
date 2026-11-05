@@ -9,12 +9,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Info } from 'lucide-react';
+import { Loader2, Plus, Info, LayoutDashboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { OutputPort, DataProduct } from '@/types/data-product';
 import type { DataContractListItem } from '@/types/data-contract';
 import type { DeliveryMethodRead } from '@/types/delivery-method';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
+import { AssetSelector } from '@/components/common/asset-selector';
+import type { SelectedAsset } from '@/components/common/asset-selector';
+
+const DASHBOARD_PORT_TYPE = 'dashboard';
 
 type OutputPortFormProps = {
   isOpen: boolean;
@@ -38,6 +42,12 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
   const [status, setStatus] = useState('');
   const [containsPii, setContainsPii] = useState(false);
   const [autoApprove, setAutoApprove] = useState(false);
+  // The delivered asset; kept as is unless a dashboard is picked below
+  const [assetType, setAssetType] = useState<string | undefined>();
+  const [assetIdentifier, setAssetIdentifier] = useState<string | undefined>();
+  const [server, setServer] = useState<OutputPort['server']>();
+  const [dashboardName, setDashboardName] = useState<string | undefined>();
+  const [isDashboardPickerOpen, setIsDashboardPickerOpen] = useState(false);
   
   // Delivery methods
   const [deliveryMethods, setDeliveryMethods] = useState<DeliveryMethodRead[]>([]);
@@ -68,6 +78,10 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       setStatus(initial.status || '');
       setContainsPii(initial.containsPii || false);
       setAutoApprove(initial.autoApprove || false);
+      setAssetType(initial.assetType);
+      setAssetIdentifier(initial.assetIdentifier);
+      setServer(initial.server);
+      setDashboardName(undefined);
       setContractSelectionMode(initial.contractId ? 'existing' : 'none');
     } else if (isOpen && !initial) {
       setName('');
@@ -79,6 +93,10 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       setStatus('');
       setContainsPii(false);
       setAutoApprove(false);
+      setAssetType(undefined);
+      setAssetIdentifier(undefined);
+      setServer(undefined);
+      setDashboardName(undefined);
       setContractSelectionMode('none');
     }
   }, [isOpen, initial]);
@@ -134,6 +152,28 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
     fetchContracts();
   };
 
+  const isDashboardPort = type.trim().toLowerCase() === DASHBOARD_PORT_TYPE;
+
+  const handleDashboardPicked = async (assets: SelectedAsset[]) => {
+    const asset = assets[0];
+    if (!asset) return;
+    setAssetType(DASHBOARD_PORT_TYPE);
+    setAssetIdentifier(asset.location || undefined);
+    setDashboardName(asset.name);
+    if (!name.trim()) setName(asset.name);
+    // The previous dashboard's link no longer applies
+    setServer(prev => (prev ? { ...prev, location: undefined } : prev));
+    try {
+      const response = await fetch(`/api/assets/${asset.id}`);
+      if (!response.ok) return;
+      const details: { properties?: Record<string, any> } = await response.json();
+      const url = details.properties?.dashboardUrl || details.properties?.url;
+      if (url) setServer(prev => ({ ...(prev || {}), location: url }));
+    } catch {
+      // The link to the live dashboard is optional
+    }
+  };
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast({ title: 'Validation Error', description: 'Name is required', variant: 'destructive' });
@@ -147,7 +187,10 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
 
     setIsSubmitting(true);
     try {
+      // Start from the original port: fields this form does not edit (server,
+      // asset, SBOM, input contracts, ...) must survive an edit
       const port: OutputPort = {
+        ...(initial || {}),
         id: initial?.id,
         name: name.trim(),
         version: version.trim(),
@@ -158,6 +201,9 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
         status: status.trim() || undefined,
         containsPii,
         autoApprove,
+        assetType,
+        assetIdentifier,
+        server,
       };
 
       await onSubmit(port);
@@ -276,6 +322,28 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                   placeholder={t('data-products:outputPortForm.placeholders.type')}
                 />
               </div>
+
+              {isDashboardPort && (
+                <div className="space-y-2">
+                  <Label>{t('data-products:outputPortForm.labels.dashboard')}</Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 truncate rounded-md border px-3 py-2 text-sm">
+                      {dashboardName || assetIdentifier || (
+                        <span className="text-muted-foreground">{t('data-products:outputPortForm.placeholders.noDashboard')}</span>
+                      )}
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => setIsDashboardPickerOpen(true)}>
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      {t('data-products:outputPortForm.actions.chooseDashboard')}
+                    </Button>
+                  </div>
+                  {server?.location && (
+                    <a href={server.location} target="_blank" rel="noreferrer" className="block truncate text-xs text-primary hover:underline">
+                      {server.location}
+                    </a>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="status">{t('common:labels.status')}</Label>
@@ -424,6 +492,16 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AssetSelector
+      isOpen={isDashboardPickerOpen}
+      onOpenChange={setIsDashboardPickerOpen}
+      onConfirm={handleDashboardPicked}
+      targetAssetTypes={['Dashboard']}
+      title={t('data-products:outputPortForm.dashboardPicker.title')}
+      description={t('data-products:outputPortForm.dashboardPicker.description')}
+      confirmLabel={t('data-products:outputPortForm.actions.chooseDashboard')}
+    />
 
     <CreateContractInlineDialog
       isOpen={isCreateContractOpen}

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import InferFromAssetDialog from './infer-from-asset-dialog'
+import { inferredPropertyFields } from './inferred-schema'
 import type { InferredSchemaObject } from './infer-from-asset-dialog'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import { PrincipalPicker } from '@/components/common/principal-picker'
@@ -324,14 +325,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       name: s.name,
       physicalName: s.physicalName,
       description: s.description || undefined,
-      properties: s.properties.map(p => ({
-        name: p.name,
-        physicalType: p.physicalType,
-        logicalType: p.logicalType || 'string',
-        required: p.required,
-        description: p.description,
-        partitioned: p.partitioned,
-      })),
+      properties: s.properties.map(inferredPropertyFields),
     }))
     setSchemaObjects((prev) => [...prev, ...newObjects])
     setStep(2)

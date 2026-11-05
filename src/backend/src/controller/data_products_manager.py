@@ -3262,7 +3262,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         contract_id: str,
         product_name: str,
         version: str,
-        output_port_name: Optional[str] = None
+        output_port_name: Optional[str] = None,
+        include_dashboards: bool = False,
     ) -> DataProductApi:
         """
         Creates a new ODPS v1.0.0 Data Product from an existing Data Contract.
@@ -3275,6 +3276,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_name: Name for the new data product
             version: Version string for the product
             output_port_name: Optional name for the output port
+            include_dashboards: Also add the dashboards built on the contract's
+                semantic models as dashboard output ports, and describe the
+                product from them
 
         Returns:
             Created DataProduct API model
@@ -3324,6 +3328,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             ]
         }
 
+        if include_dashboards:
+            dashboards = self.contract_dashboards(contract_id)
+            product_data['outputPorts'].extend(self._dashboard_port(d, version) for d in dashboards)
+            if dashboards:
+                product_data['description'] = self._dashboard_description(contract_db.name, dashboards)
+
         # TODO: Add team members from contract owner
         if contract_db.owner_team_id:
             product_data['team'] = {
@@ -3345,6 +3355,84 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         created_product = self.create_product(product_data)
         logger.info(f"Successfully created ODPS Data Product {product_id} from contract {contract_id}")
         return created_product
+
+    def contract_dashboards(self, contract_id: str) -> List[Any]:
+        """Dashboard assets that read one of the contract's semantic models.
+
+        A schema object inferred from a semantic model keeps the model's location
+        as its physical name; dashboards point at the model with ``consumesFrom``.
+        """
+        from sqlalchemy import func
+        from src.db_models.assets import AssetDb, AssetTypeDb
+        from src.db_models.data_contracts import SchemaObjectDb
+        from src.db_models.entity_relationships import EntityRelationshipDb
+
+        names = {
+            (row.physical_name or "").strip().lower()
+            for row in self._db.query(SchemaObjectDb.physical_name).filter(SchemaObjectDb.contract_id == contract_id)
+            if row.physical_name
+        }
+        if not names:
+            return []
+
+        def of_type(type_name: str):
+            return (
+                self._db.query(AssetDb)
+                .join(AssetTypeDb, AssetDb.asset_type_id == AssetTypeDb.id)
+                .filter(AssetTypeDb.name == type_name, AssetDb.status != "retired")
+            )
+
+        model_ids = [str(m.id) for m in of_type("Semantic Model").filter(func.lower(AssetDb.location).in_(names))]
+        if not model_ids:
+            return []
+        source_ids = {
+            r.source_id for r in self._db.query(EntityRelationshipDb.source_id).filter(
+                EntityRelationshipDb.target_id.in_(model_ids),
+                EntityRelationshipDb.relationship_type == "consumesFrom",
+            )
+        }
+        uids = []
+        for source_id in source_ids:
+            try:
+                uids.append(UUID(source_id))
+            except ValueError:
+                continue
+        if not uids:
+            return []
+        return of_type("Dashboard").filter(AssetDb.id.in_(uids)).order_by(AssetDb.name).all()
+
+    @staticmethod
+    def _dashboard_port(dashboard: Any, version: str) -> Dict[str, Any]:
+        props = dashboard.properties or {}
+        url = props.get("dashboardUrl") or props.get("url")
+        port: Dict[str, Any] = {
+            'name': dashboard.name,
+            'version': version,
+            'description': dashboard.description or f"Dashboard: {dashboard.name}",
+            'type': 'dashboard',
+            'assetType': 'dashboard',
+            'assetIdentifier': dashboard.location,
+        }
+        if url:
+            port['server'] = {'location': url}
+        return port
+
+    @staticmethod
+    def _dashboard_description(contract_name: str, dashboards: List[Any]) -> Dict[str, Any]:
+        names = ", ".join(d.name for d in dashboards)
+        described = [d.description for d in dashboards if d.description]
+        purpose = described[0] if len(dashboards) == 1 and described else (
+            f"Dashboards built on contract {contract_name}: {names}"
+        )
+        links = [
+            f"{d.name}: {(d.properties or {}).get('dashboardUrl')}"
+            for d in dashboards if (d.properties or {}).get('dashboardUrl')
+        ]
+        return {
+            'purpose': purpose,
+            'limitations': None,
+            'usage': ("Open the live dashboards: " + "; ".join(links)) if links else None,
+        }
 
     def get_products_by_contract(self, contract_id: str) -> List[DataProductApi]:
         """

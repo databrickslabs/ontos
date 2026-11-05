@@ -109,6 +109,9 @@ def is_forward_flow(relationship_type: str, source_layer: Optional[str], target_
 HIDDEN_LINEAGE_TYPES = {"LogicalEntity", "LogicalAttribute"}
 
 PHYSICAL_TABLE_TYPES = PHYSICAL_TABLE_ASSET_TYPES
+# BI assets a port can deliver; matched by exact location only (Tableau paths
+# are opaque ids, a suffix match would be meaningless)
+BI_PORT_ASSET_TYPES = ("Dashboard", "Report", "Semantic Model")
 MAX_CONCEPT_FANOUT = 30
 
 # Semantic-link entity_type for dedicated types
@@ -570,10 +573,11 @@ class ModelLineageResolver:
         query = (
             db.query(AssetDb)
             .join(AssetTypeDb, AssetDb.asset_type_id == AssetTypeDb.id)
-            .filter(AssetTypeDb.name.in_(PHYSICAL_TABLE_TYPES + ("Dataset",)))
         )
         if exact:
-            return query.filter(func.lower(AssetDb.location) == pn).all()
+            types = PHYSICAL_TABLE_TYPES + ("Dataset",) + BI_PORT_ASSET_TYPES
+            return query.filter(AssetTypeDb.name.in_(types), func.lower(AssetDb.location) == pn).all()
+        query = query.filter(AssetTypeDb.name.in_(PHYSICAL_TABLE_TYPES + ("Dataset",)))
         # LIKE pre-filter ('_' is a wildcard there), exact suffix check in Python
         candidates = query.filter(func.lower(AssetDb.location).like(f"%{pn}")).all()
         return [

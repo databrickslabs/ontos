@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import type { EntitySemanticLink } from '@/types/semantic-link';
+import type { LinkCheck, LinkWarning } from '@/types/metric-view-consistency';
+import MetricViewLinkWarnings from '@/components/metric-views/metric-view-link-warnings';
 import {
     MetricViewDefinition,
     MetricViewField,
@@ -167,7 +169,7 @@ function FieldTable({ title, fields, empty, linksByName, canEdit, onAdd, onRemov
  */
 export default function MetricViewDefinitionPanel({ definition }: MetricViewDefinitionPanelProps) {
     const { t } = useTranslation('data-asset-reviews');
-    const { post, delete: apiDelete } = useApi();
+    const { get, post, delete: apiDelete } = useApi();
     const { toast } = useToast();
     const { hasPermission } = usePermissions();
     const canEdit = hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
@@ -175,6 +177,9 @@ export default function MetricViewDefinitionPanel({ definition }: MetricViewDefi
 
     const [links, setLinks] = useState<MetricViewLinks | null>(definition.links ?? null);
     const [target, setTarget] = useState<LinkTarget | null>(null);
+    const [linkWarnings, setLinkWarnings] = useState<
+        { name: string; warnings: LinkWarning[] } | null
+    >(null);
     useEffect(() => setLinks(definition.links ?? null), [definition]);
 
     const linksOf = (kind: 'dimension' | 'measure') =>
@@ -188,8 +193,23 @@ export default function MetricViewDefinitionPanel({ definition }: MetricViewDefi
         return field ? field.links.map((l) => l.iri) : [];
     };
 
+    /** The non-blocking warnings linking a measure to `iri` raises (none if the check fails). */
+    const checkLink = async (link: LinkTarget, iri: string): Promise<LinkWarning[]> => {
+        if (link.entityType !== 'uc_column') return [];
+        try {
+            const res = await get<LinkCheck>(
+                '/api/metric-views/consistency/link-check'
+                + `?entity_id=${encodeURIComponent(link.entityId)}&iri=${encodeURIComponent(iri)}`,
+            );
+            return !res?.error && Array.isArray(res?.data?.warnings) ? res.data.warnings : [];
+        } catch {
+            return [];
+        }
+    };
+
     const addLink = async (iri: string) => {
         if (!target) return;
+        const warnings = await checkLink(target, iri);
         const res = await post<EntitySemanticLink>('/api/semantic-links/', {
             entity_type: target.entityType,
             entity_id: target.entityId,
@@ -200,6 +220,7 @@ export default function MetricViewDefinitionPanel({ definition }: MetricViewDefi
             return;
         }
         setLinks((current) => (current ? withLink(current, target.entityId, res.data) : current));
+        setLinkWarnings(warnings.length > 0 ? { name: target.name, warnings } : null);
         toast({ title: t('editor.metricView.linked', { name: target.name }) });
         setTarget(null);
     };
@@ -219,6 +240,13 @@ export default function MetricViewDefinitionPanel({ definition }: MetricViewDefi
 
     return (
         <div className="space-y-4">
+            {linkWarnings && (
+                <MetricViewLinkWarnings
+                    name={linkWarnings.name}
+                    warnings={linkWarnings.warnings}
+                    onDismiss={() => setLinkWarnings(null)}
+                />
+            )}
             {links && (
                 <div className="space-y-1">
                     <h4 className="text-sm font-semibold">{t('editor.metricView.viewConcepts')}</h4>

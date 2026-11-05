@@ -11,8 +11,10 @@ from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 from src.common.metric_views import parse_metric_view_definition
 from src.controller.metric_view_baselines_manager import MetricViewBaselinesManager
+from src.controller.metric_view_consistency_manager import store_metric_view
 from src.controller.metric_view_refresh import read_refresh_state
 from src.controller.semantic_links_manager import SemanticLinksManager
+from src.models.assets import METRIC_VIEW_ASSET_TYPE
 from src.models.metric_views import MetricViewRead
 from src.repositories.assets_repository import asset_repo
 
@@ -55,6 +57,9 @@ class MetricViewsManager:
         user_email: Optional[str] = None,
     ) -> MetricViewRead:
         """The metric view an asset points at (its ``location`` is the view's FQN).
+
+        The spec read is stored on a Metric View asset with its measure
+        fingerprints (``metric_view_consistency_manager.store_metric_view``).
 
         ``ws_client`` is the requesting user's client, so Unity Catalog decides
         whether they may read the definition. The definition read is checked
@@ -100,6 +105,7 @@ class MetricViewsManager:
             )
         definition = getattr(table, 'view_definition', None) or ''
         spec = parse_metric_view_definition(definition)
+        self._store_fingerprints(asset, spec)
         baseline, drift = MetricViewBaselinesManager(self._db).check(
             fqn, spec, asset_id=asset_id, user_email=user_email,
         )
@@ -111,3 +117,18 @@ class MetricViewsManager:
             drift=drift,
             refresh=read_refresh_state(ws_client, table, spec),
         )
+
+    def _store_fingerprints(self, asset, spec) -> None:
+        """Refresh the spec and measure fingerprints stored on a Metric View asset (#1263).
+
+        Never fails the read: an error is logged and the stored ones stay as they were.
+        """
+        type_name = getattr(getattr(asset, 'asset_type', None), 'name', None)
+        if spec is None or type_name != METRIC_VIEW_ASSET_TYPE:
+            return
+        try:
+            with self._db.begin_nested():
+                store_metric_view(self._db, asset, spec)
+        except Exception:
+            logger.warning("Could not store the fingerprints of metric view asset %s",
+                           asset.id, exc_info=True)

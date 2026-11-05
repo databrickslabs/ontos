@@ -1,0 +1,62 @@
+{
+  "verdict": {
+    "duplicate": "Duplicato",
+    "link_conflict": "Collegata a un altro concetto",
+    "unrecognized_duplicate": "Duplicato non riconosciuto",
+    "variant": "Variante",
+    "conflict": "Conflitto",
+    "near_duplicate": "Quasi duplicato"
+  },
+  "level": {
+    "expression": "espressione",
+    "scope": "ambito",
+    "full": "finestra e parametri"
+  },
+  "component": {
+    "expression": "Espressione",
+    "source": "Origine",
+    "filter": "Filtro",
+    "window": "Finestra",
+    "joins": "Join",
+    "parameters": "Parametri",
+    "aggregation": "Aggregazione",
+    "columns": "Colonne"
+  },
+  "differences": "Differenze",
+  "similarity": "Somiglianza {{score}}%",
+  "hidden": "Non puoi leggere questa metric view in Unity Catalog, quindi la sua definizione non viene mostrata.",
+  "concept": {
+    "title": "Misure delle metric view",
+    "group": "Definizione {{n}}",
+    "differsAt": "Differisce dalla definizione 1 in: {{level}}",
+    "onlyIn": "Solo in {{name}}",
+    "otherConcepts": "La stessa definizione è collegata anche a: {{concepts}}",
+    "unresolved": "Campi collegati senza definizione memorizzata: {{fields}}",
+    "verdict": {
+      "consistent": "Coerente",
+      "conflict": "Definizioni in conflitto"
+    },
+    "hint": {
+      "consistent": "Tutte le misure collegate a questo concetto calcolano la stessa cosa.",
+      "conflict": "Le misure collegate a questo concetto calcolano {{count}} cose diverse. Le differenze sono evidenziate."
+    }
+  },
+  "asset": {
+    "title": "Definizioni uguali o simili",
+    "hint": "Altre misure sugli stessi dati con una definizione uguale o simile, e collegamenti di concetto in conflitto. Non viene modificato nulla.",
+    "linkedTo": "collegata a {{concepts}}",
+    "onlyIn": "Solo in {{name}}",
+    "error": {
+      "reference_cycle": "I riferimenti di questa misura formano un ciclo, quindi non può essere confrontata.",
+      "reference_depth": "I riferimenti di questa misura sono annidati troppo in profondità per essere confrontati.",
+      "no_expression": "Questa misura non ha un'espressione da confrontare."
+    }
+  },
+  "linkWarning": {
+    "title": "{{name}} è stata collegata. Controlla la definizione",
+    "dismiss": "Chiudi",
+    "hint": "Il collegamento è stato creato. Rivedi le definizioni nella pagina del concetto.",
+    "concept_has_other_definitions": "Le misure già collegate a questo concetto calcolano altro ({{count}}): {{measures}}",
+    "definition_linked_to_other_concepts": "Le misure con la stessa definizione sono collegate ad altri concetti ({{count}}): {{concepts}}"
+  }
+}

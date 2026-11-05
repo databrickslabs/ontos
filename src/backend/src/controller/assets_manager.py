@@ -13,7 +13,7 @@ from src.models.assets import (
     AssetRelationshipCreate, AssetRelationshipRead,
     PaginatedAssetSummary,
     DeletePreviewItem, CascadeDeleteResult,
-    PHYSICAL_TABLE_ASSET_TYPES,
+    PHYSICAL_TABLE_ASSET_TYPES, with_internal_properties,
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
@@ -384,6 +384,10 @@ class AssetsManager(SearchableAsset):
             self._validate_properties(db, effective_type_id, asset_in.properties)
 
         update_data = asset_in.model_dump(exclude_unset=True)
+        if update_data.get('properties') is not None:
+            # Clients never see the internal keys, so they can't send them back
+            update_data['properties'] = with_internal_properties(
+                update_data['properties'], db_asset.properties)
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.pop('domain_ids', None) or []
         primary_domain_id = update_data.pop('primary_domain_id', None)

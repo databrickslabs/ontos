@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 import MetricViewStatus from '@/components/assets/metric-view-status';
+import MeasureConsistencyList from '@/components/metric-views/measure-consistency-list';
 import { useApi } from '@/hooks/use-api';
 import type { MetricViewDefinition } from '@/types/data-asset-review';
 
@@ -99,6 +100,7 @@ export default function AssetMetricViewCard({ assetId, assetTypeName }: {
                             refresh={definition.refresh}
                         />
                         <MetricViewDefinitionPanel definition={definition} />
+                        <MeasureConsistencyList assetId={assetId} />
                     </>
                 )}
             </CardContent>

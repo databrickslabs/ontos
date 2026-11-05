@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import MetricViewDefinitionPanel from './metric-view-definition';
 import { MetricViewDefinition, MetricViewLinks } from '@/types/data-asset-review';
 
+const getMock = vi.fn();
 const postMock = vi.fn();
 const deleteMock = vi.fn();
 const toastMock = vi.fn();
@@ -11,7 +12,7 @@ let canEdit = true;
 let pickerProps: { excludeIris?: string[]; title?: string } = {};
 
 vi.mock('@/hooks/use-api', () => ({
-    useApi: () => ({ post: postMock, delete: deleteMock }),
+    useApi: () => ({ get: getMock, post: postMock, delete: deleteMock }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
 vi.mock('@/stores/permissions-store', () => ({
@@ -138,6 +139,8 @@ const rowOf = (text: string) => within(screen.getByText(text).closest('tr') as H
 
 describe('MetricViewDefinitionPanel concept links', () => {
     beforeEach(() => {
+        getMock.mockReset();
+        getMock.mockResolvedValue({ data: { warnings: [] } });
         postMock.mockReset();
         deleteMock.mockReset();
         toastMock.mockReset();
@@ -173,6 +176,93 @@ describe('MetricViewDefinitionPanel concept links', () => {
         });
         expect(toastMock).toHaveBeenCalledWith({ title: 'Concept linked to Orders.' });
         expect(screen.queryByText('pick concept')).not.toBeInTheDocument();
+    });
+
+    it('warns, without blocking, when a measure link would create a conflict', async () => {
+        getMock.mockResolvedValue({ data: { warnings: [{
+            code: 'concept_has_other_definitions',
+            message: 'Measures already linked to this concept compute something else.',
+            params: { count: 1, measures: ['main.sales.net_mv.Revenue'] },
+        }] } });
+        postMock.mockResolvedValue({
+            data: link('l-new', 'uc_column', `${VIEW}.Orders`, NET_REVENUE, 'Net Revenue'),
+        });
+        render(<MetricViewDefinitionPanel definition={{ ...definition, links }} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Link a concept to Orders' }));
+        fireEvent.click(screen.getByText('pick concept'));
+
+        const alert = await screen.findByTestId('metric-view-link-warnings');
+        expect(getMock).toHaveBeenCalledWith(
+            '/api/metric-views/consistency/link-check'
+            + `?entity_id=${encodeURIComponent(`${VIEW}.Orders`)}`
+            + `&iri=${encodeURIComponent(NET_REVENUE)}`,
+        );
+        // The link is created anyway
+        expect(postMock).toHaveBeenCalledTimes(1);
+        expect(rowOf('COUNT(*)').getByText('Net Revenue')).toBeInTheDocument();
+        expect(within(alert).getByText(
+            'Measures already linked to this concept compute something else (1): '
+            + 'main.sales.net_mv.Revenue',
+        )).toBeInTheDocument();
+        fireEvent.click(within(alert).getByRole('button', { name: 'Dismiss' }));
+        expect(screen.queryByTestId('metric-view-link-warnings')).not.toBeInTheDocument();
+    });
+
+    it('links without a warning when the check fails or finds nothing', async () => {
+        getMock.mockRejectedValue(new Error('offline'));
+        postMock.mockResolvedValue({
+            data: link('l-new', 'uc_column', `${VIEW}.Orders`, NET_REVENUE, 'Net Revenue'),
+        });
+        render(<MetricViewDefinitionPanel definition={{ ...definition, links }} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Link a concept to Orders' }));
+        fireEvent.click(screen.getByText('pick concept'));
+
+        await waitFor(() => expect(rowOf('COUNT(*)').getByText('Net Revenue')).toBeInTheDocument());
+        expect(screen.queryByTestId('metric-view-link-warnings')).not.toBeInTheDocument();
+    });
+
+    it('translates the link warning, the message standing in for an unknown code', async () => {
+        getMock.mockResolvedValue({ data: { warnings: [
+            {
+                code: 'definition_linked_to_other_concepts', message: 'x',
+                params: { count: 1, concepts: ['http://example.com/glossary#NetSales'] },
+            },
+            { code: 'something_new', message: 'A new kind of warning.', params: {} },
+        ] } });
+        postMock.mockResolvedValue({
+            data: link('l-new', 'uc_column', `${VIEW}.Orders`, NET_REVENUE, 'Net Revenue'),
+        });
+        await i18n.changeLanguage('pt');
+        try {
+            render(<MetricViewDefinitionPanel definition={{ ...definition, links }} />);
+            fireEvent.click(screen.getByRole('button', { name: 'Vincular um conceito a Orders' }));
+            fireEvent.click(screen.getByText('pick concept'));
+
+            const alert = await screen.findByTestId('metric-view-link-warnings');
+            expect(within(alert).getByText(
+                'Medidas com a mesma definição estão vinculadas a outros conceitos (1): NetSales',
+            )).toBeInTheDocument();
+            expect(within(alert).getByText('A new kind of warning.')).toBeInTheDocument();
+            expect(within(alert).getByText('Orders foi vinculada. Confira a definição'))
+                .toBeInTheDocument();
+        } finally {
+            await i18n.changeLanguage('en');
+        }
+    });
+
+    it('does not check a link to the view itself', async () => {
+        postMock.mockResolvedValue({
+            data: link('l-v2', 'uc_table', VIEW, NET_REVENUE, 'Net Revenue'),
+        });
+        render(<MetricViewDefinitionPanel definition={{ ...definition, links }} />);
+
+        fireEvent.click(screen.getByRole('button', { name: `Link a concept to ${VIEW}` }));
+        fireEvent.click(screen.getByText('pick concept'));
+
+        await waitFor(() => expect(postMock).toHaveBeenCalled());
+        expect(getMock).not.toHaveBeenCalled();
     });
 
     it('links a concept to the view as a uc_table, without offering the linked ones', async () => {

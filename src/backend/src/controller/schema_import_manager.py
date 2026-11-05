@@ -15,6 +15,9 @@ from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, ListAssetsOptions
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.assets_manager import AssetsManager
+from src.controller.metric_view_consistency_manager import (
+    STORE_KEY as METRIC_VIEW_PROPERTY, build_stored_metric_view, store_metric_view,
+)
 from src.db_models.assets import AssetDb
 from src.db_models.connections import ConnectionDb
 from src.models.assets import (
@@ -432,6 +435,7 @@ class SchemaImportManager:
                         ))
                         # Still a View: no relationships are wired to it as a Metric View
                         continue
+                    self._refresh_metric_view(db, connector, item)
                 result.skipped += 1
                 result.items.append(ImportResultItem(
                     path=item.path,
@@ -567,6 +571,24 @@ class SchemaImportManager:
                         logger.debug(f"Entity relationship System -> {item.path}: {exc}")
 
         return result
+
+    def _refresh_metric_view(
+        self, db: Session, connector: AssetConnector, item: ImportPreviewItem,
+    ) -> None:
+        """Store the current spec and fingerprints on a re-imported Metric View (#1263).
+
+        In a savepoint: a failure is logged and leaves the stored ones as they were.
+        """
+        try:
+            meta = connector.get_asset_metadata(item.path)
+            spec = (meta.properties or {}).get(METRIC_VIEW_PROPERTY) if meta else None
+            asset = asset_repo.get(db, id=item.existing_asset_id)
+            if spec and asset is not None:
+                with db.begin_nested():
+                    store_metric_view(db, asset, spec)
+        except Exception:
+            logger.warning("Could not refresh the metric view fingerprints of %s",
+                           item.path, exc_info=True)
 
     # ------------------------------------------------------------------
     # Ancestor expansion
@@ -928,6 +950,12 @@ class SchemaImportManager:
                         properties["source_tags"] = meta.tags
                     properties["source_path"] = item.path
                     properties["connector_type"] = connector.connector_type
+                    if item.asset_type == METRIC_VIEW_ASSET_TYPE:
+                        # The parsed spec and its measure fingerprints (#1263)
+                        stored = build_stored_metric_view(
+                            (meta.properties or {}).get(METRIC_VIEW_PROPERTY))
+                        if stored:
+                            properties[METRIC_VIEW_PROPERTY] = stored
             except Exception as exc:
                 logger.debug(f"Could not fetch metadata for '{item.path}': {exc}")
 

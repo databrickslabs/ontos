@@ -50,6 +50,7 @@ import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-label
 import { createSchemeLookup } from '@/lib/scheme-lookup';
 import ConceptRelationsPanel from '@/components/semantic/concept-relations-panel';
 import LinkedObjectsPanel from '@/components/semantic/linked-objects-panel';
+import ConceptMeasureGroups from '@/components/metric-views/concept-measure-groups';
 import ConceptNeighborhoodGraph from '@/components/semantic/concept-neighborhood-graph';
 import { ConceptEditorDialog } from '@/components/knowledge/concept-editor-dialog';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
@@ -1093,6 +1094,7 @@ export default function ConceptDetailView() {
             onChanged={fetchConcept}
             maxVisibleRows={MAX_VISIBLE_ROWS}
           />
+          <ConceptMeasureGroups conceptIri={concept.iri} />
         </div>
 
         {/* Version history: live, drives versioning

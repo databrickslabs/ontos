@@ -50,59 +50,102 @@ def _issues(result):
     return [(issue.code, issue.params) for issue in result.issues]
 
 
-def test_a_pair_with_a_dispatch_site_is_accepted(db_session):
-    result = _manager(db_session).validate_workflow(_workflow(WorkflowTrigger(
-        type=TriggerType.BEFORE_UPDATE, entity_types=[EntityType.DATA_CONTRACT],
-    )))
+def _codes(errors):
+    return [(e.code, e.params) for e in errors]
 
-    assert result.valid, result.errors
+
+def _check(db_session, trigger, stored=None):
+    """The trigger/entity errors of saving ``trigger`` (a create, or an update of ``stored``)."""
+    return _codes(_manager(db_session).trigger_save_errors(trigger, stored))
+
+
+def _trigger(trigger_type=TriggerType.BEFORE_UPDATE, known=(), unknown=()):
+    return WorkflowTrigger(type=trigger_type, entity_types=list(known),
+                           unknown_entity_types=list(unknown))
+
+
+def test_a_pair_with_a_dispatch_site_is_accepted(db_session):
+    assert _check(db_session, _trigger(known=[EntityType.DATA_CONTRACT])) == []
 
 
 def test_a_pair_no_code_fires_is_refused_with_a_code(db_session):
-    result = _manager(db_session).validate_workflow(_workflow(WorkflowTrigger(
-        type=TriggerType.BEFORE_UPDATE,
-        entity_types=[EntityType.DATA_CONTRACT, EntityType.DATA_PRODUCT],
-    )))
-
-    assert not result.valid
-    assert _issues(result) == [('trigger_entity_type_unsupported',
-                                {'triggerType': 'before_update', 'entityType': 'data_product'})]
+    assert _check(db_session, _trigger(known=[EntityType.DATA_CONTRACT, EntityType.DATA_PRODUCT])) \
+        == [('trigger_entity_type_unsupported',
+             {'triggerType': 'before_update', 'entityType': 'data_product'})]
 
 
 @pytest.mark.parametrize('trigger_type', [TriggerType.MANUAL, TriggerType.SCHEDULED,
                                           TriggerType.FOR_APPROVAL_RESPONSE])
 def test_an_empty_list_in_the_map_allows_any_entity(db_session, trigger_type):
-    result = _manager(db_session).validate_workflow(_workflow(WorkflowTrigger(
-        type=trigger_type, entity_types=[EntityType.DATA_PRODUCT, EntityType.TABLE],
-    )))
-
-    assert result.valid, result.errors
+    trigger = _trigger(trigger_type, known=[EntityType.DATA_PRODUCT, EntityType.TABLE])
+    assert _check(db_session, trigger) == []
 
 
 def test_an_unknown_entity_type_has_its_own_code(db_session):
-    result = _manager(db_session).validate_workflow(_workflow(WorkflowTrigger(
-        type=TriggerType.BEFORE_UPDATE, entity_types=[EntityType.DATA_CONTRACT],
-        unknown_entity_types=['dataset'],
-    )))
-
-    assert not result.valid
-    assert _issues(result) == [('trigger_entity_type_unknown',
-                                {'triggerType': 'before_update', 'entityType': 'dataset'})]
+    assert _check(db_session, _trigger(known=[EntityType.DATA_CONTRACT], unknown=['dataset'])) \
+        == [('trigger_entity_type_unknown',
+             {'triggerType': 'before_update', 'entityType': 'dataset'})]
 
 
 def test_maturity_change_fires_for_products_and_contracts_only(db_session):
-    manager = _manager(db_session)
-    allowed = manager.validate_workflow(_workflow(WorkflowTrigger(
-        type=TriggerType.ON_MATURITY_CHANGE,
-        entity_types=[EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT],
-    )))
-    refused = manager.validate_workflow(_workflow(WorkflowTrigger(
-        type=TriggerType.ON_MATURITY_CHANGE, entity_types=[EntityType.DOMAIN],
-    )))
+    maturity = TriggerType.ON_MATURITY_CHANGE
+    assert _check(db_session, _trigger(
+        maturity, known=[EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT])) == []
+    assert _check(db_session, _trigger(maturity, known=[EntityType.DOMAIN])) == [
+        ('trigger_entity_type_unsupported',
+         {'triggerType': 'on_maturity_change', 'entityType': 'domain'}),
+    ]
 
-    assert allowed.valid, allowed.errors
-    assert _issues(refused) == [('trigger_entity_type_unsupported',
-                                 {'triggerType': 'on_maturity_change', 'entityType': 'domain'})]
+
+def test_the_trigger_check_is_not_part_of_validate_workflow(db_session):
+    """Step edits of a stored workflow go through validate_workflow with the stored trigger."""
+    result = _manager(db_session).validate_workflow(_workflow(_trigger(
+        known=[EntityType.DATA_PRODUCT], unknown=['dataset'],
+    )))
+    assert result.valid, result.errors
+
+
+_STORED_DATASET = _trigger(unknown=['dataset'])
+_STORED_PRODUCT_GATE = _trigger(known=[EntityType.DATA_PRODUCT])  # a pair no code fires
+
+
+@pytest.mark.parametrize('new, stored', [
+    (None, _STORED_DATASET),  # trigger not sent
+    (_trigger(unknown=['dataset']), _STORED_DATASET),  # sent again as stored
+    (_trigger(known=[EntityType.DATA_PRODUCT]), _STORED_PRODUCT_GATE),
+    # changed, keeping the stored values under the same trigger type
+    (_trigger(known=[EntityType.DATA_CONTRACT], unknown=['dataset']), _STORED_DATASET),
+    (_trigger(known=[EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT]), _STORED_PRODUCT_GATE),
+])
+def test_an_update_may_keep_what_is_stored(db_session, new, stored):
+    assert _check(db_session, new, stored) == []
+
+
+def test_an_update_may_not_add_an_unsupported_pair(db_session):
+    new = _trigger(known=[EntityType.DATA_PRODUCT], unknown=['dataset'])
+    assert _check(db_session, new, _STORED_DATASET) == [
+        ('trigger_entity_type_unsupported',
+         {'triggerType': 'before_update', 'entityType': 'data_product'}),
+    ]
+
+
+@pytest.mark.parametrize('new', [
+    _trigger(unknown=['dataset', 'data_product']),  # a known type sent as unknown
+    _trigger(unknown=['dataset', 'legacy']),  # an unknown value that isn't stored
+])
+def test_an_update_may_not_add_unknown_values(db_session, new):
+    added = [v for v in new.unknown_entity_types if v != 'dataset']
+    assert _check(db_session, new, _STORED_DATASET) == [
+        ('trigger_entity_type_unknown', {'triggerType': 'before_update', 'entityType': value})
+        for value in added
+    ]
+
+
+def test_stored_values_are_not_kept_under_another_trigger_type(db_session):
+    new = _trigger(TriggerType.ON_UPDATE, known=[EntityType.DATA_CONTRACT], unknown=['dataset'])
+    assert _check(db_session, new, _STORED_DATASET) == [
+        ('trigger_entity_type_unknown', {'triggerType': 'on_update', 'entityType': 'dataset'}),
+    ]
 
 
 def test_every_shipped_default_workflow_validates(db_session):
@@ -120,14 +163,15 @@ def test_every_shipped_default_workflow_validates(db_session):
                 for step in wf.steps
             ],
         ))
-        if not result.valid:
-            failures[wf.name] = result.errors
+        errors = [*result.errors, *manager.trigger_save_errors(wf.trigger)]
+        if errors:
+            failures[wf.name] = errors
     assert failures == {}
 
 
-# Demo workflows (``process_workflows`` rows of the demo presets) whose trigger the save
-# check refuses. They keep loading and are only refused when edited; listed so a new
-# preset workflow with a pair no code fires fails here.
+# Demo workflows (``process_workflows`` rows of the demo presets) whose trigger would be
+# refused on a create. Stored, they keep loading, running and being edited (only a trigger
+# change is checked); listed so a new preset workflow with a pair no code fires fails here.
 def _refused(code, trigger_type, entity_type):
     return [(code, {'triggerType': trigger_type, 'entityType': entity_type})]
 
@@ -163,7 +207,7 @@ def _demo_workflows():
     return rows
 
 
-def test_demo_workflows_load_and_only_the_known_ones_are_refused(db_session):
+def test_demo_workflows_load_edit_and_only_the_known_ones_are_refused_as_new(db_session):
     manager = _manager(db_session)
     rows = _demo_workflows()
     assert len(rows) >= 14
@@ -179,15 +223,14 @@ def test_demo_workflows_load_and_only_the_known_ones_are_refused(db_session):
         ))
         db_session.commit()
         stored = manager.get_workflow(wf_id)  # loads, unknown types included
-        result = manager.validate_workflow(_workflow(stored.trigger))
-        if not result.valid:
-            refused[(file_name, name)] = _issues(result)
+        # A step edit (the trigger unchanged) is accepted
+        assert manager.validate_workflow(_workflow(stored.trigger)).valid, name
+        assert manager.trigger_save_errors(stored.trigger, stored.trigger) == [], name
+        as_new = _codes(manager.trigger_save_errors(stored.trigger))
+        if as_new:
+            refused[(file_name, name)] = as_new
 
     assert refused == _DEMO_PAIRS_REFUSED
-
-
-def _codes(errors):
-    return [(e.code, e.params) for e in errors]
 
 
 def test_emptying_a_trigger_of_only_unknown_types_is_refused(db_session):

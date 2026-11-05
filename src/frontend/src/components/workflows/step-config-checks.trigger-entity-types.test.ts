@@ -5,7 +5,8 @@ import { workflowValidationIssueText } from './step-config-checks';
 
 const unknown = {
   code: 'trigger_entity_type_unknown',
-  message: "Unknown entity type 'dataset' on the trigger: remove it to save",
+  message: "Entity type 'dataset' is listed as unknown on the trigger: "
+    + 'remove it to change the trigger',
   params: { triggerType: 'before_update', entityType: 'dataset' },
 };
 const unsupported = {
@@ -22,12 +23,12 @@ describe('workflowValidationIssueText: trigger entity types', () => {
   it('names the unknown type', async () => {
     expect(workflowValidationIssueText(unknown, i18n.t)).toBe(
       'The trigger lists the unknown entity type "dataset": '
-      + 'remove it in the trigger settings to save.',
+      + 'remove it in the trigger settings to change the trigger.',
     );
     await i18n.changeLanguage('pt');
     expect(workflowValidationIssueText(unknown, i18n.t)).toBe(
       'O gatilho lista o tipo de entidade desconhecido "dataset": '
-      + 'remova-o nas configurações do gatilho para salvar.',
+      + 'remova-o nas configurações do gatilho para alterar o gatilho.',
     );
   });
 

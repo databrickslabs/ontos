@@ -609,9 +609,9 @@
   "triggerEntityChecks": {
     "unknownBadge": "Type d'entité inconnu : {{type}}",
     "removeUnknown": "Retirer {{type}}",
-    "unknownNotice_one": "Ce déclencheur contient un type d'entité qui n'existe plus. Il ne correspond à rien : retirez-le pour enregistrer.",
-    "unknownNotice_other": "Ce déclencheur contient {{count}} types d'entité qui n'existent plus. Ils ne correspondent à rien : retirez-les pour enregistrer.",
-    "unknownOnSave": "Le déclencheur contient le type d'entité inconnu « {{type}} » : retirez-le dans la configuration du déclencheur pour enregistrer.",
+    "unknownNotice_one": "Ce déclencheur contient un type d'entité qui n'existe plus. Il ne correspond à rien : retirez-le pour modifier le déclencheur.",
+    "unknownNotice_other": "Ce déclencheur contient {{count}} types d'entité qui n'existent plus. Ils ne correspondent à rien : retirez-les pour modifier le déclencheur.",
+    "unknownOnSave": "Le déclencheur contient le type d'entité inconnu « {{type}} » : retirez-le dans la configuration du déclencheur pour le modifier.",
     "unsupportedOnSave": "« {{trigger}} » ne se déclenche jamais pour {{type}} : choisissez un type d'entité pris en charge par ce déclencheur.",
     "pickKnownType": "Choisissez au moins un type d'entité. Sans type, ce workflow se déclencherait pour toutes les entités.",
     "requiredOnSave": "Choisissez au moins un type d'entité pour le déclencheur : il ne contenait que des types qui n'existent plus, et une liste vide le ferait se déclencher pour toutes les entités."

@@ -609,9 +609,9 @@
   "triggerEntityChecks": {
     "unknownBadge": "Tipo di entità sconosciuto: {{type}}",
     "removeUnknown": "Rimuovi {{type}}",
-    "unknownNotice_one": "Questo trigger contiene un tipo di entità che non esiste più. Non corrisponde a nulla: rimuovilo per salvare.",
-    "unknownNotice_other": "Questo trigger contiene {{count}} tipi di entità che non esistono più. Non corrispondono a nulla: rimuovili per salvare.",
-    "unknownOnSave": "Il trigger contiene il tipo di entità sconosciuto \"{{type}}\": rimuovilo nella configurazione del trigger per salvare.",
+    "unknownNotice_one": "Questo trigger contiene un tipo di entità che non esiste più. Non corrisponde a nulla: rimuovilo per modificare il trigger.",
+    "unknownNotice_other": "Questo trigger contiene {{count}} tipi di entità che non esistono più. Non corrispondono a nulla: rimuovili per modificare il trigger.",
+    "unknownOnSave": "Il trigger contiene il tipo di entità sconosciuto \"{{type}}\": rimuovilo nella configurazione del trigger per modificarlo.",
     "unsupportedOnSave": "\"{{trigger}}\" non si attiva mai per {{type}}: scegli un tipo di entità supportato da questo trigger.",
     "pickKnownType": "Scegli almeno un tipo di entità. Senza, questo workflow si attiverebbe per tutte le entità.",
     "requiredOnSave": "Scegli almeno un tipo di entità per il trigger: conteneva solo tipi che non esistono più, e una lista vuota lo farebbe attivare per tutte le entità."

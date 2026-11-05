@@ -22,7 +22,7 @@ describe('UnknownEntityTypesNotice', () => {
     expect(screen.getByText('Unknown entity type: dataset')).toBeInTheDocument();
     expect(screen.getByTestId('unknown-entity-types')).toHaveTextContent(
       'This trigger lists an entity type that no longer exists. '
-      + 'It matches nothing: remove it to save.',
+      + 'It matches nothing: remove it to change the trigger.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Remove dataset' }));
     expect(onRemove).toHaveBeenCalledWith('dataset');

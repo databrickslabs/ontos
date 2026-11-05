@@ -609,9 +609,9 @@
   "triggerEntityChecks": {
     "unknownBadge": "Tipo de entidade desconhecido: {{type}}",
     "removeUnknown": "Remover {{type}}",
-    "unknownNotice_one": "Este gatilho lista um tipo de entidade que não existe mais. Ele não corresponde a nada: remova-o para salvar.",
-    "unknownNotice_other": "Este gatilho lista {{count}} tipos de entidade que não existem mais. Eles não correspondem a nada: remova-os para salvar.",
-    "unknownOnSave": "O gatilho lista o tipo de entidade desconhecido \"{{type}}\": remova-o nas configurações do gatilho para salvar.",
+    "unknownNotice_one": "Este gatilho lista um tipo de entidade que não existe mais. Ele não corresponde a nada: remova-o para alterar o gatilho.",
+    "unknownNotice_other": "Este gatilho lista {{count}} tipos de entidade que não existem mais. Eles não correspondem a nada: remova-os para alterar o gatilho.",
+    "unknownOnSave": "O gatilho lista o tipo de entidade desconhecido \"{{type}}\": remova-o nas configurações do gatilho para alterar o gatilho.",
     "unsupportedOnSave": "\"{{trigger}}\" nunca é acionado para {{type}}: escolha um tipo de entidade que este gatilho suporta.",
     "pickKnownType": "Escolha pelo menos um tipo de entidade. Sem nenhum, este workflow seria acionado para todas as entidades.",
     "requiredOnSave": "Escolha pelo menos um tipo de entidade para o gatilho: ele listava só tipos que não existem mais, e uma lista vazia faria com que fosse acionado para todas as entidades."

@@ -76,6 +76,8 @@ afterEach(async () => {
 });
 
 describe('WorkflowDesigner with unknown stored entity types', () => {
+  // The backend answers 200 to this body (the trigger is unchanged, so it isn't checked):
+  // test_a_designer_save_that_keeps_the_trigger_succeeds in the route tests
   it('saves the unknown types back and does not auto-fill a known one', async () => {
     const { container } = renderDesigner();
     await openTrigger(container);

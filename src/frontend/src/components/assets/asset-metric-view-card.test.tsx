@@ -101,6 +101,7 @@ describe('AssetMetricViewCard', () => {
         expect(await screen.findByText('Same or similar definitions')).toBeInTheDocument();
         expect(getMock.mock.calls.map(([url]) => url)).toEqual([
             '/api/assets/a1/metric-view', '/api/metric-views/consistency?asset_id=a1',
+            '/api/assets/a1/metric-view/change-requests',
         ]);
         expect(screen.getByText('Duplicate')).toBeInTheDocument();
     });

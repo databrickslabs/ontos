@@ -44,13 +44,10 @@ def test_get_shows_the_unknown_type_and_a_trigger_put_keeps_it(client, db_sessio
     assert trigger['entity_types'] == []
     assert trigger['unknown_entity_types'] == ['dataset']
 
-    # A trigger-only PUT (no steps) is checked too: refused, and nothing is written
+    # The trigger sent back unchanged is not checked, and keeps the stored value
     saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': trigger})
 
-    assert saved.status_code == 400, saved.text
-    assert [code for code, _ in _issue_codes(saved.json()['detail'])] == [
-        'trigger_entity_type_unknown',
-    ]
+    assert saved.status_code == 200, saved.text
     assert _stored_types(db_session, wf_id) == ['dataset']
 
 
@@ -58,17 +55,51 @@ def _issue_codes(detail):
     return [(issue['code'], issue['params']) for issue in detail['params']['issues']]
 
 
-def test_saving_the_get_body_of_an_unknown_type_is_refused_and_keeps_it(client, db_session):
-    wf_id = _stored(db_session, ['dataset'])
+def _designer_body(client, wf_id):
+    """What the designer PUTs for a loaded workflow: the trigger with its unknown types."""
     body = client.get(f'/api/workflows/{wf_id}').json()
+    return {key: body[key] for key in ('name', 'description', 'trigger', 'workflow_type',
+                                       'is_active', 'steps')}
+
+
+def test_a_designer_save_that_keeps_the_trigger_succeeds(client, db_session):
+    wf_id = _stored(db_session, ['dataset'])
+    body = _designer_body(client, wf_id)
+    assert body['trigger']['unknown_entity_types'] == ['dataset']
+    body['description'] = 'edited'
+
+    saved = client.put(f'/api/workflows/{wf_id}', json=body)
+
+    assert saved.status_code == 200, saved.text
+    assert saved.json()['description'] == 'edited'
+    assert _stored_types(db_session, wf_id) == ['dataset']
+
+
+def test_a_step_only_edit_of_an_unknown_type_workflow_succeeds(client, db_session):
+    wf_id = _stored(db_session, ['dataset'])
+    steps = [{'step_id': 'done', 'name': 'Done', 'step_type': 'pass', 'order': 0}]
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'steps': steps})
+
+    assert saved.status_code == 200, saved.text
+    assert [step['step_id'] for step in saved.json()['steps']] == ['done']
+    assert _stored_types(db_session, wf_id) == ['dataset']
+
+
+def test_a_designer_save_adding_an_unsupported_pair_is_refused(client, db_session):
+    wf_id = _stored(db_session, ['dataset'])
+    body = _designer_body(client, wf_id)
+    body['trigger']['entity_types'] = ['data_product']
 
     saved = client.put(f'/api/workflows/{wf_id}', json=body)
 
     assert saved.status_code == 400, saved.text
     detail = saved.json()['detail']
     assert detail['code'] == 'workflow_invalid'
-    assert _issue_codes(detail) == [('trigger_entity_type_unknown',
-                                     {'triggerType': 'before_update', 'entityType': 'dataset'})]
+    assert _issue_codes(detail) == [
+        ('trigger_entity_type_unsupported',
+         {'triggerType': 'before_update', 'entityType': 'data_product'}),
+    ]
     assert _stored_types(db_session, wf_id) == ['dataset']
 
 

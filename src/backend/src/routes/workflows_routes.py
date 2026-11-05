@@ -823,6 +823,10 @@ async def create_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
+    trigger_errors = manager.trigger_save_errors(workflow.trigger)
+    if trigger_errors:
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
+            WorkflowValidationResult(valid=False, errors=trigger_errors)))
     result = manager.create_workflow(workflow, created_by=user_email)
     
     audit_manager.log_action(
@@ -898,10 +902,8 @@ async def update_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
-    trigger_errors = manager.trigger_widening_errors(existing.trigger, workflow.trigger)
-    if workflow.trigger is not None and workflow.steps is None:
-        # validate_workflow above only runs when steps are sent
-        trigger_errors += manager.trigger_entity_type_errors(workflow.trigger)
+    # Only a changed trigger is checked: stored workflows keep working and can be edited
+    trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
     if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
             WorkflowValidationResult(valid=False, errors=trigger_errors)))
@@ -1102,8 +1104,17 @@ async def validate_workflow(
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowValidationResult:
-    """Validate a workflow definition."""
-    return manager.validate_workflow(workflow)
+    """Validate a workflow definition (as a new one: its trigger/entity pairs too)."""
+    validation = manager.validate_workflow(workflow)
+    trigger_errors = manager.trigger_save_errors(workflow.trigger)
+    if not trigger_errors:
+        return validation
+    # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes
+    added = WorkflowValidationResult(valid=False, errors=trigger_errors)
+    return WorkflowValidationResult(
+        valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
+        issues=[*validation.issues, *added.issues],
+    )
 
 
 @router.post("/check-condition")

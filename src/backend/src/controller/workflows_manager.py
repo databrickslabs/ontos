@@ -106,7 +106,7 @@ class WorkflowsManager:
     ):
         """``trigger_entity_types``: entity types each trigger type has a dispatch site
         for (an empty list = any). Given by the workflow routes, which own that map;
-        without it ``validate_workflow`` doesn't check trigger/entity pairs.
+        without it ``trigger_save_errors`` doesn't check trigger/entity pairs.
         """
         self._db = db
         self._default_workflows_path = Path(__file__).parent.parent / "data" / "default_workflows.yaml"
@@ -651,7 +651,6 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
-        errors.extend(self.trigger_entity_type_errors(workflow.trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -682,21 +681,39 @@ class WorkflowsManager:
             'trigger_entity_type_required', triggerType=new.type.value,
         )]
 
-    def trigger_entity_type_errors(self, trigger: WorkflowTrigger) -> List[str]:
-        """Entity types the trigger can never fire for: unknown ones, and pairs no code fires.
+    @staticmethod
+    def _trigger_matches(left: WorkflowTrigger, right: WorkflowTrigger) -> bool:
+        """Same trigger type and entity types (known and unknown), in any order."""
+        return (left.type == right.type
+                and set(left.entity_types) == set(right.entity_types)
+                and set(left.unknown_entity_types) == set(right.unknown_entity_types))
 
-        Only saves are checked; stored workflows keep loading as they are. Every value in
-        ``unknown_entity_types`` is refused, a known type placed there too: a save never
-        writes client-sent values of that list, which ``stored_config_json`` would merge
-        into the stored ``entity_types``.
+    def trigger_save_errors(
+        self, new: Optional[WorkflowTrigger], stored: Optional[WorkflowTrigger] = None,
+    ) -> List[str]:
+        """Trigger/entity errors of a create (``stored`` None) or an update.
+
+        Only trigger changes are checked: an update that doesn't send the trigger, or
+        sends the stored one again, is not, so stored workflows (an unknown type, a pair
+        no code fires) keep working and can be edited. A changed trigger may keep the
+        stored unknown values and pairs while its trigger type stays the same; any other
+        unknown value (a known type sent as unknown too, since ``stored_config_json``
+        would merge it into ``entity_types``) and any new pair no code fires is refused,
+        and so is emptying a trigger of only unknown types (``trigger_widening_errors``).
         """
-        trigger_type = trigger.type.value
+        if new is None or (stored is not None and self._trigger_matches(new, stored)):
+            return []
+        same_type = stored is not None and stored.type == new.type
+        kept_unknown = set(stored.unknown_entity_types) if same_type else set()
+        kept_known = set(stored.entity_types) if same_type else set()
+        trigger_type = new.type.value
         errors: List[str] = [
             CodedMessage(
-                f"Entity type '{value}' is listed as unknown on the trigger: remove it to save",
+                f"Entity type '{value}' is listed as unknown on the trigger: "
+                "remove it to change the trigger",
                 'trigger_entity_type_unknown', triggerType=trigger_type, entityType=value,
             )
-            for value in trigger.unknown_entity_types
+            for value in new.unknown_entity_types if value not in kept_unknown
         ]
         allowed = (self._trigger_entity_types or {}).get(trigger_type) or []
         if allowed:
@@ -706,8 +723,10 @@ class WorkflowsManager:
                     'trigger_entity_type_unsupported',
                     triggerType=trigger_type, entityType=et.value,
                 )
-                for et in trigger.entity_types if et.value not in allowed
+                for et in new.entity_types if et.value not in allowed and et not in kept_known
             )
+        if stored is not None:
+            errors.extend(self.trigger_widening_errors(stored, new))
         return errors
 
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:

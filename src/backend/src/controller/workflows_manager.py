@@ -98,9 +98,19 @@ def _step_issue(step: WorkflowStepCreate, issue: Dict[str, Any]) -> CodedMessage
 class WorkflowsManager:
     """Manager for process workflow definitions."""
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        trigger_entity_types: Optional[Dict[str, List[str]]] = None,
+    ):
+        """``trigger_entity_types``: entity types each trigger type has a dispatch site
+        for (an empty list = any). Given by the workflow routes, which own that map;
+        without it ``validate_workflow`` doesn't check trigger/entity pairs.
+        """
         self._db = db
         self._default_workflows_path = Path(__file__).parent.parent / "data" / "default_workflows.yaml"
+        self._trigger_entity_types = trigger_entity_types
 
     def load_from_yaml(
         self,
@@ -641,12 +651,38 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
+        errors.extend(self._validate_trigger_entity_types(workflow.trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
         )
+
+    def _validate_trigger_entity_types(self, trigger: WorkflowTrigger) -> List[str]:
+        """Entity types the trigger can never fire for: unknown ones, and pairs no code fires.
+
+        Only saves are checked; stored workflows keep loading as they are.
+        """
+        trigger_type = trigger.type.value
+        errors: List[str] = [
+            CodedMessage(
+                f"Unknown entity type '{value}' on the trigger: remove it to save",
+                'trigger_entity_type_unknown', triggerType=trigger_type, entityType=value,
+            )
+            for value in trigger.unknown_entity_types
+        ]
+        allowed = (self._trigger_entity_types or {}).get(trigger_type) or []
+        if allowed:
+            errors.extend(
+                CodedMessage(
+                    f"Trigger '{trigger_type}' never fires for entity type '{et.value}'",
+                    'trigger_entity_type_unsupported',
+                    triggerType=trigger_type, entityType=et.value,
+                )
+                for et in trigger.entity_types if et.value not in allowed
+            )
+        return errors
 
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""

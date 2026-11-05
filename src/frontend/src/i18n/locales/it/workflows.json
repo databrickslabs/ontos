@@ -610,7 +610,9 @@
     "unknownBadge": "Tipo di entità sconosciuto: {{type}}",
     "removeUnknown": "Rimuovi {{type}}",
     "unknownNotice_one": "Questo trigger contiene un tipo di entità che non esiste più. Non corrisponde a nulla: rimuovilo per salvare.",
-    "unknownNotice_other": "Questo trigger contiene {{count}} tipi di entità che non esistono più. Non corrispondono a nulla: rimuovili per salvare."
+    "unknownNotice_other": "Questo trigger contiene {{count}} tipi di entità che non esistono più. Non corrispondono a nulla: rimuovili per salvare.",
+    "unknownOnSave": "Il trigger contiene il tipo di entità sconosciuto \"{{type}}\": rimuovilo nella configurazione del trigger per salvare.",
+    "unsupportedOnSave": "\"{{trigger}}\" non si attiva mai per {{type}}: scegli un tipo di entità supportato da questo trigger."
   },
   "triggerPicker": {
     "label": "Si attiva su",

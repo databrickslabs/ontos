@@ -610,7 +610,9 @@
     "unknownBadge": "Unknown entity type: {{type}}",
     "removeUnknown": "Remove {{type}}",
     "unknownNotice_one": "This trigger lists an entity type that no longer exists. It matches nothing: remove it to save.",
-    "unknownNotice_other": "This trigger lists {{count}} entity types that no longer exist. They match nothing: remove them to save."
+    "unknownNotice_other": "This trigger lists {{count}} entity types that no longer exist. They match nothing: remove them to save.",
+    "unknownOnSave": "The trigger lists the unknown entity type \"{{type}}\": remove it in the trigger settings to save.",
+    "unsupportedOnSave": "\"{{trigger}}\" never fires for {{type}}: pick an entity type this trigger supports."
   },
   "triggerPicker": {
     "label": "Fires on",

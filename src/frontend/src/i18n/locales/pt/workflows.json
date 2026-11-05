@@ -610,7 +610,9 @@
     "unknownBadge": "Tipo de entidade desconhecido: {{type}}",
     "removeUnknown": "Remover {{type}}",
     "unknownNotice_one": "Este gatilho lista um tipo de entidade que não existe mais. Ele não corresponde a nada: remova-o para salvar.",
-    "unknownNotice_other": "Este gatilho lista {{count}} tipos de entidade que não existem mais. Eles não correspondem a nada: remova-os para salvar."
+    "unknownNotice_other": "Este gatilho lista {{count}} tipos de entidade que não existem mais. Eles não correspondem a nada: remova-os para salvar.",
+    "unknownOnSave": "O gatilho lista o tipo de entidade desconhecido \"{{type}}\": remova-o nas configurações do gatilho para salvar.",
+    "unsupportedOnSave": "\"{{trigger}}\" nunca é acionado para {{type}}: escolha um tipo de entidade que este gatilho suporta."
   },
   "triggerPicker": {
     "label": "Acionado em",

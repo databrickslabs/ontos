@@ -610,7 +610,9 @@
     "unknownBadge": "Unbekannter Entity-Typ: {{type}}",
     "removeUnknown": "{{type}} entfernen",
     "unknownNotice_one": "Dieser Trigger enthält einen Entity-Typ, der nicht mehr existiert. Er trifft auf nichts zu: Entfernen Sie ihn, um zu speichern.",
-    "unknownNotice_other": "Dieser Trigger enthält {{count}} Entity-Typen, die nicht mehr existieren. Sie treffen auf nichts zu: Entfernen Sie sie, um zu speichern."
+    "unknownNotice_other": "Dieser Trigger enthält {{count}} Entity-Typen, die nicht mehr existieren. Sie treffen auf nichts zu: Entfernen Sie sie, um zu speichern.",
+    "unknownOnSave": "Der Trigger enthält den unbekannten Entity-Typ \"{{type}}\": Entfernen Sie ihn in der Trigger-Konfiguration, um zu speichern.",
+    "unsupportedOnSave": "\"{{trigger}}\" wird für {{type}} nie ausgelöst: Wählen Sie einen Entity-Typ, den dieser Trigger unterstützt."
   },
   "triggerPicker": {
     "label": "Wird ausgelöst bei",

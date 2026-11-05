@@ -13,7 +13,9 @@ import WorkflowDesigner from './workflow-designer';
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), toast: vi.fn() }));
 
-vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get: api.get, post: api.post, put: api.put }) }));
+vi.mock('@/hooks/use-api', () => ({
+  useApi: () => ({ get: api.get, post: api.post, put: api.put }),
+}));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: api.toast }) }));
 vi.mock('./template-vars-inspector', () => ({ default: () => null }));
 

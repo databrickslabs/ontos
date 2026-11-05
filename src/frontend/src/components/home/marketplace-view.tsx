@@ -328,12 +328,14 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     );
   }, []);
 
-  // Add a domain to the filter (idempotent). Used by the graph view, where a node
-  // click both focuses the graph and includes that domain in the filter — adding
-  // (not toggling) so navigating back to an already-selected node never silently
-  // removes it from the filter.
-  const addDomainToFilter = useCallback((domainId: string) => {
-    setSelectedDomainIds(prev => (prev.includes(domainId) ? prev : [...prev, domainId]));
+  // Graph view is single-select navigation: a node click focuses the graph AND
+  // replaces the filter with that domain. Accumulating (the #597 behaviour) broke
+  // drill-down — Retail -> Retail Operations kept Retail (+ all its descendants)
+  // in the union, so the subdomain click never narrowed the result. The graph has
+  // no visual for "which nodes are in the filter", so multi-select lives in pills.
+  const focusDomainInGraph = useCallback((domainId: string) => {
+    setGraphFocusId(domainId);
+    setSelectedDomainIds([domainId]);
   }, []);
 
   // Handle product card click
@@ -634,11 +636,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             <div className={`transition-opacity duration-300 ${graphFadeIn ? 'opacity-100' : 'opacity-0'}`}>
               <DataDomainMiniGraph
                 currentDomain={selectedDomainDetails}
-                // Node click focuses the graph AND includes that domain in the filter.
-                // We add (never remove) so re-visiting a node during navigation can't
-                // silently drop it from the filter; clearing is done via the pills view
-                // or the "clear filters" control.
-                onNodeClick={(id) => { setGraphFocusId(id); addDomainToFilter(id); }}
+                onNodeClick={focusDomainInGraph}
               />
             </div>
           ) : (

@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, Loader2, FileText } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertCircle, Loader2, FileText, LayoutDashboard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useDataProductTypes } from '@/hooks/use-data-product-types';
@@ -37,6 +38,13 @@ interface CreateFromContractDialogProps {
   onSuccess?: (productId: string) => void;
 }
 
+interface ContractDashboard {
+  id: string;
+  name: string;
+  location?: string | null;
+  url?: string | null;
+}
+
 const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   isOpen,
   onOpenChange,
@@ -44,7 +52,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   contractName,
   onSuccess,
 }) => {
-  const { post } = useApi();
+  const { get, post } = useApi();
   const { toast } = useToast();
   const { t } = useTranslation(['data-products', 'common']);
 
@@ -60,6 +68,9 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   const [outputPortName, setOutputPortName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Dashboards built on the contract's semantic models, offered as extra deliverables
+  const [dashboards, setDashboards] = useState<ContractDashboard[]>([]);
+  const [includeDashboards, setIncludeDashboards] = useState(true);
 
   const handleSubmit = async () => {
     // Validation
@@ -83,6 +94,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
         product_type: productType || undefined,
         version: version.trim(),
         output_port_name: outputPortName.trim() || undefined,
+        include_dashboards: dashboards.length > 0 && includeDashboards,
       });
 
       if (response.error) {
@@ -140,8 +152,13 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       setVersion('v1.0.0');
       setOutputPortName('');
       setError(null);
+      setIncludeDashboards(true);
+      setDashboards([]);
+      get<ContractDashboard[]>(`/api/data-products/from-contract/${encodeURIComponent(contractId)}/dashboards`)
+        .then(res => setDashboards(res.data || []))
+        .catch(() => setDashboards([]));
     }
-  }, [isOpen]);
+  }, [isOpen, contractId, get]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -233,6 +250,37 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
               {t('data-products:createFromContract.deliverableNameHint')}
             </div>
           </div>
+
+          {dashboards.length > 0 && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="include-dashboards"
+                  checked={includeDashboards}
+                  onCheckedChange={(value) => setIncludeDashboards(value === true)}
+                  disabled={submitting}
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="include-dashboards" className="text-sm font-medium">
+                    {t('data-products:createFromContract.includeDashboardsLabel')}
+                  </Label>
+                  <div className="text-xs text-muted-foreground">
+                    {t('data-products:createFromContract.includeDashboardsHint')}
+                  </div>
+                </div>
+              </div>
+              <ul className="ml-6 space-y-1 text-sm">
+                {dashboards.map(d => (
+                  <li key={d.id} className="flex items-center gap-2">
+                    <LayoutDashboard className="h-3.5 w-3.5 text-muted-foreground" />
+                    {d.url ? (
+                      <a href={d.url} target="_blank" rel="noreferrer" className="hover:underline">{d.name}</a>
+                    ) : d.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Error Alert */}
           {error && (

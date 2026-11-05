@@ -23,6 +23,25 @@ logger = get_logger(__name__)
 class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
 
+
+# Explicit principals of the workflow resolver (``_resolve_role_to_users``):
+# ``user:<x>`` / ``group:<name>`` never name an app role.
+_EXPLICIT_PREFIXES = ('user:', 'group:')
+
+
+def _is_explicit_principal(recipient: Optional[str]) -> bool:
+    return bool(recipient) and recipient.startswith(_EXPLICIT_PREFIXES)
+
+
+def _matches_explicit_principal(recipient: str, user_info: UserInfo) -> bool:
+    """``user:<x>``: that email / username (ignoring case); ``group:<name>``:
+    the members of that group."""
+    kind, _, name = recipient.partition(':')
+    if kind == 'group':
+        return name in set(user_info.groups or [])
+    identities = {str(v).lower() for v in (user_info.email, user_info.username) if v}
+    return name.lower() in identities
+
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
         """Initialize the notification manager.
@@ -111,6 +130,8 @@ class NotificationsManager:
             
             if not recipient and not target_role:  # Broadcast
                 is_recipient = True
+            elif _is_explicit_principal(recipient):  # Never a role name
+                is_recipient = _matches_explicit_principal(recipient, user_info)
             elif user_email and recipient == user_email:  # Direct email match
                 is_recipient = True
             elif user_name and recipient == user_name:  # Direct username match
@@ -220,6 +241,10 @@ class NotificationsManager:
         # Broadcast notification - anyone can access
         if not recipient and not target_role:
             return not strict
+
+        # user:<x> / group:<name>: that user or group, never a role name
+        if _is_explicit_principal(recipient):
+            return _matches_explicit_principal(recipient, user_info) or is_admin
         
         # Direct email match
         if user_email and recipient == user_email:

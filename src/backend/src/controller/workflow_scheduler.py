@@ -6,20 +6,25 @@ each due slot every instance inserts ``(workflow:<id>, slot)`` with ``ON CONFLIC
 DO NOTHING`` and only the instance whose insert wrote the row runs the workflow.
 
 Database access, so Lakebase can idle:
-- While no active workflow has a ``scheduled`` trigger, the thread reads nothing:
-  ``_has_scheduled`` stays False until a workflow is created, updated, toggled or
-  deleted in this process (``notify_schedules_changed``).
+- While no active workflow has a ``scheduled`` trigger, the thread reads nothing
+  until a workflow is created, updated, toggled or deleted in this process
+  (``notify_schedules_changed``), or until the slow idle re-check
+  (``idle_recheck_seconds``) looks for schedules made through another instance.
 - Otherwise the schedules are kept in memory and the database is read only when a
   slot is due (the definitions are re-read first, which also picks up edits made
   through another instance) or after a local change.
 
 A run gets a synthetic entity ``{type: schedule, id: <workflow id>, scheduled_for}``
 and ``triggered_by = system:scheduler``; no user started it, so ``requester``
-recipients resolve to nobody. Missed runs are coalesced: after downtime only the
-latest slot runs, if it is at most one interval and at most 24 hours old, and its
-claim's ``outcome.coalesced_slots`` counts the slots it stands for. A slot before
-the workflow's last change is not run, so creating or enabling a workflow doesn't
-run a slot that passed before it.
+recipients resolve to nobody. The 5-minute minimum is a save-time rule; here a
+slot less than 5 minutes after the last claimed one (a 29 February pair, a
+schedule saved without the validator) is skipped, not the workflow.
+
+Missed runs are coalesced: after downtime only the latest slot runs, if it is at
+most one interval and at most 24 hours old, and its claim's
+``outcome.coalesced_slots`` counts the slots it stands for. A slot before the
+workflow's last change is not run, so creating or enabling a workflow doesn't run
+a slot that passed before it.
 """
 import json
 import os
@@ -34,7 +39,8 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.quartz_cron import (
-    QuartzCronError, count_runs, next_runs, previous_run, validate_schedule,
+    MIN_INTERVAL, QuartzCronError, count_runs, next_runs, previous_run, resolve_timezone,
+    validate_quartz_cron,
 )
 from src.db_models.process_workflows import ProcessWorkflowDb
 from src.models.process_workflows import TriggerContext, TriggerType
@@ -92,11 +98,19 @@ class WorkflowScheduler:
         session_factory: Optional[Callable[[], Session]] = None,
         *,
         tick_seconds: int = 60,
+        idle_recheck_seconds: int = 900,
         clock: Optional[Callable[[], datetime]] = None,
         instance_id: Optional[str] = None,
     ):
         self._session_factory = session_factory
         self._tick = max(1, int(tick_seconds))
+        # 0 = never: then only a change in this process makes an idle scheduler look.
+        self._idle_recheck = max(0, int(idle_recheck_seconds))
+        self._last_refresh: Optional[datetime] = None
+        # Bumped by every invalidate(); a refresh that overlapped one keeps the flag
+        # unknown, so a change committed after its query isn't lost.
+        self._generation = 0
+        self._short_gap_logged: set = set()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._claimed_by = instance_id or f'{socket.gethostname()}:{os.getpid()}'
         self._schedules: Dict[str, _Schedule] = {}
@@ -133,6 +147,7 @@ class WorkflowScheduler:
 
     def invalidate(self) -> None:
         """Re-read the scheduled workflows on the next tick, and wake the thread."""
+        self._generation += 1
         self._has_scheduled = None
         self._wake.set()
 
@@ -154,12 +169,12 @@ class WorkflowScheduler:
         """Fire the due slots; return the seconds to sleep until the next check."""
         with self._run_lock:
             now = _utc(now) if now else self._clock()
-            if self._has_scheduled is None:
-                self._refresh()
+            if self._has_scheduled is None or self._idle_recheck_due(now):
+                self._refresh(now)
             if not self._has_scheduled:
                 return float(self._tick)
             if any(self._due_slot(s, now) for s in self._schedules.values()):
-                self._refresh()  # current definitions before running anything
+                self._refresh(now)  # current definitions before running anything
                 for schedule in list(self._schedules.values()):
                     slot = self._due_slot(schedule, now)
                     if slot is not None:
@@ -173,8 +188,17 @@ class WorkflowScheduler:
 
         return get_session_factory()()
 
-    def _refresh(self) -> None:
+    def _idle_recheck_due(self, now: datetime) -> bool:
+        return (
+            self._has_scheduled is False and self._idle_recheck > 0
+            and self._last_refresh is not None
+            and (now - self._last_refresh).total_seconds() >= self._idle_recheck
+        )
+
+    def _refresh(self, now: Optional[datetime] = None) -> None:
         """Read the active ``scheduled`` workflows into ``_schedules``."""
+        generation = self._generation
+        self._last_refresh = now or self._clock()
         db = self._session()
         try:
             rows = db.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.is_active.is_(True)).all()
@@ -190,7 +214,8 @@ class WorkflowScheduler:
                     schedule.handled_slot = known.handled_slot
                 schedules[row.id] = schedule
             self._schedules = schedules
-            self._has_scheduled = bool(schedules)
+            if self._generation == generation:
+                self._has_scheduled = bool(schedules)
         finally:
             db.close()
 
@@ -204,7 +229,10 @@ class WorkflowScheduler:
             return None
         cron, tz = trigger.get('schedule'), trigger.get('timezone')
         try:
-            cron = validate_schedule(cron, tz)
+            # Syntax and timezone only: the minimum interval is checked on save, and
+            # a short gap at runtime skips that one slot (``_fire``).
+            cron = validate_quartz_cron(cron)
+            resolve_timezone(tz)
         except QuartzCronError as e:
             # Saved without the validator (older API clients, YAML): never run it.
             logger.warning(
@@ -238,10 +266,11 @@ class WorkflowScheduler:
         until_next = (min(upcoming) - now).total_seconds() + 0.5
         return max(0.5, min(float(self._tick), until_next))
 
-    def _coalesced_slots(self, db: Session, schedule: _Schedule, slot: datetime) -> int:
+    def _coalesced_slots(
+        self, schedule: _Schedule, slot: datetime, last: Optional[datetime],
+    ) -> int:
         """How many due slots the run of ``slot`` stands for (1 when nothing was missed)."""
         since = schedule.changed_at - timedelta(microseconds=1)
-        last = _utc(scheduler_claims_repo.latest_slot(db, task_key=task_key(schedule.workflow_id)))
         if last is not None and last > since:
             since = last
         count = count_runs(schedule.cron, schedule.tz, since, slot, COALESCE_COUNT_LIMIT)
@@ -257,7 +286,17 @@ class WorkflowScheduler:
         claimed = False
         coalesced = 1
         try:
-            coalesced = self._coalesced_slots(db, schedule, slot)
+            last = _utc(scheduler_claims_repo.latest_slot(db, task_key=key))
+            if last is not None and last < slot and slot - last < MIN_INTERVAL:
+                schedule.handled_slot = slot
+                if schedule.workflow_id not in self._short_gap_logged:
+                    self._short_gap_logged.add(schedule.workflow_id)
+                    logger.warning(
+                        f"Skipping slots of {key} less than "
+                        f"{int(MIN_INTERVAL.total_seconds() // 60)} minutes after the last run"
+                    )
+                return
+            coalesced = self._coalesced_slots(schedule, slot, last)
             claimed = scheduler_claims_repo.claim(
                 db, task_key=key, slot=slot, claimed_by=self._claimed_by,
                 outcome={'status': 'claimed', 'coalesced_slots': coalesced},

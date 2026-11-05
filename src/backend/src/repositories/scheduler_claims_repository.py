@@ -29,14 +29,28 @@ class SchedulerClaimsRepository:
         ``INSERT ... ON CONFLICT DO NOTHING`` on the primary key: of several app
         instances claiming the same slot, exactly one insert writes a row.
         """
-        dialect = db.get_bind().dialect.name
-        insert = sqlite_insert if dialect == 'sqlite' else pg_insert
-        statement = insert(SchedulerClaimDb).values(
-            task_key=task_key, slot=slot, claimed_by=claimed_by, outcome=outcome,
-        ).on_conflict_do_nothing(index_elements=['task_key', 'slot'])
+        statement = self.claim_statement(
+            db.get_bind().dialect.name, task_key=task_key, slot=slot,
+            claimed_by=claimed_by, outcome=outcome,
+        )
         result = db.execute(statement)
         db.commit()
         return result.rowcount == 1
+
+    @staticmethod
+    def claim_statement(
+        dialect: str,
+        *,
+        task_key: str,
+        slot: datetime,
+        claimed_by: str,
+        outcome: Optional[Dict[str, Any]] = None,
+    ):
+        """The claim's ``INSERT ... ON CONFLICT (task_key, slot) DO NOTHING`` for a dialect."""
+        insert = sqlite_insert if dialect == 'sqlite' else pg_insert
+        return insert(SchedulerClaimDb).values(
+            task_key=task_key, slot=slot, claimed_by=claimed_by, outcome=outcome,
+        ).on_conflict_do_nothing(index_elements=['task_key', 'slot'])
 
     def get(self, db: Session, *, task_key: str, slot: datetime) -> Optional[SchedulerClaimDb]:
         return db.get(SchedulerClaimDb, (task_key, slot))

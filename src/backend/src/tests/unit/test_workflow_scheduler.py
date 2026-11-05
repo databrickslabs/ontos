@@ -56,7 +56,9 @@ class _Sessions:
     """Session factory on the test connection that counts how often it is used."""
 
     def __init__(self, db):
-        self._factory = sessionmaker(bind=db.get_bind(), autoflush=False)
+        # Savepoints, so a scheduler session's rollback keeps the test's other rows.
+        self._factory = sessionmaker(bind=db.get_bind(), autoflush=False,
+                                     join_transaction_mode='create_savepoint')
         self.opened = 0
 
     def __call__(self):
@@ -92,7 +94,7 @@ def test_no_database_access_while_no_workflow_is_scheduled(db_session, sessions)
 
     assert scheduler.run_once(_at()) == 60
     assert sessions.opened == 1  # the first tick looks once
-    for minute in range(1, 30):
+    for minute in range(1, 15):  # the idle re-check (15 min) is tested on its own
         scheduler.run_once(_at(minute=minute))
     assert sessions.opened == 1
 
@@ -209,11 +211,95 @@ def test_a_slot_before_the_workflow_changed_is_not_run(db_session, sessions):
 
 def test_an_invalid_stored_schedule_never_runs(db_session, sessions):
     _create(db_session, schedule='0 9 * * *', name='Unix cron')  # 5 fields
-    _create(db_session, schedule='0 * * * * ?', name='Every minute')
+    _create(db_session, schedule='0 0 9 * * ?', tz='Nowhere/City', name='Bad timezone')
     scheduler = _scheduler(sessions)
     scheduler.run_once(_at(minute=0, second=1))
     assert db_session.query(WorkflowExecutionDb).count() == 0
     assert scheduler._has_scheduled is False
+
+
+def test_a_slot_too_soon_after_the_last_run_is_skipped_not_the_workflow(
+        db_session, sessions, caplog):
+    # Saved without the validator; the 5-minute rule only skips slots at runtime.
+    workflow = _create(db_session, schedule='0 * * * * ?', changed=_at(hour=9, minute=59))
+    scheduler = _scheduler(sessions)
+    with caplog.at_level('WARNING', logger='src.controller.workflow_scheduler'):
+        for minute in range(0, 11):
+            scheduler.run_once(_at(minute=minute, second=1))
+    slots = sorted(c.slot.replace(tzinfo=UTC) for c in _claims(db_session, workflow.id))
+    assert slots == [_at(minute=0, second=0), _at(minute=5, second=0), _at(minute=10, second=0)]
+    assert len(_executions(db_session, workflow.id)) == 3
+    assert scheduler._has_scheduled is True
+    skipped = [r for r in caplog.records if 'less than 5 minutes after the last run' in r.message]
+    assert len(skipped) == 1
+
+
+def test_a_change_during_a_refresh_is_not_lost(db_session, sessions):
+    _create(db_session, trigger_type=TriggerType.MANUAL, schedule=None, name='Manual')
+    scheduler = _scheduler(sessions)
+    original = WorkflowScheduler._schedule_of
+
+    def change_meanwhile(row):
+        # Another request commits a scheduled workflow after the query read its rows.
+        scheduler.invalidate()
+        return original(row)
+
+    with patch.object(WorkflowScheduler, '_schedule_of', staticmethod(change_meanwhile)):
+        scheduler.run_once(_at())
+    assert scheduler._has_scheduled is None
+    opened = sessions.opened
+    scheduler.run_once(_at(minute=1))
+    assert sessions.opened == opened + 1
+    assert scheduler._has_scheduled is False
+
+
+def test_an_idle_scheduler_rechecks_slowly_for_other_instances_schedules(
+        db_session, sessions):
+    scheduler = WorkflowScheduler(sessions, tick_seconds=60, idle_recheck_seconds=900,
+                                  instance_id='idle')
+    scheduler.run_once(_at(minute=0))
+    assert sessions.opened == 1 and scheduler._has_scheduled is False
+    # Created through another instance: no notification reaches this one.
+    with patch('src.controller.workflows_manager._schedules_changed'):
+        workflow = _create(db_session, changed=_at(minute=1))
+    for minute in (1, 5, 14):
+        scheduler.run_once(_at(minute=minute))
+    assert sessions.opened == 1
+    scheduler.run_once(_at(minute=15, second=1))  # 15 minutes after the last look
+    assert scheduler._has_scheduled is True
+    assert len(_executions(db_session, workflow.id)) == 1
+
+
+def test_the_idle_recheck_can_be_turned_off(db_session, sessions):
+    scheduler = WorkflowScheduler(sessions, idle_recheck_seconds=0, instance_id='off')
+    scheduler.run_once(_at(minute=0))
+    with patch('src.controller.workflows_manager._schedules_changed'):
+        _create(db_session, changed=_at(minute=1))
+    scheduler.run_once(_at(day=6))
+    assert sessions.opened == 1 and scheduler._has_scheduled is False
+
+
+def test_a_failing_run_records_an_error_outcome(db_session, sessions):
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    scheduler = _scheduler(sessions)
+    with patch.object(WorkflowExecutor, 'execute_workflow', side_effect=RuntimeError('boom')):
+        scheduler.run_once(_at(minute=0, second=1))
+        scheduler.run_once(_at(minute=0, second=30))
+    [claim] = _claims(db_session, workflow.id)
+    assert claim.outcome == {'status': 'error', 'coalesced_slots': 1}
+    assert claim.execution_id is None
+    assert _executions(db_session, workflow.id) == []
+
+
+def test_the_postgres_claim_is_insert_on_conflict_do_nothing():
+    from sqlalchemy.dialects import postgresql
+
+    statement = scheduler_claims_repo.claim_statement(
+        'postgresql', task_key='workflow:x', slot=_at(), claimed_by='a',
+    )
+    sql = ' '.join(str(statement.compile(dialect=postgresql.dialect())).split())
+    assert sql.startswith('INSERT INTO scheduler_claims')
+    assert sql.endswith('ON CONFLICT (task_key, slot) DO NOTHING')
 
 
 # --- missed runs -------------------------------------------------------------------

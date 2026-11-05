@@ -91,7 +91,7 @@ A workflow runs only if Ontos fires its trigger for an entity type the workflow 
 Notes:
 
 - **"After" triggers never undo the action.** The product is already created, updated or moved when an `on_*` workflow runs; if the workflow fails, the action stays done. Errors while firing them are logged and don't fail the action.
-- **`scheduled` is not run.** It can be selected and saved, but nothing in the current version starts scheduled workflows.
+- **`scheduled` runs on a Quartz cron.** `trigger.schedule` is a Quartz expression as in Databricks Jobs (`sec min hour day-of-month month day-of-week [year]`, e.g. `0 30 2 * * ?` = daily 02:30) and `trigger.timezone` an IANA name (default `UTC`). Seconds must be `0`; `W`, `L` and `#` are not supported; runs must be at least 5 minutes apart. Each slot runs once across app instances, with `triggered_by = system:scheduler` and the payload `{type: schedule, id: <workflow id>, scheduled_for}`, so `requester` resolves to nobody. After downtime only the latest missed slot runs, if it is at most 24 hours old. The designer doesn't edit schedules yet (it drops `schedule` on save): set them through the API (`POST /api/workflows`, `PUT /api/workflows/{id}`).
 - **`manual` runs see only what you pass.** A manual run passes `{id, name, type}` from the query as the trigger payload; without `entity_name`, `${entity_name}` is empty. Rule steps still see the stored entity (see below); notification texts and scripts only have those three fields.
 
 ### Filters
@@ -318,7 +318,7 @@ The same data is in the API: `GET /api/workflows/executions?workflow_id=&status=
 ### When a workflow didn't run
 
 1. Is the workflow active?
-2. Does Ontos fire its trigger for that entity type (see [Where each trigger fires](#where-each-trigger-fires))? `scheduled` never runs.
+2. Does Ontos fire its trigger for that entity type (see [Where each trigger fires](#where-each-trigger-fires))? A `scheduled` workflow runs only on its slots (the log has `Ran scheduled workflow`).
 3. For status triggers, do `from_status` / `to_status` match the transition?
 4. For a request, the response carries `execution_id` and `workflow_status` when a workflow ran.
 5. The backend log has `Trigger fired: <trigger> for <entity type> '<id>'` for every trigger and `Found N matching workflow(s)` when some workflow matched.
@@ -447,7 +447,7 @@ Run on "Trading Analytics Dashboard v1" (with `entity_name` in the query), the n
 As of this version:
 
 - **After an approval, `requester` and `trigger_user` resolve to the approver**, as does `${user_email}`: a notification to the requester after an approval reaches the approver instead. Until this is fixed (PR #1017), address the requester after an approval by email, or notify them before the approval step.
-- `scheduled` triggers are not run (see #941).
+- `scheduled` triggers can't be edited in the designer yet (see #941).
 - Workflow scopes are saved but not applied.
 - A gate whose evaluation errors lets the change through, and a `PUT` that changes `status` skips gates (STATUS_PR adds `on_error` and refuses that `PUT`).
 - An approval step's `require_all` and `timeout_days` are not enforced.

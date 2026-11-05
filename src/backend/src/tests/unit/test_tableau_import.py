@@ -258,3 +258,13 @@ def test_lineage_links_for_each_asset_kind():
 def test_the_ontology_seeds_the_bi_asset_types(asset_types):
     for name in ("Folder", "Report", "Semantic Model", "Dashboard"):
         assert name in asset_types
+
+
+def test_view_lineage_resolves_to_a_datasource_imported_earlier(db_session, asset_types, uc_orders):
+    _import(db_session, DS_PATH)
+    result = _import(db_session, WB_PATH)
+
+    dashboard = _asset(db_session, f"{WB_PATH}.v~v1")
+    model = _asset(db_session, DS_PATH)
+    assert (str(dashboard.id), "consumesFrom", str(model.id)) in _edges(db_session)
+    assert not any(DS_PATH in w for w in result.warnings)

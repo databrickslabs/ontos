@@ -22,6 +22,7 @@ use time; it is never stored in the connection config.
 """
 
 import base64
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -32,6 +33,7 @@ from src.connectors.base import (
     ConnectorConfig,
     ConnectorConnectionError,
     ConnectorPermissionError,
+    DashboardSnapshot,
     LineageLink,
     ListAssetsOptions,
 )
@@ -206,6 +208,7 @@ _WORKBOOK_VIEWS_QUERY = """
 query WorkbookViews($luid: String!) {
   workbooks(filter: {luid: $luid}) {
     upstreamTables { fullName connectionType }
+    embeddedDatasources { fields { ... on CalculatedField { name formula } } }
     dashboards { luid name upstreamDatasources { ...ViewDatasource } }
     sheets { luid name upstreamDatasources { ...ViewDatasource } }
   }
@@ -219,6 +222,25 @@ fragment ViewDatasource on Datasource {
 """
 
 _METADATA_PROBE_QUERY = "query { publishedDatasourcesConnection(first: 1) { totalCount } }"
+
+_DATASOURCE_FORMULAS_QUERY = """
+query DatasourceFormulas($luid: String!) {
+  publishedDatasources(filter: {luid: $luid}) { fields { ... on CalculatedField { name formula } } }
+}
+"""
+
+# Calculations that filter by the signed-in user: a snapshot rendered as the
+# importer's account would show that account's rows to every Ontos user.
+_USER_FUNCTION_RE = re.compile(
+    r"\b(USERNAME|FULLNAME|USERDOMAIN|ISMEMBEROF|ISUSERNAME|ISFULLNAME|USERATTRIBUTE|USERATTRIBUTEINCLUDES)\s*\(",
+    re.IGNORECASE,
+)
+
+# Tableau render errors (code 400074) by message
+_RENDER_FAILURES = (
+    ("refresh token", "auth_expired"),
+    ("not connected", "not_connected"),
+)
 
 
 class TableauConnector(AssetConnector):
@@ -372,9 +394,13 @@ class TableauConnector(AssetConnector):
             except TableauAPIError as exc:
                 logger.warning(f"Metadata API query for workbook {workbook_luid} failed: {exc}")
                 return {}
-            graph: Dict[str, Any] = {"kinds": {}, "datasources": {}, "upstream_tables": []}
+            graph: Dict[str, Any] = {"kinds": {}, "datasources": {}, "upstream_tables": [], "formulas": []}
             for wb in result.data.get("workbooks") or []:
                 graph["upstream_tables"].extend(t for t in wb.get("upstreamTables") or [] if t)
+                for embedded in wb.get("embeddedDatasources") or []:
+                    graph["formulas"].extend(
+                        (f.get("name"), f["formula"]) for f in (embedded or {}).get("fields") or [] if f and f.get("formula")
+                    )
                 for kind, views in ((UnifiedAssetType.TABLEAU_DASHBOARD, wb.get("dashboards")),
                                     (UnifiedAssetType.TABLEAU_SHEET, wb.get("sheets"))):
                     for view in views or []:
@@ -755,6 +781,83 @@ class TableauConnector(AssetConnector):
                 if ds_path:
                     links.append(LineageLink(source_path=path, relationship_type="consumesFrom", target_path=ds_path))
         return links
+
+    # ------------------------------------------------------------------
+    # Snapshots
+    # ------------------------------------------------------------------
+
+    def wants_snapshot(self, metadata: AssetMetadata) -> bool:
+        return metadata.asset_type == UnifiedAssetType.TABLEAU_DASHBOARD
+
+    @staticmethod
+    def _view_ids(path: str) -> Tuple[Optional[str], Optional[str]]:
+        segments = dict((k, i) for k, i in parse_path(path) if k in (WORKBOOK, VIEW))
+        return segments.get(WORKBOOK), segments.get(VIEW)
+
+    @staticmethod
+    def _render_failure(exc: TableauAPIError) -> str:
+        if exc.status == 403:
+            return "forbidden"
+        message = str(exc).lower()
+        for marker, status in _RENDER_FAILURES:
+            if marker in message:
+                return status
+        return "error"
+
+    def capture_snapshot(self, path: str) -> Optional[DashboardSnapshot]:
+        """High-resolution view image; the cached thumbnail when rendering fails."""
+        workbook_luid, view_luid = self._view_ids(path)
+        if not view_luid:
+            return None
+        client = self._ensure_client()
+        try:
+            content = client.get_bytes(f"/views/{view_luid}/image", {"resolution": "high", "maxAge": 1})
+            if content:
+                return DashboardSnapshot(status="ok", content=content, source="view_image")
+            status, error = "empty", "Tableau returned an empty image"
+        except TableauAPIError as exc:
+            status, error = self._render_failure(exc), str(exc)
+        snapshot = DashboardSnapshot(status=status, error=error)
+        if workbook_luid:
+            try:
+                preview = client.get_bytes(f"/workbooks/{workbook_luid}/views/{view_luid}/previewImage")
+                if preview:
+                    snapshot.content, snapshot.source = preview, "preview_image"
+            except TableauAPIError as exc:
+                logger.info(f"No preview image for view {view_luid}: {exc}")
+        return snapshot
+
+    def _datasource_formulas(self, datasource_luid: str) -> List[Tuple[str, str]]:
+        client = self._ensure_client()
+
+        def load() -> List[Tuple[str, str]]:
+            result = client.graphql(_DATASOURCE_FORMULAS_QUERY, {"luid": datasource_luid})
+            return [
+                (f.get("name"), f["formula"])
+                for node in result.data.get("publishedDatasources") or []
+                for f in (node or {}).get("fields") or [] if f and f.get("formula")
+            ]
+
+        return self._cached("ds_formulas", load, datasource_luid)
+
+    def snapshot_risks(self, path: str) -> List[str]:
+        """Calculations behind the view that filter by the signed-in user."""
+        workbook_luid, view_luid = self._view_ids(path)
+        if not workbook_luid:
+            return []
+        graph = self._workbook_graph(workbook_luid)
+        formulas = list(graph.get("formulas") or [])
+        for ds_luid in graph.get("datasources", {}).get(view_luid) or []:
+            try:
+                formulas.extend(self._datasource_formulas(ds_luid))
+            except ConnectorConnectionError as exc:
+                logger.warning(f"Could not read formulas of data source {ds_luid}: {exc}")
+        risks = []
+        for name, formula in formulas:
+            match = _USER_FUNCTION_RE.search(formula or "")
+            if match:
+                risks.append(f"'{name}' uses {match.group(1).upper()}()")
+        return sorted(set(risks))
 
     def validate_asset_exists(self, identifier: str) -> AssetValidationResult:
         try:

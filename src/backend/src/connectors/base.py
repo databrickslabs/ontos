@@ -128,6 +128,22 @@ class LineageLink:
     target_asset_types: Optional[List[str]] = None
 
 
+@dataclass
+class DashboardSnapshot:
+    """A rendered image of a dashboard, or why there is none.
+
+    ``status`` is ``ok`` for a fresh render. A failed render may still carry a
+    cached thumbnail in ``content`` (``source="preview_image"``) with the status
+    of the failure: ``auth_expired``, ``not_connected``, ``forbidden``, ``empty``
+    or ``error``.
+    """
+    status: str
+    content: Optional[bytes] = None
+    content_type: str = "image/png"
+    source: Optional[str] = None
+    error: Optional[str] = None
+
+
 # ============================================================================
 # Abstract Base Connector
 # ============================================================================
@@ -375,6 +391,18 @@ class AssetConnector(ABC):
 
     def lineage_links(self, path: str, metadata: AssetMetadata) -> List[LineageLink]:
         """Relationships from the asset at ``path`` (or its columns) to other assets."""
+        return []
+
+    def wants_snapshot(self, metadata: AssetMetadata) -> bool:
+        """Whether the importer captures a snapshot of this asset (e.g. BI dashboards)."""
+        return False
+
+    def capture_snapshot(self, path: str) -> Optional[DashboardSnapshot]:
+        """Render the asset at ``path`` as an image; None when the connector cannot."""
+        return None
+
+    def snapshot_risks(self, path: str) -> List[str]:
+        """Reasons not to capture automatically, e.g. user-based row filters."""
         return []
 
     def health_check(self) -> Dict[str, Any]:

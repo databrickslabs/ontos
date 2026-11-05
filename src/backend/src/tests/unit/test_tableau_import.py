@@ -121,16 +121,28 @@ def uc_orders(db_session, asset_types):
     return SimpleNamespace(table=table, column=column)
 
 
-def _importer():
+class RecordingSnapshots:
+    """Stands in for DashboardSnapshotManager; records which assets were captured."""
+
+    def __init__(self, status="ok"):
+        self.status = status
+        self.captured = []
+
+    def capture(self, db, *, asset, connector, current_user, force=False):
+        self.captured.append(asset.location)
+        return {"status": self.status, "error": "refresh token" if self.status != "ok" else None}
+
+
+def _importer(snapshots=None):
     connector = TableauConnector(TableauConnectorConfig(server_url=FakeClient.server_url, site_content_url="s"), client=FakeClient())
     connections = MagicMock()
     connections.get_connector_for_connection.return_value = connector
-    return SchemaImportManager(connections, AssetsManager())
+    return SchemaImportManager(connections, AssetsManager(), snapshot_manager=snapshots or RecordingSnapshots())
 
 
-def _import(db, *paths):
+def _import(db, *paths, snapshots=None):
     request = ImportRequest(connection_id=uuid4(), selected_paths=list(paths), depth=ImportDepth.FULL_RECURSIVE)
-    return _importer().execute_import(db, request, current_user_id="u@example.com")
+    return _importer(snapshots).execute_import(db, request, current_user_id="u@example.com")
 
 
 def _asset(db, location):
@@ -268,3 +280,18 @@ def test_view_lineage_resolves_to_a_datasource_imported_earlier(db_session, asse
     model = _asset(db_session, DS_PATH)
     assert (str(dashboard.id), "consumesFrom", str(model.id)) in _edges(db_session)
     assert not any(DS_PATH in w for w in result.warnings)
+
+
+def test_import_captures_snapshots_of_dashboards_only(db_session, asset_types, uc_orders):
+    snapshots = RecordingSnapshots()
+    _import(db_session, WB_PATH, snapshots=snapshots)
+    assert snapshots.captured == [f"{WB_PATH}.v~v1"]
+
+    dashboard = _asset(db_session, f"{WB_PATH}.v~v1")
+    assert dashboard.properties["connection_id"]
+
+
+def test_snapshot_failures_are_import_warnings(db_session, asset_types, uc_orders):
+    result = _import(db_session, WB_PATH, snapshots=RecordingSnapshots(status="auth_expired"))
+    assert result.errors == 0
+    assert f"{WB_PATH}.v~v1: snapshot auth_expired (refresh token)" in result.warnings

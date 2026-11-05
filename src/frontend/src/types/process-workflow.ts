@@ -132,6 +132,8 @@ export interface GateExemptions {
 export interface WorkflowTrigger {
   type: TriggerType;
   entity_types: EntityType[];
+  /** Stored types this version doesn't know (a removed type): they match no event */
+  unknown_entity_types?: string[];
   from_status?: string;
   to_status?: string;
   schedule?: string;

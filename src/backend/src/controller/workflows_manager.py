@@ -57,6 +57,9 @@ _DEFAULT_ENTITY_TYPE_ADDITIONS = (
      'Status Change Request', 'data_contract'),
 )
 
+# (workflow, unknown entity types) already warned about by ``_split_entity_types``
+_WARNED_UNKNOWN_ENTITY_TYPES: set = set()
+
 # Trigger types no event fires: manual runs go by workflow id
 # (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
 # so two active workflows of these types can't consume the same event.
@@ -71,6 +74,13 @@ def _json_object(raw: Optional[str]) -> Dict[str, Any]:
     """A stored JSON config; NULL, the text ``'null'`` or a non-object value read as ``{}``."""
     value = json.loads(raw or '{}')
     return value if isinstance(value, dict) else {}
+
+
+def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optional[Dict[str, Any]]:
+    """A trigger as the stored config reads, unknown entity types in ``entity_types``."""
+    if isinstance(trigger, WorkflowTrigger):
+        return json.loads(trigger.stored_config_json())
+    return trigger
 
 
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
@@ -201,13 +211,13 @@ class WorkflowsManager:
                 
                 # Parse trigger
                 trigger_data = wf_data.get('trigger', {})
+                entity_types, unknown_types = self._split_entity_types(
+                    trigger_data.get('entity_types'), name,
+                )
                 trigger = WorkflowTrigger(
                     type=self._safe_trigger_type(trigger_data.get('type', 'manual')),
-                    entity_types=[
-                        et for et in
-                        (self._safe_entity_type(v) for v in trigger_data.get('entity_types', []))
-                        if et is not None
-                    ],
+                    entity_types=entity_types,
+                    unknown_entity_types=unknown_types,
                     from_status=trigger_data.get('from_status'),
                     to_status=trigger_data.get('to_status'),
                     schedule=trigger_data.get('schedule'),
@@ -396,7 +406,7 @@ class WorkflowsManager:
         Other fields (``schedule``, ``on_error``, ``disabled_for``) don't change
         which events a workflow matches, so editing them needs no new check.
         """
-        data = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
+        data = _stored_trigger(trigger)
         data = data or {}
         trigger_type = data.get('type')
         statuses = (
@@ -420,7 +430,7 @@ class WorkflowsManager:
         ``manual`` and ``scheduled`` workflows never conflict: no event fires
         them, a manual run targets one workflow by id.
         """
-        target_trigger = trigger.model_dump(mode='json') if isinstance(trigger, WorkflowTrigger) else trigger
+        target_trigger = _stored_trigger(trigger)
         target_trigger = target_trigger or {}
         if target_trigger.get('type') in _NON_EVENT_TRIGGER_TYPES:
             return []
@@ -492,14 +502,15 @@ class WorkflowsManager:
         trigger_config = json.loads(existing.trigger_config) if existing.trigger_config else {}
         scope_config = json.loads(existing.scope_config) if existing.scope_config else {}
         
-        # Create new workflow
+        # Create new workflow; unknown entity types are copied as stored, so the copy
+        # matches no more events than the original
+        entity_types, unknown_types = self._split_entity_types(
+            trigger_config.get('entity_types'), existing.id,
+        )
         trigger = WorkflowTrigger(
             type=self._safe_trigger_type(trigger_config.get('type', 'manual')),
-            entity_types=[
-                et for et in
-                (self._safe_entity_type(v) for v in trigger_config.get('entity_types', []))
-                if et is not None
-            ],
+            entity_types=entity_types,
+            unknown_entity_types=unknown_types,
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
@@ -1511,27 +1522,44 @@ class WorkflowsManager:
             return GateExemptions()
 
     @staticmethod
-    def _safe_entity_type(value: str) -> EntityType:
-        """Parse an entity type string, skipping unknown values."""
-        try:
-            return EntityType(value)
-        except ValueError:
-            logger.warning("Unknown entity type '%s' in DB — skipping", value)
-            return None  # type: ignore[return-value]
+    def _split_entity_types(
+        values: Optional[List[Any]], workflow: Optional[str],
+    ) -> tuple[List[EntityType], List[str]]:
+        """Stored entity types as (known, unknown), keeping the unknown values as stored.
+
+        An unknown value (a removed type such as ``dataset``) matches no event: matching
+        reads the stored list, which keeps it. Dropping it would turn a list of unknown
+        types into ``[]``, which matches every entity. Warned about once per workflow
+        and set of values, not on every read.
+        """
+        known: List[EntityType] = []
+        unknown: List[str] = []
+        for value in values or []:
+            try:
+                known.append(EntityType(value))
+            except ValueError:
+                unknown.append(str(value))
+        warn_key = (workflow, tuple(unknown))
+        if unknown and warn_key not in _WARNED_UNKNOWN_ENTITY_TYPES:
+            _WARNED_UNKNOWN_ENTITY_TYPES.add(warn_key)
+            logger.warning(
+                "Workflow %s lists unknown entity types %s: they match no event",
+                workflow, unknown,
+            )
+        return known, unknown
 
     def _db_to_model(self, db_workflow: ProcessWorkflowDb) -> ProcessWorkflow:
         """Convert database model to Pydantic model."""
         trigger_config = json.loads(db_workflow.trigger_config) if db_workflow.trigger_config else {}
         scope_config = json.loads(db_workflow.scope_config) if db_workflow.scope_config else {}
         
-        parsed_entity_types = [
-            et for et in
-            (self._safe_entity_type(v) for v in trigger_config.get('entity_types', []))
-            if et is not None
-        ]
+        entity_types, unknown_types = self._split_entity_types(
+            trigger_config.get('entity_types'), db_workflow.id,
+        )
         trigger = WorkflowTrigger(
             type=self._safe_trigger_type(trigger_config.get('type', 'manual')),
-            entity_types=parsed_entity_types,
+            entity_types=entity_types,
+            unknown_entity_types=unknown_types,
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),

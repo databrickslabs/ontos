@@ -608,6 +608,12 @@
     "matches_other": "{{count}} coincidencias",
     "noMatch": "Ninguna variable coincide"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Tipo de entidad desconocido: {{type}}",
+    "removeUnknown": "Quitar {{type}}",
+    "unknownNotice_one": "Este desencadenador incluye un tipo de entidad que ya no existe. No coincide con nada: quítelo para guardar.",
+    "unknownNotice_other": "Este desencadenador incluye {{count}} tipos de entidad que ya no existen. No coinciden con nada: quítelos para guardar."
+  },
   "triggerPicker": {
     "label": "Se activa con",
     "helper": "Qué acción hace que se ejecute este flujo de trabajo",

@@ -608,6 +608,12 @@
     "matches_other": "{{count}} Treffer",
     "noMatch": "Keine Variablen stimmen überein"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Unbekannter Entity-Typ: {{type}}",
+    "removeUnknown": "{{type}} entfernen",
+    "unknownNotice_one": "Dieser Trigger enthält einen Entity-Typ, der nicht mehr existiert. Er trifft auf nichts zu: Entfernen Sie ihn, um zu speichern.",
+    "unknownNotice_other": "Dieser Trigger enthält {{count}} Entity-Typen, die nicht mehr existieren. Sie treffen auf nichts zu: Entfernen Sie sie, um zu speichern."
+  },
   "triggerPicker": {
     "label": "Wird ausgelöst bei",
     "helper": "Welche Aktion diesen Workflow ausführt",

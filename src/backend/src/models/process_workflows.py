@@ -4,6 +4,7 @@ Pydantic models for process workflows.
 Defines the API request/response schemas for workflow definitions, steps, and executions.
 """
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -183,6 +184,13 @@ class WorkflowTrigger(BaseModel):
     """Trigger configuration for a workflow."""
     type: TriggerType = Field(..., description="Type of trigger")
     entity_types: List[EntityType] = Field(default_factory=list, description="Entity types that trigger this workflow")
+    # Stored values that are no ``EntityType`` (a removed type such as ``dataset``). They
+    # match no event, are written back with ``entity_types`` (stored_config_json), and a
+    # save that still lists them is refused (``trigger_entity_type_unknown``).
+    unknown_entity_types: List[str] = Field(
+        default_factory=list,
+        description="Stored entity types this version doesn't know; they match no event",
+    )
 
     # For on_status_change
     from_status: Optional[str] = Field(None, description="Status to transition from (for status change triggers)")
@@ -207,6 +215,14 @@ class WorkflowTrigger(BaseModel):
             "this gate is switched off for. Skips are logged and audited."
         ),
     )
+
+    def stored_config_json(self) -> str:
+        """The trigger as stored: one ``entity_types`` list, unknown values included."""
+        data = self.model_dump(mode='json', exclude={'unknown_entity_types'})
+        data['entity_types'] = list(dict.fromkeys(
+            [*data['entity_types'], *self.unknown_entity_types]
+        ))
+        return json.dumps(data)
 
     class Config:
         json_schema_extra = {

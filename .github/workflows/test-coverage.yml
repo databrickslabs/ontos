@@ -146,12 +146,65 @@ jobs:
           # vitest already fails if thresholds not met (configured in vitest.config.ts)
           echo "Coverage thresholds checked by vitest"
 
+  playwright-cache:
+    name: Playwright Browser Cache
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
+    # Caches are scoped to the ref that saved them, and a PR run can only
+    # restore its own entries and its base branch's. E2E doesn't run on pushes
+    # to development, so this job saves the browsers there for PRs to restore.
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Lookup only: on a hit the job ends here without downloading the entry
+      # or setting up Node; the remaining steps run only on a miss.
+      - name: Restore Playwright browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('src/frontend/package.json') }}
+          lookup-only: true
+
+      - uses: ./.github/actions/setup-node-jfrog
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: '24'
+
+      # npx playwright must resolve the repo's pinned version
+      - name: Install frontend dependencies
+        working-directory: ./src/frontend
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      # Browsers only: OS packages live outside the cached path
+      - name: Install Playwright browsers
+        working-directory: ./src/frontend
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
+
+      - name: Save Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+
   e2e-tests:
     name: E2E Tests
     runs-on:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
-    timeout-minutes: 20
+    # Headroom for slow runners on a cold browser install (~10 min)
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write # JFrog OIDC
@@ -203,8 +256,10 @@ jobs:
         working-directory: ./src/frontend
         run: npm ci
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+      # Restore only: PR runs reuse the entry the playwright-cache job saved
+      # on the base branch instead of each adding its own 252 MB copy.
+      - name: Restore Playwright browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -214,6 +269,15 @@ jobs:
         working-directory: ./src/frontend
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      # Saved right after the install (not in a post step) so a later timeout
+      # or cancel doesn't lose it. Pushes only: PR runs never save.
+      - name: Save Playwright browsers
+        if: github.event_name == 'push' && steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Install Playwright OS deps only
         working-directory: ./src/frontend

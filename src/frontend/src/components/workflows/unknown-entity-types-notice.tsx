@@ -12,11 +12,28 @@ import { Badge } from '@/components/ui/badge';
 export interface UnknownEntityTypesNoticeProps {
   values: string[];
   onRemove: (value: string) => void;
+  /** The last unknown type was removed from a trigger that had only those: pick a known one */
+  needsKnownType?: boolean;
 }
 
-export function UnknownEntityTypesNotice({ values, onRemove }: UnknownEntityTypesNoticeProps) {
+export function UnknownEntityTypesNotice({
+  values, onRemove, needsKnownType = false,
+}: UnknownEntityTypesNoticeProps) {
   const { t } = useTranslation(['workflows']);
-  if (values.length === 0) return null;
+  if (values.length === 0) {
+    if (!needsKnownType) return null;
+    return (
+      <p
+        className={'flex items-start gap-2 rounded-md border border-destructive/50 p-2 '
+          + 'text-xs text-destructive'}
+        data-testid="entity-type-required"
+        role="alert"
+      >
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        {t('workflows:triggerEntityChecks.pickKnownType')}
+      </p>
+    );
+  }
   return (
     <div
       className="space-y-2 rounded-md border border-destructive/50 p-2"

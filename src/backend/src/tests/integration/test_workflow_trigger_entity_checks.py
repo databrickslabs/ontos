@@ -11,13 +11,13 @@ from datetime import datetime
 from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
 
 
-def _stored(db_session, entity_types, trigger_type='before_update'):
+def _stored(db_session, entity_types, trigger_type='before_update', active=False):
     wf_id = str(uuid.uuid4())
     now = datetime.utcnow()
     db_session.add(ProcessWorkflowDb(
         id=wf_id, name=f'gate-{wf_id[:8]}', description='gate',
         trigger_config=json.dumps({'type': trigger_type, 'entity_types': entity_types}),
-        scope_config=json.dumps({'type': 'all'}), is_active=False, is_default=False,
+        scope_config=json.dumps({'type': 'all'}), is_active=active, is_default=False,
         version=1, created_at=now, updated_at=now,
     ))
     db_session.add(WorkflowStepDb(
@@ -93,3 +93,36 @@ def test_validate_reports_the_pair(client):
     assert [issue['code'] for issue in result.json()['issues']] == [
         'trigger_entity_type_unsupported',
     ]
+
+
+_CONTRACT_TRIGGER = {'type': 'before_update', 'entity_types': ['data_contract']}
+
+
+def test_emptying_a_trigger_of_only_unknown_types_is_refused(client, db_session):
+    wf_id = _stored(db_session, ['dataset'])
+
+    saved = client.put(f'/api/workflows/{wf_id}',
+                       json={'trigger': {'type': 'before_update', 'entity_types': []}})
+
+    assert saved.status_code == 400, saved.text
+    assert _issue_codes(saved.json()['detail']) == [
+        ('trigger_entity_type_required', {'triggerType': 'before_update'}),
+    ]
+    assert _stored_types(db_session, wf_id) == ['dataset']
+
+    picked = client.put(f'/api/workflows/{wf_id}', json={'trigger': _CONTRACT_TRIGGER})
+    assert picked.status_code == 200, picked.text
+    assert _stored_types(db_session, wf_id) == ['data_contract']
+
+
+def test_an_active_unknown_type_gate_taking_a_known_type_gets_the_overlap_check(
+    client, db_session,
+):
+    wf_id = _stored(db_session, ['dataset'], active=True)
+    _stored(db_session, ['data_contract'], active=True)
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': _CONTRACT_TRIGGER})
+
+    assert saved.status_code == 409, saved.text
+    assert saved.json()['detail']['code'] == 'workflow_activation_overlap'
+    assert _stored_types(db_session, wf_id) == ['dataset']

@@ -184,3 +184,37 @@ def test_demo_workflows_load_and_only_the_known_ones_are_refused(db_session):
             refused[(file_name, name)] = _issues(result)
 
     assert refused == _DEMO_PAIRS_REFUSED
+
+
+def _codes(errors):
+    return [(e.code, e.params) for e in errors]
+
+
+def test_emptying_a_trigger_of_only_unknown_types_is_refused(db_session):
+    stored = WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, unknown_entity_types=['dataset'])
+
+    errors = _manager(db_session).trigger_widening_errors(
+        stored, WorkflowTrigger(type=TriggerType.BEFORE_UPDATE),
+    )
+
+    assert _codes(errors) == [('trigger_entity_type_required', {'triggerType': 'before_update'})]
+
+
+@pytest.mark.parametrize('stored, new', [
+    # a known type picked
+    (WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, unknown_entity_types=['dataset']),
+     WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, entity_types=[EntityType.DATA_CONTRACT])),
+    # the stored trigger had a known type too: other empty lists are not refused
+    (WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, entity_types=[EntityType.DATA_CONTRACT],
+                     unknown_entity_types=['dataset']),
+     WorkflowTrigger(type=TriggerType.BEFORE_UPDATE)),
+    (WorkflowTrigger(type=TriggerType.BEFORE_UPDATE),
+     WorkflowTrigger(type=TriggerType.BEFORE_UPDATE)),
+    # a trigger type that fires for any entity
+    (WorkflowTrigger(type=TriggerType.MANUAL, unknown_entity_types=['dataset']),
+     WorkflowTrigger(type=TriggerType.MANUAL)),
+    # no trigger in the update
+    (WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, unknown_entity_types=['dataset']), None),
+])
+def test_other_updates_are_not_refused(db_session, stored, new):
+    assert _manager(db_session).trigger_widening_errors(stored, new) == []

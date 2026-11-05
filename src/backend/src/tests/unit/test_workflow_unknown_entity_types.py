@@ -128,3 +128,11 @@ def test_an_only_unknown_trigger_overlaps_no_active_workflow(db_session):
     )
 
     assert conflicts == []
+
+
+def test_dropping_the_unknown_types_changes_the_activation_key():
+    with_unknown = WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, unknown_entity_types=['dataset'])
+    without = WorkflowTrigger(type=TriggerType.BEFORE_UPDATE)
+
+    assert (WorkflowsManager.activation_trigger_key(with_unknown)
+            != WorkflowsManager.activation_trigger_key(without))

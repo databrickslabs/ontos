@@ -898,10 +898,13 @@ async def update_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
-    widening = manager.trigger_widening_errors(existing.trigger, workflow.trigger)
-    if widening:
+    trigger_errors = manager.trigger_widening_errors(existing.trigger, workflow.trigger)
+    if workflow.trigger is not None and workflow.steps is None:
+        # validate_workflow above only runs when steps are sent
+        trigger_errors += manager.trigger_entity_type_errors(workflow.trigger)
+    if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
-            WorkflowValidationResult(valid=False, errors=widening)))
+            WorkflowValidationResult(valid=False, errors=trigger_errors)))
     result = manager.update_workflow(workflow_id, workflow, updated_by=user_email)
     if not result:
         raise HTTPException(status_code=404, detail="Workflow not found")

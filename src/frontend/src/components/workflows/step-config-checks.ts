@@ -68,6 +68,8 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         type: params.entityType,
         defaultValue: fallback,
       });
+    case 'trigger_entity_type_required':
+      return t('workflows:triggerEntityChecks.requiredOnSave', { defaultValue: fallback });
     case 'trigger_entity_type_unsupported':
       return t('workflows:triggerEntityChecks.unsupportedOnSave', {
         trigger: getTriggerTypeLabel(String(params.triggerType) as TriggerType, t),

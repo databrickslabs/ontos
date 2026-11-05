@@ -612,7 +612,9 @@
     "unknownNotice_one": "This trigger lists an entity type that no longer exists. It matches nothing: remove it to save.",
     "unknownNotice_other": "This trigger lists {{count}} entity types that no longer exist. They match nothing: remove them to save.",
     "unknownOnSave": "The trigger lists the unknown entity type \"{{type}}\": remove it in the trigger settings to save.",
-    "unsupportedOnSave": "\"{{trigger}}\" never fires for {{type}}: pick an entity type this trigger supports."
+    "unsupportedOnSave": "\"{{trigger}}\" never fires for {{type}}: pick an entity type this trigger supports.",
+    "pickKnownType": "Pick at least one entity type. With none, this workflow would fire for every entity.",
+    "requiredOnSave": "Pick at least one entity type for the trigger: it listed only types that no longer exist, and an empty list would make it fire for every entity."
   },
   "triggerPicker": {
     "label": "Fires on",

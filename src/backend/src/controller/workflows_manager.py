@@ -651,7 +651,7 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
-        errors.extend(self._validate_trigger_entity_types(workflow.trigger))
+        errors.extend(self.trigger_entity_type_errors(workflow.trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -682,15 +682,18 @@ class WorkflowsManager:
             'trigger_entity_type_required', triggerType=new.type.value,
         )]
 
-    def _validate_trigger_entity_types(self, trigger: WorkflowTrigger) -> List[str]:
+    def trigger_entity_type_errors(self, trigger: WorkflowTrigger) -> List[str]:
         """Entity types the trigger can never fire for: unknown ones, and pairs no code fires.
 
-        Only saves are checked; stored workflows keep loading as they are.
+        Only saves are checked; stored workflows keep loading as they are. Every value in
+        ``unknown_entity_types`` is refused, a known type placed there too: a save never
+        writes client-sent values of that list, which ``stored_config_json`` would merge
+        into the stored ``entity_types``.
         """
         trigger_type = trigger.type.value
         errors: List[str] = [
             CodedMessage(
-                f"Unknown entity type '{value}' on the trigger: remove it to save",
+                f"Entity type '{value}' is listed as unknown on the trigger: remove it to save",
                 'trigger_entity_type_unknown', triggerType=trigger_type, entityType=value,
             )
             for value in trigger.unknown_entity_types

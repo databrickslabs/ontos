@@ -8,6 +8,8 @@ import json
 import uuid
 from datetime import datetime
 
+import pytest
+
 from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
 
 
@@ -42,9 +44,13 @@ def test_get_shows_the_unknown_type_and_a_trigger_put_keeps_it(client, db_sessio
     assert trigger['entity_types'] == []
     assert trigger['unknown_entity_types'] == ['dataset']
 
+    # A trigger-only PUT (no steps) is checked too: refused, and nothing is written
     saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': trigger})
 
-    assert saved.status_code == 200, saved.text
+    assert saved.status_code == 400, saved.text
+    assert [code for code, _ in _issue_codes(saved.json()['detail'])] == [
+        'trigger_entity_type_unknown',
+    ]
     assert _stored_types(db_session, wf_id) == ['dataset']
 
 
@@ -126,3 +132,49 @@ def test_an_active_unknown_type_gate_taking_a_known_type_gets_the_overlap_check(
     assert saved.status_code == 409, saved.text
     assert saved.json()['detail']['code'] == 'workflow_activation_overlap'
     assert _stored_types(db_session, wf_id) == ['dataset']
+
+
+def test_a_trigger_only_put_of_a_pair_no_code_fires_is_refused(client, db_session):
+    wf_id = _stored(db_session, ['data_contract'])
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': _UNSUPPORTED['trigger']})
+
+    assert saved.status_code == 400, saved.text
+    assert _issue_codes(saved.json()['detail']) == [
+        ('trigger_entity_type_unsupported',
+         {'triggerType': 'before_update', 'entityType': 'data_product'}),
+    ]
+    assert _stored_types(db_session, wf_id) == ['data_contract']
+
+
+_KNOWN_AS_UNKNOWN = {
+    'type': 'before_update', 'entity_types': [], 'unknown_entity_types': ['data_product'],
+}
+
+
+@pytest.mark.parametrize('with_steps', [False, True])
+def test_a_known_type_sent_as_unknown_is_refused_on_update(client, db_session, with_steps):
+    wf_id = _stored(db_session, ['data_contract'])
+    body = {'trigger': _KNOWN_AS_UNKNOWN}
+    if with_steps:
+        body['steps'] = _UNSUPPORTED['steps']
+
+    saved = client.put(f'/api/workflows/{wf_id}', json=body)
+
+    assert saved.status_code == 400, saved.text
+    assert _issue_codes(saved.json()['detail']) == [
+        ('trigger_entity_type_unknown',
+         {'triggerType': 'before_update', 'entityType': 'data_product'}),
+    ]
+    assert _stored_types(db_session, wf_id) == ['data_contract']
+
+
+def test_a_known_type_sent_as_unknown_is_refused_on_create(client, db_session):
+    created = client.post('/api/workflows', json={**_UNSUPPORTED, 'name': 'Smuggled type',
+                                                  'trigger': _KNOWN_AS_UNKNOWN})
+
+    assert created.status_code == 400, created.text
+    assert [code for code, _ in _issue_codes(created.json()['detail'])] == [
+        'trigger_entity_type_unknown',
+    ]
+    assert db_session.query(ProcessWorkflowDb).filter_by(name='Smuggled type').count() == 0

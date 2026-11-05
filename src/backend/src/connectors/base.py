@@ -109,6 +109,26 @@ class ListAssetsOptions(BaseModel):
 
 
 # ============================================================================
+# Import lineage
+# ============================================================================
+
+@dataclass
+class LineageLink:
+    """A relationship from an imported asset to another asset, wired after import.
+
+    The target is either another path on the same connection (``target_path``)
+    or the location of an asset from another system (``target_location``, e.g.
+    the Unity Catalog FQN of a table a BI data source reads from).
+    """
+    source_path: str
+    relationship_type: str
+    target_path: Optional[str] = None
+    target_location: Optional[str] = None
+    # Restrict location matches to these Ontos asset type names
+    target_asset_types: Optional[List[str]] = None
+
+
+# ============================================================================
 # Abstract Base Connector
 # ============================================================================
 
@@ -341,6 +361,22 @@ class AssetConnector(ABC):
         # Default implementation delegates to get_asset_metadata
         return self.get_asset_metadata(identifier)
     
+    # -------------------------------------------------------------------------
+    # Import hooks - used by the schema importer; defaults add nothing
+    # -------------------------------------------------------------------------
+
+    def import_properties(self, metadata: AssetMetadata) -> Dict[str, Any]:
+        """Connector-specific properties to store on an imported asset."""
+        return {}
+
+    def import_column_properties(self, column: Any) -> Dict[str, Any]:
+        """Connector-specific properties to store on an imported column asset."""
+        return {}
+
+    def lineage_links(self, path: str, metadata: AssetMetadata) -> List[LineageLink]:
+        """Relationships from the asset at ``path`` (or its columns) to other assets."""
+        return []
+
     def health_check(self) -> Dict[str, Any]:
         """
         Perform a health check on the connector.

@@ -83,6 +83,8 @@
         "failed": "失敗",
         "cancelled": "キャンセル済み"
       }
-    }
+    },
+    "warningsTitle": "警告（{{count}}）",
+    "moreWarnings": "ほか {{count}} 件"
   }
 }

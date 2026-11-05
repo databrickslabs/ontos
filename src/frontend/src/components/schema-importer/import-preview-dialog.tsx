@@ -53,6 +53,9 @@ import type {
 // Tree helpers
 // ---------------------------------------------------------------------------
 
+// Import warnings listed in the result view; the rest are summarized as a count.
+const MAX_WARNINGS_SHOWN = 20;
+
 interface TreeNode<T> {
   item: T;
   children: TreeNode<T>[];
@@ -646,6 +649,21 @@ export default function ImportPreviewDialog({
                   </div>
                 )}
               </div>
+              {(importResult.warnings?.length ?? 0) > 0 && (
+                <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                  <div className="font-medium mb-1">
+                    {t('database-schema:preview.warningsTitle', { count: importResult.warnings!.length })}
+                  </div>
+                  <ul className="list-disc pl-5 space-y-0.5 text-xs text-muted-foreground">
+                    {importResult.warnings!.slice(0, MAX_WARNINGS_SHOWN).map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                  {importResult.warnings!.length > MAX_WARNINGS_SHOWN && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {t('database-schema:preview.moreWarnings', { count: importResult.warnings!.length - MAX_WARNINGS_SHOWN })}
+                    </div>
+                  )}
+                </div>
+              )}
             </ScrollArea>
           ) : (
             <ScrollArea className="max-h-[400px]">

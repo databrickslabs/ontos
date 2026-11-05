@@ -92,6 +92,7 @@ class ImportResult(BaseModel):
     skipped: int = 0
     errors: int = 0
     error_messages: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal issues, e.g. lineage targets not in Ontos")
     items: List[ImportResultItem] = Field(default_factory=list)
     system_asset_id: Optional[UUID] = Field(None, description="ID of the System asset used as hierarchy root")
 

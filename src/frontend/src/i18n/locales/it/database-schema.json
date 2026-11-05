@@ -83,6 +83,8 @@
         "failed": "Non riuscita",
         "cancelled": "Annullata"
       }
-    }
+    },
+    "warningsTitle": "Avvisi ({{count}})",
+    "moreWarnings": "+{{count}} altri"
   }
 }

@@ -175,3 +175,29 @@ def test_transport_errors_become_api_errors():
 
     with pytest.raises(TableauAPIError, match="Cannot reach Tableau"):
         TableauClient(SERVER, "mysite", PatAuth("ontos", "s"), http=Broken()).server_info()
+
+
+def test_rate_limits_back_off_then_succeed(monkeypatch):
+    monkeypatch.setattr("src.connectors.tableau_client.time.sleep", lambda s: None)
+    http = FakeHttp().on("POST", "/auth/signin", _signin()).on(
+        "GET", "/workbooks/wb-1", FakeResponse(429, {}), FakeResponse(503, {}), FakeResponse(body={"workbook": {"id": "wb-1"}}),
+    )
+    assert _client(http).get_json("/workbooks/wb-1") == {"workbook": {"id": "wb-1"}}
+    assert len([c for c in http.calls if c[0] == "GET"]) == 3
+
+
+def test_persistent_rate_limit_raises(monkeypatch):
+    monkeypatch.setattr("src.connectors.tableau_client.time.sleep", lambda s: None)
+    http = FakeHttp().on("POST", "/auth/signin", _signin()).on("GET", "/workbooks/wb-1", FakeResponse(429, {}))
+    with pytest.raises(TableauAPIError) as exc:
+        _client(http).get_json("/workbooks/wb-1")
+    assert exc.value.status == 429
+    assert len([c for c in http.calls if c[0] == "GET"]) == 4
+
+
+def test_graphql_errors_with_partial_data_are_incomplete():
+    body = {"data": {"workbooks": []}, "errors": [{"message": "resolver failed"}]}
+    http = FakeHttp().on("POST", "/auth/signin", _signin()).on("POST", "/api/metadata/graphql", FakeResponse(body=body))
+    result = _client(http).graphql("query { workbooks { id } }")
+    assert result.errors and result.warnings == []
+    assert result.is_complete is False

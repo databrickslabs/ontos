@@ -154,14 +154,16 @@ def clear_session_cache() -> None:
 class GraphQLResult:
     data: Dict[str, Any]
     warnings: List[Dict[str, Any]] = field(default_factory=list)
+    # Non-warning errors returned alongside partial data
+    errors: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def warning_codes(self) -> List[str]:
-        return [str((w.get("extensions") or {}).get("code") or "") for w in self.warnings]
+        return [str((w.get("extensions") or {}).get("code") or "") for w in self.warnings + self.errors]
 
     @property
     def is_complete(self) -> bool:
-        return not (set(self.warning_codes) & INCOMPLETE_RESULT_CODES)
+        return not self.errors and not (set(self.warning_codes) & INCOMPLETE_RESULT_CODES)
 
 
 # ============================================================================
@@ -191,6 +193,11 @@ class TableauClient:
         self._http = http or requests.Session()
 
     # -- session -------------------------------------------------------------
+
+    @property
+    def identity(self) -> str:
+        """Who the client signs in as (no secret material)."""
+        return self._auth.identity
 
     @property
     def _cache_key(self) -> Tuple[str, str, str]:
@@ -355,5 +362,4 @@ class TableauClient:
             raise TableauAPIError(f"Tableau Metadata API error: {errors[0].get('message')}", resp.status_code)
         for err in errors:
             logger.warning(f"Tableau Metadata API reported an error with partial data: {err.get('message')}")
-            warnings.append(err)
-        return GraphQLResult(data=body.get("data") or {}, warnings=warnings)
+        return GraphQLResult(data=body.get("data") or {}, warnings=warnings, errors=errors)

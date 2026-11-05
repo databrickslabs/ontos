@@ -122,3 +122,21 @@ def test_the_shipped_owner_rule_fails_with_neither(db_session):
     )
 
     assert not passed
+
+
+def test_tags_set_through_the_tags_api_path_agree_with_the_count(db_session, namespace):
+    from src.controller.tags_manager import TagsManager
+    from src.models.tags import AssignedTagCreate
+
+    contract = _contract(db_session)
+    tag = _tag(db_session, namespace, 'owner')
+    TagsManager().set_tags_for_entity(
+        db_session, entity_id=contract.id, entity_type='data_contract',
+        tags=[AssignedTagCreate(tag_id=tag.id)], user_email='user@example.com',
+    )
+
+    built = build_data_contract_dict(db_session, contract.id)
+
+    assert 'owner' in built['tags']
+    assert built['tag_count'] == 1
+    assert built['has_tags'] is True

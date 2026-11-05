@@ -122,6 +122,24 @@ class NotificationsManager:
                  logger.error(f"Error validating Notification DB object (ID: {db_obj.id}): {e}")
                  continue # Skip this notification
 
+        # Notifications addressed to the user as ``user:<x>`` / ``group:<name>``
+        # pass the filter as the user's own; the stored recipient is restored
+        claimed: Dict[str, str] = {}
+        for n in all_notifications_api:
+            identity = _explicit_principal_identity(n.recipient, user_info) if user_info else None
+            if identity:
+                claimed[n.id] = n.recipient
+                n.recipient = identity
+        visible = self._filter_notifications(all_notifications_api, user_info)
+        for n in visible:
+            if n.id in claimed:
+                n.recipient = claimed[n.id]
+        return visible
+
+    def _filter_notifications(
+        self, all_notifications_api: List[Notification], user_info: Optional[UserInfo],
+    ) -> List[Notification]:
+        """The notifications the user is a recipient of (broadcasts included)."""
         # --- Filtering logic (similar to before, but uses API models and SettingsManager) ---
         if not user_info:
             # Return only broadcast notifications if no user info
@@ -148,6 +166,20 @@ class NotificationsManager:
         return filtered_notifications
 
     def can_user_access_notification(
+        self, db: Session, notification: Notification, user_info: UserInfo,
+        *, strict: bool = False,
+    ) -> bool:
+        """Whether the user can access a notification (see
+        ``_can_user_access_notification``). One addressed to the user as
+        ``user:<x>`` / ``group:<name>`` is checked as addressed to the user."""
+        identity = (
+            _explicit_principal_identity(notification.recipient, user_info) if user_info else None
+        )
+        if identity:
+            notification = notification.model_copy(update={'recipient': identity})
+        return self._can_user_access_notification(db, notification, user_info, strict=strict)
+
+    def _can_user_access_notification(
         self, db: Session, notification: Notification, user_info: UserInfo,
         *, strict: bool = False,
     ) -> bool:
@@ -657,3 +689,27 @@ class NotificationsManager:
         except Exception as e:
             logger.error(f"Error getting pending delivery notifications: {e}", exc_info=True)
             return []
+
+
+
+# Explicit principals of the workflow resolver (``_resolve_role_to_users``):
+# ``user:<x>`` / ``group:<name>`` never name an app role. A notification stores
+# them with their prefix; for the user they address, the filters below see that
+# user's own identity instead.
+_EXPLICIT_PREFIXES = ('user:', 'group:')
+
+
+def _explicit_principal_identity(recipient: Optional[str], user_info: UserInfo) -> Optional[str]:
+    """The user's own email / username when ``recipient`` is a ``user:<x>`` (that
+    email or username, ignoring case) or ``group:<name>`` (a group of the user)
+    principal naming the user; None otherwise."""
+    if not recipient or not recipient.startswith(_EXPLICIT_PREFIXES):
+        return None
+    kind, _, name = recipient.partition(':')
+    if kind == 'group':
+        named = name in set(user_info.groups or [])
+    else:
+        named = name.lower() in {
+            str(v).lower() for v in (user_info.email, user_info.username) if v
+        }
+    return (user_info.email or user_info.username) if named else None

@@ -694,6 +694,13 @@ def _owner_approvers(
 # ``_resolve_role_to_users``)
 _USER_PREFIX = 'user:'
 _GROUP_PREFIX = 'group:'
+
+
+def _strip_user_prefix(identifier: str) -> str:
+    """``identifier`` without a ``user:`` marker (``group:`` ones are kept)."""
+    return identifier[len(_USER_PREFIX):] if identifier.startswith(_USER_PREFIX) else identifier
+
+
 _UUID_RE = re.compile(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 )
@@ -708,11 +715,11 @@ def _resolve_role_to_users(
 
     Explicit forms are resolved first, so a principal named like a token or a
     role (a group called 'reviewer' or 'admins') is never read as one:
-    - 'user:<x>' → the user ``x`` as written
+    - 'user:<x>' → the user ``x``: 'user:<x>' (an email: bare)
+    - 'group:<name>' → the group ``name``: 'group:<name>' (what the Workflow
+      Designer's PrincipalPicker emits for a group)
     - 'user@email.com' → direct email
     - '<uuid>' of an app role → that role
-    - 'group:<name>' → the group ``name`` (what the Workflow Designer's
-      PrincipalPicker emits for a group)
 
     Then:
     - 'requester' / 'trigger_user' → original user email
@@ -752,9 +759,18 @@ def _resolve_role_to_users(
                     out.append((identifier, role_uuid))
         return out
 
+    # The explicit forms keep their prefix in what is stored, so the delivery
+    # (NotificationsManager) never reads them as a role name; an email can't
+    # be one and stays bare.
     if role_spec.startswith(_USER_PREFIX):
         user = role_spec[len(_USER_PREFIX):].strip()
-        return [(user, None)] if user else []
+        if not user:
+            return []
+        return [(user if '@' in user else _USER_PREFIX + user, None)]
+
+    if role_spec.startswith(_GROUP_PREFIX):
+        group = role_spec[len(_GROUP_PREFIX):].strip()
+        return [(_GROUP_PREFIX + group, None)] if group else []
 
     if '@' in role_spec:
         # Pre-comma-split single email -- treat as a direct recipient.
@@ -764,10 +780,6 @@ def _resolve_role_to_users(
         role_by_id = db.query(AppRoleDb).filter(AppRoleDb.id == role_spec).first()
         if role_by_id:
             return [(role_by_id.name, role_by_id.id)]
-
-    if role_spec.startswith(_GROUP_PREFIX):
-        group = role_spec[len(_GROUP_PREFIX):].strip()
-        return [(group, None)] if group else []
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
@@ -1312,7 +1324,10 @@ class NotificationStepHandler(StepHandler):
                     from src.common.email_service import EmailService
                     email_svc = EmailService.from_settings(self._db)
                     if email_svc:
-                        email_addrs = [r[0] for r in resolved_recipients if '@' in r[0]]
+                        email_addrs = [
+                            a for a in (_strip_user_prefix(r[0]) for r in resolved_recipients)
+                            if '@' in a
+                        ]
                         if email_addrs:
                             sent = email_svc.send(
                                 to=email_addrs,

@@ -3,7 +3,9 @@
 
 A group named like a token (``reviewer``, ``admins``) or a role (``Data Steward``)
 used to resolve to that token or role. ``group:<name>`` / ``user:<x>`` / an email /
-a role UUID now win; plain names keep the old order.
+a role UUID now win; plain names keep the old order. The explicit forms keep
+their prefix in what is stored (an email stays bare), so the delivery doesn't read
+them as a role name either.
 """
 import os
 
@@ -42,7 +44,7 @@ def test_a_group_named_reviewer_is_that_group(db_session, roles):
     out = _resolve_role_to_users(
         db_session, 'group:reviewer', _context(reviewer_email='rita@example.com'),
     )
-    assert out == [('reviewer', None)]
+    assert out == [('group:reviewer', None)]
 
 
 def test_the_reviewer_token_still_means_the_chosen_reviewer(db_session, roles):
@@ -53,29 +55,30 @@ def test_the_reviewer_token_still_means_the_chosen_reviewer(db_session, roles):
 def test_token_and_group_side_by_side(db_session, roles):
     ctx = _context(reviewer_email='rita@example.com')
     out = _resolve_role_to_users(db_session, 'reviewer,group:reviewer', ctx)
-    assert out == [('rita@example.com', None), ('reviewer', None)]
+    assert out == [('rita@example.com', None), ('group:reviewer', None)]
 
 
 @pytest.mark.parametrize('name', ['admins', 'data_stewards', 'requester', 'owner'])
 def test_a_group_named_like_a_legacy_token_is_that_group(db_session, roles, name):
-    assert _resolve_role_to_users(db_session, f'group:{name}', _context()) == [(name, None)]
+    out = _resolve_role_to_users(db_session, f'group:{name}', _context())
+    assert out == [(f'group:{name}', None)]
 
 
 def test_a_group_named_like_an_app_role_is_that_group(db_session, roles):
     out = _resolve_role_to_users(db_session, 'group:Data Steward', _context())
-    assert out == [('Data Steward', None)]
+    assert out == [('group:Data Steward', None)]
 
 
 def test_a_user_named_like_an_app_role_is_that_user(db_session, roles):
     out = _resolve_role_to_users(db_session, 'user:DataSteward', _context())
-    assert out == [('DataSteward', None)]
+    assert out == [('user:DataSteward', None)]
 
 
 def test_a_user_named_like_a_token_is_that_user(db_session, roles):
     out = _resolve_role_to_users(
         db_session, 'user:reviewer', _context(reviewer_email='rita@example.com'),
     )
-    assert out == [('reviewer', None)]
+    assert out == [('user:reviewer', None)]
 
 
 def test_a_role_uuid_resolves_to_the_role(db_session, roles):
@@ -101,3 +104,8 @@ def test_plain_names_keep_the_old_resolution(db_session, roles):
     assert _resolve_role_to_users(db_session, 'user:a@example.com', ctx) == [
         ('a@example.com', None),
     ]
+
+
+def test_a_group_with_an_at_sign_is_that_group(db_session, roles):
+    out = _resolve_role_to_users(db_session, 'group:team@corp', _context())
+    assert out == [('group:team@corp', None)]

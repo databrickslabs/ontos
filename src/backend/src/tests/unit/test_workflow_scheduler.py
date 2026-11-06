@@ -72,7 +72,7 @@ def sessions(db_session):
 
 
 def _scheduler(sessions, name='a'):
-    return WorkflowScheduler(sessions, tick_seconds=60, instance_id=name)
+    return WorkflowScheduler(sessions, instance_id=name)
 
 
 def _executions(db, workflow_id):
@@ -92,9 +92,9 @@ def test_no_database_access_while_no_workflow_is_scheduled(db_session, sessions)
     _create(db_session, active=False, name='Off')
     scheduler = _scheduler(sessions)
 
-    assert scheduler.run_once(_at()) == 60
-    assert sessions.opened == 1  # the first tick looks once
-    for minute in range(1, 15):  # the idle re-check (15 min) is tested on its own
+    assert scheduler.run_once(_at()) is None  # nothing to wait for: sleep until woken
+    assert sessions.opened == 1  # the first pass looks once
+    for minute in range(1, 15):
         scheduler.run_once(_at(minute=minute))
     assert sessions.opened == 1
 
@@ -138,6 +138,15 @@ def test_the_sleep_ends_at_the_next_slot(db_session, sessions):
     _create(db_session)
     scheduler = _scheduler(sessions)
     assert scheduler.run_once(_at(minute=4, second=40)) == pytest.approx(20.5)
+
+
+def test_the_sleep_lasts_until_the_next_slot_however_far(db_session, sessions):
+    # No fixed tick: an hourly schedule sleeps the hour, a daily one the day.
+    _create(db_session, schedule='0 0 * * * ?', name='Hourly')
+    scheduler = _scheduler(sessions)
+    assert scheduler.run_once(_at(minute=0, second=1)) == pytest.approx(3599.5)
+    _create(db_session, schedule='0 0 3 * * ?', name='Daily', changed=_at(minute=1))
+    assert scheduler.run_once(_at(minute=1)) == pytest.approx(59 * 60 + 0.5)
 
 
 # --- a run -------------------------------------------------------------------------
@@ -255,8 +264,7 @@ def test_a_change_during_a_refresh_is_not_lost(db_session, sessions):
 
 def test_an_idle_scheduler_rechecks_slowly_for_other_instances_schedules(
         db_session, sessions):
-    scheduler = WorkflowScheduler(sessions, tick_seconds=60, idle_recheck_seconds=900,
-                                  instance_id='idle')
+    scheduler = WorkflowScheduler(sessions, idle_recheck_seconds=900, instance_id='idle')
     scheduler.run_once(_at(minute=0))
     assert sessions.opened == 1 and scheduler._has_scheduled is False
     # Created through another instance: no notification reaches this one.
@@ -268,6 +276,29 @@ def test_an_idle_scheduler_rechecks_slowly_for_other_instances_schedules(
     scheduler.run_once(_at(minute=15, second=1))  # 15 minutes after the last look
     assert scheduler._has_scheduled is True
     assert len(_executions(db_session, workflow.id)) == 1
+
+
+def test_the_opt_in_recheck_is_a_deadline_of_the_sleep(db_session, sessions):
+    scheduler = WorkflowScheduler(sessions, idle_recheck_seconds=900, instance_id='idle')
+    assert scheduler.run_once(_at(minute=0)) == pytest.approx(900.5)
+    # The saving instance re-reads at once; the re-check counts from that look.
+    _create(db_session, schedule='0 0 * * * ?', name='Hourly', changed=_at(minute=1))
+    assert scheduler.run_once(_at(minute=1)) == pytest.approx(900.5)  # before 11:00
+    _create(db_session, name='Every five', changed=_at(minute=2))
+    assert scheduler.run_once(_at(minute=2)) == pytest.approx(3 * 60 + 0.5)  # 10:05
+
+
+def test_the_idle_recheck_is_off_by_default(db_session, sessions):
+    from src.common.config import Settings
+
+    assert Settings.model_fields['WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS'].default == 0
+    scheduler = WorkflowScheduler(sessions, instance_id='default')
+    scheduler.run_once(_at(minute=0))
+    with patch('src.controller.workflows_manager._schedules_changed'):
+        _create(db_session, changed=_at(minute=1))
+    for day in (5, 6, 7):
+        scheduler.run_once(_at(day=day, hour=23))
+    assert sessions.opened == 1 and scheduler._has_scheduled is False
 
 
 def test_the_idle_recheck_can_be_turned_off(db_session, sessions):
@@ -379,12 +410,118 @@ def test_notify_reaches_every_live_scheduler(sessions):
     assert first._wake.is_set() and second._wake.is_set()
 
 
-def test_the_thread_starts_and_stops(sessions):
+def test_the_thread_starts_and_stops(sessions, monkeypatch):
+    from src.common import database
+    from src.controller.workflow_scheduler import note_database_activity
+
+    monkeypatch.setattr(database, '_request_db_use_listeners', [])
     scheduler = _scheduler(sessions)
     scheduler.start()
     assert scheduler._thread.is_alive()
+    assert database._request_db_use_listeners == [note_database_activity]
     scheduler.stop()
     assert not scheduler._thread.is_alive()
+
+
+# --- changes made through another instance -----------------------------------------
+
+class _Clock:
+    def __init__(self, now):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+
+def _created_elsewhere(db, **kwargs):
+    """A workflow saved through another instance: no notification reaches this one."""
+    with patch('src.controller.workflows_manager._schedules_changed'):
+        return _create(db, **kwargs)
+
+
+def test_database_activity_makes_another_instance_pick_up_a_new_schedule(
+        db_session, sessions):
+    from src.controller.workflow_scheduler import note_database_activity
+
+    clock = _Clock(_at(minute=0))
+    scheduler = WorkflowScheduler(sessions, clock=clock, instance_id='other')
+    scheduler.run_once(clock.now)
+    assert sessions.opened == 1 and scheduler._has_scheduled is False
+    clock.now = _at(minute=2)
+    workflow = _created_elsewhere(db_session, changed=_at(minute=1))
+    scheduler.run_once(clock.now)
+    assert sessions.opened == 1  # no request yet: nothing read
+
+    note_database_activity()  # a request of this instance uses the database
+    assert scheduler._wake.is_set()
+    assert scheduler.run_once(clock.now) == pytest.approx(3 * 60 + 0.5)  # until 10:05
+    assert scheduler._has_scheduled is True
+    assert sessions.opened == 3  # the small check, then the re-read
+    scheduler.run_once(_at(minute=5, second=1))
+    assert len(_executions(db_session, workflow.id)) == 1
+
+
+def test_the_change_check_is_rate_limited_and_cheap_without_changes(db_session, sessions):
+    clock = _Clock(_at(minute=0))
+    scheduler = WorkflowScheduler(sessions, clock=clock, change_check_seconds=60,
+                                  instance_id='other')
+    scheduler.run_once(clock.now)
+    for second in (10, 30, 59):  # within a minute of the last look: ignored
+        clock.now = _at(minute=0, second=second)
+        scheduler.note_database_activity()
+        scheduler.run_once(clock.now)
+    assert sessions.opened == 1
+    clock.now = _at(minute=1)
+    scheduler.note_database_activity()
+    scheduler.run_once(clock.now)
+    assert sessions.opened == 2  # one check; nothing changed, so no re-read
+
+
+@pytest.mark.parametrize('change', ['update', 'delete'])
+def test_the_change_check_sees_edits_and_deletes_made_elsewhere(
+        db_session, sessions, change):
+    workflow = _create(db_session)
+    clock = _Clock(_at(minute=1))
+    scheduler = WorkflowScheduler(sessions, clock=clock, instance_id='other')
+    scheduler.run_once(clock.now)
+    assert scheduler._has_scheduled is True
+    query = db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id)
+    if change == 'update':
+        query.update({'trigger_config': '{"type": "manual"}', 'updated_at': _at(minute=2)},
+                     synchronize_session=False)
+    else:
+        query.delete(synchronize_session=False)
+    db_session.commit()
+    clock.now = _at(minute=3)
+    scheduler.note_database_activity()
+    assert scheduler.run_once(clock.now) is None
+    assert scheduler._has_scheduled is False
+
+
+def test_a_request_session_reports_its_first_database_use(db_session, monkeypatch):
+    from sqlalchemy import text
+
+    from src.common import database
+
+    calls = []
+    monkeypatch.setattr(database, '_request_db_use_listeners', [])
+    monkeypatch.setattr(database, '_SessionLocal',
+                        sessionmaker(bind=db_session.get_bind(), autoflush=False,
+                                     join_transaction_mode='create_savepoint'))
+    database.add_request_db_use_listener(lambda: calls.append(1))
+
+    unused = database.get_db()
+    next(unused)
+    unused.close()
+    assert calls == []
+
+    used = database.get_db()
+    db = next(used)
+    db.execute(text('SELECT 1'))
+    db.commit()
+    db.execute(text('SELECT 1'))
+    used.close()
+    assert calls == [1]  # once per request session
 
 
 # --- triggered_by is not the requester -------------------------------------------

@@ -5,14 +5,20 @@ polling``). Exactly-once across processes comes from ``scheduler_claims``: for
 each due slot every instance inserts ``(workflow:<id>, slot)`` with ``ON CONFLICT
 DO NOTHING`` and only the instance whose insert wrote the row runs the workflow.
 
-Database access, so Lakebase can idle:
-- While no active workflow has a ``scheduled`` trigger, the thread reads nothing
-  until a workflow is created, updated, toggled or deleted in this process
-  (``notify_schedules_changed``), or until the slow idle re-check
-  (``idle_recheck_seconds``) looks for schedules made through another instance.
-- Otherwise the schedules are kept in memory and the database is read only when a
-  slot is due (the definitions are re-read first, which also picks up edits made
-  through another instance) or after a local change.
+Database access, so Lakebase can idle (no fixed polling):
+- The schedules are kept in memory. The thread sleeps until the earliest known
+  deadline (the next slot of any schedule; later periodic tasks add theirs) and
+  reads the database only when a slot is due (the definitions are re-read first)
+  or after a change. With nothing scheduled it sleeps until woken.
+- The instance that saves a workflow (create, update, toggle, delete) re-reads at
+  once (``notify_schedules_changed`` wakes its thread).
+- Other instances learn of the change when the database is awake anyway: when one
+  of their requests opens a transaction (``note_database_activity``, hooked into
+  ``get_db``), the thread compares the workflows' ``(id, updated_at)`` with what it
+  last read, at most once per ``change_check_seconds``, and re-reads on a
+  difference. An instance without requests notices at its next due slot.
+- ``idle_recheck_seconds`` > 0 adds that check on a timer as an opt-in fallback
+  (each one can wake an idle Lakebase); 0, the default, means never.
 
 A run gets a synthetic entity ``{type: schedule, id: <workflow id>, scheduled_for}``
 and ``triggered_by = system:scheduler``; no user started it, so ``requester``
@@ -55,6 +61,8 @@ TASK_KEY_PREFIX = 'workflow:'
 MAX_GRACE = timedelta(hours=24)
 # The coalesced count of a run after a long downtime counts at most this many slots.
 COALESCE_COUNT_LIMIT = 10_000
+# After a failed pass (e.g. the database is unreachable), try again this much later.
+ERROR_RETRY_SECONDS = 60
 
 _schedulers: 'weakref.WeakSet[WorkflowScheduler]' = weakref.WeakSet()
 _schedulers_lock = threading.Lock()
@@ -66,6 +74,17 @@ def notify_schedules_changed() -> None:
         schedulers = list(_schedulers)
     for scheduler in schedulers:
         scheduler.invalidate()
+
+
+def note_database_activity() -> None:
+    """A request is using the database: the schedulers may check for changes (rate-limited).
+
+    Cheap and database-free; the check itself runs in each scheduler's thread.
+    """
+    with _schedulers_lock:
+        schedulers = list(_schedulers)
+    for scheduler in schedulers:
+        scheduler.note_database_activity()
 
 
 def task_key(workflow_id: str) -> str:
@@ -97,16 +116,21 @@ class WorkflowScheduler:
         self,
         session_factory: Optional[Callable[[], Session]] = None,
         *,
-        tick_seconds: int = 60,
-        idle_recheck_seconds: int = 900,
+        change_check_seconds: int = 60,
+        idle_recheck_seconds: int = 0,
         clock: Optional[Callable[[], datetime]] = None,
         instance_id: Optional[str] = None,
     ):
         self._session_factory = session_factory
-        self._tick = max(1, int(tick_seconds))
-        # 0 = never: then only a change in this process makes an idle scheduler look.
+        # Shortest time between two request-triggered checks for changes.
+        self._change_check = timedelta(seconds=max(0, int(change_check_seconds)))
+        # 0 = never: then only requests and local changes make the scheduler look.
         self._idle_recheck = max(0, int(idle_recheck_seconds))
-        self._last_refresh: Optional[datetime] = None
+        # When the database was last read for the schedules (refresh or check).
+        self._last_look: Optional[datetime] = None
+        # ``(id, updated_at)`` of every workflow at the last refresh.
+        self._fingerprint: Optional[frozenset] = None
+        self._change_check_requested = False
         # Bumped by every invalidate(); a refresh that overlapped one keeps the flag
         # unknown, so a change committed after its query isn't lost.
         self._generation = 0
@@ -135,7 +159,10 @@ class WorkflowScheduler:
             target=self._loop, daemon=True, name='WorkflowScheduler',
         )
         self._thread.start()
-        logger.info(f"Started the workflow scheduler (tick: {self._tick}s)")
+        from src.common.database import add_request_db_use_listener
+
+        add_request_db_use_listener(note_database_activity)
+        logger.info("Started the workflow scheduler")
 
     def stop(self) -> None:
         if not self._thread or not self._thread.is_alive():
@@ -146,34 +173,48 @@ class WorkflowScheduler:
         logger.info("Stopped the workflow scheduler")
 
     def invalidate(self) -> None:
-        """Re-read the scheduled workflows on the next tick, and wake the thread."""
+        """Re-read the scheduled workflows now: wake the thread."""
         self._generation += 1
         self._has_scheduled = None
         self._wake.set()
 
+    def note_database_activity(self) -> None:
+        """The database is awake: check for changes made elsewhere, unless one was just made."""
+        if self._change_check_requested or self._has_scheduled is None:
+            return
+        last = self._last_look
+        if last is not None and self._clock() - last < self._change_check:
+            return
+        self._change_check_requested = True
+        self._wake.set()
+
     def _loop(self) -> None:
         while not self._stop.is_set():
+            # Cleared before the pass, so a wake-up during it isn't lost.
+            self._wake.clear()
             try:
                 delay = self.run_once()
             except Exception as e:
-                logger.error(f"Workflow scheduler tick failed: {e}", exc_info=True)
-                delay = self._tick
+                logger.error(f"Workflow scheduler pass failed: {e}", exc_info=True)
+                delay = ERROR_RETRY_SECONDS
             if self._stop.is_set():
                 break
-            self._wake.wait(timeout=delay)
-            self._wake.clear()
+            self._wake.wait(timeout=delay)  # None: until woken
 
     # --- one tick ---------------------------------------------------------------
 
-    def run_once(self, now: Optional[datetime] = None) -> float:
-        """Fire the due slots; return the seconds to sleep until the next check."""
+    def run_once(self, now: Optional[datetime] = None) -> Optional[float]:
+        """Fire the due slots; return the seconds until the next deadline (None: none)."""
         with self._run_lock:
             now = _utc(now) if now else self._clock()
-            if self._has_scheduled is None or self._idle_recheck_due(now):
+            check_requested, self._change_check_requested = self._change_check_requested, False
+            if self._has_scheduled is None:
                 self._refresh(now)
-            if not self._has_scheduled:
-                return float(self._tick)
-            if any(self._due_slot(s, now) for s in self._schedules.values()):
+            elif check_requested or self._idle_recheck_due(now):
+                self._check_for_changes(now)
+            if self._has_scheduled and any(
+                self._due_slot(s, now) for s in self._schedules.values()
+            ):
                 self._refresh(now)  # current definitions before running anything
                 for schedule in list(self._schedules.values()):
                     slot = self._due_slot(schedule, now)
@@ -190,20 +231,42 @@ class WorkflowScheduler:
 
     def _idle_recheck_due(self, now: datetime) -> bool:
         return (
-            self._has_scheduled is False and self._idle_recheck > 0
-            and self._last_refresh is not None
-            and (now - self._last_refresh).total_seconds() >= self._idle_recheck
+            self._idle_recheck > 0 and self._last_look is not None
+            and (now - self._last_look).total_seconds() >= self._idle_recheck
         )
+
+    @staticmethod
+    def _fingerprint_of(rows) -> frozenset:
+        return frozenset((row.id, _utc(row.updated_at)) for row in rows)
+
+    def _check_for_changes(self, now: datetime) -> None:
+        """Re-read the schedules if any workflow was added, changed or deleted elsewhere.
+
+        Every change sets ``updated_at`` (or removes the row), so comparing the
+        ``(id, updated_at)`` pairs is enough, and that query is small.
+        """
+        self._last_look = now
+        db = self._session()
+        try:
+            rows = db.query(ProcessWorkflowDb.id, ProcessWorkflowDb.updated_at).all()
+            fingerprint = self._fingerprint_of(rows)
+        finally:
+            db.close()
+        if fingerprint != self._fingerprint:
+            self._refresh(now)
 
     def _refresh(self, now: Optional[datetime] = None) -> None:
         """Read the active ``scheduled`` workflows into ``_schedules``."""
         generation = self._generation
-        self._last_refresh = now or self._clock()
+        self._last_look = now or self._clock()
         db = self._session()
         try:
-            rows = db.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.is_active.is_(True)).all()
+            rows = db.query(ProcessWorkflowDb).all()
+            self._fingerprint = self._fingerprint_of(rows)
             schedules: Dict[str, _Schedule] = {}
             for row in rows:
+                if not row.is_active:
+                    continue
                 schedule = self._schedule_of(row)
                 if schedule is None:
                     continue
@@ -256,15 +319,23 @@ class WorkflowScheduler:
             return None
         return slot
 
-    def _sleep_seconds(self, now: datetime) -> float:
-        upcoming: List[datetime] = []
-        for schedule in self._schedules.values():
-            upcoming.extend(next_runs(schedule.cron, schedule.tz, after=now, count=1))
-        if not upcoming:
-            return float(self._tick)
-        # Half a second past the slot, so the wake-up doesn't land just before it.
-        until_next = (min(upcoming) - now).total_seconds() + 0.5
-        return max(0.5, min(float(self._tick), until_next))
+    def _sleep_seconds(self, now: datetime) -> Optional[float]:
+        """Seconds until the earliest known deadline, or None when there is none.
+
+        Deadlines: the next slot of every schedule and, when enabled, the idle
+        re-check. A periodic task added later (e.g. an expiry sweep) adds its next
+        deadline here rather than a fixed tick.
+        """
+        deadlines: List[datetime] = []
+        if self._has_scheduled:
+            for schedule in self._schedules.values():
+                deadlines.extend(next_runs(schedule.cron, schedule.tz, after=now, count=1))
+        if self._idle_recheck > 0 and self._last_look is not None:
+            deadlines.append(self._last_look + timedelta(seconds=self._idle_recheck))
+        if not deadlines:
+            return None
+        # Half a second past the deadline, so the wake-up doesn't land just before it.
+        return max(0.5, (min(deadlines) - now).total_seconds() + 0.5)
 
     def _coalesced_slots(
         self, schedule: _Schedule, slot: datetime, last: Optional[datetime],

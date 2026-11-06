@@ -209,6 +209,28 @@ def test_an_inactive_or_deleted_workflow_stops_firing_on_every_instance(database
     assert local._has_scheduled is False and other._has_scheduled is False
 
 
+def test_another_instance_picks_up_a_new_schedule_on_database_activity(database):
+    """No timer: the other instance looks when one of its requests uses the database."""
+    observer = database.sessions()
+    saving, other = (WorkflowScheduler(database.sessions(), instance_id=name)
+                     for name in ('saving', 'other'))
+    _run_together([saving, other], _at(0))
+    assert saving._has_scheduled is False and other._has_scheduled is False
+    workflow_scheduler._schedulers.discard(other)  # another process: not notified
+
+    workflow_id = _create_workflow(observer)  # saved through ``saving``
+    assert saving._has_scheduled is None and other._has_scheduled is False
+    other.run_once(_at(1))
+    assert other._has_scheduled is False  # nothing told it yet
+
+    other.note_database_activity()
+    _run_together([saving, other], _at(1))
+    assert saving._has_scheduled is True and other._has_scheduled is True
+    _run_together([saving, other], _at(5))
+    executions, claims = _rows(observer, workflow_id)
+    assert len(executions) == 2 and len(claims) == 2  # 10:00 and 10:05, once each
+
+
 def test_creating_a_workflow_with_an_invalid_schedule_answers_its_code(client):
     response = client.post('/api/workflows', json={
         'name': 'Too often',

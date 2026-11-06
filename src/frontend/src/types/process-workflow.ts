@@ -372,6 +372,12 @@ export interface ProcessWorkflow {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  /**
+   * Read only: stored trigger entity types that match no event, coded
+   * `stored_entity_type_unknown` / `stored_entity_type_unsupported`
+   * (params `triggerType`, `entityType`). The workflow is kept as stored.
+   */
+  trigger_warnings?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 export interface ProcessWorkflowCreate {

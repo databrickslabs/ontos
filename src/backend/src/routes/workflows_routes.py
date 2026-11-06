@@ -1497,16 +1497,16 @@ def _assert_caller_authorized_for_execution(
 
     Approval notifications without a recipient and without a role are
     ignored: ``can_user_access_notification`` treats them as broadcast
-    (visible to everyone), which must never mean "anyone may approve".
+    (visible to everyone), which must never mean "anyone may approve". The
+    access check is strict: a role that can't be resolved, or roles that
+    can't be read, authorize nobody (the bell would show them to everyone).
 
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.
 
     ``for_read``: the check that lets a pending approver read the entity
     (``caller_is_pending_reviewer``, #1117). Notifications already handled
-    (an approver who decided while the step waits for others) don't count,
-    and the access check is strict: a role that can't be resolved, or roles
-    that can't be read, grant nothing.
+    (an approver who decided while the step waits for others) don't count.
 
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
@@ -1540,10 +1540,9 @@ def _assert_caller_authorized_for_execution(
                 'message': "This approval is for the owners; you can't approve your own request.",
             },
         )
-    strict = {'strict': True} if for_read else {}
     for notification in candidates:
         if notifications_manager.can_user_access_notification(
-            db=db, notification=notification, user_info=user_info, **strict
+            db=db, notification=notification, user_info=user_info, strict=True
         ):
             return candidates
     raise HTTPException(

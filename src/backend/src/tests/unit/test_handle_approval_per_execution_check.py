@@ -201,7 +201,7 @@ def test_assert_200_when_caller_is_direct_recipient() -> None:
     db = _mock_db_with_rows(rows)
     manager = MagicMock()
 
-    def access(*, db, notification: Notification, user_info: UserInfo) -> bool:
+    def access(*, db, notification: Notification, user_info: UserInfo, strict: bool) -> bool:
         return notification.recipient == user_info.email
     manager.can_user_access_notification.side_effect = access
 
@@ -249,7 +249,7 @@ def test_assert_200_via_recipient_role_membership() -> None:
     db = _mock_db_with_rows(rows)
     manager = MagicMock()
 
-    def access(*, db, notification: Notification, user_info: UserInfo) -> bool:
+    def access(*, db, notification: Notification, user_info: UserInfo, strict: bool) -> bool:
         # Mimic real manager: role grants access if caller's groups
         # overlap role.assigned_groups (here pre-resolved as 'sales-team').
         if notification.recipient_role_id == 'role-business-owners':
@@ -321,7 +321,7 @@ def test_assert_uses_only_addressed_approval_notifications() -> None:
     db = _mock_db_with_rows(rows)
     manager = MagicMock()
 
-    def access(*, db, notification: Notification, user_info: UserInfo) -> bool:
+    def access(*, db, notification: Notification, user_info: UserInfo, strict: bool) -> bool:
         return not notification.recipient or notification.recipient == user_info.email
     manager.can_user_access_notification.side_effect = access
 
@@ -335,6 +335,42 @@ def test_assert_uses_only_addressed_approval_notifications() -> None:
         user_info=_user('alice@example.com'),
     )
     assert [m.id for m in matches] == ['n1']
+
+
+def test_assert_checks_access_strictly() -> None:
+    """The decision uses the strict access check (no broadcast fallback)."""
+    rows = [_make_notif_row(notif_id='n1', execution_id='exec-A', recipient='alice@example.com')]
+    manager = MagicMock()
+    manager.can_user_access_notification.return_value = True
+
+    _assert_caller_authorized_for_execution(
+        db=_mock_db_with_rows(rows), notifications_manager=manager, execution_id='exec-A',
+        user_info=_user('alice@example.com'),
+    )
+    assert manager.can_user_access_notification.call_args.kwargs['strict'] is True
+
+
+@pytest.mark.parametrize('roles', [[], None], ids=['unknown-role', 'roles-unreadable'])
+def test_an_unresolvable_approval_role_authorizes_nobody(roles) -> None:
+    """A notification addressed to a role that no longer exists, or checked
+    while the roles can't be read, is a broadcast for the bell; it must not
+    let anyone decide the approval."""
+    from src.controller.notifications_manager import NotificationsManager
+
+    settings = MagicMock()
+    if roles is None:
+        settings.list_app_roles.side_effect = RuntimeError('roles unavailable')
+    else:
+        settings.list_app_roles.return_value = roles
+    manager = NotificationsManager(settings_manager=settings)
+    rows = [_make_notif_row(notif_id='n1', execution_id='exec-A', recipient_role_id='role-gone')]
+
+    with pytest.raises(HTTPException) as exc:
+        _assert_caller_authorized_for_execution(
+            db=_mock_db_with_rows(rows), notifications_manager=manager, execution_id='exec-A',
+            user_info=_user('mallory@example.com'),
+        )
+    assert exc.value.status_code == 403
 
 
 
@@ -372,7 +408,7 @@ def _step_row(notif_id: str, recipient: str, step_id: str | None) -> SimpleNames
 def _by_recipient() -> MagicMock:
     manager = MagicMock()
     manager.can_user_access_notification.side_effect = (
-        lambda *, db, notification, user_info: notification.recipient == user_info.email
+        lambda *, db, notification, user_info, strict: notification.recipient == user_info.email
     )
     return manager
 

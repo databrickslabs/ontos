@@ -644,3 +644,42 @@ class TestDataProductRoutes:
         )
         assert response.status_code == 403, response.text
         assert "data-domains" in response.json().get("detail", "")
+
+    # =================================================================
+    # POST /api/data-products/from-contract
+    # =================================================================
+
+    def test_create_product_from_contract_stores_product_type(self, client, db_session):
+        """Creating a product from an active contract returns 201 and keeps the
+        chosen type as the ``productType`` custom property."""
+        from src.db_models.data_contracts import DataContractDb
+
+        contract = DataContractDb(
+            name="Source Contract",
+            version="1.0.0",
+            status="active",
+            owner_team_id=None,
+        )
+        db_session.add(contract)
+        db_session.commit()
+
+        response = client.post(
+            "/api/data-products/from-contract",
+            json={
+                "contract_id": contract.id,
+                "product_name": "Product From Contract",
+                "product_type": "source-aligned",
+                "version": "1.0.0",
+            },
+        )
+
+        assert response.status_code == 201, response.text
+        data = response.json()
+        assert data["name"] == "Product From Contract"
+
+        stored = client.get(f"/api/data-products/{data['id']}").json()
+        assert stored["outputPorts"][0]["contractId"] == contract.id
+        assert {"property": "productType", "value": "source-aligned"} in [
+            {"property": cp["property"], "value": cp["value"]}
+            for cp in stored.get("customProperties") or []
+        ]

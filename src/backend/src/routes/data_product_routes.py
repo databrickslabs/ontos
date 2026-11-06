@@ -1090,22 +1090,11 @@ async def create_product_from_contract(
     owner_team_id, and project_id from the contract.
     """
     try:
-        from src.models.data_products import DataProductType
-
-        # Convert product_type string to enum
-        try:
-            product_type_enum = DataProductType(product_type)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid product_type: {product_type}. Must be one of: {[t.value for t in DataProductType]}"
-            )
-
         # Create product via manager
         created_product = manager.create_from_contract(
             contract_id=contract_id,
             product_name=product_name,
-            product_type=product_type_enum,
+            product_type=product_type,
             version=version,
             output_port_name=output_port_name
         )

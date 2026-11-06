@@ -15,7 +15,7 @@ os.environ.setdefault('APP_AUDIT_LOG_DIR', _tempfile.gettempdir())
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool  # For in-memory SQLite persistence
 from unittest.mock import MagicMock
@@ -70,6 +70,25 @@ test_engine = create_engine(
     connect_args={"check_same_thread": False}, # check_same_thread is needed for SQLite
     poolclass=StaticPool  # Use a single connection for in-memory SQLite
 )
+
+
+# pysqlite starts its transaction lazily, at the first write: a savepoint
+# (``begin_nested``) taken before it is then the outermost transaction, and its
+# release commits past the test's rollback, leaking rows into later tests.
+# SQLAlchemy's recipe: let SQLAlchemy emit BEGIN itself. The one connection is
+# shared (StaticPool): a second session opened during a test joins the
+# transaction already open on it, as it did before.
+@event.listens_for(test_engine, "connect")
+def _sqlite_no_implicit_begin(dbapi_connection, _record):
+    dbapi_connection.isolation_level = None
+
+
+@event.listens_for(test_engine, "begin")
+def _sqlite_begin(connection):
+    if not connection.connection.dbapi_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN")
+
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 

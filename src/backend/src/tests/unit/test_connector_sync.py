@@ -291,3 +291,77 @@ def test_the_job_runs_due_syncs_and_fails_when_one_fails(db_session, sync, impor
     broken.execute_import.side_effect = RuntimeError("boom")
     assert run_syncs(db_session, ws=None, sync_id=sync.id, importer=broken) == 1
     assert run_syncs(db_session, ws=None, sync_id=str(uuid4()), importer=importer) == 1
+
+
+# --- Review: scope and incomplete walks ---------------------------------------------
+
+
+def test_a_dropped_field_is_retired_while_its_data_source_stays_unchanged(db_session, sync, importer, source):
+    _run(db_session, sync, importer)
+    source.datasources[0]["updatedAt"] = T1
+    source.fields = [f for f in source.fields if f["name"] != "Order Key"]
+    _run(db_session, sync, importer)  # the change: first miss
+
+    # Later runs see an unchanged data source: the field is still missing, not seen
+    _run(db_session, sync, importer)
+    field = _asset(db_session, f"{DS}.Order Key")
+    assert field.properties[MISSED_PROPERTY] == 2 and field.status == "active"
+    summary = _run(db_session, sync, importer)
+    assert summary["retired"] == 1 and field.status == "retired"
+
+    summary = _run(db_session, sync, importer)
+    assert summary["reactivated"] == 0 and field.status == "retired"
+
+
+def test_assets_of_another_connection_are_never_counted(db_session, sync, importer, asset_types):
+    other = ConnectionDb(id=uuid4(), name=f"tableau-{uuid4().hex[:6]}", connector_type="tableau", config={})
+    db_session.add(other)
+    db_session.flush()
+    foreign = AssetDb(id=uuid4(), name="Other", asset_type_id=asset_types["Report"].id, platform="tableau",
+                      location="p~p1.wb~other", properties={"connection_id": str(other.id)})
+    db_session.add(foreign)
+    db_session.flush()
+
+    for _ in range(3):
+        assert _run(db_session, sync, importer)["status"] == STATUS_COMPLETED
+
+    assert foreign.status == "active" and MISSED_PROPERTY not in foreign.properties
+
+
+def test_a_failed_refresh_makes_the_walk_incomplete(db_session, sync, importer, source, monkeypatch):
+    _run(db_session, sync, importer)
+    source.workbooks.pop()
+    source.datasources[0]["updatedAt"] = T1
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("refresh failed")
+    monkeypatch.setattr(importer, "_refresh_existing", fail)
+    summary = _run(db_session, sync, importer)
+
+    assert summary["errors"] >= 1 and summary["status"] == STATUS_INCOMPLETE
+    assert any("item(s) failed" in r for r in summary["incomplete_reasons"])
+    assert summary["missed"] == 0 and MISSED_PROPERTY not in _asset(db_session, WB).properties
+
+
+def test_a_truncated_listing_makes_the_walk_incomplete(db_session, sync, importer, monkeypatch):
+    monkeypatch.setattr(importer, "_child_limit", lambda db: 1)
+    summary = _run(db_session, sync, importer)
+    assert summary["status"] == STATUS_INCOMPLETE and summary["missed"] == 0
+    assert any("more than 1 children" in r for r in summary["incomplete_reasons"])
+
+
+def test_a_listing_failure_makes_the_walk_incomplete(db_session, sync, importer, source):
+    _run(db_session, sync, importer)
+    original = source.paginate
+
+    def paginate(path, *args, **kwargs):
+        if path == "/workbooks":
+            raise TableauAPIError("rate limited", 429)
+        return original(path, *args, **kwargs)
+    source.paginate = paginate
+
+    summary = _run(db_session, sync, importer)
+
+    assert summary["status"] == STATUS_INCOMPLETE and summary["missed"] == 0
+    assert any("could not be listed" in r for r in summary["incomplete_reasons"])
+    assert MISSED_PROPERTY not in _asset(db_session, WB).properties

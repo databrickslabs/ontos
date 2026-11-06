@@ -1008,7 +1008,7 @@ async def request_product_review(
 async def create_product_from_contract(
     contract_id: str = Body(..., embed=True),
     product_name: str = Body(..., embed=True),
-    product_type: Optional[str] = Body(None, embed=True, deprecated=True),
+    product_type: Optional[str] = Body(None, embed=True),
     version: str = Body(..., embed=True),
     output_port_name: Optional[str] = Body(None, embed=True),
     request: Request = None,
@@ -1023,15 +1023,13 @@ async def create_product_from_contract(
 
     The contract governs one output port of the product. Inherits domain_id,
     owner_team_id, and project_id from the contract.
-
-    ``product_type`` is accepted and ignored: ODPS products have no type, and
-    older clients still send it.
     """
     try:
         # Create product via manager
         created_product = manager.create_from_contract(
             contract_id=contract_id,
             product_name=product_name,
+            product_type=product_type,
             version=version,
             output_port_name=output_port_name,
             user_email=current_user.email if current_user else None,
@@ -1049,6 +1047,7 @@ async def create_product_from_contract(
                 'product_id': created_product.id,
                 'contract_id': contract_id,
                 'product_name': product_name,
+                'product_type': product_type,
             }
         )
 

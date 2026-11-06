@@ -3800,6 +3800,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         version: str,
         output_port_name: Optional[str] = None,
         user_email: Optional[str] = None,
+        product_type: Optional[str] = None,
     ) -> DataProductApi:
         """
         Creates a new ODPS v1.0.0 Data Product from an existing Data Contract.
@@ -3813,6 +3814,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             version: Version string for the product
             output_port_name: Optional name for the output port
             user_email: Who the ``on_create`` workflows run for (``create_product``)
+            product_type: Optional product type key, stored as the
+                ``productType`` custom property
 
         Returns:
             Created DataProduct API model
@@ -3878,6 +3881,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_data['primary_domain_id'] = next(
                 (d.domain_id for d in contract_domains if d.is_primary), None
             )
+
+        if product_type:
+            _upsert_custom_property(product_data, 'productType', product_type)
 
         # Create the product
         created_product = self.create_product(product_data, workflow_user=user_email)

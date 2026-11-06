@@ -18,6 +18,7 @@ import {
   Server,
   Link2,
   Unlink,
+  RefreshCcw,
 } from 'lucide-react';
 import {
   Dialog,
@@ -37,6 +38,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { AssetSelector, type SelectedAsset } from '@/components/common/asset-selector';
+import KeepInSyncPanel from './keep-in-sync-panel';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import type {
@@ -430,6 +432,11 @@ export default function ImportPreviewDialog({
   );
   const toCreate = activeItems.filter((i) => i.will_create && !(i.path in pathMappings)).length;
   const toSkip = activeItems.filter((i) => !i.will_create || i.path in pathMappings).length;
+  // A sync is named after what was selected
+  const syncDefaultName = useMemo(() => {
+    const names = selectedPaths.map((p) => previewItems.find((i) => i.path === p)?.name || p.split('.').pop() || p);
+    return names.join(', ');
+  }, [selectedPaths, previewItems]);
 
   // Resolve the asset type for the selector target
   const selectorTargetType = useMemo(() => {
@@ -580,6 +587,8 @@ export default function ImportPreviewDialog({
 
           {item.action === 'created' ? (
             <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+          ) : item.action === 'refreshed' ? (
+            <RefreshCcw className="h-4 w-4 text-blue-500 shrink-0" />
           ) : item.action === 'skipped' ? (
             <MinusCircle className="h-4 w-4 text-yellow-500 shrink-0" />
           ) : (
@@ -702,9 +711,22 @@ export default function ImportPreviewDialog({
 
           <DialogFooter>
             {importResult ? (
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                {t('common:actions.close')}
-              </Button>
+              <div className="flex w-full flex-col gap-3">
+                {!initialResult && importResult.errors === 0 && (
+                  <KeepInSyncPanel
+                    connectionId={connectionId}
+                    selectedPaths={selectedPaths}
+                    depth={depth}
+                    excludedPaths={Array.from(excludedPaths)}
+                    defaultName={syncDefaultName}
+                  />
+                )}
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                    {t('common:actions.close')}
+                  </Button>
+                </div>
+              </div>
             ) : asyncRun && (asyncRun.status === 'pending' || asyncRun.status === 'running') ? (
               <>
                 <Button variant="outline" onClick={cancelAsyncImport}>

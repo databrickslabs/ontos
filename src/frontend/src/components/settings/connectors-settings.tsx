@@ -20,6 +20,7 @@ import { FeatureAccessLevel } from '@/types/settings';
 import { Connection } from '@/types/connections';
 import { RelativeDate } from '@/components/common/relative-date';
 import { ConnectionFormDialog } from './connection-form-dialog';
+import { ConnectorSyncsDialog } from './connector-syncs-dialog';
 
 const SYSTEM_CREATED_BY = 'system';
 
@@ -38,6 +39,7 @@ export default function ConnectorsSettings() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [syncsConnection, setSyncsConnection] = useState<Connection | null>(null);
 
   const fetchConnections = useCallback(async () => {
     setIsLoading(true);
@@ -186,6 +188,9 @@ export default function ConnectorsSettings() {
                 <DropdownMenuItem onClick={() => handleTest(conn.id)}>
                   {t('settings:connectors.testConnection', 'Test Connection')}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSyncsConnection(conn); }}>
+                  {t('settings:connectors.syncs.menu')}
+                </DropdownMenuItem>
                 {!isSystem(conn) && (
                   <>
                     <DropdownMenuSeparator />
@@ -242,6 +247,11 @@ export default function ConnectorsSettings() {
         onOpenChange={setIsFormOpen}
         initialConnection={editingConnection}
         onSubmitSuccess={fetchConnections}
+      />
+
+      <ConnectorSyncsDialog
+        connection={syncsConnection}
+        onOpenChange={(open) => { if (!open) setSyncsConnection(null); }}
       />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

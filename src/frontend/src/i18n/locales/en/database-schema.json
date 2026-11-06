@@ -86,5 +86,21 @@
     },
     "warningsTitle": "Warnings ({{count}})",
     "moreWarnings": "+{{count}} more"
+  },
+  "sync": {
+    "keepInSync": "Keep in sync",
+    "description": "Import this selection again on a schedule: changes in the source are picked up, and items the source no longer has are retired.",
+    "interval": "How often",
+    "intervals": {
+      "60": "Hourly",
+      "1440": "Daily",
+      "10080": "Weekly"
+    },
+    "retireAfter": "Retire after missed syncs",
+    "retireAfterHint": "Items missing from this many complete syncs in a row are retired (never deleted).",
+    "save": "Save sync",
+    "saved": "Sync \"{{name}}\" saved",
+    "nextRun": "Next run",
+    "saveFailed": "Could not save the sync"
   }
 }

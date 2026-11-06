@@ -420,6 +420,9 @@ class AssetInfo(BaseModel):
     description: Optional[str] = Field(None, description="Short description")
     path: Optional[str] = Field(None, description="Full path to the asset")
     url: Optional[str] = Field(None, description="URL to view the asset in its native UI")
+    updated_at: Optional[datetime] = Field(
+        None, description="When the asset last changed in the source, if the listing reports it"
+    )
     
     # Container hierarchy (if applicable)
     catalog: Optional[str] = Field(None, description="Catalog/database name")
@@ -578,7 +581,9 @@ PHYSICAL_TABLE_ASSET_TYPES = ("Table", "View", METRIC_VIEW_ASSET_TYPE)
 # of its measures (#1263). It holds the view's definition, which only users who can
 # read the view in Unity Catalog may see, so asset reads and exports leave it out.
 METRIC_VIEW_PROPERTY = "metric_view"
-INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY})
+# The property keys the last schema import wrote, so a sync can replace exactly those
+IMPORTED_KEYS_PROPERTY = "imported_keys"
+INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY, IMPORTED_KEYS_PROPERTY})
 
 
 def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

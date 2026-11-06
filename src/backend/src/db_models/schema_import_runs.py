@@ -31,6 +31,10 @@ class SchemaImportRunDb(Base):
     # path_mappings) so the run is self-describing and re-runnable.
     request = Column(JSON, nullable=True)
 
+    # The connector sync that started the run, and what triggered it (manual | schedule)
+    sync_id = Column(String, nullable=True, index=True)
+    trigger = Column(String, nullable=True)
+
     # Progress counters (live-updated from the background thread)
     total_items = Column(Integer, nullable=True)
     processed_items = Column(Integer, nullable=False, default=0)

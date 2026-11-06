@@ -709,7 +709,7 @@ def initialize_managers(app: FastAPI):
                 from src.controller.workflow_scheduler import WorkflowScheduler
 
                 app.state.workflow_scheduler = WorkflowScheduler(
-                    tick_seconds=settings.WORKFLOW_SCHEDULER_TICK_SECONDS,
+                    change_check_seconds=settings.WORKFLOW_SCHEDULER_CHANGE_CHECK_SECONDS,
                     idle_recheck_seconds=settings.WORKFLOW_SCHEDULER_IDLE_RECHECK_SECONDS,
                 )
                 app.state.workflow_scheduler.start()

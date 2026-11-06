@@ -529,11 +529,13 @@ async def startup_event_handler(app: FastAPI):
         # seed_defaults() calls below are idempotent — they no-op if rows exist.
         try:
             from src.repositories.certification_levels_repository import certification_levels_repo
+            from src.repositories.data_product_types_repository import data_product_types_repo
             from src.repositories.maturity_repository import maturity_repo
 
             session_factory = get_session_factory()
             with session_factory() as db_session:
                 certification_levels_repo.seed_defaults(db_session)
+                data_product_types_repo.seed_defaults(db_session)
                 maturity_repo.seed_defaults(db_session)
                 db_session.commit()
             logger.info("Reference data seed step complete.")

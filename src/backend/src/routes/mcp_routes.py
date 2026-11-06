@@ -25,7 +25,17 @@ from src.controller.audit_manager import AuditManager
 from src.controller.mcp_tokens_manager import MCPTokensManager, MCPTokenInfo
 from src.models.mcp import JSONRPCRequest, JSONRPCError, JSONRPCResponse
 from src.common.api_errors import new_error_id
-from src.tools.base import ToolContext, ToolResult, tool_failed_message
+from src.common.authorization import TEST_TOKEN_HEADER, get_user_details_from_sdk
+from src.common.manager_dependencies import get_users_manager
+from src.tools.base import (
+    ToolCaller,
+    ToolContext,
+    TOOL_FAILED_CODE,
+    ToolResult,
+    check_tool_permission,
+    tool_failed_message,
+)
+from src.tools.caller import mcp_api_key_caller, resolve_tool_caller
 from src.tools.registry import create_default_registry
 
 logger = get_logger(__name__)
@@ -322,6 +332,8 @@ class MCPHandler:
         
         # Create tool context (also sets self._identity_mode)
         ctx = self._create_tool_context()
+        if getattr(tool, "required_permission", None):
+            ctx.caller = await self._resolve_caller(tool_name)
 
         # Execute the tool with audit logging
         success = False
@@ -331,11 +343,15 @@ class MCPHandler:
             "session_id": self._session_id,
             "identity_mode": self._identity_mode,
         }
+        if ctx.caller is not None:
+            details_for_audit["auth_path"] = ctx.caller.auth_path
         try:
-            result = await tool.execute(ctx, **tool_args)
+            result = check_tool_permission(tool, ctx) or await tool.execute(ctx, **tool_args)
             is_error = not result.success
             details_for_audit["is_error"] = is_error
             success = not is_error
+            if result.error_code:
+                details_for_audit["error_code"] = result.error_code
             
             if result.success:
                 return {
@@ -349,15 +365,7 @@ class MCPHandler:
                 }
             else:
                 details_for_audit["tool_error"] = result.error
-                return {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": result.error or "Unknown error"
-                        }
-                    ],
-                    "isError": True
-                }
+                return _tool_error_result(result.error or "Unknown error", result.to_dict())
                 
         except Exception as e:
             error_id = new_error_id()
@@ -366,15 +374,10 @@ class MCPHandler:
             )
             details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
             details_for_audit["error_id"] = error_id
-            return {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": tool_failed_message(error_id)
-                    }
-                ],
-                "isError": True
-            }
+            message = tool_failed_message(error_id)
+            return _tool_error_result(
+                message, {"error": message, "error_code": TOOL_FAILED_CODE, "error_id": error_id}
+            )
         finally:
             self._audit(action="TOOL_CALL", success=success, details=details_for_audit)
     
@@ -448,6 +451,45 @@ class MCPHandler:
         self._identity_mode = "service_principal"
         return getattr(app.state, "workspace_client", None)
 
+    async def _resolve_caller(self, tool_name: str) -> ToolCaller:
+        """The caller a tool acts for: the forwarded user, else the API-key policy.
+
+        A forwarded user that can't be resolved fails the call (and is audited)
+        instead of falling back to the token's identity.
+        """
+        auth_path = _forwarded_auth_path(self._request, self._settings)
+        if auth_path is None:
+            return mcp_api_key_caller(self._token_info)
+        try:
+            user = await get_user_details_from_sdk(
+                self._request, self._settings, get_users_manager(self._request)
+            )
+        except Exception as e:
+            logger.warning(
+                "MCP tool %s refused: the forwarded user could not be resolved "
+                "(auth path %s, %s)",
+                tool_name,
+                auth_path,
+                type(e).__name__,
+            )
+            self._audit(
+                action="IDENTITY_REJECTED",
+                success=False,
+                details={
+                    "reason": "forwarded_user_unresolved",
+                    "tool_name": tool_name,
+                    "auth_path": auth_path,
+                    "token_name": self._token_info.name,
+                    "session_id": self._session_id,
+                },
+            )
+            raise MCPError(
+                MCP_AUTH_FAILED,
+                "The forwarded user could not be resolved, so the tool did not run.",
+                {"auth_path": auth_path},
+            )
+        return await resolve_tool_caller(user, self._request, auth_path)
+
     def _create_tool_context(self) -> ToolContext:
         """Create a ToolContext for tool execution."""
         # Get managers from app.state if available
@@ -463,6 +505,18 @@ class MCPHandler:
             costs_manager=None,  # Add if needed
             search_manager=getattr(app.state, "search_manager", None)
         )
+
+
+def _tool_error_result(text: str, structured: Dict[str, Any]) -> Dict[str, Any]:
+    """A failed ``tools/call`` result: the message as text, and the same failure
+    (``error``, ``error_code`` and its params, e.g. ``feature_id`` /
+    ``required_level`` for ``tool_not_permitted``) as ``structuredContent``.
+    """
+    return {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": structured,
+        "isError": True,
+    }
 
 
 class MCPError(Exception):
@@ -496,6 +550,17 @@ def _forwarded_email(request: Request) -> Optional[str]:
     the trust level the regular HTTP API places in the same headers.
     """
     return request.headers.get("X-Forwarded-Email") or request.headers.get("X-Forwarded-User")
+
+
+def _forwarded_auth_path(request: Request, settings: Settings) -> Optional[str]:
+    """How the request names its user, or None when it names none (API key only)."""
+    if request.headers.get("x-forwarded-access-token"):
+        return "mcp_forwarded_token"
+    if _forwarded_email(request):
+        return "mcp_forwarded_email"
+    if settings.TEST_USER_TOKEN and request.headers.get(TEST_TOKEN_HEADER):
+        return "mcp_test_user"
+    return None
 
 
 def resolve_mcp_principal(

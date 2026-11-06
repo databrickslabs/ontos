@@ -285,6 +285,9 @@
     "featurePreviews": "Versões prévias de recursos",
     "showBetaFeatures": "Mostrar recursos beta",
     "showAlphaFeatures": "Mostrar recursos alfa",
+    "edition": {
+      "showAllFeatures": "Mostrar todos os recursos"
+    },
     "logOut": "Sair"
   },
   "projectMenu": {

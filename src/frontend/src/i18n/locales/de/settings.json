@@ -632,6 +632,19 @@
   "uiCustomization": {
     "title": "UI-Anpassung",
     "description": "Passen Sie das Branding, die Spracheinstellungen und das Erscheinungsbild der Anwendung an.",
+    "edition": {
+      "title": "Edition",
+      "label": "Edition",
+      "options": {
+        "full": "Vollständig",
+        "essentials": "Essentials"
+      },
+      "descriptions": {
+        "full": "Alle Funktionen erscheinen in den Menüs.",
+        "essentials": "Ein fokussiertes Menü für Teams, die mit ihren Unity-Catalog-Tabellen beginnen: Suche, Datenkatalog, Assets, Konzepte, Asset-Prüfungen und Meine Anfragen."
+      },
+      "help": "Die Edition ändert nur, was die Navigation, die Schnellaktionen der Startseite und die Seite „Über“ anzeigen. Die Berechtigungen bleiben unverändert: Ausgeblendete Seiten öffnen sich weiterhin über einen direkten Link für Benutzer mit Zugriff, und Administratoren können im Benutzermenü „Alle Funktionen anzeigen“ einschalten."
+    },
     "i18n": {
       "title": "Spracheinstellungen",
       "enableLabel": "Internationalisierung aktivieren",

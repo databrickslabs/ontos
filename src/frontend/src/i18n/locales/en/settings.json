@@ -650,6 +650,19 @@
   "uiCustomization": {
     "title": "UI Customization",
     "description": "Customize the application branding, language settings, and appearance.",
+    "edition": {
+      "title": "Edition",
+      "label": "Edition",
+      "options": {
+        "full": "Full",
+        "essentials": "Essentials"
+      },
+      "descriptions": {
+        "full": "Every feature appears in the menus.",
+        "essentials": "A focused menu for teams starting from their Unity Catalog tables: Search, Data Catalog, Assets, Concepts, Asset Reviews and My Requests."
+      },
+      "help": "The edition only changes what the navigation, the home quick actions and the About page show. Permissions are unchanged: hidden pages still open from a direct link for users who have access, and admins can turn on \"Show All Features\" in the user menu."
+    },
     "i18n": {
       "title": "Language Settings",
       "enableLabel": "Enable Internationalization",

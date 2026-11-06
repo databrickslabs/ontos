@@ -13,10 +13,14 @@ import {
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon, Settings, Info, TestTube2 } from 'lucide-react';
+import {
+  LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon, Settings, Info, TestTube2,
+  LayoutGrid,
+} from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
+import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import { usePermissions } from '@/stores/permissions-store';
 import useTestPersonaStore from '@/stores/test-persona-store';
 import { FeatureAccessLevel, AppRole } from '@/types/settings';
@@ -72,7 +76,10 @@ export default function UserInfo() {
   const [userInfo, setUserInfo] = useState<UserInfoData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hasFetched = useRef(false);
-  const { showBeta, showAlpha, actions: visibilityActions } = useFeatureVisibilityStore();
+  const {
+      showBeta, showAlpha, showAllFeatures, actions: visibilityActions,
+  } = useFeatureVisibilityStore();
+  const edition = useUICustomizationStore((state) => state.edition);
   const {
       permissions,
       isLoading: permissionsLoading,
@@ -214,6 +221,13 @@ export default function UserInfo() {
   // Admins/localdev keep the impersonation power (all roles); non-admins with 2+ membership-matched
   // roles get a membership-scoped switcher. Single-role users still don't see the switcher.
   const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdminActual || myRoles.length >= 2);
+
+  // In Essentials the edition decides what the menus show, so only admins keep the
+  // maturity switches, plus "Show all features" to reach the pages the edition hides.
+  const isEssentials = edition === 'essentials';
+  const showBetaSwitch = !isEssentials || isAdminActual;
+  const showAllFeaturesSwitch = isEssentials && isAdminActual;
+  const showFeaturePreviews = showBetaSwitch || isAdminActual;
 
   const loadingText = t('common:states.loading');
   const displayName = userInfo?.user || userInfo?.username || userInfo?.email || loadingText;
@@ -386,8 +400,28 @@ export default function UserInfo() {
             <DropdownMenuSeparator />
             </>
         )}
+        {showFeaturePreviews && (
+        <>
         <DropdownMenuGroup>
             <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">{t('userMenu.featurePreviews')}</DropdownMenuLabel>
+            {showAllFeaturesSwitch && (
+             <DropdownMenuItem
+                className="flex items-center justify-between"
+                onSelect={(e) => e.preventDefault()}
+             >
+                <div className="flex items-center">
+                    <LayoutGrid className="mr-2 h-4 w-4" />
+                    <span>{t('userMenu.edition.showAllFeatures', 'Show All Features')}</span>
+                </div>
+                <Switch
+                    checked={showAllFeatures}
+                    onCheckedChange={visibilityActions.toggleShowAllFeatures}
+                    aria-label={t('userMenu.edition.showAllFeatures', 'Show All Features')}
+                    className="scale-75"
+                />
+            </DropdownMenuItem>
+            )}
+            {showBetaSwitch && (
              <DropdownMenuItem
                 className="flex items-center justify-between"
                 onSelect={(e) => e.preventDefault()}
@@ -402,6 +436,7 @@ export default function UserInfo() {
                     className="scale-75"
                  />
             </DropdownMenuItem>
+            )}
             {isAdminActual && (
              <DropdownMenuItem
                 className="flex items-center justify-between"
@@ -420,6 +455,8 @@ export default function UserInfo() {
             )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        </>
+        )}
         <DropdownMenuItem disabled>
           <LogOut className="mr-2 h-4 w-4" />
           <span>{t('userMenu.logOut')}</span>

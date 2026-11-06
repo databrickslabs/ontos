@@ -632,6 +632,19 @@
   "uiCustomization": {
     "title": "Personalizzazione UI",
     "description": "Personalizza il branding, le impostazioni della lingua e l'aspetto dell'applicazione.",
+    "edition": {
+      "title": "Edizione",
+      "label": "Edizione",
+      "options": {
+        "full": "Completa",
+        "essentials": "Essentials"
+      },
+      "descriptions": {
+        "full": "Tutte le funzionalità compaiono nei menu.",
+        "essentials": "Un menu essenziale per i team che partono dalle proprie tabelle Unity Catalog: Ricerca, Catalogo dati, Risorse, Concetti, Revisioni risorse e Le mie richieste."
+      },
+      "help": "L'edizione cambia solo ciò che mostrano la navigazione, le azioni rapide della home e la pagina Informazioni. I permessi non cambiano: le pagine nascoste si aprono ancora da un link diretto per chi ha accesso, e gli amministratori possono attivare \"Mostra tutte le funzionalità\" nel menu utente."
+    },
     "i18n": {
       "title": "Impostazioni lingua",
       "enableLabel": "Abilita internazionalizzazione",

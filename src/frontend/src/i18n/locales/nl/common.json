@@ -285,6 +285,9 @@
     "featurePreviews": "Functie Voorbeelden",
     "showBetaFeatures": "Toon Beta Functies",
     "showAlphaFeatures": "Toon Alpha Functies",
+    "edition": {
+      "showAllFeatures": "Alle functies tonen"
+    },
     "logOut": "Uitloggen"
   },
   "projectMenu": {

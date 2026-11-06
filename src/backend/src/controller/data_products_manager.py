@@ -120,8 +120,18 @@ from src.common import genie_client
 from src.common.delivery_mixin import DeliveryMixin
 from src.repositories.entity_relationships_repository import entity_relationship_repo
 from src.repositories.assets_repository import asset_repo
+from src.repositories.data_product_types_repository import data_product_types_repo
 
 logger = get_logger(__name__)
+
+
+class UnknownDataProductTypeError(CodedValueError):
+    """A product type key that doesn't exist or has been deactivated."""
+
+    code = 'unknown_data_product_type'
+
+    def __init__(self, key: str):
+        super().__init__(f"Unknown or inactive data product type: '{key}'", key=key)
 
 
 @searchable_asset
@@ -3216,16 +3226,26 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_name: Name for the new data product
             version: Version string for the product
             output_port_name: Optional name for the output port
-            product_type: Optional product type key, stored as the
-                ``productType`` custom property
+            product_type: Optional product type key. Must be an active type;
+                when omitted, the default type is used (if one is set). Stored
+                on ``product_type_id`` and, for ODPS export, as the
+                ``productType`` custom property.
 
         Returns:
             Created DataProduct API model
 
         Raises:
+            UnknownDataProductTypeError: If product_type is unknown or inactive
             ValueError: If contract doesn't exist or is not in valid status
         """
-        logger.info(f"Creating ODPS Data Product '{product_name}' from contract {contract_id}")
+        logger.info("Creating ODPS Data Product '%s' from contract %s", product_name, contract_id)
+
+        if product_type:
+            type_db = data_product_types_repo.get_by_key(self._db, product_type)
+            if type_db is None or not type_db.is_active:
+                raise UnknownDataProductTypeError(product_type)
+        else:
+            type_db = data_product_types_repo.get_default(self._db)
 
         from src.repositories.data_contracts_repository import data_contract_repo
 
@@ -3284,12 +3304,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 (d.domain_id for d in contract_domains if d.is_primary), None
             )
 
-        if product_type:
-            _upsert_custom_property(product_data, 'productType', product_type)
+        # Kept until ODPS export/import reads product_type_id directly.
+        if type_db is not None:
+            _upsert_custom_property(product_data, 'productType', type_db.key)
 
         # Create the product
         created_product = self.create_product(product_data)
-        logger.info(f"Successfully created ODPS Data Product {product_id} from contract {contract_id}")
+
+        if type_db is not None:
+            created_db = self._repo.get(db=self._db, id=created_product.id)
+            created_db.product_type_id = type_db.id
+            self._db.flush()
+
+        logger.info("Created ODPS Data Product %s from contract %s", created_product.id, contract_id)
         return created_product
 
     def get_products_by_contract(self, contract_id: str) -> List[DataProductApi]:

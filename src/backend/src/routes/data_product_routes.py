@@ -1073,8 +1073,8 @@ async def request_product_review(
 async def create_product_from_contract(
     contract_id: str = Body(..., embed=True),
     product_name: str = Body(..., embed=True),
-    product_type: str = Body(..., embed=True),
     version: str = Body(..., embed=True),
+    product_type: Optional[str] = Body(None, embed=True),
     output_port_name: Optional[str] = Body(None, embed=True),
     request: Request = None,
     db: DBSessionDep = None,
@@ -1087,7 +1087,8 @@ async def create_product_from_contract(
     Create a new Data Product from an existing Data Contract.
 
     The contract governs one output port of the product. Inherits domain_id,
-    owner_team_id, and project_id from the contract.
+    owner_team_id, and project_id from the contract. ``product_type`` must be
+    an active type key; when omitted, the default type is used.
     """
     try:
         # Create product via manager
@@ -1115,17 +1116,21 @@ async def create_product_from_contract(
             }
         )
 
-        logger.info(f"Created Data Product {created_product.id} from contract {contract_id}")
+        logger.info("Created Data Product %s from contract %s", created_product.id, contract_id)
         return created_product
 
+    except CodedValueError as e:
+        # Unknown or inactive product type; the message is safe to show
+        logger.warning("Rejected product type for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error creating product from contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid contract data for product creation")
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception(f"Error creating product from contract {contract_id}")
-        raise HTTPException(status_code=500, detail=f"Failed to create product from contract: {str(e)}")
+    except Exception:
+        logger.exception("Error creating product from contract %s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to create product from contract")
 
 
 @router.get('/data-products/by-contract/{contract_id}', response_model=List[DataProduct])

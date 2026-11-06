@@ -1,4 +1,4 @@
-"""Tests for the data product types repository (seeding)."""
+"""Tests for the data product types repository (seeding, default lookup)."""
 
 from src.db_models.data_product_types import DataProductTypeDb
 from src.repositories.data_product_types_repository import (
@@ -44,3 +44,17 @@ def test_seed_defaults_leaves_existing_types_alone(db_session):
 
     assert [t.key for t in data_product_types_repo.get_all_ordered(db_session)] == ["custom"]
     assert data_product_types_repo.get_by_key(db_session, "aggregate") is None
+
+
+def test_get_default_returns_active_default(db_session):
+    data_product_types_repo.seed_defaults(db_session)
+
+    assert data_product_types_repo.get_default(db_session).key == "source-aligned"
+
+
+def test_get_default_ignores_inactive_default(db_session):
+    data_product_types_repo.seed_defaults(db_session)
+    data_product_types_repo.get_by_key(db_session, "source-aligned").is_active = False
+    db_session.flush()
+
+    assert data_product_types_repo.get_default(db_session) is None

@@ -4,7 +4,11 @@ Unit tests for NotificationsManager
 import pytest
 from datetime import datetime
 from unittest.mock import Mock, MagicMock, patch, mock_open
-from src.controller.notifications_manager import NotificationsManager, NotificationNotFoundError
+from src.controller.notifications_manager import (
+    NotificationNotDeletableError,
+    NotificationNotFoundError,
+    NotificationsManager,
+)
 from src.models.notifications import Notification, NotificationType
 from src.models.users import UserInfo
 from src.db_models.notifications import NotificationDb
@@ -343,17 +347,39 @@ class TestNotificationsManager:
             manager.delete_notification(mock_db, notification_id="nonexistent")
 
     def test_delete_notification_cannot_delete(self, manager):
-        """Test trying to delete a notification marked as non-deletable."""
+        """Test trying to delete a notification marked as non-deletable.
+
+        Raises rather than returning False so the route can distinguish it
+        from "not found" and answer 403 instead of 404 (see #675).
+        """
         mock_db = Mock()
-        
+
         notif_db = Mock(spec=NotificationDb)
         notif_db.id = "notif-123"
         notif_db.can_delete = False
-        
+
         manager._repo.get.return_value = notif_db
 
-        result = manager.delete_notification(mock_db, notification_id="notif-123")
+        with pytest.raises(NotificationNotDeletableError):
+            manager.delete_notification(mock_db, notification_id="notif-123")
 
-        assert result is False
         manager._repo.remove.assert_not_called()
+
+    def test_delete_notification_admin_override(self, manager):
+        """Admins may delete a non-deletable notification (#675)."""
+        mock_db = Mock()
+
+        notif_db = Mock(spec=NotificationDb)
+        notif_db.id = "notif-123"
+        notif_db.can_delete = False
+
+        manager._repo.get.return_value = notif_db
+        manager._repo.remove.return_value = notif_db
+
+        result = manager.delete_notification(
+            mock_db, notification_id="notif-123", is_admin=True
+        )
+
+        assert result is True
+        manager._repo.remove.assert_called_once()
 

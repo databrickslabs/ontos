@@ -20,6 +20,16 @@ import {
   
   export type FeatureMaturity = 'ga' | 'beta' | 'alpha';
   export type FeatureGroup = 'Discover' | 'Build' | 'Govern' | 'Deploy';
+
+  /**
+   * Edition: which features the navigation, home quick actions and About page show.
+   * Set by an admin (`UI_EDITION`); presentation only, permissions are unchanged.
+   */
+  export type Edition = 'full' | 'essentials';
+  export const EDITIONS: Edition[] = ['full', 'essentials'];
+  export const DEFAULT_EDITION: Edition = 'full';
+  const ALL_EDITIONS: Edition[] = ['full', 'essentials'];
+  const FULL_ONLY: Edition[] = ['full'];
   
   export interface FeatureConfig {
     id: string;
@@ -29,6 +39,8 @@ import {
     icon: LucideIcon;
     group: FeatureGroup;
     maturity: FeatureMaturity;
+    /** Editions whose menus show this feature (every feature declares them). */
+    editions: Edition[];
     showInLanding?: boolean;
     /** When set, permission checks use this feature ID instead of `id`. */
     permissionId?: string;
@@ -44,6 +56,7 @@ import {
       icon: ShoppingCart,
       group: 'Discover',
       maturity: 'ga',
+      editions: FULL_ONLY,
       showInLanding: false,
       permissionId: 'data-products',
     },
@@ -55,6 +68,7 @@ import {
       icon: Search,
       group: 'Discover',
       maturity: 'ga',
+      editions: ALL_EDITIONS,
       showInLanding: false,
     },
     {
@@ -65,6 +79,7 @@ import {
       icon: BookOpen,
       group: 'Discover',
       maturity: 'ga',
+      editions: ALL_EDITIONS,
       showInLanding: true,
     },
     // Build - Create and manage data assets
@@ -76,6 +91,7 @@ import {
       icon: Box,
       group: 'Build',
       maturity: 'ga',
+      editions: ALL_EDITIONS,
       showInLanding: true,
     },
     {
@@ -86,6 +102,7 @@ import {
       icon: Network,
       group: 'Build',
       maturity: 'ga',
+      editions: ALL_EDITIONS,
       showInLanding: true,
       permissionId: 'semantic-models',
     },
@@ -97,6 +114,7 @@ import {
       icon: FileTextIcon,
       group: 'Build',
       maturity: 'ga',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -107,6 +125,7 @@ import {
       icon: Package,
       group: 'Build',
       maturity: 'ga',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -117,6 +136,7 @@ import {
       icon: ShoppingCart,
       group: 'Build',
       maturity: 'ga',
+      editions: FULL_ONLY,
       showInLanding: false,
     },
     {
@@ -127,6 +147,7 @@ import {
       icon: ClipboardList,
       group: 'Build',
       maturity: 'ga',
+      editions: ALL_EDITIONS,
       showInLanding: false,
     },
     // Govern - Monitor and comply
@@ -138,6 +159,7 @@ import {
       icon: CheckCircle,
       group: 'Govern',
       maturity: 'beta',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -148,6 +170,7 @@ import {
       icon: Users,
       group: 'Govern',
       maturity: 'beta',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -158,6 +181,7 @@ import {
       icon: ClipboardCheck,
       group: 'Govern',
       maturity: 'beta',
+      editions: ALL_EDITIONS,
       showInLanding: true,
     },
     {
@@ -168,6 +192,7 @@ import {
       icon: Lock,
       group: 'Govern',
       maturity: 'alpha',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -178,6 +203,7 @@ import {
       icon: Shield,
       group: 'Govern',
       maturity: 'alpha',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -188,6 +214,7 @@ import {
       icon: RefreshCw,
       group: 'Govern',
       maturity: 'alpha',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     // Deploy - Operationalize
@@ -199,6 +226,7 @@ import {
       icon: Globe,
       group: 'Deploy',
       maturity: 'alpha',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
     {
@@ -209,6 +237,7 @@ import {
       icon: FolderKanban,
       group: 'Deploy',
       maturity: 'alpha',
+      editions: FULL_ONLY,
       showInLanding: true,
     },
   ];
@@ -223,14 +252,23 @@ import {
       return feature?.name || pathSegment;
   };
   
+  /** Whether both the maturity filter and the edition allow a feature in the menus. */
+  export const isFeatureShown = (
+      feature: FeatureConfig,
+      allowedMaturities: FeatureMaturity[],
+      edition: Edition = DEFAULT_EDITION,
+  ): boolean =>
+      allowedMaturities.includes(feature.maturity) && feature.editions.includes(edition);
+
   // Helper function to group features for navigation
   export const getNavigationGroups = (
-      allowedMaturities: FeatureMaturity[] = ['ga']
+      allowedMaturities: FeatureMaturity[] = ['ga'],
+      edition: Edition = DEFAULT_EDITION,
     ): { name: FeatureGroup; items: FeatureConfig[] }[] => {
       const grouped: { [key in FeatureGroup]?: FeatureConfig[] } = {};
   
       features
-        .filter((feature) => allowedMaturities.includes(feature.maturity))
+        .filter((feature) => isFeatureShown(feature, allowedMaturities, edition))
         .forEach((feature) => {
           if (!grouped[feature.group]) {
             grouped[feature.group] = [];
@@ -250,10 +288,11 @@ import {
   
   // Helper function to get features for landing pages (Home, About)
   export const getLandingPageFeatures = (
-      allowedMaturities: FeatureMaturity[] = ['ga']
+      allowedMaturities: FeatureMaturity[] = ['ga'],
+      edition: Edition = DEFAULT_EDITION,
   ): FeatureConfig[] => {
       return features.filter(
           (feature) =>
-          feature.showInLanding && allowedMaturities.includes(feature.maturity)
+          feature.showInLanding && isFeatureShown(feature, allowedMaturities, edition)
       );
   };

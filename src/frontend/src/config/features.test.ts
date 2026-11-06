@@ -5,7 +5,16 @@ import {
   getFeatureNameByPath,
   getNavigationGroups,
   getLandingPageFeatures,
+  EDITIONS,
+  type FeatureMaturity,
 } from './features';
+
+const ESSENTIALS = [
+  'search', 'data-catalog', 'assets', 'concepts', 'data-asset-reviews', 'my-requests',
+];
+const MATURITY_SETS: FeatureMaturity[][] = [['ga'], ['ga', 'beta'], ['ga', 'beta', 'alpha']];
+const navIds = (groups: ReturnType<typeof getNavigationGroups>) =>
+  groups.flatMap((g) => g.items.map((i) => i.id));
 
 describe('features config', () => {
   it('defines a non-empty, well-formed feature catalog', () => {
@@ -75,6 +84,63 @@ describe('features config', () => {
     it('returns only landing GA features', () => {
       const landing = getLandingPageFeatures(['ga']);
       expect(landing.every((f) => f.showInLanding && f.maturity === 'ga')).toBe(true);
+    });
+  });
+
+  describe('editions', () => {
+    it('every feature declares at least one known edition, and all are in Full', () => {
+      for (const f of features) {
+        expect(Array.isArray(f.editions), f.id).toBe(true);
+        expect(f.editions.length, f.id).toBeGreaterThan(0);
+        expect(f.editions.every((e) => EDITIONS.includes(e)), f.id).toBe(true);
+        expect(f.editions, f.id).toContain('full');
+      }
+    });
+
+    it('Essentials is exactly the curated set', () => {
+      const ids = features.filter((f) => f.editions.includes('essentials')).map((f) => f.id);
+      expect(ids.sort()).toEqual([...ESSENTIALS].sort());
+    });
+
+    it.each(MATURITY_SETS)('navigation: Full keeps every feature of maturity %s', (...m) => {
+      const expected = features.filter((f) => m.includes(f.maturity)).map((f) => f.id);
+      expect(navIds(getNavigationGroups(m, 'full')).sort()).toEqual(expected.sort());
+      // The edition defaults to Full, so the old call signature is unchanged.
+      expect(navIds(getNavigationGroups(m))).toEqual(navIds(getNavigationGroups(m, 'full')));
+    });
+
+    it.each(MATURITY_SETS)('navigation: Essentials applies both filters for %s', (...m) => {
+      const expected = features
+        .filter((f) => ESSENTIALS.includes(f.id) && m.includes(f.maturity))
+        .map((f) => f.id);
+      expect(navIds(getNavigationGroups(m, 'essentials')).sort()).toEqual(expected.sort());
+    });
+
+    it('navigation: Essentials shows the six with beta, loses reviews without it', () => {
+      expect(navIds(getNavigationGroups(['ga', 'beta'], 'essentials')).sort())
+        .toEqual([...ESSENTIALS].sort());
+      expect(navIds(getNavigationGroups(['ga'], 'essentials'))).not.toContain(
+        'data-asset-reviews',
+      );
+    });
+
+    it.each(MATURITY_SETS)('landing: both filters apply per edition for %s', (...m) => {
+      for (const edition of EDITIONS) {
+        const expected = features
+          .filter((f) => f.showInLanding && m.includes(f.maturity))
+          .filter((f) => f.editions.includes(edition))
+          .map((f) => f.id);
+        expect(getLandingPageFeatures(m, edition).map((f) => f.id)).toEqual(expected);
+      }
+      expect(getLandingPageFeatures(m)).toEqual(getLandingPageFeatures(m, 'full'));
+    });
+
+    it('landing: Essentials hides products, contracts and compliance', () => {
+      const ids = getLandingPageFeatures(['ga', 'beta', 'alpha'], 'essentials').map((f) => f.id);
+      expect(ids).toEqual(expect.arrayContaining(['data-catalog', 'assets', 'concepts']));
+      for (const hidden of ['data-products', 'data-contracts', 'compliance', 'estate-manager']) {
+        expect(ids).not.toContain(hidden);
+      }
     });
   });
 });

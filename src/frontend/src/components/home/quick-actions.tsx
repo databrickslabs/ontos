@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom';
 import { usePermissions } from '@/stores/permissions-store';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { features, type FeatureGroup } from '@/config/features';
+import { features, isFeatureShown, type FeatureGroup } from '@/config/features';
+import { useShownEdition } from '@/hooks/use-shown-edition';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface QuickAction {
@@ -19,6 +20,7 @@ export default function QuickActions() {
   const { t } = useTranslation(['home', 'features']);
   const { isLoading: permissionsLoading, hasPermission } = usePermissions();
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  const edition = useShownEdition();
 
   const actions: QuickAction[] = useMemo(() => {
     if (permissionsLoading) return [];
@@ -54,11 +56,11 @@ export default function QuickActions() {
 
     actionMapping.forEach(({ featureId, requiredLevel, action }) => {
       const feature = features.find(f => f.id === featureId || f.permissionId === featureId);
-      // Respect feature maturity gating the same way the sidebar navigation does,
-      // so hidden-maturity features (e.g. alpha) never leak in as quick actions.
+      // Respect feature maturity and edition gating the same way the sidebar navigation
+      // does, so hidden features (e.g. alpha, or outside the edition) never leak in.
       if (
         feature &&
-        allowedMaturities.includes(feature.maturity) &&
+        isFeatureShown(feature, allowedMaturities, edition) &&
         hasPermission(feature.permissionId || feature.id, requiredLevel)
       ) {
         // Skip if we already added an action for this feature (prefer write actions)
@@ -76,7 +78,7 @@ export default function QuickActions() {
     });
 
     return list;
-  }, [permissionsLoading, hasPermission, allowedMaturities]);
+  }, [permissionsLoading, hasPermission, allowedMaturities, edition]);
 
   // Group actions by feature group
   const groupedActions = useMemo(() => {

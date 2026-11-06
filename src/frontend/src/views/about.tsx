@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from '@/components/ui/button';
 import { getLandingPageFeatures, FeatureConfig } from '@/config/features';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
+import { useShownEdition } from '@/hooks/use-shown-edition';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,7 @@ import MarkdownViewer from '@/components/ui/markdown-viewer';
 export default function About() {
   const { t } = useTranslation(['about', 'features']);
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  const edition = useShownEdition();
   const customAboutContent = useUICustomizationStore((state) => state.aboutContent);
   const appName = useUICustomizationStore((state) => state.getAppName());
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function About() {
     fetchServerInfo();
   }, []);
 
-  const features = getLandingPageFeatures(allowedMaturities);
+  const features = getLandingPageFeatures(allowedMaturities, edition);
 
   // If custom about content is set, render it instead of the default
   if (customAboutContent) {

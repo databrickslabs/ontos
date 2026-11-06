@@ -614,7 +614,7 @@
     "unknownOnSave": "De trigger bevat het onbekende entiteitstype \"{{type}}\": verwijder het in de triggerconfiguratie om de trigger te wijzigen.",
     "unsupportedOnSave": "\"{{trigger}}\" wordt nooit geactiveerd voor {{type}}: kies een entiteitstype dat deze trigger ondersteunt.",
     "pickKnownType": "Kies minstens één entiteitstype. Zonder type wordt deze workflow voor elke entiteit geactiveerd.",
-    "requiredOnSave": "Kies minstens één entiteitstype voor de trigger: hij bevatte alleen typen die niet meer bestaan, en een lege lijst zou hem voor elke entiteit activeren."
+    "requiredOnSave": "Kies minstens één entiteitstype voor de trigger: geen van zijn typen activeert hem (ze bestaan niet meer, of deze trigger wordt er nooit voor geactiveerd), en een lege lijst zou hem voor elke entiteit activeren."
   },
   "triggerPicker": {
     "label": "Wordt geactiveerd bij",

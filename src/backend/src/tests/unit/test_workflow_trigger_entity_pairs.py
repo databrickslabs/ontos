@@ -242,6 +242,53 @@ def test_emptying_a_trigger_of_only_unknown_types_is_refused(db_session):
     assert _codes(errors) == [('trigger_entity_type_required', {'triggerType': 'before_update'})]
 
 
+@pytest.mark.parametrize('known, unknown', [
+    ([EntityType.DATA_PRODUCT], ['dataset']),  # the known type never fires either
+    ([EntityType.DATA_PRODUCT], []),  # only a pair no code fires
+    ([EntityType.DATA_PRODUCT, EntityType.TABLE], []),
+])
+def test_emptying_a_trigger_whose_types_all_never_fire_is_refused(db_session, known, unknown):
+    stored = _trigger(known=known, unknown=unknown)
+
+    errors = _manager(db_session).trigger_widening_errors(
+        stored, WorkflowTrigger(type=TriggerType.BEFORE_UPDATE),
+    )
+
+    assert _codes(errors) == [('trigger_entity_type_required', {'triggerType': 'before_update'})]
+    # The same through the update check of a changed trigger
+    assert _check(db_session, WorkflowTrigger(type=TriggerType.BEFORE_UPDATE), stored) \
+        == [('trigger_entity_type_required', {'triggerType': 'before_update'})]
+
+
+def test_emptying_a_trigger_with_a_type_that_fires_is_not_refused(db_session):
+    stored = _trigger(known=[EntityType.DATA_CONTRACT, EntityType.DATA_PRODUCT],
+                      unknown=['dataset'])
+
+    assert _manager(db_session).trigger_widening_errors(
+        stored, WorkflowTrigger(type=TriggerType.BEFORE_UPDATE),
+    ) == []
+
+
+def test_without_the_map_only_a_trigger_of_unknown_types_counts(db_session):
+    manager = WorkflowsManager(db_session)
+    empty = WorkflowTrigger(type=TriggerType.BEFORE_UPDATE)
+
+    assert manager.trigger_widening_errors(
+        _trigger(known=[EntityType.DATA_PRODUCT], unknown=['dataset']), empty,
+    ) == []
+    assert [e.code for e in manager.trigger_widening_errors(_trigger(unknown=['dataset']), empty)] \
+        == ['trigger_entity_type_required']
+
+
+def test_unknown_types_under_a_trigger_type_for_any_entity_still_match_nothing(db_session):
+    # An unknown value never matches; emptying it under a gate type is refused
+    stored = _trigger(TriggerType.MANUAL, unknown=['dataset'])
+
+    assert [e.code for e in _manager(db_session).trigger_widening_errors(
+        stored, WorkflowTrigger(type=TriggerType.BEFORE_UPDATE),
+    )] == ['trigger_entity_type_required']
+
+
 @pytest.mark.parametrize('stored, new', [
     # a known type picked
     (WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, unknown_entity_types=['dataset']),

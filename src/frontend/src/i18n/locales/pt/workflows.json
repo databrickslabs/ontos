@@ -614,7 +614,7 @@
     "unknownOnSave": "O gatilho lista o tipo de entidade desconhecido \"{{type}}\": remova-o nas configurações do gatilho para alterar o gatilho.",
     "unsupportedOnSave": "\"{{trigger}}\" nunca é acionado para {{type}}: escolha um tipo de entidade que este gatilho suporta.",
     "pickKnownType": "Escolha pelo menos um tipo de entidade. Sem nenhum, este workflow seria acionado para todas as entidades.",
-    "requiredOnSave": "Escolha pelo menos um tipo de entidade para o gatilho: ele listava só tipos que não existem mais, e uma lista vazia faria com que fosse acionado para todas as entidades."
+    "requiredOnSave": "Escolha pelo menos um tipo de entidade para o gatilho: nenhum dos tipos dele dispara (não existem mais, ou este gatilho nunca dispara para eles), e uma lista vazia faria com que fosse acionado para todas as entidades."
   },
   "triggerPicker": {
     "label": "Acionado em",

@@ -614,7 +614,7 @@
     "unknownOnSave": "Il trigger contiene il tipo di entità sconosciuto \"{{type}}\": rimuovilo nella configurazione del trigger per modificarlo.",
     "unsupportedOnSave": "\"{{trigger}}\" non si attiva mai per {{type}}: scegli un tipo di entità supportato da questo trigger.",
     "pickKnownType": "Scegli almeno un tipo di entità. Senza, questo workflow si attiverebbe per tutte le entità.",
-    "requiredOnSave": "Scegli almeno un tipo di entità per il trigger: conteneva solo tipi che non esistono più, e una lista vuota lo farebbe attivare per tutte le entità."
+    "requiredOnSave": "Scegli almeno un tipo di entità per il trigger: nessuno dei suoi tipi lo attiva (non esistono più, o questo trigger non si attiva mai per loro), e una lista vuota lo farebbe attivare per tutte le entità."
   },
   "triggerPicker": {
     "label": "Si attiva su",

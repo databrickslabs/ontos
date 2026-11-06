@@ -17,11 +17,12 @@ contain dots) with a kind prefix:
 
 Credentials
 -----------
-The Connected App secret (or PAT secret) is read from a Databricks secret scope at
-use time; it is never stored in the connection config.
+The Connected App secret (or PAT secret) is read from a Unity Catalog secret
+(``catalog.schema.secret``) at use time; it is never stored in the connection
+config. Whoever browses or imports needs READ_SECRET on it, and so does the app's
+service principal for scheduled syncs.
 """
 
-import base64
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -53,6 +54,8 @@ from src.models.assets import (
     SchemaInfo,
     UnifiedAssetType,
 )
+from databricks.sdk.errors import NotFound, PermissionDenied
+
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -78,9 +81,9 @@ class TableauConnectorConfig(ConnectorConfig):
     username: Optional[str] = None
     pat_name: Optional[str] = None
 
-    # Databricks secret holding the Connected App secret value (or the PAT secret)
-    secret_scope: Optional[str] = None
-    secret_key: Optional[str] = None
+    # Unity Catalog secret (catalog.schema.secret) holding the Connected App
+    # secret value (or the PAT secret)
+    secret_name: Optional[str] = None
 
     # Optional CA bundle path for Tableau Server with a private CA
     ca_bundle_path: Optional[str] = None
@@ -131,6 +134,7 @@ def _parse_ts(value: Optional[str]):
 
 
 _UC_CONNECTION_TYPES = {"databricks", "spark"}
+_UC_SECRET_NAME_RE = re.compile(r"^[^.\s]+\.[^.\s]+\.[^.\s]+$")
 _TABLE_ASSET_TYPES = ["Table", "View", "Metric View"]
 
 
@@ -268,31 +272,42 @@ class TableauConnector(AssetConnector):
 
     def _read_secret(self) -> str:
         cfg = self._cfg
-        if not (cfg.secret_scope and cfg.secret_key):
+        name = (cfg.secret_name or "").strip()
+        if not name:
             raise ConnectorAuthenticationError(
-                "Tableau secret scope and key are not configured", connector_type=self.connector_type
+                "The Tableau secret (a Unity Catalog secret) is not configured", connector_type=self.connector_type
+            )
+        if not _UC_SECRET_NAME_RE.match(name):
+            raise ConnectorAuthenticationError(
+                f"'{name}' is not a Unity Catalog secret name (catalog.schema.secret)",
+                connector_type=self.connector_type,
             )
         if cfg.workspace_client is None:
             raise ConnectorAuthenticationError(
                 "No workspace client available to read the Tableau secret", connector_type=self.connector_type
             )
         try:
-            raw = cfg.workspace_client.secrets.get_secret(scope=cfg.secret_scope, key=cfg.secret_key).value
+            value = cfg.workspace_client.secrets_uc.get_secret(full_name=name, include_value=True).effective_value
+        except NotFound:
+            raise ConnectorAuthenticationError(
+                f"Unity Catalog secret '{name}' was not found", connector_type=self.connector_type
+            ) from None
+        except PermissionDenied:
+            raise ConnectorAuthenticationError(
+                f"No READ_SECRET privilege on Unity Catalog secret '{name}'", connector_type=self.connector_type
+            ) from None
         except Exception as exc:
+            # The SDK message can carry request details: log it, keep it out of the error
+            logger.warning(f"Reading Unity Catalog secret '{name}' failed: {type(exc).__name__}: {exc}")
             raise ConnectorAuthenticationError(
-                f"Could not read secret '{cfg.secret_scope}/{cfg.secret_key}': {exc}",
+                f"Could not read Unity Catalog secret '{name}'", connector_type=self.connector_type
+            ) from None
+        if not value:
+            raise ConnectorAuthenticationError(
+                f"Unity Catalog secret '{name}' is empty, or the value was not returned (READ_SECRET is needed)",
                 connector_type=self.connector_type,
-            ) from exc
-        if not raw:
-            raise ConnectorAuthenticationError(
-                f"Secret '{cfg.secret_scope}/{cfg.secret_key}' is empty", connector_type=self.connector_type
             )
-        text = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
-        # The secrets API returns the value base64-encoded
-        try:
-            return base64.b64decode(text, validate=True).decode("utf-8").strip()
-        except Exception:
-            return text.strip()
+        return str(value).strip()
 
     def _build_auth(self) -> TableauAuth:
         cfg = self._cfg

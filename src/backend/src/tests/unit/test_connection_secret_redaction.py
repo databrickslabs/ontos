@@ -10,6 +10,7 @@ def test_redact_config_masks_secrets_but_not_references():
         "password": "pw",
         "secret_scope": "tableau",
         "secret_key": "app-secret",
+        "secret_name": "main.ontos.tableau_pat",
         "secret_id": "kid-1",
         "pat_name": "ontos",
         "server_url": "https://t",
@@ -19,7 +20,7 @@ def test_redact_config_masks_secrets_but_not_references():
     assert redacted["client_secret"] == SECRET_MASK
     assert redacted["password"] == SECRET_MASK
     assert redacted["token"] == ""  # nothing to hide
-    for key in ("secret_scope", "secret_key", "secret_id", "pat_name", "server_url"):
+    for key in ("secret_scope", "secret_key", "secret_name", "secret_id", "pat_name", "server_url"):
         assert redacted[key] == config[key]
 
 

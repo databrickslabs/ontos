@@ -65,8 +65,7 @@ const formSchema = z.object({
   secret_id: z.string().optional(),
   username: z.string().optional(),
   pat_name: z.string().optional(),
-  secret_scope: z.string().optional(),
-  secret_key: z.string().optional(),
+  secret_name: z.string().optional(),
   ca_bundle_path: z.string().optional(),
   default_catalog: z.string().optional(),
 });
@@ -198,8 +197,7 @@ export function ConnectionFormDialog({
         secret_id: cfg.secret_id || '',
         username: cfg.username || '',
         pat_name: cfg.pat_name || '',
-        secret_scope: cfg.secret_scope || '',
-        secret_key: cfg.secret_key || '',
+        secret_name: cfg.secret_name || '',
         ca_bundle_path: cfg.ca_bundle_path || '',
         default_catalog: cfg.default_catalog || '',
       });

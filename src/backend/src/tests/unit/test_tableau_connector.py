@@ -1,10 +1,10 @@
 """Tableau connector: path scheme, browse, metadata mapping, health check, secret handling."""
 
-import base64
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from databricks.sdk.errors import NotFound, PermissionDenied
 
 from src.connectors.base import (
     ConnectorAuthenticationError,
@@ -181,15 +181,46 @@ def test_health_check_warns_for_non_admin_and_missing_metadata_api():
     assert admin["warnings"] == [] and admin["metadata_api"] is True
 
 
-def test_secret_is_read_from_scope_and_decoded():
-    ws = MagicMock()
-    ws.secrets.get_secret.return_value = SimpleNamespace(value=base64.b64encode(b"pat-secret").decode())
-    connector = TableauConnector(TableauConnectorConfig(
-        server_url="https://t", auth_mode="pat", pat_name="ontos", secret_scope="tableau", secret_key="pat", workspace_client=ws,
+def _pat_connector(ws, secret_name="main.ontos.tableau_pat"):
+    return TableauConnector(TableauConnectorConfig(
+        server_url="https://t", auth_mode="pat", pat_name="ontos", secret_name=secret_name, workspace_client=ws,
     ))
-    auth = connector._build_auth()
-    assert auth == PatAuth("ontos", "pat-secret")
-    ws.secrets.get_secret.assert_called_once_with(scope="tableau", key="pat")
+
+
+def test_secret_is_read_from_a_unity_catalog_secret():
+    ws = MagicMock()
+    ws.secrets_uc.get_secret.return_value = SimpleNamespace(effective_value=" pat-secret\n")
+    assert _pat_connector(ws)._build_auth() == PatAuth("ontos", "pat-secret")
+    ws.secrets_uc.get_secret.assert_called_once_with(full_name="main.ontos.tableau_pat", include_value=True)
+    ws.secrets.get_secret.assert_not_called()
+
+
+@pytest.mark.parametrize("error,message", [
+    (NotFound("secret xyz does not exist"), "was not found"),
+    (PermissionDenied("User x lacks READ_SECRET on abc"), "No READ_SECRET privilege"),
+    (RuntimeError("socket details"), "Could not read Unity Catalog secret"),
+])
+def test_secret_read_failures_name_the_cause_without_the_sdk_message(error, message):
+    ws = MagicMock()
+    ws.secrets_uc.get_secret.side_effect = error
+    with pytest.raises(ConnectorAuthenticationError) as raised:
+        _pat_connector(ws)._build_auth()
+    assert message in str(raised.value) and str(error) not in str(raised.value)
+
+
+def test_a_secret_returned_without_its_value_is_an_auth_error():
+    ws = MagicMock()
+    ws.secrets_uc.get_secret.return_value = SimpleNamespace(effective_value=None)
+    with pytest.raises(ConnectorAuthenticationError, match="READ_SECRET"):
+        _pat_connector(ws)._build_auth()
+
+
+@pytest.mark.parametrize("name", ["tableau/pat", "ontos.tableau_pat", "a.b.c.d", "a. b.c"])
+def test_secret_name_must_be_catalog_schema_secret(name):
+    ws = MagicMock()
+    with pytest.raises(ConnectorAuthenticationError, match="catalog.schema.secret"):
+        _pat_connector(ws, secret_name=name)._build_auth()
+    ws.secrets_uc.get_secret.assert_not_called()
 
 
 def test_missing_secret_configuration_is_an_auth_error():

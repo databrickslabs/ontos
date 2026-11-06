@@ -89,11 +89,15 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
     Published products (active/deprecated) are readable by any caller with
     data-products READ_ONLY — that's the catalog/marketplace contract.
     Unpublished products (draft/proposed/under_review/approved/...) are only
-    readable by data-products admins (incl. via an in-app role override) and
-    by owners (draft_owner / owning team / project member). This stops a
-    consumer from reading an unpublished product by its id (ONT-NEG-011).
-    Fails closed on error.
+    readable by data-products admins and owners (``_caller_owns_product``) and
+    by whoever can decide an open review or approval of it
+    (``caller_is_pending_reviewer``, #1117).
+    This stops a consumer from reading an unpublished product by its id
+    (ONT-NEG-011). Fails closed on error; the database lookups run in
+    savepoints, so a failed one doesn't abort the caller's transaction (the
+    approvals queue checks row after row).
     """
+    product_id = str(getattr(product, "id", "") or "")
     try:
         from types import SimpleNamespace
         from src.common.version_visibility import is_visible_consumer
@@ -104,88 +108,126 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
         status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
         if is_visible_consumer(SimpleNamespace(status=status_str)):
             return True
-
-        product_id = str(getattr(product, "id", "") or "")
-        auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
-        caller_email = current_user.email if current_user else None
-        user_groups = current_user.groups if current_user else []
-
-        if auth_manager and current_user:
-            applied_role_id = (
-                settings_manager.get_applied_role_override_for_user(caller_email)
-                if settings_manager else None
-            )
-            if applied_role_id and settings_manager:
-                eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                eff = auth_manager.get_user_effective_permissions(user_groups or [], None)
-            if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
-                return True
-
-        # Non-admin: grant only if the caller genuinely OWNS *this* product.
-        #
-        # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
-        # resolved the caller's scope via ``projects_manager.get_user_projects``
-        # and then checked membership of ``manager.list_products(...)``. But
-        # ``get_user_projects`` treats *any* group whose name merely contains
-        # the substring "admin" (e.g. the ubiquitous workspace ``admins``
-        # group) as a global admin and returns EVERY project. A Data Consumer
-        # in such a group therefore got ``caller_project_ids`` = all projects,
-        # which matched the draft's ``project_id`` in ``list_products`` and
-        # leaked the draft. We must NOT trust that broad, substring-admin
-        # scope. Instead resolve the three ownership facts against THIS product
-        # only, using membership-based checks (no substring-admin shortcut):
-        #   * draft_owner_id == caller (creator ownership)
-        #   * owner_team_id in caller's real team memberships
-        #   * project_id where the caller is a genuine project member
-        from src.controller.teams_manager import teams_manager
-        from src.controller.projects_manager import projects_manager
-
-        if not caller_email:
-            return False
-
-        owner_email = getattr(product, "draft_owner_id", None)
-        if owner_email and str(owner_email).lower() == str(caller_email).lower():
+        if _caller_owns_product_or_denies(request, db, current_user, product):
             return True
 
-        product_team_id = getattr(product, "owner_team_id", None)
-        if product_team_id:
-            try:
-                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-                if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
-                    return True
-            except Exception:
-                logger.exception(
-                    "Team-membership resolution failed for %s in product read gate",
-                    caller_email,
-                )
+        # Whoever can decide an open review or approval of this product can read
+        # it (#1117). Read only: no write route consults this gate.
+        from src.common.review_access import caller_is_pending_reviewer
 
-        product_project_id = getattr(product, "project_id", None)
-        if product_project_id:
-            try:
-                from src.common.config import get_settings
-                # ``is_user_project_member`` uses configured admin groups
-                # (is_user_admin), not a substring match, and verifies real
-                # team membership of the project — so it does not over-grant.
-                if projects_manager.is_user_project_member(
+        return caller_is_pending_reviewer(
+            db,
+            current_user,
+            "data_product",
+            product_id,
+            getattr(request.app.state, "notifications_manager", None),
+        )
+    except Exception:
+        logger.exception("Product read gate failed for %s; denying", product_id)
+        return False
+
+
+def _caller_owns_product_or_denies(request, db, current_user, product) -> bool:
+    """``_caller_owns_product``, False on error (fail closed)."""
+    try:
+        with db.begin_nested():
+            return _caller_owns_product(request, db, current_user, product)
+    except Exception:
+        logger.exception(
+            "Product ownership check failed for %s; denying", getattr(product, "id", None),
+        )
+        return False
+
+
+def _caller_owns_product(request, db, current_user, product) -> bool:
+    """Whether ``current_user`` is a data-products admin or an owner of ``product``.
+
+    Admin: data-products ADMIN, incl. via an in-app role override. Owner: the
+    draft owner, a member of the owning team, or a member of the product's
+    project. The read gate's ownership facts, also required to request a review
+    (whose named reviewer then reads the product, #1117). May raise: callers
+    fail closed.
+    """
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    settings_manager = getattr(request.app.state, "settings_manager", None)
+    caller_email = current_user.email if current_user else None
+    user_groups = current_user.groups if current_user else []
+
+    if auth_manager and current_user:
+        applied_role_id = (
+            settings_manager.get_applied_role_override_for_user(caller_email)
+            if settings_manager else None
+        )
+        if applied_role_id and settings_manager:
+            eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+        else:
+            eff = auth_manager.get_user_effective_permissions(user_groups or [], None)
+        if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
+            return True
+
+    # Non-admin: grant only if the caller genuinely OWNS *this* product.
+    #
+    # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
+    # resolved the caller's scope via ``projects_manager.get_user_projects``
+    # and then checked membership of ``manager.list_products(...)``. But
+    # ``get_user_projects`` treats *any* group whose name merely contains
+    # the substring "admin" (e.g. the ubiquitous workspace ``admins``
+    # group) as a global admin and returns EVERY project. A Data Consumer
+    # in such a group therefore got ``caller_project_ids`` = all projects,
+    # which matched the draft's ``project_id`` in ``list_products`` and
+    # leaked the draft. We must NOT trust that broad, substring-admin
+    # scope. Instead resolve the three ownership facts against THIS product
+    # only, using membership-based checks (no substring-admin shortcut):
+    #   * draft_owner_id == caller (creator ownership)
+    #   * owner_team_id in caller's real team memberships
+    #   * project_id where the caller is a genuine project member
+    from src.controller.teams_manager import teams_manager
+    from src.controller.projects_manager import projects_manager
+
+    if not caller_email:
+        return False
+
+    owner_email = getattr(product, "draft_owner_id", None)
+    if owner_email and str(owner_email).lower() == str(caller_email).lower():
+        return True
+
+    product_team_id = getattr(product, "owner_team_id", None)
+    if product_team_id:
+        try:
+            with db.begin_nested():
+                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
+            if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
+                return True
+        except Exception:
+            logger.exception(
+                "Team-membership resolution failed for %s in product read gate",
+                caller_email,
+            )
+
+    product_project_id = getattr(product, "project_id", None)
+    if product_project_id:
+        try:
+            from src.common.config import get_settings
+            # ``is_user_project_member`` uses configured admin groups
+            # (is_user_admin), not a substring match, and verifies real
+            # team membership of the project — so it does not over-grant.
+            with db.begin_nested():
+                is_member = projects_manager.is_user_project_member(
                     db=db,
                     user_identifier=caller_email,
                     user_groups=user_groups or [],
                     project_id=str(product_project_id),
                     settings=get_settings(),
-                ):
-                    return True
-            except Exception:
-                logger.exception(
-                    "Project-membership resolution failed for %s in product read gate",
-                    caller_email,
                 )
+            if is_member:
+                return True
+        except Exception:
+            logger.exception(
+                "Project-membership resolution failed for %s in product read gate",
+                caller_email,
+            )
 
-        return False
-    except Exception:
-        logger.exception("Product read gate failed for %s; denying", product_id)
-        return False
+    return False
 
 
 # --- Lifecycle transitions (minimal) ---
@@ -1059,6 +1101,23 @@ async def request_product_review(
     try:
         body = await request.json()
         review_request = ReviewRequest(**body)
+
+        # The named reviewer reads the product while the review is open (#1117),
+        # so only its owners or an admin may request it. A caller who can't read
+        # the product gets the same 404 as reading it.
+        product = manager.get_product(product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Data product not found")
+        if not _caller_owns_product_or_denies(request, db, current_user, product):
+            if not _caller_can_read_product(request, db, current_user, manager, product):
+                raise HTTPException(status_code=404, detail="Data product not found")
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    'code': 'not_product_owner',
+                    'message': "Only the product's owners or an admin can request its review.",
+                },
+            )
         
         result = manager.request_review(
             product_id=product_id,

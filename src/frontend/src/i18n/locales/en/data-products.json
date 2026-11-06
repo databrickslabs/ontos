@@ -679,7 +679,8 @@
     },
     "errors": {
       "cannotRequest": "\"{{requestType}}\" isn't available for a product with status {{productStatus}}.",
-      "failedToSubmit": "Failed to submit request"
+      "failedToSubmit": "Failed to submit request",
+      "notProductOwner": "Only the product's owners or an admin can request its review."
     },
     "toast": {
       "statusChanged": "Status Changed",

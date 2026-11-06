@@ -679,7 +679,8 @@
     },
     "errors": {
       "cannotRequest": "\"{{requestType}}\" is niet beschikbaar voor een product met status {{productStatus}}.",
-      "failedToSubmit": "Verzenden van verzoek mislukt"
+      "failedToSubmit": "Verzenden van verzoek mislukt",
+      "notProductOwner": "Alleen de eigenaren van het product of een beheerder kunnen een review ervan aanvragen."
     },
     "toast": {
       "statusChanged": "Status Gewijzigd",

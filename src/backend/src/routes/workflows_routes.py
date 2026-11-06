@@ -1385,6 +1385,17 @@ def _is_for_step(
     return step_id is None or notified_step is None or notified_step == step_id
 
 
+def _is_handled(notification: Union[Notification, NotificationDb]) -> bool:
+    """Whether the approval notification's decision was already recorded."""
+    payload = notification.action_payload
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            return False
+    return isinstance(payload, dict) and bool(payload.get('handled'))
+
+
 def _is_own_owner_approval(
     db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
 ) -> bool:
@@ -1428,6 +1439,8 @@ def _assert_caller_authorized_for_execution(
     notifications_manager: NotificationsManager,
     execution_id: str,
     user_info: UserInfo,
+    *,
+    for_read: bool = False,
 ) -> List[Notification]:
     """Authorize ``user_info`` to act on the paused workflow execution.
 
@@ -1450,6 +1463,12 @@ def _assert_caller_authorized_for_execution(
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.
 
+    ``for_read``: the check that lets a pending approver read the entity
+    (``caller_is_pending_reviewer``, #1117). Notifications already handled
+    (an approver who decided while the step waits for others) don't count,
+    and the access check is strict: a role that can't be resolved, or roles
+    that can't be read, grant nothing.
+
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
     """
@@ -1457,6 +1476,7 @@ def _assert_caller_authorized_for_execution(
     candidates = [
         n for n in _find_approval_notifications_for_execution(db, execution_id)
         if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
+        and not (for_read and _is_handled(n))
     ]
     if not candidates:
         raise HTTPException(
@@ -1472,9 +1492,10 @@ def _assert_caller_authorized_for_execution(
                 'message': "This approval is for the owners; you can't approve your own request.",
             },
         )
+    strict = {'strict': True} if for_read else {}
     for notification in candidates:
         if notifications_manager.can_user_access_notification(
-            db=db, notification=notification, user_info=user_info
+            db=db, notification=notification, user_info=user_info, **strict
         ):
             return candidates
     raise HTTPException(

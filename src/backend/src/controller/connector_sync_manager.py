@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from src.common.logging import get_logger
+from src.controller.schema_import_manager import RETIRED_BY_SYNC_PROPERTY
+from src.controller.schema_import_manager import SYNC_MISSED_PROPERTY as MISSED_PROPERTY
 from src.db_models.assets import AssetDb
 from src.db_models.connector_syncs import ConnectorSyncDb
 from src.models.assets import AssetStatus
@@ -28,8 +30,6 @@ from src.repositories.schema_import_runs_repository import schema_import_runs_re
 logger = get_logger(__name__)
 
 SYNC_USER = "system:connector-sync"
-MISSED_PROPERTY = "sync_missed"
-RETIRED_BY_SYNC_PROPERTY = "retired_by_sync"
 
 STATUS_COMPLETED = "completed"
 STATUS_INCOMPLETE = "incomplete"

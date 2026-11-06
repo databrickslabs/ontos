@@ -18,6 +18,10 @@ from sqlalchemy.orm.attributes import flag_modified
 from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, LineageLink, ListAssetsOptions
 from src.models.assets import AssetInfo
+
+# Set by connector syncs on assets a complete walk did not find (see connector_sync_manager)
+SYNC_MISSED_PROPERTY = "sync_missed"
+RETIRED_BY_SYNC_PROPERTY = "retired_by_sync"
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.assets_manager import AssetsManager
 from src.controller.metric_view_consistency_manager import (
@@ -1166,11 +1170,22 @@ class SchemaImportManager:
         if stored_at is None or listed_at > stored_at:
             return False
         walk.seen_ids.add(existing.id)
-        descendants = db.query(AssetDb.id).filter(
+        # Back after missing runs: what was below it is back too. Otherwise a
+        # descendant missing since the asset last changed is still missing (it is
+        # counted again, not seen): the asset hasn't changed since.
+        came_back = bool(
+            (existing.properties or {}).get(SYNC_MISSED_PROPERTY)
+            or (existing.properties or {}).get(RETIRED_BY_SYNC_PROPERTY)
+        )
+        descendants = db.query(AssetDb.id, AssetDb.properties).filter(
             AssetDb.platform == connector.connector_type,
             AssetDb.location.startswith(f"{path}.", autoescape=True),
         )
-        walk.seen_ids.update(row.id for row in descendants)
+        for row in descendants:
+            props = row.properties or {}
+            if not came_back and (props.get(SYNC_MISSED_PROPERTY) or props.get(RETIRED_BY_SYNC_PROPERTY)):
+                continue
+            walk.seen_ids.add(row.id)
         return True
 
     def _create_asset_from_item(

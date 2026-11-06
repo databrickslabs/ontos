@@ -6,7 +6,7 @@ UC Discovery/Business Domains) so managers don't touch the SDK directly and unit
 tests can mock a single seam.
 
 Key UC facts this wrapper encodes (see the SDK 0.137 surface):
-- Domains are **account-scoped** and require the ``MANAGE DISCOVERY`` permission.
+- Domains are **account-scoped** and require the ``MANAGE DISCOVER`` permission.
 - ``list_domains`` returns a flat list; hierarchy is expressed via
   ``parent_domain_id``. UC caps nesting at **two levels** (root domains + one
   layer of subdomains — subdomains cannot nest further).
@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 
 class DomainPermissionError(PermissionError):
-    """Raised when the caller lacks MANAGE DISCOVERY for UC domains."""
+    """Raised when the caller lacks MANAGE DISCOVER for UC domains."""
 
 
 @dataclass
@@ -168,6 +168,6 @@ class UcDomainsClient:
         if name == "PermissionDenied" or "not authorized" in msg.lower():
             return DomainPermissionError(
                 "Access to Unity Catalog domains was denied. The caller needs the "
-                "MANAGE DISCOVERY permission (UC domains are account-scoped)."
+                "MANAGE DISCOVER permission (UC domains are account-scoped)."
             )
         return exc

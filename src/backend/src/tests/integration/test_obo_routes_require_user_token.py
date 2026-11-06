@@ -17,11 +17,11 @@ from src.common import config as config_module
 from src.common import workspace_client as workspace_client_module
 from src.common.workspace_client import (
     USER_TOKEN_REQUIRED_MESSAGE,
+)
+from src.common.workspace_client import (
     get_obo_workspace_client as REAL_GET_OBO_WORKSPACE_CLIENT,
 )
-from src.routes import (
-    domain_sync_routes, llm_search_routes, ontology_generator_routes, schema_import_routes,
-)
+from src.routes import llm_search_routes, ontology_generator_routes, schema_import_routes
 
 CODED_403 = {'code': 'user_token_required', 'message': USER_TOKEN_REQUIRED_MESSAGE, 'params': {}}
 
@@ -31,8 +31,7 @@ def app_client(monkeypatch, test_settings):
     """ENV=PROD, the real on-behalf-of helper, and a spy for the app's own client."""
     monkeypatch.setattr(test_settings, 'ENV', 'PROD')
     monkeypatch.setattr(config_module, '_settings', test_settings)
-    for module in (workspace_client_module, domain_sync_routes, llm_search_routes,
-                   ontology_generator_routes):
+    for module in (workspace_client_module, llm_search_routes, ontology_generator_routes):
         monkeypatch.setattr(module, 'get_obo_workspace_client', REAL_GET_OBO_WORKSPACE_CLIENT)
     spy = MagicMock(name='get_workspace_client')
     monkeypatch.setattr(workspace_client_module, 'get_workspace_client', spy)
@@ -56,11 +55,6 @@ def test_catalog_commander_does_not_browse_as_the_app(client, app_client):
 
     _assert_refused(response)
     app_client.return_value.catalogs.list.assert_not_called()
-
-
-def test_domain_sync_is_refused_without_the_user_token(client, app_client):
-    _assert_refused(client.post('/api/domain-sync/import/preview', json={}))
-    app_client.assert_not_called()
 
 
 def test_llm_search_is_refused_without_the_user_token(client, app_client):

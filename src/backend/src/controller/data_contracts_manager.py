@@ -154,6 +154,10 @@ from src.common.api_errors import CodedValueError
 
 logger = get_logger(__name__)
 
+# Warning code for a deploy decision sent with execute_deployment (see
+# handle_deploy_response)
+DEPLOYMENT_NOT_AVAILABLE_CODE = 'deployment_not_available'
+
 
 class InvalidVersionFormatError(CodedValueError):
     """A new contract version that isn't ``X.Y.Z`` (or ``X.Y.Z-draft`` for a personal draft)."""
@@ -5678,8 +5682,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     f"Current status: {contract_db.status}"
                 )
             contract_db.publication_scope = scope
-            contract_db.published_at = datetime.now(timezone.utc)
-            contract_db.published_by = current_user
+            if not was_published:
+                # A scope change keeps who published it and when
+                contract_db.published_at = datetime.now(timezone.utc)
+                contract_db.published_by = current_user
         else:
             contract_db.publication_scope = "none"
             contract_db.published_at = None
@@ -6254,7 +6260,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self,
         db,
         notifications_manager,
-        jobs_manager,
         contract_id: str,
         approver_email: str,
         decision: str,
@@ -6263,60 +6268,63 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None
     ) -> dict:
         """Handle a deploy request decision (approve/deny).
-        
-        Optionally triggers actual deployment, updates notifications and change log.
-        
+
+        Records the decision: updates notifications and the change log. Nothing
+        is deployed; there is no deployment trigger yet. ``execute_deployment``
+        is still accepted from older clients, logged and ignored, and the
+        response says so in ``warnings``.
+
         Args:
             db: Database session
             notifications_manager: Notifications manager instance
-            jobs_manager: Jobs manager instance (for triggering deployment)
             contract_id: Contract ID
             approver_email: Email of approver
             decision: Decision ('approve' or 'deny')
-            execute_deployment: Whether to actually trigger deployment
+            execute_deployment: Ignored (see above)
             message: Optional approver message
             current_user: Username handling deploy request
-            
+
         Returns:
-            Dict with message and optional job_id
-            
+            Dict with message and, when ``execute_deployment`` was set, warnings
+
         Raises:
             ValueError: If contract not found or invalid decision
         """
         from datetime import datetime
         from src.models.notifications import NotificationType, Notification
-        
+
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
-        
+
         decision = decision.lower()
         if decision not in ('approve', 'deny'):
             raise ValueError("Decision must be 'approve' or 'deny'")
-        
+
         now = datetime.utcnow()
         response_message = f"Deploy decision '{decision}' recorded successfully"
         result = {"message": response_message}
-        
-        # Trigger deployment if approved and requested
-        if decision == 'approve' and execute_deployment and jobs_manager:
-            try:
-                job = jobs_manager.trigger_deployment(contract_id=contract_id)
-                result["job_id"] = job.id
-                response_message += f". Deployment job {job.id} started."
-                notification_title = "Contract Deployment Started"
-                notification_desc = f"Deployment of contract '{contract.name}' to Unity Catalog has been initiated (Job ID: {job.id})."
-            except Exception as e:
-                logger.error(f"Failed to trigger deployment: {e}", exc_info=True)
-                notification_title = "Contract Deployment Approved"
-                notification_desc = f"Your contract '{contract.name}' deployment was approved, but failed to start: {str(e)}"
-        elif decision == 'approve':
+
+        if execute_deployment:
+            logger.warning(
+                "Deploy decision for contract %s asked to execute the deployment; "
+                "ignored, there is no deployment trigger",
+                contract_id,
+            )
+            result["warnings"] = [{
+                "code": DEPLOYMENT_NOT_AVAILABLE_CODE,
+                "message": "execute_deployment is ignored: approving a deployment request "
+                           "records the decision and doesn't deploy anything.",
+                "params": {},
+            }]
+
+        if decision == 'approve':
             notification_title = "Contract Deployment Approved"
             notification_desc = f"Your contract '{contract.name}' deployment was approved."
         else:  # deny
             notification_title = "Contract Deployment Denied"
             notification_desc = f"Your deployment request for contract '{contract.name}' was denied."
-        
+
         if message:
             notification_desc += f"\n\nApprover message: {message}"
         
@@ -6374,7 +6382,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             },
         )
         
-        result["message"] = response_message
         return result
     
     def request_status_change(

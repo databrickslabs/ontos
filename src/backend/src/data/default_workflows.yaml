@@ -287,16 +287,17 @@ workflows:
         - "table"
     scope:
       type: "all"
-    is_active: false  # Disabled by default - enable after configuring policies
+    is_active: false  # Disabled by default - select the policies, then enable
     is_default: true
     steps:
       - id: "naming-policy-check"
         name: "Check Naming Convention Policy"
         type: "policy_check"
         config:
-          # This policy_id should be replaced with an actual UUID from your compliance policies
-          # The UI allows selecting policies from a dropdown
-          policy_id: "naming-conventions"
+          # Select the compliance policy in the designer before enabling this workflow
+          # (it can't be enabled while a policy_check step has no existing policy).
+          # policy_name is only a hint for which policy to pick.
+          policy_id: ""
           policy_name: "Naming Conventions"
         on_pass: "tagging-policy-check"
         on_fail: "fail-naming"
@@ -305,7 +306,7 @@ workflows:
         name: "Check Required Tags Policy"
         type: "policy_check"
         config:
-          policy_id: "required-tags"
+          policy_id: ""  # Select a policy in the designer (hint: Required Tags)
           policy_name: "Required Tags"
         on_pass: "success"
         on_fail: "fail-tagging"

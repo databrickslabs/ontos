@@ -310,6 +310,7 @@
       "duplicateStepIds": "2つのステップのIDが同じです。",
       "stepUnknownReference": "ステップ「{{step}}」の{{branch}}の分岐先「{{target}}」はワークフロー内にありません。",
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
+      "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
@@ -486,6 +487,8 @@
     "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
     "stepErrors": {
       "approval_rejected": "リクエストが却下されました",
+      "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
+      "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
       "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません"
     },
@@ -527,6 +530,7 @@
     "policyLabel": "ポリシー: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "ポリシーが選択されていません",
+    "policyHint": "推奨: {{name}}",
     "reviewerLabel": "レビュー担当者:",
     "notSet": "未設定",
     "connectionLabel": "接続: {{name}}",

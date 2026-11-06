@@ -11,6 +11,7 @@ Handles step-by-step execution with branching, including:
 """
 
 import json
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -460,6 +461,22 @@ def _owner_approvers(
     )
 
 
+# Explicit principal forms in an approvers / recipients spec (see
+# ``_resolve_role_to_users``)
+_USER_PREFIX = 'user:'
+_GROUP_PREFIX = 'group:'
+
+
+def _strip_user_prefix(identifier: str) -> str:
+    """``identifier`` without a ``user:`` marker (``group:`` ones are kept)."""
+    return identifier[len(_USER_PREFIX):] if identifier.startswith(_USER_PREFIX) else identifier
+
+
+_UUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
 def _resolve_role_to_users(
     db: Session,
     role_spec: str,
@@ -467,16 +484,24 @@ def _resolve_role_to_users(
 ) -> List[tuple]:
     """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
 
-    Handles:
+    Explicit forms are resolved first, so a principal named like a token or a
+    role (a group called 'reviewer' or 'admins') is never read as one:
+    - 'user:<x>' → the user ``x``: 'user:<x>' (an email: bare)
+    - 'group:<name>' → the group ``name``: 'group:<name>' (what the Workflow
+      Designer's PrincipalPicker emits for a group)
+    - 'user@email.com' → direct email
+    - '<uuid>' of an app role → that role
+
+    Then:
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
     - 'reviewer' → entity reviewer_email (falls back to the Admin role)
     - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
-    - '<uuid>' → app role UUID
-    - 'user@email.com' → direct email
     - Legacy aliases like 'data_stewards', 'admins', etc.
+    - Any other name: an app role id or name, else the name as written (a bare
+      group name, as stored before the picker sent the prefix)
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -504,6 +529,28 @@ def _resolve_role_to_users(
                     seen.add(key)
                     out.append((identifier, role_uuid))
         return out
+
+    # The explicit forms keep their prefix in what is stored, so the delivery
+    # (NotificationsManager) never reads them as a role name; an email can't
+    # be one and stays bare.
+    if role_spec.startswith(_USER_PREFIX):
+        user = role_spec[len(_USER_PREFIX):].strip()
+        if not user:
+            return []
+        return [(user if '@' in user else _USER_PREFIX + user, None)]
+
+    if role_spec.startswith(_GROUP_PREFIX):
+        group = role_spec[len(_GROUP_PREFIX):].strip()
+        return [(_GROUP_PREFIX + group, None)] if group else []
+
+    if '@' in role_spec:
+        # Pre-comma-split single email -- treat as a direct recipient.
+        return [(role_spec, None)]
+
+    if _UUID_RE.match(role_spec):
+        role_by_id = db.query(AppRoleDb).filter(AppRoleDb.id == role_spec).first()
+        if role_by_id:
+            return [(role_by_id.name, role_by_id.id)]
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
@@ -552,14 +599,6 @@ def _resolve_role_to_users(
                 if r.name.lower().replace(' ', '') == normalized:
                     return [(r.name, r.id)]
         return [(role_name, role.id if role else None)]
-
-    # Strip "user:" prefix emitted by the PrincipalPicker (e.g. "user:foo@bar.com").
-    if role_spec.startswith('user:'):
-        role_spec = role_spec[len('user:'):]
-
-    if '@' in role_spec:
-        # Pre-comma-split single email -- treat as a direct recipient.
-        return [(role_spec, None)]
 
     # Business role: prefixed with "business:"
     if role_spec.startswith('business:'):
@@ -1038,7 +1077,10 @@ class NotificationStepHandler(StepHandler):
                     from src.common.email_service import EmailService
                     email_svc = EmailService.from_settings(self._db)
                     if email_svc:
-                        email_addrs = [r[0] for r in resolved_recipients if '@' in r[0]]
+                        email_addrs = [
+                            a for a in (_strip_user_prefix(r[0]) for r in resolved_recipients)
+                            if '@' in a
+                        ]
                         if email_addrs:
                             sent = email_svc.send(
                                 to=email_addrs,
@@ -2413,13 +2455,24 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        if scope != 'none' and resolved_type == 'data_product':
+            # The same rule as set_publication_scope: every output port needs an
+            # approved / active contract (approval can come after the contract changed)
+            from src.common.output_port_contracts import validate_output_port_contracts
+            from src.common.api_errors import CodedValueError
+            try:
+                validate_output_port_contracts(db_entity, self._db)
+            except CodedValueError as e:
+                return _rule_step_error(e)
         was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = scope
         if scope == 'none':
             # Unpublishing: clear the publication metadata, as unpublish does
             db_entity.published_at = None
             db_entity.published_by = None
-        else:
+        elif not was_published:
+            # Only a real unpublished -> published change is stamped; a scope
+            # change keeps who published it and when
             db_entity.published_at = datetime.now(timezone.utc)
             db_entity.published_by = context.user_email
         self._db.add(db_entity)
@@ -2493,12 +2546,23 @@ class EntityActionStepHandler(StepHandler):
         if not db_entity:
             return StepResult(passed=False, error=f"{entity_type} {entity_id} not found")
 
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = 'none'
         db_entity.published_at = None
         db_entity.published_by = None
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: unpublished {entity_type} {entity_id}")
+        failed_trigger = self._fire_publication_trigger(
+            resolved_type, entity_id, db_entity, 'none', was_published, context,
+        )
+        if failed_trigger:
+            # The unpublish stands; say in the step result that its workflows didn't run
+            return StepResult(
+                passed=True,
+                message=f"Unpublished; the {failed_trigger} workflows did not run",
+                data={'trigger_failed': failed_trigger},
+            )
         return StepResult(passed=True, message="Unpublished")
 
 

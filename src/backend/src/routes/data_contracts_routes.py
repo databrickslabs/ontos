@@ -731,7 +731,14 @@ class HandlePublishPayload(BaseModel):
 class HandleDeployPayload(BaseModel):
     decision: str  # 'approve', 'deny'
     message: Optional[str] = None
-    execute_deployment: bool = False  # If true, actually trigger deployment
+    execute_deployment: bool = Field(
+        False,
+        description=(
+            "Ignored. Approving a deployment request records the decision and doesn't "
+            "deploy anything; when true, the response has a 'deployment_not_available' "
+            "warning."
+        ),
+    )
 
 
 @router.post('/data-contracts/{contract_id}/handle-review')
@@ -1208,21 +1215,15 @@ async def handle_deploy_request_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a deployment request decision (approve/deny). Optionally executes deployment."""
+    """Record a deployment request decision (approve/deny).
+
+    Nothing is deployed. ``execute_deployment`` is accepted and ignored with a
+    warning in the response.
+    """
     try:
-        # Get jobs manager for deployment execution
-        jobs_manager = None
-        try:
-            from src.common.dependencies import get_jobs_manager
-            jobs_manager = request.app.state.jobs_manager
-        except Exception:
-            logger.warning("Jobs manager not available")
-        
-        # Business logic now in manager
         result = manager.handle_deploy_response(
             db=db,
             notifications_manager=notifications,
-            jobs_manager=jobs_manager,
             contract_id=contract_id,
             approver_email=current_user.email,
             decision=payload.decision,
@@ -1239,7 +1240,10 @@ async def handle_deploy_request_response(
             feature='data-contracts',
             action=f'DEPLOY_{payload.decision.upper()}',
             success=True,
-            details={'contract_id': contract_id, 'decision': payload.decision, 'deployed': payload.execute_deployment}
+            details={
+                'contract_id': contract_id, 'decision': payload.decision, 'deployed': False,
+                'execute_deployment_ignored': payload.execute_deployment,
+            }
         )
         
         return result

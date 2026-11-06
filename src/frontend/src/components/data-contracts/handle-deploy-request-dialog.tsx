@@ -4,7 +4,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { Database } from 'lucide-react';
@@ -34,26 +33,19 @@ export default function HandleDeployRequestDialog({
   const { post } = useApi();
   const { toast } = useToast();
   const [message, setMessage] = useState('');
-  const [executeDeployment, setExecuteDeployment] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const submitDecision = async (decision: 'approve' | 'deny') => {
     setSubmitting(true);
     try {
-      const body = {
-        decision,
-        message: message || undefined,
-        execute_deployment: decision === 'approve' ? executeDeployment : false,
-      };
+      // Approving records the decision; it doesn't deploy anything
+      const body = { decision, message: message || undefined };
       const res = await post(`/api/data-contracts/${contractId}/handle-deploy`, body);
       if (res.error) throw new Error(res.error);
 
-      let description = decision === 'approve'
+      const description = decision === 'approve'
         ? t('data-contracts:deployRequest.toast.approvedDescription', 'Deployment request has been approved.')
         : t('data-contracts:deployRequest.toast.deniedDescription', 'Deployment request has been denied.');
-      if (decision === 'approve' && executeDeployment) {
-        description += ' ' + t('data-contracts:deployRequest.toast.deploymentInitiated', 'Deployment has been initiated.');
-      }
 
       toast({
         title: decision === 'approve'
@@ -116,23 +108,6 @@ export default function HandleDeployRequestDialog({
             </p>
           </div>
 
-          <div className="flex items-start space-x-3 p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-            <Checkbox
-              id="execute-deploy"
-              checked={executeDeployment}
-              onCheckedChange={(checked) => setExecuteDeployment(checked as boolean)}
-              disabled={submitting}
-            />
-            <div className="flex-1">
-              <label htmlFor="execute-deploy" className="text-sm font-medium cursor-pointer">
-                {t('data-contracts:deployRequest.executeLabel', 'Execute deployment immediately upon approval')}
-              </label>
-              <p className="text-xs text-muted-foreground mt-1">
-                {t('data-contracts:deployRequest.executeHint', 'If checked, the deployment will be triggered automatically when you approve this request.')}
-              </p>
-            </div>
-          </div>
-
           <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-900 dark:text-amber-100">
               <strong>{t('data-contracts:deployRequest.warningLabel', 'Warning:')}</strong> {t('data-contracts:deployRequest.warningText', 'Deployment will create physical assets in Unity Catalog. Ensure you have reviewed the contract schema and configuration.')}
@@ -147,7 +122,7 @@ export default function HandleDeployRequestDialog({
             {t('data-contracts:deployRequest.deny', 'Deny')}
           </Button>
           <Button onClick={() => submitDecision('approve')} disabled={submitting}>
-            {executeDeployment ? t('data-contracts:deployRequest.approveAndDeploy', 'Approve & Deploy') : t('common:actions.approve', 'Approve')}
+            {t('common:actions.approve', 'Approve')}
           </Button>
         </DialogFooter>
       </DialogContent>

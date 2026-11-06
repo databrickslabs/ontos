@@ -310,6 +310,7 @@
       "duplicateStepIds": "Due passaggi hanno lo stesso ID.",
       "stepUnknownReference": "Il passaggio \"{{step}}\" indirizza il ramo di {{branch}} a \"{{target}}\", che non è nel workflow.",
       "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
+      "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
       "branch": {
         "on_pass": "successo",
         "on_fail": "errore"
@@ -486,6 +487,8 @@
     "removedStepsHint": "Questi passaggi sono stati eseguiti in questa esecuzione e poi rimossi dal workflow.",
     "stepErrors": {
       "approval_rejected": "Richiesta rifiutata",
+      "output_port_contracts_missing": "Impossibile pubblicare: le porte di output {{ports}} devono avere contratti di dati assegnati",
+      "output_port_contracts_unapproved": "Impossibile pubblicare: queste porte di output hanno contratti non approvati: {{ports}}. I contratti devono prima essere approvati.",
       "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola",
       "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata"
     },
@@ -527,6 +530,7 @@
     "policyLabel": "Criterio: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nessun criterio selezionato",
+    "policyHint": "Suggerito: {{name}}",
     "reviewerLabel": "Revisore:",
     "notSet": "Non impostato",
     "connectionLabel": "Connessione: {{name}}",

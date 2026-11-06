@@ -5,7 +5,9 @@
  *
  * The backend's recipient / approver resolver accepts a single
  * comma-separated string where each segment may be a role/literal
- * token, a user email, or a group name. ``joinRoleAndPrincipals``
+ * token, a user email, or a group (``group:<name>``; a bare group name
+ * from before the prefix still resolves after the role tokens, so a
+ * group called ``reviewer`` needs the prefix). ``joinRoleAndPrincipals``
  * produces that wire string; ``splitRoleAndPrincipals`` is its
  * inverse so the designer can hydrate the form from a persisted
  * config value.
@@ -14,6 +16,8 @@
  * legacy aliases) are kept on the left side of the comma; anything
  * else on the right is treated as a principal pick.
  */
+
+import type { Principal } from '@/types/directory';
 
 /**
  * Tokens we recognise as "role-shaped" rather than principal picks.
@@ -33,6 +37,18 @@ const KNOWN_ROLE_LITERALS = new Set([
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const normalizeRoleName = (s: string) => s.toLowerCase().replace(/[\s_]/g, '');
+
+/** Prefix the resolver reads as "this is a group", never a role token. */
+export const GROUP_PRINCIPAL_PREFIX = 'group:';
+
+/**
+ * Value the Workflow Designer's PrincipalPicker stores for a pick: users by
+ * their id (email / UPN), groups with ``group:`` so a group named like a
+ * role token (``reviewer``, ``admins``) stays that group.
+ */
+export function workflowPrincipalValue(p: Principal): string {
+  return p.type === 'group' ? `${GROUP_PRINCIPAL_PREFIX}${p.id}` : p.id;
+}
 
 export interface NamedRole {
   id: string;

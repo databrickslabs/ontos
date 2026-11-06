@@ -310,6 +310,7 @@
       "duplicateStepIds": "Deux étapes ont le même ID.",
       "stepUnknownReference": "L'étape « {{step}} » dirige sa branche {{branch}} vers « {{target}} », qui n'est pas dans le workflow.",
       "stepConfigMissing": "Il manque des paramètres obligatoires à l'étape « {{step}} » : {{fields}}.",
+      "policyCheckPolicyMissing": "L'étape \"{{step}}\" nécessite une politique de conformité existante. Sélectionnez-en une dans les paramètres de l'étape.",
       "branch": {
         "on_pass": "de réussite",
         "on_fail": "d'échec"
@@ -486,6 +487,8 @@
     "removedStepsHint": "Ces étapes ont été exécutées dans cette exécution, puis supprimées du workflow.",
     "stepErrors": {
       "approval_rejected": "Demande refusée",
+      "output_port_contracts_missing": "Publication impossible : les ports de sortie {{ports}} doivent avoir des contrats de données assignés",
+      "output_port_contracts_unapproved": "Publication impossible : ces ports de sortie ont des contrats non approuvés : {{ports}}. Les contrats doivent d'abord être approuvés.",
       "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
       "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée"
     },
@@ -527,6 +530,7 @@
     "policyLabel": "Politique : {{name}}",
     "idLabel": "ID : {{id}}",
     "noPolicySelected": "Aucune politique sélectionnée",
+    "policyHint": "Suggérée : {{name}}",
     "reviewerLabel": "Réviseur :",
     "notSet": "Non défini",
     "connectionLabel": "Connexion : {{name}}",

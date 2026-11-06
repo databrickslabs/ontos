@@ -310,6 +310,7 @@
       "duplicateStepIds": "Twee stappen hebben dezelfde ID.",
       "stepUnknownReference": "Stap \"{{step}}\" laat zijn {{branch}}-tak wijzen naar \"{{target}}\", die niet in de workflow staat.",
       "stepConfigMissing": "Stap \"{{step}}\" mist verplichte instellingen: {{fields}}.",
+      "policyCheckPolicyMissing": "Stap \"{{step}}\" heeft een bestaand compliancebeleid nodig. Selecteer er een in de instellingen van de stap.",
       "branch": {
         "on_pass": "succes",
         "on_fail": "fout"
@@ -486,6 +487,8 @@
     "removedStepsHint": "Deze stappen zijn in deze uitvoering uitgevoerd en later uit de workflow verwijderd.",
     "stepErrors": {
       "approval_rejected": "Verzoek afgewezen",
+      "output_port_contracts_missing": "Publiceren niet mogelijk: de uitvoerpoorten {{ports}} moeten datacontracten toegewezen hebben",
+      "output_port_contracts_unapproved": "Publiceren niet mogelijk: deze uitvoerpoorten hebben niet-goedgekeurde contracten: {{ports}}. De contracten moeten eerst worden goedgekeurd.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
       "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd"
     },
@@ -527,6 +530,7 @@
     "policyLabel": "Beleid: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Geen beleid geselecteerd",
+    "policyHint": "Suggestie: {{name}}",
     "reviewerLabel": "Beoordelaar:",
     "notSet": "Niet ingesteld",
     "connectionLabel": "Verbinding: {{name}}",

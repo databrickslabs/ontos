@@ -310,6 +310,7 @@
       "duplicateStepIds": "Two steps have the same ID.",
       "stepUnknownReference": "Step \"{{step}}\" points its {{branch}} branch at \"{{target}}\", which is not in the workflow.",
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
+      "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
       "branch": {
         "on_pass": "pass",
         "on_fail": "fail"
@@ -486,6 +487,8 @@
     "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
     "stepErrors": {
       "approval_rejected": "Request denied",
+      "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
+      "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
       "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated"
     },
@@ -527,6 +530,7 @@
     "policyLabel": "Policy: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "No policy selected",
+    "policyHint": "Suggested: {{name}}",
     "reviewerLabel": "Reviewer:",
     "notSet": "Not set",
     "connectionLabel": "Connection: {{name}}",

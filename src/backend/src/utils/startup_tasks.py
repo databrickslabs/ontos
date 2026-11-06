@@ -71,6 +71,7 @@ from src.connectors.databricks import DatabricksConnector
 from src.connectors.snowflake import SnowflakeConnector
 from src.connectors.kafka import KafkaConnector
 from src.connectors.powerbi import PowerBIConnector
+from src.connectors.tableau import TableauConnector
 from src.connectors.bigquery import BigQueryConnector
 
 logger = get_logger(__name__)
@@ -423,7 +424,8 @@ def initialize_managers(app: FastAPI):
             registry.register_class("snowflake", SnowflakeConnector)
             registry.register_class("kafka", KafkaConnector)
             registry.register_class("powerbi", PowerBIConnector)
-            logger.info("Registered connectors: bigquery, snowflake, kafka, powerbi")
+            registry.register_class("tableau", TableauConnector)
+            logger.info("Registered connectors: bigquery, snowflake, kafka, powerbi, tableau")
             
             logger.info(f"Connector registry initialized with {len(registry.list_registered())} connectors")
         except Exception as e:

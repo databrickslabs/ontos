@@ -777,7 +777,8 @@
       "contractAssignment": "契約の割り当て",
       "accessAndPrivacy": "アクセスとプライバシー",
       "containsPii": "PII を含む",
-      "autoApprove": "自動承認"
+      "autoApprove": "自動承認",
+      "dashboard": "ダッシュボード"
     },
     "placeholders": {
       "name": "例: 日次チャーン率",
@@ -785,7 +786,8 @@
       "description": "このデリバラブルが提供する内容を記述してください",
       "type": "例: table, api, stream",
       "status": "例: active, draft",
-      "chooseContract": "契約を選択..."
+      "chooseContract": "契約を選択...",
+      "noDashboard": "ダッシュボードが選択されていません"
     },
     "contractOptions": {
       "noContract": "契約なし",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "デリバラブルの保存に失敗しました"
     },
     "actions": {
-      "addDeliverable": "デリバラブルを追加"
+      "addDeliverable": "デリバラブルを追加",
+      "chooseDashboard": "ダッシュボードを選択"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "配信方法を読み込めませんでした"
+    },
+    "dashboardPicker": {
+      "title": "ダッシュボードを選択",
+      "description": "この成果物が提供するダッシュボードを選択してください。"
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "製品を作成しました",
       "productCreatedDesc": "データ製品 \"{{productName}}\" が契約から正常に作成されました。"
-    }
+    },
+    "includeDashboardsLabel": "この契約に基づくダッシュボードを成果物として追加",
+    "includeDashboardsHint": "契約のセマンティックモデルを参照するダッシュボードです。製品の説明はそれらから入力されます。"
   },
   "createVersion": {
     "title": "新しいバージョンを作成",

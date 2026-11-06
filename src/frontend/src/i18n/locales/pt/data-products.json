@@ -777,7 +777,8 @@
       "contractAssignment": "Atribuição de contrato",
       "accessAndPrivacy": "Acesso e privacidade",
       "containsPii": "Contém PII",
-      "autoApprove": "Aprovação automática"
+      "autoApprove": "Aprovação automática",
+      "dashboard": "Painel"
     },
     "placeholders": {
       "name": "ex.: Taxa diária de churn",
@@ -785,7 +786,8 @@
       "description": "Descreva o que este entregável fornece",
       "type": "ex.: tabela, api, stream",
       "status": "ex.: ativo, rascunho",
-      "chooseContract": "Escolha um contrato..."
+      "chooseContract": "Escolha um contrato...",
+      "noDashboard": "Nenhum painel selecionado"
     },
     "contractOptions": {
       "noContract": "Sem contrato",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "Falha ao salvar entregável"
     },
     "actions": {
-      "addDeliverable": "Adicionar entregável"
+      "addDeliverable": "Adicionar entregável",
+      "chooseDashboard": "Escolher painel"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "Não foi possível carregar os métodos de entrega"
+    },
+    "dashboardPicker": {
+      "title": "Escolher um painel",
+      "description": "Escolha o painel que este entregável fornece."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Produto criado",
       "productCreatedDesc": "Produto de dados \"{{productName}}\" criado com sucesso a partir do contrato."
-    }
+    },
+    "includeDashboardsLabel": "Adicionar como entregáveis os painéis criados sobre este contrato",
+    "includeDashboardsHint": "Eles leem o modelo semântico do contrato. A descrição do produto é preenchida a partir deles."
   },
   "createVersion": {
     "title": "Criar nova versão",

@@ -771,11 +771,37 @@
       "testError": "Erreur du test de connexion",
       "deleteSuccess": "Connexion supprimée",
       "testSuccessProject": "Projet : {{project}}",
-      "deleteFailed": "Échec de la suppression"
+      "deleteFailed": "Échec de la suppression",
+      "testSuccessWithWarnings": "Connecté, avec des avertissements"
     },
     "badges": {
       "system": "Système",
       "default": "Par défaut"
+    },
+    "tableau": {
+      "configTitle": "Configuration Tableau",
+      "serverUrl": "URL du serveur",
+      "serverUrlHelp": "URL du pod Tableau Cloud (comme dans le navigateur) ou URL de Tableau Server.",
+      "site": "Site",
+      "siteHelp": "URL de contenu du site, dans la barre d'adresse (…/site/<site>/…). Vide pour le site par défaut de Tableau Server.",
+      "authSectionTitle": "Authentification",
+      "authSectionHelp": "Enregistrez la valeur secrète de la Connected App (ou le secret du PAT) comme Databricks Secret, puis indiquez le scope et la clé ci-dessous. Utilisez un compte administrateur du site, sinon Tableau masque les noms de tables et de colonnes du contenu qui ne lui appartient pas.",
+      "authMode": "Méthode d'authentification",
+      "authConnectedApp": "Connected App (recommandé)",
+      "authConnectedAppHelp": "Connected App en confiance directe. Ontos signe un jeton de courte durée pour l'utilisateur ci-dessous ; les sessions peuvent être simultanées.",
+      "authPat": "Jeton d'accès personnel",
+      "authPatHelp": "Pour le développement. Une nouvelle connexion avec le même jeton met fin à sa session précédente : utilisez un jeton dédié.",
+      "patName": "Nom du jeton",
+      "clientId": "ID client",
+      "secretId": "ID du secret",
+      "username": "Nom d'utilisateur",
+      "usernameHelp": "Utilisateur Tableau sous lequel la Connected App se connecte (e-mail sur Tableau Cloud).",
+      "secretScope": "Scope du secret",
+      "secretKey": "Clé du secret",
+      "caBundlePath": "Chemin du bundle CA",
+      "caBundlePathHelp": "Facultatif. Bundle PEM pour Tableau Server avec une autorité de certification privée.",
+      "defaultCatalog": "Catalogue par défaut",
+      "defaultCatalogHelp": "Facultatif. Catalogue Unity Catalog des tables Databricks que Tableau nomme seulement schéma.table."
     }
   },
   "schemaImporter": {

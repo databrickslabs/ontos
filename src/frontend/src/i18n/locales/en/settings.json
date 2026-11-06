@@ -789,11 +789,37 @@
       "testError": "Connection test error",
       "deleteSuccess": "Connection deleted",
       "testSuccessProject": "Project: {{project}}",
-      "deleteFailed": "Delete failed"
+      "deleteFailed": "Delete failed",
+      "testSuccessWithWarnings": "Connected, with warnings"
     },
     "badges": {
       "system": "System",
       "default": "Default"
+    },
+    "tableau": {
+      "configTitle": "Tableau Configuration",
+      "serverUrl": "Server URL",
+      "serverUrlHelp": "Tableau Cloud pod URL (as in your browser) or Tableau Server URL.",
+      "site": "Site",
+      "siteHelp": "Site content URL from the address bar (…/site/<site>/…). Empty for the default site on Tableau Server.",
+      "authSectionTitle": "Authentication",
+      "authSectionHelp": "Store the Connected App secret value (or the PAT secret) as a Databricks Secret, then reference the scope and key below. Use a site administrator account, otherwise Tableau hides table and column names of content the account does not own.",
+      "authMode": "Authentication method",
+      "authConnectedApp": "Connected App (recommended)",
+      "authConnectedAppHelp": "Direct trust Connected App. Ontos signs a short-lived token for the user below; sessions may run concurrently.",
+      "authPat": "Personal Access Token",
+      "authPatHelp": "For development. Signing in again with the same token ends its previous session, so use a dedicated token.",
+      "patName": "Token name",
+      "clientId": "Client ID",
+      "secretId": "Secret ID",
+      "username": "Username",
+      "usernameHelp": "Tableau user the Connected App signs in as (e-mail on Tableau Cloud).",
+      "secretScope": "Secret Scope",
+      "secretKey": "Secret Key",
+      "caBundlePath": "CA bundle path",
+      "caBundlePathHelp": "Optional. PEM bundle for Tableau Server with a private certificate authority.",
+      "defaultCatalog": "Default catalog",
+      "defaultCatalogHelp": "Optional. Unity Catalog catalog for Databricks tables Tableau names as schema.table only."
     }
   },
   "schemaImporter": {

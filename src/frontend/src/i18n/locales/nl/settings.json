@@ -789,11 +789,37 @@
       "testError": "Fout bij verbindingstest",
       "deleteSuccess": "Verbinding verwijderd",
       "testSuccessProject": "Project: {{project}}",
-      "deleteFailed": "Verwijderen mislukt"
+      "deleteFailed": "Verwijderen mislukt",
+      "testSuccessWithWarnings": "Verbonden, met waarschuwingen"
     },
     "badges": {
       "system": "Systeem",
       "default": "Standaard"
+    },
+    "tableau": {
+      "configTitle": "Tableau-configuratie",
+      "serverUrl": "Server-URL",
+      "serverUrlHelp": "Pod-URL van Tableau Cloud (zoals in je browser) of de URL van Tableau Server.",
+      "site": "Site",
+      "siteHelp": "Content-URL van de site uit de adresbalk (…/site/<site>/…). Leeg voor de standaardsite van Tableau Server.",
+      "authSectionTitle": "Authenticatie",
+      "authSectionHelp": "Sla de geheime waarde van de Connected App (of het PAT-geheim) op als Databricks Secret en verwijs hieronder naar scope en sleutel. Gebruik een site-beheerdersaccount, anders verbergt Tableau tabel- en kolomnamen van content die het account niet bezit.",
+      "authMode": "Authenticatiemethode",
+      "authConnectedApp": "Connected App (aanbevolen)",
+      "authConnectedAppHelp": "Connected App met direct trust. Ontos ondertekent een kortlevend token voor de gebruiker hieronder; sessies kunnen tegelijk lopen.",
+      "authPat": "Persoonlijk toegangstoken",
+      "authPatHelp": "Voor ontwikkeling. Opnieuw aanmelden met hetzelfde token beëindigt de vorige sessie, dus gebruik een apart token.",
+      "patName": "Tokennaam",
+      "clientId": "Client-ID",
+      "secretId": "Secret-ID",
+      "username": "Gebruikersnaam",
+      "usernameHelp": "Tableau-gebruiker waarmee de Connected App zich aanmeldt (e-mailadres bij Tableau Cloud).",
+      "secretScope": "Secret-scope",
+      "secretKey": "Secret-sleutel",
+      "caBundlePath": "Pad naar CA-bundel",
+      "caBundlePathHelp": "Optioneel. PEM-bundel voor Tableau Server met een private certificaatautoriteit.",
+      "defaultCatalog": "Standaardcatalogus",
+      "defaultCatalogHelp": "Optioneel. Unity Catalog-catalogus voor Databricks-tabellen die Tableau alleen als schema.tabel benoemt."
     }
   },
   "schemaImporter": {

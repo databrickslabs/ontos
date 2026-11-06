@@ -777,7 +777,8 @@
       "contractAssignment": "Contract Assignment",
       "accessAndPrivacy": "Access & Privacy",
       "containsPii": "Contains PII",
-      "autoApprove": "Auto Approve"
+      "autoApprove": "Auto Approve",
+      "dashboard": "Dashboard"
     },
     "placeholders": {
       "name": "e.g., Daily Churn Rate",
@@ -785,7 +786,8 @@
       "description": "Describe what this deliverable provides",
       "type": "e.g., table, api, stream",
       "status": "e.g., active, draft",
-      "chooseContract": "Choose a contract..."
+      "chooseContract": "Choose a contract...",
+      "noDashboard": "No dashboard selected"
     },
     "contractOptions": {
       "noContract": "No Contract",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "Failed to save deliverable"
     },
     "actions": {
-      "addDeliverable": "Add Deliverable"
+      "addDeliverable": "Add Deliverable",
+      "chooseDashboard": "Choose dashboard"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "Could not load delivery methods"
+    },
+    "dashboardPicker": {
+      "title": "Choose a dashboard",
+      "description": "Pick the dashboard this deliverable provides."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Product Created",
       "productCreatedDesc": "Data Product \"{{productName}}\" created successfully from contract."
-    }
+    },
+    "includeDashboardsLabel": "Add the dashboards built on this contract as deliverables",
+    "includeDashboardsHint": "They read the contract's semantic model. The product description is filled in from them."
   },
   "createVersion": {
     "title": "Create New Version",

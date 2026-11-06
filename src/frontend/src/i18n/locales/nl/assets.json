@@ -226,5 +226,30 @@
       "system": "Systemen",
       "custom": "Aangepast"
     }
+  },
+  "snapshot": {
+    "title": "Visuele preview",
+    "rlsNotice": "Een momentopname van het dashboard zoals het serviceaccount van Ontos het ziet. Niet live; mensen met beveiliging op rijniveau kunnen andere cijfers zien.",
+    "imageAlt": "Dashboard-momentopname",
+    "none": "Nog geen momentopname.",
+    "thumbnailNotice": "Miniatuur: de laatste weergave is mislukt, dus deze afbeelding kan verouderd zijn.",
+    "risksTitle": "Niet automatisch vastgelegd: deze berekeningen filteren op de aangemelde gebruiker",
+    "capturedAt": "Vastgelegd",
+    "openLive": "Live dashboard openen",
+    "refresh": "Momentopname vernieuwen",
+    "refreshFailed": "Kon geen momentopname vastleggen",
+    "optOut": "Nooit momentopnamen vastleggen",
+    "status": {
+      "ok": "Actueel",
+      "auth_expired": "Inloggegevens verlopen",
+      "not_connected": "Gegevensbron niet verbonden",
+      "forbidden": "Geen toestemming",
+      "empty": "Lege afbeelding",
+      "error": "Weergave mislukt",
+      "opted_out": "Momentopnamen uit",
+      "skipped_user_filters": "Gebruikersfilters",
+      "unsupported": "Niet ondersteund",
+      "none": "Geen momentopname"
+    }
   }
 }

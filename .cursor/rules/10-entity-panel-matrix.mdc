@@ -152,6 +152,13 @@ Legend: **Y** = show | **—** = hide | **Σ** = summary only
 - **Dataset**: An output-port implementation. Treated like a first-class data asset
   with most panels enabled.
 - **Dashboard / ML Model**: Consumable outputs. Ratings and costs apply.
+- **Folder / Report / Semantic Model** (BI imports, e.g. Tableau projects,
+  workbooks, published data sources): Folder follows the **Schema** column
+  (structural container). Report and Semantic Model follow the **Dashboard**
+  column, plus Lineage = Y: they `consumesFrom` warehouse tables, and Semantic
+  Model fields (Columns) are `derivedFrom` warehouse columns. Dashboards imported
+  from a BI tool carry their snapshot and preview note in the Metadata panel;
+  products inherit them through a `dashboard` output port.
 - **Notebook / API Endpoint**: Development artifacts. Comments and tags yes,
   ratings and costs generally no (cost is tracked at the product level).
 - **Semantic Links (Tier 2)**: All Tier 2 asset-backed entities are addressable

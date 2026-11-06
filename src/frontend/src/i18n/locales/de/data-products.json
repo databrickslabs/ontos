@@ -777,7 +777,8 @@
       "contractAssignment": "Vertragszuweisung",
       "accessAndPrivacy": "Zugriff & Datenschutz",
       "containsPii": "Enthält PII",
-      "autoApprove": "Automatisch genehmigen"
+      "autoApprove": "Automatisch genehmigen",
+      "dashboard": "Dashboard"
     },
     "placeholders": {
       "name": "z. B. Tägliche Abwanderungsrate",
@@ -785,7 +786,8 @@
       "description": "Beschreiben Sie, was dieses Deliverable bereitstellt",
       "type": "z. B. table, api, stream",
       "status": "z. B. active, draft",
-      "chooseContract": "Vertrag auswählen..."
+      "chooseContract": "Vertrag auswählen...",
+      "noDashboard": "Kein Dashboard ausgewählt"
     },
     "contractOptions": {
       "noContract": "Kein Vertrag",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "Deliverable konnte nicht gespeichert werden"
     },
     "actions": {
-      "addDeliverable": "Deliverable hinzufügen"
+      "addDeliverable": "Deliverable hinzufügen",
+      "chooseDashboard": "Dashboard auswählen"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "Bereitstellungsmethoden konnten nicht geladen werden"
+    },
+    "dashboardPicker": {
+      "title": "Dashboard auswählen",
+      "description": "Wählen Sie das Dashboard, das dieses Deliverable bereitstellt."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Produkt erstellt",
       "productCreatedDesc": "Datenprodukt \"{{productName}}\" erfolgreich aus dem Vertrag erstellt."
-    }
+    },
+    "includeDashboardsLabel": "Die auf diesem Vertrag aufgebauten Dashboards als Deliverables hinzufügen",
+    "includeDashboardsHint": "Sie lesen das semantische Modell des Vertrags. Die Produktbeschreibung wird daraus vorausgefüllt."
   },
   "createVersion": {
     "title": "Neue Version erstellen",

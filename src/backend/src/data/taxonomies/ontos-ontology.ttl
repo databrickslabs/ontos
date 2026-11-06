@@ -456,6 +456,42 @@ ontos:Dashboard a rdfs:Class ;
     ontos:uiDisplayOrder 1 ;
     ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
 
+ontos:Report a rdfs:Class ;
+    ontos:modelLayer "physical" ;
+    rdfs:subClassOf ontos:Asset ;
+    rdfs:label "Report"@en ;
+    rdfs:comment "BI workbook or report that groups dashboards and sheets"@en ;
+    skos:example "Tableau workbook, Power BI report" ;
+    ontos:modelTier "asset" ;
+    ontos:uiIcon "BookOpen" ;
+    ontos:uiCategory "analytics" ;
+    ontos:uiDisplayOrder 2 ;
+    ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
+
+ontos:SemanticModel a rdfs:Class ;
+    ontos:modelLayer "physical" ;
+    rdfs:subClassOf ontos:Asset ;
+    rdfs:label "Semantic Model"@en ;
+    rdfs:comment "BI semantic layer: a published data source with fields, calculations and hierarchies"@en ;
+    skos:example "Tableau published data source, Power BI semantic model" ;
+    ontos:modelTier "asset" ;
+    ontos:uiIcon "Shapes" ;
+    ontos:uiCategory "analytics" ;
+    ontos:uiDisplayOrder 3 ;
+    ontos:uiPersonaVisibility "admin,steward,producer,consumer" .
+
+ontos:Folder a rdfs:Class ;
+    ontos:modelLayer "physical" ;
+    rdfs:subClassOf ontos:Asset ;
+    rdfs:label "Folder"@en ;
+    rdfs:comment "Container that organizes content in a source system"@en ;
+    skos:example "Tableau project, Power BI workspace" ;
+    ontos:modelTier "asset" ;
+    ontos:uiIcon "FolderOpen" ;
+    ontos:uiCategory "analytics" ;
+    ontos:uiDisplayOrder 4 ;
+    ontos:uiPersonaVisibility "admin,steward,producer" .
+
 ontos:Notebook a rdfs:Class ;
     ontos:modelLayer "physical" ;
     rdfs:subClassOf ontos:Asset ;
@@ -693,11 +729,22 @@ ontos:hasView a owl:ObjectProperty ;
 
 ontos:hasColumn a owl:ObjectProperty ;
     rdfs:label "has column"@en ;
-    rdfs:comment "Links a table or view to its columns"@en ;
-    rdfs:domain ontos:Table , ontos:View ;
+    rdfs:comment "Links a table, view or semantic model to its columns (fields)"@en ;
+    rdfs:domain ontos:Table , ontos:View , ontos:SemanticModel ;
     rdfs:range ontos:Column ;
     ontos:uiLabel "Has Columns"@en ;
     ontos:inverseLabel "Table"@en ;
+    ontos:cardinality "0..*" ;
+    ontos:uiDisplayContext "tab" ;
+    ontos:isHierarchical true .
+
+ontos:hasPart a owl:ObjectProperty ;
+    rdfs:label "has part"@en ;
+    rdfs:comment "Generic containment: a system, folder or report contains the asset"@en ;
+    rdfs:domain ontos:System , ontos:Folder , ontos:Report ;
+    rdfs:range ontos:Asset ;
+    ontos:uiLabel "Contains"@en ;
+    ontos:inverseLabel "Part of"@en ;
     ontos:cardinality "0..*" ;
     ontos:uiDisplayContext "tab" ;
     ontos:isHierarchical true .
@@ -987,10 +1034,21 @@ ontos:consumesFrom a owl:ObjectProperty ;
     rdfs:label "consumes from"@en ;
     rdfs:comment "Indicates an asset reads or depends on another asset"@en ;
     rdfs:domain ontos:Dataset , ontos:Table , ontos:View , ontos:Dashboard ,
+               ontos:Report , ontos:SemanticModel ,
                ontos:Notebook , ontos:MLModel , ontos:APIEndpoint , ontos:Stream ;
     rdfs:range ontos:Asset ;
     ontos:uiLabel "Consumes From"@en ;
     ontos:inverseLabel "Consumed By"@en ;
+    ontos:cardinality "0..*" ;
+    ontos:uiDisplayContext "tab" .
+
+ontos:derivedFrom a owl:ObjectProperty ;
+    rdfs:label "derived from"@en ;
+    rdfs:comment "A column (e.g. a BI field) is computed from or maps to another column"@en ;
+    rdfs:domain ontos:Column ;
+    rdfs:range ontos:Column ;
+    ontos:uiLabel "Derived From"@en ;
+    ontos:inverseLabel "Used By"@en ;
     ontos:cardinality "0..*" ;
     ontos:uiDisplayContext "tab" .
 

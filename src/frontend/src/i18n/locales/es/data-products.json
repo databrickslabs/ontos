@@ -777,7 +777,8 @@
       "contractAssignment": "Asignación de contrato",
       "accessAndPrivacy": "Acceso y privacidad",
       "containsPii": "Contiene PII",
-      "autoApprove": "Aprobación automática"
+      "autoApprove": "Aprobación automática",
+      "dashboard": "Panel"
     },
     "placeholders": {
       "name": "p. ej., Tasa de abandono diaria",
@@ -785,7 +786,8 @@
       "description": "Describa qué proporciona este entregable",
       "type": "p. ej., table, api, stream",
       "status": "p. ej., active, draft",
-      "chooseContract": "Elija un contrato..."
+      "chooseContract": "Elija un contrato...",
+      "noDashboard": "Ningún panel seleccionado"
     },
     "contractOptions": {
       "noContract": "Sin contrato",
@@ -815,10 +817,15 @@
       "failedToSaveDeliverable": "No se pudo guardar el entregable"
     },
     "actions": {
-      "addDeliverable": "Agregar entregable"
+      "addDeliverable": "Agregar entregable",
+      "chooseDashboard": "Elegir panel"
     },
     "warnings": {
       "couldNotLoadDeliveryMethods": "No se pudieron cargar los métodos de entrega"
+    },
+    "dashboardPicker": {
+      "title": "Elegir un panel",
+      "description": "Elija el panel que proporciona este entregable."
     }
   },
   "inputPortForm": {
@@ -1079,7 +1086,9 @@
     "messages": {
       "productCreated": "Producto creado",
       "productCreatedDesc": "Producto de datos \"{{productName}}\" creado correctamente a partir del contrato."
-    }
+    },
+    "includeDashboardsLabel": "Añadir como entregables los paneles basados en este contrato",
+    "includeDashboardsHint": "Leen el modelo semántico del contrato. La descripción del producto se rellena a partir de ellos."
   },
   "createVersion": {
     "title": "Crear nueva versión",

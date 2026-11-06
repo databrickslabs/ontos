@@ -1,10 +1,12 @@
 """
 Shared test helper functions and utilities.
 """
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 from unittest.mock import Mock, MagicMock
 from datetime import datetime
 from databricks.sdk import WorkspaceClient
+from sqlalchemy import event
 
 
 def create_mock_table(
@@ -301,3 +303,31 @@ def compare_dicts_ignore_keys(
     filtered_dict2 = {k: v for k, v in dict2.items() if k not in ignore_keys}
 
     return filtered_dict1 == filtered_dict2
+
+
+@contextmanager
+def postgres_aborts(db):
+    """Make the test connection behave like Postgres after a failed statement:
+    every later statement fails until a ``ROLLBACK`` (to a savepoint)."""
+    connection = db.connection()
+    state = {'running': False, 'aborted': False}
+
+    def _before(conn, cursor, statement, *args):
+        if state['running']:  # the previous statement raised
+            state['aborted'] = True
+        if state['aborted']:
+            if not statement.lstrip().upper().startswith('ROLLBACK'):
+                raise RuntimeError('current transaction is aborted')
+            state['aborted'] = False
+        state['running'] = True
+
+    def _after(*args):
+        state['running'] = False
+
+    event.listen(connection, 'before_cursor_execute', _before)
+    event.listen(connection, 'after_cursor_execute', _after)
+    try:
+        yield
+    finally:
+        event.remove(connection, 'before_cursor_execute', _before)
+        event.remove(connection, 'after_cursor_execute', _after)

@@ -551,13 +551,18 @@ class ImportLinks:
                 setattr(entity, column, target)
                 db.flush()
                 # The entities are committed: a failed entry doesn't fail the
-                # import, as for the other change log entries of an import
+                # import, as for the other change log entries of an import. The
+                # savepoint keeps a failed write from aborting the transaction
+                # (Postgres), so the next links and the import's commit work;
+                # the import commits the entries.
                 try:
-                    change_log_manager.log_change_with_details(
-                        db, entity_type=self.entity_type, entity_id=entity_id, action='UPDATE',
-                        username=username,
-                        details={column: target, 'summary': 'Replacement linked by the import'},
-                    )
+                    with db.begin_nested():
+                        change_log_manager.log_change_with_details(
+                            db, entity_type=self.entity_type, entity_id=entity_id,
+                            action='UPDATE', username=username, commit=False,
+                            details={column: target,
+                                     'summary': 'Replacement linked by the import'},
+                        )
                 except Exception as e:
                     logger.warning("Failed to log the replacement link of %s %s: %s",
                                    self.entity_type, entity_id, e)

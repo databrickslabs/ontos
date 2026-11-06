@@ -62,6 +62,15 @@ class DataProductTypesRepository:
     def get_by_key(self, db: Session, key: str) -> DataProductTypeDb | None:
         return db.query(DataProductTypeDb).filter(DataProductTypeDb.key == key).first()
 
+    def get_default(self, db: Session) -> DataProductTypeDb | None:
+        """The active type marked as default, if there is one."""
+        return (
+            db.query(DataProductTypeDb)
+            .filter(DataProductTypeDb.is_default.is_(True), DataProductTypeDb.is_active.is_(True))
+            .order_by(DataProductTypeDb.sort_order, DataProductTypeDb.key)
+            .first()
+        )
+
     def create(
         self,
         db: Session,

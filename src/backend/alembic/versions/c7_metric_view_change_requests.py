@@ -5,7 +5,7 @@ was written against, its review (status, decision) and its delivery (#1124
 phase 3).
 
 Revision ID: c7_metric_view_change_requests
-Revises: c6_metric_view_baselines
+Revises: b9_lifecycle_deprecation_fields
 Create Date: 2026-11-01 15:00:00.000000
 
 """
@@ -17,7 +17,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = 'c7_metric_view_change_requests'
-down_revision: Union[str, None] = 'c6_metric_view_baselines'
+down_revision: Union[str, None] = 'b9_lifecycle_deprecation_fields'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

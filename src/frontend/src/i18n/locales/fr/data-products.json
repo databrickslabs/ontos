@@ -1182,5 +1182,12 @@
     "colSubscriber": "Abonné",
     "colSubscribed": "Abonné",
     "colReason": "Raison"
+  },
+  "dataProductType": {
+    "source-aligned": "Aligné sur la source",
+    "aggregate": "Agrégat",
+    "consumer-aligned": "Aligné sur le consommateur",
+    "source": "Source",
+    "sink": "Destination"
   }
 }

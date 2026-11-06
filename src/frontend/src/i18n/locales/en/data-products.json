@@ -1182,5 +1182,12 @@
     "colSubscriber": "Subscriber",
     "colSubscribed": "Subscribed",
     "colReason": "Reason"
+  },
+  "dataProductType": {
+    "source-aligned": "Source-Aligned",
+    "aggregate": "Aggregate",
+    "consumer-aligned": "Consumer-Aligned",
+    "source": "Source",
+    "sink": "Sink"
   }
 }

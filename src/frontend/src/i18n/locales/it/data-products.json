@@ -1182,5 +1182,12 @@
     "colSubscriber": "Sottoscrittore",
     "colSubscribed": "Sottoscritto",
     "colReason": "Motivo"
+  },
+  "dataProductType": {
+    "source-aligned": "Allineato alla sorgente",
+    "aggregate": "Aggregato",
+    "consumer-aligned": "Allineato al consumatore",
+    "source": "Sorgente",
+    "sink": "Destinazione"
   }
 }

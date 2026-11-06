@@ -1182,5 +1182,12 @@
     "colSubscriber": "Abonnee",
     "colSubscribed": "Geabonneerd",
     "colReason": "Reden"
+  },
+  "dataProductType": {
+    "source-aligned": "Brongericht",
+    "aggregate": "Aggregaat",
+    "consumer-aligned": "Consumentgericht",
+    "source": "Bron",
+    "sink": "Bestemming"
   }
 }

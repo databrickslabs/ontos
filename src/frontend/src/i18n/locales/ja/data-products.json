@@ -1182,5 +1182,12 @@
     "colSubscriber": "購読者",
     "colSubscribed": "購読日",
     "colReason": "理由"
+  },
+  "dataProductType": {
+    "source-aligned": "ソース指向",
+    "aggregate": "集約",
+    "consumer-aligned": "コンシューマー指向",
+    "source": "ソース",
+    "sink": "シンク"
   }
 }

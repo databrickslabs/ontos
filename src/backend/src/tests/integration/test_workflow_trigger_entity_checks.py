@@ -209,3 +209,27 @@ def test_a_known_type_sent_as_unknown_is_refused_on_create(client, db_session):
         'trigger_entity_type_unknown',
     ]
     assert db_session.query(ProcessWorkflowDb).filter_by(name='Smuggled type').count() == 0
+
+
+def test_get_and_list_flag_stored_entity_types_that_match_no_event(client, db_session):
+    unknown_id = _stored(db_session, ['dataset'])
+    pair_id = _stored(db_session, ['data_product', 'data_contract'])
+    fine_id = _stored(db_session, ['data_contract'])
+
+    def codes(body):
+        return [(w['code'], w['params']) for w in body['trigger_warnings']]
+
+    assert codes(client.get(f'/api/workflows/{unknown_id}').json()) == [
+        ('stored_entity_type_unknown', {'triggerType': 'before_update', 'entityType': 'dataset'}),
+    ]
+    assert codes(client.get(f'/api/workflows/{pair_id}').json()) == [
+        ('stored_entity_type_unsupported',
+         {'triggerType': 'before_update', 'entityType': 'data_product'}),
+    ]
+    listed = client.get('/api/workflows')
+    assert listed.status_code == 200, listed.text
+    by_id = {wf['id']: wf for wf in listed.json()['workflows']}
+    assert codes(by_id[fine_id]) == []
+    assert [code for code, _ in codes(by_id[pair_id])] == ['stored_entity_type_unsupported']
+    # Flagged only: the stored trigger is unchanged
+    assert _stored_types(db_session, pair_id) == ['data_product', 'data_contract']

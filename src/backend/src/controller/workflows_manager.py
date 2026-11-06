@@ -30,6 +30,7 @@ from src.models.process_workflows import (
     WorkflowType,
     StepPosition,
     CodedMessage,
+    WorkflowValidationIssue,
     WorkflowValidationResult,
     StepTypeSchema,
     TemplateVarDescriptor,
@@ -59,6 +60,7 @@ _DEFAULT_ENTITY_TYPE_ADDITIONS = (
 
 # (workflow, unknown entity types) already warned about by ``_split_entity_types``
 _WARNED_UNKNOWN_ENTITY_TYPES: set = set()
+_ENTITY_TYPE_VALUES = frozenset(et.value for et in EntityType)
 
 # Trigger types no event fires: manual runs go by workflow id
 # (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
@@ -728,6 +730,64 @@ class WorkflowsManager:
         if stored is not None:
             errors.extend(self.trigger_widening_errors(stored, new))
         return errors
+
+    def stored_trigger_warnings(self, trigger: WorkflowTrigger) -> List[CodedMessage]:
+        """Entity types of a stored trigger that match no event; the workflow is kept as is.
+
+        Each unknown value (``stored_entity_type_unknown``), and, with the trigger/entity
+        map, each known type its trigger type never fires for
+        (``stored_entity_type_unsupported``). Params: ``triggerType``, ``entityType``.
+        """
+        trigger_type = trigger.type.value
+        warnings = [
+            CodedMessage(
+                f"Entity type '{value}' no longer exists: it matches no event",
+                'stored_entity_type_unknown', triggerType=trigger_type, entityType=value,
+            )
+            for value in trigger.unknown_entity_types
+        ]
+        allowed = (self._trigger_entity_types or {}).get(trigger_type) or []
+        if allowed:
+            warnings.extend(
+                CodedMessage(
+                    f"Trigger '{trigger_type}' never fires for entity type '{et.value}'",
+                    'stored_entity_type_unsupported',
+                    triggerType=trigger_type, entityType=et.value,
+                )
+                for et in trigger.entity_types if et.value not in allowed
+            )
+        return warnings
+
+    def log_unmatched_trigger_entity_types(self) -> int:
+        """Warn once per stored workflow whose trigger lists entity types that match no event.
+
+        Run at startup. The log line has the workflow id, name, trigger type and the
+        entity types; the workflows are not changed or deactivated. Returns how many
+        workflows were warned about.
+        """
+        warned = 0
+        for db_workflow in process_workflow_repo.list_all(self._db):
+            # This warning covers the unknown values too: skip the one of reads
+            unknown = [
+                str(v) for v in _json_object(db_workflow.trigger_config).get('entity_types') or []
+                if v not in _ENTITY_TYPE_VALUES
+            ]
+            _WARNED_UNKNOWN_ENTITY_TYPES.add((db_workflow.id, tuple(unknown)))
+            workflow = self._db_to_model(db_workflow)
+            if not workflow.trigger_warnings:
+                continue
+            warned += 1
+            logger.warning(
+                "Workflow %s (%r, %s, trigger %s) lists entity types that match no event: "
+                "unknown %s, not fired for this trigger %s. It is kept as stored.",
+                workflow.id, workflow.name, 'active' if workflow.is_active else 'inactive',
+                workflow.trigger.type.value,
+                [w.params['entityType'] for w in workflow.trigger_warnings
+                 if w.code == 'stored_entity_type_unknown'],
+                [w.params['entityType'] for w in workflow.trigger_warnings
+                 if w.code == 'stored_entity_type_unsupported'],
+            )
+        return warned
 
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""
@@ -1688,5 +1748,9 @@ class WorkflowsManager:
             updated_at=db_workflow.updated_at,
             created_by=db_workflow.created_by,
             updated_by=db_workflow.updated_by,
+            trigger_warnings=[
+                WorkflowValidationIssue(code=w.code, message=str(w), params=w.params)
+                for w in self.stored_trigger_warnings(trigger)
+            ],
         )
 

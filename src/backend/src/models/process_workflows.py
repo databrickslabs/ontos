@@ -675,6 +675,12 @@ class ProcessWorkflow(ProcessWorkflowBase):
     updated_at: Optional[datetime] = None
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
+    # Read only: stored trigger entity types that match no event (an unknown type, a
+    # pair no code fires). The workflow is kept as stored; saves don't send this.
+    trigger_warnings: List['WorkflowValidationIssue'] = Field(
+        default_factory=list,
+        description="Trigger entity types of the stored workflow that match no event",
+    )
 
     class Config:
         from_attributes = True
@@ -905,6 +911,11 @@ class WorkflowValidationIssue(BaseModel):
     code: str
     message: str
     params: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ``ProcessWorkflow.trigger_warnings`` refers to the issue model defined above
+ProcessWorkflow.model_rebuild()
+WorkflowListResponse.model_rebuild()
 
 
 class WorkflowValidationResult(BaseModel):

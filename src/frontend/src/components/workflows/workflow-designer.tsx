@@ -144,6 +144,7 @@ import {
 } from '@/lib/workflow-labels';
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
+import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
@@ -864,6 +865,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [description, setDescription] = useState('');
   const [triggerType, setTriggerType] = useState<TriggerType>('on_create');
   const [entityTypes, setEntityTypes] = useState<EntityType[]>(['table']);
+  // Stored types this version doesn't know: shown apart, the user removes them to save
+  const [unknownEntityTypes, setUnknownEntityTypes] = useState<string[]>([]);
+  // Fallback to the static FE map while the catalog is loading or unavailable
+  const supportedEntityTypes = triggerTypeOptions.find(o => o.value === triggerType)?.entity_types
+    ?? ALL_ENTITY_TYPES.filter(et => isTriggerEntitySupported(triggerType, et));
+  // A trigger stored with only unknown types matched nothing: with them removed, a known type
+  // must be picked, as an empty list would match every entity (the backend refuses it too)
+  const storedUnknownTypes = workflow?.trigger.unknown_entity_types ?? [];
+  const needsKnownType = storedUnknownTypes.length > 0
+    && workflow?.trigger.entity_types.length === 0
+    && unknownEntityTypes.length === 0 && entityTypes.length === 0
+    && supportedEntityTypes.length > 0;
   const [triggerFromStatus, setTriggerFromStatus] = useState('');
   const [triggerToStatus, setTriggerToStatus] = useState('');
   const [triggerOnError, setTriggerOnError] = useState<GateErrorMode>('fail_open');
@@ -1002,12 +1015,17 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     // Compare entity types
     if (entityTypes.length !== originalState.entityTypes.length) return true;
     if (!entityTypes.every(et => originalState.entityTypes.includes(et))) return true;
+    if (unknownEntityTypes.length !== storedUnknownTypes.length) return true;
     
     // Compare steps (deep comparison via JSON)
     if (JSON.stringify(steps) !== JSON.stringify(originalState.steps)) return true;
     
     return false;
-  }, [originalState, name, description, triggerType, entityTypes, isActive, steps, isNew]);
+  }, [
+    originalState, name, description, triggerType, entityTypes, unknownEntityTypes,
+    storedUnknownTypes.length,
+    isActive, steps, isNew,
+  ]);
 
   // Set up breadcrumbs
   useEffect(() => {
@@ -1118,6 +1136,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setDescription(response.data.description || '');
             setTriggerType(response.data.trigger.type);
             setEntityTypes(response.data.trigger.entity_types);
+            setUnknownEntityTypes(response.data.trigger.unknown_entity_types ?? []);
             setTriggerFromStatus(response.data.trigger.from_status || '');
             setTriggerToStatus(response.data.trigger.to_status || '');
             setTriggerOnError(response.data.trigger.on_error || 'fail_open');
@@ -1501,6 +1520,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     }
     setInvalidStepId(null);
 
+    if (needsKnownType) {
+      setSelectedNodeId('trigger');
+      toast({
+        title: t('workflows:designer.messages.validationError'),
+        description: t('workflows:triggerEntityChecks.requiredOnSave'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (triggerType === 'before_status_change' && missingExemptions.length > 0) {
       toast({
         title: t('workflows:designer.messages.validationError'),
@@ -1520,6 +1549,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         trigger: {
           type: triggerType,
           entity_types: entityTypes,
+          ...(unknownEntityTypes.length > 0 ? { unknown_entity_types: unknownEntityTypes } : {}),
           ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
           ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
           ...(triggerType === 'before_status_change' ? { on_error: triggerOnError, disabled_for: triggerDisabledFor } : {}),
@@ -1553,6 +1583,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         if (typeof failedStep === 'string') {
           setInvalidStepId(failedStep);
           setSelectedNodeId(failedStep);
+        } else if (issues?.some(issue => issue.code.startsWith('trigger_entity_type_'))) {
+          setSelectedNodeId('trigger');  // where the entity types are fixed
         }
         toast({
           title: t('workflows:designer.messages.validationError'),
@@ -1860,16 +1892,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       triggerType={triggerType}
                       value={entityTypes as string[]}
                       onChange={(next) => setEntityTypes(next as EntityType[])}
-                      supportedEntityTypes={
-                        triggerTypeOptions.find((o) => o.value === triggerType)?.entity_types
-                        // Fallback to the static FE map when the catalog
-                        // is still loading or unavailable. Keeps the
-                        // multiselect non-empty so saved configs are
-                        // visible during the first render.
-                        ?? ALL_ENTITY_TYPES.filter((et) => isTriggerEntitySupported(triggerType, et))
-                      }
+                      supportedEntityTypes={supportedEntityTypes}
+                      // No auto-fill over a trigger stored with unknown types: the user picks
+                      autoFill={storedUnknownTypes.length === 0}
                     />
                   </div>
+                  <UnknownEntityTypesNotice
+                    values={unknownEntityTypes}
+                    needsKnownType={needsKnownType}
+                    onRemove={value => setUnknownEntityTypes(prev => prev.filter(v => v !== value))}
+                  />
                   {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (() => {
                     // Offer real lifecycle statuses for the selected entity
                     // type(s) instead of free text. No known vocabulary (mixed

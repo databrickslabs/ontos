@@ -1,3 +1,12 @@
+# Release Notes - Unreleased
+
+
+## ⚠️ Upgrade Notes
+
+- **workflows**: rules on `tag_count`, `has_tags` and `HAS_TAG` / `TAG` now see the tags assigned to data products and data contracts. Before, the rule object of a product or contract counted assignments under `DataProduct` / `DataContract`, while tags are stored under `data_product` / `data_contract`, and it had no `tags` field: `tag_count` was always 0, `has_tags` always false and `HAS_TAG(...)` always false. This applies to workflow validation steps that read the stored product or contract (all triggers except `before_create`, `before_update` and `on_delete`) and to maturity gates. Results can change in both directions on upgrade: a rule that requires tags (`HAS_TAG('owner')`, `obj.tag_count > 0`) can now pass, so its `ON_FAIL` branch (for example an auto-assign tag step) stops running where the tag exists; a rule that requires no tags (`NOT HAS_TAG(...)`, `obj.tag_count = 0`, `obj.has_tags = false`) can now fail and fire its `ON_FAIL` branch; maturity levels with the "Tags assigned" gate can go up. What to check: in Settings > Workflows, review the active workflows on data products and contracts whose validation steps use these fields, and the maturity gates that use them.
+- **workflows**: stored workflows whose trigger lists an entity type that matches no event (a type that no longer exists, such as `dataset`, or a type the trigger never fires for, such as `before_update` on `data_product`) are kept as stored and not deactivated. At startup the backend logs one warning per such workflow (id, name, trigger type, entity types), and `GET /api/workflows` and `GET /api/workflows/{id}` list them in `trigger_warnings` (codes `stored_entity_type_unknown` and `stored_entity_type_unsupported`). What to check: the startup log, then pick a supported entity type for those workflows or delete them.
+
+
 # Release Notes - v1.0.0 (2026-06-22)
 
 

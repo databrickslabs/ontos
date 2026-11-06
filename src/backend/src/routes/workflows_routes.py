@@ -51,8 +51,11 @@ router = APIRouter(prefix="/api/workflows", tags=["Process Workflows"])
 
 
 def get_workflows_manager(db: Session = Depends(get_db)) -> WorkflowsManager:
-    """Get WorkflowsManager instance."""
-    return WorkflowsManager(db)
+    """Get WorkflowsManager instance.
+
+    It gets the trigger/entity map, so saving a pair no code fires is refused.
+    """
+    return WorkflowsManager(db, trigger_entity_types=_TRIGGER_ENTITY_TYPES)
 
 
 def get_workflow_executor(db: Session = Depends(get_db)) -> WorkflowExecutor:
@@ -197,6 +200,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_unpublish": ["data_contract", "data_product"],
     "on_certify": ["data_contract", "data_product"],
     "on_decertify": ["data_contract", "data_product"],
+    "on_maturity_change": ["data_contract", "data_product"],  # maturity_evaluator
     # Validation gates
     "before_create": ["catalog", "schema", "table"],
     "before_update": ["data_contract"],
@@ -819,6 +823,10 @@ async def create_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
+    trigger_errors = manager.trigger_save_errors(workflow.trigger)
+    if trigger_errors:
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
+            WorkflowValidationResult(valid=False, errors=trigger_errors)))
     result = manager.create_workflow(workflow, created_by=user_email)
     
     audit_manager.log_action(
@@ -894,6 +902,11 @@ async def update_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
+    # Only a changed trigger is checked: stored workflows keep working and can be edited
+    trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
+    if trigger_errors:
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
+            WorkflowValidationResult(valid=False, errors=trigger_errors)))
     result = manager.update_workflow(workflow_id, workflow, updated_by=user_email)
     if not result:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -1091,8 +1104,17 @@ async def validate_workflow(
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowValidationResult:
-    """Validate a workflow definition."""
-    return manager.validate_workflow(workflow)
+    """Validate a workflow definition (as a new one: its trigger/entity pairs too)."""
+    validation = manager.validate_workflow(workflow)
+    trigger_errors = manager.trigger_save_errors(workflow.trigger)
+    if not trigger_errors:
+        return validation
+    # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes
+    added = WorkflowValidationResult(valid=False, errors=trigger_errors)
+    return WorkflowValidationResult(
+        valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
+        issues=[*validation.issues, *added.issues],
+    )
 
 
 @router.post("/check-condition")

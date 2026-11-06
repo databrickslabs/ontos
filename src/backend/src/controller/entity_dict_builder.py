@@ -62,7 +62,9 @@ def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, 
 
     # Relationship counts
     _add_relationship_counts(db, base, "DataProduct", product_id)
-    _add_tag_count(db, base, product_id, "DataProduct")
+    # The entity type the tags API and the managers store assignments under
+    _add_tag_count(db, base, product_id, "data_product")
+    _add_tags(db, base, product_id, "data_product")
     _add_quality_check_count(db, base, "DataProduct", product_id)
 
     return base
@@ -106,7 +108,8 @@ def build_data_contract_dict(db: Session, contract_id: str) -> Optional[Dict[str
 
     # Relationship counts
     _add_relationship_counts(db, base, "DataContract", contract_id)
-    _add_tag_count(db, base, contract_id, "DataContract")
+    _add_tag_count(db, base, contract_id, "data_contract")
+    _add_tags(db, base, contract_id, "data_contract")
     _add_quality_check_count(db, base, "DataContract", contract_id)
 
     return base
@@ -206,6 +209,21 @@ def _add_tag_count(db: Session, d: Dict[str, Any],
     ) or 0
     d["tag_count"] = count
     d["has_tags"] = count > 0
+
+
+def _add_tags(db: Session, d: Dict[str, Any], entity_id: str, entity_type: str) -> None:
+    """The assigned tags as a ``tags`` dict, for ``HAS_TAG`` / ``TAG`` in rules.
+
+    The assignments ``_add_tag_count`` counts, keyed as compliance rules read
+    app entity tags (``tag_values``).
+    """
+    from src.common.compliance_entities import tag_values
+    from src.repositories.tags_repository import entity_tag_repo
+
+    assigned = entity_tag_repo.get_assigned_tags_for_entities(
+        db, entity_ids=[entity_id], entity_type=entity_type,
+    )
+    d["tags"] = tag_values(assigned.get(entity_id, []))
 
 
 def _add_quality_check_count(db: Session, d: Dict[str, Any],

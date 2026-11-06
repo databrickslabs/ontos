@@ -663,25 +663,36 @@ class WorkflowsManager:
     def trigger_widening_errors(
         self, stored: WorkflowTrigger, new: Optional[WorkflowTrigger],
     ) -> List[str]:
-        """An update that turns a trigger listing only unknown entity types into "any entity".
+        """An update that turns a stored trigger matching no event into "any entity".
 
-        Such a trigger matches no event; saving it with no entity types at all would
-        match every entity of its trigger type. Refused unless the new trigger type
-        fires for any entity anyway (an empty list in the trigger/entity map). Other
-        empty lists are not refused.
+        The stored trigger lists entity types, and none of them fires: each is unknown,
+        or (with the trigger/entity map) a known type its trigger type never fires for.
+        Without the map only a trigger of unknown types counts. Saving it with no
+        entity types at all would match every entity of its trigger type. Refused
+        unless the new trigger type fires for any entity anyway (an empty list in the
+        map). Emptying a trigger that has a type that fires is not refused.
         """
-        if new is None or stored.entity_types or not stored.unknown_entity_types:
+        if new is None or new.entity_types or new.unknown_entity_types:
             return []
-        if new.entity_types or new.unknown_entity_types:
+        if not self._matches_no_event(stored):
             return []
         if self._trigger_entity_types is not None \
                 and not self._trigger_entity_types.get(new.type.value):
             return []
         return [CodedMessage(
-            "Pick at least one entity type: the trigger listed only unknown types, "
+            "Pick at least one entity type: the trigger matched no event, "
             "and no entity type would match every entity",
             'trigger_entity_type_required', triggerType=new.type.value,
         )]
+
+    def _matches_no_event(self, trigger: WorkflowTrigger) -> bool:
+        """The trigger lists entity types and none fires (see ``trigger_widening_errors``)."""
+        if not trigger.entity_types and not trigger.unknown_entity_types:
+            return False  # an empty list matches any entity
+        # Without the map, or for a trigger type that fires for any entity, every known
+        # type fires; an unknown value never does
+        allowed = (self._trigger_entity_types or {}).get(trigger.type.value) or []
+        return not any(not allowed or et.value in allowed for et in trigger.entity_types)
 
     @staticmethod
     def _trigger_matches(left: WorkflowTrigger, right: WorkflowTrigger) -> bool:

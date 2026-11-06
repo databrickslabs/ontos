@@ -616,7 +616,7 @@
     "unknownOnSave": "El desencadenador incluye el tipo de entidad desconocido \"{{type}}\": quítelo en la configuración del desencadenador para cambiarlo.",
     "unsupportedOnSave": "\"{{trigger}}\" nunca se activa para {{type}}: elija un tipo de entidad que este desencadenador admita.",
     "pickKnownType": "Elija al menos un tipo de entidad. Sin ninguno, este workflow se activaría para todas las entidades.",
-    "requiredOnSave": "Elija al menos un tipo de entidad para el desencadenador: solo incluía tipos que ya no existen, y una lista vacía haría que se activara para todas las entidades."
+    "requiredOnSave": "Elija al menos un tipo de entidad para el desencadenador: ninguno de sus tipos lo activa (ya no existen o este desencadenador nunca se activa para ellos), y una lista vacía haría que se activara para todas las entidades."
   },
   "triggerPicker": {
     "label": "Se activa con",

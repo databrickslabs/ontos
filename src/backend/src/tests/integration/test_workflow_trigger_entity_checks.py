@@ -233,3 +233,16 @@ def test_get_and_list_flag_stored_entity_types_that_match_no_event(client, db_se
     assert [code for code, _ in codes(by_id[pair_id])] == ['stored_entity_type_unsupported']
     # Flagged only: the stored trigger is unchanged
     assert _stored_types(db_session, pair_id) == ['data_product', 'data_contract']
+
+
+def test_emptying_a_trigger_whose_known_type_never_fires_is_refused(client, db_session):
+    wf_id = _stored(db_session, ['dataset', 'data_product'])
+
+    saved = client.put(f'/api/workflows/{wf_id}',
+                       json={'trigger': {'type': 'before_update', 'entity_types': []}})
+
+    assert saved.status_code == 400, saved.text
+    assert _issue_codes(saved.json()['detail']) == [
+        ('trigger_entity_type_required', {'triggerType': 'before_update'}),
+    ]
+    assert _stored_types(db_session, wf_id) == ['dataset', 'data_product']

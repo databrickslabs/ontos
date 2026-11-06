@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from fastapi import Response
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
@@ -256,6 +257,18 @@ async def upload_document(
         # Validate path components to prevent directory traversal
         if not is_safe_path_component(entity_type) or not is_safe_path_component(entity_id):
             raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
+
+        # Validate the request before touching the volume, so a rejected
+        # request never leaves an orphaned file behind.
+        try:
+            payload = DocumentCreate(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                title=title,
+                short_description=short_description,
+            )
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
         
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{entity_id}"
@@ -283,12 +296,6 @@ async def upload_document(
         # Upload file bytes to the UC Volume path (path, file-like object, overwrite)
         ws.files.upload(dest_path, BytesIO(content))
 
-        payload = DocumentCreate(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            title=title,
-            short_description=short_description,
-        )
         result = manager.create_document_record(
             db,
             data=payload,

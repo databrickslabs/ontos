@@ -3,10 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { usePermissions } from '@/stores/permissions-store';
-import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { features, isFeatureShown, type FeatureGroup } from '@/config/features';
-import { useShownEdition } from '@/hooks/use-shown-edition';
+import { useMenuVisibility } from '@/hooks/use-menu-visibility';
 import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface QuickAction {
@@ -19,8 +18,7 @@ interface QuickAction {
 export default function QuickActions() {
   const { t } = useTranslation(['home', 'features']);
   const { isLoading: permissionsLoading, hasPermission } = usePermissions();
-  const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
-  const edition = useShownEdition();
+  const { allowedMaturities, edition } = useMenuVisibility();
 
   const actions: QuickAction[] = useMemo(() => {
     if (permissionsLoading) return [];

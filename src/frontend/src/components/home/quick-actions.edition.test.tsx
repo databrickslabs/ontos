@@ -8,7 +8,7 @@ vi.hoisted(() => {
 });
 
 vi.mock('@/stores/permissions-store', () => ({
-  usePermissions: () => ({ isLoading: false, hasPermission: () => true }),
+  usePermissions: () => ({ isLoading: false, hasPermission: () => true, availableRoles: [] }),
 }));
 
 import QuickActions from './quick-actions';

@@ -64,6 +64,7 @@ vi.mock('@/components/ui/user-profile-dialog', () => ({
 }));
 
 import UserInfo from './user-info';
+import { useUserStore } from '@/stores/user-store';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,6 +111,10 @@ const consumerRole = {
 };
 
 const mockUserDetailsFetch = (groups: string[], username: string = 'test.user') => {
+  // The admin check reads the shared user store (filled by the app at startup).
+  useUserStore.setState({
+    userInfo: { email: `${username}@example.com`, username, user: username, ip: null, groups },
+  });
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/api/user/details') || url.includes('/api/user/info')) {

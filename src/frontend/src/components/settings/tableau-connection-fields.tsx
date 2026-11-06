@@ -14,7 +14,7 @@ import {
 export const TABLEAU_CONFIG_FIELDS = [
   'server_url', 'site_content_url', 'auth_mode',
   'client_id', 'secret_id', 'username', 'pat_name',
-  'secret_scope', 'secret_key', 'ca_bundle_path', 'default_catalog',
+  'secret_name', 'ca_bundle_path', 'default_catalog',
 ] as const;
 
 interface Props<T extends FieldValues> {
@@ -22,7 +22,7 @@ interface Props<T extends FieldValues> {
   control: Control<T>;
 }
 
-/** Tableau Cloud / Server connection settings. Secrets are referenced via a Databricks secret scope. */
+/** Tableau Cloud / Server connection settings. The secret is referenced as a Unity Catalog secret. */
 export function TableauConnectionFields<T extends FieldValues>({ control }: Props<T>) {
   const { t } = useTranslation(['settings']);
   const authMode: string = useWatch({ control, name: 'auth_mode' as Path<T> }) || 'connected_app';
@@ -106,14 +106,12 @@ export function TableauConnectionFields<T extends FieldValues>({ control }: Prop
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {textField('secret_scope', t('settings:connectors.tableau.secretScope'), 'ontos-connectors')}
-        {textField(
-          'secret_key',
-          t('settings:connectors.tableau.secretKey'),
-          authMode === 'pat' ? 'tableau-pat' : 'tableau-connected-app',
-        )}
-      </div>
+      {textField(
+        'secret_name',
+        t('settings:connectors.tableau.secretName'),
+        authMode === 'pat' ? 'main.ontos.tableau_pat' : 'main.ontos.tableau_connected_app',
+        t('settings:connectors.tableau.secretNameHelp'),
+      )}
 
       {textField(
         'default_catalog',

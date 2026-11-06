@@ -102,8 +102,7 @@ describe('Tableau connection config', () => {
       client_id: 'cid',
       secret_id: 'kid',
       username: 'svc@example.com',
-      secret_scope: 'ontos-connectors',
-      secret_key: 'tableau-app',
+      secret_name: 'main.ontos.tableau_connected_app',
       project_id: 'ignored-bigquery-field',
     });
     expect(config).toEqual({
@@ -113,8 +112,7 @@ describe('Tableau connection config', () => {
       client_id: 'cid',
       secret_id: 'kid',
       username: 'svc@example.com',
-      secret_scope: 'ontos-connectors',
-      secret_key: 'tableau-app',
+      secret_name: 'main.ontos.tableau_connected_app',
     });
     expect(CONNECTOR_CONFIG_FIELDS.tableau).not.toContain('secret_value');
   });

@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.common.quartz_cron import (
     MIN_INTERVAL, QuartzCronError, count_runs, next_runs, previous_run, resolve_timezone,
-    validate_quartz_cron,
+    validate_in_app_cron,
 )
 from src.db_models.process_workflows import ProcessWorkflowDb
 from src.models.process_workflows import TriggerContext, TriggerType
@@ -231,7 +231,7 @@ class WorkflowScheduler:
         try:
             # Syntax and timezone only: the minimum interval is checked on save, and
             # a short gap at runtime skips that one slot (``_fire``).
-            cron = validate_quartz_cron(cron)
+            cron = validate_in_app_cron(cron)
             resolve_timezone(tz)
         except QuartzCronError as e:
             # Saved without the validator (older API clients, YAML): never run it.

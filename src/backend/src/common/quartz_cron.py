@@ -2,18 +2,35 @@
 
 Workflow schedules (``scheduled`` triggers) and Databricks job schedules use the
 Quartz format of Databricks Jobs: ``sec min hour day-of-month month day-of-week
-[year]``. Expressions are evaluated with ``croniter`` (``second_at_beginning``),
-which supports a subset of Quartz. This module accepts exactly that subset:
+[year]``. There are two levels of checks:
 
-- 6 or 7 fields; the seconds field must be ``0`` (runs are minute-aligned).
-- ``?`` (no specific value) is read as ``*``.
-- ``W``, ``L`` and ``#`` are rejected, and so is an expression that restricts
-  both day-of-month and day-of-week (Quartz needs ``?`` in one of them; croniter
-  would OR the two).
-- Day-of-week numbers are Quartz's ``1-7`` = ``SUN-SAT``; croniter counts
-  ``0-6`` from Sunday, so numbers are shifted by one before evaluation. Names
-  (``MON-FRI``) mean the same in both.
-- Anything else croniter rejects is rejected.
+1. ``validate_quartz_syntax``: the full Quartz grammar, for Databricks job
+   schedules. Databricks evaluates those itself, so ``L``, ``W``, ``#`` and
+   non-zero seconds are fine; this level only refuses what Quartz can't parse:
+   - 6 or 7 fields; seconds and minutes 0-59, hours 0-23, day-of-month 1-31,
+     month 1-12 or ``JAN-DEC``, day-of-week 1-7 (``SUN-SAT``), year 1970-2199;
+     names in any case.
+   - Items are ``*``, values, ranges (``a-b``, which may wrap, e.g. ``FRI-MON``;
+     not in the year field) and increments (``*/n``, ``a/n``, ``a-b/n``),
+     separated by commas.
+   - ``?`` is a whole field, in exactly one of day-of-month and day-of-week
+     (Quartz refuses an expression that sets both, or neither).
+   - Day-of-month also takes ``L``, ``L-n`` (n up to 30), ``LW``, ``L-nW`` and
+     ``nW``; day-of-week takes ``L``, ``nL`` and ``n#k`` (k 1-5). ``L`` in
+     day-of-week can't be combined with other days, and only one ``#`` item is
+     allowed.
+2. The in-app level, for ``scheduled`` workflow triggers that Ontos runs itself
+   with ``croniter`` (``second_at_beginning``), which supports a subset of
+   Quartz. ``validate_in_app_cron`` adds to level 1:
+   - the seconds field must be ``0`` (runs are minute-aligned);
+   - ``W``, ``L`` and ``#`` are rejected;
+   - anything else croniter rejects is rejected (``?`` is read as ``*``).
+   ``validate_schedule`` also checks the timezone and that runs are at least
+   ``MIN_INTERVAL`` (5 minutes) apart.
+
+Day-of-week numbers are Quartz's ``1-7`` = ``SUN-SAT``; croniter counts ``0-6``
+from Sunday, so numbers are shifted by one before evaluation. Names (``MON-FRI``)
+mean the same in both.
 
 Runs are computed in an IANA timezone (``zoneinfo``). In the hour a DST change
 skips, a run moves to the first valid time after it; in the hour a DST change
@@ -45,7 +62,30 @@ INTERVAL_CHECK_RUNS = 1000
 
 _EXAMPLE = '0 30 2 * * ?'
 _FIELDS = ('second', 'minute', 'hour', 'day_of_month', 'month', 'day_of_week', 'year')
-_NAMES = re.compile(r'JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|SUN|MON|TUE|WED|THU|FRI|SAT')
+_MONTHS = ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
+_DAYS = ('SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT')
+# Per field: lowest and highest value, the names (value = position + lowest), and
+# the largest increment Quartz takes (``checkIncrementRange``; None = no limit).
+_SPECS = {
+    'second': (0, 59, (), 59),
+    'minute': (0, 59, (), 59),
+    'hour': (0, 23, (), 23),
+    'day_of_month': (1, 31, (), 31),
+    'month': (1, 12, _MONTHS, 12),
+    'day_of_week': (1, 7, _DAYS, 7),
+    'year': (1970, 2199, (), None),
+}
+# Quartz's MAX_LAST_DAY_OFFSET: ``L-n`` in day-of-month.
+_MAX_LAST_DAY_OFFSET = 30
+_VALUE = r'(?:\d+|[A-Z]{3})'
+_ITEM = re.compile(
+    rf'(?:(?P<all>\*)|(?P<start>{_VALUE})(?:-(?P<end>{_VALUE}))?)(?:/(?P<step>\d+))?'
+)
+_DOM_LAST = re.compile(r'L(?:-(?P<offset>\d+))?W?')
+_DOM_WEEKDAY = re.compile(r'(?P<day>\d+)W')
+_DOW_LAST = re.compile(rf'(?P<day>{_VALUE})?L')
+_DOW_NTH = re.compile(rf'(?P<day>{_VALUE})#(?P<nth>\d+)')
+_NAMES = re.compile('|'.join(_MONTHS + _DAYS))
 _UNSUPPORTED = ('W', 'L', '#')
 _NUMBER = re.compile(r'\d+')
 
@@ -69,7 +109,105 @@ def _fields(expr: Optional[str]) -> List[str]:
     return fields
 
 
-def _check_subset(fields: List[str]) -> None:
+def _invalid(name: str, value: str) -> QuartzCronError:
+    return QuartzCronError(
+        f"'{value}' is not valid in the {name.replace('_', '-')} field of a Quartz cron "
+        f"expression",
+        'cron_invalid_field', field=name, value=value,
+    )
+
+
+def _value(name: str, token: str, item: str) -> int:
+    """``token`` (a number or, in month and day-of-week, a name) as a number in range."""
+    low, high, names, _ = _SPECS[name]
+    if token.isdigit():
+        number = int(token)
+    elif token in names:
+        number = names.index(token) + low
+    else:
+        raise _invalid(name, item)
+    if not low <= number <= high:
+        raise _invalid(name, item)
+    return number
+
+
+def _check_item(name: str, item: str) -> None:
+    """One comma-separated item of a field, upper-cased."""
+    if name == 'day_of_month':
+        last = _DOM_LAST.fullmatch(item)
+        if last:
+            if last.group('offset') and int(last.group('offset')) > _MAX_LAST_DAY_OFFSET:
+                raise _invalid(name, item)
+            return
+        weekday = _DOM_WEEKDAY.fullmatch(item)
+        if weekday:
+            _value(name, weekday.group('day'), item)
+            return
+    if name == 'day_of_week':
+        last = _DOW_LAST.fullmatch(item)
+        if last:
+            if last.group('day'):
+                _value(name, last.group('day'), item)
+            return
+        nth = _DOW_NTH.fullmatch(item)
+        if nth:
+            _value(name, nth.group('day'), item)
+            if not 1 <= int(nth.group('nth')) <= 5:
+                raise _invalid(name, item)
+            return
+    match = _ITEM.fullmatch(item)
+    if not match:
+        raise _invalid(name, item)
+    if match.group('start'):
+        start = _value(name, match.group('start'), item)
+        if match.group('end'):
+            end = _value(name, match.group('end'), item)
+            # Quartz ranges wrap (``FRI-MON``, ``22-2``), except in the year field.
+            if name == 'year' and end < start:
+                raise _invalid(name, item)
+    step = match.group('step')
+    if step is not None:
+        largest = _SPECS[name][3]
+        if int(step) < 1 or (largest is not None and int(step) > largest):
+            raise _invalid(name, item)
+
+
+def _check_field(name: str, value: str) -> None:
+    upper = value.upper()
+    if upper == '?':
+        if name not in ('day_of_month', 'day_of_week'):
+            raise _invalid(name, value)
+        return
+    items = upper.split(',')
+    for item in items:
+        _check_item(name, item)
+    if name == 'day_of_week' and len(items) > 1:
+        if any(_DOW_LAST.fullmatch(item) for item in items):
+            raise _invalid(name, value)  # Quartz: 'L' with other days is not supported
+        if sum('#' in item for item in items) > 1:
+            raise _invalid(name, value)  # Quartz: one "nth" day only
+
+
+def validate_quartz_syntax(expr: Optional[str]) -> str:
+    """Level 1: check ``expr`` against the full Quartz grammar; return it normalised.
+
+    For Databricks job schedules, which Databricks evaluates itself (``L``, ``W``,
+    ``#`` and any seconds are accepted). Normalised = fields joined by single
+    spaces, case kept. Raises ``QuartzCronError`` (a ``ValueError``).
+    """
+    fields = _fields(expr)
+    for name, value in zip(_FIELDS, fields):
+        _check_field(name, value)
+    if (fields[3] == '?') == (fields[5] == '?'):
+        raise QuartzCronError(
+            "A Quartz cron expression needs '?' in exactly one of day-of-month and "
+            "day-of-week",
+            'cron_day_fields_conflict',
+        )
+    return ' '.join(fields)
+
+
+def _check_in_app_subset(fields: List[str]) -> None:
     if fields[0] != '0':
         raise QuartzCronError(
             "The seconds field of a Quartz cron expression must be 0",
@@ -83,30 +221,18 @@ def _check_subset(fields: List[str]) -> None:
                     f"'{char}' in the {name.replace('_', '-')} field is not supported",
                     'cron_unsupported_character', field=name, character=char,
                 )
-    if fields[3] not in ('?', '*') and fields[5] not in ('?', '*'):
-        raise QuartzCronError(
-            "A Quartz cron expression can't restrict both day-of-month and day-of-week; "
-            "use '?' in one of them",
-            'cron_day_fields_conflict',
-        )
 
 
 def _croniter_day_of_week(value: str) -> str:
-    """Quartz day-of-week numbers (1-7 = SUN-SAT) in croniter's form (0-6 = SUN-SAT)."""
+    """Quartz day-of-week numbers (1-7 = SUN-SAT) in croniter's form (0-6 = SUN-SAT).
+
+    Level 1 has checked that the numbers are 1-7.
+    """
     parts = []
     for item in value.split(','):
         base, slash, step = item.partition('/')
-
-        def shift(match: re.Match) -> str:
-            number = int(match.group())
-            if not 1 <= number <= 7:
-                raise QuartzCronError(
-                    "Day-of-week numbers in a Quartz cron expression are 1-7 (SUN-SAT)",
-                    'cron_day_of_week_out_of_range', value=number,
-                )
-            return str(number - 1)
-
-        parts.append(_NUMBER.sub(shift, base) + slash + step)
+        shifted = _NUMBER.sub(lambda match: str(int(match.group()) - 1), base)
+        parts.append(shifted + slash + step)
     return ','.join(parts)
 
 
@@ -121,25 +247,26 @@ def _iterator(cron: str, start: datetime) -> croniter:
 
 
 def _parse(expr: Optional[str]) -> Tuple[str, str]:
-    """(normalised Quartz expression, croniter expression), checked against the subset."""
-    fields = _fields(expr)
-    _check_subset(fields)
+    """(normalised Quartz expression, croniter expression), checked at the in-app level."""
+    normalised = validate_quartz_syntax(expr)
+    fields = normalised.split()
+    _check_in_app_subset(fields)
     cron = _to_croniter(fields)
     try:
         croniter(cron, second_at_beginning=True)
     except (CroniterError, ValueError, KeyError) as e:
         raise QuartzCronError(
-            "Not a valid Quartz cron expression", 'cron_invalid', expression=' '.join(fields),
+            "Not a valid Quartz cron expression", 'cron_invalid', expression=normalised,
         ) from e
-    return ' '.join(fields), cron
+    return normalised, cron
 
 
-def validate_quartz_cron(expr: str) -> str:
-    """Check a Quartz cron expression against the supported subset; return it normalised.
+def validate_in_app_cron(expr: Optional[str]) -> str:
+    """Level 2 without the interval: Quartz syntax plus the subset Ontos runs itself.
 
-    Normalised = fields joined by single spaces. Raises ``QuartzCronError`` (a
-    ``ValueError``). The timezone and the minimum interval are checked by
-    ``validate_schedule``.
+    For ``scheduled`` workflow triggers; returns the expression normalised. Raises
+    ``QuartzCronError`` (a ``ValueError``). The timezone and the minimum interval
+    are checked by ``validate_schedule``.
     """
     return _parse(expr)[0]
 
@@ -219,13 +346,13 @@ def count_runs(expr: str, tz: Optional[str], after: datetime, until: datetime, l
 def validate_schedule(
     expr: str, tz: Optional[str] = None, *, now: Optional[datetime] = None,
 ) -> str:
-    """Check a workflow schedule: the expression, its timezone and the minimum interval.
+    """Level 2: check an in-app workflow schedule, its timezone and the minimum interval.
 
     Raises ``QuartzCronError`` when the expression has no upcoming run, or when two
     consecutive upcoming runs (of the next ``INTERVAL_CHECK_RUNS``) are less than
     ``MIN_INTERVAL`` apart. Returns the normalised expression.
     """
-    normalised = validate_quartz_cron(expr)
+    normalised = validate_in_app_cron(expr)
     resolve_timezone(tz)
     runs = next_runs(normalised, tz, after=now, count=INTERVAL_CHECK_RUNS)
     if not runs:

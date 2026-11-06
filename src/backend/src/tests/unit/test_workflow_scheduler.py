@@ -429,7 +429,7 @@ def _validate(db, schedule, tz=None, trigger_type=TriggerType.SCHEDULED):
     ('15 0 9 * * ?', None, 'cron_seconds_not_zero'),
     ('0 0 9 L * ?', None, 'cron_unsupported_character'),
     ('0 0 9 1 * MON', None, 'cron_day_fields_conflict'),
-    ('0 0 99 * * ?', None, 'cron_invalid'),
+    ('0 0 99 * * ?', None, 'cron_invalid_field'),
     ('0 0,2 * * * ?', None, 'cron_interval_too_short'),
     ('0 0 9 * * ?', 'Nowhere/City', 'timezone_invalid'),
 ])

@@ -420,6 +420,9 @@ class AssetInfo(BaseModel):
     description: Optional[str] = Field(None, description="Short description")
     path: Optional[str] = Field(None, description="Full path to the asset")
     url: Optional[str] = Field(None, description="URL to view the asset in its native UI")
+    updated_at: Optional[datetime] = Field(
+        None, description="When the asset last changed in the source, if the listing reports it"
+    )
     
     # Container hierarchy (if applicable)
     catalog: Optional[str] = Field(None, description="Catalog/database name")
@@ -581,7 +584,9 @@ METRIC_VIEW_PROPERTY = "metric_view"
 # Why the asset's description is not in Unity Catalog: set when writing it there
 # failed, removed when a later write succeeds (see uc_description_sync_manager).
 DESCRIPTION_SYNC_PROPERTY = "uc_description_sync"
-INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY, DESCRIPTION_SYNC_PROPERTY})
+# The property keys the last schema import wrote, so a sync can replace exactly those
+IMPORTED_KEYS_PROPERTY = "imported_keys"
+INTERNAL_PROPERTY_KEYS = frozenset({METRIC_VIEW_PROPERTY, DESCRIPTION_SYNC_PROPERTY, IMPORTED_KEYS_PROPERTY})
 
 
 def public_properties(properties: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

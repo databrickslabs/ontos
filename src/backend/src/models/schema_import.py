@@ -50,6 +50,14 @@ class ImportDepth(str, Enum):
     FULL_RECURSIVE = "full_recursive"
 
 
+class ImportMode(str, Enum):
+    # Create what is missing; existing assets are left as they are
+    CREATE = "create"
+    # Also refresh existing assets that changed in the source, and report every
+    # asset the walk saw (a connector sync retires the ones it did not see)
+    SYNC = "sync"
+
+
 # ---------------------------------------------------------------------------
 # Import request / preview / result
 # ---------------------------------------------------------------------------
@@ -62,6 +70,7 @@ class ImportRequest(BaseModel):
     dry_run: bool = Field(False, description="If true, only preview — do not create assets")
     excluded_paths: List[str] = Field(default_factory=list, description="Paths the user chose to exclude from import")
     path_mappings: Dict[str, UUID] = Field(default_factory=dict, description="Map preview path to an existing asset ID instead of creating a new one")
+    mode: ImportMode = Field(ImportMode.CREATE, description="create: import what is missing; sync: also refresh changed assets")
 
 
 class ImportPreviewItem(BaseModel):
@@ -73,6 +82,7 @@ class ImportPreviewItem(BaseModel):
     existing_asset_id: Optional[UUID] = Field(None, description="ID of the existing asset if will_create is False")
     parent_path: Optional[str] = Field(None, description="Path of the parent node (for relationship creation)")
     is_ancestor: bool = Field(False, description="True for auto-included structural parents (System, Catalog, Schema)")
+    needs_refresh: bool = Field(False, description="Sync mode: the existing asset changed in the source and is updated")
 
 
 class ImportResultItem(BaseModel):
@@ -80,7 +90,7 @@ class ImportResultItem(BaseModel):
     path: str
     name: str
     asset_type: str
-    action: str = Field(..., description="created | skipped | error")
+    action: str = Field(..., description="created | refreshed | skipped | error")
     asset_id: Optional[UUID] = None
     error: Optional[str] = None
     parent_path: Optional[str] = Field(None, description="Path of the parent node (for tree display)")
@@ -95,6 +105,12 @@ class ImportResult(BaseModel):
     warnings: List[str] = Field(default_factory=list, description="Non-fatal issues, e.g. lineage targets not in Ontos")
     items: List[ImportResultItem] = Field(default_factory=list)
     system_asset_id: Optional[UUID] = Field(None, description="ID of the System asset used as hierarchy root")
+    refreshed: int = Field(0, description="Existing assets updated because they changed in the source (sync mode)")
+    seen_asset_ids: List[UUID] = Field(default_factory=list, description="Every asset the walk found in the source (sync mode)")
+    incomplete_reasons: List[str] = Field(
+        default_factory=list,
+        description="Why the walk may have missed source items (sync mode); retirement only counts complete walks",
+    )
 
 
 # ---------------------------------------------------------------------------

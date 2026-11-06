@@ -86,5 +86,21 @@
     },
     "warningsTitle": "Waarschuwingen ({{count}})",
     "moreWarnings": "+{{count}} meer"
+  },
+  "sync": {
+    "keepInSync": "Gesynchroniseerd houden",
+    "description": "Deze selectie volgens een schema opnieuw importeren: wijzigingen in de bron worden overgenomen en items die de bron niet meer heeft, worden buiten gebruik gesteld.",
+    "interval": "Hoe vaak",
+    "intervals": {
+      "60": "Elk uur",
+      "1440": "Dagelijks",
+      "10080": "Wekelijks"
+    },
+    "retireAfter": "Buiten gebruik na gemiste synchronisaties",
+    "retireAfterHint": "Items die in zoveel volledige synchronisaties op rij ontbreken, worden buiten gebruik gesteld (nooit verwijderd).",
+    "save": "Synchronisatie opslaan",
+    "saved": "Synchronisatie \"{{name}}\" opgeslagen",
+    "nextRun": "Volgende run",
+    "saveFailed": "Synchronisatie kon niet worden opgeslagen"
   }
 }

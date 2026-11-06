@@ -899,6 +899,28 @@
       "connection_error": "Het bronsysteem is niet bereikbaar.",
       "import_failed": "Dit item kon niet worden geïmporteerd.",
       "connection_test_failed": "De verbindingstest is mislukt. Zie het serverlogboek voor details."
+    },
+    "syncs": {
+      "menu": "Synchronisaties",
+      "title": "Synchronisaties van {{name}}",
+      "description": "Selecties van deze verbinding die de job Connector Sync volgens een schema opnieuw importeert.",
+      "none": "Nog geen synchronisaties. Importeer vanuit deze verbinding in de Schema Importer en kies ‘Gesynchroniseerd houden’.",
+      "everyMinutes": "Elke {{count}} minuten",
+      "retireAfter": "Buiten gebruik na gemiste synchronisaties: {{count}}",
+      "status": {
+        "completed": "Voltooid",
+        "incomplete": "Onvolledig (niets buiten gebruik)",
+        "failed": "Mislukt"
+      },
+      "lastRun": "Laatste run",
+      "neverRun": "Nog niet uitgevoerd",
+      "enabled": "Ingeschakeld",
+      "runNow": "Nu uitvoeren",
+      "runStarted": "Synchronisatie \"{{name}}\" gestart",
+      "runFailed": "Synchronisatie kon niet worden gestart",
+      "updateFailed": "Synchronisatie kon niet worden bijgewerkt",
+      "deleteFailed": "Synchronisatie kon niet worden verwijderd",
+      "jobWarningTitle": "Geplande job draait niet"
     }
   },
   "schemaImporter": {

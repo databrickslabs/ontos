@@ -216,10 +216,17 @@ class WorkflowScheduler:
                 self._due_slot(s, now) for s in self._schedules.values()
             ):
                 self._refresh(now)  # current definitions before running anything
+                retry = False
                 for schedule in list(self._schedules.values()):
                     slot = self._due_slot(schedule, now)
-                    if slot is not None:
-                        self._fire(schedule, slot)
+                    if slot is not None and not self._fire(schedule, slot):
+                        retry = True
+                delay = self._sleep_seconds(now)
+                if retry and (delay is None or delay > ERROR_RETRY_SECONDS):
+                    # A slot failed before its claim: try it again soon (the grace
+                    # period still applies), not only at the next slot.
+                    return float(ERROR_RETRY_SECONDS)
+                return delay
             return self._sleep_seconds(now)
 
     def _session(self) -> Session:
@@ -271,9 +278,11 @@ class WorkflowScheduler:
                 if schedule is None:
                     continue
                 known = self._schedules.get(row.id)
-                if known and (known.cron, known.tz, known.changed_at) == (
-                    schedule.cron, schedule.tz, schedule.changed_at,
-                ):
+                if known and (known.cron, known.tz) == (schedule.cron, schedule.tz):
+                    # Same schedule, still active: an edit of anything else (name,
+                    # steps, ...) bumps ``updated_at`` but must not move the cutoff,
+                    # or a slot due before that edit would be dropped.
+                    schedule.changed_at = known.changed_at
                     schedule.handled_slot = known.handled_slot
                 schedules[row.id] = schedule
             self._schedules = schedules
@@ -347,8 +356,14 @@ class WorkflowScheduler:
         count = count_runs(schedule.cron, schedule.tz, since, slot, COALESCE_COUNT_LIMIT)
         return max(1, count)
 
-    def _fire(self, schedule: _Schedule, slot: datetime) -> None:
-        """Claim ``slot`` and, if this instance got it, run the workflow."""
+    def _fire(self, schedule: _Schedule, slot: datetime) -> bool:
+        """Claim ``slot`` and, if this instance got it, run the workflow.
+
+        Returns False when it failed before the claim was written (e.g. a
+        transient database error): the slot is not handled and is tried again.
+        After the claim, a failure is recorded as the outcome ``error`` and the
+        slot is not run again.
+        """
         from src.common.workflow_executor import WorkflowExecutor
         from src.controller.workflows_manager import WorkflowsManager
 
@@ -366,7 +381,7 @@ class WorkflowScheduler:
                         f"Skipping slots of {key} less than "
                         f"{int(MIN_INTERVAL.total_seconds() // 60)} minutes after the last run"
                     )
-                return
+                return True
             coalesced = self._coalesced_slots(schedule, slot, last)
             claimed = scheduler_claims_repo.claim(
                 db, task_key=key, slot=slot, claimed_by=self._claimed_by,
@@ -375,14 +390,14 @@ class WorkflowScheduler:
             schedule.handled_slot = slot
             if not claimed:
                 logger.info(f"Slot {slot.isoformat()} of {key} was claimed by another instance")
-                return
+                return True
             workflow = WorkflowsManager(db).get_workflow(schedule.workflow_id)
             if workflow is None or not workflow.is_active:
                 scheduler_claims_repo.record_outcome(
                     db, task_key=key, slot=slot,
                     outcome={'status': 'skipped', 'coalesced_slots': coalesced},
                 )
-                return
+                return True
             scheduled_for = slot.isoformat()
             entity = {
                 'type': SCHEDULE_ENTITY_TYPE, 'id': workflow.id, 'name': workflow.name,
@@ -414,13 +429,15 @@ class WorkflowScheduler:
             logger.error(f"Scheduled run of {key} for {slot.isoformat()} failed: {e}",
                          exc_info=True)
             db.rollback()
-            if claimed:
-                try:
-                    scheduler_claims_repo.record_outcome(
-                        db, task_key=key, slot=slot,
-                        outcome={'status': 'error', 'coalesced_slots': coalesced},
-                    )
-                except Exception:
-                    db.rollback()
+            if not claimed:
+                return False  # nothing written: run_once retries the slot
+            try:
+                scheduler_claims_repo.record_outcome(
+                    db, task_key=key, slot=slot,
+                    outcome={'status': 'error', 'coalesced_slots': coalesced},
+                )
+            except Exception:
+                db.rollback()
         finally:
             db.close()
+        return True

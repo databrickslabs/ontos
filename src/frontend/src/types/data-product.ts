@@ -251,6 +251,11 @@ export interface DataProduct {
   kind: string; // "DataProduct"
   id: string;
   status: string; // proposed, draft, active, deprecated, retired
+  // Set when the product moves to `deprecated`
+  deprecation_reason?: string | null;
+  sunset_date?: string | null; // YYYY-MM-DD
+  replacement_product_id?: string | null;
+  deprecated_at?: string | null;
 
   // ODPS v1.0.0 optional fields
   name?: string;

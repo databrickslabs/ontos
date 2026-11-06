@@ -59,8 +59,10 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
 from src.common.lifecycle_status import check_status_unchanged
+from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.data_products import DeprecationPayload
 from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
@@ -406,7 +408,8 @@ async def reject_contract(
         raise HTTPException(status_code=500, detail="Failed to reject contract")
 
 
-class ChangeStatusPayload(BaseModel):
+class ChangeStatusPayload(DeprecationPayload):
+    """Target status; the deprecation fields are used when it is ``deprecated``."""
     new_status: str
 
 
@@ -439,18 +442,25 @@ async def change_contract_status(
             db=db,
             contract_id=contract_id,
             new_status=new_status,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            deprecation=payload.deprecation_details(),
         )
         
         # Audit
+        lifecycle_audit = {
+            'deprecation_reason': updated.deprecation_reason,
+            'sunset_date': updated.sunset_date.isoformat() if updated.sunset_date else None,
+            'replacement_contract_id': updated.replacement_contract_id,
+        } if new_status == 'deprecated' else {}
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'anonymous',
             ip_address=request.client.host if request.client else None,
             feature='data-contracts',
-            action='CHANGE_STATUS',
+            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
-            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status}
+            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status,
+                     **lifecycle_audit},
         )
         return {'status': updated.status, 'from': from_status, 'to': updated.status}
     except ValueError as e:
@@ -484,6 +494,9 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str
     justification: str
     current_status: Optional[str] = None
+    # Requested deprecation: sunset date (YYYY-MM-DD, UTC) and replacement contract
+    sunset_date: Optional[str] = None
+    replacement_id: Optional[str] = None
 
 
 class HandleStatusChangePayload(BaseModel):
@@ -667,7 +680,9 @@ async def request_status_change(
             target_status=payload.target_status,
             justification=payload.justification,
             requester_email=current_user.email if current_user else None,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         # Audit
@@ -687,6 +702,11 @@ async def request_status_change(
         
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. a replacement that doesn't exist): its
+        # code, never the 404 of a missing contract
+        logger.info("Refused status change request for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Request status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (403 if "denied" in str(e).lower() or "permission" in str(e).lower() else 409)
@@ -1302,6 +1322,11 @@ async def handle_status_change_response(
         
         return result
         
+    except LifecycleFieldError as e:
+        # The requested deprecation no longer holds (e.g. its replacement is
+        # gone): 400 with the code, never the 404 of a missing contract
+        logger.info("Refused status change decision for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Handle status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)

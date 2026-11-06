@@ -38,6 +38,11 @@ def _canonical_uuid(value: str) -> Optional[str]:
         return None
 
 
+def _isoformat(value) -> Optional[str]:
+    """ISO 8601 string for a date / datetime column, or None."""
+    return value.isoformat() if value else None
+
+
 def _upsert_custom_property(data: dict, prop: str, value) -> None:
     """Set a customProperties entry on an ODCS payload dict, tolerating the
     list-of-{property,value} form and the legacy {key: value} dict form."""
@@ -126,6 +131,21 @@ from src.controller.domain_export_adapter import (
     domain_export_adapter,
     ONTOS_ORIGINAL_DOMAIN_PROPERTY,
     original_domain_strings_from_props,
+)
+from src.controller.lifecycle_fields import (
+    DeprecationDetails,
+    ImportedLifecycleError,
+    ImportLinks,
+    add_import_notes,
+    apply_lifecycle_fields,
+    check_lifecycle_fields,
+    imported_lifecycle_columns,
+    lifecycle_custom_properties,
+    peek_lifecycle_replacement,
+    pop_lifecycle_custom_properties,
+    requested_deprecation,
+    audit_approved_lifecycle_change,
+    set_lifecycle_columns,
 )
 
 from src.common.logging import get_logger
@@ -1464,6 +1484,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
         # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
         _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
+        for prop, value in lifecycle_custom_properties(db_obj, 'data_contract').items():
+            _upsert_custom_property(odcs, prop, value)
 
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
@@ -2116,12 +2138,29 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         db.add(pricing_db)
     
-    def _create_custom_properties(self, db, contract_id: str, custom_props):
+    def _create_custom_properties(self, db, contract_id: str, custom_props,
+                                  apply_lifecycle: bool = False,
+                                  import_links: Optional[ImportLinks] = None,
+                                  source_id: Optional[str] = None) -> Dict[str, Any]:
         """Create custom properties from ODCS customProperties (handles both array and dict formats).
         
         ODCS uses array format: [{"property": "key", "value": "val"}, ...]
         Legacy format uses dict: {"key": "val", ...}
+        The ontos* lifecycle properties are never stored as custom properties:
+        on import (``apply_lifecycle``) they set the lifecycle columns, which
+        are returned; on a regular update they're ignored, since those columns
+        only change through a status transition.
         """
+        columns: Dict[str, Any] = {}
+        lifecycle_props = pop_lifecycle_custom_properties(custom_props)
+        if lifecycle_props and apply_lifecycle:
+            columns = imported_lifecycle_columns(
+                db, 'data_contract', contract_id, lifecycle_props,
+                links=import_links, source_id=source_id,
+            )
+            contract = db.get(DataContractDb, contract_id)
+            if contract is not None:
+                set_lifecycle_columns(contract, columns)
         if isinstance(custom_props, list):
             # ODCS array format
             for prop_data in custom_props:
@@ -2157,6 +2196,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         value=value_str
                     )
                     db.add(custom_prop_db)
+        return columns
     
     def _create_sla_properties(self, db, contract_id: str, sla_properties_data: List[dict]):
         """Create SLA properties from ODCS slaProperties array."""
@@ -3015,6 +3055,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         current_user: Optional[str] = None,
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
+        import_links: Optional[ImportLinks] = None,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -3025,6 +3066,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             current_user: Username of current user
             create_missing_domains: When True, auto-create by name any domain that
                 doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+            import_links: Replacement links of a batch import (``ImportLinks``); a
+                single upload gets its own, so a replacement that isn't in the
+                target is not linked rather than failing the upload.
 
         Returns:
             Created DataContractDb instance
@@ -3173,8 +3217,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Create custom properties if present (handles both ODCS array and legacy dict formats)
             custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties')
+            links = import_links if import_links is not None else ImportLinks('data_contract')
+            lifecycle_columns: Dict[str, Any] = {}
             if custom_props:
-                self._create_custom_properties(db, created.id, custom_props)
+                lifecycle_columns = self._create_custom_properties(
+                    db, created.id, custom_props, apply_lifecycle=True,
+                    import_links=links, source_id=original_id,
+                )
             
             # Create SLA properties if present
             sla_properties_data = parsed_odcs.get('slaProperties', [])
@@ -3223,6 +3272,33 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             db.commit()
             db.refresh(created)
+            links.record(original_id, created.id)
+
+            # Log to change log for timeline, with the imported lifecycle fields
+            try:
+                from src.controller.change_log_manager import change_log_manager
+                change_log_manager.log_change_with_details(
+                    db,
+                    entity_type="data_contract",
+                    entity_id=str(created.id),
+                    action="CREATE",
+                    username=current_user,
+                    details={
+                        "name": created.name,
+                        "version": created.version,
+                        "status": created.status,
+                        "summary": f"Contract '{created.name}' imported"
+                                   + (f" by {current_user}" if current_user else ""),
+                        **{
+                            column: value.isoformat() if hasattr(value, 'isoformat') else value
+                            for column, value in lifecycle_columns.items()
+                        },
+                    },
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to log change for contract import: {log_err}")
+
+            db.refresh(created)  # the change log commit expired it
             self._update_search_index(created, db)
             return created
             
@@ -3278,6 +3354,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return [parsed]
         raise ValueError("File must contain an ODCS object or an array of ODCS objects.")
 
+    @staticmethod
+    def _import_replacement_entries(parsed_files):
+        """``(id, ontosReplacedBy)`` of every contract in the parsed import files,
+        for ``ImportLinks.plan``; files that didn't parse are left out (the
+        import reports them)."""
+        entries = []
+        for _filename, entities, _error in parsed_files:
+            for entity in entities or []:
+                if isinstance(entity, dict):
+                    entries.append((
+                        entity.get('id'),
+                        peek_lifecycle_replacement(
+                            entity.get('customProperties') or entity.get('custom_properties')
+                        ),
+                    ))
+        return entries
+
     def create_contracts_from_files(
         self,
         db,
@@ -3309,14 +3402,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             its own transaction inside `create_from_upload`).
         """
         result = BatchImportResult()
-        index = 0
+        # Each file is parsed once: the replacement links of the whole import
+        # are planned before any contract is created
+        parsed_files = []
         for filename, content_text, content_type in files:
             try:
-                entities = self.parse_uploaded_entities(content_text, filename, content_type)
+                parsed_files.append((
+                    filename,
+                    self.parse_uploaded_entities(content_text, filename, content_type),
+                    None,
+                ))
             except Exception as e:  # pragma: no cover - defensive; parse falls back to text
+                parsed_files.append((filename, None, e))
+        links = ImportLinks('data_contract')
+        links.plan(self._import_replacement_entries(parsed_files))
+        index = 0
+        for filename, entities, parse_error in parsed_files:
+            if parse_error is not None:  # pragma: no cover - see above
                 result.add(ImportItemResult(
                     index=index, source_file=filename, status="failed",
-                    message=f"Could not parse file: {e}",
+                    message=f"Could not parse file: {parse_error}",
                 ))
                 index += 1
                 continue
@@ -3395,11 +3500,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         db=db, parsed_odcs=entity, current_user=current_user,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
+                        import_links=links,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
                         **(status_note or {}),
+                    ))
+                except ImportedLifecycleError as e:
+                    # The app's own message, naming the lifecycle property
+                    logger.warning(
+                        "Failed to import contract at batch index %d (file %s): %s",
+                        index, filename, e,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="failed", message=str(e),
+                        code=e.code, params=e.params,
                     ))
                 except CodedValueError as e:
                     # The app's own refusal (e.g. ``certified`` as a status):
@@ -3427,6 +3544,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     ))
                 index += 1
 
+        add_import_notes(result, links.finish(db, username=current_user))
+        db.commit()
         logger.info(
             "Contract batch import complete: %d created, %d skipped, %d failed (%d total)",
             result.created, result.skipped, result.failed, result.total,
@@ -4165,6 +4284,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         contract_id: str,
         new_status: str,
         current_user: Optional[str] = None,
+        deprecation: Optional[DeprecationDetails] = None,
         also_set: Optional[Dict[str, Any]] = None,
     ) -> DataContractDb:
         """
@@ -4176,6 +4296,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_id: Contract UUID
             new_status: New status value
             current_user: Username of current user
+            deprecation: Reason, sunset date and replacement, required when
+                moving to ``deprecated`` (see ``lifecycle_fields``)
             also_set: Other fields written in the same commit as the status,
                 only once the gates passed (e.g. a review request clears
                 ``draft_owner_id`` with its draft -> proposed change)
@@ -4199,9 +4321,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Allow any transition if current status not in map (backward compatibility)
             if current_status in valid_transitions:
                 raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
-        
+
         # Run before_status_change workflows (gating)
-        # (a gate that errors refuses the transition when it is fail_closed, #1103)
+        # (a gate that errors refuses the transition when it is fail_closed, #1103);
+        # the deprecation fields are checked after the certified guard, before the gates
         from src.common.workflow_triggers import run_status_gates
         from src.models.process_workflows import EntityType as WFEntityType
         run_status_gates(
@@ -4213,9 +4336,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             entity_name=contract.name,
             entity_data={"name": contract.name, "status": current_status},
             user_email=current_user,
+            before_gates=lambda: check_lifecycle_fields(
+                db, 'data_contract', contract_id, new_status, deprecation
+            ),
         )
         
         try:
+            lifecycle_changes = apply_lifecycle_fields(
+                contract, 'data_contract', current_status, new_status, deprecation
+            )
             updated = data_contract_repo.update(
                 db=db,
                 db_obj=contract,
@@ -4245,7 +4374,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from_status=current_status,
                 to_status=new_status,
                 entity_name=contract.name,
-                entity_data={"name": contract.name, "status": new_status},
+                entity_data={"name": contract.name, "status": new_status, **lifecycle_changes},
                 user_email=current_user,
             )
         except Exception as e:
@@ -6256,7 +6385,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         target_status: str,
         justification: str,
         requester_email: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        sunset_date: Optional[str] = None,
+        replacement_id: Optional[str] = None,
     ) -> dict:
         """Request approval to change the status of a contract via workflow.
 
@@ -6299,7 +6430,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         allowed_transitions = self._get_allowed_status_transitions(current_status)
         if target_status_lower not in allowed_transitions:
             raise ValueError(f"Invalid transition from '{current_status}' to '{target_status}'")
-        
+
+        # A requested deprecation may carry a sunset date and a replacement,
+        # checked now and applied with the justification as the reason
+        requested = {}
+        if target_status_lower == 'deprecated' and (sunset_date or replacement_id):
+            from src.controller.lifecycle_fields import (
+                check_requested_deprecation, requested_deprecation_data,
+            )
+            details = check_requested_deprecation(
+                db, 'data_contract', contract_id, justification, sunset_date, replacement_id,
+            )
+            requested = requested_deprecation_data(db, 'data_contract', details)
+
         now = datetime.utcnow()
         # Ties the decision to this request (certified deprecation guard)
         request_id = str(uuid4())
@@ -6317,6 +6460,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "target_status": target_status_lower,
                 "justification": justification,
                 "request_id": request_id,
+                # The approval applies them (the change log entry is written after)
+                **requested,
             },
             user_email=requester_email,
         )
@@ -6336,6 +6481,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "current_status": current_status,
                 "target_status": target_status,
                 "justification": justification,
+                **requested,
                 "timestamp": now.isoformat(),
                 "summary": f"Status change from '{current_status}' to '{target_status}' requested by {requester_email}",
                 **outcome,
@@ -6411,12 +6557,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
 
             # Through transition_status, like a product's approved request, so
-            # the before_status_change gates run and on_status_change fires.
+            # the before_status_change gates run and on_status_change fires; a
+            # requested deprecation uses the request's justification as its reason.
+            request_id, deprecation = requested_deprecation(
+                db, 'data_contract', contract_id, target_status_lower
+            )
             contract = self.transition_status(
                 db=db,
                 contract_id=contract_id,
                 new_status=target_status_lower,
                 current_user=current_user,
+                deprecation=deprecation,
+            )
+            audit_approved_lifecycle_change(
+                db, 'data_contract', contract_id, from_status, target_status_lower,
+                request_id, current_user or approver_email,
             )
             
             notification_title = "Status Change Approved"
@@ -7201,6 +7356,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             publication_scope=getattr(db_contract, "publication_scope", None) or "none",
             published_at=db_contract.published_at.isoformat() if getattr(db_contract, "published_at", None) else None,
             published_by=db_contract.published_by,
+            deprecation_reason=getattr(db_contract, "deprecation_reason", None),
+            sunset_date=_isoformat(getattr(db_contract, "sunset_date", None)),
+            replacement_contract_id=getattr(db_contract, "replacement_contract_id", None),
+            deprecated_at=_isoformat(getattr(db_contract, "deprecated_at", None)),
         )
 
     def compare_contracts(self, old_contract: Dict, new_contract: Dict) -> Dict:

@@ -4,7 +4,9 @@
   with a product's payload, instead of its own English notifications;
 - the completion of the request workflow applies an approved contract request
   through ``DataContractsManager.transition_status``, only while the contract
-  still has the status the request was made from;
+  still has the status the request was made from, with the deprecation the
+  request asked for (its justification as the reason, its sunset date and
+  replacement), audited as ``DEPRECATE``;
 - the default "Status Change Request" workflow covers contracts, and an
   existing install gets ``data_contract`` added to its stored default once,
   keeping the admin's edits.
@@ -16,6 +18,7 @@ os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import json
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -24,7 +27,9 @@ import pytest
 import yaml
 
 from src.common.workflow_executor import WorkflowExecutor
+from src.controller import audit_manager
 from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.lifecycle_fields import DeprecationDetails, utc_today
 from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.app_settings import AppSettingDb
 from src.db_models.data_contracts import DataContractDb
@@ -34,6 +39,15 @@ from src.models.process_workflows import EntityType, TriggerContext, TriggerType
 
 DEFAULT_WORKFLOWS = Path(__file__).resolve().parents[2] / 'data' / 'default_workflows.yaml'
 UPGRADE_KEY = 'default_workflow_added_status_change_request_data_contract'
+
+
+@pytest.fixture(autouse=True)
+def audited(monkeypatch):
+    # An approved deprecation is audited (#1042) in a session of its own, whose
+    # commit would keep this test's rows in the shared test database.
+    entries = []
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: entries.append(kw))
+    return entries
 
 
 def _contract(db, status='active'):
@@ -98,12 +112,12 @@ def test_the_request_is_logged_with_the_id_the_workflow_gets(db_session):
 
 # --- The completion ----------------------------------------------------------
 
-def _complete(db, contract, approved, target='deprecated', from_status=None):
+def _complete(db, contract, approved, target='deprecated', from_status=None, **requested):
     context = TriggerContext(
         entity_type='data_contract', entity_id=contract.id, entity_name=contract.name,
         trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
         from_status=from_status or contract.status, to_status=target,
-        entity_data={'target_status': target, 'justification': 'Moving to v2'},
+        entity_data={'target_status': target, 'justification': 'Moving to v2', **requested},
     )
     workflow = SimpleNamespace(
         name='Status Change Request',
@@ -140,7 +154,51 @@ def test_it_goes_through_the_contracts_transition_status(db_session):
     manager.transition_status.assert_called_once_with(
         db=db_session, contract_id=contract.id, new_status='deprecated',
         current_user='approver@example.com',
+        deprecation=DeprecationDetails(reason='Moving to v2'),
     )
+
+
+def test_an_approval_applies_the_requested_deprecation_and_audits_it(db_session, audited):
+    contract, replacement = _contract(db_session), _contract(db_session)
+    sunset = utc_today() + timedelta(days=30)
+
+    _complete(
+        db_session, contract, True, request_id='r-1',
+        sunset_date=sunset.isoformat(), replacement_id=replacement.id,
+    )
+
+    db_session.refresh(contract)
+    assert contract.status == 'deprecated'
+    assert contract.deprecation_reason == 'Moving to v2'
+    assert contract.sunset_date == sunset
+    assert contract.replacement_contract_id == replacement.id
+    [entry] = [a for a in audited if a['action'] == 'DEPRECATE']
+    assert entry['feature'] == 'data-contracts'
+    assert entry['details']['request_id'] == 'r-1'
+    assert entry['details']['deprecation_reason'] == 'Moving to v2'
+    assert entry['details']['replacement_contract_id'] == replacement.id
+
+
+def test_a_synchronous_run_does_not_take_an_earlier_requests_details(db_session):
+    # The run completes before its request is logged; an earlier request's
+    # sunset date and replacement are not this request's
+    from src.controller.change_log_manager import change_log_manager
+
+    contract, replacement = _contract(db_session), _contract(db_session)
+    change_log_manager.log_change_with_details(
+        db_session, entity_type='data_contract', entity_id=contract.id,
+        action='status_change_requested', username='requester@example.com',
+        details={'target_status': 'deprecated', 'justification': 'Old reason',
+                 'request_id': 'r-old', 'replacement_id': replacement.id,
+                 'sunset_date': (utc_today() + timedelta(days=9)).isoformat()},
+    )
+
+    _complete(db_session, contract, True, request_id='r-new')
+
+    db_session.refresh(contract)
+    assert contract.status == 'deprecated'
+    assert (contract.deprecation_reason, contract.sunset_date,
+            contract.replacement_contract_id) == ('Moving to v2', None, None)
 
 
 def test_a_request_made_from_another_status_is_not_applied(db_session):
@@ -184,7 +242,9 @@ def test_a_certified_contract_needs_the_approval_step(db_session):
     context = TriggerContext(
         entity_type='data_contract', entity_id=contract.id, entity_name=contract.name,
         trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE, user_email='requester@example.com',
-        from_status='active', to_status='deprecated', entity_data={},
+        from_status='active', to_status='deprecated',
+        # A reason is given: the refusal is the guard's
+        entity_data={'justification': 'Moving to v2'},
     )
     workflow = SimpleNamespace(
         name='Status Change Request',

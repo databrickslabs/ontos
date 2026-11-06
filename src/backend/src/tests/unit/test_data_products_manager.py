@@ -504,7 +504,10 @@ class TestDataProductsManager:
         created = manager.create_product(sample_product_data, db=db_session)
 
         # Act
-        result = manager.deprecate_product(created.id)
+        from src.controller.lifecycle_fields import DeprecationDetails
+        result = manager.deprecate_product(
+            created.id, deprecation=DeprecationDetails(reason="Replaced by v2")
+        )
 
         # Assert
         assert result is not None

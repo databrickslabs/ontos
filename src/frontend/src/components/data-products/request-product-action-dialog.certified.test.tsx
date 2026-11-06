@@ -1,7 +1,8 @@
 /**
  * Deprecating a certified product directly is refused by the certified guard
  * (`certified_deprecation_requires_approval`): the dialog shows the error in
- * the UI language and offers to send a status change request instead.
+ * the UI language and offers to send a status change request instead, with the
+ * reason given for the direct change as its justification.
  *
  * The Radix Select hangs in jsdom, so it is replaced by a native select.
  */
@@ -43,6 +44,8 @@ vi.mock('@/components/ui/select', () => ({
   SelectItem: ({ value }: any) => <option value={value}>{value}</option>,
 }));
 
+const REASON = 'Replaced by Orders v2; every consumer has moved.';
+
 const REFUSED = {
   data: {},
   error: "The data product 'Orders' is certified: deprecating it needs an approved status "
@@ -72,6 +75,10 @@ function chooseDeprecate() {
     (select) => select.querySelector('option[value="deprecated"]'),
   ) as HTMLSelectElement;
   fireEvent.change(target, { target: { value: 'deprecated' } });
+  // A direct deprecation needs a reason
+  fireEvent.change(document.getElementById('deprecation-reason') as HTMLTextAreaElement, {
+    target: { value: REASON },
+  });
 }
 
 describe('RequestProductActionDialog certified deprecation', () => {
@@ -104,9 +111,7 @@ describe('RequestProductActionDialog certified deprecation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Solicitar a mudança de status' }));
 
     const justification = await screen.findByRole('textbox');
-    fireEvent.change(justification, {
-      target: { value: 'Replaced by Orders v2; every consumer has moved.' },
-    });
+    expect(justification).toHaveValue(REASON);
     fireEvent.click(screen.getByRole('button', {
       name: i18n.t('data-products:requestAction.buttons.sendRequest'),
     }));
@@ -115,7 +120,7 @@ describe('RequestProductActionDialog certified deprecation', () => {
     expect(mockPost.mock.calls[1][0]).toBe('/api/data-products/prod-1/request-status-change');
     expect(mockPost.mock.calls[1][1]).toMatchObject({
       target_status: 'deprecated',
-      justification: 'Replaced by Orders v2; every consumer has moved.',
+      justification: REASON,
       current_status: 'active',
     });
   });

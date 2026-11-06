@@ -15,6 +15,18 @@ const REASON_KEYS: Record<string, string> = {
   rule_entity_not_found: 'workflow-gates:reasons.entityNotFound',
 };
 
+/** Codes of the deprecation checks (`common:deprecation.errors.<code>`). */
+const DEPRECATION_ERROR_CODES = new Set([
+  'deprecation_reason_required',
+  'sunset_date_in_past',
+  'replacement_is_self',
+  'replacement_not_found',
+  'replacement_retired',
+  'replacement_deprecated',
+  'replacement_deprecated_replaced',
+  'replacement_leads_back',
+]);
+
 function reasonText(reason: BlockedReason, t: TFunction): string {
   let text = reason.text;
   if (reason.code === 'execution_status') {
@@ -39,6 +51,10 @@ function reasonText(reason: BlockedReason, t: TFunction): string {
  * are translated too, and so is a `fail_closed` gate that couldn't be evaluated
  * (`status_change_gate_error`). Any other error is the English `error` the API sent.
  *
+ * A deprecation the details don't allow (no reason, a past sunset date, an
+ * unusable replacement) is answered with one of `DEPRECATION_ERROR_CODES`
+ * and translated from `common:deprecation.errors`.
+ *
  * `statusNamespace` is the namespace whose `status.<status>` keys label the
  * entity's statuses (`data-products`, `data-contracts`).
  */
@@ -49,6 +65,12 @@ export function statusChangeErrorText(
 ): string {
   const error = response.error || '';
   const params = response.errorParams;
+  if (response.errorCode && DEPRECATION_ERROR_CODES.has(response.errorCode)) {
+    return t(`common:deprecation.errors.${response.errorCode}`, {
+      ...(params ?? {}),
+      defaultValue: error,
+    });
+  }
   const statusLabel = (status: unknown) =>
     t(`${statusNamespace}:status.${String(status ?? '')}`, { defaultValue: String(status ?? '') });
   // The lifecycle status checks of src.common.lifecycle_status

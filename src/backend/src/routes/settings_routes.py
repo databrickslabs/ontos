@@ -156,6 +156,7 @@ async def get_ui_customization(_current_user: CurrentUserDep):
     - app_display_name: Global application display name (overrides default product name)
     - app_short_name: Optional short/abbreviated name for compact UI surfaces
     - favicon_url: URL to custom favicon image
+    - edition: ``full`` or ``essentials``; which features the menus show (presentation only)
     """
     try:
         app_settings = get_settings()
@@ -167,6 +168,7 @@ async def get_ui_customization(_current_user: CurrentUserDep):
             "app_display_name": app_settings.UI_APP_DISPLAY_NAME,
             "app_short_name": app_settings.UI_APP_SHORT_NAME,
             "favicon_url": app_settings.UI_FAVICON_URL,
+            "edition": app_settings.UI_EDITION,
         }
     except Exception as e:
         logger.error("Error getting UI customization settings", exc_info=True)

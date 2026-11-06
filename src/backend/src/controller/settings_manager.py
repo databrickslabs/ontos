@@ -17,7 +17,12 @@ from src.common.instance_identity import (
     validate_instance_id,
     validate_instance_name,
 )
-from src.common.config import Settings
+from src.common.config import (
+    UI_EDITION_DEFAULT,
+    Settings,
+    coerce_ui_edition,
+    validate_ui_edition,
+)
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
     sanitize_app_display_name,
@@ -403,6 +408,12 @@ class SettingsManager:
             if 'UI_FAVICON_URL' in all_settings and all_settings['UI_FAVICON_URL'] is not None:
                 self._settings.UI_FAVICON_URL = all_settings['UI_FAVICON_URL']
                 logger.debug("Loaded UI_FAVICON_URL from database")
+
+            if all_settings.get('UI_EDITION') is not None:
+                self._settings.UI_EDITION = coerce_ui_edition(
+                    all_settings['UI_EDITION'], source='database'
+                )
+                logger.debug(f"Loaded UI_EDITION from database: {self._settings.UI_EDITION}")
 
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
@@ -1375,6 +1386,7 @@ class SettingsManager:
             'ui_app_display_name': self._settings.UI_APP_DISPLAY_NAME,
             'ui_app_short_name': self._settings.UI_APP_SHORT_NAME,
             'ui_favicon_url': self._settings.UI_FAVICON_URL,
+            'ui_edition': self._settings.UI_EDITION,
         }
 
     # Settings the Git service reads: its remote and its export location.
@@ -1531,6 +1543,13 @@ class SettingsManager:
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
         git_values_before = self._git_setting_values()
+        # Check the edition before anything is written, so a bad value persists nothing
+        new_edition = None
+        if 'ui_edition' in settings:
+            raw_edition = settings.get('ui_edition')
+            new_edition = (
+                UI_EDITION_DEFAULT if raw_edition is None else validate_ui_edition(raw_edition)
+            )
         # Persist configured cluster ID string; do not scan clusters
         cluster_in_payload = 'job_cluster_id' in settings
         desired_cluster_id: Optional[str] = (
@@ -1781,6 +1800,12 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'UI_FAVICON_URL', value)
             self._settings.UI_FAVICON_URL = value
             logger.info(f"Updated UI_FAVICON_URL")
+
+        # Edition (presentation only): an unknown value is refused with a coded 400
+        if 'ui_edition' in settings:
+            app_settings_repo.set(self._db, 'UI_EDITION', new_edition)
+            self._settings.UI_EDITION = new_edition
+            logger.info(f"Updated UI_EDITION to: {new_edition}")
 
         # Reinitialize the Git service only when a value it reads changed. The
         # export location comes from the volume settings, so they count too; the

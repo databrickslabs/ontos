@@ -63,9 +63,12 @@ export default function RequiredActionsSection() {
     n => n.type === 'action_required' && n.action_type === 'handle_role_request'
   );
 
-  // Filter workflow approval items separately so they get inline approve/deny
+  // Filter workflow approval items separately so they get inline approve/deny.
+  // Decided ones (payload `handled`, set by the backend for this user's or another
+  // target member's decision) stay in the bell history only; `read` alone keeps them.
   const workflowApprovalNotifications = notifications.filter(
     n => n.type === 'action_required' && n.action_type === 'workflow_approval'
+      && !n.action_payload?.handled
   );
 
   // Filter other action items (excluding role requests and workflow approvals)

@@ -310,6 +310,92 @@ def test_the_idle_recheck_can_be_turned_off(db_session, sessions):
     assert sessions.opened == 1 and scheduler._has_scheduled is False
 
 
+def test_an_unrelated_edit_after_a_slot_does_not_drop_it(db_session, sessions):
+    from src.models.process_workflows import ProcessWorkflowUpdate
+
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    scheduler = _scheduler(sessions)
+    scheduler.run_once(_at(minute=0, second=1))  # 10:00 runs
+    # Renamed at 10:05:30, before the 10:05 slot fired (a late wake-up, a retry).
+    WorkflowsManager(db_session).update_workflow(
+        workflow.id, ProcessWorkflowUpdate(name='Renamed'))
+    db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id).update(
+        {'updated_at': _at(minute=5, second=30)}, synchronize_session=False)
+    db_session.commit()
+    scheduler.run_once(_at(minute=5, second=40))
+    assert len(_executions(db_session, workflow.id)) == 2
+
+
+@pytest.mark.parametrize('change', ['cron', 'toggle'])
+def test_a_schedule_change_after_a_slot_still_moves_the_cutoff(db_session, sessions, change):
+    workflow = _create(db_session, changed=_at(hour=9, minute=58))
+    scheduler = _scheduler(sessions)
+    scheduler.run_once(_at(minute=0, second=1))
+    query = db_session.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == workflow.id)
+    if change == 'cron':
+        query.update({'trigger_config': '{"type": "scheduled", "schedule": "0 0/15 * * * ?"}',
+                      'updated_at': _at(minute=5, second=30)}, synchronize_session=False)
+    else:
+        query.update({'is_active': False}, synchronize_session=False)
+        db_session.commit()
+        scheduler.invalidate()
+        scheduler.run_once(_at(minute=5, second=20))  # sees it off
+        query.update({'is_active': True, 'updated_at': _at(minute=5, second=30)},
+                     synchronize_session=False)
+    db_session.commit()
+    scheduler.invalidate()
+    scheduler.run_once(_at(minute=5, second=40))
+    assert len(_executions(db_session, workflow.id)) == 1  # 10:05 isn't run
+
+
+def test_a_failure_before_the_claim_retries_the_slot_soon(db_session, sessions):
+    from sqlalchemy.exc import OperationalError
+
+    from src.controller.workflow_scheduler import ERROR_RETRY_SECONDS
+
+    workflow = _create(db_session, schedule='0 0 * * * ?', changed=_at(hour=9, minute=58))
+    scheduler = _scheduler(sessions)
+    down = OperationalError('SELECT', {}, Exception('connection refused'))
+    with patch.object(scheduler_claims_repo, 'latest_slot', side_effect=down):
+        assert scheduler.run_once(_at(minute=0, second=1)) == ERROR_RETRY_SECONDS
+    assert _claims(db_session, workflow.id) == []
+    # The next pass runs the same slot once; no retry is pending any more.
+    assert scheduler.run_once(_at(minute=1, second=1)) == pytest.approx(59 * 60 - 0.5)
+    assert len(_executions(db_session, workflow.id)) == 1
+    assert len(_claims(db_session, workflow.id)) == 1
+
+
+def test_the_loop_waits_the_retry_delay_after_a_failed_pass_and_goes_on(sessions):
+    from src.controller.workflow_scheduler import ERROR_RETRY_SECONDS
+
+    scheduler = _scheduler(sessions)
+    waits = []
+    passes = iter([RuntimeError('database down'), 42.0, None])
+
+    def run_once():
+        item = next(passes)
+        if isinstance(item, Exception):
+            raise item
+        if item is None:
+            scheduler._stop.set()
+        return item
+
+    class _Wake:
+        def clear(self):
+            pass
+
+        def set(self):
+            pass
+
+        def wait(self, timeout=None):
+            waits.append(timeout)
+
+    scheduler.run_once = run_once
+    scheduler._wake = _Wake()
+    scheduler._loop()
+    assert waits == [ERROR_RETRY_SECONDS, 42.0]
+
+
 def test_a_failing_run_records_an_error_outcome(db_session, sessions):
     workflow = _create(db_session, changed=_at(hour=9, minute=58))
     scheduler = _scheduler(sessions)

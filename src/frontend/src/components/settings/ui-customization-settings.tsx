@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,9 +27,11 @@ import {
   RotateCcw,
   ExternalLink,
   Tag,
+  LayoutGrid,
 } from 'lucide-react';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
-import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { toEdition, useUICustomizationStore } from '@/stores/ui-customization-store';
+import { DEFAULT_EDITION, EDITIONS, type Edition } from '@/config/features';
 import {
   CardSkeleton,
   SkeletonLine,
@@ -44,6 +49,7 @@ interface UICustomizationState {
   appDisplayName: string;
   appShortName: string;
   faviconUrl: string;
+  edition: Edition;
 }
 
 export default function UICustomizationSettings() {
@@ -61,6 +67,7 @@ export default function UICustomizationSettings() {
     appDisplayName: '',
     appShortName: '',
     faviconUrl: '',
+    edition: DEFAULT_EDITION,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -83,6 +90,7 @@ export default function UICustomizationSettings() {
             appDisplayName: data.ui_app_display_name || '',
             appShortName: data.ui_app_short_name || '',
             faviconUrl: data.ui_favicon_url || '',
+            edition: toEdition(data.ui_edition),
           });
         }
       } catch (error) {
@@ -108,6 +116,7 @@ export default function UICustomizationSettings() {
           ui_app_display_name: settings.appDisplayName.trim() || null,
           ui_app_short_name: settings.appShortName.trim() || null,
           ui_favicon_url: settings.faviconUrl || null,
+          ui_edition: settings.edition,
         }),
       });
       if (response.ok) {
@@ -218,6 +227,58 @@ export default function UICustomizationSettings() {
       </div>
 
       <div className="space-y-8">
+        {/* Edition: which features the menus show (presentation only) */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+            <h3 className="text-lg font-medium">
+              {t('settings:uiCustomization.edition.title', 'Edition')}
+            </h3>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ui-edition">
+              {t('settings:uiCustomization.edition.label', 'Edition')}
+            </Label>
+            <Select
+              value={settings.edition}
+              onValueChange={(value) =>
+                setSettings((prev) => ({ ...prev, edition: toEdition(value) }))
+              }
+              disabled={!hasWriteAccess}
+            >
+              <SelectTrigger id="ui-edition" className="max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EDITIONS.map((edition) => (
+                  <SelectItem key={edition} value={edition}>
+                    {t(`settings:uiCustomization.edition.options.${edition}`, edition)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                `settings:uiCustomization.edition.descriptions.${settings.edition}`,
+                '',
+              )}
+            </p>
+          </div>
+          <Alert variant="default">
+            <AlertDescription>
+              {t(
+                'settings:uiCustomization.edition.help',
+                'The edition only changes what the navigation, the home quick actions and the '
+                  + 'About page show. Permissions are unchanged: hidden pages still open from a '
+                  + 'direct link for users who have access, and admins can turn on '
+                  + '"Show All Features" in the user menu.',
+              )}
+            </AlertDescription>
+          </Alert>
+        </div>
+
+        <Separator />
+
         {/* Internationalization Settings */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">

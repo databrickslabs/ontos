@@ -284,6 +284,9 @@
     "featurePreviews": "Anteprime funzionalità",
     "showBetaFeatures": "Mostra funzionalità beta",
     "showAlphaFeatures": "Mostra funzionalità alpha",
+    "edition": {
+      "showAllFeatures": "Mostra tutte le funzionalità"
+    },
     "logOut": "Esci"
   },
   "projectMenu": {

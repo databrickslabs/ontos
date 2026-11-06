@@ -16,6 +16,42 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
+# UI edition: which features the navigation, home quick actions and About page show.
+# Presentation only: permissions and routes don't depend on it.
+UI_EDITIONS: Tuple[str, ...] = ('full', 'essentials')
+UI_EDITION_DEFAULT = 'full'
+
+
+class UiEditionInvalidError(CodedValueError):
+    """An edition that isn't one of ``UI_EDITIONS``."""
+
+    code = 'ui_edition_invalid'
+
+
+def validate_ui_edition(value: Any) -> str:
+    """The edition, lowercased; raises ``UiEditionInvalidError`` for anything else."""
+    edition = value.strip().lower() if isinstance(value, str) else None
+    if edition not in UI_EDITIONS:
+        raise UiEditionInvalidError(
+            f"Unknown edition '{value}'. Use one of: {', '.join(UI_EDITIONS)}.",
+            value=str(value), allowed=list(UI_EDITIONS),
+        )
+    return edition
+
+
+def coerce_ui_edition(value: Any, *, source: str) -> str:
+    """The edition, or ``full`` with a warning when ``value`` is empty or unknown."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return UI_EDITION_DEFAULT
+    try:
+        return validate_ui_edition(value)
+    except UiEditionInvalidError:
+        logger.warning(
+            "Unknown UI_EDITION %r in the %s, using '%s'", value, source, UI_EDITION_DEFAULT,
+        )
+        return UI_EDITION_DEFAULT
+
+
 # Define paths
 DOTENV_FILE = Path(__file__).parent.parent.parent / Path(".env")
 
@@ -234,6 +270,8 @@ class Settings(BaseSettings):
     UI_APP_DISPLAY_NAME: Optional[str] = Field(None, env='UI_APP_DISPLAY_NAME')  # Global application display name (overrides default product name in UI copy)
     UI_APP_SHORT_NAME: Optional[str] = Field(None, env='UI_APP_SHORT_NAME')  # Optional short/abbreviated name for compact UI surfaces
     UI_FAVICON_URL: Optional[str] = Field(None, env='UI_FAVICON_URL')  # URL to custom favicon image (http/https)
+    # Edition: which features the menus show (presentation only, permissions unchanged)
+    UI_EDITION: str = Field(UI_EDITION_DEFAULT, env='UI_EDITION')
 
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(
@@ -241,6 +279,12 @@ class Settings(BaseSettings):
         case_sensitive=True, 
         extra='ignore' # Explicitly ignore extra env vars
     )
+
+    @field_validator('UI_EDITION', mode='before')
+    @classmethod
+    def fall_back_to_default_edition(cls, value: Any) -> str:
+        """An unknown edition from the environment falls back to ``full`` with a warning."""
+        return coerce_ui_edition(value, source='environment')
 
     @model_validator(mode='after')
     def compute_databricks_http_path(self) -> 'Settings':

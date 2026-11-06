@@ -38,12 +38,24 @@ vi.mock('@/stores/permissions-store', () => ({
   usePermissions: () => permissionsState,
 }));
 
+const toggleShowAllFeaturesMock = vi.fn();
 vi.mock('@/stores/feature-visibility-store', () => ({
   useFeatureVisibilityStore: () => ({
     showBeta: false,
     showAlpha: false,
-    actions: { toggleBeta: vi.fn(), toggleAlpha: vi.fn() },
+    showAllFeatures: false,
+    actions: {
+      toggleBeta: vi.fn(),
+      toggleAlpha: vi.fn(),
+      toggleShowAllFeatures: toggleShowAllFeaturesMock,
+    },
   }),
+}));
+
+let editionState: 'full' | 'essentials' = 'full';
+vi.mock('@/stores/ui-customization-store', () => ({
+  useUICustomizationStore: (selector: (s: { edition: string }) => unknown) =>
+    selector({ edition: editionState }),
 }));
 
 // Dialog is irrelevant for these tests; stub it out so we don't need its deps.
@@ -52,6 +64,7 @@ vi.mock('@/components/ui/user-profile-dialog', () => ({
 }));
 
 import UserInfo from './user-info';
+import { useUserStore } from '@/stores/user-store';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,6 +111,10 @@ const consumerRole = {
 };
 
 const mockUserDetailsFetch = (groups: string[], username: string = 'test.user') => {
+  // The admin check reads the shared user store (filled by the app at startup).
+  useUserStore.setState({
+    userInfo: { email: `${username}@example.com`, username, user: username, ip: null, groups },
+  });
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/api/user/details') || url.includes('/api/user/info')) {
@@ -241,5 +258,64 @@ describe('UserInfo role switcher gating', () => {
     expect(await screen.findByText('userMenu.applyRoleOverride')).toBeInTheDocument();
     expect(screen.getByText('Data Producer')).toBeInTheDocument();
     expect(screen.getByText('Data Steward')).toBeInTheDocument();
+  });
+});
+
+describe('UserInfo feature switches by edition', () => {
+  beforeEach(() => {
+    editionState = 'full';
+    toggleShowAllFeaturesMock.mockReset();
+    permissionsState = {
+      permissions: {},
+      actualPermissions: {},
+      isLoading: false,
+      availableRoles: [adminRole, producerRole],
+      appliedRoleId: null,
+      setRoleOverride: setRoleOverrideMock,
+      initializeStore: initializeStoreMock,
+      hasPermission: () => true,
+    };
+  });
+
+  const renderOpen = async (groups: string[], username: string) => {
+    mockUserDetailsFetch(groups, username);
+    renderWithProviders(<UserInfo />);
+    const user = await openMenu();
+    await waitFor(() => expect(screen.getByText('userMenu.profile')).toBeInTheDocument());
+    return user;
+  };
+
+  it('Full: a non-admin keeps the beta switch and gets no "Show all features"', async () => {
+    await renderOpen(['data-producers'], 'producer');
+    expect(screen.getByText('userMenu.showBetaFeatures')).toBeInTheDocument();
+    expect(screen.queryByText('Show All Features')).not.toBeInTheDocument();
+  });
+
+  it('Full: an admin gets no "Show all features" either', async () => {
+    await renderOpen(['admins'], 'admin.user');
+    await waitFor(() =>
+      expect(screen.getByText('userMenu.showAlphaFeatures')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Show All Features')).not.toBeInTheDocument();
+  });
+
+  it('Essentials: a non-admin sees no beta/alpha switches', async () => {
+    editionState = 'essentials';
+    await renderOpen(['data-producers'], 'producer');
+    expect(screen.queryByText('userMenu.featurePreviews')).not.toBeInTheDocument();
+    expect(screen.queryByText('userMenu.showBetaFeatures')).not.toBeInTheDocument();
+    expect(screen.queryByText('userMenu.showAlphaFeatures')).not.toBeInTheDocument();
+    expect(screen.queryByText('Show All Features')).not.toBeInTheDocument();
+  });
+
+  it('Essentials: an admin gets "Show all features" next to the maturity switches', async () => {
+    editionState = 'essentials';
+    const user = await renderOpen(['admins'], 'admin.user');
+    expect(await screen.findByText('Show All Features')).toBeInTheDocument();
+    expect(screen.getByText('userMenu.showBetaFeatures')).toBeInTheDocument();
+    expect(screen.getByText('userMenu.showAlphaFeatures')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: 'Show All Features' }));
+    expect(toggleShowAllFeaturesMock).toHaveBeenCalledTimes(1);
   });
 });

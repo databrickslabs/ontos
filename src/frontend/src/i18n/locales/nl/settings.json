@@ -650,6 +650,19 @@
   "uiCustomization": {
     "title": "UI-aanpassing",
     "description": "Pas de branding, taalinstellingen en weergave van de applicatie aan.",
+    "edition": {
+      "title": "Editie",
+      "label": "Editie",
+      "options": {
+        "full": "Volledig",
+        "essentials": "Essentials"
+      },
+      "descriptions": {
+        "full": "Alle functies verschijnen in de menu's.",
+        "essentials": "Een beknopt menu voor teams die beginnen met hun Unity Catalog-tabellen: Zoeken, Datacatalogus, Assets, Concepten, Asset Beoordelingen en Mijn aanvragen."
+      },
+      "help": "De editie verandert alleen wat de navigatie, de snelle acties op de startpagina en de pagina Over tonen. Rechten veranderen niet: verborgen pagina's openen nog steeds via een directe link voor gebruikers met toegang, en beheerders kunnen \"Alle functies tonen\" inschakelen in het gebruikersmenu."
+    },
     "i18n": {
       "title": "Taalinstellingen",
       "enableLabel": "Internationalisering inschakelen",

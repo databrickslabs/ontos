@@ -118,3 +118,33 @@ def test_narrows_restrict_to_ids_never_widens(db_session, owned_graph):
 def test_no_owner_email_keeps_today_behaviour(db_session, owned_graph):
     result = AssetsManager().get_all_assets(db=db_session)
     assert {owned_graph.a.id, owned_graph.d.id, owned_graph.e.id} <= _ids(result)
+
+
+def test_paging_assets_with_the_same_name_neither_repeats_nor_skips(db_session, owned_graph):
+    # The same table name in several catalogs: ``name`` alone doesn't order them.
+    table_id = owned_graph.a.asset_type_id
+    role = db_session.query(BusinessRoleDb).filter_by(name="OwnedFilterOwner").one()
+    twins = [
+        AssetDb(id=uuid.uuid4(), name="orders", asset_type_id=table_id, status="active",
+                platform="databricks", location=f"cat{i}.sales.orders")
+        for i in range(5)
+    ]
+    db_session.add_all(twins)
+    db_session.flush()
+    for twin in twins:
+        db_session.add(BusinessOwnerDb(
+            object_type="asset", object_id=str(twin.id), user_email=OTHER,
+            role_id=role.id, is_active=True,
+        ))
+    db_session.flush()
+
+    mgr = AssetsManager()
+    pages = [
+        mgr.get_all_assets(db=db_session, owner_email=OTHER, skip=i, limit=1) for i in range(6)
+    ]
+    seen = [item.id for page in pages for item in page.items]
+    assert len(seen) == len(set(seen)) == 6
+    assert set(seen) == {owned_graph.d.id, *(t.id for t in twins)}
+    # Same name: the id breaks the tie, so every page call agrees on one order.
+    twin_ids = [i for i in seen if i != owned_graph.d.id]
+    assert twin_ids == sorted(twin_ids, key=str)

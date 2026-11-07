@@ -11,6 +11,7 @@ from datetime import date
 
 import pytest
 
+from src.controller import assets_manager as assets_manager_module
 from src.db_models.assets import AssetDb, AssetRelationshipDb, AssetTypeDb
 from src.db_models.change_log import ChangeLogDb
 from src.db_models.costs import CostItemDb
@@ -77,7 +78,7 @@ NONE_LEFT = {model.__name__: 0 for model in MODELS}
 ONE_EACH = {model.__name__: 1 for model in MODELS}
 REMOVED = {
     'domains': 1, 'rich_texts': 1, 'links': 1, 'documents': 1, 'attachments': 1,
-    'cost_items': 1, 'document_files_deleted': 1, 'document_files_failed': 0,
+    'cost_items': 1,
 }
 
 
@@ -129,8 +130,7 @@ def test_a_failing_file_delete_does_not_stop_the_asset_delete(
     assert response.status_code == 200, response.text
     assert db_session.query(AssetDb).filter(AssetDb.id == asset.id).count() == 0
     assert _counts(db_session, 'asset', str(asset.id)) == NONE_LEFT
-    removed = _deleted_details(db_session, asset.id)['removed']
-    assert (removed['document_files_deleted'], removed['document_files_failed']) == (0, 1)
+    files.delete.assert_called_once()
 
 
 def test_cascade_delete_removes_the_data_of_every_asset(client, db_session, make_asset, files):
@@ -154,3 +154,52 @@ def test_cascade_delete_removes_the_data_of_every_asset(client, db_session, make
     assert _counts(db_session, 'asset', str(other.id)) == ONE_EACH
     assert _counts(db_session, 'data_contract', str(child.id)) == ONE_EACH
     assert _deleted_paths(files) == paths
+
+
+# --- The files go only once the transaction commits -------------------------
+# A rollback of the request's session also rolls back the test's own data (see
+# test_asset_metadata_access.py), so these tests check the volume calls only.
+
+@pytest.fixture
+def change_log_rolls_back_for(monkeypatch):
+    """The change-log write of the given assets fails and rolls the session back.
+
+    It is the commit point of each deleted asset (``log_change`` commits).
+    """
+    failing = set()
+    real = assets_manager_module.change_log_manager.log_change_with_details
+
+    def log_change_with_details(db, **kwargs):
+        if kwargs.get('entity_id') in failing:
+            db.rollback()
+            raise RuntimeError('commit failed')
+        return real(db, **kwargs)
+
+    monkeypatch.setattr(assets_manager_module.change_log_manager, 'log_change_with_details',
+                        log_change_with_details)
+    return failing
+
+
+def test_a_rolled_back_delete_keeps_the_files(
+        client, db_session, make_asset, files, change_log_rolls_back_for):
+    asset = make_asset('orders')
+    _seed(db_session, 'asset', str(asset.id))
+    change_log_rolls_back_for.add(str(asset.id))
+
+    client.delete(f'/api/assets/{asset.id}')
+
+    files.delete.assert_not_called()
+
+
+def test_a_cascade_that_rolls_back_a_later_asset_keeps_its_files(
+        client, db_session, make_asset, files, change_log_rolls_back_for):
+    """The first asset is committed (its files go); the second rolls back (its files stay)."""
+    first, second = make_asset('first'), make_asset('second')
+    first_path = _seed(db_session, 'asset', str(first.id))
+    _seed(db_session, 'asset', str(second.id))
+    change_log_rolls_back_for.add(str(second.id))
+
+    client.post('/api/assets/cascade-delete',
+                json={'asset_ids': [str(first.id), str(second.id)]})
+
+    assert _deleted_paths(files) == {first_path}

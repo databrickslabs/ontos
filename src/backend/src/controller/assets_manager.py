@@ -496,9 +496,10 @@ class AssetsManager(SearchableAsset):
 
         Removes its domain associations, notes, links, documents, attachments
         and cost items (rows with ``entity_type == "asset"`` and its id), then
-        the asset row, then the documents' files in the volume. A file that
-        can't be deleted is logged and counted, never raised. Returns the
-        number removed per kind, for the change log.
+        the asset row. The documents' files are deleted from the volume once
+        the transaction commits (kept if it rolls back); a file that can't be
+        deleted is logged, never raised. Returns the number of rows removed
+        per kind, for the change log.
         """
         entity_id = str(asset_id)
         removed: Dict[str, int] = {
@@ -514,9 +515,7 @@ class AssetsManager(SearchableAsset):
             db, entity_type="asset", entity_id=entity_id,
         )
         self._asset_repo.remove(db=db, id=asset_id)
-        files_deleted, files_failed = self._metadata_manager.delete_document_files(ws, paths)
-        removed["document_files_deleted"] = files_deleted
-        removed["document_files_failed"] = files_failed
+        self._metadata_manager.delete_document_files_after_commit(db, paths, ws)
         return removed
 
     def delete_asset(

@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any, Tuple
 
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
@@ -26,6 +27,17 @@ logger = get_logger(__name__)
 
 # Constant for shared asset entity_id
 SHARED_ENTITY_ID = "__shared__"
+
+# Session.info keys of the document files to delete once the session commits.
+_PENDING_FILES_KEY = "ontos_pending_document_files"
+_PENDING_FILES_LISTENING = "ontos_pending_document_files_listening"
+
+
+def _drop_pending_files(session: Session) -> None:
+    """On a rollback the document rows come back: keep their files."""
+    pending = session.info.pop(_PENDING_FILES_KEY, [])
+    if pending:
+        logger.info("Rolled back: %d document file(s) kept in the volume", len(pending))
 
 
 class MetadataManager:
@@ -263,6 +275,36 @@ class MetadataManager:
                                exc_info=True)
                 failed += 1
         return deleted, failed
+
+    def delete_document_files_after_commit(
+        self, db: Session, paths: List[str], ws: Optional[WorkspaceClient] = None,
+    ) -> None:
+        """Delete document files from the volume once ``db`` commits, best effort.
+
+        The rows that point to the files are deleted in ``db``'s transaction;
+        deleting the files before the commit would leave rows pointing to
+        missing files if the transaction rolls back. The paths wait in
+        ``db.info`` and are deleted on the next commit, or dropped (the files
+        kept) on a rollback. The counts are logged, never raised.
+        """
+        paths = [path for path in paths if path]
+        if not paths:
+            return
+        pending = db.info.setdefault(_PENDING_FILES_KEY, [])
+        pending.extend((path, ws) for path in paths)
+        if not db.info.get(_PENDING_FILES_LISTENING):
+            db.info[_PENDING_FILES_LISTENING] = True
+            event.listen(db, 'after_commit', self._delete_pending_files)
+            event.listen(db, 'after_rollback', _drop_pending_files)
+
+    def _delete_pending_files(self, session: Session) -> None:
+        pending = session.info.pop(_PENDING_FILES_KEY, [])
+        if not pending:
+            return
+        ws = next((client for _, client in pending if client is not None), None)
+        deleted, failed = self.delete_document_files(ws, [path for path, _ in pending])
+        logger.info("Deleted %d document file(s) from the volume after commit, %d failed",
+                    deleted, failed)
 
     # =========================================================================
     # Shared Assets Management

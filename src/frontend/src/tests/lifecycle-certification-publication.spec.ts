@@ -261,7 +261,7 @@ test.describe('Data Product Detail — Lifecycle Panel & Badges', () => {
     // Cert + Published cells are now part of the basic-info metadata grid
     const certLabel = page.getByText(/^cert:?$/i)
     const publishedLabel = page.getByText(/^published:?$/i)
-    await expect(certLabel.first().or(publishedLabel.first())).toBeVisible({ timeout: 10_000 })
+    await expect(certLabel.or(publishedLabel).first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('certify button visible for admin users', async ({ page }) => {
@@ -315,7 +315,7 @@ test.describe('Data Contract Detail — Lifecycle Panel & Badges', () => {
 
     const certLabel = page.getByText(/^cert:?$/i)
     const publishedLabel = page.getByText(/^published:?$/i)
-    await expect(certLabel.first().or(publishedLabel.first())).toBeVisible({ timeout: 10_000 })
+    await expect(certLabel.or(publishedLabel).first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('contract list shows certification and publication badges', async ({ page }) => {

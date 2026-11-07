@@ -4,11 +4,17 @@ import os
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
+import asyncio
 import uuid
+from contextlib import contextmanager
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.common.genie_client import collect_contract_names, format_metadata_for_genie
+from src.controller.data_products_manager import DataProductsManager
 from src.db_models.data_contracts import DataContractDb
+from src.db_models.data_products import DataProductDb, OutputPortDb
+from src.db_models.metadata import RichTextMetadataDb
 
 
 def _note(title, content, short=None):
@@ -91,3 +97,49 @@ def test_collect_contract_names_maps_ids_to_names(db_session):
 
     assert collect_contract_names([cid, 'missing'], db_session) == {cid: 'Orders v1'}
     assert collect_contract_names([], db_session) == {}
+
+
+def test_create_genie_space_task_passes_contract_names(db_session):
+    contract_id = str(uuid.uuid4())
+    product_id = str(uuid.uuid4())
+    db_session.add(DataContractDb(id=contract_id, name='Orders v1', version='1.0.0', status='draft'))
+    db_session.add(DataProductDb(
+        id=product_id, api_version='v1.0.0', kind='DataProduct', status='active',
+        name='Orders', version='1.0.0',
+    ))
+    db_session.flush()
+    for name, cid in (('with-contract', contract_id), ('no-contract', None)):
+        db_session.add(OutputPortDb(
+            id=str(uuid.uuid4()), product_id=product_id, name=name, version='1.0.0',
+            contract_id=cid,
+        ))
+    db_session.add(RichTextMetadataDb(
+        entity_id=contract_id, entity_type='data_contract', title='Revenue rule',
+        content_markdown='revenue = price * quantity',
+    ))
+    db_session.commit()
+
+    @contextmanager
+    def session_factory():
+        yield db_session
+
+    create_space = AsyncMock(return_value={
+        'space_id': 's1', 'space_url': 'https://example/s1', 'status': 'active',
+    })
+    persist = MagicMock(return_value=SimpleNamespace(id='row'))
+    manager = DataProductsManager(db=db_session)
+    with patch('src.controller.data_products_manager.get_session_factory',
+               return_value=session_factory), \
+         patch('src.common.genie_client.collect_datasets_from_products',
+               return_value=['main.s.orders']), \
+         patch('src.common.genie_client.create_genie_space', create_space), \
+         patch('src.controller.data_products_manager.genie_space_repo.create', persist):
+        asyncio.run(manager._create_genie_space_task([product_id], 'user@example.com'))
+
+    create_space.assert_awaited_once()
+    instructions = create_space.await_args.kwargs['instructions']
+    assert '### Contract: Orders v1' in instructions
+    assert '#### Revenue rule' in instructions
+    assert 'revenue = price * quantity' in instructions
+    persist.assert_called_once()
+    assert persist.call_args.kwargs['obj_in'].status == 'active'

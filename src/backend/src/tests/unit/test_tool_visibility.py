@@ -297,3 +297,27 @@ def test_fields_keep_the_echoed_status_scope_and_certification(world):
         assert set(row) >= {'id', 'title', 'status', 'publication_scope', 'certification_level'}
     res = _call(world, ADMIN, 'list_data_contracts')
     assert res.data['contracts'][0]['publication_scope'] == 'organization'
+
+
+class TestScopedButNotActive:
+    """`published` needs status == active on top of a publication scope."""
+
+    def test_scoped_deprecated_and_draft_are_not_published(self, world):
+        dep = DataProductDb(id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
+                            name='P scoped_deprecated', version='1.0.0',
+                            status='deprecated', publication_scope='organization')
+        draft = DataProductDb(id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
+                              name='P scoped_draft', version='1.0.0', status='draft',
+                              publication_scope='organization',
+                              draft_owner_id='sue@example.com')
+        world.db.add_all([dep, draft])
+        world.db.commit()
+        world.search = SearchManager(searchable_managers=[_Index([
+            SearchIndexItem(id=f'product::{r.id}', type='data-product',
+                            feature_id='data-products', title=r.name, description='x',
+                            link='/x', tags=[], extra_data={'status': r.status})
+            for r in (dep, draft)])])
+        res = _call(world, SUE, 'search_data_products', query='*')
+        assert {r['id'] for r in res.data['products']} == set()
+        res = _call(world, SUE, 'search_data_products', query='*', visibility='readable')
+        assert {r['id'] for r in res.data['products']} == {draft.id, dep.id}

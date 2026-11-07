@@ -548,7 +548,12 @@ class ComplianceManager:
         db.refresh(run)
         return run
 
-    def complete_run(self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int, score: float, error_message: Optional[str] = None, error_code: Optional[str] = None, error_params: Optional[dict] = None) -> ComplianceRunDb:
+    def complete_run(
+        self, db: Session, run: ComplianceRunDb, *, success_count: int, failure_count: int,
+        score: float, error_message: Optional[str] = None, error_code: Optional[str] = None,
+        error_params: Optional[dict] = None, warning_code: Optional[str] = None,
+        warning_params: Optional[dict] = None,
+    ) -> ComplianceRunDb:
         run.success_count = success_count
         run.failure_count = failure_count
         run.score = score
@@ -558,6 +563,11 @@ class ComplianceManager:
         # A code the UI translates (see common/compliance_errors.py); the message is the fallback
         run.error_code = error_code if error_message is not None else None
         run.error_params = json.dumps(error_params) if error_code and error_params else None
+        if error_message is None and warning_code:
+            # A run that finished but has something to tell: no column exists for
+            # warnings, so the code sits in the error fields of a succeeded run
+            run.error_code = warning_code
+            run.error_params = json.dumps(warning_params) if warning_params else None
         db.commit()
         db.refresh(run)
         return run
@@ -733,7 +743,14 @@ class ComplianceManager:
 
             total = max(1, success + failure)
             score = round(100.0 * (success / total), 2)
-            self.complete_run(db, run, success_count=success, failure_count=failure, score=score)
+            # A stored rule with trailing input keeps running with its tail ignored;
+            # the run says so, so the policies that need a fix can be found
+            trailing = parsed_rule.get('trailing_input')
+            self.complete_run(
+                db, run, success_count=success, failure_count=failure, score=score,
+                warning_code='rule_trailing_input' if trailing else None,
+                warning_params=trailing,
+            )
             
             # Log to change log for timeline
             try:

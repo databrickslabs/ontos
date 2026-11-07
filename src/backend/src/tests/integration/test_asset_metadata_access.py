@@ -347,3 +347,90 @@ def test_assets_alone_gives_nothing_on_other_entities(
     _name, _kind, method, url, kwargs = _request(entity_type, 'any-entity-id', ids, route)
 
     _assert_data_domains_refusal(_call(client, method, url, kwargs))
+
+
+# --- Merged metadata with contract_ids --------------------------------------
+# The route also returns the inheritable metadata of the named contracts, which
+# the asset rules don't cover: naming contracts still needs data-domains.
+
+def _contract_note(db) -> str:
+    note = MetadataManager().create_rich_text(db, data=RichTextCreate(
+        entity_type='data_contract', entity_id='contract-1', title='Contract note',
+        content_markdown='Body',
+    ), user_email='seed@example.com')
+    return str(note.id)
+
+
+def _merged(client, asset, **params):
+    return client.get('/api/entities/asset/metadata/merged',
+                      params={'entity_id': str(asset.id), **params})
+
+
+def test_assets_alone_cannot_read_a_contract_through_merged_metadata(
+        client, db_session, asset, act_as):
+    _contract_note(db_session)
+    act_as(ASSETS_ONLY)
+
+    _assert_data_domains_refusal(_merged(client, asset, contract_ids='contract-1'))
+
+
+def test_assets_alone_reads_merged_metadata_without_contracts(
+        client, db_session, asset, act_as):
+    act_as(ASSETS_ONLY)
+
+    assert _merged(client, asset, contract_ids=' , ').status_code == 200
+
+
+@pytest.mark.parametrize('role', ['Admin', 'Data Steward'])
+def test_data_domains_still_reads_a_contract_through_merged_metadata(
+        client, db_session, asset, act_as, linked_to_an_accessible_product, role):
+    """The Steward reads the asset through its product, and the contract with data-domains."""
+    note_id = _contract_note(db_session)
+    act_as(role)
+
+    response = _merged(client, asset, contract_ids='contract-1')
+
+    assert response.status_code == 200, response.text
+    assert note_id in [rt['id'] for rt in response.json()['rich_texts']]
+
+
+# --- Rows addressed by id: fallbacks ----------------------------------------
+
+@pytest.mark.parametrize('role, expected', [('Data Steward', 404), ('Data Consumer', 403)])
+def test_an_unknown_row_gets_the_data_domains_check_then_404(client, act_as, role, expected):
+    act_as(role)
+
+    response = client.put(f'/api/rich-texts/{uuid.uuid4()}', json={'title': 'N2'})
+
+    assert response.status_code == expected, response.text
+    if expected == 403:
+        _assert_data_domains_refusal(response)
+
+
+@pytest.mark.parametrize('role, expected', [('Data Steward', 404), ('Data Consumer', 403)])
+def test_a_row_that_cannot_be_loaded_gets_the_data_domains_check(
+        client, act_as, monkeypatch, role, expected):
+    def broken(self, db, *, id):
+        raise RuntimeError('database unavailable')
+
+    monkeypatch.setattr(MetadataManager, 'get_rich_text', broken)
+    act_as(role)
+
+    response = client.delete(f'/api/rich-texts/{uuid.uuid4()}')
+
+    assert response.status_code == expected, response.text
+    if expected == 403:
+        _assert_data_domains_refusal(response)
+
+
+@pytest.mark.parametrize('method', ['PUT', 'DELETE'])
+def test_a_steward_cannot_change_an_asset_note_by_id(
+        client, db_session, asset, act_as, method):
+    ids = _seed(db_session, 'asset', str(asset.id))
+    act_as('Data Steward')
+
+    response = client.request(method, f"/api/rich-texts/{ids['note']}",
+                              **({'json': {'title': 'N2'}} if method == 'PUT' else {}))
+
+    assert response.status_code == 403, response.text
+    assert _code(response) == 'asset_write_denied'

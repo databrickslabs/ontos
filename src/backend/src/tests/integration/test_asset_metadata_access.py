@@ -427,6 +427,74 @@ def test_assets_alone_still_detaches_from_an_asset(client, db_session, asset, ac
     assert response.status_code == 204, response.text
 
 
+# --- The read check resolves roles as PermissionChecker does ----------------
+
+@pytest.fixture
+def no_groups(mock_test_user):
+    """The test user has no group role: only what each test assigns."""
+    mock_test_user.groups = []
+    return mock_test_user
+
+
+def _assets_role(email_assigned: str = None):
+    return app.state.settings_manager.create_app_role(AppRoleCreate(
+        name=ASSETS_ONLY,
+        assigned_users=[email_assigned] if email_assigned else [],
+        feature_permissions={'assets': FeatureAccessLevel.READ_WRITE},
+    ))
+
+
+def _note_routes(asset):
+    """The asset itself (GET /api/assets/{id}, same read check), then a note read and write."""
+    q = {'entity_id': str(asset.id)}
+    return [
+        ('GET', f'/api/assets/{asset.id}', {}),
+        ('GET', '/api/entities/asset/rich-texts', {'params': q}),
+        ('POST', '/api/entities/asset/rich-texts', {'params': q, 'json': {
+            'entity_type': 'asset', 'entity_id': str(asset.id), 'title': 'N',
+            'content_markdown': 'B'}}),
+    ]
+
+
+def test_email_assigned_assets_role_reads_asset_and_notes(client, asset, no_groups):
+    _assets_role(email_assigned=no_groups.email)
+
+    for method, url, kwargs in _note_routes(asset):
+        response = _call(client, method, url, kwargs)
+        assert response.status_code < 300, (method, response.text)
+
+
+def test_team_override_assets_role_reads_asset_and_notes(
+        client, db_session, asset, no_groups):
+    from src.db_models.teams import TeamDb, TeamMemberDb
+
+    role = _assets_role()
+    team = TeamDb(name=f'Team {uuid.uuid4().hex[:8]}',
+                  created_by='seed', updated_by='seed')
+    db_session.add(team)
+    db_session.flush()
+    db_session.add(TeamMemberDb(team_id=team.id, member_type='user',
+                                member_identifier=no_groups.email,
+                                app_role_override=role.name, added_by='seed'))
+    db_session.flush()
+
+    for method, url, kwargs in _note_routes(asset):
+        response = _call(client, method, url, kwargs)
+        assert response.status_code < 300, (method, response.text)
+
+
+@pytest.mark.parametrize('route', [0, 1, 2])
+def test_without_an_assigned_assets_role_all_stay_refused(client, asset, no_groups, route):
+    _assets_role()  # exists, but not assigned to the user
+    method, url, kwargs = _note_routes(asset)[route]
+
+    response = _call(client, method, url, kwargs)
+
+    assert response.status_code == 403, response.text
+    if route:
+        assert _code(response) in ('asset_read_denied', 'asset_write_denied')
+
+
 # --- Rows addressed by id: fallbacks ----------------------------------------
 
 @pytest.mark.parametrize('role, expected', [('Data Steward', 404), ('Data Consumer', 403)])

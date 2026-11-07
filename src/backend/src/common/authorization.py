@@ -452,6 +452,13 @@ async def get_user_groups(user_email: str, request: Optional[Request] = None) ->
 
 async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
     """Get the highest team role override for a user."""
+    return team_role_override_for_user(user_identifier, user_groups, request)
+
+
+def team_role_override_for_user(
+    user_identifier: str, user_groups: List[str], request: Request,
+) -> Optional[str]:
+    """``get_user_team_role_overrides`` for synchronous callers."""
     try:
         # Get teams manager from app state
         teams_manager = getattr(request.app.state, 'teams_manager', None)
@@ -688,6 +695,59 @@ def user_has_feature_level(auth_manager, user, feature_id: str, required_level: 
         return False
 
 
+def effective_feature_permissions(
+    request: Request,
+    user_details: UserInfo,
+    auth_manager: AuthorizationManager,
+    team_role_override: Optional[str],
+) -> Dict[str, FeatureAccessLevel]:
+    """The user's level per feature, as ``PermissionChecker`` resolves it.
+
+    An applied role override (role switcher) wins; otherwise the roles of the
+    user's groups and email, with the team role override.
+    """
+    # Check if an explicit role override is applied for this user
+    applied_role_id = None
+    try:
+        settings_manager = getattr(request.app.state, 'settings_manager', None)
+        if settings_manager:
+            applied_role_id = settings_manager.get_applied_role_override_for_user(
+                user_details.email
+            )
+    except Exception:
+        applied_role_id = None
+
+    if applied_role_id and settings_manager:
+        # Build effective permissions directly from the selected role
+        return settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+    return auth_manager.get_user_effective_permissions(
+        user_details.groups,
+        team_role_override,
+        user_email=user_details.email,
+    )
+
+
+def user_passes_permission_check(
+    request: Request, user_details: UserInfo, feature_id: str, level: FeatureAccessLevel,
+) -> bool:
+    """Whether ``PermissionChecker(feature_id, level)`` would let the user through.
+
+    For synchronous callers that branch on a permission instead of refusing.
+    """
+    auth_manager = getattr(request.app.state, 'authorization_manager', None)
+    if not auth_manager or not user_details:
+        return False
+    if not user_details.groups and not user_details.email:
+        return False
+    team_role_override = team_role_override_for_user(
+        user_details.email, user_details.groups or [], request,
+    )
+    effective = effective_feature_permissions(
+        request, user_details, auth_manager, team_role_override,
+    )
+    return auth_manager.has_permission(effective, feature_id, level)
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):
@@ -721,24 +781,9 @@ class PermissionChecker:
                 request
             )
 
-            # Check if an explicit role override is applied for this user
-            applied_role_id = None
-            try:
-                settings_manager = getattr(request.app.state, 'settings_manager', None)
-                if settings_manager:
-                    applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-            except Exception:
-                applied_role_id = None
-
-            if applied_role_id and settings_manager:
-                # Build effective permissions directly from the selected role
-                effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                effective_permissions = auth_manager.get_user_effective_permissions(
-                    user_details.groups,
-                    team_role_override,
-                    user_email=user_details.email,
-                )
+            effective_permissions = effective_feature_permissions(
+                request, user_details, auth_manager, team_role_override,
+            )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,
                 self.feature_id,

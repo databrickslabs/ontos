@@ -1152,7 +1152,12 @@ async def request_product_review(
 
 # --- Contract-Product Integration Endpoints ---
 
-@router.post('/data-products/from-contract', response_model=DataProduct, status_code=201)
+@router.post(
+    '/data-products/from-contract',
+    response_model=DataProduct,
+    response_model_by_alias=False,
+    status_code=201,
+)
 async def create_product_from_contract(
     contract_id: str = Body(..., embed=True),
     product_name: str = Body(..., embed=True),
@@ -1855,7 +1860,12 @@ async def get_data_products(
         logger.exception(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.post('/data-products', response_model=DataProduct, status_code=201)
+@router.post(
+    '/data-products',
+    response_model=DataProduct,
+    response_model_by_alias=False,
+    status_code=201,
+)
 async def create_data_product(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -2090,7 +2100,12 @@ async def get_product_family_latest(
     }
 
 
-@router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
+@router.post(
+    "/data-products/{product_id}/versions",
+    response_model=DataProduct,
+    response_model_by_alias=False,
+    status_code=201,
+)
 async def create_data_product_version(
     product_id: str, # This is the original product ID
     request: Request, 
@@ -2182,7 +2197,9 @@ async def compare_product_versions(
         logger.error("Error comparing products", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to compare products")
 
-@router.put('/data-products/{product_id}', response_model=DataProduct)
+@router.put(
+    '/data-products/{product_id}', response_model=DataProduct, response_model_by_alias=False
+)
 async def update_data_product(
     product_id: str,
     request: Request,
@@ -2747,7 +2764,11 @@ async def get_subscriber_count(
 
 # ==================== Versioned Editing Endpoints ====================
 
-@router.post('/data-products/{product_id}/clone-for-editing', response_model=DataProduct)
+@router.post(
+    '/data-products/{product_id}/clone-for-editing',
+    response_model=DataProduct,
+    response_model_by_alias=False,
+)
 async def clone_product_for_editing(
     product_id: str,
     request: Request,

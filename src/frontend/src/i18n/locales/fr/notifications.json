@@ -178,6 +178,11 @@
       "concept-review-approval": {
         "notify-approved": "Votre concept '{{entity_name}}' a été approuvé.",
         "notify-rejected": "Votre concept '{{entity_name}}' a été renvoyé pour modifications. Veuillez lire le commentaire du réviseur et le soumettre à nouveau."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "Votre modification de la metric view '{{entity_name}}' a été soumise pour approbation.",
+        "notify-approved": "Votre modification de la metric view '{{entity_name}}' a été approuvée et est en cours de livraison.",
+        "notify-rejected": "Votre modification de la metric view '{{entity_name}}' a été rejetée."
       }
     },
     "approval": {
@@ -205,7 +210,8 @@
         "entity": "Entité",
         "ontology_concept": "Concept",
         "ontology_collection": "Schéma de concepts",
-        "concept_changeset": "Lot de modifications de concepts"
+        "concept_changeset": "Lot de modifications de concepts",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -234,5 +240,13 @@
       "title": "Produit activé",
       "description": "Le produit de données « {{productName}} » a été activé et est maintenant disponible."
     }
+  },
+  "metricViewChangeManual": {
+    "title": "Appliquer la modification de la metric view",
+    "description": "La demande de modification de la metric view {{fqn}} a été approuvée. Exécutez cette instruction pour l’appliquer :\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Modification de la metric view non livrée",
+    "description": "La demande de modification approuvée de la metric view {{fqn}} n’a pas pu être livrée."
   }
 }

@@ -35,7 +35,8 @@
       "contractApprovers": "Contractgoedkeurders",
       "appRoles": "App-rollen",
       "businessRoles": "Bedrijfsrollen",
-      "noGroups": "Geen groepen"
+      "noGroups": "Geen groepen",
+      "assetOwners": "Asseteigenaren"
     },
     "messages": {
       "loadWorkflowFailed": "Kon workflow niet laden",
@@ -215,7 +216,11 @@
       "approversRole": "Goedkeurders (Rol)",
       "selectRole": "Selecteer rol",
       "additionalApproversAria": "Aanvullende goedkeurders",
-      "timeoutDays": "Time-out (dagen)"
+      "timeoutDays": "Time-out (dagen)",
+      "timeoutDaysHelp": "0 betekent geen time-out; laat leeg voor de standaardwaarde (7 dagen).",
+      "requireAll": "Alle goedkeurders vereisen",
+      "requireAllHelp": "Elke goedkeurder beslist: een gebruiker voor zichzelf, een willekeurig lid voor een groep of rol. Elke afwijzing laat de stap mislukken.",
+      "timeoutNotEnforced": "Nog niet afgedwongen: een openstaande goedkeuring verloopt niet."
     },
     "assetReview": {
       "reviewerRole": "Beoordelaarsrol",
@@ -343,10 +348,17 @@
       "processFailed": "Kon goedkeuring niet verwerken.",
       "processFailedRetry": "Kon goedkeuring niet verwerken. Probeer het opnieuw.",
       "entityApproved": "{{name}} is goedgekeurd.",
-      "entityRejected": "{{name}} is afgewezen."
+      "entityRejected": "{{name}} is afgewezen.",
+      "decisionRecorded": "Beslissing vastgelegd",
+      "waitingForApprovers_one": "Wacht nog op {{count}} goedkeurder.",
+      "waitingForApprovers_other": "Wacht nog op {{count}} goedkeurders."
     },
     "errors": {
-      "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren."
+      "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren.",
+      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren.",
+      "approval_already_decided": "U hebt al over deze goedkeuring beslist.",
+      "approval_not_an_approver": "Alleen de goedkeurders van deze stap kunnen erover beslissen.",
+      "approval_no_longer_pending": "Over deze goedkeuring is al besloten."
     },
     "entityTypes": {
       "entity": "Entiteit",
@@ -487,7 +499,8 @@
     "stepErrors": {
       "approval_rejected": "Verzoek afgewezen",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd",
+      "cancelled_by_admin": "Geannuleerd door een beheerder ({{by}})"
     },
     "states": {
       "pending": "In Afwachting",
@@ -757,6 +770,7 @@
       "loadDefaultsFailed": "Kon standaardworkflows niet laden",
       "cancelSuccess": "Uitvoering succesvol geannuleerd",
       "cancelFailed": "Kon uitvoering niet annuleren",
+      "approvalCancelled": "Goedkeuring geannuleerd. De workflow volgde het afwijzingspad; status: {{status}}.",
       "retryStarted": "Nieuwe poging voor uitvoering gestart",
       "retryFailed": "Kon uitvoering niet opnieuw proberen",
       "executionDeleteSuccess": "Uitvoering succesvol verwijderd",
@@ -767,6 +781,7 @@
       "approveFailed": "Kon workflow niet goedkeuren",
       "rejectResumeSuccess": "Workflow afgewezen en hervat",
       "rejectFailed": "Kon workflow niet afwijzen",
+      "forceDecisionRequireAll": "Alleen de goedkeurders kunnen over deze stap beslissen (iedereen moet beslissen). Je kunt de uitvoering in plaats daarvan annuleren.",
       "noChanges": "Geen Wijzigingen",
       "allAlreadyEnabled": "Alle geselecteerde workflows zijn al ingeschakeld.",
       "allAlreadyDisabled": "Alle geselecteerde workflows zijn al uitgeschakeld.",

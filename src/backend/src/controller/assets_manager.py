@@ -496,25 +496,28 @@ class AssetsManager(SearchableAsset):
 
         Removes its domain associations, notes, links, documents, attachments
         and cost items (rows with ``entity_type == "asset"`` and its id), then
-        the asset row. The documents' files are deleted from the volume once
-        the transaction commits (kept if it rolls back); a file that can't be
-        deleted is logged, never raised. Returns the number of rows removed
-        per kind, for the change log.
+        the asset row, all in one savepoint: if any of it fails, none of it
+        stays (a cascade goes on with the next asset, whose commit would
+        otherwise keep this asset's partial deletes). The documents' files
+        are deleted from the volume once the transaction commits (kept if it
+        rolls back); a file that can't be deleted is logged, never raised.
+        Returns the number of rows removed per kind, for the change log.
         """
         entity_id = str(asset_id)
-        removed: Dict[str, int] = {
-            "domains": entity_domain_repo.remove_all_for_entity(
+        with db.begin_nested():
+            removed: Dict[str, int] = {
+                "domains": entity_domain_repo.remove_all_for_entity(
+                    db, entity_type="asset", entity_id=entity_id,
+                ),
+            }
+            metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
                 db, entity_type="asset", entity_id=entity_id,
-            ),
-        }
-        metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
-            db, entity_type="asset", entity_id=entity_id,
-        )
-        removed.update(metadata_counts)
-        removed["cost_items"] = self._costs_manager.remove_all_for_entity(
-            db, entity_type="asset", entity_id=entity_id,
-        )
-        self._asset_repo.remove(db=db, id=asset_id)
+            )
+            removed.update(metadata_counts)
+            removed["cost_items"] = self._costs_manager.remove_all_for_entity(
+                db, entity_type="asset", entity_id=entity_id,
+            )
+            self._asset_repo.remove(db=db, id=asset_id)
         self._metadata_manager.delete_document_files_after_commit(db, paths, ws)
         return removed
 

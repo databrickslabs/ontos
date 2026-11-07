@@ -203,3 +203,56 @@ def test_a_cascade_that_rolls_back_a_later_asset_keeps_its_files(
                 json={'asset_ids': [str(first.id), str(second.id)]})
 
     assert _deleted_paths(files) == {first_path}
+
+
+def test_a_cascade_asset_whose_removal_fails_midway_keeps_everything(
+        client, db_session, make_asset, files, monkeypatch):
+    """Its notes, links and documents were already deleted when its cost items failed:
+    the savepoint brings them back, and the next asset's commit doesn't keep the
+    partial delete."""
+    from src.controller.costs_manager import CostsManager
+
+    broken, other = make_asset('broken'), make_asset('other')
+    _seed(db_session, 'asset', str(broken.id))
+    other_path = _seed(db_session, 'asset', str(other.id))
+    real = CostsManager.remove_all_for_entity
+
+    def remove_all_for_entity(self, db, *, entity_type, entity_id):
+        if entity_id == str(broken.id):
+            raise RuntimeError('cost items unavailable')
+        return real(self, db, entity_type=entity_type, entity_id=entity_id)
+
+    monkeypatch.setattr(CostsManager, 'remove_all_for_entity', remove_all_for_entity)
+
+    response = client.post('/api/assets/cascade-delete',
+                           json={'asset_ids': [str(broken.id), str(other.id)]})
+
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert [f['id'] for f in result['failed']] == [str(broken.id)]
+    assert [d['id'] for d in result['deleted']] == [str(other.id)]
+    assert db_session.query(AssetDb).filter(AssetDb.id == broken.id).count() == 1
+    assert _counts(db_session, 'asset', str(broken.id)) == ONE_EACH
+    assert _counts(db_session, 'asset', str(other.id)) == NONE_LEFT
+    assert _deleted_paths(files) == {other_path}
+
+
+def test_files_of_a_rolled_back_delete_stay_when_the_session_commits_later(db_session):
+    """after_rollback drops the queued paths; a later commit on the session deletes nothing."""
+    from unittest.mock import MagicMock
+
+    from src.controller.metadata_manager import MetadataManager
+
+    ws = MagicMock()
+    manager = MetadataManager()
+    # The rows of the files are deleted in the session's transaction first.
+    db_session.query(DocumentMetadataDb).filter(DocumentMetadataDb.id == uuid.uuid4()).delete()
+    manager.delete_document_files_after_commit(db_session, ['/Volumes/c/s/v/rolled-back'], ws)
+    db_session.rollback()
+    db_session.add(ChangeLogDb(entity_type='asset', entity_id='x', action='other'))
+    db_session.commit()
+    ws.files.delete.assert_not_called()
+
+    manager.delete_document_files_after_commit(db_session, ['/Volumes/c/s/v/committed'], ws)
+    db_session.commit()
+    assert [c.args[0] for c in ws.files.delete.call_args_list] == ['/Volumes/c/s/v/committed']

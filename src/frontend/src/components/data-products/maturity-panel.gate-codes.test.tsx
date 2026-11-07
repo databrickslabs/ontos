@@ -79,6 +79,24 @@ describe('MaturityPanel gate codes', () => {
     expect(await screen.findByText(ENGLISH)).toBeInTheDocument();
   });
 
+  it('shows a gate evaluation error in Portuguese', async () => {
+    const gate = REPORT.levels[0].gates[0];
+    const saved = { ...gate };
+    Object.assign(gate, {
+      message: 'Gate Columns documented could not be evaluated.',
+      message_code: 'maturity_gate_error',
+      message_params: { gateName: 'Columns documented' },
+    });
+    try {
+      await renderPanel('pt');
+      expect(await screen.findByText(
+        'Não foi possível avaliar o gate Columns documented. Os detalhes estão no log do servidor.',
+      )).toBeInTheDocument();
+    } finally {
+      Object.assign(gate, saved);
+    }
+  });
+
   it('falls back to the server text for an unknown code', async () => {
     const gate = REPORT.levels[0].gates[0];
     const original = gate.message_code;

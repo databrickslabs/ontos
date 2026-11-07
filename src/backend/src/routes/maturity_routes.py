@@ -181,7 +181,9 @@ async def delete_maturity_level(
     if not db_obj:
         raise HTTPException(status_code=404, detail="Maturity level not found")
 
-    ref_count = maturity_repo.count_snapshots_for_level(db, db_obj.level_order)
+    ref_count = maturity_repo.count_snapshots_for_level(
+        db, db_obj.level_order, db_obj.entity_type,
+    )
     if ref_count > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -24,6 +24,11 @@
     "message": "Si è verificato un errore imprevisto.",
     "retry": "Riprova"
   },
+  "assetAccess": {
+    "readDenied": "Non hai accesso a questo asset. Per visualizzarlo serve l'accesso in lettura/scrittura agli Asset o l'accesso a un prodotto dati a cui appartiene.",
+    "writeDenied": "Per modificare note, link, documenti e costi di un asset serve l'accesso in lettura/scrittura agli Asset.",
+    "notFound": "Asset '{{assetId}}' non trovato."
+  },
   "internalError": "Si è verificato un errore imprevisto. I dettagli sono nel log del server (id dell'errore {{errorId}}).",
   "userTokenRequired": "Questa richiesta richiede il tuo token di accesso Databricks, ma non ne è stato ricevuto nessuno. Ricarica la pagina; se il problema persiste, chiedi a un amministratore di abilitare l'autorizzazione utente per l'app.",
   "subscription": {

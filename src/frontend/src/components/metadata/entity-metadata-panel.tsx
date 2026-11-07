@@ -10,6 +10,7 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil, Loader2, Share2, ArrowDownToLine } from 'lucide-react';
 import FilePreviewDialog from '@/components/preview/file-preview-dialog';
+import { responseErrorText } from '@/lib/asset-access-error';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
@@ -239,7 +240,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
                               try {
                                 const resp = await fetch(`/api/rich-texts/${n.id}`, { method: 'DELETE' });
-                                if (!resp.ok) throw new Error(t('notes.messages.deleteFailed'));
+                                if (!resp.ok) {
+                                  throw new Error(
+                                    await responseErrorText(resp, t('notes.messages.deleteFailed')),
+                                  );
+                                }
                                 fetchMetadata();
                               } catch (e: any) { toast({ title: t('notes.messages.deleteFailed'), description: e.message, variant: 'destructive' }); }
                             }}>
@@ -278,7 +283,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     const payload = { entity_id: entityId, entity_type: entityType, title: noteTitle, short_description: noteDesc || undefined, content_markdown: noteContent, level: noteLevel, inheritable: noteInheritable, is_shared: noteIsShared };
                     const endpoint = noteIsShared ? '/api/metadata/shared/rich-texts' : `/api/entities/${entityType}/rich-texts?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (!resp.ok) throw new Error(await resp.text());
+                    if (!resp.ok) throw new Error(await responseErrorText(resp));
                     setNoteTitle(''); setNoteDesc(''); setNoteContent(''); setNoteLevel(50); setNoteInheritable(true); setNoteIsShared(false); setAddingNote(false);
                     fetchMetadata();
                     if (noteIsShared) sharedAssets.refresh();
@@ -385,7 +390,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
                               try {
                                 const resp = await fetch(`/api/links/${l.id}`, { method: 'DELETE' });
-                                if (!resp.ok) throw new Error(t('links.messages.deleteFailed'));
+                                if (!resp.ok) {
+                                  throw new Error(
+                                    await responseErrorText(resp, t('links.messages.deleteFailed')),
+                                  );
+                                }
                                 fetchMetadata();
                               } catch (e: any) { toast({ title: t('links.messages.deleteFailed'), description: e.message, variant: 'destructive' }); }
                             }}>
@@ -424,7 +433,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     const payload = { entity_id: entityId, entity_type: entityType, title: linkTitle, short_description: linkDesc || undefined, url: linkUrl, level: linkLevel, inheritable: linkInheritable, is_shared: linkIsShared };
                     const endpoint = linkIsShared ? '/api/metadata/shared/links' : `/api/entities/${entityType}/links?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (!resp.ok) throw new Error(await resp.text());
+                    if (!resp.ok) throw new Error(await responseErrorText(resp));
                     setLinkTitle(''); setLinkDesc(''); setLinkUrl(''); setLinkLevel(50); setLinkInheritable(true); setLinkIsShared(false); setAddingLink(false);
                     fetchMetadata();
                     if (linkIsShared) sharedAssets.refresh();
@@ -507,7 +516,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     form.append('file', docFile);
                     const endpoint = docIsShared ? '/api/metadata/shared/documents' : `/api/entities/${entityType}/documents?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', body: form });
-                    if (!resp.ok) throw new Error(await resp.text());
+                    if (!resp.ok) throw new Error(await responseErrorText(resp));
                     setDocTitle(''); setDocDesc(''); setDocFile(null); setDocLevel(50); setDocInheritable(true); setDocIsShared(false); setUploadingDoc(false); setAddingDoc(false);
                     fetchMetadata();
                     if (docIsShared) sharedAssets.refresh();
@@ -561,7 +570,16 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                           </Tooltip>
                         </TooltipProvider>
                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
-                          try { const resp = await fetch(`/api/documents/${d.id}`, { method: 'DELETE' }); if (!resp.ok) throw new Error(t('documents.messages.deleteFailed')); fetchMetadata(); }
+                          try {
+                            const url = `/api/documents/${d.id}`;
+                            const resp = await fetch(url, { method: 'DELETE' });
+                            if (!resp.ok) {
+                              throw new Error(
+                                await responseErrorText(resp, t('documents.messages.deleteFailed')),
+                              );
+                            }
+                            fetchMetadata();
+                          }
                           catch (e: any) { toast({ title: t('documents.messages.deleteFailed'), description: e.message, variant: 'destructive' }); }
                         }}>
                           <Trash2 className="h-4 w-4" />
@@ -656,7 +674,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(payload),
                         });
-                        if (!resp.ok) throw new Error(await resp.text());
+                        if (!resp.ok) throw new Error(await responseErrorText(resp));
                         setEditingNote(null);
                         fetchMetadata();
                       } catch (e: any) {
@@ -718,7 +736,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(payload),
                         });
-                        if (!resp.ok) throw new Error(await resp.text());
+                        if (!resp.ok) throw new Error(await responseErrorText(resp));
                         setEditingLink(null);
                         fetchMetadata();
                       } catch (e: any) {

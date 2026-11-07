@@ -9,7 +9,8 @@ import { renderWithProviders } from '@/test/utils';
 import { MaturityPanel } from './maturity-panel';
 import type { MaturityReport } from '@/types/maturity';
 
-const ENGLISH = 'Table main.sales.orders was not found in Unity Catalog, so its fields are missing.';
+const ENGLISH = 'Table main.sales.orders was not found in Unity Catalog, '
+  + 'so its fields are missing.';
 
 const REPORT: MaturityReport = {
   entity_type: 'DataProduct',
@@ -64,7 +65,8 @@ describe('MaturityPanel gate codes', () => {
     await renderPanel('pt');
 
     expect(await screen.findByText(
-      'A tabela main.sales.orders não foi encontrada no Unity Catalog, então faltam os campos dela.',
+      'A tabela main.sales.orders não foi encontrada no Unity Catalog, '
+      + 'então faltam os campos dela.',
     )).toBeInTheDocument();
     expect(screen.queryByText(ENGLISH)).not.toBeInTheDocument();
     // A gate without a code keeps its own message

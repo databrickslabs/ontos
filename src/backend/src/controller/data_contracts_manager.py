@@ -3067,9 +3067,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             current_user: Username of current user
             create_missing_domains: When True, auto-create by name any domain that
                 doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
-            import_links: Replacement links of a batch import (``ImportLinks``); a
-                single upload gets its own, so a replacement that isn't in the
-                target is not linked rather than failing the upload.
+            import_links: Replacement links of the batch import
+                (``create_contracts_from_files``, which links a replacement
+                imported later and notes one that isn't in the target).
 
         Returns:
             Created DataContractDb instance
@@ -3218,12 +3218,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Create custom properties if present (handles both ODCS array and legacy dict formats)
             custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties')
-            links = import_links if import_links is not None else ImportLinks('data_contract')
             lifecycle_columns: Dict[str, Any] = {}
             if custom_props:
                 lifecycle_columns = self._create_custom_properties(
                     db, created.id, custom_props, apply_lifecycle=True,
-                    import_links=links, source_id=original_id,
+                    import_links=import_links, source_id=original_id,
                 )
             
             # Create SLA properties if present
@@ -3273,7 +3272,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             db.commit()
             db.refresh(created)
-            links.record(original_id, created.id)
+            if import_links is not None:
+                import_links.record(original_id, created.id)
 
             # Log to change log for timeline, with the imported lifecycle fields
             try:

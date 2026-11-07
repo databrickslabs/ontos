@@ -5,12 +5,10 @@ and data contracts).
 """
 import json
 import uuid
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import event
 
 from src.common import review_access
 from src.common.review_access import caller_is_pending_reviewer
@@ -20,39 +18,12 @@ from src.db_models.process_workflows import (
     ProcessWorkflowDb, WorkflowExecutionDb, WorkflowStepDb, WorkflowStepExecutionDb,
 )
 from src.models.users import UserInfo
+from src.tests.helpers import postgres_aborts
 
 ENTITY_ID = 'e-1'
 # entity type -> asset FQN prefix in an asset review
 FQN_PREFIX = {'data_product': 'product:', 'data_contract': 'contract:'}
 ROLE_ID = 'role-stewards'
-
-
-@contextmanager
-def postgres_aborts(db):
-    """Make the test connection behave like Postgres after a failed statement:
-    every later statement fails until a ``ROLLBACK`` (to a savepoint)."""
-    connection = db.connection()
-    state = {'running': False, 'aborted': False}
-
-    def _before(conn, cursor, statement, *args):
-        if state['running']:  # the previous statement raised
-            state['aborted'] = True
-        if state['aborted']:
-            if not statement.lstrip().upper().startswith('ROLLBACK'):
-                raise RuntimeError('current transaction is aborted')
-            state['aborted'] = False
-        state['running'] = True
-
-    def _after(*args):
-        state['running'] = False
-
-    event.listen(connection, 'before_cursor_execute', _before)
-    event.listen(connection, 'after_cursor_execute', _after)
-    try:
-        yield
-    finally:
-        event.remove(connection, 'before_cursor_execute', _before)
-        event.remove(connection, 'after_cursor_execute', _after)
 
 
 @pytest.fixture(params=sorted(FQN_PREFIX))

@@ -37,6 +37,7 @@ from src.controller.lifecycle_fields import (
 )
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
+from src.tests.helpers import postgres_aborts
 
 _TOMORROW = utc_today() + timedelta(days=1)
 
@@ -1094,6 +1095,48 @@ def test_a_failed_link_log_write_keeps_the_import(db_session, monkeypatch, kind)
     assert (result.created, result.failed) == (2, 0)
     by_source = {i.source_id: i.entity_id for i in result.items}
     assert getattr(db_session.get(model, by_source[a_id]), column) == by_source[b_id]
+
+
+@pytest.mark.parametrize('kind', ['product', 'contract'])
+def test_a_link_log_write_failing_in_the_database_keeps_the_import(db_session, monkeypatch, kind):
+    """On Postgres a failed statement aborts the transaction: the failed change
+    log write of a link is rolled back to a savepoint, so the next links and
+    the import's commit still work."""
+    from sqlalchemy import text
+
+    a_id, b_id, c_id = (str(uuid.uuid4()) for _ in range(3))
+    real = change_log_manager.log_change_with_details
+
+    def failing_link_log(db, **kw):
+        if kw.get('action') == 'UPDATE':
+            db.execute(text('SELECT * FROM no_such_change_log'))
+        return real(db, **kw)
+
+    monkeypatch.setattr(change_log_manager, 'log_change_with_details', failing_link_log)
+    if kind == 'product':
+        files = _product_files(_odps(a_id, ontosReplacedBy=c_id),
+                               _odps(b_id, ontosReplacedBy=c_id),
+                               {**_odps(c_id), 'status': 'active'})
+        model, column = DataProductDb, 'replacement_product_id'
+    else:
+        files = _contract_files(_odcs(a_id, ontosReplacedBy=c_id),
+                                _odcs(b_id, ontosReplacedBy=c_id),
+                                {**_odcs(c_id), 'status': 'active'})
+        model, column = DataContractDb, 'replacement_contract_id'
+
+    with postgres_aborts(db_session):
+        if kind == 'product':
+            result = DataProductsManager(db=db_session).create_products_from_files(
+                files, adopt_ids=False)
+        else:
+            result = DataContractsManager(data_dir=Path('/tmp')).create_contracts_from_files(
+                db_session, files, adopt_ids=False)
+
+        assert (result.created, result.failed) == (3, 0)
+        by_source = {i.source_id: i.entity_id for i in result.items}
+        for source_id in (a_id, b_id):
+            row = db_session.query(model).filter(model.id == by_source[source_id]).one()
+            assert getattr(row, column) == by_source[c_id]
 
 
 def test_a_product_that_fails_after_its_flush_is_no_replacement(db_session, monkeypatch):

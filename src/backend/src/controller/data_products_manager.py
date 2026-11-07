@@ -7,6 +7,7 @@ Handles product creation, updates, versioning, contract integration, and search 
 
 import asyncio
 import uuid
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Any, Set
 from uuid import UUID
@@ -92,7 +93,7 @@ def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None
 import yaml
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import ResourceClosedError, SQLAlchemyError
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound, PermissionDenied
@@ -326,7 +327,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             import_links: Set by an ODPS import: the ontos* lifecycle properties
                 then set the lifecycle columns, with replacements resolved among
                 the entities of the same import. Otherwise they're ignored, since
-                those columns only change through a status transition.
+                those columns only change through a status transition. The
+                product is then only flushed: the import commits it in its
+                savepoint, and records it in ``import_links``.
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -443,41 +446,42 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Handle tag assignments
             if tags_data and self._tags_manager:
                 try:
-                    self._assign_tags_to_product(created_db_obj.id, tags_data)
+                    # An import commits each product once it is complete
+                    self._assign_tags_to_product(
+                        created_db_obj.id, tags_data, commit=import_links is None,
+                    )
                 except Exception as e:
                     logger.error(f"Failed to assign tags to product {created_db_obj.id}: {e}")
 
             # Load product with tags
             result = self._load_product_with_tags(created_db_obj, db=db_session)
             
-            # Log to change log for timeline
+            # Log to change log for timeline. An import commits each product
+            # once it is complete: there the entry is only flushed, in a
+            # savepoint, so a failed write doesn't abort the import's
+            # transaction (Postgres).
+            importing = import_links is not None
             try:
                 from src.controller.change_log_manager import change_log_manager
-                change_log_manager.log_change_with_details(
-                    db_session,
-                    entity_type="data_product",
-                    entity_id=str(created_db_obj.id),
-                    action="CREATE",
-                    username=user,
-                    details={
-                        "name": result.name,
-                        "status": result.status.value if hasattr(result.status, 'value') else result.status,
-                        "summary": f"Product '{result.name}' created" + (f" by {user}" if user else ""),
-                        # Imported lifecycle fields, as a deprecation records them
-                        **{
-                            column: value.isoformat() if hasattr(value, 'isoformat') else value
-                            for column, value in lifecycle_columns.items()
-                        },
+                details = {
+                    "name": result.name,
+                    "status": getattr(result.status, 'value', result.status),
+                    "summary": f"Product '{result.name}' created" + (f" by {user}" if user else ""),
+                    # Imported lifecycle fields, as a deprecation records them
+                    **{
+                        column: value.isoformat() if hasattr(value, 'isoformat') else value
+                        for column, value in lifecycle_columns.items()
                     },
-                )
+                }
+                with db_session.begin_nested() if importing else nullcontext():
+                    change_log_manager.log_change_with_details(
+                        db_session, entity_type="data_product",
+                        entity_id=str(created_db_obj.id), action="CREATE", username=user,
+                        details=details, commit=not importing,
+                    )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for product creation: {log_err}")
 
-            # Only a product that was created can be a replacement of the
-            # import: one that fails before this point leaves no link
-            if import_links is not None:
-                import_links.record(incoming_id, created_db_obj.id)
-            
             # Queue delivery for active modes
             self._queue_delivery(
                 entity=created_db_obj,
@@ -2010,6 +2014,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 parsed_files.append((filename, None, e))
         links = ImportLinks('data_product')
         links.plan(self._import_replacement_entries(parsed_files))
+        self._ensure_default_tag_namespace(parsed_files, user)
         index = 0
         for filename, data_list, parse_error in parsed_files:
             if parse_error is not None:
@@ -2100,12 +2105,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         product_data.get('status'), PRODUCT_STATUSES
                     )
                     product_data = {**product_data, 'status': status_value}
-                    created = self.create_product(
+                    created = self._create_imported_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
                         adopt_ids=adopt_ids and not dup,
                         import_links=links,
                     )
+                    # Only a product that was created can be a replacement of
+                    # the import: one that failed leaves no link
+                    links.record(source_id, created.id)
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         entity_id=created.id, name=created.name, status="created",
@@ -3183,10 +3191,89 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Error fetching/mapping ODPS products for search: {e}", exc_info=True)
             return []
 
+    def _create_imported_product(self, product_data: Dict[str, Any], **kwargs) -> DataProductApi:
+        """Create and commit one product of a batch import, in its own savepoint.
+
+        A product that fails after its first flush leaves nothing, and on
+        Postgres its failed statement doesn't abort the transaction of the rest
+        of the import. Each product is committed once created, so a
+        session-wide rollback inside (a repository's error path) only loses
+        this one. Raises when the product isn't created, with the session
+        usable for the next product.
+        """
+        savepoint = self._db.begin_nested()
+        try:
+            created = self.create_product(product_data, **kwargs)
+            if savepoint.is_active:
+                savepoint.commit()
+            else:
+                # Deactivated by a failed flush a helper swallowed, or ended by
+                # a commit or a session-wide rollback inside (nothing to undo)
+                self._end_savepoint(savepoint)
+                if not self._product_row_exists(created.id):
+                    # Writes made after that rollback are in a new transaction
+                    # holding only this product's work: drop them too
+                    self._db.rollback()
+                    raise RuntimeError(
+                        f"Product {created.id} was rolled back while it was imported"
+                    )
+            self._db.commit()
+            return created
+        except Exception:
+            already_ended = self._end_savepoint(savepoint)
+            if already_ended or not self._db.is_active:
+                # e.g. the commit failed, or create_product kept writing after a
+                # session-wide rollback a helper swallowed: only this product's
+                # work is uncommitted
+                self._db.rollback()
+            raise
+
+    @staticmethod
+    def _end_savepoint(savepoint) -> bool:
+        """Roll back a savepoint that is still open, also when a failed flush
+        deactivated it (``is_active`` is then False, but it needs a rollback).
+        Returns True when it had already ended."""
+        try:
+            savepoint.rollback()
+        except ResourceClosedError:
+            return True  # already ended by a commit or a session-wide rollback
+        return False
+
+    def _product_row_exists(self, product_id: str) -> bool:
+        """Whether the product's row is in the database (not just in the session)."""
+        from src.db_models.data_products import DataProductDb
+        return self._db.query(DataProductDb.id).filter(
+            DataProductDb.id == product_id).first() is not None
+
     # --- Tag integration helpers ---
 
-    def _assign_tags_to_product(self, product_id: str, tags_data: List[Dict[str, Any]]) -> None:
-        """Helper to assign tags to an ODPS data product."""
+    def _ensure_default_tag_namespace(self, parsed_files, user: Optional[str]) -> None:
+        """Create the default tag namespace before an import's products are, if
+        one of them has tags: creating it commits, which would end the
+        savepoint of the product being imported."""
+        if not self._tags_manager:
+            return
+        if not any(
+            isinstance(entity, dict) and entity.get('tags')
+            for _filename, entities, _error in parsed_files for entity in entities or []
+        ):
+            return
+        try:
+            self._tags_manager.get_or_create_default_namespace(self._db, user_email=user)
+        except Exception as e:
+            # The tags of the products then fail on their own, as before
+            self._db.rollback()
+            logger.warning(f"Could not create the default tag namespace for the import: {e}")
+
+    def _assign_tags_to_product(
+        self, product_id: str, tags_data: List[Dict[str, Any]], commit: bool = True,
+    ) -> None:
+        """Helper to assign tags to an ODPS data product.
+
+        With ``commit=False`` (a batch import) the tags are only flushed, in a
+        savepoint, so a failure is rolled back without aborting the import's
+        transaction (Postgres).
+        """
         if not self._tags_manager:
             logger.warning("TagsManager not available, cannot assign tags")
             return
@@ -3211,13 +3298,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.debug(f"No valid tags to assign to ODPS product {product_id}")
                 return
 
-            self._tags_manager.set_tags_for_entity(
-                db=self._db,
-                entity_id=product_id,
-                entity_type="data_product",
-                tags=assigned_tags,
-                user_email="system"
-            )
+            if commit:
+                self._tags_manager.set_tags_for_entity(
+                    db=self._db,
+                    entity_id=product_id,
+                    entity_type="data_product",
+                    tags=assigned_tags,
+                    user_email="system"
+                )
+            else:
+                with self._db.begin_nested():
+                    self._tags_manager.set_tags_for_entity(
+                        db=self._db, entity_id=product_id, entity_type="data_product",
+                        tags=assigned_tags, user_email="system", commit=False,
+                    )
             logger.debug(f"Successfully assigned {len(assigned_tags)} tags to ODPS product {product_id}")
 
         except Exception as e:

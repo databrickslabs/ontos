@@ -348,7 +348,10 @@
     },
     "errors": {
       "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande.",
-      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification."
+      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification.",
+      "approval_already_decided": "Vous avez déjà pris une décision sur cette approbation.",
+      "approval_not_an_approver": "Seuls les approbateurs de cette étape peuvent en décider.",
+      "approval_no_longer_pending": "Cette approbation a déjà été décidée."
     },
     "entityTypes": {
       "entity": "Entité",

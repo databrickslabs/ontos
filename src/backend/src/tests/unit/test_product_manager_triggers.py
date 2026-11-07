@@ -221,6 +221,21 @@ class TestPublicationAndCertification:
             user_email=USER, blocking=True,
         )
 
+    @pytest.mark.parametrize('status, expected', [
+        ('draft', 'proposed'), ('sandbox', 'proposed'), ('active', 'active'),
+    ])
+    def test_request_certification_moves_a_pre_review_product_to_proposed(
+        self, manager, db_session, registry, status, expected
+    ):
+        # ONT-CUJ-019: a draft / sandbox product surfaces in the review queue.
+        registry.before_status_change.return_value = (True, [])
+        row = _row(db_session, status=status)
+
+        manager.request_certification(row.id, 2, 'please', USER, db=db_session)
+
+        db_session.expire_all()
+        assert db_session.get(DataProductDb, row.id).status == expected
+
     def test_request_publication_fires_on_request_publish(
         self, manager, db_session, registry
     ):

@@ -225,3 +225,98 @@ class TestLevelDeletionPerEntityType:
         assert client.delete(f'/api/maturity-levels/{asset}').status_code == 204
         # Last: a refused request rolls back the test's transaction
         assert client.delete(f'/api/maturity-levels/{shared}').status_code == 409
+
+
+def _asset_type_id(db, name):
+    asset_type = db.query(AssetTypeDb).filter_by(name=name).first()
+    if asset_type is None:
+        asset_type = AssetTypeDb(name=name)
+        db.add(asset_type)
+        db.flush()
+    return str(asset_type.id)
+
+
+class TestAssetCreationEvaluation:
+    def _create(self, client, db_session, type_name):
+        response = client.post('/api/assets', json={
+            'name': f'orders-{uuid.uuid4().hex[:6]}',
+            'asset_type_id': _asset_type_id(db_session, type_name),
+            'platform': 'databricks', 'location': FQN,
+            'description': 'Orders placed in the shop',
+        })
+        assert response.status_code == 201, response.text
+        return response.json()['id']
+
+    def _snapshots(self, db_session, asset_id):
+        return db_session.query(MaturitySnapshotDb).filter_by(entity_id=asset_id).all()
+
+    def test_creating_a_table_asset_evaluates_it(self, client, db_session, uc_table, fired):
+        _asset_ladder(client, db_session)
+
+        asset_id = self._create(client, db_session, 'Table')
+
+        snapshots = self._snapshots(db_session, asset_id)
+        assert [s.achieved_level_order for s in snapshots] == [2]
+        assert snapshots[0].entity_type == 'Asset'
+        assert snapshots[0].evaluated_by == 'test@example.com'
+        uc_table.tables.get.assert_called_with(full_name=FQN)
+        assert [e['entity_id'] for e in fired] == [FQN]
+
+    def test_creating_another_asset_type_is_not_evaluated(
+            self, client, db_session, uc_table, fired):
+        _asset_ladder(client, db_session)
+
+        asset_id = self._create(client, db_session, 'Dashboard')
+
+        assert self._snapshots(db_session, asset_id) == []
+        uc_table.tables.get.assert_not_called()
+        assert fired == []
+
+    def test_creating_a_table_without_asset_levels_is_not_evaluated(
+            self, client, db_session, uc_table, fired):
+        asset_id = self._create(client, db_session, 'Table')
+
+        assert self._snapshots(db_session, asset_id) == []
+        uc_table.tables.get.assert_not_called()
+        assert fired == []
+
+
+_MATURITY_ROUTES = [
+    ('get', '/api/assets/{id}/maturity'),
+    ('post', '/api/assets/{id}/maturity/evaluate'),
+    ('get', '/api/assets/{id}/maturity/history'),
+]
+
+
+class TestAssetMaturityAccess:
+    """The asset maturity routes are readable by exactly the users who may read the asset."""
+
+    @pytest.fixture
+    def no_assets_feature(self, monkeypatch):
+        from src.routes import assets_routes
+        monkeypatch.setattr(assets_routes, '_user_has_assets_feature', lambda *a, **k: False)
+
+    @pytest.mark.parametrize('method,path', _MATURITY_ROUTES)
+    def test_a_user_who_cannot_read_the_asset_gets_403(
+            self, client, db_session, uc_table, no_assets_feature, method, path):
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+        asset_id = str(asset.id)
+
+        response = getattr(client, method)(path.format(id=asset_id))
+
+        assert response.status_code == 403, response.text
+        uc_table.tables.get.assert_not_called()
+        assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=asset_id).count() == 0
+
+    @pytest.mark.parametrize('method,path', _MATURITY_ROUTES)
+    def test_a_user_who_reads_the_asset_through_a_product_gets_200(
+            self, client, db_session, uc_table, no_assets_feature, monkeypatch, method, path):
+        from src.controller.assets_manager import assets_manager
+        monkeypatch.setattr(assets_manager, 'is_asset_accessible', lambda *a, **k: True)
+        _asset_ladder(client, db_session)
+        asset = _asset(db_session, description='Orders')
+
+        response = getattr(client, method)(path.format(id=asset.id))
+
+        assert response.status_code == 200, response.text

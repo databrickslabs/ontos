@@ -57,7 +57,7 @@ An execution has one of these statuses:
 | `paused` | Waiting at an approval step |
 | `succeeded` | Ended on a step that passed |
 | `failed` | Ended on a step that failed |
-| `cancelled` | Cancelled by an admin while running or paused |
+| `cancelled` | Cancelled by an admin while running (a cancelled approval follows the step's `on_fail` instead, see Cancel below) |
 
 ## Triggers
 
@@ -214,21 +214,40 @@ Notification `recipients` and approval `approvers` take one of these values, or 
 
 1. It resolves its `approvers` and creates an **Approval Required** notification for each of them. Its `message` (with variables substituted) is shown in the notification and the approval dialog.
 2. The execution pauses at that step (`paused`, **Waiting At** in Recent Executions).
-3. When an approver decides, the execution resumes: an approval follows the step's `on_pass`, a rejection its `on_fail`. The approver's message becomes the step's error on a rejection, and is available as `${step_results.<step_id>.reason}`.
+3. When an approver decides (with `require_all`, once every approver has approved or one has rejected, see below), the execution resumes: an approval follows the step's `on_pass`, a rejection its `on_fail`. The approver's message becomes the step's error on a rejection, and is available as `${step_results.<step_id>.reason}`.
 
 The approval step appears twice in the execution's step history: once when it asked for the approval, once with the decision.
 
-`require_all` and `timeout_days` are stored with the step but not enforced in the current version: the first decision resumes the execution, and a paused execution waits until someone decides or an admin cancels it.
+### Every approver: `require_all`
+
+Without `require_all` (the default), the first decision resumes the execution.
+
+With `require_all: true`, every notification target the step resolved when it paused must decide:
+
+- a user target needs that user's decision; a group or role target needs one decision from any member. A role's members are the members of its assigned groups and the users assigned to it individually; a role nobody is assigned to falls back to the admins. The owners of a business role are one target (one decision for the role). To require N named people, list them as users;
+- one person fills at most one target per step: their own user target if it is still pending, else the first still-pending group or role target in the order the step resolved them. So someone listed by email who is also in an approver group fills their own target, and the group needs another member;
+- the execution stays paused until every target has approved, then follows `on_pass`;
+- any rejection follows `on_fail` at once: the outcome follows every stored decision, so a rejection stored earlier fails the step even if a later decision approves;
+- a second decision by someone who has filled a target of the step is refused with `409`, code `approval_already_decided`; the first one stands. Someone whose targets have all been filled by others (e.g. another member of a group that has decided) gets `409`, code `approval_no_longer_pending`;
+- only the targets decide: anyone else, an admin included, is refused with `403`, code `approval_not_an_approver`, and nothing is recorded (this also applies to the admins' Force Approve / Force Reject and to `POST /api/workflows/executions/{id}/resume`). An admin who is one of the targets (or a member of an approver group or role) decides like any other. An admin who isn't can **cancel** the execution (see Cancel below), for example when an approver has left: until `timeout_days` is enforced, the step would otherwise wait forever. Without `require_all`, admins may still act on any approval, except one addressed to a business role (see Who can decide).
+
+The decisions are stored with the step, one per target, in the `decisions` list of its step result: `target` (the user, group or role name; for a business role, the owner who decided), `role_id` (for a role target), `decided_by`, `decision` (`approved` / `rejected`), `at`, `reason`. The targets and `require_all` are read from when the step paused (`resolved_targets` in the pause record), so editing the workflow doesn't change approvals already pending. Only targets whose approval notification was created are stored: a target nobody could tell about the approval isn't waited for. Each target's notification is marked handled when it is filled; the others stay open. When the step is decided, its pause record gets `status: decided`, so a workflow that comes back to the same step starts a new round with no decisions.
+
+Decisions arriving at the same time are taken one after the other: each locks the execution and reads it afresh, and the decision that ends the step moves the execution out of `paused` in its first commit, so a decision waiting for the lock finds the step decided (`409`, code `approval_no_longer_pending`, for an approver).
+
+`timeout_days` is stored with the step but not enforced yet: a paused execution waits until it is decided or an admin cancels it. `0` means no timeout; without the key the default is 7 days. Expiry is the second part of #1119; the designer marks the field "not enforced yet".
 
 ### Who can decide
 
 The approval dialog (from the notification) calls `POST /api/workflows/handle-approval`:
 
 ```json
-{ "execution_id": "<execution id>", "approved": true, "message": "Looks good" }
+{ "execution_id": "<execution id>", "approved": true, "message": "Looks good", "step_id": "approve" }
 ```
 
-The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role), or an admin. Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step is decided, a second decision gets `404 Execution not found or not in paused state`. The approval notifications of the decided step are marked as handled.
+`step_id` (optional) is the approval step the notification is for; the dialog sends it from the notification.
+
+The caller must be a recipient of an approval notification for the step the execution is paused at (directly, or through the notification's role: its groups or its individually assigned users), or an admin (with `require_all`, admins only when they are one of the approvers, see above; any admin may cancel the execution instead). A `business:<role id>` approval is decided only by the owners its notifications name, with or without `require_all`: an admin who isn't one of them can't decide it and cancels the execution instead. The same holds for a notification addressed to an app role that has since been deleted: it reaches nobody, not even a role created later with the same name. Others get `403 You are not an authorized approver for this execution`. For owner approvals (`DomainOwner`, `ContractApprover`), the requester can't decide their own request (`403`, code `own_owner_approval`). Once the step has ended (every approver approved, someone rejected, or the execution was cancelled; or, when the request names the step in `step_id`, the execution has moved on to another step), a decision by one of its approvers gets `409`, code `approval_no_longer_pending`, with or without `require_all`; anyone else still gets `403`. The approval notifications of the decided step are marked as handled. With `require_all`, a decision that leaves other approvers pending answers `200` with `status: paused` and `pending_approvers`; a decision that moves the execution on to another approval step also answers `status: paused`, without `pending_approvers`.
 
 ### Resuming from another system
 
@@ -239,7 +258,7 @@ POST /api/workflows/executions/{execution_id}/resume
 { "approved": true, "message": "...", "reason": "..." }
 ```
 
-This endpoint requires read/write access to workflow settings and doesn't check approval notifications, so use it with an identity meant for automation. Send `${execution_id}` in the webhook body so the system knows which execution to resume.
+This endpoint requires read/write access to workflow settings and doesn't check approval notifications, so use it with an identity meant for automation. It doesn't decide a `require_all` step (`403`, code `approval_not_an_approver`): only that step's approvers do, through `handle-approval`. Send `${execution_id}` in the webhook body so the system knows which execution to resume.
 
 ### What Ontos does after a request is decided
 
@@ -292,7 +311,10 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 **Retry** (admins, failed executions only, `POST /api/workflows/executions/{id}/retry` or the Retry action in Recent Executions) runs the same execution again from the first step, with the trigger payload it was started with. Its previous step results are replaced, and every step runs again: notifications are sent again and webhooks called again.
 
-**Cancel** (admins, running or paused executions) sets the execution to `cancelled`. The approval notifications of a cancelled execution stay in the approvers' list; deciding one gets `404`.
+**Cancel** (admins, running or paused executions, `POST /api/workflows/executions/{id}/cancel` or the Cancel action in Recent Executions):
+
+- an execution **paused at an approval step**, with or without `require_all`, isn't just stopped: the step ends as failed with `reason: cancelled_by_admin` and the execution follows the step's `on_fail`, as after a rejection, so whatever the workflow does then (for example notify the requester, or set the entity back to draft) runs once. The execution ends with the status that path leads to, not `cancelled`. The admin decides for no approver: the step's result keeps the approvers' decisions so far (`decisions`, with `require_all`) and adds `decision: cancelled`, `cancelled_by` and `error_code: cancelled_by_admin`. The step's open approval notifications are marked handled with decision `cancelled`, and the cancel is audited as an override (`CANCEL_EXECUTION` with `override: true`, `reason: cancelled_by_admin` and the step id). An approver deciding afterwards gets `409`, code `approval_no_longer_pending`;
+- a **running** execution (or one paused anywhere else) is set to `cancelled`.
 
 ## Debugging Recent Executions
 
@@ -450,7 +472,7 @@ As of this version:
 - `scheduled` triggers are not run (see #941).
 - Workflow scopes are saved but not applied.
 - A gate whose evaluation errors lets the change through, and a `PUT` that changes `status` skips gates (STATUS_PR adds `on_error` and refuses that `PUT`).
-- An approval step's `require_all` and `timeout_days` are not enforced.
+- An approval step's `timeout_days` is not enforced (#1119).
 - Saving a workflow's steps removes the step results of its past executions (fixed by WORKFLOWS_PR).
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
 - Reload All Defaults also resets the defaults' active flag to the shipped value.

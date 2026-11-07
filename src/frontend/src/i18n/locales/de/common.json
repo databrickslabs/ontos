@@ -338,7 +338,8 @@
       "for_request_access": "Zugriff anfordern (Assistent)",
       "for_request_publish": "Veröffentlichung anfordern (Assistent)",
       "for_request_certify": "Zertifizierung anfordern (Assistent)",
-      "for_request_status_change": "Statusänderung anfordern (Assistent)"
+      "for_request_status_change": "Statusänderung anfordern (Assistent)",
+      "on_request_definition_change": "Definitionsänderungsanfrage"
     },
     "entityTypes": {
       "catalog": "Katalog",
@@ -355,7 +356,8 @@
       "data_asset_review": "Asset-Prüfung",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Benutzer"
+      "user": "Benutzer",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validierung",

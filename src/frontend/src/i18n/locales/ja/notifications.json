@@ -186,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "コンセプト「{{entity_name}}」が承認されました。",
         "notify-rejected": "コンセプト「{{entity_name}}」は修正のため差し戻されました。レビュアーのコメントを確認して再提出してください。"
+      },
+      "metric-view-change-request": {
+        "notify-requester": "メトリックビュー '{{entity_name}}' への変更を承認のために提出しました。",
+        "notify-approved": "メトリックビュー '{{entity_name}}' への変更が承認され、配信中です。",
+        "notify-rejected": "メトリックビュー '{{entity_name}}' への変更は却下されました。"
       }
     },
     "approval": {
@@ -213,7 +218,8 @@
         "entity": "エンティティ",
         "ontology_concept": "コンセプト",
         "ontology_collection": "コンセプトスキーム",
-        "concept_changeset": "コンセプト変更セット"
+        "concept_changeset": "コンセプト変更セット",
+        "metric_view": "メトリックビュー"
       }
     },
     "approvalMessages": {
@@ -250,5 +256,13 @@
       "retiredVersion": "{{entity_type}}「{{entity_name}}」(バージョン {{version}}) は廃止されました。",
       "replacementVersion": "後継: {{replacementName}} (バージョン {{replacementVersion}})"
     }
+  },
+  "metricViewChangeManual": {
+    "title": "メトリックビューの変更を適用してください",
+    "description": "メトリックビュー {{fqn}} の変更リクエストが承認されました。適用するには次のステートメントを実行してください:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "メトリックビューの変更を配信できませんでした",
+    "description": "メトリックビュー {{fqn}} の承認済み変更リクエストを配信できませんでした。"
   }
 }

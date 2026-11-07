@@ -369,6 +369,22 @@ class WorkflowExecutionRepository:
             .first()
         )
 
+    def lock(self, db: Session, execution_id: str) -> Optional[WorkflowExecutionDb]:
+        """Lock an execution's row until the transaction ends and read it afresh.
+
+        ``populate_existing`` replaces what the session already holds for the
+        row, so a status that another transaction changed while this one
+        waited for the lock is seen. No joined loads: Postgres can't lock the
+        nullable side of an outer join.
+        """
+        return (
+            db.query(WorkflowExecutionDb)
+            .filter(WorkflowExecutionDb.id == execution_id)
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+
     def create(
         self,
         db: Session,

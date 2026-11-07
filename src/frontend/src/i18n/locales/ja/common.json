@@ -338,7 +338,8 @@
       "for_request_access": "アクセス依頼（ウィザード）",
       "for_request_publish": "公開依頼（ウィザード）",
       "for_request_certify": "認定依頼（ウィザード）",
-      "for_request_status_change": "ステータス変更依頼（ウィザード）"
+      "for_request_status_change": "ステータス変更依頼（ウィザード）",
+      "on_request_definition_change": "定義変更リクエスト"
     },
     "entityTypes": {
       "catalog": "カタログ",
@@ -355,7 +356,8 @@
       "data_asset_review": "アセットレビュー",
       "job": "ジョブ",
       "subscription": "購読",
-      "user": "ユーザー"
+      "user": "ユーザー",
+      "metric_view": "メトリックビュー"
     },
     "stepTypes": {
       "validation": "検証",

@@ -135,6 +135,7 @@ _TRIGGER_LABELS: Dict[str, str] = {
     "on_request_certify": "After a certification request is submitted",
     "for_request_status_change": "When a user requests status change",
     "on_request_status_change": "After a status change request is submitted",
+    "on_request_definition_change": "After a definition change request is submitted",
     "for_approval_response": "Approval response dialog",
     "before_create": "Before entity is created (validation)",
     "before_update": "Before entity is updated (validation)",
@@ -167,7 +168,7 @@ _TRIGGER_GROUPS_REQUEST_FLOW = {
     "for_request_status_change", "for_approval_response",
     "on_subscribe", "on_unsubscribe",
     "on_request_access", "on_request_review", "on_request_publish", "on_request_deploy",
-    "on_request_certify", "on_request_status_change",
+    "on_request_certify", "on_request_status_change", "on_request_definition_change",
     "on_revoke", "on_expiring", "on_first_access",
 }
 _TRIGGER_GROUPS_LIFECYCLE = {
@@ -206,6 +207,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
     "on_request_deploy": ["data_contract"],
+    "on_request_definition_change": ["metric_view"],
     "on_request_certify": ["data_contract", "data_product"],
     # Concept curation: ontology_concept = single-concept Request Revision / review
     # ping-pong (P2). concept_changeset (bulk RDF upload gate, P3) is intentionally
@@ -1235,7 +1237,19 @@ async def resume_workflow_execution(
         reason = body.get('reason')
         
         user_email = current_user.email if current_user else None
-        
+
+        # require_all (#1119): only the step's approvers decide it, through
+        # handle-approval; an admin may cancel the execution instead
+        if executor.paused_at_required_approval(execution_id):
+            raise HTTPException(
+                status_code=403,
+                # code: translated by the UI (workflows:view.messages.*)
+                detail={
+                    'code': 'approval_not_an_approver',
+                    'message': "Only the approvers of this step can decide it.",
+                },
+            )
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,
@@ -1434,6 +1448,31 @@ def _is_own_owner_approval(
     )
 
 
+def _is_own_definition_change_request(
+    db: Session, execution_id: str, user_info: UserInfo,
+) -> bool:
+    """Whether ``user_info`` requested the metric view definition change under review.
+
+    A definition change request (``on_request_definition_change``) is never
+    decided by its requester, whoever the approvers are (#1124).
+    """
+    from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowExecutionDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None or not execution.trigger_context:
+        return False
+    workflow = db.get(ProcessWorkflowDb, execution.workflow_id)
+    try:
+        trigger = json.loads(workflow.trigger_config) if workflow else {}
+        requester = (json.loads(execution.trigger_context) or {}).get('user_email')
+    except (TypeError, ValueError):
+        return False
+    if (trigger or {}).get('type') != TriggerType.ON_REQUEST_DEFINITION_CHANGE.value:
+        return False
+    caller = {(user_info.email or '').lower(), (user_info.username or '').lower()} - {''}
+    return bool(requester) and requester.lower() in caller
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -1458,16 +1497,18 @@ def _assert_caller_authorized_for_execution(
 
     Approval notifications without a recipient and without a role are
     ignored: ``can_user_access_notification`` treats them as broadcast
-    (visible to everyone), which must never mean "anyone may approve".
+    (visible to everyone), which must never mean "anyone may approve". The
+    access check is strict: roles that can't be read authorize nobody, and a
+    role id that isn't an app role only the user the notification names (a
+    business role's owner; a deleted role names nobody). The bell would show
+    them to everyone.
 
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.
 
     ``for_read``: the check that lets a pending approver read the entity
     (``caller_is_pending_reviewer``, #1117). Notifications already handled
-    (an approver who decided while the step waits for others) don't count,
-    and the access check is strict: a role that can't be resolved, or roles
-    that can't be read, grant nothing.
+    (an approver who decided while the step waits for others) don't count.
 
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
@@ -1483,6 +1524,15 @@ def _assert_caller_authorized_for_execution(
             status_code=403,
             detail="You are not an authorized approver for this execution",
         )
+    if _is_own_definition_change_request(db, execution_id, user_info):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'own_change_request_approval',
+                'message': "You can't approve your own change request.",
+            },
+        )
     if _is_own_owner_approval(db, execution_id, pending_step, user_info):
         raise HTTPException(
             status_code=403,
@@ -1492,10 +1542,9 @@ def _assert_caller_authorized_for_execution(
                 'message': "This approval is for the owners; you can't approve your own request.",
             },
         )
-    strict = {'strict': True} if for_read else {}
     for notification in candidates:
         if notifications_manager.can_user_access_notification(
-            db=db, notification=notification, user_info=user_info, **strict
+            db=db, notification=notification, user_info=user_info, strict=True
         ):
             return candidates
     raise HTTPException(
@@ -1504,24 +1553,36 @@ def _assert_caller_authorized_for_execution(
     )
 
 
+def _open_execution_approvals(db: Session, execution_id: str) -> List[NotificationDb]:
+    """The approval notifications of ``execution_id`` not handled yet, read or not.
+
+    The text filter (the quoted id) narrows the rows in SQL; callers check
+    the payload's ``execution_id`` exactly.
+    """
+    rows = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval',
+        NotificationDb.action_payload.contains(json.dumps(execution_id)),
+    ).all()
+    return [n for n in rows if not _is_handled(n)]
+
+
 def _mark_step_notifications_handled(
     db: Session,
     execution_id: str,
     step_id: Optional[str],
     approved: bool,
     user_email: Optional[str],
+    decision: Optional[str] = None,
 ) -> None:
-    """Mark the unread approval notifications of ``step_id`` as handled.
+    """Mark the approval notifications of ``step_id`` not yet handled as handled.
 
-    Notifications of later steps, created while the workflow resumed, stay
-    open for their approvers.
+    Read ones too: an approver who opened the notification in the bell still
+    sees it in My actions until it is handled. Notifications of later steps,
+    created while the workflow resumed, stay open for their approvers.
+    ``decision`` overrides approved / rejected (``cancelled`` when an admin
+    cancels the step).
     """
-    notifications = db.query(NotificationDb).filter(
-        NotificationDb.action_type == 'workflow_approval',
-        NotificationDb.read == False
-    ).all()
-
-    for notif in notifications:
+    for notif in _open_execution_approvals(db, execution_id):
         try:
             payload = notif.action_payload
             if isinstance(payload, str):
@@ -1534,13 +1595,155 @@ def _mark_step_notifications_handled(
                 notif.read = True
                 # Mark the action as handled with decision info
                 payload['handled'] = True
-                payload['decision'] = 'approved' if approved else 'rejected'
+                payload['decision'] = decision or ('approved' if approved else 'rejected')
                 payload['handled_by'] = user_email
                 payload['handled_at'] = datetime.utcnow().isoformat()
                 notif.action_payload = json.dumps(payload)
                 db.add(notif)
         except (json.JSONDecodeError, TypeError):
             continue
+
+
+def _mark_decided_approver_notifications(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    decisions: List[Dict[str, Any]],
+) -> None:
+    """Mark handled the approval notifications of the targets that decided.
+
+    For a require_all step still waiting for others (#1119): the notification
+    of each decided target (a user, a group, a role) is handled, the others
+    stay open.
+    """
+    from src.common.workflow_executor import approver_key
+
+    by_key = {approver_key(d.get('target') or '', d.get('role_id')): d for d in decisions}
+    for notif in _open_execution_approvals(db, execution_id):
+        try:
+            payload = json.loads(notif.action_payload or '{}')
+        except (TypeError, ValueError):
+            continue
+        if payload.get('execution_id') != execution_id or not _is_for_step(notif, step_id):
+            continue
+        decision = by_key.get(approver_key(
+            notif.recipient or notif.recipient_role_id or '', notif.recipient_role_id,
+        ))
+        if decision is None:
+            continue
+        notif.read = True
+        payload.update({
+            'handled': True,
+            'decision': decision.get('decision'),
+            'handled_by': decision.get('decided_by'),
+            'handled_at': decision.get('at'),
+        })
+        notif.action_payload = json.dumps(payload)
+        db.add(notif)
+
+
+def _no_longer_pending() -> HTTPException:
+    """409 for a decision on an approval that is no longer pending (#1119)."""
+    return HTTPException(
+        status_code=409,
+        # code: translated by the UI (workflows:approvalResponse.errors.*)
+        detail={
+            'code': 'approval_no_longer_pending',
+            'message': "This approval has already been decided.",
+        },
+    )
+
+
+def _assert_approval_still_pending(
+    db: Session,
+    notifications_manager: NotificationsManager,
+    execution_id: str,
+    step_id: Optional[str],
+    user_info: UserInfo,
+) -> None:
+    """Refuse with 409 a decision on an approval step that has ended (#1119).
+
+    The step ended when the execution is no longer paused (every approver
+    approved, someone rejected, or it was cancelled), or, when the caller
+    names the step (``step_id``, from the notification), when the execution
+    has moved on to another step. Only callers who were approvers of that
+    step get the 409; anyone else gets the 403 of the per-execution check
+    (a decision for an ended step never applies to the current one).
+    """
+    from src.db_models.process_workflows import WorkflowExecutionDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None:
+        return
+    if execution.status == 'paused' and (not step_id or step_id == execution.current_step_id):
+        return
+    for notification in _find_approval_notifications_for_execution(db, execution_id):
+        if not (notification.recipient or notification.recipient_role_id):
+            continue
+        if step_id and not _is_for_step(notification, step_id):
+            continue
+        if notifications_manager.can_user_access_notification(
+            db=db, notification=notification, user_info=user_info,
+        ):
+            raise _no_longer_pending()
+    raise HTTPException(
+        status_code=403,
+        detail="You are not an authorized approver for this execution",
+    )
+
+
+def _respond_to_pending_approval(
+    db: Session,
+    request: Request,
+    audit_manager: Any,
+    current_user: Optional[UserInfo],
+    execution_id: str,
+    approved: bool,
+    required: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Answer a require_all decision that doesn't end the step (#1119)."""
+    if required['outcome'] == 'not_an_approver':
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'approval_not_an_approver',
+                'message': "Only the approvers of this step can decide it.",
+            },
+        )
+    if required['outcome'] == 'already_decided':
+        raise HTTPException(
+            status_code=409,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'approval_already_decided',
+                'message': "You have already decided this approval.",
+            },
+        )
+    if required['outcome'] == 'no_longer_pending':
+        raise _no_longer_pending()
+    _mark_decided_approver_notifications(
+        db, execution_id, _pending_step_id(db, execution_id), required['decisions'],
+    )
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature='process-workflows',
+        action='HANDLE_APPROVAL',
+        success=True,
+        details={
+            'execution_id': execution_id, 'approved': approved,
+            'pending_approvers': required['pending_approvers'],
+        },
+    )
+    db.commit()
+    return {
+        'execution_id': execution_id,
+        'status': 'paused',
+        'pending_approvers': required['pending_approvers'],
+        'message': "Decision recorded; waiting for the other approvers",
+    }
 
 
 @router.post("/handle-approval")
@@ -1581,9 +1784,16 @@ async def handle_workflow_approval(
         execution_id = body.get('execution_id')
         approved = body.get('approved', False)
         message = body.get('message') or body.get('reason')
+        # The step the caller decides, from the notification (optional)
+        step_id = body.get('step_id') if isinstance(body.get('step_id'), str) else None
 
         if not execution_id:
             raise HTTPException(status_code=400, detail="execution_id is required")
+
+        # A late decision, on a step that has ended: 409, not 404 (#1119)
+        _assert_approval_still_pending(
+            db, notifications_manager, execution_id, step_id, current_user,
+        )
 
         # Per-execution authorization (PR K). Raises 403 if the caller
         # isn't a recipient/role-member of any approval notification for
@@ -1595,7 +1805,34 @@ async def handle_workflow_approval(
             user_info=current_user,
         )
 
+        # require_all (#1119): each resolved approver decides once (a user for
+        # themselves, any one member for a group or role). The execution stays
+        # paused until all have approved; any rejection resumes it as rejected.
+        required = executor.record_required_approval(
+            execution_id,
+            bool(approved),
+            decides_for=notifications_manager.recipient_matcher(current_user),
+            user_email=current_user.email if current_user else None,
+            username=current_user.username if current_user else None,
+            reason=message,
+        )
+        if required is not None and required['outcome'] in (
+            'pending', 'already_decided', 'no_longer_pending', 'not_an_approver',
+        ):
+            return _respond_to_pending_approval(
+                db, request, audit_manager, current_user, execution_id, bool(approved),
+                required,
+            )
+
         user_email = current_user.email if current_user else None
+        # require_all: the step's outcome follows every stored decision, so a
+        # rejection stored earlier fails it even if this decision approves
+        rejection = (required or {}).get('rejection')
+        if required is not None:
+            approved = required['outcome'] == 'approved'
+            if rejection:
+                user_email = rejection.get('decided_by') or user_email
+                message = rejection.get('reason')
         # Resuming may pause at the next approval step and notify its
         # approvers; only the notifications of the step decided now are marked.
         decided_step = _pending_step_id(db, execution_id)
@@ -1620,11 +1857,15 @@ async def handle_workflow_approval(
             )
 
         if not result:
+            # Another decision ended the step meanwhile: 409, as above
+            _assert_approval_still_pending(
+                db, notifications_manager, execution_id, step_id, current_user,
+            )
             raise HTTPException(
                 status_code=404,
                 detail="Execution not found or not in paused state"
             )
-        
+
         _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
 
         audit_manager.log_action(
@@ -1658,6 +1899,59 @@ async def handle_workflow_approval(
 # Execution Administration Endpoints
 # ============================================================================
 
+def _cancel_paused_approval(
+    db: Session,
+    request: Request,
+    audit_manager: Any,
+    current_user: Optional[UserInfo],
+    executor: WorkflowExecutor,
+    execution_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Cancel an execution paused at an approval step: an admin override (#1119).
+
+    Admins may cancel a waiting approval, never decide it for the approvers:
+    the step ends as failed with reason ``cancelled_by_admin``, the workflow
+    follows its ``on_fail`` (so the requester is told when the workflow does
+    so), the step's open approval notifications are handled as ``cancelled``
+    and the cancel is audited as an override. A later decision gets 409.
+    Returns None when the execution isn't paused at an approval step.
+    """
+    cancelled_by = (current_user.email or current_user.username) if current_user else None
+    step_id = _pending_step_id(db, execution_id)
+    result = executor.cancel_paused_approval(execution_id, cancelled_by=cancelled_by)
+    if result is None:
+        return None
+    _mark_step_notifications_handled(
+        db, execution_id, step_id, False, cancelled_by, decision='cancelled',
+    )
+    db.commit()
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature='process-workflows',
+        action='CANCEL_EXECUTION',
+        success=True,
+        details={
+            'execution_id': execution_id, 'override': True,
+            'reason': 'cancelled_by_admin', 'step_id': step_id,
+            'status': result.status.value,
+        },
+    )
+    logger.info(
+        "Approval step %s of execution %s cancelled by %s, now %s",
+        step_id, execution_id, cancelled_by, result.status.value,
+    )
+    return {
+        'execution_id': result.id,
+        'status': result.status.value,
+        # code: translated by the UI (workflows:view.messages.*)
+        'code': 'cancelled_by_admin',
+        'params': {'status': result.status.value},
+        'message': "Approval cancelled; the workflow followed its failure path",
+    }
+
+
 @router.post("/executions/{execution_id}/cancel")
 async def cancel_execution(
     execution_id: str,
@@ -1665,14 +1959,24 @@ async def cancel_execution(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    executor: WorkflowExecutor = Depends(get_workflow_executor),
     _: bool = Depends(PermissionChecker('process-workflows', FeatureAccessLevel.ADMIN)),
 ) -> Dict[str, Any]:
     """Cancel a running or paused workflow execution.
     
     Requires ADMIN permission. Running and paused executions can be cancelled.
+    An execution paused at an approval step isn't just stopped: the step fails
+    with reason ``cancelled_by_admin`` and the workflow follows its ``on_fail``
+    (#1119), see ``_cancel_paused_approval``.
     """
     user_email = current_user.email if current_user else None
-    
+
+    cancelled = _cancel_paused_approval(
+        db, request, audit_manager, current_user, executor, execution_id,
+    )
+    if cancelled is not None:
+        return cancelled
+
     result = workflow_execution_repo.cancel(db, execution_id, cancelled_by=user_email)
     
     if not result:

@@ -21,6 +21,8 @@ import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
+import { complianceRunWarningText } from '@/lib/compliance-run-warning';
+import { complianceSaveErrorText } from '@/lib/compliance-save-error';
 
 type Policy = {
   id: string; // UUID
@@ -49,6 +51,8 @@ type Run = {
   error_message?: string;
   error_code?: string | null;
   error_params?: Record<string, unknown> | null;
+  warning_code?: string | null;
+  warning_params?: Record<string, unknown> | null;
 };
 
 type Result = {
@@ -198,7 +202,9 @@ export default function CompliancePolicyDetails() {
       const response = await put<Policy>(`/api/compliance/policies/${policyId}`, updatedPolicy);
       
       if (response.error || !response.data) {
-        throw new Error(response.error || t('compliance:errors.savePolicyFailed'));
+        throw new Error(
+          complianceSaveErrorText(t, response, t('compliance:errors.savePolicyFailed')),
+        );
       }
       
       setPolicy(response.data);
@@ -336,6 +342,11 @@ export default function CompliancePolicyDetails() {
             </CardDescription>
             {activeRun.status === 'failed' && activeRun.error_message && (
               <div className="text-sm text-destructive">{t('compliance:policyDetails.runSummary.errorLabel')} {complianceRunErrorText(t, activeRun)}</div>
+            )}
+            {activeRun.status !== 'failed' && activeRun.warning_code && (
+              <div className="text-sm text-amber-600" data-testid="run-warning">
+                {complianceRunWarningText(t, activeRun)}
+              </div>
             )}
           </CardHeader>
           <CardContent>

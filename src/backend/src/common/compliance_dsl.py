@@ -32,6 +32,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 import re
 
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -752,10 +753,21 @@ def evaluate_rule_on_object(rule: str, obj: Dict[str, Any]) -> Tuple[bool, Optio
         return False, f"DSL evaluation error: {str(e)}"
 
 
-def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
+class RuleTrailingInputError(CodedValueError):
+    """A rule has input after its last recognised clause (strict parsing)."""
+
+    code = 'rule_trailing_input'
+
+
+def parse_rule(
+    rule: str, *, source: Optional[str] = None, strict: bool = False,
+) -> Dict[str, Any]:
     """Parse a full DSL rule into components.
 
-    ``source`` identifies the rule (e.g. the policy) in diagnostics.
+    ``source`` identifies the rule (e.g. the policy) in diagnostics. With
+    ``strict`` a rule with trailing input raises ``RuleTrailingInputError``
+    (code and position as parameters) instead of ignoring the tail; policies
+    are checked that way when they are saved.
 
     Returns dict with keys:
         - match_type: Entity type to match
@@ -763,6 +775,8 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
         - assert_clause: ASSERT condition AST
         - on_pass_actions: List of actions on success
         - on_fail_actions: List of actions on failure
+        - trailing_input: ``None``, or ``{line, column, text}`` of the first
+          token left over after the last clause (ignored unless ``strict``)
     """
     try:
         lexer = Lexer(rule)
@@ -775,6 +789,7 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
             'assert_clause': None,
             'on_pass_actions': [],
             'on_fail_actions': [],
+            'trailing_input': None,
         }
 
         # Parse MATCH clause
@@ -805,11 +820,21 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
             key = 'on_pass_actions' if clause == TokenType.ON_PASS else 'on_fail_actions'
             result[key].extend(parse_actions(parser))
 
-        # Leftover tokens are ignored, as before, but no longer silently: they usually
-        # mean unsupported syntax (e.g. `IS NOT NULL`) truncated the rule.
+        # Leftover tokens usually mean unsupported syntax (e.g. `IS NOT NULL`)
+        # truncated the rule. Strict parsing refuses them; otherwise they are
+        # ignored, as before, but logged and reported in ``trailing_input``.
         if parser.current().type != TokenType.EOF:
             token = parser.current()
             text = token.value if token.value is not None else token.type.value
+            result['trailing_input'] = {
+                'line': token.line, 'column': token.column, 'text': str(text),
+            }
+            if strict:
+                raise RuleTrailingInputError(
+                    f"Rule has unparsed trailing input starting at line {token.line}, "
+                    f"column {token.column} ({str(text)!r}); remove it or fix the syntax",
+                    **result['trailing_input'],
+                )
             logger.warning(
                 "Compliance rule%s has unparsed trailing input starting at line %s, "
                 "column %s (%r); it is ignored",
@@ -819,6 +844,8 @@ def parse_rule(rule: str, *, source: Optional[str] = None) -> Dict[str, Any]:
 
         return result
 
+    except RuleTrailingInputError:
+        raise
     except Exception as e:
         raise ValueError(f"Failed to parse rule: {str(e)}")
 

@@ -5,6 +5,8 @@ Tools for searching glossary terms and managing semantic links.
 """
 
 from typing import Any, Dict, Optional
+from src.common.features import FeatureAccessLevel
+from src.tools import read_access
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -52,6 +54,12 @@ class SearchGlossaryTermsTool(BaseTool):
             # Search concepts in the semantic models / knowledge graph
             # Results are ConceptSearchResult with nested 'concept' (OntologyConcept)
             results = ctx.semantic_models_manager.search_ontology_concepts(term, limit=20)
+            # The graph also holds product and contract nodes (labelled with
+            # their names): leave out the ones the caller can't read.
+            dropped = [r.concept.iri for r in results
+                       if read_access.iri_is_unreadable(ctx, r.concept.iri)]
+            results = [r for r in results
+                       if not read_access.iri_is_unreadable(ctx, r.concept.iri)]
             
             terms = []
             for result in results:
@@ -67,14 +75,14 @@ class SearchGlossaryTermsTool(BaseTool):
                 })
             
             logger.info(f"[search_glossary_terms] SUCCESS: Found {len(results)} matching terms")
-            return ToolResult(
+            return read_access.denied(ctx, self.name, ToolResult(
                 success=True,
                 data={
                     "terms": terms[:15],
                     "total_found": len(results),
                     "source": "knowledge_graph"
                 }
-            )
+            ), dropped)
             
         except Exception as e:
             return ToolResult(
@@ -116,6 +124,7 @@ class AddSemanticLinkTool(BaseTool):
     }
     required_params = ["entity_type", "entity_id", "concept_iri", "concept_label"]
     required_scope = "semantic:write"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -128,6 +137,15 @@ class AddSemanticLinkTool(BaseTool):
     ) -> ToolResult:
         """Add a semantic link from an entity to a knowledge graph concept."""
         logger.info(f"[add_semantic_link] Starting - entity_type={entity_type}, entity_id={entity_id}, concept_iri={concept_iri}")
+
+        # An entity of a product or contract the caller can't read is answered
+        # like a missing one, before its existing links are looked at.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, entity_type, entity_id,
+            f"{entity_type} '{entity_id}' not found",
+        )
+        if refusal:
+            return refusal
         
         try:
             from src.controller.semantic_links_manager import SemanticLinksManager
@@ -222,7 +240,12 @@ class ListSemanticLinksTool(BaseTool):
                 semantic_models_manager=ctx.semantic_models_manager
             )
             
-            links = manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
+            # An entity the caller can't read is answered like a missing one (no links).
+            unreadable = read_access.entity_is_unreadable(ctx, entity_type, entity_id)
+            links = (
+                [] if unreadable
+                else manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
+            )
             
             link_list = []
             for link in links:
@@ -230,12 +253,17 @@ class ListSemanticLinksTool(BaseTool):
                     "id": link.id,
                     "iri": link.iri,
                     "label": link.label,
-                    "relationship_type": link.relationship_type,
-                    "created_at": link.created_at.isoformat() if link.created_at else None
+                    # EntitySemanticLink has neither field: reading them raised, so
+                    # any entity with a link answered the generic tool failure.
+                    "relationship_type": getattr(link, "relationship_type", None),
+                    "created_at": (
+                        link.created_at.isoformat()
+                        if getattr(link, "created_at", None) else None
+                    ),
                 })
             
             logger.info(f"[list_semantic_links] SUCCESS: Found {len(link_list)} links for {entity_type} {entity_id}")
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "links": link_list,
@@ -244,6 +272,7 @@ class ListSemanticLinksTool(BaseTool):
                     "entity_id": entity_id
                 }
             )
+            return read_access.denied(ctx, self.name, result, [entity_id] if unreadable else [])
             
         except Exception as e:
             return ToolResult(
@@ -267,6 +296,7 @@ class RemoveSemanticLinkTool(BaseTool):
     }
     required_params = ["link_id"]
     required_scope = "semantic:write"
+    required_permission = ("semantic-models", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -285,6 +315,23 @@ class RemoveSemanticLinkTool(BaseTool):
                 semantic_models_manager=ctx.semantic_models_manager
             )
             
+            # A link of a product or contract the caller can't read is answered
+            # like a missing link, and nothing is removed.
+            try:
+                import uuid as _uuid
+
+                from src.db_models.semantic_links import EntitySemanticLinkDb
+                link_row = ctx.db.get(EntitySemanticLinkDb, _uuid.UUID(str(link_id)))
+            except (ValueError, AttributeError):
+                link_row = None
+            if link_row is not None:
+                refusal = read_access.unreadable_target(
+                    ctx, self.name, link_row.entity_type, link_row.entity_id,
+                    f"Semantic link '{link_id}' not found",
+                )
+                if refusal:
+                    return refusal
+
             # Remove the link
             success = manager.remove(link_id, removed_by="llm-assistant")
             
@@ -344,9 +391,15 @@ class FindEntitiesByConceptTool(BaseTool):
             
             # Get all entities linked to this concept (explicit + inferred)
             links = manager.list_for_iri(iri=concept_iri)
+            # Products and contracts (and their schemas and properties) the
+            # caller can't read are left out.
+            dropped = [link.entity_id for link in links
+                       if read_access.entity_is_unreadable(ctx, link.entity_type, link.entity_id)]
             
             entities = []
             for link in links:
+                if read_access.entity_is_unreadable(ctx, link.entity_type, link.entity_id):
+                    continue
                 entities.append({
                     "entity_type": link.entity_type,
                     "entity_id": link.entity_id,
@@ -356,7 +409,7 @@ class FindEntitiesByConceptTool(BaseTool):
                 })
             
             logger.info(f"[find_entities_by_concept] SUCCESS: Found {len(entities)} entities linked to concept")
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "entities": entities,
@@ -364,6 +417,7 @@ class FindEntitiesByConceptTool(BaseTool):
                     "concept_iri": concept_iri
                 }
             )
+            return read_access.denied(ctx, self.name, result, dropped)
             
         except Exception as e:
             return ToolResult(
@@ -395,6 +449,10 @@ class ExecuteSparqlQueryTool(BaseTool):
     }
     required_params = ["sparql"]
     required_scope = "sparql:query"
+    # Admins only: the graph holds every product and contract, readable or
+    # not. Same feature as POST /api/semantic-models/query (Read/Write), one
+    # level up.
+    required_permission = ("semantic-models", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,
@@ -489,13 +547,30 @@ class GetConceptHierarchyTool(BaseTool):
             )
         
         try:
-            hierarchy = ctx.semantic_models_manager.get_concept_hierarchy(concept_iri)
+            # A product or contract node the caller can't read is answered like
+            # a missing concept, and such nodes are left out of the hierarchy.
+            unreadable = read_access.iri_is_unreadable(ctx, concept_iri)
+            hierarchy = (
+                None if unreadable
+                else ctx.semantic_models_manager.get_concept_hierarchy(concept_iri)
+            )
             
             if not hierarchy:
-                return ToolResult(
+                result = ToolResult(
                     success=False,
                     error=f"Concept not found: {concept_iri}"
                 )
+                return read_access.denied(ctx, self.name, result,
+                                          [concept_iri] if unreadable else [])
+
+            def _visible(concepts):
+                return [c for c in concepts if not read_access.iri_is_unreadable(ctx, c.iri)]
+
+            dropped = [
+                c.iri
+                for c in (*hierarchy.ancestors, *hierarchy.descendants, *hierarchy.siblings)
+                if read_access.iri_is_unreadable(ctx, c.iri)
+            ]
             
             # Format the response
             result = {
@@ -512,7 +587,7 @@ class GetConceptHierarchyTool(BaseTool):
                         "label": a.label,
                         "concept_type": a.concept_type
                     }
-                    for a in hierarchy.ancestors
+                    for a in _visible(hierarchy.ancestors)
                 ],
                 "descendants": [
                     {
@@ -520,7 +595,7 @@ class GetConceptHierarchyTool(BaseTool):
                         "label": d.label,
                         "concept_type": d.concept_type
                     }
-                    for d in hierarchy.descendants
+                    for d in _visible(hierarchy.descendants)
                 ],
                 "siblings": [
                     {
@@ -528,12 +603,13 @@ class GetConceptHierarchyTool(BaseTool):
                         "label": s.label,
                         "concept_type": s.concept_type
                     }
-                    for s in hierarchy.siblings
+                    for s in _visible(hierarchy.siblings)
                 ]
             }
             
             logger.info(f"[get_concept_hierarchy] SUCCESS: {len(hierarchy.ancestors)} ancestors, {len(hierarchy.descendants)} descendants, {len(hierarchy.siblings)} siblings")
-            return ToolResult(success=True, data=result)
+            return read_access.denied(ctx, self.name, ToolResult(success=True, data=result),
+                                      dropped)
             
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_concept_hierarchy", e))
@@ -578,13 +654,25 @@ class GetConceptNeighborsTool(BaseTool):
         max_neighbors = min(max_neighbors, 200)
         
         try:
-            neighbors = ctx.semantic_models_manager.neighbors(concept_iri, limit=max_neighbors)
+            # A product or contract node the caller can't read is answered like
+            # an unknown IRI (no neighbors), and such nodes are left out of the
+            # neighbors of any other node.
+            unreadable = read_access.iri_is_unreadable(ctx, concept_iri)
+            neighbors = (
+                [] if unreadable
+                else ctx.semantic_models_manager.neighbors(concept_iri, limit=max_neighbors)
+            )
+            dropped = [concept_iri] if unreadable else []
             
             # Separate into outgoing and incoming
             outgoing = []
             incoming = []
             
             for n in neighbors:
+                node = n.get("stepIri") or n.get("display")
+                if read_access.iri_is_unreadable(ctx, node):
+                    dropped.append(str(node))
+                    continue
                 neighbor_info = {
                     "predicate": n.get("predicate"),
                     "display": n.get("display"),
@@ -599,7 +687,7 @@ class GetConceptNeighborsTool(BaseTool):
                     incoming.append(neighbor_info)
             
             logger.info(f"[get_concept_neighbors] SUCCESS: {len(outgoing)} outgoing, {len(incoming)} incoming")
-            return ToolResult(
+            return read_access.denied(ctx, self.name, ToolResult(
                 success=True,
                 data={
                     "concept_iri": concept_iri,
@@ -608,7 +696,7 @@ class GetConceptNeighborsTool(BaseTool):
                     "total_outgoing": len(outgoing),
                     "total_incoming": len(incoming)
                 }
-            )
+            ), dropped)
             
         except Exception as e:
             return ToolResult(

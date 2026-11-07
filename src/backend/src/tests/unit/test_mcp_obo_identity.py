@@ -60,7 +60,8 @@ def test_obo_failure_raises_mcp_error_no_fallback(monkeypatch):
     with pytest.raises(MCPError) as exc_info:
         h._create_tool_context()
     assert exc_info.value.code == MCP_AUTH_FAILED
-    assert "forwarded" in exc_info.value.message.lower()
+    # One constant client message; the reason is in the audit entry.
+    assert exc_info.value.message == mcp_routes.IDENTITY_REJECTED_MESSAGE
     # Identity never flips to service_principal; the raise aborts the request.
     assert h._identity_mode != "service_principal"
 

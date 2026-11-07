@@ -6,6 +6,9 @@ Tools for searching, creating, updating, and deleting data contracts.
 
 import json
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
+from src.tools.write_audit import audit_change, audited, caller_email
+from src.tools import read_access
 
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
@@ -84,6 +87,55 @@ def _serialize_contract(contract) -> Dict[str, Any]:
     }
 
 
+DATA_CONTRACTS_FEATURE_ID = "data-contracts"
+# A before_update workflow failed: PUT /data-contracts/{id} answers 400 and
+# nothing is written.
+UPDATE_BLOCKED_CODE = "update_blocked"
+
+
+def _transition_status(
+    ctx: ToolContext, tool_name: str, contract_id: str, from_status: str, status: str,
+    **kwargs: Any,
+) -> Any:
+    """The change-status route's call (the caller for the gates), audited as CHANGE_STATUS.
+
+    ``kwargs`` go to ``transition_status``.
+    """
+    details = {"contract_id": contract_id, "from": from_status}
+    with audited(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "CHANGE_STATUS", details) as outcome:
+        updated = ctx.data_contracts_manager.transition_status(
+            db=ctx.db, contract_id=contract_id, new_status=status,
+            current_user=caller_email(ctx), **kwargs,
+        )
+        details["to"] = updated.status
+        outcome["success"] = True
+    return updated
+
+
+def _update_refusal(
+    ctx: ToolContext, tool_name: str, contract: Any, changes: Dict[str, Any]
+) -> Optional[ToolResult]:
+    """The PUT route's before_update gates (``run_update_gates``); None = may update."""
+    passed, executions = ctx.data_contracts_manager.run_update_gates(
+        ctx.db, contract, changes, caller_email(ctx)
+    )
+    if passed:
+        return None
+    from src.common.workflow_triggers import (
+        describe_failed_executions, failed_execution_reasons,
+    )
+    contract_id = str(contract.id)
+    audit_change(ctx, DATA_CONTRACTS_FEATURE_ID, tool_name, "UPDATE", False, {
+        "params": {"contract_id": contract_id}, "error_code": UPDATE_BLOCKED_CODE,
+    })
+    return ToolResult(
+        success=False,
+        error=f"Update blocked by workflow: {describe_failed_executions(executions)}",
+        error_code=UPDATE_BLOCKED_CODE,
+        data={"contract_id": contract_id, "reasons": failed_execution_reasons(executions)},
+    )
+
+
 class CreateDraftDataContractTool(BaseTool):
     """Create a new draft data contract based on schema information."""
     
@@ -129,6 +181,7 @@ class CreateDraftDataContractTool(BaseTool):
     }
     required_params = ["name", "description", "domain"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -183,12 +236,21 @@ class CreateDraftDataContractTool(BaseTool):
                 "schema": schema_objects
             }
             
-            # Create the contract
-            created = ctx.data_contracts_manager.create_contract_with_relations(
-                db=ctx.db,
-                contract_data=contract_data,
-                current_user=None  # Will use system default
-            )
+            # Create the contract. The caller is its draft owner, as with POST
+            # /data-contracts, so they can read and edit it afterwards.
+            audit_details: Dict[str, Any] = {"params": {"contract_name": name}}
+            with audited(
+                ctx, DATA_CONTRACTS_FEATURE_ID, self.name, "CREATE", audit_details
+            ) as outcome:
+                created = ctx.data_contracts_manager.create_contract_with_relations(
+                    db=ctx.db,
+                    contract_data=contract_data,
+                    current_user=caller_email(ctx),
+                )
+                audit_details["created_resource_id"] = str(created.id)
+                outcome["success"] = True
+            # The on_create workflows of POST /data-contracts.
+            ctx.data_contracts_manager.fire_create_trigger(ctx.db, created, caller_email(ctx))
             
             logger.info(f"[create_draft_data_contract] SUCCESS: Created contract id={created.id}, name={created.name}")
             return ToolResult(
@@ -253,6 +315,7 @@ class UpdateDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -271,6 +334,22 @@ class UpdateDataContractTool(BaseTool):
         if not ctx.data_contracts_manager:
             logger.error(f"[update_data_contract] FAILED: Data contracts manager not available")
             return ToolResult(success=False, error="Data contracts manager not available")
+
+        # A contract the caller can't read is answered like a missing one; one
+        # in a project needs a project member, as on PUT /api/data-contracts/{id}.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_contract", contract_id,
+            f"Data contract '{contract_id}' not found",
+        )
+        if refusal:
+            return refusal
+        from src.repositories.data_contracts_repository import data_contract_repo as _repo
+        target = _repo.get(ctx.db, id=contract_id)
+        refusal = read_access.project_refusal(
+            ctx, getattr(target, "project_id", None), "contract"
+        )
+        if refusal:
+            return refusal
         
         try:
             # Build update data
@@ -285,6 +364,20 @@ class UpdateDataContractTool(BaseTool):
                     success=False,
                     error="No fields to update. Provide at least one of: domain, description, status"
                 )
+
+            # A field change runs the before_update gates of PUT
+            # /data-contracts/{id}, before the status change, so a refused call
+            # writes nothing. A status change alone runs only the
+            # before_status_change gates, as the change-status route.
+            if update_data:
+                if not target:
+                    return ToolResult(
+                        success=False,
+                        error=f"Data contract '{contract_id}' not found"
+                    )
+                refusal = _update_refusal(ctx, self.name, target, update_data)
+                if refusal:
+                    return refusal
 
             # A status change goes through the lifecycle transition (allowed
             # transitions, before_status_change gates), like the change-status
@@ -317,11 +410,8 @@ class UpdateDataContractTool(BaseTool):
                             success=False, error=INVALID_SUNSET_DATE,
                             error_code=INVALID_SUNSET_DATE_CODE,
                         )
-                    updated = ctx.data_contracts_manager.transition_status(
-                        db=ctx.db,
-                        contract_id=contract_id,
-                        new_status=status.lower(),
-                        current_user=None,
+                    updated = _transition_status(
+                        ctx, self.name, contract_id, current_status, status.lower(),
                         deprecation=deprecation,
                     )
                 else:
@@ -329,12 +419,25 @@ class UpdateDataContractTool(BaseTool):
 
             # Update the contract
             if update_data:
-                updated = ctx.data_contracts_manager.update_contract_with_relations(
-                    db=ctx.db,
-                    contract_id=contract_id,
-                    contract_data=update_data,
-                    current_user=None
-                )
+                details = {"params": {"contract_id": contract_id}}
+                with audited(
+                    ctx, DATA_CONTRACTS_FEATURE_ID, self.name, "UPDATE", details
+                ) as outcome:
+                    updated = ctx.data_contracts_manager.update_contract_with_relations(
+                        db=ctx.db,
+                        contract_id=contract_id,
+                        contract_data=update_data,
+                        current_user=caller_email(ctx),
+                    )
+                    if updated is not None:
+                        details["updated_resource_id"] = contract_id
+                        outcome["success"] = True
+                if updated is not None:
+                    # The on_update workflows of PUT /data-contracts/{id}; a status
+                    # change alone fires on_status_change only, as change-status.
+                    ctx.data_contracts_manager.fire_update_trigger(
+                        ctx.db, contract_id, updated, update_data, caller_email(ctx)
+                    )
             
             if not updated:
                 return ToolResult(
@@ -474,6 +577,8 @@ class SearchDataContractsTool(BaseTool):
                 offset=offset,
                 include_facets=include_facets,
                 fields=fields,
+                # The read rule, before pagination and facets.
+                allowed_ids_by_type=read_access.allowed_ids_by_type(ctx, "data-contract"),
             )
             # Tool name already carries the type; `link` is a UI-only route path.
             # Neither helps an MCP agent, so drop them from every record.
@@ -537,11 +642,15 @@ class GetDataContractTool(BaseTool):
             from src.repositories.data_contracts_repository import data_contract_repo
 
             db_obj = data_contract_repo.get_with_all(ctx.db, id=contract_id)
-            if not db_obj:
-                return ToolResult(
+            if not db_obj or not read_access.can_read_contract(ctx, db_obj):
+                # An unreadable contract is answered like a missing one.
+                result = ToolResult(
                     success=False,
                     error=f"Data contract '{contract_id}' not found"
                 )
+                if db_obj:
+                    read_access.denied(ctx, self.name, result, [contract_id])
+                return result
 
             contract = ctx.data_contracts_manager._build_contract_api_model(ctx.db, db_obj)
 
@@ -607,20 +716,24 @@ class GetDataContractsBulkTool(BaseTool):
 
         contracts: List[Dict[str, Any]] = []
         not_found: List[str] = []
+        unreadable: List[str] = []
         try:
             for cid in ids:
                 db_obj = data_contract_repo.get_with_all(ctx.db, id=cid)
-                if db_obj:
+                if db_obj and read_access.can_read_contract(ctx, db_obj):
                     contract = ctx.data_contracts_manager._build_contract_api_model(ctx.db, db_obj)
                     contracts.append(_serialize_contract(contract))
                 else:
+                    # An unreadable contract is answered like a missing one.
                     not_found.append(cid)
+                    if db_obj:
+                        unreadable.append(cid)
 
             logger.info(
                 f"[get_data_contracts] SUCCESS: {len(contracts)} found, "
                 f"{len(not_found)} not found"
             )
-            return ToolResult(
+            result = ToolResult(
                 success=True,
                 data={
                     "contracts": contracts,
@@ -631,6 +744,7 @@ class GetDataContractsBulkTool(BaseTool):
                     "truncated": requested > effective_limit,
                 },
             )
+            return read_access.denied(ctx, self.name, result, unreadable)
         except Exception as e:
             return ToolResult(success=False, **tool_failure("get_data_contracts", e))
 
@@ -701,6 +815,7 @@ class DeleteDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
         """Delete a data contract."""
@@ -709,6 +824,15 @@ class DeleteDataContractTool(BaseTool):
         if not ctx.data_contracts_manager:
             logger.error(f"[delete_data_contract] FAILED: Data contracts manager not available")
             return ToolResult(success=False, error="Data contracts manager not available")
+
+        # A contract the caller can't read (e.g. another user's personal draft)
+        # is answered like a missing one, and nothing is deleted.
+        refusal = read_access.unreadable_target(
+            ctx, self.name, "data_contract", contract_id,
+            f"Data contract '{contract_id}' not found",
+        )
+        if refusal:
+            return refusal
         
         try:
             # DB-backed delete: the legacy in-memory manager.delete_contract() never touches
@@ -723,12 +847,25 @@ class DeleteDataContractTool(BaseTool):
                 )
             contract_name = db_obj.name
 
-            ctx.data_contracts_manager.delete_contract_from_db(
-                db=ctx.db,
-                contract_id=contract_id,
-                current_user=None,
+            details: Dict[str, Any] = {
+                "params": {"contract_id": contract_id},
+                "deleted_resource_id_attempted": contract_id,
+            }
+            with audited(
+                ctx, DATA_CONTRACTS_FEATURE_ID, self.name, "DELETE", details
+            ) as outcome:
+                ctx.data_contracts_manager.delete_contract_from_db(
+                    db=ctx.db,
+                    contract_id=contract_id,
+                    current_user=caller_email(ctx),
+                )
+                ctx.db.commit()
+                details["response_status_code"] = 204
+                outcome["success"] = True
+            # The on_delete workflows of DELETE /data-contracts/{id}.
+            ctx.data_contracts_manager.fire_delete_trigger(
+                ctx.db, contract_id, caller_email(ctx)
             )
-            ctx.db.commit()
 
             logger.info(f"[delete_data_contract] SUCCESS: Deleted contract {contract_name}")
             return ToolResult(

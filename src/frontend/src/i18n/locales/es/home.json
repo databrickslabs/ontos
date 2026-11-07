@@ -34,9 +34,12 @@
       "description": "Tus activos que aún no tienen documentación o revisión.",
       "noAssets": "Todavía no posees ningún activo.",
       "allDone": "Todos tus activos están documentados y revisados.",
+      "noGapsLoaded": "No hay carencias en los activos cargados hasta ahora.",
       "noDescription": "Sin descripción",
       "noReview": "Sin revisar",
       "more": "Mostrando {{shown}} de tus {{total}} activos.",
+      "loadMore": "Cargar más",
+      "pageSize": "Por página",
       "requestReview": "Solicitar una revisión"
     },
     "maintain": {

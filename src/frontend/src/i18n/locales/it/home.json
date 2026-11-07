@@ -34,9 +34,12 @@
       "description": "I tuoi asset che non hanno ancora documentazione o revisione.",
       "noAssets": "Non possiedi ancora alcun asset.",
       "allDone": "Tutti i tuoi asset sono documentati e revisionati.",
+      "noGapsLoaded": "Nessuna lacuna negli asset caricati finora.",
       "noDescription": "Nessuna descrizione",
       "noReview": "Non revisionato",
       "more": "Visualizzati {{shown}} dei tuoi {{total}} asset.",
+      "loadMore": "Carica altri",
+      "pageSize": "Per pagina",
       "requestReview": "Richiedi una revisione"
     },
     "maintain": {

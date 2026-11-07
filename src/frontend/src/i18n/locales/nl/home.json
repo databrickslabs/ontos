@@ -34,9 +34,12 @@
       "description": "Je assets die nog documentatie of een beoordeling missen.",
       "noAssets": "Je bent nog geen eigenaar van een asset.",
       "allDone": "Al je assets zijn gedocumenteerd en beoordeeld.",
+      "noGapsLoaded": "Geen hiaten in de tot nu toe geladen assets.",
       "noDescription": "Geen beschrijving",
       "noReview": "Niet beoordeeld",
       "more": "{{shown}} van je {{total}} assets weergegeven.",
+      "loadMore": "Meer laden",
+      "pageSize": "Per pagina",
       "requestReview": "Beoordeling aanvragen"
     },
     "maintain": {

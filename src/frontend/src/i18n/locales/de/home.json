@@ -34,9 +34,12 @@
       "description": "Ihre Assets, denen noch Dokumentation oder eine Prüfung fehlt.",
       "noAssets": "Ihnen gehört noch kein Asset.",
       "allDone": "Alle Ihre Assets sind dokumentiert und geprüft.",
+      "noGapsLoaded": "Keine Lücken in den bisher geladenen Assets.",
       "noDescription": "Keine Beschreibung",
       "noReview": "Nicht geprüft",
       "more": "{{shown}} von Ihren {{total}} Assets angezeigt.",
+      "loadMore": "Mehr laden",
+      "pageSize": "Pro Seite",
       "requestReview": "Prüfung anfordern"
     },
     "maintain": {

@@ -1,6 +1,6 @@
 /** The home page by edition: Full is unchanged, Essentials is organized by journey. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { FeatureAccessLevel } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '@/lib/permissions';
@@ -20,23 +20,29 @@ const state = vi.hoisted(() => {
       .sort((a, b) => b.length - a.length)
       .find((k) => url.startsWith(k));
     if (!key) return { ok: false, status: 404, json: async () => ({}) };
-    return { ok: true, status: 200, json: async () => s.routes[key] };
+    const body = s.routes[key];
+    const data = typeof body === 'function' ? (body as (u: string) => unknown)(url) : body;
+    return { ok: true, status: 200, json: async () => data };
   }) as any;
   return s;
 });
 
-vi.mock('@/stores/permissions-store', () => ({
-  usePermissions: () => ({
-    isLoading: false,
-    permissions: state.perms,
-    hasPermission: (id: string, level: FeatureAccessLevel) =>
-      (ACCESS_LEVEL_ORDER as Record<string, number>)[state.perms[id] || 'None'] >=
-      (ACCESS_LEVEL_ORDER as Record<string, number>)[level],
-    availableRoles: state.roles,
-    requestableRoles: [],
-    appliedRoleId: null,
-  }),
-}));
+vi.mock('@/stores/permissions-store', () => {
+  // Stable like the real store's: tiles re-fetch whenever `hasPermission` changes.
+  const hasPermission = (id: string, level: FeatureAccessLevel) =>
+    (ACCESS_LEVEL_ORDER as Record<string, number>)[state.perms[id] || 'None'] >=
+    (ACCESS_LEVEL_ORDER as Record<string, number>)[level];
+  return {
+    usePermissions: () => ({
+      isLoading: false,
+      permissions: state.perms,
+      hasPermission,
+      availableRoles: state.roles,
+      requestableRoles: [],
+      appliedRoleId: null,
+    }),
+  };
+});
 // Sections with their own data and tests; stubbed to keep this test on the layout.
 vi.mock('@/components/home/required-actions-section', () => ({
   default: () => <div data-testid="required-actions" />,
@@ -53,6 +59,7 @@ import { features } from '@/config/features';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { useUserStore } from '@/stores/user-store';
+import { useEssentialsHomePreferencesStore } from '@/stores/essentials-home-preferences-store';
 import {
   assetGaps,
   latestReviewedAssets,
@@ -89,18 +96,23 @@ const REVIEWS = [
   ]),
 ];
 
+let owned: { id: string; name: string; location: string; description: string }[] = [];
+
+/** `GET /api/assets?owned_by_me=true&skip=&limit=` over the `owned` fixture. */
+function ownedPage(url: string) {
+  const q = new URL(url, 'http://x').searchParams;
+  const skip = Number(q.get('skip')), limit = Number(q.get('limit'));
+  return { items: owned.slice(skip, skip + limit), total: owned.length, skip, limit };
+}
+
 function setRoutes() {
+  owned = [
+    { id: 'a1', name: 'orders', location: 'main.sales.orders', description: 'Orders' },
+    { id: 'a2', name: 'customers', location: 'main.sales.customers', description: '' },
+  ];
   state.routes = {
     '/api/assets?limit=1': { items: [], total: 42, skip: 0, limit: 1 },
-    '/api/assets/a1': { id: 'a1', name: 'orders', location: 'main.sales.orders',
-      description: 'Orders' },
-    '/api/assets/a2': { id: 'a2', name: 'customers', location: 'main.sales.customers',
-      description: '' },
-    '/api/user/ownerships': [
-      { object_type: 'asset', object_id: 'a1' },
-      { object_type: 'asset', object_id: 'a2' },
-      { object_type: 'data_product', object_id: 'p1' },
-    ],
+    '/api/assets?owned_by_me=true': ownedPage,
     '/api/data-asset-reviews': REVIEWS,
     '/api/access-grants/my-requests': { requests: [
       { id: 'g1', entity_name: 'Sales tables', entity_id: 'e1', entity_type: 'asset',
@@ -123,6 +135,7 @@ describe('Home by edition', () => {
     state.calls = [];
     state.roles = [];
     setRoutes();
+    useEssentialsHomePreferencesStore.setState({ publishPageSize: 10 });
     useFeatureVisibilityStore.setState({
       showAllFeatures: false, allowedMaturities: ['ga', 'beta'],
     });
@@ -194,7 +207,7 @@ describe('Home by edition', () => {
     expect(screen.queryByText('Browse the Data Catalog')).not.toBeInTheDocument();
     await waitFor(() => expect(state.calls).toContain('/api/assets?limit=1'));
     expect(state.calls.some((u) => u.startsWith('/api/data-asset-reviews'))).toBe(false);
-    expect(state.calls).not.toContain('/api/user/ownerships');
+    expect(state.calls.some((u) => u.includes('owned_by_me'))).toBe(false);
     expect(state.calls).not.toContain('/api/access-grants/my-requests');
   });
 
@@ -207,6 +220,57 @@ describe('Home by edition', () => {
     expect(within(list).getByText('No description')).toBeInTheDocument();
     expect(within(list).getByText('Not reviewed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Request a review/ })).toBeInTheDocument();
+  });
+
+  it('Publish loads my assets in one call per page, sized by the saved preference', async () => {
+    owned = Array.from({ length: 30 }, (_, i) => ({
+      id: `m${i}`, name: `table_${i}`, location: `main.s.t${i}`, description: '',
+    }));
+    useEssentialsHomePreferencesStore.setState({ publishPageSize: 25 });
+    useUICustomizationStore.setState({ edition: 'essentials' });
+    renderWithProviders(<Home />);
+    const paging = await screen.findByTestId('essentials-publish-paging');
+    expect(within(paging).getByText('Showing 25 of your 30 assets.')).toBeInTheDocument();
+    expect(state.calls).toContain('/api/assets?owned_by_me=true&skip=0&limit=25');
+    expect(state.calls.some((u) => /^\/api\/assets\/m\d/.test(u))).toBe(false);
+    expect(within(paging).getByRole('combobox', { name: 'Per page' })).toHaveTextContent('25');
+
+    await act(async () => {
+      within(paging).getByRole('button', { name: 'Load more' }).click();
+    });
+    await waitFor(() =>
+      expect(within(paging).getByText('Showing 30 of your 30 assets.')).toBeInTheDocument(),
+    );
+    expect(state.calls).toContain('/api/assets?owned_by_me=true&skip=25&limit=25');
+    expect(within(paging).queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('essentials-publish-gaps')).getAllByText('No description'))
+      .toHaveLength(30);
+  });
+
+  it('a new page size starts over from the first page', async () => {
+    owned = Array.from({ length: 12 }, (_, i) => ({
+      id: `m${i}`, name: `table_${i}`, location: `main.s.t${i}`, description: '',
+    }));
+    useUICustomizationStore.setState({ edition: 'essentials' });
+    renderWithProviders(<Home />);
+    const paging = await screen.findByTestId('essentials-publish-paging');
+    expect(within(paging).getByText('Showing 10 of your 12 assets.')).toBeInTheDocument();
+    act(() => useEssentialsHomePreferencesStore.getState().setPublishPageSize(50));
+    // The page reloads from the first page, so the paging row is rendered again.
+    expect(await screen.findByText('Showing 12 of your 12 assets.')).toBeInTheDocument();
+    expect(state.calls).toContain('/api/assets?owned_by_me=true&skip=0&limit=50');
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('says only the loaded assets are clean while more pages exist', async () => {
+    owned = Array.from({ length: 11 }, (_, i) => ({
+      id: `m${i}`, name: `table_${i}`, location: `main.s.t${i}`, description: 'ok',
+    }));
+    state.routes['/api/data-asset-reviews'] = [review('rx', 'approved', 'a@x.com', 'b@x.com',
+      owned.map((a) => ({ fqn: a.location, status: 'approved', at: '2026-01-01' })))];
+    useUICustomizationStore.setState({ edition: 'essentials' });
+    renderWithProviders(<Home />);
+    expect(await screen.findByText('No gaps in the assets loaded so far.')).toBeInTheDocument();
   });
 
   it('Maintain shows my pending requests and my open reviews', async () => {
@@ -239,6 +303,19 @@ describe('Home by edition', () => {
     renderWithProviders(<Home />);
     expect(screen.queryByTestId('essentials-home')).not.toBeInTheDocument();
     expect(screen.getByText('Overview')).toBeInTheDocument();
+  });
+});
+
+describe('Essentials home preferences', () => {
+  it('keeps only the offered page sizes', () => {
+    const { setPublishPageSize } = useEssentialsHomePreferencesStore.getState();
+    setPublishPageSize(50);
+    expect(useEssentialsHomePreferencesStore.getState().publishPageSize).toBe(50);
+    setPublishPageSize(7);
+    expect(useEssentialsHomePreferencesStore.getState().publishPageSize).toBe(10);
+    setPublishPageSize(25);
+    expect(JSON.parse(localStorage.getItem('essentials-home-preferences') || '{}').state)
+      .toEqual({ publishPageSize: 25 });
   });
 });
 

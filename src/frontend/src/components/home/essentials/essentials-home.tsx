@@ -12,6 +12,13 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import SearchBar from '@/components/ui/search-bar';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
@@ -21,6 +28,10 @@ import CreateReviewRequestDialog from
   '@/components/data-asset-reviews/create-review-request-dialog';
 import { useMenuVisibility } from '@/hooks/use-menu-visibility';
 import { useApi } from '@/hooks/use-api';
+import {
+  PUBLISH_PAGE_SIZES,
+  useEssentialsHomePreferencesStore,
+} from '@/stores/essentials-home-preferences-store';
 import { usePermissions } from '@/stores/permissions-store';
 import { useUserStore } from '@/stores/user-store';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
@@ -37,7 +48,6 @@ import {
   useMyAccessRequests,
   useOwnedAssets,
   useReviewRequests,
-  MY_ASSETS_LIMIT,
   type OwnedAsset,
 } from './use-essentials-data';
 
@@ -124,7 +134,9 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
 
   const assetTotal = useAssetTotal(!!assets);
   const reviewList = useReviewRequests(!!reviews);
-  const owned = useOwnedAssets(!!assetsWrite);
+  const pageSize = useEssentialsHomePreferencesStore((s) => s.publishPageSize);
+  const setPageSize = useEssentialsHomePreferencesStore((s) => s.setPublishPageSize);
+  const owned = useOwnedAssets(!!assetsWrite, pageSize);
   const accessRequests = useMyAccessRequests(!!myRequests);
 
   const counts = useMemo(() => reviewStatusCounts(reviewList.data), [reviewList.data]);
@@ -273,7 +285,11 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
               {owned.loading ? null : owned.data.length === 0 ? (
                 <Empty>{t('home:essentials.publish.noAssets')}</Empty>
               ) : gaps.length === 0 ? (
-                <Empty>{t('home:essentials.publish.allDone')}</Empty>
+                <Empty>
+                  {owned.hasMore
+                    ? t('home:essentials.publish.noGapsLoaded')
+                    : t('home:essentials.publish.allDone')}
+                </Empty>
               ) : (
                 <ul className="space-y-2 text-sm" data-testid="essentials-publish-gaps">
                   {gaps.map((g) => (
@@ -297,12 +313,44 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                   ))}
                 </ul>
               )}
-              {owned.total > MY_ASSETS_LIMIT && (
-                <Empty>
-                  {t('home:essentials.publish.more', {
-                    shown: MY_ASSETS_LIMIT, total: owned.total,
-                  })}
-                </Empty>
+              {owned.total > 0 && (
+                <div className="flex flex-wrap items-center gap-3 text-sm"
+                  data-testid="essentials-publish-paging">
+                  <span className="text-muted-foreground">
+                    {t('home:essentials.publish.more', {
+                      shown: owned.data.length, total: owned.total,
+                    })}
+                  </span>
+                  {owned.hasMore && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={owned.loadingMore}
+                      onClick={owned.loadMore}
+                    >
+                      {t('home:essentials.publish.loadMore')}
+                    </Button>
+                  )}
+                  <label className="ml-auto flex items-center gap-2 text-muted-foreground">
+                    {t('home:essentials.publish.pageSize')}
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(v) => setPageSize(Number(v))}
+                    >
+                      <SelectTrigger
+                        className="h-8 w-[72px]"
+                        aria-label={t('home:essentials.publish.pageSize')}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PUBLISH_PAGE_SIZES.map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </div>
               )}
               {reviewsWrite && (
                 <Button size="sm" onClick={() => setReviewDialogOpen(true)}>

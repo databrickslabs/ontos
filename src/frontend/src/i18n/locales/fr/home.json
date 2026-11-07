@@ -34,9 +34,12 @@
       "description": "Vos actifs qui n'ont pas encore de documentation ou de revue.",
       "noAssets": "Vous n'êtes propriétaire d'aucun actif pour l'instant.",
       "allDone": "Tous vos actifs sont documentés et revus.",
+      "noGapsLoaded": "Aucune lacune dans les actifs chargés jusqu'ici.",
       "noDescription": "Sans description",
       "noReview": "Non revu",
       "more": "{{shown}} de vos {{total}} actifs affichés.",
+      "loadMore": "Charger plus",
+      "pageSize": "Par page",
       "requestReview": "Demander une revue"
     },
     "maintain": {

@@ -34,9 +34,12 @@
       "description": "ドキュメントやレビューがまだないあなたのアセット。",
       "noAssets": "まだ所有しているアセットはありません。",
       "allDone": "すべてのアセットが文書化され、レビュー済みです。",
+      "noGapsLoaded": "これまでに読み込んだアセットに不足はありません。",
       "noDescription": "説明なし",
       "noReview": "未レビュー",
       "more": "{{total}} 件中 {{shown}} 件のアセットを表示しています。",
+      "loadMore": "さらに読み込む",
+      "pageSize": "1 ページの件数",
       "requestReview": "レビューを依頼"
     },
     "maintain": {

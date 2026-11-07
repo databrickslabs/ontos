@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   features,
   isFeatureShown,
@@ -17,13 +17,10 @@ import {
  * Data for the Essentials home. Every call goes to an existing endpoint:
  * - GET /api/assets?limit=1            total assets (Understand)
  * - GET /api/data-asset-reviews        review requests (Trust, Publish, Maintain)
- * - GET /api/user/ownerships           assets the user owns (Publish)
- * - GET /api/assets/{id}               description/location of each owned asset (Publish)
+ * - GET /api/assets?owned_by_me=true   the user's assets, one page at a time (Publish)
  * - GET /api/access-grants/my-requests the user's access requests (Maintain)
  */
 
-/** Owned assets checked on the home; the Assets page lists the rest. */
-export const MY_ASSETS_LIMIT = 10;
 /** Review requests read to compute statuses (the endpoint pages at 100 by default). */
 export const REVIEWS_LIMIT = 500;
 
@@ -152,30 +149,58 @@ export function useMyAccessRequests(enabled: boolean): Loadable<AccessRequestIte
   return { data: res.data?.requests ?? EMPTY_REQUESTS, loading: res.loading };
 }
 
-interface OwnedAssets {
-  assets: OwnedAsset[];
+interface AssetPage {
+  items: OwnedAsset[];
   total: number;
 }
 
-const NO_OWNED: OwnedAssets = { assets: [], total: 0 };
+const ownedPageUrl = (skip: number, limit: number) =>
+  `/api/assets?owned_by_me=true&skip=${skip}&limit=${limit}`;
 
-async function loadOwnedAssets(): Promise<OwnedAssets> {
-  const ownerships =
-    (await getJson<{ object_type: string; object_id: string }[]>('/api/user/ownerships')) ?? [];
-  const ids = Array.from(
-    new Set(ownerships.filter((o) => o.object_type === 'asset').map((o) => o.object_id)),
-  );
-  const assets = await Promise.all(
-    ids.slice(0, MY_ASSETS_LIMIT).map((id) => getJson<OwnedAsset>(`/api/assets/${id}`)),
-  );
-  return { assets: assets.filter((a): a is OwnedAsset => !!a), total: ids.length };
+export interface OwnedAssets extends Loadable<OwnedAsset[]> {
+  total: number;
+  /** More pages exist on the server (`skip + limit < total`). */
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => void;
 }
 
-/** The assets the user owns (first {@link MY_ASSETS_LIMIT}), with their metadata. */
-export function useOwnedAssets(enabled: boolean): Loadable<OwnedAsset[]> & { total: number } {
-  const res = useLoad<OwnedAssets>(enabled ? 'owned' : null, loadOwnedAssets, NO_OWNED);
-  return { data: res.data.assets, total: res.data.total, loading: res.loading };
+/**
+ * The assets the user owns, `pageSize` at a time, from one paginated call. A new page
+ * size starts over from the first page.
+ */
+export function useOwnedAssets(enabled: boolean, pageSize: number): OwnedAssets {
+  const key = enabled ? ownedPageUrl(0, pageSize) : null;
+  const first = useJson<AssetPage | null>(key, null);
+  const [more, setMore] = useState<{ key: string; items: OwnedAsset[]; loading: boolean }>();
+  const extra = key && more?.key === key ? more : undefined;
+  const items = useMemo(
+    () => [...(first.data?.items ?? []), ...(extra?.items ?? [])],
+    [first.data, extra],
+  );
+  const total = first.data?.total ?? 0;
+  const loadingMore = !!extra?.loading;
+
+  const loadMore = useCallback(() => {
+    if (!key || loadingMore) return;
+    const skip = items.length;
+    const keep = (m?: { key: string; items: OwnedAsset[] }) => (m?.key === key ? m.items : []);
+    setMore((m) => ({ key, items: keep(m), loading: true }));
+    getJson<AssetPage>(ownedPageUrl(skip, pageSize)).then((page) =>
+      setMore((m) => ({ key, items: [...keep(m), ...(page?.items ?? [])], loading: false })),
+    );
+  }, [key, loadingMore, items.length, pageSize]);
+
+  return {
+    data: items,
+    loading: first.loading,
+    total,
+    hasMore: !first.loading && items.length < total,
+    loadingMore,
+    loadMore,
+  };
 }
+
 /** Count of reviewed assets per status, across all review requests. */
 export function reviewStatusCounts(
   reviews: DataAssetReviewRequest[],

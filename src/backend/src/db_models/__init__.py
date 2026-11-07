@@ -30,6 +30,7 @@ from . import process_workflows
 from . import projects
 from . import quality
 from . import rdf_triples
+from . import scheduler_claims
 from . import semantic_links
 from . import semantic_models
 from . import settings
@@ -53,4 +54,5 @@ from . import schema_import_runs
 from . import term_mappings
 from . import search_documents
 from . import metric_view_baselines
+from . import metric_view_change_requests
 

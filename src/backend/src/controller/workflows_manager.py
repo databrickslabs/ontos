@@ -39,6 +39,7 @@ from src.models.process_workflows import (
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
 from src.common.workflow_step_config import check_condition, check_script_config
+from src.common.quartz_cron import QuartzCronError, validate_schedule
 
 logger = get_logger(__name__)
 
@@ -58,8 +59,9 @@ _DEFAULT_ENTITY_TYPE_ADDITIONS = (
 )
 
 # Trigger types no event fires: manual runs go by workflow id
-# (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
-# so two active workflows of these types can't consume the same event.
+# (POST /api/workflows/{id}/execute) and the scheduler runs a ``scheduled``
+# workflow by id (controller/workflow_scheduler.py), so two active workflows of
+# these types can't consume the same event.
 _NON_EVENT_TRIGGER_TYPES = frozenset({TriggerType.MANUAL.value, TriggerType.SCHEDULED.value})
 # Trigger types whose from/to status filters narrow the events they match.
 _STATUS_FILTERED_TRIGGER_TYPES = frozenset({
@@ -77,6 +79,13 @@ def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMes
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
                         step=step.step_id, fields=fields)
+
+
+def _schedules_changed() -> None:
+    """Tell the workflow scheduler to re-read the scheduled workflows (#941)."""
+    from src.controller.workflow_scheduler import notify_schedules_changed
+
+    notify_schedules_changed()
 
 
 def _step_issue(step: WorkflowStepCreate, issue: Dict[str, Any]) -> CodedMessage:
@@ -336,6 +345,7 @@ class WorkflowsManager:
             is_default=False,
             created_by=created_by,
         )
+        _schedules_changed()
         return self._db_to_model(db_workflow)
 
     def update_workflow(
@@ -354,11 +364,15 @@ class WorkflowsManager:
         )
         if not db_workflow:
             return None
+        _schedules_changed()
         return self._db_to_model(db_workflow)
 
     def delete_workflow(self, workflow_id: str) -> bool:
         """Delete a workflow (non-default only)."""
-        return process_workflow_repo.delete(self._db, workflow_id)
+        deleted = process_workflow_repo.delete(self._db, workflow_id)
+        if deleted:
+            _schedules_changed()
+        return deleted
 
     def toggle_active(
         self,
@@ -376,6 +390,7 @@ class WorkflowsManager:
         )
         if not db_workflow:
             return None
+        _schedules_changed()
         return self._db_to_model(db_workflow)
 
     @staticmethod
@@ -503,6 +518,7 @@ class WorkflowsManager:
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
+            timezone=trigger_config.get('timezone'),
             on_error=self._safe_gate_error_mode(trigger_config.get('on_error')),
             disabled_for=self._safe_gate_exemptions(trigger_config.get('disabled_for')),
         )
@@ -630,12 +646,28 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
+        errors.extend(self._validate_schedule(workflow.trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
         )
+
+    @staticmethod
+    def _validate_schedule(trigger: WorkflowTrigger) -> List[str]:
+        """A ``scheduled`` trigger needs a Quartz cron (common/quartz_cron.py) and a timezone."""
+        if trigger.type != TriggerType.SCHEDULED:
+            return []
+        if not (trigger.schedule or '').strip():
+            return [CodedMessage(
+                "A scheduled trigger requires a cron expression (schedule)", 'schedule_required',
+            )]
+        try:
+            validate_schedule(trigger.schedule, trigger.timezone)
+        except QuartzCronError as e:
+            return [CodedMessage(str(e), e.code, **e.params)]
+        return []
 
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""
@@ -1535,6 +1567,7 @@ class WorkflowsManager:
             from_status=trigger_config.get('from_status'),
             to_status=trigger_config.get('to_status'),
             schedule=trigger_config.get('schedule'),
+            timezone=trigger_config.get('timezone'),
             on_error=self._safe_gate_error_mode(trigger_config.get('on_error')),
             disabled_for=self._safe_gate_exemptions(trigger_config.get('disabled_for')),
         )

@@ -407,6 +407,8 @@ _OWNER_APPROVER_TOKENS = {
     'domainowner': 'DomainOwner',
     'domainowners': 'DomainOwner',
     'contractapprover': 'ContractApprover',
+    'assetowner': 'AssetOwner',
+    'assetowners': 'AssetOwner',
 }
 
 
@@ -416,9 +418,9 @@ def _owner_approvers(
     """Approvers for the 'DomainOwner' / 'ContractApprover' tokens.
 
     An app role with that name wins (an admin may have created one).
-    Otherwise 'DomainOwner' resolves to the owners of the entity's domain and
-    'ContractApprover' to the owners of the entity itself (the data
-    contract), leaving out the requester. When nobody is left, the request
+    Otherwise 'DomainOwner' resolves to the owners of the entity's domain, and
+    'ContractApprover' and 'AssetOwner' to the owners of the entity itself (the
+    data contract, the asset), leaving out the requester. When nobody is left, the request
     goes to the Data Steward and Admin roles instead of a recipient no user
     matches; handle-approval refuses the requester's own decision.
     """
@@ -623,6 +625,7 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
     "ontology_concept": "Concept",
     "ontology_collection": "Concept Scheme",
     "concept_changeset": "Concept Changeset",
+    "metric_view": "Metric View",
 }
 
 
@@ -2775,6 +2778,7 @@ class WorkflowExecutor:
         trigger_context: Optional[TriggerContext] = None,
         blocking: bool = True,
         execution_id: Optional[str] = None,
+        triggered_by: Optional[str] = None,
     ) -> WorkflowExecution:
         """Execute a workflow against an entity.
         
@@ -2788,6 +2792,9 @@ class WorkflowExecutor:
             trigger_context: Full trigger context
             blocking: If True, run synchronously; if False, queue for async execution
             execution_id: Optional existing execution ID to reuse (for retries)
+            triggered_by: Recorded as the execution's ``triggered_by`` instead of
+                ``user_email``, for runs no user started (``system:scheduler``);
+                ``user_email`` stays the requester the steps resolve
             
         Returns:
             WorkflowExecution with results
@@ -2809,7 +2816,7 @@ class WorkflowExecutor:
             execution_create = WorkflowExecutionCreate(
                 workflow_id=workflow.id,
                 trigger_context=trigger_context,
-                triggered_by=user_email,
+                triggered_by=triggered_by or user_email,
             )
             db_execution = workflow_execution_repo.create(self._db, execution_create)
         
@@ -3511,6 +3518,19 @@ class WorkflowExecutor:
                     execution_id=execution_id,
                 )
                     
+            # Metric view definition change request decided: record the
+            # decision and deliver an approved request (#1124)
+            elif (entity_type == 'metric_view'
+                  and trigger_type in ('on_request_definition_change',
+                                       'ON_REQUEST_DEFINITION_CHANGE')):
+                from src.controller.metric_view_change_requests_manager import (
+                    MetricViewChangeRequestsManager,
+                )
+                MetricViewChangeRequestsManager(self._db).on_workflow_completed(
+                    (trigger_context.entity_data or {}).get('request_id'),
+                    approved=approved, responded_by=responded_by, execution_id=execution_id,
+                )
+
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
                 self._apply_product_review_outcome(

@@ -703,6 +703,69 @@ workflows:
         config:
           message: "Status change request was rejected"
 
+  # Metric View Definition Change Request (#1124). Approved by the asset's
+  # owners other than the requester, else by the Data Stewards and admins; the
+  # requester can't decide it. An approval delivers the change (Indirect: YAML
+  # and DDL in Git; Manual: the DDL to the owners); nothing is applied by Ontos.
+  - id: "metric-view-change-request"
+    name: "Metric View Change Request"
+    description: "Handles changes to the definition of a Unity Catalog metric view, approved by its owners before delivery."
+    trigger:
+      type: "on_request_definition_change"
+      entity_types:
+        - "metric_view"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Change Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your change to the metric view '${entity_name}' has been submitted for approval."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Owner Approval"
+        type: "approval"
+        config:
+          approvers: "AssetOwner"
+          timeout_days: 5
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Change Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your change to the metric view '${entity_name}' has been approved and is being delivered."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Change Rejected"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your change to the metric view '${entity_name}' has been rejected."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Change Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Change Rejected"
+        type: "fail"
+        config:
+          message: "Metric view change request was rejected"
+
   # =========================================================================
   # Data Asset Review Workflows
   # =========================================================================

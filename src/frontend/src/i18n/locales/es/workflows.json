@@ -35,7 +35,8 @@
       "contractApprovers": "Aprobadores del contrato",
       "appRoles": "Roles de la aplicación",
       "businessRoles": "Roles de negocio",
-      "noGroups": "Sin grupos"
+      "noGroups": "Sin grupos",
+      "assetOwners": "Propietarios del activo"
     },
     "messages": {
       "loadWorkflowFailed": "No se pudo cargar el flujo de trabajo",
@@ -348,7 +349,11 @@
       "entityRejected": "{{name}} se ha rechazado."
     },
     "errors": {
-      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud."
+      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
+      "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
+      "approval_already_decided": "Ya has decidido esta aprobación.",
+      "approval_not_an_approver": "Solo los aprobadores de este paso pueden decidirlo.",
+      "approval_no_longer_pending": "Esta aprobación ya se ha decidido."
     },
     "entityTypes": {
       "entity": "Entidad",

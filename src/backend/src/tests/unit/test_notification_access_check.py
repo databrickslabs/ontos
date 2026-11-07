@@ -95,6 +95,35 @@ class TestStrictAccessCheck:
         ) is False
         assert manager.can_user_access_notification(None, notification, self._user()) is True
 
+    def test_a_business_role_notification_admits_only_its_owner_when_strict(self):
+        """Business-role approvals name the owner and store the business role's
+        id, which is not an app role."""
+        admin = Mock(id='role-admin', assigned_groups=['admins'], assigned_users=[])
+        admin.name = 'Admin'
+        manager = self._manager([self.ROLE, admin])
+        notification = self._notification(recipient='U@example.com', role_id='business-role-1')
+
+        assert manager.can_user_access_notification(
+            None, notification, self._user(), strict=True,
+        ) is True
+        other = UserInfo(
+            username='o@example.com', email='o@example.com', user='o', ip='127.0.0.1',
+            groups=['stewards', 'admins'],
+        )
+        assert manager.can_user_access_notification(
+            None, notification, other, strict=True,
+        ) is False
+
+    def test_a_deleted_role_admits_nobody_when_strict(self):
+        """An app-role notification names the role; once the role is deleted, a
+        role created later with the same name doesn't inherit it."""
+        manager = self._manager([self.ROLE])
+        notification = self._notification(recipient='Data Steward', role_id='role-deleted')
+
+        assert manager.can_user_access_notification(
+            None, notification, self._user(['stewards']), strict=True,
+        ) is False
+
     def test_a_role_stored_by_uuid_addresses_its_members_in_the_bell(self):
         """The default check resolves the text form of a UUID role id too, so
         the notification isn't a broadcast."""

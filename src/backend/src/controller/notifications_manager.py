@@ -61,6 +61,10 @@ class _RecipientMembership:
             return self._assigned_to(role)
         return self.is_admin
 
+    def is_user(self, recipient: Optional[str]) -> bool:
+        """Whether the recipient names the user (email or username)."""
+        return bool(recipient) and recipient.strip().lower() in self._identities
+
     def role_of(self, recipient: Optional[str], recipient_role_id: Optional[str]) -> Optional[Any]:
         """The app role a recipient names: by id, else by name (legacy)."""
         if recipient_role_id and str(recipient_role_id) in self.role_by_id:
@@ -72,7 +76,7 @@ class _RecipientMembership:
         fallbacks of the access check."""
         if not (recipient or recipient_role_id):
             return False
-        if recipient and recipient.strip().lower() in self._identities:
+        if self.is_user(recipient):
             return True
         role = self.role_of(recipient, recipient_role_id)
         if role is not None:
@@ -157,9 +161,11 @@ class NotificationsManager:
             notification: The notification to check access for
             user_info: The user's info including email and groups
             strict: Fail closed, for decisions that grant access to something
-                else (#1117): no broadcast, and nothing when the roles can't be
-                read or ``recipient_role_id`` names no role. The default (the
-                bell) treats an unresolvable role as a broadcast.
+                else (#1117): no broadcast, nothing when the roles can't be
+                read, and when ``recipient_role_id`` names no app role (a
+                business role, or a deleted role) only the user the
+                notification names, not the admins. The default (the bell)
+                treats an unresolvable role as a broadcast.
             
         Returns:
             True if user can access the notification, False otherwise
@@ -172,7 +178,10 @@ class NotificationsManager:
         recipient = notification.recipient
         role_id = notification.recipient_role_id
         if strict and role_id and membership.role_of(None, role_id) is None:
-            return False  # A role that no longer exists addresses nobody
+            # Not an app role: only the person the notification names. A
+            # business role's notification names its owner; a role that no
+            # longer exists names its role and so addresses nobody.
+            return membership.is_user(recipient)
         # Broadcast notification - anyone can access
         if not recipient and membership.role_of(None, role_id) is None:
             return not strict

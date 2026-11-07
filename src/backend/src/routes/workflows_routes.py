@@ -1498,8 +1498,10 @@ def _assert_caller_authorized_for_execution(
     Approval notifications without a recipient and without a role are
     ignored: ``can_user_access_notification`` treats them as broadcast
     (visible to everyone), which must never mean "anyone may approve". The
-    access check is strict: a role that can't be resolved, or roles that
-    can't be read, authorize nobody (the bell would show them to everyone).
+    access check is strict: roles that can't be read authorize nobody, and a
+    role id that isn't an app role only the user the notification names (a
+    business role's owner; a deleted role names nobody). The bell would show
+    them to everyone.
 
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.

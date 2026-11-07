@@ -373,6 +373,33 @@ def test_an_unresolvable_approval_role_authorizes_nobody(roles) -> None:
     assert exc.value.status_code == 403
 
 
+def test_a_business_role_owner_decides_their_approval() -> None:
+    """A business-role approval names the owner's email and stores the
+    business role's id, which is not an app role: the owner decides it, and
+    nobody else does through it."""
+    from src.controller.notifications_manager import NotificationsManager
+
+    settings = MagicMock()
+    settings.list_app_roles.return_value = []
+    manager = NotificationsManager(settings_manager=settings)
+    rows = [_make_notif_row(
+        notif_id='n1', execution_id='exec-A', recipient='owner@example.com',
+        recipient_role_id='business-role-1',
+    )]
+
+    matched = _assert_caller_authorized_for_execution(
+        db=_mock_db_with_rows(rows), notifications_manager=manager, execution_id='exec-A',
+        user_info=_user('Owner@example.com'),
+    )
+    assert [n.id for n in matched] == ['n1']
+    with pytest.raises(HTTPException) as exc:
+        _assert_caller_authorized_for_execution(
+            db=_mock_db_with_rows(rows), notifications_manager=manager, execution_id='exec-A',
+            user_info=_user('mallory@example.com'),
+        )
+    assert exc.value.status_code == 403
+
+
 
 # --- Only the approvers of the pending step may answer -----------------------
 

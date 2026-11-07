@@ -5,6 +5,7 @@ import {
   resolveAppName,
   resolveShortName,
 } from '@/lib/branding';
+import { DEFAULT_EDITION, EDITIONS, type Edition } from '@/config/features';
 
 export interface UICustomizationSettings {
   i18nEnabled: boolean;
@@ -15,6 +16,8 @@ export interface UICustomizationSettings {
   appDisplayName: string | null;
   appShortName: string | null;
   faviconUrl: string | null;
+  /** Which features the menus show (presentation only). */
+  edition: Edition;
   isLoaded: boolean;
 }
 
@@ -35,6 +38,7 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
   appDisplayName: null,
   appShortName: null,
   faviconUrl: null,
+  edition: DEFAULT_EDITION,
   isLoaded: false,
 
   setSettings: (settings) => set((state) => ({ ...state, ...settings })),
@@ -52,6 +56,7 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
           appDisplayName: data.app_display_name || null,
           appShortName: data.app_short_name || null,
           faviconUrl: data.favicon_url || null,
+          edition: toEdition(data.edition),
           isLoaded: true,
         });
 
@@ -80,6 +85,11 @@ export const useUICustomizationStore = create<UICustomizationStore>((set, get) =
 }));
 
 export { DEFAULT_APP_NAME };
+
+/** The edition the server sent, or the default one for a missing or unknown value. */
+export function toEdition(value: unknown): Edition {
+  return EDITIONS.includes(value as Edition) ? (value as Edition) : DEFAULT_EDITION;
+}
 
 /**
  * Inject custom CSS into the document head.

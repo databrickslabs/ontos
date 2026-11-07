@@ -143,3 +143,33 @@ def test_branding_rejects_display_name_too_long(client: TestClient):
     assert response.status_code == 400
     detail = response.json().get("detail", "")
     assert "display name" in detail.lower() or "characters" in detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# UI edition — admin write round-trip + public bootstrap
+# ---------------------------------------------------------------------------
+
+
+def test_ui_edition_defaults_to_full(client: TestClient):
+    assert client.get("/api/settings/ui-customization").json()["edition"] == "full"
+    assert client.get("/api/settings").json()["ui_edition"] == "full"
+
+
+def test_ui_edition_round_trip(client: TestClient):
+    put = client.put("/api/settings", json={"ui_edition": "essentials"})
+    assert put.status_code == 200, put.text
+    assert client.get("/api/settings/ui-customization").json()["edition"] == "essentials"
+    assert client.get("/api/settings").json()["ui_edition"] == "essentials"
+
+    back = client.put("/api/settings", json={"ui_edition": "full"})
+    assert back.status_code == 200, back.text
+    assert client.get("/api/settings/ui-customization").json()["edition"] == "full"
+
+
+def test_ui_edition_rejects_unknown_value_with_a_code(client: TestClient):
+    response = client.put("/api/settings", json={"ui_edition": "enterprise"})
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "ui_edition_invalid"
+    assert detail["params"]["allowed"] == ["full", "essentials"]
+    assert client.get("/api/settings/ui-customization").json()["edition"] == "full"

@@ -632,6 +632,19 @@
   "uiCustomization": {
     "title": "Personnalisation UI",
     "description": "Personnalisez la marque, les paramètres de langue et l'apparence de l'application.",
+    "edition": {
+      "title": "Édition",
+      "label": "Édition",
+      "options": {
+        "full": "Complète",
+        "essentials": "Essentials"
+      },
+      "descriptions": {
+        "full": "Toutes les fonctionnalités apparaissent dans les menus.",
+        "essentials": "Un menu ciblé pour les équipes qui partent de leurs tables Unity Catalog : Recherche, Catalogue de données, Actifs, Concepts, Révisions d'actifs et Mes demandes."
+      },
+      "help": "L'édition ne change que ce qu'affichent la navigation, les actions rapides de l'accueil et la page À propos. Les permissions ne changent pas : les pages masquées s'ouvrent toujours depuis un lien direct pour les utilisateurs qui y ont accès, et les administrateurs peuvent activer « Afficher toutes les fonctionnalités » dans le menu utilisateur."
+    },
     "i18n": {
       "title": "Paramètres de langue",
       "enableLabel": "Activer l'internationalisation",

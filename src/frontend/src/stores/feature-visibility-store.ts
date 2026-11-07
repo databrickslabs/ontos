@@ -5,9 +5,12 @@ import { FeatureMaturity } from '@/config/features';
 interface FeatureVisibilityState {
   showBeta: boolean;
   showAlpha: boolean;
+  /** Admin switch: show the features the edition hides (maturity still applies). */
+  showAllFeatures: boolean;
   actions: {
     toggleBeta: () => void;
     toggleAlpha: () => void;
+    toggleShowAllFeatures: () => void;
   };
   // Computed property derived from state
   allowedMaturities: FeatureMaturity[];
@@ -18,6 +21,7 @@ export const useFeatureVisibilityStore = create<FeatureVisibilityState>()(
     (set, _get) => ({
       showBeta: true,
       showAlpha: false,
+      showAllFeatures: false,
       // Compute allowedMaturities whenever state changes
       allowedMaturities: ['ga'], // Initial value
 
@@ -36,6 +40,8 @@ export const useFeatureVisibilityStore = create<FeatureVisibilityState>()(
             if (newShowAlpha) maturities.push('alpha');
             return { showAlpha: newShowAlpha, allowedMaturities: maturities };
         }),
+        toggleShowAllFeatures: () =>
+          set((state) => ({ showAllFeatures: !state.showAllFeatures })),
       },
       // This part recalculates allowedMaturities on initialization from storage
       // Note: We are deriving allowedMaturities directly within the state/actions
@@ -49,6 +55,7 @@ export const useFeatureVisibilityStore = create<FeatureVisibilityState>()(
       partialize: (state) => ({
         showBeta: state.showBeta,
         showAlpha: state.showAlpha,
+        showAllFeatures: state.showAllFeatures,
       }),
        // Recompute allowedMaturities after rehydration from storage
         onRehydrateStorage: () => (state, _error) => {

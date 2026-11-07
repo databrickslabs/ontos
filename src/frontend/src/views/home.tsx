@@ -18,10 +18,13 @@ import ConnectedOverviewTile from '@/components/home/connected-overview-tile';
 import { tileRegistry, tileOrder } from '@/tiles';
 import { Card, CardContent } from '@/components/ui/card';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { useMenuVisibility } from '@/hooks/use-menu-visibility';
+import EssentialsHome from '@/components/home/essentials/essentials-home';
 
 export default function Home() {
   const { t } = useTranslation(['home', 'common']);
   const appName = useUICustomizationStore((s) => s.getAppName());
+  const { edition } = useMenuVisibility();
   const { permissions, isLoading: permissionsLoading, hasPermission, requestableRoles, appliedRoleId } = usePermissions();
 
   // Get available tiles based on permissions
@@ -64,7 +67,9 @@ export default function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {hasAnyAccess && (
+      {hasAnyAccess && edition === 'essentials' && <EssentialsHome />}
+
+      {hasAnyAccess && edition !== 'essentials' && (
         <>
           <div className="max-w-2xl mx-auto text-center mb-8">
             <div className="flex items-center justify-center mb-4">

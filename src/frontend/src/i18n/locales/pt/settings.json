@@ -650,6 +650,19 @@
   "uiCustomization": {
     "title": "Personalização da interface",
     "description": "Personalize a identidade visual, as configurações de idioma e a aparência do aplicativo.",
+    "edition": {
+      "title": "Edição",
+      "label": "Edição",
+      "options": {
+        "full": "Completa",
+        "essentials": "Essentials"
+      },
+      "descriptions": {
+        "full": "Todos os recursos aparecem nos menus.",
+        "essentials": "Um menu enxuto para equipes que começam pelas suas tabelas do Unity Catalog: Busca, Catálogo de Dados, Ativos, Conceitos, Revisões de Ativos e Minhas Solicitações."
+      },
+      "help": "A edição só muda o que a navegação, as ações rápidas da página inicial e a página Sobre mostram. As permissões não mudam: páginas ocultas continuam abrindo por link direto para quem tem acesso, e administradores podem ativar \"Mostrar todos os recursos\" no menu do usuário."
+    },
     "i18n": {
       "title": "Configurações de idioma",
       "enableLabel": "Ativar internacionalização",

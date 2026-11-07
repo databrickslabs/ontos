@@ -1,6 +1,58 @@
 {
   "title": "Bienvenido a {{appName}}",
   "tagline": "Gestiona glosario de negocio, contratos de datos, productos de datos, personas y más",
+  "essentials": {
+    "tagline": "Encuentra, entiende y confía en tus datos; luego publica y mantén lo que es tuyo.",
+    "consumer": {
+      "title": "Usar datos",
+      "description": "Empieza por las tablas que tu equipo ya tiene en Unity Catalog."
+    },
+    "producer": {
+      "title": "Compartir datos",
+      "description": "Documenta los activos que posees y haz que los revisen."
+    },
+    "find": {
+      "title": "Encontrar",
+      "description": "Busca activos y conceptos, o explora el catálogo.",
+      "placeholder": "Busca tablas, activos y términos del glosario...",
+      "browseCatalog": "Explorar el Data Catalog"
+    },
+    "understand": {
+      "title": "Entender",
+      "description": "Mira qué es un activo y qué significan sus términos.",
+      "assets": "Activos",
+      "assetsDescription": "Tablas, vistas y otros activos con sus metadatos."
+    },
+    "trust": {
+      "title": "Confiar",
+      "description": "Estado de revisión de los activos y dónde están hoy los datos.",
+      "empty": "Todavía no se ha revisado ningún activo.",
+      "openReviews": "Abrir Revisiones de Activos"
+    },
+    "publish": {
+      "title": "Publicar",
+      "description": "Tus activos que aún no tienen documentación o revisión.",
+      "noAssets": "Todavía no posees ningún activo.",
+      "allDone": "Todos tus activos están documentados y revisados.",
+      "noGapsLoaded": "No hay carencias en los activos cargados hasta ahora.",
+      "noDescription": "Sin descripción",
+      "noReview": "Sin revisar",
+      "more": "Mostrando {{shown}} de tus {{total}} activos.",
+      "loadMore": "Cargar más",
+      "pageSize": "Por página",
+      "requestReview": "Solicitar una revisión"
+    },
+    "maintain": {
+      "title": "Mantener",
+      "description": "Tus solicitudes y revisiones abiertas.",
+      "myRequests": "Mis solicitudes pendientes ({{count}})",
+      "noRequests": "No hay solicitudes pendientes.",
+      "openMyRequests": "Abrir Mis Solicitudes",
+      "myReviews": "Mis revisiones de activos abiertas ({{count}})",
+      "noReviews": "No hay revisiones de activos abiertas.",
+      "nothing": "Nada que seguir."
+    }
+  },
   "search": {
     "placeholder": "Buscar productos de datos, términos de glosario, contratos..."
   },

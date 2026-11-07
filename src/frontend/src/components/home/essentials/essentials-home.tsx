@@ -224,7 +224,7 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
               >
                 <div className="flex flex-wrap gap-2" data-testid="essentials-trust-counts">
                   {STATUS_ORDER.map((s) => (
-                    <Badge key={s} variant={STATUS_VARIANT[s]}>
+                    <Badge key={s} variant={counts[s] > 0 ? STATUS_VARIANT[s] : 'outline'}>
                       {statusLabel(s)}: {counts[s]}
                     </Badge>
                   ))}

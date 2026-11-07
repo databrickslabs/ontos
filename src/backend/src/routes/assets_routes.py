@@ -29,7 +29,7 @@ from src.controller.metric_view_change_requests_manager import (
 from src.models.metric_view_change_requests import (
     MetricViewChangeRequestCreate, MetricViewChangeRequestDetail, MetricViewChangeRequestRead,
 )
-from src.common.authorization import PermissionChecker, effective_permissions_for_request
+from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
@@ -39,6 +39,9 @@ from src.common.dependencies import (
     SettingsDep,
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
+from src.common.asset_access import (
+    ensure_asset_readable, get_data_products_manager, user_has_assets_feature,
+)
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -61,59 +64,11 @@ def get_assets_manager(request: Request = None) -> AssetsManager:
     return manager_dependencies.get_assets_manager(request)
 
 
-def _get_data_products_manager(request: Request):
-    """Pull the DataProductsManager singleton from app.state.
-
-    Returns None when not configured (e.g. early in tests); callers must
-    handle that defensively rather than raising — scoping should fail closed
-    (i.e. return empty for non-admins) rather than 500.
-    """
-    return getattr(request.app.state, "data_products_manager", None)
-
-
-def _user_has_assets_feature(request: Request, current_user, level: FeatureAccessLevel) -> bool:
-    """Check whether the current user has the ``assets`` feature at ``level``.
-
-    Used for branching: when a Data Consumer lacks the feature, we still
-    allow DP-scoped reads of linked assets (issue #347), but block writes.
-    """
-    try:
-        auth_manager = getattr(request.app.state, "authorization_manager", None)
-        if not auth_manager or not current_user:
-            return False
-        effective = effective_permissions_for_request(
-            request, current_user.email, current_user.groups or [], auth_manager,
-        )
-        return auth_manager.has_permission(effective, FEATURE_ID, level)
-    except Exception:
-        logger.exception("Failed to check assets feature for user")
-        return False
-
-
-def _ensure_asset_readable(request: Request, db, current_user, manager, asset_id: UUID) -> None:
-    """Raise 403 unless the user may read the asset (issue #347).
-
-    Users with ``assets:READ_WRITE`` or higher read every asset; others only
-    assets linked (directly or via an OutputPort) to a Data Product they can
-    access.
-    """
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Authentication required.",
-        )
-
-    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
-
-    if not is_unscoped:
-        dpm = _get_data_products_manager(request)
-        if dpm is None or not manager.is_asset_accessible(
-            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Asset is not linked to a Data Product accessible to this user.",
-            )
+# The read rule (issue #347) lives in a shared module, so the metadata and
+# costs routes apply it too; the old names stay for the callers of this module.
+_get_data_products_manager = get_data_products_manager
+_user_has_assets_feature = user_has_assets_feature
+_ensure_asset_readable = ensure_asset_readable
 
 
 # ===================== Asset Types =====================

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
+from src.common.entity_metadata_access import EntityMetadataPermission, cost_item_permission
 from src.common.logging import get_logger
 from src.controller.costs_manager import CostsManager
 from src.common.manager_dependencies import get_metadata_manager  # reuse style; provide a getter here
@@ -34,7 +35,7 @@ async def create_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {
@@ -80,7 +81,7 @@ async def list_cost_items(
     month: Optional[str] = Query(None, description="YYYY-MM to filter active recurring items"),
     db: DBSessionDep = None,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     month_date = None
     if month:
@@ -98,7 +99,7 @@ async def summarize_cost_items(
     month: str = Query(..., description="YYYY-MM month to summarize"),
     db: DBSessionDep = None,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     try:
         month_date = datetime.strptime(month + "-01", "%Y-%m-%d").date()
@@ -117,7 +118,7 @@ async def update_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(cost_item_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {
@@ -162,7 +163,7 @@ async def delete_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(cost_item_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {"params": {"cost_item_id": id}}

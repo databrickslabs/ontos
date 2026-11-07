@@ -12,6 +12,7 @@ import { Loader2, Plus, RefreshCcw, Trash2, Pencil, ArrowLeft, ArrowRight } from
 import type { EntityKind, CostItem, CostItemCreate, CostItemUpdate, CostCenter, CostSummary } from '@/types/costs';
 import { formatCents } from '@/types/costs';
 import { useToast } from '@/hooks/use-toast';
+import { responseErrorText } from '@/lib/asset-access-error';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Props = { entityId: string; entityType: EntityKind };
@@ -145,15 +146,29 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
     try {
       if (editing) {
         const resp = await fetch(`/api/cost-items/${editing.id}`, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload as CostItemUpdate) });
-        if (!resp.ok) throw new Error(await resp.text());
+        if (!resp.ok) throw new Error(await responseErrorText(resp));
       } else {
         const resp = await fetch(`/api/entities/${entityType}/${entityId}/cost-items`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-        if (!resp.ok) throw new Error(await resp.text());
+        if (!resp.ok) throw new Error(await responseErrorText(resp));
       }
       toast({ title: editing ? t('metadata:costs.messages.updated') : t('metadata:costs.messages.added') });
       setShowForm(false); resetForm(); fetchData();
     } catch (e: any) {
       toast({ title: t('metadata:costs.messages.saveFailed'), description: e?.message || String(e), variant: 'destructive' });
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    const resp = await fetch(`/api/cost-items/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+      toast({ title: t('metadata:costs.messages.deleted') });
+      fetchData();
+    } else {
+      toast({
+        title: t('metadata:costs.messages.deleteFailed'),
+        description: await responseErrorText(resp),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -239,7 +254,14 @@ const EntityCostsPanel: React.FC<Props> = ({ entityId, entityType }) => {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(it)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => { const resp = await fetch(`/api/cost-items/${it.id}`, { method: 'DELETE' }); if (resp.ok) { toast({ title: t('metadata:costs.messages.deleted') }); fetchData(); } else { toast({ title: t('metadata:costs.messages.deleteFailed'), description: await resp.text(), variant: 'destructive' }); } }}><Trash2 className="h-4 w-4" /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => deleteItem(it.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

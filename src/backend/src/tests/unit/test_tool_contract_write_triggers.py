@@ -146,7 +146,8 @@ class TestOnTriggers:
         on_update = _workflow(world.db, 'on_update')
         on_status = _workflow(world.db, 'on_status_change')
         res = run(_ctx(world), 'update_data_contract',
-                  {'contract_id': world.row.id, 'status': 'deprecated'})
+                  {'contract_id': world.row.id, 'status': 'deprecated',
+                   'deprecation_reason': 'Replaced'})
         assert res.success is True, res.error
         assert _runs(world.db, on_update) == []
         assert _runs(world.db, on_status) == [(world.row.id, 'on_status_change', SUE.email)]
@@ -198,7 +199,8 @@ class TestBlockingGates:
         # As change-status, which runs the before_status_change gates only.
         gate = _workflow(world.db, 'before_update', step_type='fail')
         res = run(_ctx(world), 'update_data_contract',
-                  {'contract_id': world.row.id, 'status': 'deprecated'})
+                  {'contract_id': world.row.id, 'status': 'deprecated',
+                   'deprecation_reason': 'Replaced'})
         assert res.success is True, res.error
         assert _runs(world.db, gate) == []
 
@@ -206,7 +208,8 @@ class TestBlockingGates:
         gate = _workflow(world.db, 'before_status_change', step_type='fail',
                          from_status='active', to_status='deprecated')
         res = run(_ctx(world), 'update_data_contract',
-                  {'contract_id': world.row.id, 'status': 'deprecated'})
+                  {'contract_id': world.row.id, 'status': 'deprecated',
+                   'deprecation_reason': 'Replaced'})
         assert res.success is False
         assert res.error_code == 'status_change_blocked'
         assert _runs(world.db, gate) == [(world.row.id, 'before_status_change', SUE.email)]
@@ -244,7 +247,8 @@ class TestAuditAndCaller:
 
     def test_a_status_change_is_audited_as_change_status(self, world, run):
         res = run(_ctx(world), 'update_data_contract',
-                  {'contract_id': world.row.id, 'status': 'deprecated'})
+                  {'contract_id': world.row.id, 'status': 'deprecated',
+                   'deprecation_reason': 'Replaced'})
         assert res.success is True, res.error
         assert _stored(world).updated_by == SUE.email
         assert _actions(world) == [('CHANGE_STATUS', True)]

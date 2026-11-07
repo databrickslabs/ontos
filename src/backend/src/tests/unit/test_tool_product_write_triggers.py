@@ -145,7 +145,8 @@ class TestOnTriggers:
         on_update = _workflow(world.db, 'on_update')
         on_status = _workflow(world.db, 'on_status_change')
         res = run(_ctx(world, OWNER), 'update_data_product',
-                  {'product_id': world.row.id, 'status': 'deprecated'})
+                  {'product_id': world.row.id, 'status': 'deprecated',
+                   'deprecation_reason': 'Replaced'})
         assert res.success is True, res.error
         assert _runs(world.db, on_update) == []
         assert _runs(world.db, on_status) == [(world.row.id, 'on_status_change', OWNER.email)]
@@ -165,7 +166,8 @@ class TestBlockingGate:
         gate = _workflow(world.db, 'before_status_change', step_type='fail',
                          from_status='active', to_status='deprecated')
         res = run(_ctx(world, OWNER), 'update_data_product',
-                  {'product_id': world.row.id, 'status': 'deprecated'})
+                  {'product_id': world.row.id, 'status': 'deprecated',
+                   'deprecation_reason': 'Replaced'})
         assert res.success is False
         assert res.error_code == 'status_change_blocked'
         assert len(_runs(world.db, gate)) == 1

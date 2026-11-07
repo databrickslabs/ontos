@@ -1205,7 +1205,7 @@
     "title": "Niveaux de maturité",
     "description": "Définissez l'échelle de maturité des produits de données et des contrats. Chaque niveau est conditionné par des politiques de conformité.",
     "addLevel": "Ajouter un niveau",
-    "allTypes": "Tous les types",
+    "allTypes": "Produits et contrats",
     "gateCount_one": "{{count}} condition",
     "gateCount_other": "{{count}} conditions",
     "complianceGates": "Conditions de politique de conformité",
@@ -1232,7 +1232,8 @@
       "levelNamePreview": "Nom du niveau"
     },
     "entityTypes": {
-      "all": "Tous les types d'entités",
+      "all": "Produits et contrats de données",
+      "Asset": "Actifs (tables et vues)",
       "DataProduct": "Produits de données",
       "DataContract": "Contrats de données"
     },

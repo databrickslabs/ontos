@@ -1205,7 +1205,7 @@
     "title": "Reifegradstufen",
     "description": "Definieren Sie die Reifegradleiter für Datenprodukte und Verträge. Jede Stufe ist durch Compliance-Richtlinien gesteuert.",
     "addLevel": "Stufe hinzufügen",
-    "allTypes": "Alle Typen",
+    "allTypes": "Produkte und Verträge",
     "gateCount_one": "{{count}} Gate",
     "gateCount_other": "{{count}} Gates",
     "complianceGates": "Compliance-Richtlinien-Gates",
@@ -1232,7 +1232,8 @@
       "levelNamePreview": "Stufenname"
     },
     "entityTypes": {
-      "all": "Alle Entity-Typen",
+      "all": "Datenprodukte und Datenverträge",
+      "Asset": "Assets (Tabellen und Views)",
       "DataProduct": "Datenprodukte",
       "DataContract": "Datenverträge"
     },

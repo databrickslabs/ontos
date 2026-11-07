@@ -102,7 +102,8 @@ def test_collect_contract_names_maps_ids_to_names(db_session):
 def test_create_genie_space_task_passes_contract_names(db_session):
     contract_id = str(uuid.uuid4())
     product_id = str(uuid.uuid4())
-    db_session.add(DataContractDb(id=contract_id, name='Orders v1', version='1.0.0', status='draft'))
+    db_session.add(DataContractDb(
+        id=contract_id, name='Orders v1', version='1.0.0', status='draft'))
     db_session.add(DataProductDb(
         id=product_id, api_version='v1.0.0', kind='DataProduct', status='active',
         name='Orders', version='1.0.0',

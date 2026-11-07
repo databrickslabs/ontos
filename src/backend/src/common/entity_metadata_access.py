@@ -6,7 +6,8 @@ an asset (``entity_type == "asset"``) the asset's own rules apply instead
 
 - reading needs the asset to be readable (``assets`` READ_WRITE, or a link to
   a Data Product the user can access, see ``asset_access``);
-- changing needs ``assets`` READ_WRITE;
+- changing needs ``assets`` READ_WRITE (attaching a shared or another
+  entity's row also needs ``data-domains`` READ, the right to read that row);
 - the asset must exist (404 ``asset_not_found``), except on the routes that
   address a row by its own id, so orphaned rows can still be cleaned up.
 
@@ -100,12 +101,24 @@ class EntityMetadataPermission:
     the inheritable metadata of the contracts in ``contract_ids``, which the
     asset rules don't cover, so a request that names contracts still needs
     the ``data-domains`` check.
+
+    ``attaching`` (attach route): the row to attach is picked by id from the
+    shared library or another entity, which only ``data-domains`` READ may
+    read, and merged metadata then returns it to every reader of the asset.
+    Attaching to an asset also needs ``data-domains`` READ.
     """
 
-    def __init__(self, level: FeatureAccessLevel, *, contract_ids_need_domains: bool = False):
+    def __init__(
+        self, level: FeatureAccessLevel, *,
+        contract_ids_need_domains: bool = False, attaching: bool = False,
+    ):
         self.level = level
         self.contract_ids_need_domains = contract_ids_need_domains
+        self.attaching = attaching
         self._domain_checker = PermissionChecker(METADATA_FEATURE_ID, level)
+        self._domain_read_checker = PermissionChecker(
+            METADATA_FEATURE_ID, FeatureAccessLevel.READ_ONLY,
+        )
 
     async def __call__(
         self,
@@ -125,6 +138,8 @@ class EntityMetadataPermission:
         contract_ids = (request.query_params.get('contract_ids') or '').split(',')
         if self.contract_ids_need_domains and any(cid.strip() for cid in contract_ids):
             await self._domain_checker(request, user_details, auth_manager)
+        if self.attaching:
+            await self._domain_read_checker(request, user_details, auth_manager)
 
 
 def _rich_text_owner(request: Request, db):

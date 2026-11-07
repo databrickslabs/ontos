@@ -24,7 +24,7 @@ from src.controller.metadata_manager import MetadataManager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.metadata import DocumentMetadataDb
 from src.models.costs import CostItemCreate
-from src.models.metadata import LinkCreate, RichTextCreate
+from src.models.metadata import LinkCreate, MetadataAttachmentCreate, RichTextCreate
 from src.models.settings import AppRoleCreate
 
 ASSETS_ONLY = 'Assets only (#1342)'
@@ -188,10 +188,13 @@ def test_the_default_roles_are_what_this_file_assumes(client, act_as):
 
 @pytest.mark.parametrize('role', ['Admin', ASSETS_ONLY])
 def test_assets_read_write_reads_and_writes_everything(client, db_session, asset, ws, act_as, role):
+    """Attaching also needs data-domains READ: see the attachments section."""
     ids = _seed(db_session, 'asset', str(asset.id))
     act_as(role)
 
     for name, _kind, method, url, kwargs in _requests('asset', str(asset.id), ids):
+        if role == ASSETS_ONLY and name in ('attach', 'detach'):
+            continue
         response = _call(client, method, url, kwargs)
         assert response.status_code < 300, (name, response.status_code, response.text)
 
@@ -392,6 +395,36 @@ def test_data_domains_still_reads_a_contract_through_merged_metadata(
 
     assert response.status_code == 200, response.text
     assert note_id in [rt['id'] for rt in response.json()['rich_texts']]
+
+
+# --- Attachments --------------------------------------------------------------
+# The row to attach is picked by id (shared library or another entity's row),
+# and merged metadata then returns it to every reader of the asset.
+
+def test_assets_alone_cannot_attach_a_contract_note_to_an_asset(
+        client, db_session, asset, act_as):
+    note_id = _contract_note(db_session)
+    act_as(ASSETS_ONLY)
+
+    response = client.post('/api/entities/asset/attachments', params={'entity_id': str(asset.id)},
+                           json={'asset_type': 'rich_text', 'asset_id': note_id})
+
+    _assert_data_domains_refusal(response)
+
+
+def test_assets_alone_still_detaches_from_an_asset(client, db_session, asset, act_as):
+    note_id = _contract_note(db_session)
+    MetadataManager().attach_shared_asset(
+        db_session, entity_type='asset', entity_id=str(asset.id),
+        data=MetadataAttachmentCreate(asset_type='rich_text', asset_id=note_id),
+        user_email='seed@example.com',
+    )
+    act_as(ASSETS_ONLY)
+
+    response = client.delete(f'/api/entities/asset/attachments/rich_text/{note_id}',
+                             params={'entity_id': str(asset.id)})
+
+    assert response.status_code == 204, response.text
 
 
 # --- Rows addressed by id: fallbacks ----------------------------------------

@@ -541,7 +541,7 @@ async def attach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE, attaching=True)),
 ):
     """Attach a shared metadata asset to an entity."""
     try:

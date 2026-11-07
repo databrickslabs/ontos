@@ -14,6 +14,7 @@
     "find": {
       "title": "Encontrar",
       "description": "Pesquise ativos e conceitos ou navegue pelo catálogo.",
+      "placeholder": "Pesquise tabelas, ativos e termos do glossário...",
       "browseCatalog": "Navegar no Data Catalog"
     },
     "understand": {

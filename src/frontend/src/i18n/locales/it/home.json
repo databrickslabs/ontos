@@ -14,6 +14,7 @@
     "find": {
       "title": "Trovare",
       "description": "Cerca asset e concetti, o sfoglia il catalogo.",
+      "placeholder": "Cerca tabelle, asset e termini del glossario...",
       "browseCatalog": "Sfoglia il Data Catalog"
     },
     "understand": {

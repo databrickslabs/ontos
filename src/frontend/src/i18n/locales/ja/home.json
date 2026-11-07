@@ -14,6 +14,7 @@
     "find": {
       "title": "見つける",
       "description": "アセットや概念を検索するか、カタログを参照します。",
+      "placeholder": "テーブル、アセット、用語集の用語を検索...",
       "browseCatalog": "Data Catalog を参照"
     },
     "understand": {

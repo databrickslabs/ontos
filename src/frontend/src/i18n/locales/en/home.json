@@ -14,6 +14,7 @@
     "find": {
       "title": "Find",
       "description": "Search assets and concepts, or browse the catalog.",
+      "placeholder": "Search tables, assets and glossary terms...",
       "browseCatalog": "Browse the Data Catalog"
     },
     "understand": {

@@ -70,12 +70,13 @@ interface JourneyCardProps {
   icon: ReactNode;
   title: string;
   description: string;
+  className?: string;
   children: ReactNode;
 }
 
-function JourneyCard({ id, icon, title, description, children }: JourneyCardProps) {
+function JourneyCard({ id, icon, title, description, className, children }: JourneyCardProps) {
   return (
-    <Card className="h-full" data-testid={`essentials-section-${id}`}>
+    <Card className={`h-full ${className ?? ''}`} data-testid={`essentials-section-${id}`}>
       <CardHeader>
         <div className="flex items-center gap-2">
           <span className="text-primary">{icon}</span>
@@ -165,15 +166,18 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
           <p className="text-muted-foreground mb-4">
             {t('home:essentials.consumer.description')}
           </p>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {showFind && (
               <JourneyCard
                 id="find"
+                className="lg:col-span-2"
                 icon={<Search className="h-5 w-5" />}
                 title={t('home:essentials.find.title')}
                 description={t('home:essentials.find.description')}
               >
-                {searchShown && <SearchBar placeholder={t('home:search.placeholder')} />}
+                {searchShown && (
+                  <SearchBar variant="large" placeholder={t('home:essentials.find.placeholder')} />
+                )}
                 {catalog && (
                   <Button asChild variant="outline" size="sm">
                     <Link to={catalog.path}>
@@ -192,20 +196,22 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                 title={t('home:essentials.understand.title')}
                 description={t('home:essentials.understand.description')}
               >
-                {assets && (
-                  <OverviewTile
-                    icon={<assets.icon className="h-4 w-4" />}
-                    title={t('home:essentials.understand.assets')}
-                    value={assetTotal.data ?? '-'}
-                    loading={assetTotal.loading}
-                    error={null}
-                    link={assets.path}
-                    description={t('home:essentials.understand.assetsDescription')}
-                  />
-                )}
-                {conceptsTile && (
-                  <ConnectedOverviewTile tile={{ ...conceptsTile, link: concepts!.path }} />
-                )}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {assets && (
+                    <OverviewTile
+                      icon={<assets.icon className="h-4 w-4" />}
+                      title={t('home:essentials.understand.assets')}
+                      value={assetTotal.data ?? '-'}
+                      loading={assetTotal.loading}
+                      error={null}
+                      link={assets.path}
+                      description={t('home:essentials.understand.assetsDescription')}
+                    />
+                  )}
+                  {conceptsTile && (
+                    <ConnectedOverviewTile tile={{ ...conceptsTile, link: concepts!.path }} />
+                  )}
+                </div>
               </JourneyCard>
             )}
 
@@ -280,7 +286,9 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
                       </Link>
                       {renderAssetBadge?.(g.asset)}
                       {g.missingDescription && (
-                        <Badge variant="outline">{t('home:essentials.publish.noDescription')}</Badge>
+                        <Badge variant="outline">
+                          {t('home:essentials.publish.noDescription')}
+                        </Badge>
                       )}
                       {g.missingReview && (
                         <Badge variant="outline">{t('home:essentials.publish.noReview')}</Badge>
@@ -291,7 +299,9 @@ export default function EssentialsHome({ renderAssetBadge }: EssentialsHomeProps
               )}
               {owned.total > MY_ASSETS_LIMIT && (
                 <Empty>
-                  {t('home:essentials.publish.more', { shown: MY_ASSETS_LIMIT, total: owned.total })}
+                  {t('home:essentials.publish.more', {
+                    shown: MY_ASSETS_LIMIT, total: owned.total,
+                  })}
                 </Empty>
               )}
               {reviewsWrite && (

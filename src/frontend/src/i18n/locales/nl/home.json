@@ -14,6 +14,7 @@
     "find": {
       "title": "Vinden",
       "description": "Zoek assets en concepten, of blader door de catalogus.",
+      "placeholder": "Zoek tabellen, assets en glossariumtermen...",
       "browseCatalog": "Door de Data Catalog bladeren"
     },
     "understand": {

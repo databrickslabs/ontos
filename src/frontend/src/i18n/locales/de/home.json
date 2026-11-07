@@ -14,6 +14,7 @@
     "find": {
       "title": "Finden",
       "description": "Suchen Sie Assets und Konzepte oder durchsuchen Sie den Katalog.",
+      "placeholder": "Tabellen, Assets und Glossarbegriffe suchen...",
       "browseCatalog": "Data Catalog durchsuchen"
     },
     "understand": {

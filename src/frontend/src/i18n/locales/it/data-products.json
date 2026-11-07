@@ -1012,6 +1012,12 @@
     "overTime": "Maturità nel tempo",
     "retry": "Riprova"
   },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog non è raggiungibile, quindi mancano i campi della tabella {{tableName}}.",
+    "maturity_uc_table_not_found": "La tabella {{tableName}} non è stata trovata in Unity Catalog, quindi mancano i suoi campi.",
+    "maturity_uc_table_permission_denied": "L'app non può leggere la tabella {{tableName}} in Unity Catalog, quindi mancano i suoi campi.",
+    "maturity_uc_table_read_failed": "Non è stato possibile leggere la tabella {{tableName}} da Unity Catalog, quindi mancano i suoi campi."
+  },
   "createDialog": {
     "editTitle": "Modifica metadati del prodotto dati",
     "createTitle": "Crea prodotto dati (ODPS v1.0.0)",

@@ -1,9 +1,10 @@
-"""Postgres full-text search over the ``search_documents`` table.
+"""Postgres search over the ``search_documents`` table.
 
-Data layer for the ``postgres`` SEARCH_BACKEND. All SQL here is Postgres-specific
-(weighted ``tsvector`` + ``websearch_to_tsquery`` + ``ts_rank_cd``, JSONB filters)
-and is therefore exercised by the local-Postgres integration test, not the SQLite
-unit suite.
+Data layer for the ``postgres`` SEARCH_BACKEND. Ranking is compiled from the
+advanced-search Settings (``SearchConfig``) by ``search_scoring_sql`` so results
+match the in-memory backend exactly; JSONB filters, permissions, pagination and
+facets are SQL. All SQL here is Postgres-specific and is exercised by the
+local-Postgres integration tests, not the SQLite unit suite.
 
 Result shape matches ``controller.search_scoring.search_index`` so the search
 backends are interchangeable and MCP tools / the REST route need no changes.
@@ -18,11 +19,22 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
+from src.controller.search_scoring import is_list_query, tokenize
+from src.models.search_config import SearchConfig
+from src.repositories import search_scoring_sql
 
 logger = get_logger(__name__)
 
 # extra_data keys surfaced on every result (mirrors search_scoring._RESULT_FIELDS).
 _RESULT_FIELDS = ("domain", "status", "owner", "version")
+# extra_data keys counted as facets (mirrors search_scoring._FACET_FIELDS).
+_FACET_FIELDS = ("domain", "status", "owner")
+_COLS = "id, entity_id, type, title, description, link, tags, extra_data, feature_id"
+
+
+def _default_config() -> SearchConfig:
+    from src.common.search_config_loader import get_search_config
+    return get_search_config()
 # Filter keys we accept and how they map to SQL (whitelist — never interpolate raw keys).
 _EQ_FILTER_COLUMNS = {"status": "status", "domain": "domain", "category": "category"}
 
@@ -94,16 +106,18 @@ def delete_by_type(db: Session, type_: str) -> None:
 
 
 def _where(
-    query: str,
     type_filter: Optional[str],
     filters: Optional[Dict[str, Optional[str]]],
     allowed_features: Optional[Iterable[str]],
-) -> tuple[str, Dict[str, Any], bool]:
-    """Build the shared WHERE clause + params. Returns (sql, params, has_query)."""
+    disabled_where: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    """Build the shared candidate WHERE clause + params (filters, permissions,
+    disabled asset types). Query matching is done by the scoring CTE."""
     clauses: List[str] = []
     params: Dict[str, Any] = {}
-    has_query = bool(query) and query.strip() not in ("", "*")
 
+    if disabled_where:
+        clauses.append(disabled_where)
     if type_filter:
         clauses.append("type = :type_filter")
         params["type_filter"] = type_filter
@@ -124,12 +138,28 @@ def _where(
             clauses.append(f"lower(extra_data->>'{_EQ_FILTER_COLUMNS[key]}') = lower(:f_{key})")
             params[f"f_{key}"] = val
         # unknown filter keys are ignored (never interpolated)
-    if has_query:
-        clauses.append("search_tsv @@ websearch_to_tsquery('english', :q)")
-        params["q"] = query
 
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    return where, params, has_query
+    return where, params
+
+
+def _matches_cte(
+    config: SearchConfig,
+    tokens: List[str],
+    where: str,
+) -> tuple[str, Dict[str, Any], str]:
+    """``WITH ... matches AS (...)`` over the filtered candidates, plus params and
+    the ORDER BY body. ``matches`` has the base columns + ``score``/``priority``
+    and only rows where at least one token matched (search_scoring.score_item)."""
+    s = search_scoring_sql.build_scoring_sql(config, tokens)
+    cte = (
+        f"WITH b AS (SELECT {_COLS}, {s.base_select} FROM search_documents{where}), "
+        f"scored AS (SELECT b.id, b.entity_id, b.type, b.title, b.description, b.link, b.tags, "
+        f"b.extra_data, b.feature_id, {s.score_expr} AS score, {s.priority_expr} AS priority, "
+        f"{s.matched_expr} AS matched FROM b {s.lateral_joins}), "
+        f"matches AS (SELECT * FROM scored WHERE matched > 0) "
+    )
+    return cte, s.params, s.order_by
 
 
 def _row_to_result(row: Any, with_score: bool, fields: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -157,47 +187,40 @@ def _row_to_result(row: Any, with_score: bool, fields: Optional[List[str]] = Non
         if extra.get(f):
             result[f] = extra[f]
     if with_score:
-        result["relevance_score"] = round(float(m["rank"]), 4)
+        result["relevance_score"] = round(float(m["score"]), 4)
     if fields:
         allowed = set(fields) | {"id"}
         result = {k: v for k, v in result.items() if k in allowed}
     return result
 
 
-def _facets(db: Session, where: str, params: Dict[str, Any], top_tags: int = 10) -> Dict[str, Dict[str, int]]:
-    """Facet counts over the same filtered candidate set (mirrors the memory backend)."""
+def _facets(
+    db: Session, prefix: str, rel: str, params: Dict[str, Any], top_tags: int = 10
+) -> Dict[str, Dict[str, int]]:
+    """Facet counts over ``rel`` (the result set: scored matches, or the filtered
+    list), with ``prefix`` holding any ``WITH`` clause ``rel`` depends on."""
     facets: Dict[str, Dict[str, int]] = {}
 
-    def _and(extra: str) -> str:
-        # Append a condition to the shared WHERE (or start one if there is none).
-        return f"{where} AND {extra}" if where else f" WHERE {extra}"
-
-    # type facet
-    rows = db.execute(
-        text(f"SELECT type AS k, count(*) AS n FROM search_documents{where} GROUP BY type"),
-        params,
-    )
+    rows = db.execute(text(f"{prefix}SELECT r.type AS k, count(*) AS n FROM {rel} AS r GROUP BY r.type"), params)
     counts = {r._mapping["k"]: r._mapping["n"] for r in rows if r._mapping["k"]}
     if counts:
         facets["type"] = counts
 
-    # domain / status facets from extra_data
-    for facet_key, expr in (("domain", "extra_data->>'domain'"), ("status", "extra_data->>'status'")):
+    for facet_key in _FACET_FIELDS:  # whitelisted literals, never user input
+        expr = f"r.extra_data->>'{facet_key}'"
         rows = db.execute(
-            text(f"SELECT {expr} AS k, count(*) AS n FROM search_documents{_and(f'{expr} IS NOT NULL')} GROUP BY k"),
+            text(f"{prefix}SELECT {expr} AS k, count(*) AS n FROM {rel} AS r WHERE {expr} IS NOT NULL GROUP BY k"),
             params,
         )
         counts = {r._mapping["k"]: r._mapping["n"] for r in rows if r._mapping["k"]}
         if counts:
             facets[facet_key] = counts
 
-    # top tags — unnest the tags JSONB array. The shared WHERE references only
-    # base-table columns, so it applies unchanged under the CROSS JOIN LATERAL.
     tag_rows = db.execute(
         text(
-            "SELECT t AS k, count(*) AS n FROM search_documents "
-            "CROSS JOIN LATERAL jsonb_array_elements_text(tags) t"
-            f"{where} GROUP BY t ORDER BY n DESC LIMIT :top_tags"
+            f"{prefix}SELECT t AS k, count(*) AS n FROM {rel} AS r "
+            "CROSS JOIN LATERAL jsonb_array_elements_text(r.tags) t "
+            "GROUP BY t ORDER BY n DESC, t ASC LIMIT :top_tags"
         ),
         {**params, "top_tags": top_tags},
     )
@@ -219,30 +242,46 @@ def search(
     offset: int = 0,
     include_facets: bool = True,
     fields: Optional[List[str]] = None,
+    config: Optional[SearchConfig] = None,
 ) -> Dict[str, Any]:
-    """Full-text search over search_documents; result shape matches search_scoring.search_index."""
+    """Settings-driven search over search_documents; result shape matches
+    search_scoring.search_index (list mode for an empty / ``*`` query)."""
+    config = config or _default_config()
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
-    where, params, has_query = _where(query, type_filter, filters, allowed_features)
+    disabled, dparams = search_scoring_sql.disabled_where_only(config)
+    where, params = _where(type_filter, filters, allowed_features, disabled)
+    params.update(dparams)
+    page = {"limit": limit, "offset": offset}
 
-    if has_query:
+    if is_list_query(query):
+        prefix, rel = "", f"(SELECT * FROM search_documents{where})"
         sql = (
-            "SELECT entity_id, type, title, description, link, tags, extra_data, feature_id, "
-            "ts_rank_cd(search_tsv, websearch_to_tsquery('english', :q)) AS rank, "
-            "count(*) OVER() AS total_count "
-            f"FROM search_documents{where} "
-            "ORDER BY rank DESC, lower(title) ASC LIMIT :limit OFFSET :offset"
+            f"SELECT {_COLS}, count(*) OVER() AS total_count FROM search_documents{where} "
+            f"ORDER BY {search_scoring_sql.list_order_sql()} LIMIT :limit OFFSET :offset"
         )
+        with_score = False
     else:
+        tokens = tokenize(query)
+        if not tokens:  # e.g. only punctuation: nothing can match (score_and_rank -> [])
+            return _empty(query, limit, offset)
+        prefix, sparams, order_by = _matches_cte(config, tokens, where)
+        params.update(sparams)
+        rel = "matches"
         sql = (
-            "SELECT entity_id, type, title, description, link, tags, extra_data, feature_id, "
-            "count(*) OVER() AS total_count "
-            f"FROM search_documents{where} "
-            "ORDER BY lower(title) ASC LIMIT :limit OFFSET :offset"
+            f"{prefix}SELECT *, count(*) OVER() AS total_count FROM matches "
+            f"ORDER BY {order_by} LIMIT :limit OFFSET :offset"
         )
-    rows = list(db.execute(text(sql), {**params, "limit": limit, "offset": offset}))
-    total = int(rows[0]._mapping["total_count"]) if rows else 0
-    results = [_row_to_result(r, with_score=has_query, fields=fields) for r in rows]
+        with_score = True
+
+    rows = list(db.execute(text(sql), {**params, **page}))
+    if rows:
+        total = int(rows[0]._mapping["total_count"])
+    elif offset > 0:  # page past the end: the window count has no row to ride on
+        total = int(db.execute(text(f"{prefix}SELECT count(*) FROM {rel} AS r"), params).scalar() or 0)
+    else:
+        total = 0
+    results = [_row_to_result(r, with_score=with_score, fields=fields) for r in rows]
 
     return {
         "results": results,
@@ -251,8 +290,15 @@ def search(
         "offset": offset,
         "limit": limit,
         "has_more": (offset + len(results)) < total,
-        "facets": _facets(db, where, params) if include_facets else {},
+        "facets": _facets(db, prefix, rel, params) if include_facets else {},
         "query": query,
+    }
+
+
+def _empty(query: str, limit: int, offset: int) -> Dict[str, Any]:
+    return {
+        "results": [], "total_count": 0, "returned": 0, "offset": offset,
+        "limit": limit, "has_more": False, "facets": {}, "query": query,
     }
 
 
@@ -278,7 +324,8 @@ def _row_to_item(row: Any) -> SearchIndexItem:
 
 
 def _search_by_tag(
-    db: Session, pattern: str, allowed_features: Optional[Iterable[str]], limit: int
+    db: Session, pattern: str, allowed_features: Optional[Iterable[str]], limit: int,
+    config: SearchConfig,
 ) -> List[SearchIndexItem]:
     """Mirror SearchManager._filter_by_tag: exact match when the pattern has a '/',
     otherwise namespace-prefix match (tag == pattern or starts with 'pattern/')."""
@@ -293,9 +340,13 @@ def _search_by_tag(
     if allowed_features is not None:
         where.append("feature_id = ANY(:allowed_features)")
         params["allowed_features"] = list(allowed_features)
+    disabled, dparams = search_scoring_sql.disabled_where_only(config)
+    if disabled:
+        where.append(disabled)
+        params.update(dparams)
     sql = (
-        "SELECT id, entity_id, type, title, description, link, tags, extra_data, feature_id "
-        f"FROM search_documents WHERE {' AND '.join(where)} ORDER BY lower(title) ASC LIMIT :limit"
+        f"SELECT {_COLS} FROM search_documents WHERE {' AND '.join(where)} "
+        f"ORDER BY {search_scoring_sql.list_order_sql()} LIMIT :limit"
     )
     return [_row_to_item(r) for r in db.execute(text(sql), params)]
 
@@ -306,25 +357,29 @@ def search_index_items(
     *,
     allowed_features: Optional[Iterable[str]] = None,
     limit: int = 200,
+    config: Optional[SearchConfig] = None,
 ) -> List[SearchIndexItem]:
     """Ranked SearchIndexItems for the REST path (caller applies permission filtering).
 
-    Supports the ``tag:`` prefix like the in-memory SearchManager.
+    Same Settings-driven ranking as ``search``; supports the ``tag:`` prefix like
+    the in-memory SearchManager. A query with no searchable terms returns nothing
+    (as ``score_and_rank`` does).
     """
+    config = config or _default_config()
     limit = max(1, min(limit, 500))
     q = (query or "").strip()
     if q.lower().startswith("tag:"):
-        return _search_by_tag(db, q[4:].strip(), allowed_features, limit)
+        return _search_by_tag(db, q[4:].strip(), allowed_features, limit, config)
 
-    where, params, has_query = _where(query, None, None, allowed_features)
-    order = (
-        "ts_rank_cd(search_tsv, websearch_to_tsquery('english', :q)) DESC, lower(title) ASC"
-        if has_query else "lower(title) ASC"
-    )
-    sql = (
-        "SELECT id, entity_id, type, title, description, link, tags, extra_data, feature_id "
-        f"FROM search_documents{where} ORDER BY {order} LIMIT :limit"
-    )
+    tokens = tokenize(q)
+    if not tokens:
+        return []
+    disabled, dparams = search_scoring_sql.disabled_where_only(config)
+    where, params = _where(None, None, allowed_features, disabled)
+    params.update(dparams)
+    prefix, sparams, order_by = _matches_cte(config, tokens, where)
+    params.update(sparams)
+    sql = f"{prefix}SELECT {_COLS} FROM matches ORDER BY {order_by} LIMIT :limit"
     return [_row_to_item(r) for r in db.execute(text(sql), {**params, "limit": limit})]
 
 

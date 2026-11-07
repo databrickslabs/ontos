@@ -153,7 +153,14 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium">{gate.policy_name}</p>
                           {gate.message && (
-                            <p className="text-xs text-muted-foreground">{gate.message}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {gate.message_code
+                                ? t(`data-products:maturityGateCodes.${gate.message_code}`, {
+                                  ...(gate.message_params ?? {}),
+                                  defaultValue: gate.message,
+                                })
+                                : gate.message}
+                            </p>
                           )}
                         </div>
                         <Badge variant="outline" className="text-[10px]">

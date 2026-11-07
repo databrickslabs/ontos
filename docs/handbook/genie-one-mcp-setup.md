@@ -16,15 +16,19 @@ The Ontos MCP endpoint (`/api/mcp`) sits behind two layers:
 2. **Ontos MCP layer** — normally requires an `X-API-Key` (an Ontos-issued MCP token).
 
 Ontos supports **keyless MCP**: when no `X-API-Key` is sent, the request is authenticated
-from the app-proxy identity that Databricks forwards, and mapped to a single **keyless
-default** MCP token. That default token's **scopes** apply to every keyless call.
+from the user token that the Databricks app proxy forwards (`x-forwarded-access-token`),
+verified with `current_user.me()`, and mapped to a single **keyless default** MCP token.
+That default token's **scopes** apply to every keyless call. A request with only the
+`X-Forwarded-Email` header (no forwarded token) is refused.
 
 A Unity Catalog HTTP connection can carry only one credential (OAuth M2M). Keyless is what
 makes that one credential sufficient — no second token to inject.
 
-> ⚠️ **Keyless calls run as the default token's identity and scopes, not the end user's.**
-> Some tools (e.g. `global_search`) bypass per-user filtering. **Scope the keyless default
-> token read-only** unless you intend write access for everyone using Genie.
+> ⚠️ **Keyless calls act for the verified caller (the Genie service principal, or the end
+> user when Genie forwards one), within the default token's scopes.** The caller's Ontos
+> roles apply: data products and contracts it may not read are answered as not found, and
+> changes need its feature levels. Give the service principal the Ontos role it needs, and
+> **scope the keyless default token read-only** unless you intend write access.
 
 ## Prerequisites
 
@@ -166,7 +170,10 @@ print(r.text[:400])
 
 A `200` whose body contains a `tools` array confirms the full chain (proxy OAuth →
 keyless MCP) works with the single credential. If you get `-32001 Invalid or missing API
-key`, no active **keyless-default** token is configured in Ontos — set one first.
+key`, no active **keyless-default** token is configured in Ontos — set one first. If you
+get `-32001 The caller's identity could not be verified.`, the request reached Ontos without a
+forwarded user token (`x-forwarded-access-token`), or `current_user.me()` refused it; the
+`IDENTITY_REJECTED` audit entry has the reason.
 
 > 🔐 **Secret hygiene:** the `client_secret` is stored (encrypted) in the UC connection and
 > is also printed in the notebook. Clear the cell outputs, or store the secret in a

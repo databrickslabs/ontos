@@ -100,7 +100,9 @@ class TestAssetMaturityRoutes:
 
         assert len(fired) == 1
         assert fired[0]['entity_type'] == EntityType.TABLE
-        assert fired[0]['entity_id'] == str(asset.id)
+        # The UC full name, like the self-service table events; asset id in the payload
+        assert fired[0]['entity_id'] == FQN
+        assert fired[0]['entity_data']['asset_id'] == str(asset.id)
         assert fired[0]['from_level'] is None and fired[0]['to_level'] == 2
 
     def test_unreadable_table_is_a_coded_gate_message(
@@ -162,3 +164,64 @@ class TestAssetMaturityRoutes:
         ).json()
 
         assert all(lv['entity_type'] != 'Asset' for lv in product_levels)
+
+    def test_gate_error_answers_a_code_without_the_exception(self, client, db_session, uc_table):
+        response = client.post('/api/maturity-levels', json={
+            'name': 'Broken', 'level_order': 1, 'entity_type': 'Asset',
+        })
+        level = response.json()
+        policy = CompliancePolicyDb(id=str(uuid.uuid4()), name='Broken gate',
+                                    rule='ASSERT LENGTH(obj.name, obj.status) > 0',
+                                    is_active=True)
+        db_session.add(policy)
+        db_session.flush()
+        client.post(f"/api/maturity-levels/{level['id']}/gates",
+                    json={'compliance_policy_id': policy.id})
+        asset = _asset(db_session)
+
+        response = client.post(f'/api/assets/{asset.id}/maturity/evaluate')
+
+        assert response.status_code == 200, response.text
+        gate = response.json()['levels'][0]['gates'][0]
+        assert gate['message_code'] == 'maturity_gate_error'
+        assert gate['message_params'] == {'gateName': 'Broken gate'}
+        assert 'LENGTH expects' not in response.text
+        snapshot = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).one()
+        assert 'LENGTH expects' not in snapshot.gate_results_json
+        assert json.loads(snapshot.gate_results_json)[0]['message_code'] == 'maturity_gate_error'
+
+
+class TestLevelDeletionPerEntityType:
+    def _create(self, client, name, entity_type):
+        response = client.post('/api/maturity-levels', json={
+            'name': name, 'level_order': 7, 'entity_type': entity_type,
+        })
+        assert response.status_code == 201, response.text
+        return response.json()['id']
+
+    def _snapshot(self, db_session, entity_type):
+        db_session.add(MaturitySnapshotDb(
+            entity_type=entity_type, entity_id=str(uuid.uuid4()),
+            achieved_level_order=7, achieved_level_name='x',
+        ))
+        db_session.flush()
+
+    def test_an_asset_snapshot_does_not_block_product_or_shared_levels(self, client, db_session):
+        product = self._create(client, 'Product L7', 'DataProduct')
+        shared = self._create(client, 'Shared L7', 'all')
+        asset = self._create(client, 'Asset L7', 'Asset')
+        self._snapshot(db_session, 'Asset')
+
+        assert client.delete(f'/api/maturity-levels/{product}').status_code == 204
+        assert client.delete(f'/api/maturity-levels/{shared}').status_code == 204
+        # Last: a refused request rolls back the test's transaction
+        assert client.delete(f'/api/maturity-levels/{asset}').status_code == 409
+
+    def test_a_product_snapshot_does_not_block_an_asset_level(self, client, db_session):
+        shared = self._create(client, 'Shared L7', 'all')
+        asset = self._create(client, 'Asset L7', 'Asset')
+        self._snapshot(db_session, 'DataProduct')
+
+        assert client.delete(f'/api/maturity-levels/{asset}').status_code == 204
+        # Last: a refused request rolls back the test's transaction
+        assert client.delete(f'/api/maturity-levels/{shared}').status_code == 409

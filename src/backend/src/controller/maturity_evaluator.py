@@ -49,6 +49,7 @@ _UC_STATUS_MESSAGES = {
     "read_failed": "Table {tableName} could not be read from Unity Catalog, so its fields "
                    "are missing.",
 }
+GATE_ERROR_CODE = "maturity_gate_error"
 _UC_FIELD_IN_RULE = re.compile(
     r"\.(" + "|".join(sorted(UC_TABLE_FIELDS, key=len, reverse=True)) + r")\b"
 )
@@ -146,7 +147,9 @@ class MaturityEvaluator:
                         all_required_pass = False
                     continue
 
-                passed, message = self._evaluate_gate(policy.rule, entity_dict)
+                passed, message, errored = self._evaluate_gate(
+                    policy.rule, entity_dict, policy_name=policy.name,
+                )
                 if passed:
                     total_gates_passed += 1
                 elif gate.required:
@@ -157,6 +160,13 @@ class MaturityEvaluator:
                 notice = uc_notice if (
                     uc_notice and not passed and _UC_FIELD_IN_RULE.search(policy.rule or "")
                 ) else None
+                if notice is None and errored:
+                    # The error itself stays in the server log
+                    notice = MaturityNotice(
+                        code=GATE_ERROR_CODE,
+                        message=f"Gate {policy.name} could not be evaluated.",
+                        params={"gateName": policy.name},
+                    )
                 gate_results.append(GateResult(
                     gate_id=str(gate.id),
                     policy_id=gate.compliance_policy_id,
@@ -229,14 +239,27 @@ class MaturityEvaluator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _evaluate_gate(rule: str, entity_dict: dict) -> tuple[bool, Optional[str]]:
-        """Evaluate a compliance DSL rule against an entity dict."""
+    def _evaluate_gate(rule: str, entity_dict: dict, *,
+                       policy_name: Optional[str] = None) -> tuple[bool, Optional[str], bool]:
+        """Evaluate a compliance DSL rule against an entity dict.
+
+        Returns ``(passed, message, errored)``. A rule that can't be parsed or
+        evaluated fails with ``errored=True`` and no message: the exception is
+        logged here, and the gate result gets ``maturity_gate_error``.
+        (``evaluate_rule_on_object`` would put the exception text in the message.)
+        """
+        from src.common.compliance_dsl import Evaluator, Lexer, Parser
         try:
-            from src.common.compliance_dsl import evaluate_rule_on_object
-            return evaluate_rule_on_object(rule, entity_dict)
-        except Exception as e:
-            logger.error("Gate evaluation error: %s", e, exc_info=True)
-            return False, str(e)
+            if "ASSERT" not in (rule or ""):
+                raise ValueError("Rule must contain ASSERT clause")
+            assert_part = rule.split("ASSERT", 1)[1].strip()
+            ast = Parser(Lexer(assert_part).tokenize()).parse_expression()
+            if bool(Evaluator(entity_dict).evaluate(ast)):
+                return True, None, False
+            return False, f"Assertion failed: {assert_part}", False
+        except Exception:
+            logger.error("Maturity gate %r could not be evaluated", policy_name, exc_info=True)
+            return False, None, True
 
     @staticmethod
     def _persist(db: Session, report: MaturityReport) -> None:
@@ -324,11 +347,14 @@ class MaturityEvaluator:
             }
             key = f"Asset:{asset_type}" if entity_type == "Asset" else entity_type
             et_enum = et_map.get(key)
+            # Table/view events carry the UC full name as entity id (as the
+            # self-service ones do); the asset id stays in the payload.
+            trigger_id = (entity_data or {}).get("uc_table_name") or entity_id
             if et_enum:
                 registry = TriggerRegistry(db)
                 registry.on_maturity_change(
                     entity_type=et_enum,
-                    entity_id=entity_id,
+                    entity_id=trigger_id,
                     entity_name=entity_name,
                     entity_data=entity_data,
                     from_level=from_level,
@@ -372,7 +398,7 @@ def _uc_notice(entity_dict: Dict[str, Any]) -> Optional[MaturityNotice]:
 
 
 def _trigger_data(entity_type: str, entity_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """What a maturity workflow gets about an asset (its id is the asset id)."""
+    """What a maturity workflow gets about an asset (the event id is its UC name)."""
     if entity_type != "Asset":
         return None
     return {

@@ -320,10 +320,137 @@ def test_asset_level_change_fires_on_maturity_change_as_table(db_session):
 
     kwargs = registry.return_value.on_maturity_change.call_args.kwargs
     assert kwargs['entity_type'] == EntityType.TABLE
-    assert kwargs['entity_id'] == str(asset.id)
+    # Same convention as the self-service table events: the UC full name
+    assert kwargs['entity_id'] == FQN
+    assert kwargs['entity_data']['asset_id'] == str(asset.id)
     assert kwargs['from_level'] is None and kwargs['to_level'] == 1
     assert kwargs['entity_data']['uc_table_name'] == FQN
     assert kwargs['user_email'] == 'owner@example.com'
+
+
+def test_asset_without_uc_name_fires_with_the_asset_id(db_session):
+    asset = _asset(db_session, 'View', platform=None, location=None)
+    _level(db_session, 1, 'Named', ['ASSERT obj.name != \'\''])
+
+    with patch('src.common.workflow_triggers.TriggerRegistry') as registry:
+        MaturityEvaluator(_ws()).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+        )
+
+    kwargs = registry.return_value.on_maturity_change.call_args.kwargs
+    assert kwargs['entity_type'] == EntityType.VIEW
+    assert kwargs['entity_id'] == str(asset.id)
+    assert kwargs['entity_data']['asset_id'] == str(asset.id)
+    assert kwargs['entity_data']['uc_table_name'] is None
+
+
+def test_unreadable_table_still_fires_with_its_uc_name(db_session):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Named', ['ASSERT obj.name != \'\''])
+
+    with patch('src.common.workflow_triggers.TriggerRegistry') as registry:
+        MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+        )
+
+    assert registry.return_value.on_maturity_change.call_args.kwargs['entity_id'] == FQN
+
+
+# --- gate errors -------------------------------------------------------------
+
+SECRET = 'LENGTH expects 1 argument'
+
+
+@pytest.mark.parametrize('rule', [
+    'ASSERT LENGTH(obj.name, obj.status) > 0',  # raises while it is evaluated
+    'ASSERT obj.name ==== (',  # can't be parsed
+    'obj.name != ""',  # no ASSERT
+])
+def test_gate_error_is_coded_and_keeps_the_exception_out(db_session, rule, caplog):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Broken', [rule])
+
+    with caplog.at_level('ERROR', logger='src.controller.maturity_evaluator'):
+        report = MaturityEvaluator(_ws(_table([]))).evaluate(
+            db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+        )
+
+    gate = report.levels[0].gates[0]
+    assert gate.passed is False
+    assert gate.message_code == 'maturity_gate_error'
+    assert gate.message_params == {'gateName': 'Broken gate 0'}
+    assert gate.message == 'Gate Broken gate 0 could not be evaluated.'
+    assert report.achieved_level_order is None
+    snapshot = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).one()
+    stored = json.loads(snapshot.gate_results_json)[0]
+    assert stored['message_code'] == 'maturity_gate_error'
+    assert stored['message_params'] == {'gateName': 'Broken gate 0'}
+    for text in (snapshot.gate_results_json, report.model_dump_json()):
+        assert SECRET not in text and 'DSL evaluation error' not in text
+        assert 'Evaluation error' not in text and 'Unexpected token' not in text
+    # The exception is in the server log
+    assert any(r.exc_info for r in caplog.records)
+
+
+def test_gate_error_on_a_product_is_coded_too(db_session):
+    from src.db_models.data_products import DataProductDb
+
+    product_id = str(uuid.uuid4())
+    db_session.add(DataProductDb(id=product_id, name='p', status='draft',
+                                 version_family_id=product_id))
+    db_session.flush()
+    _level(db_session, 1, 'Broken', ['ASSERT LENGTH(obj.name, obj.status) > 0'],
+           entity_type='DataProduct')
+
+    report = MaturityEvaluator(_ws()).evaluate(
+        db_session, entity_type='DataProduct', entity_id=product_id, persist=False,
+    )
+
+    gate = report.levels[0].gates[0]
+    assert gate.message_code == 'maturity_gate_error' and SECRET not in (gate.message or '')
+
+
+def test_a_failed_assertion_keeps_its_message(db_session):
+    asset = _asset(db_session)
+    _level(db_session, 1, 'Certified', ['ASSERT obj.is_certified = True'])
+
+    report = MaturityEvaluator(_ws(_table([]))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=False,
+    )
+
+    gate = report.levels[0].gates[0]
+    assert gate.message == 'Assertion failed: obj.is_certified = True'
+    assert gate.message_code is None
+
+
+# --- snapshot counts per entity type -------------------------------------------
+
+def _snapshot(db, entity_type, order):
+    maturity_repo.create_snapshot(
+        db, entity_type=entity_type, entity_id=str(uuid.uuid4()),
+        achieved_level_order=order, achieved_level_name='x',
+    )
+
+
+def test_asset_snapshots_do_not_count_for_product_or_shared_levels(db_session):
+    _snapshot(db_session, 'Asset', 2)
+
+    assert maturity_repo.count_snapshots_for_level(db_session, 2, 'Asset') == 1
+    assert maturity_repo.count_snapshots_for_level(db_session, 2, 'DataProduct') == 0
+    assert maturity_repo.count_snapshots_for_level(db_session, 2, 'DataContract') == 0
+    assert maturity_repo.count_snapshots_for_level(db_session, 2, 'all') == 0
+
+
+def test_product_and_contract_snapshots_do_not_count_for_asset_levels(db_session):
+    _snapshot(db_session, 'DataProduct', 3)
+    _snapshot(db_session, 'DataContract', 3)
+
+    assert maturity_repo.count_snapshots_for_level(db_session, 3, 'Asset') == 0
+    assert maturity_repo.count_snapshots_for_level(db_session, 3, 'DataProduct') == 1
+    assert maturity_repo.count_snapshots_for_level(db_session, 3, 'DataContract') == 1
+    # A shared level covers products and contracts
+    assert maturity_repo.count_snapshots_for_level(db_session, 3, 'all') == 2
+    assert maturity_repo.count_snapshots_for_level(db_session, 4, 'all') == 0
 
 
 def test_unsupported_asset_type_propagates_from_the_evaluator(db_session):

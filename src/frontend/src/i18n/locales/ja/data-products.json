@@ -1016,7 +1016,8 @@
     "maturity_uc_table_client_unavailable": "Unity Catalog に接続できないため、テーブル {{tableName}} のフィールドがありません。",
     "maturity_uc_table_not_found": "テーブル {{tableName}} が Unity Catalog に見つからないため、フィールドがありません。",
     "maturity_uc_table_permission_denied": "アプリには Unity Catalog のテーブル {{tableName}} を読み取る権限がないため、フィールドがありません。",
-    "maturity_uc_table_read_failed": "テーブル {{tableName}} を Unity Catalog から読み取れなかったため、フィールドがありません。"
+    "maturity_uc_table_read_failed": "テーブル {{tableName}} を Unity Catalog から読み取れなかったため、フィールドがありません。",
+    "maturity_gate_error": "ゲート {{gateName}} を評価できませんでした。詳細はサーバーログにあります。"
   },
   "createDialog": {
     "editTitle": "データ製品のメタデータを編集",

@@ -24,6 +24,11 @@
     "message": "An unexpected error occurred.",
     "retry": "Try Again"
   },
+  "assetAccess": {
+    "readDenied": "You don't have access to this asset. Viewing it needs read/write access to Assets, or access to a data product it belongs to.",
+    "writeDenied": "Changing the notes, links, documents and costs of an asset needs read/write access to Assets.",
+    "notFound": "Asset '{{assetId}}' not found."
+  },
   "internalError": "An unexpected error occurred. The details are in the server log (error id {{errorId}}).",
   "userTokenRequired": "This request needs your Databricks access token, and none was received. Reload the page; if this persists, ask an administrator to enable user authorization for the app.",
   "subscription": {

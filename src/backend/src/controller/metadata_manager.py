@@ -129,6 +129,10 @@ class MetadataManager:
         rows = self._rich_text_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
         return [RichText.from_orm(r) for r in rows]
 
+    def get_rich_text(self, db: Session, *, id: str) -> Optional[RichText]:
+        db_obj = self._rich_text_repo.get(db, id=id)
+        return RichText.from_orm(db_obj) if db_obj else None
+
     def update_rich_text(self, db: Session, *, id: str, data: RichTextUpdate, user_email: Optional[str]) -> Optional[RichText]:
         db_obj = self._rich_text_repo.get(db, id=id)
         if not db_obj:
@@ -162,6 +166,10 @@ class MetadataManager:
     def list_links(self, db: Session, *, entity_type: str, entity_id: str) -> List[Link]:
         rows = self._link_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
         return [Link.from_orm(r) for r in rows]
+
+    def get_link(self, db: Session, *, id: str) -> Optional[Link]:
+        db_obj = self._link_repo.get(db, id=id)
+        return Link.from_orm(db_obj) if db_obj else None
 
     def update_link(self, db: Session, *, id: str, data: LinkUpdate, user_email: Optional[str]) -> Optional[Link]:
         db_obj = self._link_repo.get(db, id=id)

@@ -265,6 +265,10 @@ class AssetsManager(SearchableAsset):
             return None
         return self._asset_to_read(db_asset)
 
+    def asset_exists(self, db: Session, asset_id: UUID) -> bool:
+        """Whether an asset has this id (without loading its relationships)."""
+        return self._asset_repo.get(db, asset_id) is not None
+
     # --- Data-Product asset scoping (issue #347) ---
     #
     # Data Consumers (and other non-admin users) should only see assets linked

@@ -76,6 +76,11 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         fields: Array.isArray(params.fields) ? params.fields.join(', ') : '',
         defaultValue: fallback,
       });
+    case 'policy_check_policy_missing':
+      return t('workflows:designer.validationIssues.policyCheckPolicyMissing', {
+        step: params.step,
+        defaultValue: fallback,
+      });
     default:
       if (!(issue.code.startsWith('condition_') || issue.code.startsWith('script_'))) {
         // An error the designer has no text for: the backend's English text.

@@ -63,6 +63,10 @@ import type {
   TriggerType,
 } from '@/types/process-workflow';
 import { getTriggerDisplay, getTriggerTypeLabel, getEntityTypeLabel, getStepTypeLabel } from '@/lib/workflow-labels';
+import {
+  workflowValidationIssueText,
+  type WorkflowValidationIssue,
+} from '@/components/workflows/step-config-checks';
 import { WorkflowExecutionDialog } from '@/components/workflows/workflow-execution-dialog';
 import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 import { workflowExecutionErrorText } from '@/lib/workflow-execution-error';
@@ -229,6 +233,8 @@ export default function Workflows() {
   const toggleWorkflowActive = async (workflow: ProcessWorkflow, confirmOverlap = false): Promise<{
     updated: ProcessWorkflow | null;
     conflicts: WorkflowActivationConflict[];
+    /** Translated reason of a refused activation (`workflow_invalid`, e.g. a missing policy). */
+    refusal: string | null;
   }> => {
     const activating = !workflow.is_active;
     const url = `/api/workflows/${workflow.id}/toggle-active?is_active=${activating}`
@@ -237,12 +243,33 @@ export default function Workflows() {
     if (response.status === 409) {
       const body = await response.json();
       if (body?.detail?.code === 'workflow_activation_overlap') {
-        return { updated: null, conflicts: body.detail.params?.conflicts || body.detail.conflicts || [] };
+        return {
+          updated: null,
+          conflicts: body.detail.params?.conflicts || body.detail.conflicts || [],
+          refusal: null,
+        };
+      }
+    }
+    if (response.status === 400) {
+      // The backend refuses a workflow that can't run before it looks for overlaps
+      const body = await response.json().catch(() => null);
+      const issues = body?.detail?.code === 'workflow_invalid'
+        && Array.isArray(body.detail.params?.issues)
+        ? (body.detail.params.issues as WorkflowValidationIssue[])
+        : null;
+      if (issues && issues.length > 0) {
+        const refusal = issues.map(issue => workflowValidationIssueText(issue, t)).join(' ');
+        return { updated: null, conflicts: [], refusal };
       }
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return { updated: await response.json() as ProcessWorkflow, conflicts: [] };
+    return { updated: await response.json() as ProcessWorkflow, conflicts: [], refusal: null };
   };
+
+  // "N workflows failed to update." followed by the reason of each refusal
+  const failedUpdateText = (failures: number, refusals: string[]) =>
+    [t('workflows:view.messages.workflowsFailedUpdate', { count: failures }), ...refusals]
+      .join(' ');
 
   const handleToggleWorkflowActive = async (workflow: ProcessWorkflow) => {
     if (!canEdit) {
@@ -255,7 +282,11 @@ export default function Workflows() {
     }
     
     try {
-      const { updated, conflicts } = await toggleWorkflowActive(workflow);
+      const { updated, conflicts, refusal } = await toggleWorkflowActive(workflow);
+      if (refusal) {
+        toast({ title: t('common:toast.error'), description: refusal, variant: 'destructive' });
+        return;
+      }
       if (conflicts.length > 0) {
         setPendingOverlapActivations([{ workflow, conflicts }]);
         return;
@@ -285,13 +316,17 @@ export default function Workflows() {
     setIsConfirmingOverlap(true);
     let successes = 0;
     let failures = 0;
+    const refusals: string[] = [];
     try {
       for (const pending of pendingOverlapActivations) {
         try {
-          const { updated } = await toggleWorkflowActive(pending.workflow, true);
+          const { updated, refusal } = await toggleWorkflowActive(pending.workflow, true);
           if (updated) {
             successes += 1;
             setWorkflows(prev => prev.map(w => w.id === updated.id ? updated : w));
+          } else {
+            failures += 1;
+            if (refusal) refusals.push(`${pending.workflow.name}: ${refusal}`);
           }
         } catch {
           failures += 1;
@@ -307,7 +342,7 @@ export default function Workflows() {
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: t('workflows:view.messages.workflowsFailedUpdate', { count: failures }),
+          description: failedUpdateText(failures, refusals),
           variant: 'destructive',
         });
       }
@@ -603,14 +638,19 @@ export default function Workflows() {
       let successes = 0;
       let failures = 0;
       const overlaps: PendingOverlapActivation[] = [];
+      const refusals: string[] = [];
       // Run activation sequentially: an overlap requires an explicit decision
       // and must not be hidden inside Promise.allSettled as a "successful" call.
+      // A refusal (e.g. a policy_check step without an existing policy) is a failure.
       for (const workflow of toUpdate) {
         try {
-          const { updated, conflicts } = await toggleWorkflowActive(workflow);
+          const { updated, conflicts, refusal } = await toggleWorkflowActive(workflow);
           if (updated) successes += 1;
           else if (conflicts.length > 0) overlaps.push({ workflow, conflicts });
-          else failures += 1;
+          else {
+            failures += 1;
+            if (refusal) refusals.push(`${workflow.name}: ${refusal}`);
+          }
         } catch {
           failures += 1;
         }
@@ -630,7 +670,7 @@ export default function Workflows() {
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: t('workflows:view.messages.workflowsFailedUpdate', { count: failures }),
+          description: failedUpdateText(failures, refusals),
           variant: 'destructive',
         });
       }

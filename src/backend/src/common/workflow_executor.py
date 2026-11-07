@@ -2425,13 +2425,24 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        if scope != 'none' and resolved_type == 'data_product':
+            # The same rule as set_publication_scope: every output port needs an
+            # approved / active contract (approval can come after the contract changed)
+            from src.common.output_port_contracts import validate_output_port_contracts
+            from src.common.api_errors import CodedValueError
+            try:
+                validate_output_port_contracts(db_entity, self._db)
+            except CodedValueError as e:
+                return _rule_step_error(e)
         was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = scope
         if scope == 'none':
             # Unpublishing: clear the publication metadata, as unpublish does
             db_entity.published_at = None
             db_entity.published_by = None
-        else:
+        elif not was_published:
+            # Only a real unpublished -> published change is stamped; a scope
+            # change keeps who published it and when
             db_entity.published_at = datetime.now(timezone.utc)
             db_entity.published_by = context.user_email
         self._db.add(db_entity)
@@ -2505,12 +2516,23 @@ class EntityActionStepHandler(StepHandler):
         if not db_entity:
             return StepResult(passed=False, error=f"{entity_type} {entity_id} not found")
 
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = 'none'
         db_entity.published_at = None
         db_entity.published_by = None
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: unpublished {entity_type} {entity_id}")
+        failed_trigger = self._fire_publication_trigger(
+            resolved_type, entity_id, db_entity, 'none', was_published, context,
+        )
+        if failed_trigger:
+            # The unpublish stands; say in the step result that its workflows didn't run
+            return StepResult(
+                passed=True,
+                message=f"Unpublished; the {failed_trigger} workflows did not run",
+                data={'trigger_failed': failed_trigger},
+            )
         return StepResult(passed=True, message="Unpublished")
 
 

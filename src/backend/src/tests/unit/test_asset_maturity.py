@@ -388,8 +388,8 @@ def test_gate_error_is_coded_and_keeps_the_exception_out(db_session, rule, caplo
     for text in (snapshot.gate_results_json, report.model_dump_json()):
         assert SECRET not in text and 'DSL evaluation error' not in text
         assert 'Evaluation error' not in text and 'Unexpected token' not in text
-    # The exception is in the server log
-    assert any(r.exc_info for r in caplog.records)
+    # The error is in the server log
+    assert any('could not be evaluated: ' in r.getMessage() for r in caplog.records)
 
 
 def test_gate_error_on_a_product_is_coded_too(db_session):

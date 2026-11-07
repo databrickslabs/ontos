@@ -351,7 +351,10 @@
     },
     "errors": {
       "own_owner_approval": "Deze goedkeuring is voor de eigenaren; u kunt uw eigen aanvraag niet goedkeuren.",
-      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren."
+      "own_change_request_approval": "U kunt uw eigen wijzigingsverzoek niet goedkeuren.",
+      "approval_already_decided": "U hebt al over deze goedkeuring beslist.",
+      "approval_not_an_approver": "Alleen de goedkeurders van deze stap kunnen erover beslissen.",
+      "approval_no_longer_pending": "Over deze goedkeuring is al besloten."
     },
     "entityTypes": {
       "entity": "Entiteit",

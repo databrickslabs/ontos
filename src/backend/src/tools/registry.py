@@ -14,6 +14,7 @@ from src.tools.base import (
     BaseTool,
     ToolContext,
     ToolResult,
+    check_tool_permission,
     tool_failed_message,
 )
 
@@ -163,7 +164,11 @@ class ToolRegistry:
                 success=False,
                 error=f"Unknown tool: {name}"
             )
-        
+
+        refusal = check_tool_permission(tool, ctx)
+        if refusal:
+            return refusal
+
         try:
             logger.info(f"Executing tool: {name} with args: {args}")
             result = await tool.execute(ctx, **(args or {}))

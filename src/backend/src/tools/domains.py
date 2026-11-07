@@ -6,6 +6,7 @@ Tools for searching, creating, updating, and deleting data domains.
 
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -167,6 +168,7 @@ class CreateDomainTool(BaseTool):
     }
     required_params = ["name"]
     required_scope = "domains:write"
+    required_permission = ("data-domains", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -242,6 +244,7 @@ class UpdateDomainTool(BaseTool):
     }
     required_params = ["domain_id"]
     required_scope = "domains:write"
+    required_permission = ("data-domains", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -322,6 +325,7 @@ class DeleteDomainTool(BaseTool):
     }
     required_params = ["domain_id"]
     required_scope = "domains:write"
+    required_permission = ("data-domains", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,

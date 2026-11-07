@@ -809,8 +809,22 @@ def test_an_approved_request_to_another_status_writes_no_lifecycle_audit(db_sess
 # --- MCP update tools can deprecate ---
 
 def _tool_context(db_session, **managers):
-    from types import SimpleNamespace
-    return SimpleNamespace(db=db_session, **managers)
+    """A tool context for an admin of both features (the tools apply the read
+    rules and the route levels for the caller)."""
+    from unittest.mock import MagicMock
+
+    from src.common.features import FeatureAccessLevel
+    from src.tools.base import ToolCaller, ToolContext
+
+    caller = ToolCaller(
+        email='admin@example.com', auth_path='test',
+        permissions={
+            'data-products': FeatureAccessLevel.ADMIN,
+            'data-contracts': FeatureAccessLevel.ADMIN,
+        },
+        products_admin=True, contracts_admin=True,
+    )
+    return ToolContext(db=db_session, settings=MagicMock(), caller=caller, **managers)
 
 
 @pytest.mark.asyncio

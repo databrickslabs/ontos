@@ -31,7 +31,7 @@ from ..controller.notifications_manager import NotificationsManager
 from ..common.config import get_settings
 from ..common.sanitization import sanitize_markdown_input
 from ..common.search_config_loader import get_search_config_loader
-from ..common.authorization import PermissionChecker
+from ..common.authorization import PermissionChecker, require_demo_admin_or_setup_token
 from ..common.features import FeatureAccessLevel
 
 # Configure logging
@@ -483,10 +483,7 @@ async def load_demo_data(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager),
-    # NOTE: intentionally NOT gated by PermissionChecker — invoked from the
-    # Swagger UI during demo setup, which does not propagate app-level auth
-    # headers. Tracked for a follow-up that introduces a Swagger-friendly
-    # admin path. Edge auth still blocks anonymous callers in prod.
+    _: None = Depends(require_demo_admin_or_setup_token),
     preset: str = Query(
         default="retail",
         description=(
@@ -662,8 +659,7 @@ async def clear_demo_data(
             "List what would be deleted, and what blocks the clear, without changing anything."
         ),
     ),
-    # NOTE: intentionally NOT gated by PermissionChecker — see load_demo_data
-    # above. Swagger-driven demo teardown; gate added in a follow-up.
+    _: None = Depends(require_demo_admin_or_setup_token),
 ):
     """
     Clear all demo data from the database.

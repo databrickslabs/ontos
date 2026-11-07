@@ -5,8 +5,9 @@ Provides a centralized system for registering trigger points throughout the app
 and executing matching workflows when events occur.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from src.models.process_workflows import (
@@ -128,16 +129,17 @@ class TriggerRegistry:
         
         for workflow in matching_workflows:
             try:
-                execution = executor.execute_workflow(
-                    workflow=workflow,
-                    entity=event.entity_data or {},
-                    entity_type=event.entity_type.value,
-                    entity_id=event.entity_id,
-                    entity_name=event.entity_name,
-                    user_email=event.user_email,
-                    trigger_context=trigger_context,
-                    blocking=blocking,
-                )
+                with _workflow_savepoint(self._db):
+                    execution = executor.execute_workflow(
+                        workflow=workflow,
+                        entity=event.entity_data or {},
+                        entity_type=event.entity_type.value,
+                        entity_id=event.entity_id,
+                        entity_name=event.entity_name,
+                        user_email=event.user_email,
+                        trigger_context=trigger_context,
+                        blocking=blocking,
+                    )
                 executions.append(execution)
                 
                 logger.info(
@@ -147,9 +149,6 @@ class TriggerRegistry:
                 logger.exception(f"Failed to execute workflow '{workflow.name}': {e}")
                 if errors is not None:
                     errors.append((workflow, e))
-                    # A database error aborts the transaction: recover so the
-                    # next gates and the caller's status write can still run
-                    _recover_session_after_gate_error(self._db)
         
         return executions
 
@@ -1320,6 +1319,59 @@ def _recover_session_after_gate_error(db: Session) -> None:
         db.rollback()
 
 
+@contextmanager
+def _workflow_savepoint(db: Session) -> Iterator[None]:
+    """Run workflows in a savepoint, so an error undoes only their own writes.
+
+    The caller's change is often not committed yet when its triggers fire (a
+    batch import commits once at the end): a full rollback after a workflow's
+    database error would drop it while the caller reports it as made. A
+    workflow that commits along the way (the executor commits its runs) ends
+    the savepoint; after an error the session is then recovered as after a
+    gate error, which only drops what was written since that commit. When
+    the savepoint can't be taken (the caller's own pending change fails to
+    flush), the session is left as it is: the caller's commit then fails.
+    """
+    savepoint = db.begin_nested()
+    try:
+        yield
+    except Exception:
+        if _is_open(db, savepoint):
+            savepoint.rollback()
+        else:
+            _recover_session_after_gate_error(db)
+        raise
+    if _is_open(db, savepoint):
+        if savepoint.is_active and _transaction_usable(db):
+            savepoint.commit()
+        else:
+            # A database error the workflow caught itself: a failed flush ends
+            # the savepoint, a failed query on Postgres aborts the transaction
+            # (releasing the savepoint would then fail too)
+            savepoint.rollback()
+
+
+def _transaction_usable(db: Session) -> bool:
+    """Whether ``db``'s transaction still runs statements (Postgres aborts it on a failure)."""
+    from sqlalchemy import text
+
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        return False
+    return True
+
+
+def _is_open(db: Session, savepoint: Any) -> bool:
+    """Whether ``savepoint`` is still in the session's chain of nested transactions."""
+    current = db.get_nested_transaction()
+    while current is not None:
+        if current is savepoint:
+            return True
+        current = current.parent
+    return False
+
+
 def _fail_closed_gate_names(db: Session, event: TriggerEvent) -> List[str]:
     """Active ``fail_closed`` gates that would match ``event``, read directly from the table.
 
@@ -1513,7 +1565,10 @@ def fire_trigger_safe(
             kwargs["to_status"] = to_status
         if method not in ("before_create", "before_update", "before_status_change"):
             kwargs["blocking"] = blocking
-        getattr(registry, method)(**kwargs)
+        # A database error undoes only the trigger's writes: the caller's change
+        # stays, and an ODPS import goes on to the next product
+        with _workflow_savepoint(db):
+            getattr(registry, method)(**kwargs)
     except Exception as e:
         logger.warning(f"{method} trigger failed for {entity_type.value} {entity_id}: {e}")
 

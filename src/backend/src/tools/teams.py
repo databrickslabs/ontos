@@ -5,6 +5,7 @@ Tools for searching, creating, updating, and deleting teams.
 """
 
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
@@ -200,6 +201,7 @@ class CreateTeamTool(BaseTool):
     }
     required_params = ["name", "title"]
     required_scope = "teams:write"
+    required_permission = ("teams", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -279,6 +281,7 @@ class UpdateTeamTool(BaseTool):
     }
     required_params = ["team_id"]
     required_scope = "teams:write"
+    required_permission = ("teams", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -362,6 +365,7 @@ class DeleteTeamTool(BaseTool):
     }
     required_params = ["team_id"]
     required_scope = "teams:write"
+    required_permission = ("teams", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,

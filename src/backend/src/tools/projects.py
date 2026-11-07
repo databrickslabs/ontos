@@ -5,6 +5,7 @@ Tools for searching, creating, updating, and deleting projects.
 """
 
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
@@ -193,6 +194,7 @@ class CreateProjectTool(BaseTool):
     }
     required_params = ["name", "title"]
     required_scope = "projects:write"
+    required_permission = ("projects", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -275,6 +277,7 @@ class UpdateProjectTool(BaseTool):
     }
     required_params = ["project_id"]
     required_scope = "projects:write"
+    required_permission = ("projects", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -356,6 +359,7 @@ class DeleteProjectTool(BaseTool):
     }
     required_params = ["project_id"]
     required_scope = "projects:write"
+    required_permission = ("projects", FeatureAccessLevel.ADMIN)
     
     async def execute(
         self,

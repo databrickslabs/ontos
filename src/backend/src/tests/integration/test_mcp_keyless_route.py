@@ -1,8 +1,10 @@
 """Integration tests for the keyless MCP path on /api/mcp.
 
 Exercises resolve_mcp_principal end-to-end through the JSON-RPC endpoint: an
-app-gate-authenticated request (forwarded email, no X-API-Key) resolves to the
-keyless default token, is scoped by that token, and is audited under the caller.
+app-gate-authenticated request (no X-API-Key) with a forwarded user token
+resolves to the keyless default token, is scoped by that token, and is audited
+under the user that ``current_user.me()`` returns for the token. The forwarded
+email header alone is rejected.
 """
 import pytest
 from fastapi.testclient import TestClient
@@ -14,10 +16,23 @@ from src.common.manager_dependencies import get_audit_manager
 from src.controller.audit_manager import AuditManager
 from src.db_models.mcp_tokens import MCPTokenDb
 from src.db_models.audit_log import AuditLogDb
+from src.models.users import UserInfo
 
 
 FWD_EMAIL_HEADER = "X-Forwarded-Email"
 CALLER = "genie@example.com"
+# What the Databricks Apps proxy forwards: the user's token and email.
+FORWARDED = {"x-forwarded-access-token": "user-token", FWD_EMAIL_HEADER: CALLER}
+
+
+@pytest.fixture
+def verified_caller(client, monkeypatch):
+    """``current_user.me()`` for the forwarded token answers CALLER."""
+    def _me(obo_client, real_ip=None):
+        return UserInfo(email=CALLER, username=CALLER, user="Genie", ip=real_ip,
+                        groups=["genie-users"])
+
+    monkeypatch.setattr(app.state.users_manager, "get_current_user", _me)
 
 
 @pytest.fixture(autouse=True)
@@ -85,8 +100,10 @@ class TestNativePathAlias:
     the two must behave identically."""
 
     @pytest.mark.parametrize("path", ["/mcp", "/api/mcp"])
-    def test_tools_list_identical_on_both_paths(self, mcp_client, keyless_default_token, path):
-        resp = _rpc(mcp_client, "tools/list", headers={FWD_EMAIL_HEADER: CALLER}, path=path)
+    def test_tools_list_identical_on_both_paths(
+        self, mcp_client, keyless_default_token, verified_caller, path
+    ):
+        resp = _rpc(mcp_client, "tools/list", headers=FORWARDED, path=path)
         assert resp.status_code == 200, resp.text
         payload = resp.json()
         assert "error" not in payload, payload
@@ -99,8 +116,10 @@ class TestNativePathAlias:
 
 
 class TestKeylessEnabled:
-    def test_tools_list_filtered_to_default_scopes(self, mcp_client, keyless_default_token):
-        resp = _rpc(mcp_client, "tools/list", headers={FWD_EMAIL_HEADER: CALLER})
+    def test_tools_list_filtered_to_default_scopes(
+        self, mcp_client, keyless_default_token, verified_caller
+    ):
+        resp = _rpc(mcp_client, "tools/list", headers=FORWARDED)
         assert resp.status_code == 200, resp.text
         payload = resp.json()
         assert "error" not in payload, payload
@@ -113,12 +132,14 @@ class TestKeylessEnabled:
         assert "execute_sparql_query" not in names
         assert "add_semantic_link" not in names
 
-    def test_out_of_scope_tool_call_rejected(self, mcp_client, keyless_default_token):
+    def test_out_of_scope_tool_call_rejected(
+        self, mcp_client, keyless_default_token, verified_caller
+    ):
         resp = _rpc(
             mcp_client,
             "tools/call",
             params={"name": "execute_sparql_query", "arguments": {"sparql": "SELECT * WHERE {?s ?p ?o}"}},
-            headers={FWD_EMAIL_HEADER: CALLER},
+            headers=FORWARDED,
         )
         assert resp.status_code == 200, resp.text
         payload = resp.json()
@@ -127,13 +148,13 @@ class TestKeylessEnabled:
         assert payload["error"]["code"] == -32002
 
     def test_scope_violation_audited_under_forwarded_caller(
-        self, mcp_client, keyless_default_token, db_session: Session
+        self, mcp_client, keyless_default_token, verified_caller, db_session: Session
     ):
         _rpc(
             mcp_client,
             "tools/call",
             params={"name": "execute_sparql_query", "arguments": {"sparql": "ASK {}"}},
-            headers={FWD_EMAIL_HEADER: CALLER},
+            headers=FORWARDED,
         )
         audit = (
             db_session.query(AuditLogDb)
@@ -141,6 +162,39 @@ class TestKeylessEnabled:
             .first()
         )
         assert audit is not None, "keyless scope violation should be attributed to the forwarded caller"
+
+    def test_the_forwarded_email_alone_is_rejected_and_audited(
+        self, mcp_client, keyless_default_token, db_session: Session
+    ):
+        resp = _rpc(mcp_client, "tools/list", headers={FWD_EMAIL_HEADER: CALLER})
+        payload = resp.json()
+        assert payload["error"]["code"] == -32001, payload
+        assert payload["error"]["message"] == "The caller's identity could not be verified."
+        audit = (
+            db_session.query(AuditLogDb)
+            .filter_by(feature="mcp", action="IDENTITY_REJECTED")
+            .first()
+        )
+        assert audit is not None and audit.success is False
+        assert audit.details['reason'] == 'forwarded_token_missing'
+
+    def test_a_token_me_rejects_is_refused_and_audited(
+        self, mcp_client, keyless_default_token, db_session: Session, monkeypatch
+    ):
+        def _expired(obo_client, real_ip=None):
+            raise RuntimeError("token expired")
+
+        monkeypatch.setattr(app.state.users_manager, "get_current_user", _expired)
+        resp = _rpc(mcp_client, "tools/list", headers=FORWARDED)
+        payload = resp.json()
+        assert payload["error"]["code"] == -32001, payload
+        assert "expired" not in payload["error"]["message"]
+        audit = (
+            db_session.query(AuditLogDb)
+            .filter_by(feature="mcp", action="IDENTITY_REJECTED")
+            .first()
+        )
+        assert audit is not None and audit.details['reason'] == 'caller_unresolved'
 
 
 class TestKeylessDisabled:
@@ -179,19 +233,23 @@ class TestProtocolNegotiation:
         return _rpc(
             client,
             "initialize",
-            params={"protocolVersion": version, "clientInfo": {"name": "test"}, "capabilities": {}},
-            headers={FWD_EMAIL_HEADER: CALLER},
+            params={
+                "protocolVersion": version, "clientInfo": {"name": "test"}, "capabilities": {},
+            },
+            headers=FORWARDED,
         ).json()
 
-    def test_newer_version_echoed(self, mcp_client, keyless_default_token):
+    def test_newer_version_echoed(self, mcp_client, keyless_default_token, verified_caller):
         payload = self._initialize(mcp_client, "2025-06-18")
         assert payload["result"]["protocolVersion"] == "2025-06-18"
 
-    def test_legacy_version_echoed(self, mcp_client, keyless_default_token):
+    def test_legacy_version_echoed(self, mcp_client, keyless_default_token, verified_caller):
         payload = self._initialize(mcp_client, "2024-11-05")
         assert payload["result"]["protocolVersion"] == "2024-11-05"
 
-    def test_unsupported_version_falls_back_to_latest(self, mcp_client, keyless_default_token):
+    def test_unsupported_version_falls_back_to_latest(
+        self, mcp_client, keyless_default_token, verified_caller
+    ):
         from src.routes.mcp_routes import MCP_PROTOCOL_VERSION
         payload = self._initialize(mcp_client, "1999-01-01")
         assert payload["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION

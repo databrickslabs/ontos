@@ -95,10 +95,16 @@ class EntityMetadataPermission:
     """Dependency for the routes with ``{entity_type}`` in the path.
 
     ``entity_id`` is read from the path (costs) or the query (metadata).
+
+    ``contract_ids_need_domains`` (merged metadata): the route also returns
+    the inheritable metadata of the contracts in ``contract_ids``, which the
+    asset rules don't cover, so a request that names contracts still needs
+    the ``data-domains`` check.
     """
 
-    def __init__(self, level: FeatureAccessLevel):
+    def __init__(self, level: FeatureAccessLevel, *, contract_ids_need_domains: bool = False):
         self.level = level
+        self.contract_ids_need_domains = contract_ids_need_domains
         self._domain_checker = PermissionChecker(METADATA_FEATURE_ID, level)
 
     async def __call__(
@@ -116,6 +122,9 @@ class EntityMetadataPermission:
         await _ensure_asset(
             request, db, user_details, auth_manager, entity_id, self.level, require_asset=True,
         )
+        contract_ids = (request.query_params.get('contract_ids') or '').split(',')
+        if self.contract_ids_need_domains and any(cid.strip() for cid in contract_ids):
+            await self._domain_checker(request, user_details, auth_manager)
 
 
 def _rich_text_owner(request: Request, db):

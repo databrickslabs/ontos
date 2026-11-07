@@ -624,7 +624,9 @@ async def get_merged_metadata(
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
     db: DBSessionDep = None,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(
+        FeatureAccessLevel.READ_ONLY, contract_ids_need_domains=True,
+    )),
 ):
     """
     Get merged metadata for an entity, including inherited metadata from contracts.

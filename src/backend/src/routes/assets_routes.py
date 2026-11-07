@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query, Request
 
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
@@ -70,6 +70,17 @@ def get_assets_manager(request: Request = None) -> AssetsManager:
 _get_data_products_manager = get_data_products_manager
 _user_has_assets_feature = user_has_assets_feature
 _ensure_asset_readable = ensure_asset_readable
+
+
+def _schedule_maturity_evaluation(
+    background_tasks: BackgroundTasks, request: Request, asset_id, user_email,
+) -> None:
+    """Re-evaluate a table/view asset's maturity after the response is sent."""
+    from src.controller.maturity_evaluator import evaluate_asset_maturity_on_change
+    background_tasks.add_task(
+        evaluate_asset_maturity_on_change, str(asset_id), evaluated_by=user_email,
+        workspace_client=getattr(request.app.state, "workspace_client", None),
+    )
 
 
 # ===================== Asset Types =====================
@@ -257,6 +268,7 @@ def create_asset(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
     manager=Depends(get_assets_manager),
 ):
     """Creates a new asset.
@@ -284,6 +296,7 @@ def create_asset(
         result.description_sync = outcome.state
         if outcome.audit:
             details["uc_comment"] = outcome.audit
+        _schedule_maturity_evaluation(background_tasks, request, result.id, current_user.email)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}
@@ -428,9 +441,10 @@ def update_asset(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
     manager=Depends(get_assets_manager),
 ):
-    """Updates an existing asset."""
+    """Updates an existing asset; a table or view is re-evaluated for maturity afterwards."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
     if asset_in.properties is not None:
@@ -467,6 +481,7 @@ def update_asset(
         if outcome.audit:
             details["uc_comment"] = outcome.audit
         success = True
+        _schedule_maturity_evaluation(background_tasks, request, asset_id, current_user.email)
         return result
     except NotFoundError as e:
         details["exception"] = {"type": "NotFoundError", "message": str(e)}

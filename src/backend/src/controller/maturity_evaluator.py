@@ -4,18 +4,23 @@ Evaluates an entity against admin-configured maturity levels.
 Levels are cumulative: evaluation stops at the first level where a required gate fails.
 """
 import json
+import re
+import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
 
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.controller.entity_dict_builder import (
+    UC_TABLE_FIELDS,
+    build_asset_dict,
     build_data_product_dict,
     build_data_contract_dict,
 )
 from src.models.maturity import (
     MaturityReport,
+    MaturityNotice,
     LevelResult,
     GateResult,
 )
@@ -28,9 +33,53 @@ _ENTITY_DICT_BUILDERS = {
     "DataContract": build_data_contract_dict,
 }
 
+# Codes for a UC-backed asset whose table couldn't be read (by ``uc_table_status``)
+_UC_STATUS_CODES = {
+    "client_unavailable": "maturity_uc_table_client_unavailable",
+    "not_found": "maturity_uc_table_not_found",
+    "permission_denied": "maturity_uc_table_permission_denied",
+    "read_failed": "maturity_uc_table_read_failed",
+}
+_UC_STATUS_MESSAGES = {
+    "client_unavailable": "Unity Catalog can't be reached, so the fields of table {tableName} "
+                          "are missing.",
+    "not_found": "Table {tableName} was not found in Unity Catalog, so its fields are missing.",
+    "permission_denied": "The app may not read table {tableName} in Unity Catalog, so its "
+                         "fields are missing.",
+    "read_failed": "Table {tableName} could not be read from Unity Catalog, so its fields "
+                   "are missing.",
+}
+_UC_FIELD_IN_RULE = re.compile(
+    r"\.(" + "|".join(sorted(UC_TABLE_FIELDS, key=len, reverse=True)) + r")\b"
+)
+
+
+def _default_workspace_client():
+    from src.common.workspace_client import get_workspace_client
+    return get_workspace_client()
+
 
 class MaturityEvaluator:
-    """Evaluates maturity for Data Products and Data Contracts."""
+    """Evaluates maturity for Data Products, Data Contracts and table/view Assets.
+
+    ``workspace_client`` (a client, or a callable returning one) reads the
+    Unity Catalog table behind an asset; by default the app's client is used,
+    only when an evaluated asset points to a UC table.
+    """
+
+    def __init__(self, workspace_client: Any = None):
+        if workspace_client is None:
+            self._get_client: Callable[[], Any] = _default_workspace_client
+        elif callable(workspace_client) and not hasattr(workspace_client, "tables"):
+            self._get_client = workspace_client
+        else:
+            self._get_client = lambda: workspace_client
+
+    def _build_entity_dict(self, db: Session, entity_type: str,
+                           entity_id: str) -> Optional[Dict[str, Any]]:
+        if entity_type == "Asset":
+            return build_asset_dict(db, entity_id, get_workspace_client=self._get_client)
+        return _ENTITY_DICT_BUILDERS[entity_type](db, entity_id)
 
     def evaluate(
         self,
@@ -43,18 +92,20 @@ class MaturityEvaluator:
     ) -> Optional[MaturityReport]:
         """Evaluate maturity for an entity.
 
-        Returns None if the entity is not found.
+        Returns None if the entity is not found. Raises
+        ``UnsupportedMaturityAssetTypeError`` for an asset that isn't a table
+        or a view.
         """
-        builder = _ENTITY_DICT_BUILDERS.get(entity_type)
-        if not builder:
-            logger.warning(f"No entity dict builder for type: {entity_type}")
+        if entity_type not in _ENTITY_DICT_BUILDERS and entity_type != "Asset":
+            logger.warning("No entity dict builder for type: %s", entity_type)
             return None
 
-        entity_dict = builder(db, entity_id)
+        entity_dict = self._build_entity_dict(db, entity_type, entity_id)
         if entity_dict is None:
             return None
 
         entity_name = entity_dict.get("name")
+        uc_notice = _uc_notice(entity_dict)
 
         # Load levels applicable to this entity type
         levels = maturity_repo.get_all_ordered(db, entity_type=entity_type)
@@ -65,6 +116,7 @@ class MaturityEvaluator:
                 entity_name=entity_name,
                 evaluated_at=datetime.now(timezone.utc),
                 evaluated_by=evaluated_by,
+                notices=[uc_notice] if uc_notice else [],
             )
 
         level_results = []
@@ -100,13 +152,20 @@ class MaturityEvaluator:
                 elif gate.required:
                     all_required_pass = False
 
+                # A gate that failed on UC fields the table couldn't provide
+                # says so with a code, instead of a plain "value is null".
+                notice = uc_notice if (
+                    uc_notice and not passed and _UC_FIELD_IN_RULE.search(policy.rule or "")
+                ) else None
                 gate_results.append(GateResult(
                     gate_id=str(gate.id),
                     policy_id=gate.compliance_policy_id,
                     policy_name=policy.name,
                     required=gate.required,
                     passed=passed,
-                    message=message if not passed else None,
+                    message=(notice.message if notice else message) if not passed else None,
+                    message_code=notice.code if notice else None,
+                    message_params=notice.params if notice else None,
                 ))
 
             level_results.append(LevelResult(
@@ -138,6 +197,7 @@ class MaturityEvaluator:
             levels=level_results,
             evaluated_at=now,
             evaluated_by=evaluated_by,
+            notices=[uc_notice] if uc_notice else [],
         )
 
         if persist:
@@ -158,6 +218,8 @@ class MaturityEvaluator:
                     to_level=achieved_order,
                     entity_name=entity_name,
                     evaluated_by=evaluated_by,
+                    asset_type=entity_dict.get("asset_type"),
+                    entity_data=_trigger_data(entity_type, entity_dict),
                 )
 
         return report
@@ -173,7 +235,7 @@ class MaturityEvaluator:
             from src.common.compliance_dsl import evaluate_rule_on_object
             return evaluate_rule_on_object(rule, entity_dict)
         except Exception as e:
-            logger.error(f"Gate evaluation error: {e}", exc_info=True)
+            logger.error("Gate evaluation error: %s", e, exc_info=True)
             return False, str(e)
 
     @staticmethod
@@ -191,6 +253,8 @@ class MaturityEvaluator:
                     "required": gr.required,
                     "passed": gr.passed,
                     "message": gr.message,
+                    **({"message_code": gr.message_code,
+                        "message_params": gr.message_params} if gr.message_code else {}),
                 })
 
         maturity_repo.create_snapshot(
@@ -227,6 +291,8 @@ class MaturityEvaluator:
         to_level: Optional[int],
         entity_name: Optional[str] = None,
         evaluated_by: Optional[str] = None,
+        asset_type: Optional[str] = None,
+        entity_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Log maturity change to change log and fire workflow trigger."""
         try:
@@ -249,14 +315,22 @@ class MaturityEvaluator:
         try:
             from src.common.workflow_triggers import TriggerRegistry
             from src.models.process_workflows import EntityType
-            et_map = {"DataProduct": EntityType.DATA_PRODUCT, "DataContract": EntityType.DATA_CONTRACT}
-            et_enum = et_map.get(entity_type)
+            et_map = {
+                "DataProduct": EntityType.DATA_PRODUCT,
+                "DataContract": EntityType.DATA_CONTRACT,
+                # Assets fire as the workflow entity type of their asset type
+                "Asset:Table": EntityType.TABLE,
+                "Asset:View": EntityType.VIEW,
+            }
+            key = f"Asset:{asset_type}" if entity_type == "Asset" else entity_type
+            et_enum = et_map.get(key)
             if et_enum:
                 registry = TriggerRegistry(db)
                 registry.on_maturity_change(
                     entity_type=et_enum,
                     entity_id=entity_id,
                     entity_name=entity_name,
+                    entity_data=entity_data,
                     from_level=from_level,
                     to_level=to_level,
                     user_email=evaluated_by,
@@ -281,3 +355,63 @@ def _update_entity_cache(db: Session, *, entity_type: str, entity_id: str,
             {"maturity_level_order": level_order, "maturity_evaluated_at": now},
             synchronize_session=False,
         )
+
+
+def _uc_notice(entity_dict: Dict[str, Any]) -> Optional[MaturityNotice]:
+    """Why the UC table fields of an asset are absent, or None when they aren't."""
+    status = entity_dict.get("uc_table_status")
+    code = _UC_STATUS_CODES.get(status)
+    if not code:
+        return None
+    table_name = entity_dict.get("uc_table_name")
+    return MaturityNotice(
+        code=code,
+        message=_UC_STATUS_MESSAGES[status].format(tableName=table_name),
+        params={"tableName": table_name},
+    )
+
+
+def _trigger_data(entity_type: str, entity_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """What a maturity workflow gets about an asset (its id is the asset id)."""
+    if entity_type != "Asset":
+        return None
+    return {
+        "asset_id": entity_dict.get("id"),
+        "asset_type": entity_dict.get("asset_type"),
+        "location": entity_dict.get("location"),
+        "uc_table_name": entity_dict.get("uc_table_name"),
+    }
+
+
+def evaluate_asset_maturity_on_change(
+    asset_id: str,
+    *,
+    evaluated_by: Optional[str] = None,
+    workspace_client: Any = None,
+) -> Optional[MaturityReport]:
+    """Re-evaluate an asset after it changed (run as a background task).
+
+    Opens its own session. Does nothing for asset types other than tables and
+    views, or when no ``Asset`` maturity level exists, so most asset changes
+    cost one query and no Unity Catalog call. Never raises: a failed
+    evaluation must not fail the change that triggered it.
+    """
+    from src.common.database import get_db_session
+    from src.controller.entity_dict_builder import MATURITY_ASSET_TYPES
+    from src.db_models.assets import AssetDb
+
+    try:
+        with get_db_session() as db:
+            if not maturity_repo.get_all_ordered(db, entity_type="Asset"):
+                return None
+            asset = db.get(AssetDb, uuid.UUID(str(asset_id)))
+            type_name = asset.asset_type.name if asset and asset.asset_type else None
+            if type_name not in MATURITY_ASSET_TYPES:
+                return None
+            return MaturityEvaluator(workspace_client).evaluate(
+                db, entity_type="Asset", entity_id=str(asset_id),
+                persist=True, evaluated_by=evaluated_by,
+            )
+    except Exception:
+        logger.warning("Maturity re-evaluation failed for asset %s", asset_id, exc_info=True)
+        return None

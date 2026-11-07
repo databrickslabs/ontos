@@ -4,7 +4,7 @@ One row per run of a scheduled task (#941): the app instance whose insert
 succeeds (``ON CONFLICT DO NOTHING`` on the primary key) runs the slot.
 
 Revision ID: c8_workflow_scheduler_claims
-Revises: c6_metric_view_baselines
+Revises: c7_metric_view_change_requests
 Create Date: 2026-11-04 12:00:00.000000
 
 """
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'c8_workflow_scheduler_claims'
-down_revision: Union[str, None] = 'c6_metric_view_baselines'
+down_revision: Union[str, None] = 'c7_metric_view_change_requests'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

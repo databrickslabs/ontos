@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime
@@ -6,6 +7,7 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from src.common.config import Settings
@@ -111,6 +113,14 @@ class AuditManager:
         log_entry_data: Dict[str, Any]
     ):
         """Internal synchronous logic to log to file and DB using a given session."""
+        # The column is JSON: UUIDs, datetimes, Decimals and Enums would fail the
+        # insert, and this method swallows that failure, so the row would vanish.
+        try:
+            details = jsonable_encoder(log_entry_data["details"])
+        except Exception:
+            details = json.loads(json.dumps(log_entry_data["details"], default=str))
+        log_entry_data = {**log_entry_data, "details": details}
+
         # 1. Log to file (structured as JSON string)
         if not file_audit_logger.disabled:
             try:

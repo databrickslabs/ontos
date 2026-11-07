@@ -5,9 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from src.models.costs import CostItemCreate
-from src.repositories.costs_repository import cost_items_repo
-
 
 def _cost_items_url(entity_type: str, entity_id: str) -> str:
     return f"/api/entities/{entity_type}/{entity_id}/cost-items"
@@ -31,15 +28,13 @@ class TestCostsRoutes:
         }
 
     @pytest.fixture
-    def created_cost(self, db_session: Session, sample_cost_data):
-        """A cost item stored through the repository.
-
-        Not through POST: that route's audit entry fails to serialise (#1051) and,
-        in this harness, the failed audit write rolls back the test's data.
-        """
-        item = cost_items_repo.create(db_session, obj_in=CostItemCreate(**sample_cost_data))
-        db_session.flush()
-        return {"id": str(item.id)}
+    def created_cost(self, client: TestClient, sample_cost_data):
+        """A cost item created through the API."""
+        response = client.post(
+            _cost_items_url("data_product", "test-product-123"), json=sample_cost_data
+        )
+        assert response.status_code == 201, response.text
+        return {"id": response.json()["id"]}
 
     def test_create_cost_item_is_audited(
         self, client: TestClient, sample_cost_data, verify_audit_log
@@ -50,6 +45,21 @@ class TestCostsRoutes:
         )
         assert response.status_code == 201
         verify_audit_log("costs", "CREATE", success=True)
+
+    def test_create_then_list_cost_items(
+        self, client: TestClient, sample_cost_data, verify_audit_log
+    ):
+        """A cost item created through POST is listed by the next GET."""
+        url = _cost_items_url("data_product", "test-product-123")
+        created = client.post(url, json=sample_cost_data)
+        assert created.status_code == 201, created.text
+
+        listed = client.get(url)
+        assert listed.status_code == 200, listed.text
+        assert [item["id"] for item in listed.json()] == [created.json()["id"]]
+
+        audit = verify_audit_log("costs", "CREATE", success=True)
+        assert audit.details["cost_item_id"] == created.json()["id"]
 
     def test_get_costs_for_entity(self, client: TestClient, created_cost):
         """Test getting costs for an entity."""

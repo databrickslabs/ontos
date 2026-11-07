@@ -244,22 +244,20 @@ class MaturityEvaluator:
         """Evaluate a compliance DSL rule against an entity dict.
 
         Returns ``(passed, message, errored)``. A rule that can't be parsed or
-        evaluated fails with ``errored=True`` and no message: the exception is
-        logged here, and the gate result gets ``maturity_gate_error``.
-        (``evaluate_rule_on_object`` would put the exception text in the message.)
+        evaluated fails with ``errored=True`` and no message: the error is logged
+        here, and the gate result gets ``maturity_gate_error``.
         """
-        from src.common.compliance_dsl import Evaluator, Lexer, Parser
+        from src.common.compliance_dsl import evaluate_rule_on_object
         try:
-            if "ASSERT" not in (rule or ""):
-                raise ValueError("Rule must contain ASSERT clause")
-            assert_part = rule.split("ASSERT", 1)[1].strip()
-            ast = Parser(Lexer(assert_part).tokenize()).parse_expression()
-            if bool(Evaluator(entity_dict).evaluate(ast)):
-                return True, None, False
-            return False, f"Assertion failed: {assert_part}", False
+            passed, message = evaluate_rule_on_object(rule or "", entity_dict)
         except Exception:
             logger.error("Maturity gate %r could not be evaluated", policy_name, exc_info=True)
             return False, None, True
+        if passed or (message or "").startswith("Assertion failed:"):
+            return passed, message, False
+        # A parse/evaluation error or a rule without ASSERT: keep its text out of results
+        logger.error("Maturity gate %r could not be evaluated: %s", policy_name, message)
+        return False, None, True
 
     @staticmethod
     def _persist(db: Session, report: MaturityReport) -> None:

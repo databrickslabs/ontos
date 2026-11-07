@@ -19,6 +19,31 @@ panel should be rendered, and whether a backend route should accept a given `ent
 
 > **Convention:** when adding a new entity/asset type, update this matrix first.
 
+## 0. Parity rule for managed (lifecycled) entities
+
+Every managed Ontos entity — at minimum every entity with a lifecycle status
+(draft → … → deprecated/retired) — gets the **same cross-cutting capabilities as
+Data Products and Data Contracts** unless a cell below records a deliberate "—" with
+a reason. Check this list at the *plan* stage of any larger entity-based feature:
+
+| Capability | Backend | Frontend |
+|---|---|---|
+| Domains (multi, one primary) | `entity_domain_associations` + `entity_domain_repo.set_domains_for_entity` | `DomainMultiSelector` in create/edit; badges on detail |
+| Owner Team | `owner_team_id` FK → `teams.id` (validated, returned with name) | Team select in create/edit; shown on detail |
+| Project | `project_id` FK → `projects.id`; list filter `?project_id=` | Project select (defaults to current project); shown on detail |
+| Comments = Timeline | `comments` entity_type; status changes + automated events written to the timeline | `CommentSidebar` |
+| Tags | `TagsManager.set_tags_for_entity` on create/update; tags in read model | `TagSelector` in dialog; chips on detail |
+| Owners | `business_owners` — add the type to `OwnerObjectType` (backend enum + `types/business-owner.ts`) | `OwnershipPanel` (pass `ownerTeamId` for copy-from-team) |
+| Metadata | add the type to `METADATA_ENTITY_TYPES` (`models/metadata.py`) | `EntityMetadataPanel` + both `EntityKind` unions |
+| Search | `SearchableAsset` manager registered on `app.state`; reindex on create/update/status/delete | global search link to the detail route |
+| MCP | list/search/get tools in `src/backend/src/tools/` | — |
+| Lifecycle | status transition endpoint; workflow `EntityType` for triggers | status badge + transition actions |
+| Versioning / Maturity | where the entity is versioned: family + New Version; `maturity_evaluator` builder | `VersionNavigator`; `MaturityInline` |
+
+Polymorphic allow-lists are the usual miss: a panel that renders is not proof that
+saving works (e.g. metadata only accepted domain/product/contract/dataset until
+`METADATA_ENTITY_TYPES`, so notes on assets/policies/concepts failed with 422).
+
 ---
 
 ## 1. Polymorphic Backend Tables

@@ -1012,6 +1012,13 @@
     "overTime": "Maturity over time",
     "retry": "Retry"
   },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Unity Catalog can't be reached, so the fields of table {{tableName}} are missing.",
+    "maturity_uc_table_not_found": "Table {{tableName}} was not found in Unity Catalog, so its fields are missing.",
+    "maturity_uc_table_permission_denied": "The app may not read table {{tableName}} in Unity Catalog, so its fields are missing.",
+    "maturity_uc_table_read_failed": "Table {{tableName}} could not be read from Unity Catalog, so its fields are missing.",
+    "maturity_gate_error": "Gate {{gateName}} could not be evaluated. The details are in the server log."
+  },
   "createDialog": {
     "editTitle": "Edit Data Product Metadata",
     "createTitle": "Create Data Product (ODPS v1.0.0)",

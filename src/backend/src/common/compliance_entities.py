@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
+from src.common.uc_table_columns import table_column_fields
 
 logger = get_logger(__name__)
 
@@ -133,6 +134,7 @@ class UnityCatalogLoader(EntityLoader):
                                         'created_at': getattr(table, 'created_at', None),
                                         'updated_at': getattr(table, 'updated_at', None),
                                         'storage_location': getattr(table, 'storage_location', None),
+                                        **table_column_fields(table),
                                     }
                             except Exception:
                                 logger.exception(f"Failed to list tables for schema {catalog.name}.{schema.name}")

@@ -1012,6 +1012,13 @@
     "overTime": "Maturidade ao longo do tempo",
     "retry": "Tentar novamente"
   },
+  "maturityGateCodes": {
+    "maturity_uc_table_client_unavailable": "Não foi possível acessar o Unity Catalog, então faltam os campos da tabela {{tableName}}.",
+    "maturity_uc_table_not_found": "A tabela {{tableName}} não foi encontrada no Unity Catalog, então faltam os campos dela.",
+    "maturity_uc_table_permission_denied": "O app não tem permissão para ler a tabela {{tableName}} no Unity Catalog, então faltam os campos dela.",
+    "maturity_uc_table_read_failed": "Não foi possível ler a tabela {{tableName}} do Unity Catalog, então faltam os campos dela.",
+    "maturity_gate_error": "Não foi possível avaliar o gate {{gateName}}. Os detalhes estão no log do servidor."
+  },
   "createDialog": {
     "editTitle": "Editar metadados do produto de dados",
     "createTitle": "Criar produto de dados (ODPS v1.0.0)",

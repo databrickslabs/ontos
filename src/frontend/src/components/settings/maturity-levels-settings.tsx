@@ -47,6 +47,7 @@ const COLOR_OPTIONS = ['blue', 'cyan', 'green', 'amber', 'purple', 'red', 'emera
 
 const ENTITY_TYPE_OPTIONS: Array<{ value: string }> = [
   { value: 'all' },
+  { value: 'Asset' },
   { value: 'DataProduct' },
   { value: 'DataContract' },
 ];

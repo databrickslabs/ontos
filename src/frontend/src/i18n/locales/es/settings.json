@@ -1196,7 +1196,7 @@
     "title": "Niveles de madurez",
     "description": "Define la escala de madurez para los productos de datos y los contratos. Cada nivel está condicionado por políticas de cumplimiento.",
     "addLevel": "Añadir nivel",
-    "allTypes": "Todos los tipos",
+    "allTypes": "Productos y contratos",
     "gateCount_one": "{{count}} puerta",
     "gateCount_other": "{{count}} puertas",
     "complianceGates": "Puertas de política de cumplimiento",
@@ -1223,7 +1223,8 @@
       "levelNamePreview": "Nombre del nivel"
     },
     "entityTypes": {
-      "all": "Todos los tipos de entidad",
+      "all": "Productos y contratos de datos",
+      "Asset": "Activos (tablas y vistas)",
       "DataProduct": "Productos de datos",
       "DataContract": "Contratos de datos"
     },

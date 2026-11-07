@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, HttpUrl
 # ============================================================================
 # Entity Types Pattern
 # ============================================================================
-ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset)$"
+ENTITY_TYPE_PATTERN = r"^(data_domain|data_product|data_contract|dataset|asset)$"
 
 
 # ============================================================================

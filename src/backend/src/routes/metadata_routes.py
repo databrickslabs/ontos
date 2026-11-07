@@ -5,10 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from fastapi import Response
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
+from src.common.entity_metadata_access import (
+    EntityMetadataPermission, document_permission, link_permission, rich_text_permission,
+)
 from src.common.logging import get_logger
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
 from src.controller.metadata_manager import MetadataManager, SHARED_ENTITY_ID
@@ -42,7 +46,7 @@ async def create_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
@@ -73,7 +77,7 @@ async def list_rich_texts(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_rich_texts(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -87,7 +91,7 @@ async def update_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(rich_text_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     updated = manager.update_rich_text(db, id=id, data=payload, user_email=current_user.email if current_user else None)
     if not updated:
@@ -114,7 +118,7 @@ async def delete_rich_text(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(rich_text_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     ok = manager.delete_rich_text(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -144,7 +148,7 @@ async def create_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
@@ -175,7 +179,7 @@ async def list_links(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_links(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -189,7 +193,7 @@ async def update_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(link_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     updated = manager.update_link(db, id=id, data=payload, user_email=current_user.email if current_user else None)
     if not updated:
@@ -216,7 +220,7 @@ async def delete_link(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(link_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     ok = manager.delete_link(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -250,12 +254,24 @@ async def upload_document(
     manager: MetadataManager = Depends(get_metadata_manager),
     settings: Settings = Depends(get_settings),
     ws: WorkspaceClient = Depends(get_workspace_client),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     try:
         # Validate path components to prevent directory traversal
         if not is_safe_path_component(entity_type) or not is_safe_path_component(entity_id):
             raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
+
+        # Validate the request before touching the volume, so a rejected
+        # request never leaves an orphaned file behind.
+        try:
+            payload = DocumentCreate(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                title=title,
+                short_description=short_description,
+            )
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
         
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{entity_id}"
@@ -283,12 +299,6 @@ async def upload_document(
         # Upload file bytes to the UC Volume path (path, file-like object, overwrite)
         ws.files.upload(dest_path, BytesIO(content))
 
-        payload = DocumentCreate(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            title=title,
-            short_description=short_description,
-        )
         result = manager.create_document_record(
             db,
             data=payload,
@@ -323,7 +333,7 @@ async def list_documents(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     return manager.list_documents(db, entity_type=entity_type, entity_id=entity_id)
 
@@ -333,7 +343,7 @@ async def get_document(
     id: str,
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(document_permission(FeatureAccessLevel.READ_ONLY)),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:
@@ -349,7 +359,7 @@ async def delete_document(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(document_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     ok = manager.delete_document(db, id=id, user_email=current_user.email if current_user else None)
     if not ok:
@@ -531,7 +541,7 @@ async def attach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE, attaching=True)),
 ):
     """Attach a shared metadata asset to an entity."""
     try:
@@ -562,7 +572,7 @@ async def list_attachments(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_ONLY)),
 ):
     """List all shared asset attachments for an entity."""
     return manager.list_attachments(db, entity_type=entity_type, entity_id=entity_id)
@@ -579,7 +589,7 @@ async def detach_shared_asset(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityMetadataPermission(FeatureAccessLevel.READ_WRITE)),
 ):
     """Detach a shared metadata asset from an entity."""
     ok = manager.detach_shared_asset(
@@ -614,7 +624,9 @@ async def get_merged_metadata(
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
     db: DBSessionDep = None,
     manager: MetadataManager = Depends(get_metadata_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityMetadataPermission(
+        FeatureAccessLevel.READ_ONLY, contract_ids_need_domains=True,
+    )),
 ):
     """
     Get merged metadata for an entity, including inherited metadata from contracts.
@@ -640,7 +652,7 @@ async def get_document_content(
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     ws: WorkspaceClient = Depends(get_workspace_client),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(document_permission(FeatureAccessLevel.READ_ONLY)),
 ):
     doc = manager.get_document(db, id=id)
     if not doc:

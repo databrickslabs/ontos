@@ -324,12 +324,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 non-colliding UUID in the payload is adopted as the primary key so
                 YAML-expressed cross-entity links survive import. Otherwise (or on a
                 non-UUID / colliding id) a fresh UUID is generated as before.
-            import_links: Set by an ODPS import: the ontos* lifecycle properties
+            import_links: Set by an ODPS import, which commits the product in its
+                savepoint and records it in ``import_links`` (here it is only
+                flushed). The ontos* lifecycle properties
                 then set the lifecycle columns, with replacements resolved among
                 the entities of the same import. Otherwise they're ignored, since
-                those columns only change through a status transition. The
-                product is then only flushed: the import commits it in its
-                savepoint, and records it in ``import_links``.
+                those columns only change through a status transition.
         """
         from src.controller.delivery_service import DeliveryChangeType
 

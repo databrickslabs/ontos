@@ -113,7 +113,10 @@ def caller_owns_product(
     Membership is resolved against the product only, never through a broad
     listing scope (ONT-NEG-011). ``caller_team_ids`` is looked up when not given;
     ``caller_project_ids`` (from ``lookup_member_project_ids``) saves the
-    per-product project query when many products are checked.
+    per-product project query when many products are checked. Each lookup runs
+    in a savepoint, so a failed one (denied) doesn't abort the caller's
+    transaction for the checks after it (e.g. the reviewer check of the read
+    gate, the next row of the approvals queue).
     """
     if not caller_email:
         return False
@@ -126,10 +129,10 @@ def caller_owns_product(
     product_team_id = getattr(product, "owner_team_id", None)
     if product_team_id:
         try:
-            team_ids = (
-                caller_team_ids if caller_team_ids is not None
-                else lookup_team_ids(db, caller_email, groups)
-            )
+            team_ids = caller_team_ids
+            if team_ids is None:
+                with db.begin_nested():
+                    team_ids = lookup_team_ids(db, caller_email, groups)
             if str(product_team_id) in team_ids:
                 return True
         except Exception:
@@ -147,13 +150,15 @@ def caller_owns_product(
 
             # ``is_user_project_member`` uses the configured admin groups, not a
             # substring match, and checks real team membership of the project.
-            if projects_manager.is_user_project_member(
-                db=db,
-                user_identifier=caller_email,
-                user_groups=groups,
-                project_id=str(product_project_id),
-                settings=get_settings(),
-            ):
+            with db.begin_nested():
+                is_member = projects_manager.is_user_project_member(
+                    db=db,
+                    user_identifier=caller_email,
+                    user_groups=groups,
+                    project_id=str(product_project_id),
+                    settings=get_settings(),
+                )
+            if is_member:
                 return True
         except Exception:
             logger.exception(

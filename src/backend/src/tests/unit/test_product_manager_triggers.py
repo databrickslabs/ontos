@@ -25,6 +25,7 @@ import pytest
 
 from src.common.workflow_triggers import StatusChangeBlockedError
 from src.controller.data_products_manager import DataProductsManager
+from src.controller.lifecycle_fields import DeprecationDetails
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
 from src.db_models.process_workflows import (
@@ -310,7 +311,9 @@ class TestRealWorkflows:
         on_status = _workflow(db_session, 'on_status_change')
 
         with pytest.raises(StatusChangeBlockedError):
-            manager.transition_status(row.id, 'deprecated', USER)
+            manager.transition_status(
+                row.id, 'deprecated', USER, deprecation=DeprecationDetails(reason='Replaced'),
+            )
 
         assert len(_runs(db_session, gate)) == 1
         assert _runs(db_session, on_status) == []

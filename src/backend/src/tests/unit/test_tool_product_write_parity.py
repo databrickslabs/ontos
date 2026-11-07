@@ -138,7 +138,7 @@ class TestUpdateNeedsAnOwner:
     def test_a_status_change_alone_needs_only_the_level(self, world):
         # As POST /api/data-products/{id}/change-status (Read/Write, no ownership rule).
         res = _call(world, NON_OWNER, 'update_data_product', product_id=world.row.id,
-                    status='deprecated')
+                    status='deprecated', deprecation_reason='Replaced')
         assert res.success is True, res.error
         assert _stored(world).status == 'deprecated'
         assert [(e['action'], e['success']) for e in world.audit] == [('CHANGE_STATUS', True)]

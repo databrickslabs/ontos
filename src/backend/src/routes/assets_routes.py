@@ -342,8 +342,13 @@ def get_all_assets(
     domain_ids: Optional[str] = Query(None, description="Filter by multiple domain IDs, comma-separated (any-of)"),
     asset_status: Optional[str] = Query(None, alias="status"),
     name: Optional[str] = Query(None),
+    owned_by_me: bool = Query(
+        False, description="Only assets the current user owns (active business owner)",
+    ),
 ):
     """Lists all assets with optional filters. Returns paginated results.
+
+    ``owned_by_me`` narrows any of the branches below to the caller's owned assets.
 
     Authorization (issue #347):
     - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): see
@@ -384,6 +389,7 @@ def get_all_assets(
         asset_type_id=asset_type_id, asset_type_names=type_names_list,
         platform=platform, domain_id=domain_id, domain_ids=domain_ids_list, status=asset_status, name=name,
         restrict_to_ids=restrict_ids,
+        owner_email=(current_user.email or "") if owned_by_me else None,
     )
 
 

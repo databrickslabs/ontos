@@ -143,7 +143,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
                     selectinload(self.model.target_relationships)
                     .selectinload(AssetRelationshipDb.source_asset),
                 )
-                .order_by(self.model.name)
+                .order_by(self.model.name, self.model.id)
             )
             query = self._apply_filters(
                 query, db=db, asset_type_id=asset_type_id, asset_type_names=asset_type_names,

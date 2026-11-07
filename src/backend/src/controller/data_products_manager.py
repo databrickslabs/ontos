@@ -3211,26 +3211,33 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # a commit or a session-wide rollback inside (nothing to undo)
                 self._end_savepoint(savepoint)
                 if not self._product_row_exists(created.id):
+                    # Writes made after that rollback are in a new transaction
+                    # holding only this product's work: drop them too
+                    self._db.rollback()
                     raise RuntimeError(
                         f"Product {created.id} was rolled back while it was imported"
                     )
             self._db.commit()
             return created
         except Exception:
-            self._end_savepoint(savepoint)
-            if not self._db.is_active:
-                # e.g. the commit failed: only this product is uncommitted
+            already_ended = self._end_savepoint(savepoint)
+            if already_ended or not self._db.is_active:
+                # e.g. the commit failed, or create_product kept writing after a
+                # session-wide rollback a helper swallowed: only this product's
+                # work is uncommitted
                 self._db.rollback()
             raise
 
     @staticmethod
-    def _end_savepoint(savepoint) -> None:
+    def _end_savepoint(savepoint) -> bool:
         """Roll back a savepoint that is still open, also when a failed flush
-        deactivated it (``is_active`` is then False, but it needs a rollback)."""
+        deactivated it (``is_active`` is then False, but it needs a rollback).
+        Returns True when it had already ended."""
         try:
             savepoint.rollback()
         except ResourceClosedError:
-            pass  # already ended by a commit or a session-wide rollback
+            return True  # already ended by a commit or a session-wide rollback
+        return False
 
     def _product_row_exists(self, product_id: str) -> bool:
         """Whether the product's row is in the database (not just in the session)."""

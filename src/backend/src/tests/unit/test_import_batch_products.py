@@ -213,6 +213,39 @@ class TestProductIsolation:
         assert tagged == {result.items[0].entity_id}
 
 
+    def test_a_failed_tag_write_keeps_the_product_and_the_next(self, db_session, monkeypatch):
+        """On Postgres a failed statement aborts the transaction until a rollback:
+        an import's tag write runs in its own savepoint, so only the tags are lost."""
+        from sqlalchemy import text
+        from src.controller.tags_manager import TagsManager
+        from src.db_models.tags import EntityTagAssociationDb
+        from src.tests.helpers import postgres_aborts
+
+        tags_manager = TagsManager()
+        tags_manager.get_or_create_default_namespace(db_session, user_email="a@b.com")
+        real = tags_manager.set_tags_for_entity
+        calls = []
+
+        def failing_second(db, **kw):
+            calls.append(kw["entity_id"])
+            if len(calls) == 2:
+                db.execute(text("SELECT * FROM no_such_tag_table"))
+            return real(db, **kw)
+
+        monkeypatch.setattr(tags_manager, "set_tags_for_entity", failing_second)
+        manager = DataProductsManager(db=db_session, tags_manager=tags_manager)
+        docs = [{**_odps(name), "tags": ["imported-tag"]} for name in ("P A", "P B", "P C")]
+        content = yaml.safe_dump(docs).encode("utf-8")
+
+        with postgres_aborts(db_session):
+            result = manager.create_products_from_files([("p.yaml", content)], user="a@b.com")
+
+            assert (result.created, result.failed) == (3, 0)
+            assert self._names(db_session) == ["P A", "P B", "P C"]
+            tagged = {a.entity_id for a in db_session.query(EntityTagAssociationDb)}
+            assert tagged == {result.items[0].entity_id, result.items[2].entity_id}
+
+
 @pytest.fixture
 def committing_session(db_session):
     """A session whose commits are kept and whose rollback drops only what
@@ -356,6 +389,41 @@ class TestProductIsolationOnCommit:
         assert item_a.code == "imported_replacement_dropped"
         created_a = committing_session.get(DataProductDb, item_a.entity_id)
         assert created_a.replacement_product_id is None
+
+    @pytest.mark.parametrize("then_raises", [False, True])
+    def test_writes_after_a_swallowed_rollback_are_not_kept(
+        self, committing_session, monkeypatch, then_raises,
+    ):
+        """A helper rolls the session back and swallows it, and create_product
+        then keeps writing in a new transaction (and returns or raises): those
+        writes are dropped too."""
+        from src.db_models.change_log import ChangeLogDb
+
+        manager = DataProductsManager(db=committing_session, tags_manager=MagicMock())
+        real = manager.create_product
+        rolled_back = []
+
+        def rolled_back_then_logged_for_b(product_data, **kw):
+            created = real(product_data, **kw)
+            if product_data.get("name") == "P B":
+                committing_session.rollback()
+                committing_session.add(ChangeLogDb(
+                    entity_type="data_product", entity_id=created.id, action="UPDATE"))
+                committing_session.flush()
+                rolled_back.append(created.id)
+                if then_raises:
+                    raise ValueError("failed after the rollback")
+            return created
+
+        monkeypatch.setattr(manager, "create_product", rolled_back_then_logged_for_b)
+
+        result = self._import_a_b_c(manager)
+
+        assert [i.status for i in result.items] == ["created", "failed", "created"]
+        assert self._names(committing_session) == ["P A", "P C"]
+        orphans = committing_session.query(ChangeLogDb).filter(
+            ChangeLogDb.entity_id == rolled_back[0]).count()
+        assert orphans == 0
 
     @staticmethod
     def _flush_a_product_without_status(session):

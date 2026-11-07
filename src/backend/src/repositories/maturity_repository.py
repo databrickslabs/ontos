@@ -12,6 +12,8 @@ logger = get_logger(__name__)
 
 # Entity types whose ladder doesn't include the shared ``all`` levels
 OWN_LADDER_ENTITY_TYPES = frozenset({"Asset"})
+# Entity types the shared ``all`` levels apply to
+SHARED_LEVEL_ENTITY_TYPES = ("DataProduct", "DataContract")
 
 
 class MaturityLevelRepository:
@@ -105,9 +107,18 @@ class MaturityLevelRepository:
 
         return self.get_all_ordered(db)
 
-    def count_snapshots_for_level(self, db: Session, level_order: int) -> int:
+    def count_snapshots_for_level(self, db: Session, level_order: int,
+                                  entity_type: str = "all") -> int:
+        """Snapshots at ``level_order`` of the entity types the level applies to.
+
+        An ``all`` level covers data products and data contracts; any other
+        level only its own entity type, so an asset snapshot never blocks
+        deleting a product or contract level (nor the reverse).
+        """
+        types = list(SHARED_LEVEL_ENTITY_TYPES) if entity_type == "all" else [entity_type]
         return db.query(func.count(MaturitySnapshotDb.id)).filter(
-            MaturitySnapshotDb.achieved_level_order == level_order
+            MaturitySnapshotDb.achieved_level_order == level_order,
+            MaturitySnapshotDb.entity_type.in_(types),
         ).scalar() or 0
 
     def is_empty(self, db: Session, entity_type: Optional[str] = None) -> bool:

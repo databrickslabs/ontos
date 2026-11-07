@@ -53,6 +53,10 @@ class EntityLoader(ABC):
         pass
 
 
+# Unity Catalog table types that are views. The exact type stays in `table_type`.
+VIEW_TABLE_TYPES = ('VIEW', 'MATERIALIZED_VIEW', 'METRIC_VIEW')
+
+
 class UnityCatalogLoader(EntityLoader):
     """Load entities from Unity Catalog."""
 
@@ -114,8 +118,12 @@ class UnityCatalogLoader(EntityLoader):
                                     catalog_name=catalog.name,
                                     schema_name=schema.name
                                 ):
+                                    # The SDK returns a TableType enum; rules compare strings.
                                     table_type_raw = getattr(table, 'table_type', 'TABLE')
-                                    entity_type = 'view' if table_type_raw == 'VIEW' else 'table'
+                                    table_type_raw = getattr(
+                                        table_type_raw, 'value', table_type_raw)
+                                    is_view = table_type_raw in VIEW_TABLE_TYPES
+                                    entity_type = 'view' if is_view else 'table'
 
                                     if entity_type not in entity_types:
                                         continue

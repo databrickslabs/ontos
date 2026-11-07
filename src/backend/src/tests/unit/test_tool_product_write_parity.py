@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.common.features import FeatureAccessLevel
+from src.common.workflow_triggers import StatusChangeBlockedError
 from src.controller import audit_manager
 from src.controller import projects_manager as projects_module
 from src.controller.data_products_manager import DataProductsManager
@@ -176,6 +177,26 @@ class TestCreateAndDelete:
         assert seen['user'] == ADMIN.email
         assert [(e['action'], e['success']) for e in world.audit] == [('DELETE', True)]
         assert world.audit[0]['username'] == ADMIN.email
+
+
+    def test_a_failed_delete_is_audited_as_failed(self, world, monkeypatch):
+        monkeypatch.setattr(world.products, 'delete_product', lambda *a, **k: False)
+        res = _call(world, ADMIN, 'delete_data_product', product_id=world.row.id)
+        assert res.success is False
+        assert [(e['action'], e['success']) for e in world.audit] == [('DELETE', False)]
+
+    def test_a_blocked_status_change_is_audited_as_failed(self, world, monkeypatch):
+        def _blocked(*args, **kwargs):
+            raise StatusChangeBlockedError('active', 'deprecated', [])
+
+        monkeypatch.setattr(world.products, 'transition_status', _blocked)
+        res = _call(world, NON_OWNER, 'update_data_product', product_id=world.row.id,
+                    status='deprecated', deprecation_reason='Replaced')
+        assert res.success is False
+        assert res.error_code == 'status_change_blocked'
+        assert _stored(world).status == 'active'
+        assert [(e['action'], e['success']) for e in world.audit] \
+            == [('CHANGE_STATUS', False)]
 
 
 def test_the_route_helper_and_the_tool_share_the_ownership_rule(world):

@@ -136,6 +136,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
   on_request_certify: 'After a certification request is submitted',
   for_request_status_change: 'When a user requests status change',
   on_request_status_change: 'After a status change request is submitted',
+  on_request_definition_change: 'After a definition change request is submitted',
   for_approval_response: 'Approval response dialog',
   before_create: 'Before entity is created (validation)',
   before_update: 'Before entity is updated (validation)',
@@ -266,6 +267,7 @@ export const ALL_TRIGGER_TYPES: TriggerType[] = [
   'on_request_publish',
   'on_request_deploy',
   'on_request_status_change',
+  'on_request_definition_change',
   'on_request_certify',
   'on_certify',
   'on_decertify',
@@ -310,6 +312,7 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'ontology_concept',
   'ontology_collection',
   'concept_changeset',
+  'metric_view',
 ];
 
 /**
@@ -393,6 +396,8 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
   on_request_deploy: ['data_contract'],
+  // Metric view definition change requests (#1124)
+  on_request_definition_change: ['metric_view'],
   // Concept curation: single-concept review ping-pong. concept_changeset (bulk-
   // upload gate) is NOT selectable — Scenario D (2026-08-18) disabled the gate; all
   // file uploads land as Draft and follow per-concept review. Kept in the

@@ -123,6 +123,8 @@
     "request-publish": "Publicatie aanvragen",
     "request-status-change": "Statuswijziging aanvragen",
     "before-status-change-default": "Poort voor statuswijziging (standaard)",
+    "owner-deprecation-notice": "Melding aan eigenaren: verouderd",
+    "owner-retirement-notice": "Melding aan eigenaren: buiten gebruik",
     "on-publish-notification": "Melding van publicatie",
     "on-unpublish-notification": "Melding van intrekking van publicatie",
     "certification-request-review": "Beoordeling van certificeringsverzoeken",

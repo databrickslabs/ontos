@@ -123,6 +123,8 @@
     "request-publish": "Demander la publication",
     "request-status-change": "Demander un changement de statut",
     "before-status-change-default": "Contrôle de changement de statut (par défaut)",
+    "owner-deprecation-notice": "Avis d'obsolescence aux responsables",
+    "owner-retirement-notice": "Avis de retrait aux responsables",
     "on-publish-notification": "Notification de publication",
     "on-unpublish-notification": "Notification de dépublication",
     "certification-request-review": "Revue des demandes de certification",

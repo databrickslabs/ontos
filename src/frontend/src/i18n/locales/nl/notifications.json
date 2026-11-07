@@ -84,6 +84,14 @@
         "title": "PII gedetecteerd",
         "message": "Mogelijke PII gedetecteerd in {{entity_type}} '{{entity_name}}'. Controleer dit."
       },
+      "entity_deprecated": {
+        "title": "Melding: verouderd",
+        "message": "{{entity_type}} '{{entity_name}}' is als verouderd gemarkeerd."
+      },
+      "entity_retired": {
+        "title": "Melding: buiten gebruik",
+        "message": "{{entity_type}} '{{entity_name}}' is buiten gebruik gesteld."
+      },
       "default": {
         "title": "Workflowmelding",
         "message": "Workflowmelding voor {{entity_name}}"
@@ -233,6 +241,14 @@
     "activation": {
       "title": "Product geactiveerd",
       "description": "Het dataproduct '{{productName}}' is geactiveerd en is nu beschikbaar voor gebruik."
+    },
+    "ownerNotice": {
+      "reason": "Reden: {{reason}}",
+      "sunsetDate": "Einddatum: {{sunsetDate}}",
+      "replacement": "Vervanging: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (versie {{version}}) is als verouderd gemarkeerd.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (versie {{version}}) is buiten gebruik gesteld.",
+      "replacementVersion": "Vervanging: {{replacementName}} (versie {{replacementVersion}})"
     }
   }
 }

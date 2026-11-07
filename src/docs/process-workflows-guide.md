@@ -614,6 +614,7 @@ Sends notifications to specified recipients.
 - `product_approved` - Product approval notification
 - `product_rejected` - Product rejection notification
 - `approval_requested` - Approval request notification
+- `entity_deprecated` / `entity_retired` - Owner notice of a deprecation / retirement: the reason, sunset date and replacement from the `on_status_change` payload, one line each when set
 
 **Example Configuration:**
 ```yaml

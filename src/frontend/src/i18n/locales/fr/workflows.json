@@ -188,7 +188,9 @@
         "validationPassed": "Validation réussie",
         "productApproved": "Produit approuvé",
         "productRejected": "Produit rejeté",
-        "piiDetected": "Données personnelles détectées"
+        "piiDetected": "Données personnelles détectées",
+        "entityDeprecated": "Avis d'obsolescence",
+        "entityRetired": "Avis de retrait"
       },
       "customMessage": "Message personnalisé",
       "customMessagePlaceholder": "Remplacer le message du modèle. Prend en charge ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

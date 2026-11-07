@@ -188,7 +188,9 @@
         "validationPassed": "Validación superada",
         "productApproved": "Producto aprobado",
         "productRejected": "Producto rechazado",
-        "piiDetected": "PII detectada"
+        "piiDetected": "PII detectada",
+        "entityDeprecated": "Aviso de obsolescencia",
+        "entityRetired": "Aviso de retirada"
       },
       "customMessage": "Mensaje personalizado",
       "customMessagePlaceholder": "Anula el mensaje de la plantilla. Admite ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

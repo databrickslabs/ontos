@@ -1350,6 +1350,69 @@ workflows:
         type: "pass"
 
   # =========================================================================
+  # Lifecycle Notices (deprecation lifecycle, #998)
+  # =========================================================================
+  # Disabled by default; an admin enables them. The on_status_change payload
+  # carries version, deprecation_reason, sunset_date, replacement_id,
+  # replacement_name and replacement_version, which the entity_deprecated /
+  # entity_retired templates show on their own lines when set (a
+  # custom_message can use ${entity.<field>}). The subscribers of a data
+  # product get the built-in subscriber notice either way; data contracts
+  # have no subscriber notice.
+
+  - id: "owner-deprecation-notice"
+    name: "Owner Deprecation Notice"
+    description: "Tells the owners of a data product or data contract that it was deprecated, with the reason, the sunset date and the replacement."
+    trigger:
+      type: "on_status_change"
+      to_status: "deprecated"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "notify-owners"
+        name: "Notify Owners"
+        type: "notification"
+        config:
+          recipients: "entity_owner"
+          template: "entity_deprecated"
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  - id: "owner-retirement-notice"
+    name: "Owner Retirement Notice"
+    description: "Tells the owners of a data product or data contract that it was retired, with the reason, the sunset date and the replacement of its deprecation."
+    trigger:
+      type: "on_status_change"
+      to_status: "retired"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "notify-owners"
+        name: "Notify Owners"
+        type: "notification"
+        config:
+          recipients: "entity_owner"
+          template: "entity_retired"
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  # =========================================================================
   # Publication Workflows
   # =========================================================================
 

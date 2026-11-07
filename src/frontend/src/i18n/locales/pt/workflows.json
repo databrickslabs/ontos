@@ -188,7 +188,9 @@
         "validationPassed": "Validação aprovada",
         "productApproved": "Produto aprovado",
         "productRejected": "Produto rejeitado",
-        "piiDetected": "PII detectada"
+        "piiDetected": "PII detectada",
+        "entityDeprecated": "Aviso de obsolescência",
+        "entityRetired": "Aviso de aposentadoria"
       },
       "customMessage": "Mensagem personalizada",
       "customMessagePlaceholder": "Substituir mensagem do modelo. Suporta ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

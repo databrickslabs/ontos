@@ -84,6 +84,14 @@
         "title": "PII Detected",
         "message": "Potential PII detected in {{entity_type}} '{{entity_name}}'. Please review."
       },
+      "entity_deprecated": {
+        "title": "Deprecation Notice",
+        "message": "{{entity_type}} '{{entity_name}}' has been deprecated."
+      },
+      "entity_retired": {
+        "title": "Retirement Notice",
+        "message": "{{entity_type}} '{{entity_name}}' has been retired."
+      },
       "default": {
         "title": "Workflow Notification",
         "message": "Workflow notification for {{entity_name}}"
@@ -233,6 +241,14 @@
     "activation": {
       "title": "Product activated",
       "description": "The data product '{{productName}}' has been activated and is now available for use."
+    },
+    "ownerNotice": {
+      "reason": "Reason: {{reason}}",
+      "sunsetDate": "Sunset date: {{sunsetDate}}",
+      "replacement": "Replacement: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (version {{version}}) has been deprecated.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (version {{version}}) has been retired.",
+      "replacementVersion": "Replacement: {{replacementName}} (version {{replacementVersion}})"
     }
   }
 }

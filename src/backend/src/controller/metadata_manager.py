@@ -6,6 +6,7 @@ from databricks.sdk.service.catalog import VolumeType
 
 from src.common.logging import get_logger
 from src.common.config import Settings, resolve_volume
+from src.common.workspace_client import get_workspace_client
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
     Link, LinkCreate, LinkUpdate,
@@ -208,6 +209,60 @@ class MetadataManager:
         if not db_obj:
             return None
         return Document.from_orm(db_obj)
+
+    # --- Entity deletion ---
+    def remove_all_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> Tuple[Dict[str, int], List[str]]:
+        """Delete the notes, links, documents and attachments stored for an entity.
+
+        Runs in the caller's transaction (no commit). Returns the number of rows
+        removed per kind, and the volume paths of the removed documents' files,
+        for ``delete_document_files``.
+        """
+        rich_texts = self._rich_text_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        links = self._link_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        paths = self._document_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        attachments = self._attachment_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        counts = {
+            'rich_texts': rich_texts, 'links': links, 'documents': len(paths),
+            'attachments': attachments,
+        }
+        return counts, paths
+
+    def delete_document_files(
+        self, ws: Optional[WorkspaceClient], paths: List[str],
+    ) -> Tuple[int, int]:
+        """Delete document files from the volume, best effort: a failure is logged, not raised.
+
+        Without ``ws``, the app's workspace client is used. Returns (deleted, failed).
+        """
+        paths = [path for path in paths if path]
+        if paths and ws is None:
+            try:
+                ws = get_workspace_client()
+            except Exception:
+                logger.warning("No workspace client: %d document file(s) left in the volume",
+                               len(paths), exc_info=True)
+                return 0, len(paths)
+        deleted = failed = 0
+        for path in paths:
+            try:
+                ws.files.delete(path)
+                deleted += 1
+            except Exception:
+                logger.warning("Failed to delete document file %s from the volume", path,
+                               exc_info=True)
+                failed += 1
+        return deleted, failed
 
     # =========================================================================
     # Shared Assets Management

@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from databricks.sdk import WorkspaceClient
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.exc import IntegrityError
 
@@ -21,6 +22,8 @@ from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
 from src.controller.change_log_manager import change_log_manager
+from src.controller.costs_manager import CostsManager
+from src.controller.metadata_manager import MetadataManager
 
 logger = get_logger(__name__)
 
@@ -33,6 +36,8 @@ class AssetsManager(SearchableAsset):
         self._asset_repo = asset_repo
         self._rel_repo = asset_relationship_repo
         self._ontology = ontology_schema_manager
+        self._metadata_manager = MetadataManager()
+        self._costs_manager = CostsManager()
         logger.debug("AssetsManager initialized (ontology validation=%s).", self._ontology is not None)
 
     # --- Helpers ---
@@ -484,14 +489,46 @@ class AssetsManager(SearchableAsset):
         )
         return rewritten
 
-    def delete_asset(self, db: Session, *, asset_id: UUID, current_user_id: str = "system") -> AssetRead:
+    def _remove_asset_with_data(
+        self, db: Session, asset_id: UUID, ws: Optional[WorkspaceClient] = None,
+    ) -> Dict[str, int]:
+        """Delete an asset and what is stored for it (#1343), in the caller's transaction.
+
+        Removes its domain associations, notes, links, documents, attachments
+        and cost items (rows with ``entity_type == "asset"`` and its id), then
+        the asset row, then the documents' files in the volume. A file that
+        can't be deleted is logged and counted, never raised. Returns the
+        number removed per kind, for the change log.
+        """
+        entity_id = str(asset_id)
+        removed: Dict[str, int] = {
+            "domains": entity_domain_repo.remove_all_for_entity(
+                db, entity_type="asset", entity_id=entity_id,
+            ),
+        }
+        metadata_counts, paths = self._metadata_manager.remove_all_for_entity(
+            db, entity_type="asset", entity_id=entity_id,
+        )
+        removed.update(metadata_counts)
+        removed["cost_items"] = self._costs_manager.remove_all_for_entity(
+            db, entity_type="asset", entity_id=entity_id,
+        )
+        self._asset_repo.remove(db=db, id=asset_id)
+        files_deleted, files_failed = self._metadata_manager.delete_document_files(ws, paths)
+        removed["document_files_deleted"] = files_deleted
+        removed["document_files_failed"] = files_failed
+        return removed
+
+    def delete_asset(
+        self, db: Session, *, asset_id: UUID, current_user_id: str = "system",
+        ws: Optional[WorkspaceClient] = None,
+    ) -> AssetRead:
         db_asset = self._asset_repo.get_with_relationships(db, asset_id)
         if not db_asset:
             raise NotFoundError(f"Asset '{asset_id}' not found.")
 
         read = self._asset_to_read(db_asset)
-        entity_domain_repo.remove_all_for_entity(db, entity_type="asset", entity_id=str(asset_id))
-        self._asset_repo.remove(db=db, id=asset_id)
+        removed = self._remove_asset_with_data(db, asset_id, ws)
         self._notify_index_remove(f"asset::{asset_id}")
         logger.info(f"Deleted asset '{read.name}' (id: {asset_id})")
         try:
@@ -501,7 +538,8 @@ class AssetsManager(SearchableAsset):
                 entity_id=str(asset_id),
                 action="deleted",
                 username=current_user_id,
-                details={"name": read.name, "asset_type": read.asset_type_name},
+                details={"name": read.name, "asset_type": read.asset_type_name,
+                         "removed": removed},
             )
         except Exception as e:
             logger.warning(f"Failed to log change for asset deletion: {e}")
@@ -552,6 +590,7 @@ class AssetsManager(SearchableAsset):
 
     def cascade_delete_assets(
         self, db: Session, *, asset_ids: List[UUID], current_user_id: str = "system",
+        ws: Optional[WorkspaceClient] = None,
     ) -> CascadeDeleteResult:
         """Delete multiple assets in leaf-first order within a single transaction."""
         ordered = self._topological_sort_for_delete(db, asset_ids)
@@ -564,7 +603,7 @@ class AssetsManager(SearchableAsset):
                     continue
                 name = db_asset.name
                 type_name = db_asset.asset_type.name if db_asset.asset_type else None
-                self._asset_repo.remove(db=db, id=aid)
+                removed = self._remove_asset_with_data(db, aid, ws)
                 self._notify_index_remove(f"asset::{aid}")
                 logger.info(f"Cascade-deleted asset '{name}' (id: {aid})")
                 try:
@@ -574,7 +613,7 @@ class AssetsManager(SearchableAsset):
                         entity_id=str(aid),
                         action="deleted",
                         username=current_user_id,
-                        details={"name": name, "asset_type": type_name},
+                        details={"name": name, "asset_type": type_name, "removed": removed},
                     )
                 except Exception as e:
                     logger.warning(f"Failed to log change for cascade-deleted asset {aid}: {e}")

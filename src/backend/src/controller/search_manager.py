@@ -61,12 +61,19 @@ class SearchManager:
         self._config_loader = config_loader or get_search_config_loader()
 
         # Choose the backend from settings ("memory" default, "postgres" = DB-backed FTS).
+        engine_name, trgm_threshold = "auto", 0.45
         try:
             from src.common.config import get_settings
-            backend_name = get_settings().SEARCH_BACKEND
+            settings = get_settings()
+            backend_name = settings.SEARCH_BACKEND
+            engine_name = settings.SEARCH_ENGINE
+            trgm_threshold = settings.SEARCH_TRGM_THRESHOLD
         except Exception:
             backend_name = "memory"
-        self._backend = create_backend(self, backend_name)
+        self._backend = create_backend(self, backend_name, engine_name, trgm_threshold)
+        if isinstance(self._backend, PostgresBackend):
+            # Engine detection + engine-specific indexes, before the backfill below.
+            self._backend.prepare()
 
         logger.info(
             f"SearchManager initialized with {len(self.searchable_managers)} managers "
@@ -100,30 +107,41 @@ class SearchManager:
             return False
         return True
 
+    def _is_item_indexable(self, item: SearchIndexItem, uses_postgres: bool) -> bool:
+        """Whether to store the item in the active index.
+
+        The Postgres backend stores items of disabled asset types too and
+        excludes them at query time, so toggling a type in Settings applies on
+        the next query in both directions without a rebuild.
+        """
+        if uses_postgres:
+            return bool(getattr(item, 'feature_id', None))
+        return self._is_item_enabled(item)
+
     def build_index(self):
         """Builds or rebuilds the search index by querying searchable managers."""
         logger.info(f"Building search index from {len(self.searchable_managers)} managers...")
         new_index: List[SearchIndexItem] = []
-        config = self.config
+        uses_postgres = self._uses_postgres()
 
         for manager in self.searchable_managers:
             manager_name = manager.__class__.__name__
             try:
                 items = manager.get_search_index_items()
                 for item in items:
-                    if not self._is_item_enabled(item):
+                    if not self._is_item_indexable(item, uses_postgres):
                         logger.debug(f"Skipping item {item.id} from {manager_name} (disabled or missing feature_id)")
                         continue
                     new_index.append(item)
             except Exception as e:
                 logger.error(f"Failed to get search items from {manager_name}: {e}", exc_info=True)
-        
+
         self.index = new_index
         logger.info(f"Search index build complete. Total items: {len(self.index)}")
 
         # Postgres backend: backfill the search_documents table, then drop the
         # in-memory copy so search RAM is O(1) rather than O(entities).
-        if self._uses_postgres():
+        if uses_postgres:
             try:
                 self._backend.rebuild(self.index)
             except Exception as e:
@@ -132,7 +150,7 @@ class SearchManager:
 
     def upsert_item(self, item: SearchIndexItem) -> None:
         """Insert or update a single item in the active backend's index."""
-        if not self._is_item_enabled(item):
+        if not self._is_item_indexable(item, self._uses_postgres()):
             logger.debug(f"upsert_item: skipping {item.id} (disabled or missing feature_id)")
             # A now-disabled item should also be removed if present.
             self._backend.remove(item.id)

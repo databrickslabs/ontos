@@ -1,6 +1,54 @@
 {
   "title": "Willkommen bei {{appName}}",
   "tagline": "Verwalten Sie Konzepte, Datenverträge, Datenprodukte, Personas und mehr",
+  "essentials": {
+    "tagline": "Finden, verstehen und vertrauen Sie Ihren Daten, und veröffentlichen und pflegen Sie dann, was Ihnen gehört.",
+    "consumer": {
+      "title": "Daten nutzen",
+      "description": "Beginnen Sie mit den Tabellen, die Ihr Team bereits in Unity Catalog hat."
+    },
+    "producer": {
+      "title": "Daten teilen",
+      "description": "Dokumentieren Sie Ihre Assets und lassen Sie sie prüfen."
+    },
+    "find": {
+      "title": "Finden",
+      "description": "Suchen Sie Assets und Konzepte oder durchsuchen Sie den Katalog.",
+      "browseCatalog": "Data Catalog durchsuchen"
+    },
+    "understand": {
+      "title": "Verstehen",
+      "description": "Sehen Sie, was ein Asset ist und was seine Begriffe bedeuten.",
+      "assets": "Assets",
+      "assetsDescription": "Tabellen, Views und andere Assets mit ihren Metadaten."
+    },
+    "trust": {
+      "title": "Vertrauen",
+      "description": "Prüfstatus der Assets und wo die Daten heute liegen.",
+      "empty": "Es wurde noch kein Asset geprüft.",
+      "openReviews": "Asset-Prüfungen öffnen"
+    },
+    "publish": {
+      "title": "Veröffentlichen",
+      "description": "Ihre Assets, denen noch Dokumentation oder eine Prüfung fehlt.",
+      "noAssets": "Ihnen gehört noch kein Asset.",
+      "allDone": "Alle Ihre Assets sind dokumentiert und geprüft.",
+      "noDescription": "Keine Beschreibung",
+      "noReview": "Nicht geprüft",
+      "more": "{{shown}} von Ihren {{total}} Assets angezeigt.",
+      "requestReview": "Prüfung anfordern"
+    },
+    "maintain": {
+      "title": "Pflegen",
+      "description": "Ihre offenen Anfragen und Prüfungen.",
+      "myRequests": "Meine offenen Anfragen ({{count}})",
+      "noRequests": "Keine offenen Anfragen.",
+      "openMyRequests": "Meine Anfragen öffnen",
+      "myReviews": "Meine offenen Asset-Prüfungen ({{count}})",
+      "noReviews": "Keine offenen Asset-Prüfungen.",
+      "nothing": "Nichts nachzuverfolgen."
+    }
+  },
   "search": {
     "placeholder": "Suche nach Datenprodukten, Glossarbegriffen, Verträgen..."
   },

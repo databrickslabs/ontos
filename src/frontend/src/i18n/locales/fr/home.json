@@ -1,6 +1,54 @@
 {
   "title": "Bienvenue sur {{appName}}",
   "tagline": "Gérez le glossaire métier, les contrats de données, les produits de données, les personas et plus encore",
+  "essentials": {
+    "tagline": "Trouvez, comprenez et faites confiance à vos données, puis publiez et maintenez ce qui vous appartient.",
+    "consumer": {
+      "title": "Utiliser les données",
+      "description": "Partez des tables que votre équipe a déjà dans Unity Catalog."
+    },
+    "producer": {
+      "title": "Partager les données",
+      "description": "Documentez les actifs dont vous êtes propriétaire et faites-les revoir."
+    },
+    "find": {
+      "title": "Trouver",
+      "description": "Recherchez des actifs et des concepts, ou parcourez le catalogue.",
+      "browseCatalog": "Parcourir le Data Catalog"
+    },
+    "understand": {
+      "title": "Comprendre",
+      "description": "Voyez ce qu'est un actif et ce que signifient ses termes.",
+      "assets": "Actifs",
+      "assetsDescription": "Tables, vues et autres actifs avec leurs métadonnées."
+    },
+    "trust": {
+      "title": "Faire confiance",
+      "description": "Statut de revue des actifs et emplacement actuel des données.",
+      "empty": "Aucun actif n'a encore été revu.",
+      "openReviews": "Ouvrir les revues d'actifs"
+    },
+    "publish": {
+      "title": "Publier",
+      "description": "Vos actifs qui n'ont pas encore de documentation ou de revue.",
+      "noAssets": "Vous n'êtes propriétaire d'aucun actif pour l'instant.",
+      "allDone": "Tous vos actifs sont documentés et revus.",
+      "noDescription": "Sans description",
+      "noReview": "Non revu",
+      "more": "{{shown}} de vos {{total}} actifs affichés.",
+      "requestReview": "Demander une revue"
+    },
+    "maintain": {
+      "title": "Maintenir",
+      "description": "Vos demandes et revues en cours.",
+      "myRequests": "Mes demandes en attente ({{count}})",
+      "noRequests": "Aucune demande en attente.",
+      "openMyRequests": "Ouvrir Mes demandes",
+      "myReviews": "Mes revues d'actifs en cours ({{count}})",
+      "noReviews": "Aucune revue d'actif en cours.",
+      "nothing": "Rien à suivre."
+    }
+  },
   "search": {
     "placeholder": "Rechercher des produits de données, termes du glossaire, contrats..."
   },

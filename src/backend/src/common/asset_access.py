@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request, status
 
 from src.common.api_errors import CodedValueError
+from src.common.authorization import user_passes_permission_check
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 
@@ -49,27 +50,11 @@ def user_has_assets_feature(request: Request, current_user, level: FeatureAccess
 
     Used for branching: when a Data Consumer lacks the feature, we still
     allow DP-scoped reads of linked assets (issue #347), but block writes.
+    Resolved as ``PermissionChecker`` does (role switcher, groups, roles
+    assigned by email, team role override), so reads and writes agree.
     """
     try:
-        auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
-        if not auth_manager or not current_user:
-            return False
-        applied_role_id = None
-        if settings_manager:
-            try:
-                applied_role_id = settings_manager.get_applied_role_override_for_user(
-                    current_user.email
-                )
-            except Exception:
-                applied_role_id = None
-        if applied_role_id and settings_manager:
-            effective = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-        else:
-            effective = auth_manager.get_user_effective_permissions(
-                current_user.groups or [], None
-            )
-        return auth_manager.has_permission(effective, ASSETS_FEATURE_ID, level)
+        return user_passes_permission_check(request, current_user, ASSETS_FEATURE_ID, level)
     except Exception:
         logger.exception("Failed to check assets feature for user")
         return False

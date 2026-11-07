@@ -340,6 +340,39 @@ class TestCallerResolution:
         caller = _run(resolve_tool_caller(user, MagicMock(), 'ask_ontos', db_session))
         assert caller.products_admin and caller.contracts_admin and caller.team_ids == set()
 
+    @pytest.mark.parametrize('lookup', ['lookup_team_ids', 'lookup_member_project_ids'])
+    def test_a_failing_lookup_leaves_the_session_usable(self, monkeypatch, db_session, lookup):
+        """The lookups run in savepoints: a failed one falls back to the least
+        without aborting the transaction (Postgres) that the tools and the
+        audit entry use after it."""
+        from sqlalchemy import text
+
+        from src.tests.unit.test_review_access import postgres_aborts
+
+        async def _levels(email, groups, request):
+            return {}
+
+        async def _not_admin(**kwargs):
+            return False
+
+        def _failing_lookup(db, email, groups):
+            db.execute(text('SELECT * FROM no_such_table'))
+
+        monkeypatch.setattr(tool_caller, 'resolve_effective_permissions', _levels)
+        monkeypatch.setattr(tool_caller, 'is_product_read_admin', lambda request, user: False)
+        monkeypatch.setattr(tool_caller, 'is_user_feature_admin', _not_admin)
+        monkeypatch.setattr(tool_caller, 'lookup_team_ids', lambda db, email, groups: set())
+        monkeypatch.setattr(tool_caller, 'lookup_member_project_ids',
+                            lambda db, email, groups: set())
+        monkeypatch.setattr(tool_caller, lookup, _failing_lookup)
+        user = UserInfo(email='tom@example.com', username='tom', user='Tom', ip=None,
+                        groups=['g'])
+
+        with postgres_aborts(db_session):
+            caller = _run(resolve_tool_caller(user, MagicMock(), 'ask_ontos', db_session))
+            assert db_session.execute(text('SELECT 1')).scalar() == 1
+        assert caller.team_ids == set() and caller.project_ids == set()
+
 
 # --- Review follow-ups ---------------------------------------------------------
 

@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin, get_user_team_role_overrides
-from src.common.config import get_settings, Settings
+from src.common.authorization import (
+    PermissionChecker, is_user_feature_admin, get_user_team_role_overrides,
+)
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
 from src.common.manager_dependencies import get_comments_manager, get_settings_manager
@@ -15,6 +16,18 @@ from src.repositories.teams_repository import team_repo
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+async def _is_comments_admin(current_user, request: Request) -> bool:
+    """Whether the caller administers comments.
+
+    Admin means a workspace admin group or an Ontos role with ADMIN on the
+    comments feature, as the FEATURE_ID comment below promises.
+    """
+    return await is_user_feature_admin(
+        current_user.email, list(current_user.groups or []), FEATURE_ID, request
+    )
+
 
 router = APIRouter(prefix="/api", tags=["Comments"])
 
@@ -62,8 +75,8 @@ async def _create_comment_impl(
             )
 
         # Get user's groups and check admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        user_groups = list(current_user.groups or [])
+        is_admin = await _is_comments_admin(current_user, request)
         
         # Get user's teams (for validation if needed)
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -114,7 +127,7 @@ async def _list_comments_impl(
     """List comments for an entity, filtered by project context and user's visibility permissions."""
     try:
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email, request)
+        user_groups = list(current_user.groups or [])
 
         # Get user's teams for team-based audience filtering
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -136,8 +149,7 @@ async def _list_comments_impl(
 
         # Only admins can see deleted comments
         if include_deleted:
-            is_admin = is_user_admin(user_groups, get_settings())
-            if not is_admin:
+            if not await _is_comments_admin(current_user, request):
                 include_deleted = False
 
         return manager.list_comments(
@@ -175,8 +187,7 @@ async def _get_entity_timeline_count_impl(
         total_count = 0
 
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        user_groups = list(current_user.groups or [])
 
         # Get user's teams and app role
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -194,7 +205,7 @@ async def _get_entity_timeline_count_impl(
 
         if filter_type in ("all", "comments"):
             # Get comments count
-            if include_deleted and not is_admin:
+            if include_deleted and not await _is_comments_admin(current_user, request):
                 include_deleted = False
 
             comments_response = manager.list_comments(
@@ -250,8 +261,7 @@ async def _get_entity_timeline_impl(
         timeline_entries = []
 
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        user_groups = list(current_user.groups or [])
 
         # Get user's teams and app role
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -269,7 +279,7 @@ async def _get_entity_timeline_impl(
 
         if filter_type in ("all", "comments"):
             # Get comments
-            if include_deleted and not is_admin:
+            if include_deleted and not await _is_comments_admin(current_user, request):
                 include_deleted = False
 
             comments_response = manager.list_comments(
@@ -529,9 +539,7 @@ async def update_comment(
     }
 
     try:
-        # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        is_admin = await _is_comments_admin(current_user, request)
 
         updated = manager.update_comment(
             db,
@@ -590,9 +598,7 @@ async def delete_comment(
     }
 
     try:
-        # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        is_admin = await _is_comments_admin(current_user, request)
 
         # Only admins can hard delete
         if hard_delete and not is_admin:
@@ -646,9 +652,7 @@ async def check_comment_permissions(
 ):
     """Check if current user can modify a specific comment."""
     try:
-        # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email, request)
-        is_admin = is_user_admin(user_groups, get_settings())
+        is_admin = await _is_comments_admin(current_user, request)
         
         can_modify = manager.can_user_modify_comment(
             db,

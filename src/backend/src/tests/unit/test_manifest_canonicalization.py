@@ -109,6 +109,17 @@ class TestKeyOrdering:
         result = encoder.encode(obj)
         assert result == '{"a":3,"b":{"x":1,"y":2}}'
 
+    def test_keys_beyond_the_bmp_sort_by_utf16_code_units(self):
+        """A key above U+FFFF sorts by its surrogate pair, not by its code point.
+
+        U+1F600 is 0xD83D 0xDE00 in UTF-16 and U+FB33 is 0xFB33: UTF-16 order puts
+        the emoji first, code-point order (Python's sorted) puts it last.
+        """
+        encoder = CanonicalJSONEncoder()
+        obj = {"\ufb33": 1, "\U0001F600": 2, "a": 3}
+        assert encoder.encode(obj) == '{"a":3,"\U0001F600":2,"\ufb33":1}'
+        assert sorted(obj) == ["a", "\ufb33", "\U0001F600"]
+
     def test_rfc8785_appendix_b_example(self):
         """Test RFC 8785 Appendix B example 2."""
         # From RFC 8785 Appendix B (example 2)

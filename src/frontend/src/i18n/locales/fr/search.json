@@ -236,6 +236,7 @@
     "chat_validation_failed": "Je n'ai pas pu traiter les données de cette demande. Essayez de reformuler votre question. Les détails figurent dans le journal du serveur (id d'erreur {{errorId}}).",
     "chat_timeout": "La demande a expiré. Essayez une question plus simple ou réessayez plus tard (id d'erreur {{errorId}}).",
     "chat_connection_failed": "Je n'ai pas réussi à me connecter à un service nécessaire. Réessayez dans un instant (id d'erreur {{errorId}}).",
-    "chat_failed": "Une erreur s'est produite lors du traitement de votre demande. Essayez de reformuler votre question ou réessayez. Les détails figurent dans le journal du serveur (id d'erreur {{errorId}})."
+    "chat_failed": "Une erreur s'est produite lors du traitement de votre demande. Essayez de reformuler votre question ou réessayez. Les détails figurent dans le journal du serveur (id d'erreur {{errorId}}).",
+    "chat_empty_answer": "Le modèle n'a pas renvoyé de réponse à cette demande. Veuillez réessayer ou reformuler votre question (id d'erreur {{errorId}})."
   }
 }

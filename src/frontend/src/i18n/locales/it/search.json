@@ -236,6 +236,7 @@
     "chat_validation_failed": "Non sono riuscito a elaborare i dati di questa richiesta. Prova a riformulare la domanda. I dettagli sono nel log del server (id errore {{errorId}}).",
     "chat_timeout": "La richiesta è scaduta. Prova con una domanda più semplice o riprova più tardi (id errore {{errorId}}).",
     "chat_connection_failed": "Ho avuto problemi a connettermi a un servizio necessario. Riprova tra un momento (id errore {{errorId}}).",
-    "chat_failed": "Si è verificato un errore durante l'elaborazione della richiesta. Prova a riformulare la domanda o riprova. I dettagli sono nel log del server (id errore {{errorId}})."
+    "chat_failed": "Si è verificato un errore durante l'elaborazione della richiesta. Prova a riformulare la domanda o riprova. I dettagli sono nel log del server (id errore {{errorId}}).",
+    "chat_empty_answer": "Il modello non ha restituito una risposta a questa richiesta. Riprova o riformula la domanda (id errore {{errorId}})."
   }
 }

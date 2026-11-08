@@ -236,6 +236,7 @@
     "chat_validation_failed": "Ich konnte die Daten dieser Anfrage nicht verarbeiten. Bitte formulieren Sie Ihre Frage um. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}}).",
     "chat_timeout": "Die Anfrage hat das Zeitlimit überschritten. Versuchen Sie eine einfachere Frage oder versuchen Sie es später erneut (Fehler-ID {{errorId}}).",
     "chat_connection_failed": "Ich konnte keine Verbindung zu einem benötigten Dienst herstellen. Bitte versuchen Sie es gleich noch einmal (Fehler-ID {{errorId}}).",
-    "chat_failed": "Bei der Verarbeitung Ihrer Anfrage ist ein Fehler aufgetreten. Bitte formulieren Sie Ihre Frage um oder versuchen Sie es erneut. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}})."
+    "chat_failed": "Bei der Verarbeitung Ihrer Anfrage ist ein Fehler aufgetreten. Bitte formulieren Sie Ihre Frage um oder versuchen Sie es erneut. Die Details stehen im Serverprotokoll (Fehler-ID {{errorId}}).",
+    "chat_empty_answer": "Das Modell hat auf diese Anfrage keine Antwort geliefert. Bitte versuchen Sie es erneut oder formulieren Sie Ihre Frage um (Fehler-ID {{errorId}})."
   }
 }

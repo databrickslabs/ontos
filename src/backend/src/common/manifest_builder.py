@@ -453,6 +453,7 @@ class ManifestBuilder:
         raw_definition = definition.to_dict()
         validate_canonical(raw_definition, "$.definition")
         validate_canonical(evidence.assets, "$.evidence.assets")
+        validate_canonical(evidence.quality, "$.evidence.quality")
 
         # Sort every order-insensitive collection (ADR, Decision 6), so the
         # database order of the inputs never changes the digests

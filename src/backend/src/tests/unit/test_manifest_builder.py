@@ -257,7 +257,7 @@ class TestBuildManifestContent:
         )
         evidence = ManifestEvidence(
             assets=[{"port": "output", "asset_identifier": "table1"}],
-            quality={"accuracy": 0.95},
+            quality={"accuracy": "0.95"},
         )
 
         content, digests = ManifestBuilder.build_manifest_content(defn, evidence)
@@ -720,6 +720,17 @@ class TestCollectionOrderIndependence:
             ManifestBuilder.build_manifest_content(definition, evidence)
         assert exc.value.code == "float_not_allowed"
         assert exc.value.path == "$.definition.odps.outputPorts[1].score"
+
+    def test_a_float_quality_score_fails_with_its_path(self):
+        """Quality scores are checked like the rest of the input (decimals as strings)."""
+        from src.common.manifest_canonicalization import CanonicalizationError
+
+        definition, evidence = _definition_and_evidence(False)
+        evidence.quality = {"accuracy": 0.95}
+        with pytest.raises(CanonicalizationError) as exc:
+            ManifestBuilder.build_manifest_content(definition, evidence)
+        assert exc.value.code == "float_not_allowed"
+        assert exc.value.path == "$.evidence.quality.accuracy"
 
     def test_sort_custom_properties_list(self):
         """customProperties ({property, value} list) sort by property."""

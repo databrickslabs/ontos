@@ -165,6 +165,23 @@ class TestDecode:
             decode_multihash("fXXXX")
         assert exc.value.code == "invalid_hex_encoding"
 
+    @pytest.mark.parametrize("render", [
+        lambda h: "f" + h[1:].upper(),      # uppercase hex after the lowercase prefix
+        lambda h: h[:3] + " " + h[3:],      # whitespace, which bytes.fromhex skips
+        lambda h: h + "0",                  # an odd number of hex digits
+    ])
+    def test_decode_rejects_non_canonical_base16(self, render):
+        """Only lowercase base16 is accepted, so a digest has one spelling."""
+        with pytest.raises(MultihashError) as exc:
+            decode_multihash(render(encode_multihash(b"x")))
+        assert exc.value.code == "invalid_hex_encoding"
+
+    def test_decode_empty_string(self):
+        """An empty string is an invalid prefix, not an IndexError."""
+        with pytest.raises(MultihashError) as exc:
+            decode_multihash("")
+        assert exc.value.code == "invalid_multibase_prefix"
+
     def test_decode_too_short(self):
         """Multihash too short raises MultihashError."""
         with pytest.raises(MultihashError) as exc:

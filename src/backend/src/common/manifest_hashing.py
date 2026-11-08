@@ -12,6 +12,7 @@ Reference:
 """
 
 import hashlib
+import re
 from typing import Literal, Tuple
 
 
@@ -22,6 +23,7 @@ HASH_LENGTH_SHA256 = 0x20  # 32 bytes
 
 # Multibase prefix for base16 (lowercase hex)
 MULTIBASE_BASE16_PREFIX = "f"
+_LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
 # Supported hash algorithms
 HashAlgorithm = Literal["sha2-256", "sha3-256"]
@@ -124,18 +126,19 @@ def decode_multihash(encoded: str) -> Tuple[str, bytes]:
     if not encoded.startswith(MULTIBASE_BASE16_PREFIX):
         raise MultihashError(
             "invalid_multibase_prefix",
-            f"Expected multibase prefix 'f', got '{encoded[0]}'",
+            f"Expected multibase prefix 'f', got '{encoded[:1]}'",
         )
 
-    # Remove prefix and decode hex
-    try:
-        hex_part = encoded[1:]
-        multihash_bytes = bytes.fromhex(hex_part)
-    except ValueError as e:
+    # Remove prefix and decode hex. Only the canonical rendering is accepted
+    # (ADR Decision 2: base16 lowercase): bytes.fromhex would also take
+    # uppercase digits and whitespace, giving one digest several spellings.
+    hex_part = encoded[1:]
+    if not _LOWER_HEX.fullmatch(hex_part):
         raise MultihashError(
             "invalid_hex_encoding",
-            f"Failed to decode hex: {e}",
+            "Expected an even number of lowercase hex digits after the prefix",
         )
+    multihash_bytes = bytes.fromhex(hex_part)
 
     if len(multihash_bytes) < 2:
         raise MultihashError(

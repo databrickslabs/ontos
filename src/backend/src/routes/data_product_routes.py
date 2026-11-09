@@ -2889,7 +2889,8 @@ async def handle_status_change_response(
                 decision=payload.decision,
                 target_status=payload.target_status,
                 message=payload.message,
-                current_user=current_user.username
+                current_user=current_user.username,
+                requester_email_fallback=payload.requester_email,
             )
         # The decision ends the request it was about
         record_decision(

@@ -1,11 +1,14 @@
 """Saving a scheduled workflow over the API keeps its schedule valid (#941).
 
 The designer doesn't edit schedules: it PUTs the trigger without ``schedule`` and
-``timezone``, and the stored ones are kept.
+``timezone``, and the stored ones are kept. A PUT that sends only the trigger checks the
+schedule as well.
 """
 import json
 import uuid
 from datetime import datetime
+
+import pytest
 
 from src.db_models.process_workflows import ProcessWorkflowDb, WorkflowStepDb
 
@@ -81,3 +84,29 @@ def test_validate_with_the_workflow_id_keeps_the_stored_schedule(client, db_sess
 
     assert checked.status_code == 200, checked.text
     assert checked.json()['valid'] is True, checked.text
+
+
+@pytest.mark.parametrize('schedule, timezone, code', [
+    ('0 6 * * *', 'UTC', 'cron_field_count'),
+    ('0 * * * * ?', 'UTC', 'cron_interval_too_short'),
+    ('0 0 6 * * ?', 'Mars/Olympus', 'timezone_invalid'),
+])
+def test_a_trigger_only_put_checks_the_schedule(client, db_session, schedule, timezone, code):
+    wf_id = _stored_scheduled(db_session)
+    trigger = {'type': 'scheduled', 'schedule': schedule, 'timezone': timezone}
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': trigger})
+
+    assert saved.status_code == 400, saved.text
+    assert code in _issue_codes(saved)
+    assert _stored_trigger(db_session, wf_id)['schedule'] == '0 0 6 * * ?'
+
+
+def test_a_trigger_only_put_with_a_valid_schedule_is_saved(client, db_session):
+    wf_id = _stored_scheduled(db_session)
+    trigger = {'type': 'scheduled', 'schedule': '0 30 7 ? * MON-FRI', 'timezone': 'UTC'}
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': trigger})
+
+    assert saved.status_code == 200, saved.text
+    assert _stored_trigger(db_session, wf_id)['schedule'] == '0 30 7 ? * MON-FRI'

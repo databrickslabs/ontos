@@ -950,6 +950,9 @@ async def update_workflow(
     # Only a changed trigger is checked: stored workflows keep working and can be edited.
     # Before the overlap check: a confirmed overlap must not end in a refused trigger.
     trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
+    if workflow.trigger is not None and workflow.steps is None:
+        # validate_workflow above checks the schedule only when steps are sent
+        trigger_errors = [*trigger_errors, *manager.schedule_errors(workflow.trigger)]
     if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
             WorkflowValidationResult(valid=False, errors=trigger_errors)))

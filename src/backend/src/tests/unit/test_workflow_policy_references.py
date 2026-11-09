@@ -261,7 +261,10 @@ def test_other_validation_errors_keep_their_codes_next_to_the_policy_error(db_se
 def _validate(manager, workflow):
     from src.routes.workflows_routes import validate_workflow
 
-    return asyncio.run(validate_workflow(request=MagicMock(), workflow=workflow, manager=manager))
+    # Called directly, not through FastAPI: pass ``workflow_id`` or its ``Query`` default is used
+    return asyncio.run(validate_workflow(
+        request=MagicMock(), workflow=workflow, workflow_id=None, manager=manager,
+    ))
 
 
 @pytest.mark.parametrize('policy_id', ['', 'naming-conventions', 'required-tags'])

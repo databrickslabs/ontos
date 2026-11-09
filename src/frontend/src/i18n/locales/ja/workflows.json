@@ -700,6 +700,33 @@
       "suffix": "以上が、このワークフローを表示・実行するために必要です。「設定」→「ロール」で設定してください。"
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "スケジュール (Quartz cron)",
+    "cronHint": "6 または 7 個のフィールド: 秒 分 時 日 月 曜日 [年]。例: {{example}} は毎日 06:00 に実行されます。秒は 0 にする必要があり、実行間隔は 5 分以上必要です。",
+    "timezoneLabel": "タイムゾーン",
+    "timezoneHint": "Europe/Berlin や America/Sao_Paulo などの IANA 名。空欄の場合は UTC です。",
+    "fields": {
+      "second": "秒",
+      "minute": "分",
+      "hour": "時",
+      "day_of_month": "日",
+      "month": "月",
+      "day_of_week": "曜日",
+      "year": "年"
+    },
+    "errors": {
+      "schedule_required": "スケジュールトリガーには cron 式が必要です。",
+      "cron_field_count": "Quartz cron 式のフィールドは 6 または 7 個です。この式は {{fields}} 個です。",
+      "cron_invalid_field": "「{{value}}」は {{field}} フィールドでは無効です。",
+      "cron_day_fields_conflict": "「?」は日フィールドと曜日フィールドのどちらか一方だけに指定してください。",
+      "cron_seconds_not_zero": "秒フィールドは 0 にする必要があります。実行は分の始まりに開始されます。",
+      "cron_unsupported_character": "{{field}} フィールドの「{{character}}」はワークフローのスケジュールではサポートされていません。",
+      "cron_invalid": "有効な Quartz cron 式ではありません。",
+      "cron_no_upcoming_runs": "この cron 式には今後の実行がありません。",
+      "cron_interval_too_short": "スケジュール実行の間隔は {{minutes}} 分以上必要です。",
+      "timezone_invalid": "不明なタイムゾーン「{{timezone}}」です。Europe/Berlin などの IANA 名を使用してください。"
+    }
+  },
   "view": {
     "subtitle": "検証、承認、通知のための自動化ワークフローを設定します。",
     "readOnlyAccess": "（読み取り専用アクセス）",

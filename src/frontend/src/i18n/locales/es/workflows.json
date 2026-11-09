@@ -700,6 +700,33 @@
       "suffix": "o superior para ver y ejecutar este flujo de trabajo. Configúralo en Configuración → Roles."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Programación (cron de Quartz)",
+    "cronHint": "6 o 7 campos: segundo minuto hora día-del-mes mes día-de-la-semana [año]. Ejemplo: {{example}} se ejecuta todos los días a las 06:00. Los segundos deben ser 0 y las ejecuciones deben estar separadas al menos 5 minutos.",
+    "timezoneLabel": "Zona horaria",
+    "timezoneHint": "Un nombre IANA como Europe/Berlin o America/Sao_Paulo. Vacío significa UTC.",
+    "fields": {
+      "second": "segundo",
+      "minute": "minuto",
+      "hour": "hora",
+      "day_of_month": "día-del-mes",
+      "month": "mes",
+      "day_of_week": "día-de-la-semana",
+      "year": "año"
+    },
+    "errors": {
+      "schedule_required": "Un disparador programado necesita una expresión cron.",
+      "cron_field_count": "Una expresión cron de Quartz tiene 6 o 7 campos; esta tiene {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" no es válido en el campo {{field}}.",
+      "cron_day_fields_conflict": "Ponga \"?\" en exactamente uno de los campos día-del-mes y día-de-la-semana.",
+      "cron_seconds_not_zero": "El campo de segundos debe ser 0: las ejecuciones empiezan en el minuto exacto.",
+      "cron_unsupported_character": "\"{{character}}\" en el campo {{field}} no se admite en las programaciones de workflows.",
+      "cron_invalid": "Esta no es una expresión cron de Quartz válida.",
+      "cron_no_upcoming_runs": "Esta expresión cron no tiene ninguna ejecución próxima.",
+      "cron_interval_too_short": "Las ejecuciones programadas deben estar separadas al menos {{minutes}} minutos.",
+      "timezone_invalid": "Zona horaria desconocida \"{{timezone}}\": use un nombre IANA como Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configura flujos de trabajo automatizados para la validación, la aprobación y las notificaciones.",
     "readOnlyAccess": "(Acceso de solo lectura)",

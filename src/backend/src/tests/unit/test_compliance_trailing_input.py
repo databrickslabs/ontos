@@ -16,12 +16,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import text
 
 from src.common.api_errors import CodedValueError
 from src.common.compliance_dsl import RuleTrailingInputError, parse_rule
 from src.common.compliance_entities import validate_rule
 from src.controller.compliance_manager import ComplianceManager
-from src.db_models.compliance import CompliancePolicyDb
+from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb
 from src.models.compliance import CompliancePolicy, CompliancePolicyCreate
 from src.routes import compliance_routes
 
@@ -152,9 +153,10 @@ def test_a_stored_rule_with_trailing_input_still_runs_and_the_run_has_a_warning(
 
     assert run.status == 'succeeded'
     assert run.error_message is None
-    assert run.error_code == 'rule_trailing_input'
-    assert json.loads(run.error_params) == {'line': 2, 'column': 23, 'text': 'IS'}
-    # The API shows it as a warning, not as an error
+    assert run.warning_code == 'rule_trailing_input'
+    assert json.loads(run.warning_params) == {'line': 2, 'column': 23, 'text': 'IS'}
+    # A succeeded run never looks failed to a query on the error columns
+    assert run.error_code is None and run.error_params is None
     assert compliance_routes._run_codes(run) == {
         'error_code': None, 'error_params': None,
         'warning_code': 'rule_trailing_input',
@@ -162,17 +164,49 @@ def test_a_stored_rule_with_trailing_input_still_runs_and_the_run_has_a_warning(
     }
 
 
+def test_the_warning_is_stored_in_its_own_columns(db_session):
+    run_id = _run(db_session, _policy(db_session, CASES[1][0])).id
+    db_session.expire_all()
+
+    row = db_session.execute(text(
+        'SELECT error_code, error_params, warning_code, warning_params '
+        'FROM compliance_runs WHERE id = :i'
+    ), {'i': run_id}).one()
+    assert row[:3] == (None, None, 'rule_trailing_input')
+    assert json.loads(row[3]) == {'line': 3, 'column': 1, 'text': 'BOGUS'}
+    assert db_session.query(ComplianceRunDb).filter(
+        ComplianceRunDb.id == run_id, ComplianceRunDb.error_code.isnot(None),
+    ).count() == 0
+
+
 def test_a_complete_rule_has_no_run_warning(db_session):
     run = _run(db_session, _policy(db_session, COMPLETE))
 
     assert run.status == 'succeeded'
     assert run.error_code is None and run.error_params is None
+    assert run.warning_code is None and run.warning_params is None
     assert compliance_routes._run_codes(run)['warning_code'] is None
 
 
-def test_a_failed_run_still_reports_its_error_not_a_warning(db_session):
+def test_a_failed_run_reports_its_error_and_no_warning(db_session):
     run = _run(db_session, _policy(db_session, 'MATCH (p:data_product) ASSERT'))
 
+    assert run.status == 'failed'
+    assert run.warning_code is None and run.warning_params is None
     codes = compliance_routes._run_codes(run)
     assert codes['error_code'] == 'rule_parse_failed'
     assert codes['warning_code'] is None
+
+
+def test_complete_run_drops_a_warning_when_the_run_failed(db_session):
+    run = ComplianceManager().create_run(db_session, policy_id=_policy(db_session, COMPLETE).id)
+
+    ComplianceManager().complete_run(
+        db_session, run, success_count=0, failure_count=0, score=0.0,
+        error_message='boom', error_code='rule_parse_failed', error_params={'x': 1},
+        warning_code='rule_trailing_input', warning_params={'line': 1},
+    )
+
+    assert (run.error_code, run.warning_code, run.warning_params) == (
+        'rule_parse_failed', None, None,
+    )

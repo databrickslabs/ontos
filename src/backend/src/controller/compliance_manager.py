@@ -563,11 +563,11 @@ class ComplianceManager:
         # A code the UI translates (see common/compliance_errors.py); the message is the fallback
         run.error_code = error_code if error_message is not None else None
         run.error_params = json.dumps(error_params) if error_code and error_params else None
-        if error_message is None and warning_code:
-            # A run that finished but has something to tell: no column exists for
-            # warnings, so the code sits in the error fields of a succeeded run
-            run.error_code = warning_code
-            run.error_params = json.dumps(warning_params) if warning_params else None
+        # What a finished run has to report; a failed run reports its error only
+        run.warning_code = warning_code if error_message is None else None
+        run.warning_params = (
+            json.dumps(warning_params) if run.warning_code and warning_params else None
+        )
         db.commit()
         db.refresh(run)
         return run

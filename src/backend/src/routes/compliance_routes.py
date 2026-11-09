@@ -210,33 +210,22 @@ async def delete_policy(
     return {"status": "success"}
 
 
-def _run_params(run):
+def _json_params(value):
     import json
 
     try:
-        return json.loads(run.error_params) if run.error_params else None
+        return json.loads(value) if value else None
     except (TypeError, ValueError):
         return None
 
 
-def _run_error_code(run) -> dict:
-    """The run's error code and parameters, which the UI translates."""
-    if run.error_message is None:
-        return {'error_code': None, 'error_params': None}
-    return {'error_code': run.error_code, 'error_params': _run_params(run)}
-
-
 def _run_codes(run) -> dict:
-    """The error code of a failed run, or the warning code of a run that finished.
-
-    A succeeded run keeps its warning in the error columns
-    (see ``ComplianceManager.complete_run``).
-    """
-    warned = run.error_message is None and bool(run.error_code)
+    """The run's error and warning codes and their parameters, which the UI translates."""
     return {
-        **_run_error_code(run),
-        'warning_code': run.error_code if warned else None,
-        'warning_params': _run_params(run) if warned else None,
+        'error_code': run.error_code,
+        'error_params': _json_params(run.error_params),
+        'warning_code': run.warning_code,
+        'warning_params': _json_params(run.warning_params),
     }
 
 

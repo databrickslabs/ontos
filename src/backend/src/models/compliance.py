@@ -43,6 +43,8 @@ class ComplianceRun(BaseModel):
     error_message: Optional[str] = None
     error_code: Optional[str] = None  # translated by the UI; error_message is the fallback
     error_params: Optional[dict] = None
+    warning_code: Optional[str] = None  # what a finished run reports; translated by the UI
+    warning_params: Optional[dict] = None
 
 
 class ComplianceResult(BaseModel):

@@ -279,6 +279,17 @@ def test_publish_product_publishes_an_unpublished_product_at_organization_scope(
     registry.on_publish.assert_called_once()
 
 
+def test_publish_product_returns_the_product_with_its_new_scope(db_session, registry):
+    product = _product(db_session, contract_id=_contract(db_session).id, status='approved')
+    registry.before_status_change.return_value = (True, [])
+
+    result = DataProductsManager(db=db_session).publish_product(product.id, 'bob@example.com')
+
+    assert result.status == 'active'
+    assert result.publication_scope == 'organization'
+    assert result.published_by == 'bob@example.com'
+
+
 def _request_publication(db, contract_id, scope):
     from src.controller.change_log_manager import change_log_manager
     change_log_manager.log_change_with_details(

@@ -1390,7 +1390,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except Exception:
                 logger.exception("on_publish trigger failed for data product %s", product_id)
 
-            return result
+            # ``result`` was read before the scope was set: return the product as published
+            return self.get_product(product_id)
 
         except ValueError as e:
             logger.error(f"Validation error publishing product {product_id}: {e}")

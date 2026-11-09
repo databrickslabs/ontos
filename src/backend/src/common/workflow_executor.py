@@ -378,7 +378,9 @@ def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     proposed = {}
     if 'tags' in payload:
-        proposed['tags'] = _proposed_tags(db, payload['tags'])
+        tags = payload['tags']
+        # An assign-tag step puts {name: value} there; the request has a list
+        proposed['tags'] = tags if isinstance(tags, dict) else _proposed_tags(db, tags)
     if 'owner_team_id' in payload:
         proposed['owner'] = payload['owner_team_id']
     if 'descriptionPurpose' in payload or 'description' in payload:
@@ -418,7 +420,13 @@ def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     if trigger_type in ('before_create', 'on_delete'):
         return obj
     loaded = _compliance_entity(db, context)
-    return {**obj, **loaded} if loaded is not None else obj
+    if loaded is None:
+        return obj
+    merged = {**obj, **loaded}
+    # Tags an earlier assign-tag step set only in the context stay over the stored ones
+    if isinstance(payload.get('tags'), dict):
+        merged['tags'] = {**(loaded.get('tags') or {}), **payload['tags']}
+    return merged
 
 
 def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str, Any]]:
@@ -461,7 +469,15 @@ def _policy_where_object(
     if getattr(trigger_type, 'value', trigger_type) != 'before_update':
         return rule_object
     stored = _compliance_entity(db, context)
-    return {**stored, **rule_object} if stored is not None else rule_object
+    if stored is None:
+        return rule_object
+    merged = {**stored, **rule_object}
+    # A dict is what an assign-tag step adds to the context: it adds to the stored
+    # tags, while the request's list replaces them
+    payload_tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
+    if isinstance(payload_tags, dict) and isinstance(stored.get('tags'), dict):
+        merged['tags'] = {**stored['tags'], **rule_object.get('tags', {})}
+    return merged
 
 
 class ValidationStepHandler(StepHandler):
@@ -3253,7 +3269,7 @@ class WorkflowExecutor:
             try:
                 tc_data = json.loads(db_execution.trigger_context)
                 trigger_context = TriggerContext(**tc_data)
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         
         # Rebuild step context from execution
@@ -4250,7 +4266,7 @@ class WorkflowExecutor:
             try:
                 tc_data = json.loads(db_execution.trigger_context)
                 trigger_context = TriggerContext(**tc_data)
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         
         step_executions = []

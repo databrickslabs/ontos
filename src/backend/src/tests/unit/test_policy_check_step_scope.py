@@ -703,3 +703,44 @@ def test_a_review_rule_sees_the_stored_reviewer(db_session):
 
     assert result.passed is True
     assert 'not_applicable' not in result.data
+
+
+def test_before_update_keeps_a_tag_set_by_an_earlier_step(db_session):
+    # assign-tag puts {key: value} in payload['tags'] when the request has no tags
+    policy = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('reviewed')")
+    contract = _contract(db_session, 'contract', 'active', LONG)
+    payload = _before_update_payload(description=ContractDescription(purpose=LONG))
+    payload['tags'] = {'reviewed': 'yes'}
+    result = _step(
+        db_session, policy, 'data_contract', contract.id, payload,
+        trigger_type=TriggerType.BEFORE_UPDATE,
+    )
+    assert result.passed is True
+
+
+def test_on_update_keeps_a_tag_set_by_an_earlier_step_that_is_not_persisted(db_session):
+    policy = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('reviewed')")
+    contract = _contract(db_session, 'contract', 'active', LONG)
+    payload = {'name': 'contract', 'tags': {'reviewed': 'yes'}}
+    result = _step(
+        db_session, policy, 'data_contract', contract.id, payload,
+        trigger_type=TriggerType.ON_UPDATE,
+    )
+    assert result.passed is True
+
+
+def test_before_update_where_keeps_stored_tags_next_to_an_assigned_one(db_session):
+    policy = _policy(
+        db_session,
+        "MATCH (c:data_contract) WHERE HAS_TAG('stored') ASSERT HAS_TAG('reviewed')",
+    )
+    contract = _contract(db_session, 'contract', 'active', LONG)
+    _tag(db_session, contract, 'data_contract', ['stored'])
+    payload = _before_update_payload(description=ContractDescription(purpose=LONG))
+    payload['tags'] = {'reviewed': 'yes'}
+    result = _step(
+        db_session, policy, 'data_contract', contract.id, payload,
+        trigger_type=TriggerType.BEFORE_UPDATE,
+    )
+    assert not (result.data or {}).get('not_applicable')
+    assert result.passed is True

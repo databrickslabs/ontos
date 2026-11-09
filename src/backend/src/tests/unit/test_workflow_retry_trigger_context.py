@@ -117,3 +117,15 @@ def test_a_trigger_context_that_cannot_be_read_does_not_stop_the_retry(db_sessio
     passed, data = _gate_result(db_session, execution.id)
     assert passed is True
     assert data['not_applicable'] is True
+
+
+def test_a_trigger_context_that_fails_validation_does_not_stop_the_retry(db_session):
+    workflow = _on_delete_workflow(db_session)
+    execution = _failed_on_delete_execution(db_session, workflow)
+    db_execution = workflow_execution_repo.get(db_session, execution.id)
+    db_execution.trigger_context = '{"entity_type": "data_product"}'
+    db_session.commit()
+
+    response = _retry(db_session, execution.id)
+
+    assert response['execution_id'] == execution.id

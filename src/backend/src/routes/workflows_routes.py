@@ -1774,7 +1774,7 @@ async def retry_execution(
         if reset_result.trigger_context:
             try:
                 trigger_context = TriggerContext(**json.loads(reset_result.trigger_context))
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         trigger_data = trigger_context.model_dump() if trigger_context else {}
 

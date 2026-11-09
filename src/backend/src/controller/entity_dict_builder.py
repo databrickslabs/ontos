@@ -13,13 +13,6 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
-# The entity type tag assignments and quality items are stored under (the tags API,
-# ``QualityManager``), by the entity type relationships use
-_ASSOCIATION_ENTITY_TYPES = {
-    "DataProduct": "data_product",
-    "DataContract": "data_contract",
-}
-
 
 def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, Any]]:
     """Build an enriched dict for a DataProduct."""
@@ -195,6 +188,14 @@ def _add_relationship_counts(db: Session, d: Dict[str, Any],
                 logical_attr_count += 1
     d["logical_attribute_mapping_count"] = logical_attr_count
     d["has_logical_attribute_mappings"] = logical_attr_count > 0
+
+
+# The entity type tag assignments and quality items are stored under (the tags API,
+# ``QualityManager``), by the entity type relationships use
+_ASSOCIATION_ENTITY_TYPES = {
+    "DataProduct": "data_product",
+    "DataContract": "data_contract",
+}
 
 
 def _add_tags(db: Session, d: Dict[str, Any], entity_id: str, entity_type: str) -> None:

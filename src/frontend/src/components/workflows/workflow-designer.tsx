@@ -874,12 +874,13 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const supportedEntityTypes = supportedEntityTypesFor(triggerType);
   const storedUnknownTypes = workflow?.trigger.unknown_entity_types ?? [];
   // The stored trigger lists entity types and none fires: each is unknown, or a known type its
-  // trigger type never fires for (an empty supported list fires for any entity)
+  // trigger type never fires for (an empty supported list fires for any known type)
   const storedSupported = workflow ? supportedEntityTypesFor(workflow.trigger.type) : [];
   const storedMatchesNoEvent = !!workflow
     && workflow.trigger.entity_types.length + storedUnknownTypes.length > 0
-    && storedSupported.length > 0
-    && !workflow.trigger.entity_types.some(et => storedSupported.includes(et));
+    && !workflow.trigger.entity_types.some(
+      et => storedSupported.length === 0 || storedSupported.includes(et),
+    );
   // Such a trigger matched nothing: emptied, a known type must be picked, as an empty list would
   // match every entity (the backend refuses it too)
   const needsKnownType = storedMatchesNoEvent
@@ -1890,6 +1891,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         // supported set instead of carrying over a stale
                         // (and possibly unsupported) selection.
                         setEntityTypes([]);
+                        // Stored unknown types are kept only under their own trigger type
+                        // (the backend refuses them under another one)
+                        setUnknownEntityTypes(
+                          v === workflow?.trigger.type ? storedUnknownTypes : [],
+                        );
                       }}
                       workflowType={workflowType === 'approval' ? 'approval' : 'process'}
                       options={triggerTypeOptions.length > 0 ? triggerTypeOptions : undefined}

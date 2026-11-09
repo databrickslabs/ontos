@@ -22,7 +22,7 @@ vi.mock('./template-vars-inspector', () => ({ default: () => null }));
 vi.mock('./trigger-picker', () => ({
   TriggerPicker: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
     <select aria-label="Trigger" value={value} onChange={e => onChange(e.target.value)}>
-      {['before_update', 'on_publish', 'on_request_deploy'].map(v => (
+      {['before_update', 'manual', 'on_publish', 'on_request_deploy'].map(v => (
         <option key={v} value={v}>{v}</option>
       ))}
     </select>
@@ -31,16 +31,19 @@ vi.mock('./trigger-picker', () => ({
 
 const TRIGGER_TYPES = [
   { value: 'before_update', entity_types: ['data_contract'] },
+  { value: 'manual', entity_types: [] },
   { value: 'on_publish', entity_types: ['data_contract', 'data_product'] },
   { value: 'on_request_deploy', entity_types: ['data_contract'] },
 ].map(o => ({ ...o, label: o.value, workflow_type: 'process', group: 'validation_gates' }));
 
-function storedWorkflow(entityTypes: string[], unknownEntityTypes: string[] = []) {
+function storedWorkflow(
+  entityTypes: string[], unknownEntityTypes: string[] = [], triggerType = 'before_update',
+) {
   return {
     id: 'wf-1', name: 'Gate', description: '', workflow_type: 'process',
     is_active: false, is_default: false, version: 1, scope: { type: 'all', ids: [] },
     trigger: {
-      type: 'before_update', entity_types: entityTypes, unknown_entity_types: unknownEntityTypes,
+      type: triggerType, entity_types: entityTypes, unknown_entity_types: unknownEntityTypes,
     },
     steps: [{
       id: 's-1', workflow_id: 'wf-1', step_id: 'ok', name: 'OK', step_type: 'pass', config: {},
@@ -68,7 +71,7 @@ function putBodies() {
   return api.put.mock.calls.filter(([url]) => url === '/api/workflows/wf-1').map(call => call[1]);
 }
 
-async function switchTrigger(container: HTMLElement, type: string) {
+async function switchTrigger(container: HTMLElement, type: string, from = 'before_update') {
   const node = await waitFor(() => {
     const found = container.querySelector('.react-flow__node-trigger');
     expect(found).not.toBeNull();
@@ -76,7 +79,7 @@ async function switchTrigger(container: HTMLElement, type: string) {
   });
   fireEvent.click(node);
   const picker = await screen.findByRole('combobox', { name: 'Trigger', hidden: true });
-  await waitFor(() => expect(picker).toHaveValue('before_update'));
+  await waitFor(() => expect(picker).toHaveValue(from));
   fireEvent.change(picker, { target: { value: type } });
 }
 
@@ -114,7 +117,32 @@ describe('WorkflowDesigner with a stored trigger that matched no event', () => {
     await waitFor(() => expect(
       screen.getByRole('checkbox', { name: 'Data contract', hidden: true }),
     ).toBeChecked());
+    // The unknown type is kept only under its own trigger type: the backend refuses it here
+    expect(screen.queryByTestId('unknown-entity-types')).toBeNull();
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    expect(putBodies()[0].trigger.entity_types).toEqual(['data_contract']);
+    expect(putBodies()[0].trigger).not.toHaveProperty('unknown_entity_types');
   });
+
+  it('shows the unknown types again when the stored trigger type is picked back', async () => {
+    const { container } = renderDesigner(storedWorkflow([], ['dataset']));
+    await switchTrigger(container, 'on_publish');
+    expect(screen.queryByTestId('unknown-entity-types')).toBeNull();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Trigger', hidden: true }),
+      { target: { value: 'before_update' } });
+
+    expect(await screen.findByTestId('unknown-entity-types')).toHaveTextContent('dataset');
+  });
+
+  it('asks for a known type after unknown types under a trigger type for any entity',
+    async () => {
+      const { container } = renderDesigner(storedWorkflow([], ['dataset'], 'manual'));
+      await switchTrigger(container, 'on_publish', 'manual');
+
+      expect(await screen.findByTestId('entity-type-required')).toBeInTheDocument();
+    });
 
   it('does not ask for a type when the stored trigger fired', async () => {
     const { container } = renderDesigner(storedWorkflow(['data_contract']));

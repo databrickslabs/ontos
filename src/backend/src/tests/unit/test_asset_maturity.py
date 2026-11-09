@@ -164,7 +164,8 @@ def test_builder_has_the_asset_ontos_fields(db_session):
 
 
 def test_builder_reads_assigned_asset_tags(db_session):
-    asset = _asset(db_session, tags=['pii'])
+    # 'tier' is also assigned below: counted once, with the assigned value
+    asset = _asset(db_session, tags=['pii', 'tier'])
     ns = TagNamespaceDb(name=f'gov-{uuid.uuid4().hex[:8]}')
     db_session.add(ns)
     db_session.flush()
@@ -178,7 +179,8 @@ def test_builder_reads_assigned_asset_tags(db_session):
 
     d = build_asset_dict(db_session, str(asset.id))
 
-    assert 'gold' in str(d['tags']) and d['tag_count'] == 2 and d['has_tags']
+    assert d['tags']['tier'] == 'gold' and d['tags']['pii'] is True
+    assert d['tag_count'] == 2 and d['has_tags']
     assert evaluate_rule_on_object("ASSERT HAS_TAG('tier')", d)[0] is True
     assert evaluate_rule_on_object("ASSERT HAS_TAG('pii')", d)[0] is True
     assert evaluate_rule_on_object("ASSERT HAS_TAG('missing')", d)[0] is False

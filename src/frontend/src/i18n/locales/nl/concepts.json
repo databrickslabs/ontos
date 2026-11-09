@@ -23,6 +23,103 @@
     "viewTree": "Boom",
     "viewGraph": "Graaf",
     "createConcept": "Nieuw concept",
-    "createScheme": "Nieuw conceptschema"
+    "createScheme": "Nieuw conceptschema",
+    "description": "Stel uw zakelijke conceptschema's op, blader erdoor en lever ze op.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL en zoeken in de kennisgraaf"
+  },
+  "define": {
+    "description": "Stel uw zakelijke conceptschema's op, genereer of importeer ze."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Schrijf beheerde metadata naar de gekoppelde {{platform}}-assets.",
+      "tags": {
+        "name": "Tags",
+        "desc": "Key/value-governancetags op tabellen en kolommen. Sturen vindbaarheid en toegangsbeleid aan.",
+        "via": "via uc_tag_sync",
+        "notConfigured": "Tag-levering is niet geconfigureerd. Installeer de uc_tag_sync-job via Instellingen > Jobs om dit te activeren.",
+        "note": "Tag-levering verloopt via de gedeelde uc_tag_sync-job, die ook andere aspecten dan semantische toewijzing afdekt. Configureer de scope en planning ervan via Instellingen > Jobs."
+      },
+      "desc": {
+        "name": "Kolombeschrijvingen",
+        "desc": "Betekenis van kolommen in begrijpelijke taal. Dit lezen Genie en zoeken om nauwkeurig te antwoorden.",
+        "assist": "dbxmetagen kan deze opstellen"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "De beheerde zakelijke woordenlijst in het platform zelf.",
+        "note": "Synchroniseert concepten naar de native zakelijke woordenlijst van Unity Catalog, de beheerde laag waaruit Genie Ontology leest. Beschikbaar zodra UC Glossary GA is."
+      },
+      "title": "Leveren",
+      "tip": "Leveren schrijft uw beheerde metadata naar het platform. Downstream-tools (Genie, zoeken, agents) lezen deze daar. Tags = beleid en vindbaarheid. Beschrijvingen = wat Genie leest. Woordenlijst = de beheerde zakelijke laag.",
+      "pendingTitle": "Openstaande tagwijzigingen",
+      "pendingSubtitle": "Koppelingen tussen concepten en assets die zijn aangemaakt sinds de laatste geslaagde tagsynchronisatie. Een nieuwe run van uc_tag_sync levert deze op.",
+      "pendingEmpty": "Niets openstaand.",
+      "pendingInScheme": "in",
+      "pendingAppliesTo": "van toepassing op",
+      "coverageSynced": "{{synced}} van {{total}} gesynchroniseerd · ",
+      "pendingCount": "{{pending}} openstaand",
+      "lastRun": " · laatste run {{run}}",
+      "notSynced": "Nog niet gesynchroniseerd",
+      "manageInSettings": "Beheren in Instellingen",
+      "configure": "Configureren",
+      "comingSoon": "Binnenkort beschikbaar: het configureren en uitvoeren van deze synchronisatie vanuit Ontos is nog niet gekoppeld.",
+      "syncNow": "Nu synchroniseren",
+      "about": "Over dit leveringsdoel"
+    },
+    "subtitle": "Koppel uw concepten aan assets en lever daarna beheerde metadata op het platform.",
+    "deliverTo": "Leveren aan",
+    "platformTip": "Leveringsplatforms komen uit de verbindingen die u in Instellingen hebt geconfigureerd. Unity Catalog is de standaard. De leveringsdoelen hieronder passen zich aan het gekozen platform aan.",
+    "manageConnections": "Verbindingen beheren ↗",
+    "map": {
+      "title": "Koppelen",
+      "suggest": "Matches voorstellen",
+      "desc": "Koppel een concept rechtstreeks aan een {{platform}}-asset (het standaardpad, geen product of contract nodig) en voeg optioneel koppelingen toe aan dataproducten en datacontracten. Alle drie zijn onafhankelijk.",
+      "col": {
+        "scheme": "Conceptschema",
+        "lastRun": "Laatste run",
+        "concepts": "Concepten",
+        "coverage": "Dekking",
+        "products": "Producten",
+        "contracts": "Contracten",
+        "assets": "Assets",
+        "suggested": "Voorgesteld"
+      },
+      "assetNote": "Assetkoppelingen zijn wat Leveren in stap 2 verrijkt. Rechtstreeks koppelen aan assets werkt al voordat er een product of contract bestaat, zodat het kip-en-eiprobleem wordt opgelost.",
+      "review": "Beoordelen",
+      "allSelected": "Alles geselecteerd",
+      "unmappedNote": "{{unmapped}} concepten hebben nog geen koppeling.",
+      "coverageTip": "Dekking = aandeel van de concepten in een conceptschema met ten minste één koppeling. Producten en Contracten zijn optionele extra koppelingen, dus de drie aantallen tellen niet op tot het totaal. Alleen Assets kunnen in stap 2 worden verrijkt.",
+      "placeholderNote": "Dekkingscijfers zijn voorbeeldgegevens — de live dekkingsservice is momenteel niet beschikbaar."
+    },
+    "review": {
+      "title": "Voorgestelde matches beoordelen",
+      "subtitle": "Accepteer of weiger elke match tussen concept en asset. Er wordt niets gesynchroniseerd totdat u het accepteert.",
+      "loading": "Voorgestelde matches laden…",
+      "applied": "{{count}} match(es) toegepast. Ze worden bij de volgende levering gesynchroniseerd.",
+      "applyError": "Kan matches niet toepassen: ",
+      "placeholderNote": "Voorbeeldmatches ter illustratie.",
+      "reject": "Weigeren",
+      "accept": "Accepteren",
+      "drift": "Op te lossen schemadrift",
+      "openFull": "Volledig Review Board openen",
+      "applying": "Toepassen…",
+      "acceptApplyAll": "Alle {{count}} accepteren en toepassen"
+    },
+    "modes": {
+      "direct": "Direct",
+      "directDesc": "Ontos past wijzigingen direct toe op deze workspace via de service principal.",
+      "indirect": "Indirect",
+      "indirectDesc": "Ontos schrijft YAML naar Git, zodat uw CI/CD-pipeline het kan promoten (van dev naar staging naar prod).",
+      "manual": "Handmatig",
+      "manualDesc": "Ontos stuurt een melding naar een persoon om de wijziging elders toe te passen.",
+      "active": "actief",
+      "manageLink": "De leveringsmodus wordt per site ingesteld in Instellingen, Levering"
+    }
+  },
+  "mode": {
+    "description": "De geavanceerde weergave toont de ontologielaag: RDF/SKOS, IRI's, domein en bereik van eigenschappen en technische leveringsinstellingen. De eenvoudige weergave verbergt deze. Uw keuze wordt onthouden.",
+    "label": "Weergavemodus"
   }
 }

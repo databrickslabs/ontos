@@ -134,12 +134,17 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {isNew ? t('Create scheme', 'Create Scheme') : t('Edit scheme', 'Edit Scheme')}
+            {isNew
+              ? t('semantic-models:collectionEditor.createTitle', 'Create Scheme')
+              : t('semantic-models:collectionEditor.editTitle', 'Edit Scheme')}
           </DialogTitle>
           <DialogDescription>
             {isNew
-              ? t('Create a new concept scheme. Start simple as a glossary; you can add structure later.')
-              : t('Update scheme settings.')}
+              ? t(
+                  'semantic-models:collectionEditor.createDescription',
+                  'Create a new concept scheme. Start simple as a glossary; you can add structure later.',
+                )
+              : t('semantic-models:collectionEditor.editDescription', 'Update scheme settings.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -177,14 +182,14 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
             {isNew && (
               <div className="grid gap-2">
                 <div className="flex items-center gap-1.5">
-                  <Label htmlFor="collection_type">{t('Type')}</Label>
+                  <Label htmlFor="collection_type">{t('semantic-models:fields.type')}</Label>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="cursor-help text-xs text-muted-foreground border rounded-full h-4 w-4 inline-flex items-center justify-center">i</span>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-[280px]">
                       {t(
-                        'collection.typeTooltip',
+                        'semantic-models:collection.typeTooltip',
                         'Glossary, taxonomy, and ontology are points on a maturity ladder, not different tools. Glossary = a flat list of agreed terms and definitions. Taxonomy = terms arranged in a broader/narrower hierarchy. Ontology = formal classes and properties a machine can reason over. Pick where you are today; you can add structure later.',
                       )}
                     </TooltipContent>

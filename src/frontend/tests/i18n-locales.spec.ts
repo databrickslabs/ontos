@@ -21,6 +21,10 @@ const ROUTES = [
   '/settings',
   '/compliance',
   '/catalog-commander',
+  '/concepts',
+  '/concepts/define',
+  '/concepts/browser',
+  '/concepts/enrich',
 ] as const;
 
 // A run of 3+ dot-separated lowercase-ish segments is almost certainly an

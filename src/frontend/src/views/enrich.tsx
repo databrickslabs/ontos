@@ -578,7 +578,7 @@ export default function EnrichView() {
           />
         </div>
         <p className="ml-8 text-sm text-muted-foreground">
-          {t('enrich.deliver.desc', 'Write governed metadata onto the mapped {{platform}} assets.', {
+          {t('enrich.deliver.description', 'Write governed metadata onto the mapped {{platform}} assets.', {
             platform: platformNoun,
           })}
         </p>

@@ -302,7 +302,12 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
     if not stored:
         raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
-    return {**stored, **payload}
+    merged = {**stored, **payload}
+    # An assign-tag step puts only the tag it set in ``payload['tags']``: merge it into the
+    # stored tags, so later rules still see the others (``HAS_TAG``, ``TAG``)
+    if isinstance(stored.get('tags'), dict) and isinstance(payload.get('tags'), dict):
+        merged['tags'] = {**stored['tags'], **payload['tags']}
+    return merged
 
 
 class ValidationStepHandler(StepHandler):

@@ -868,13 +868,21 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // Stored types this version doesn't know: shown apart, the user removes them to save
   const [unknownEntityTypes, setUnknownEntityTypes] = useState<string[]>([]);
   // Fallback to the static FE map while the catalog is loading or unavailable
-  const supportedEntityTypes = triggerTypeOptions.find(o => o.value === triggerType)?.entity_types
-    ?? ALL_ENTITY_TYPES.filter(et => isTriggerEntitySupported(triggerType, et));
-  // A trigger stored with only unknown types matched nothing: with them removed, a known type
-  // must be picked, as an empty list would match every entity (the backend refuses it too)
+  const supportedEntityTypesFor = (type: TriggerType): string[] =>
+    triggerTypeOptions.find(o => o.value === type)?.entity_types
+    ?? ALL_ENTITY_TYPES.filter(et => isTriggerEntitySupported(type, et));
+  const supportedEntityTypes = supportedEntityTypesFor(triggerType);
   const storedUnknownTypes = workflow?.trigger.unknown_entity_types ?? [];
-  const needsKnownType = storedUnknownTypes.length > 0
-    && workflow?.trigger.entity_types.length === 0
+  // The stored trigger lists entity types and none fires: each is unknown, or a known type its
+  // trigger type never fires for (an empty supported list fires for any entity)
+  const storedSupported = workflow ? supportedEntityTypesFor(workflow.trigger.type) : [];
+  const storedMatchesNoEvent = !!workflow
+    && workflow.trigger.entity_types.length + storedUnknownTypes.length > 0
+    && storedSupported.length > 0
+    && !workflow.trigger.entity_types.some(et => storedSupported.includes(et));
+  // Such a trigger matched nothing: emptied, a known type must be picked, as an empty list would
+  // match every entity (the backend refuses it too)
+  const needsKnownType = storedMatchesNoEvent
     && unknownEntityTypes.length === 0 && entityTypes.length === 0
     && supportedEntityTypes.length > 0;
   const [triggerFromStatus, setTriggerFromStatus] = useState('');
@@ -1893,8 +1901,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       value={entityTypes as string[]}
                       onChange={(next) => setEntityTypes(next as EntityType[])}
                       supportedEntityTypes={supportedEntityTypes}
-                      // No auto-fill over a trigger stored with unknown types: the user picks
-                      autoFill={storedUnknownTypes.length === 0}
+                      // No auto-fill over a stored trigger that matched no event, while its
+                      // trigger type is kept: the user picks
+                      autoFill={!storedMatchesNoEvent || triggerType !== workflow?.trigger.type}
                     />
                   </div>
                   <UnknownEntityTypesNotice

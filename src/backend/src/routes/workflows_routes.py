@@ -927,6 +927,8 @@ async def update_workflow(
         # Activating without touching the steps: the stored steps must be able to run
         _refuse_unrunnable_policy_steps(manager, existing)
     
+    # The designer leaves out schedule and timezone: keep the stored ones
+    workflow.trigger = manager.with_stored_schedule(workflow.trigger, existing.trigger)
     # Validate if steps are being updated
     if workflow.steps is not None:
         # Create a full workflow for validation
@@ -1193,6 +1195,7 @@ async def validate_workflow(
         if not existing:
             raise HTTPException(status_code=404, detail="Workflow not found")
         stored_trigger = existing.trigger
+        workflow.trigger = manager.with_stored_schedule(workflow.trigger, stored_trigger)
     validation = manager.validate_workflow(workflow)
     trigger_errors = manager.trigger_save_errors(workflow.trigger, stored_trigger)
     if trigger_errors:

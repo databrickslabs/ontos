@@ -11,6 +11,14 @@ from src.models.costs import CostItemCreate, CostItemUpdate
 
 
 class CostItemsRepository(CRUDBase[CostItemDb, CostItemCreate, CostItemUpdate]):
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        """Delete every cost item of an entity (used when the entity is deleted)."""
+        return (
+            db.query(CostItemDb)
+            .filter(CostItemDb.entity_type == entity_type, CostItemDb.entity_id == entity_id)
+            .delete(synchronize_session=False)
+        )
+
     def list_for_entity(
         self,
         db: Session,

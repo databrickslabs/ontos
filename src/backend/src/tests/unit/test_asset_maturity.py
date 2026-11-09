@@ -180,6 +180,7 @@ def test_builder_reads_assigned_asset_tags(db_session):
 
     assert 'gold' in str(d['tags']) and d['tag_count'] == 2 and d['has_tags']
     assert evaluate_rule_on_object("ASSERT HAS_TAG('tier')", d)[0] is True
+    assert evaluate_rule_on_object("ASSERT HAS_TAG('pii')", d)[0] is True
     assert evaluate_rule_on_object("ASSERT HAS_TAG('missing')", d)[0] is False
 
 

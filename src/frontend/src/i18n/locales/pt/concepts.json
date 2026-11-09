@@ -19,7 +19,7 @@
       "description": "Grave metadados governados nos ativos {{platform}} mapeados.",
       "tags": {
         "name": "Tags",
-        "desc": "Tags de governança chave/valor em tabelas e colunas. Orientam a descoberta e as políticas de acesso.",
+        "desc": "Tags de governança chave/valor em tabelas e colunas. Impulsionam a descoberta e as políticas de acesso.",
         "via": "via uc_tag_sync",
         "notConfigured": "A entrega de tags não está configurada. Para ativá-la, o job uc_tag_sync precisa ser instalado em Configurações > Jobs.",
         "note": "A entrega de tags é executada pelo job compartilhado uc_tag_sync, que também abrange outros aspectos além da atribuição semântica. Configure o escopo e o agendamento em Configurações > Jobs."

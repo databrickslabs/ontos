@@ -266,7 +266,7 @@
         "requestChanges": "Renvoyer ce concept à l'état de brouillon. Vous pourrez ajouter un commentaire à l'étape suivante.",
         "publish": "Publier ce concept afin que d'autres puissent le trouver et l'utiliser.",
         "certify": "Marquer ce concept comme certifié, une référence de confiance.",
-        "deprecate": "Déprécier ce concept. Il reste visible mais est signalé comme n'étant plus recommandé.",
+        "deprecate": "Rendre ce concept obsolète. Il reste visible mais est signalé comme n'étant plus recommandé.",
         "archive": "Archiver ce concept. Il est retiré et masqué de l'usage courant.",
         "generic": "Faire passer ce concept au statut {{status}}.",
         "newVersion": "Enregistrer une nouvelle version de ce concept. L'IRI reste inchangé."
@@ -509,7 +509,7 @@
     "selectTargetPlaceholder": "Sélectionner le schéma de concepts cible...",
     "newIri": "Nouvel IRI",
     "sourceConcept": "Concept source",
-    "deprecateOriginal": "Déprécier l'original (recommandé)",
+    "deprecateOriginal": "Rendre l'original obsolète (recommandé)",
     "deleteOriginal": "Supprimer l'original",
     "deleteHelp": "Seuls les concepts à l'état de brouillon peuvent être supprimés. Les concepts publiés seront dépréciés.",
     "promoteWarning": "Les concepts promus nécessitent une nouvelle approbation au nouveau niveau de périmètre."
@@ -684,7 +684,7 @@
   },
   "define": {
     "requiresWrite": "Nécessite un accès en écriture",
-    "builds": "Produit",
+    "builds": "Résultat",
     "whatYouCanBuild": "Ce que vous pouvez créer",
     "schemeRdfNote": "Chaque schéma est un skos:ConceptScheme.",
     "needsReview": "Revue requise",

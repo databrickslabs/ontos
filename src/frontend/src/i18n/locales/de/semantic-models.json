@@ -365,7 +365,7 @@
     "unavailable": "Der Versionsverlauf ist nicht verfügbar.",
     "replacedBy": "Ersetzt durch {{label}}",
     "saveNewVersionDraftLocked": "Verfügbar, nachdem dieses Konzept genehmigt wurde (v1 muss vor einer neuen Version genehmigt werden).",
-    "readOnlyNote": "Versionierung gilt für governte (bearbeitbare) Konzeptschemata. Dieses Konzept stammt aus einer schreibgeschützten Quelle, daher können hier keine neuen Versionen gespeichert werden.",
+    "readOnlyNote": "Versionierung gilt für verwaltete (bearbeitbare) Konzeptschemata. Dieses Konzept stammt aus einer schreibgeschützten Quelle, daher können hier keine neuen Versionen gespeichert werden.",
     "newVersion": "Neue Version"
   },
   "import": {
@@ -725,7 +725,7 @@
       "noDomain": "Keine Datendomäne (eigene eingeben)",
       "noDomainsHint": "Noch keine Datendomänen definiert. Beschreiben Sie Ihre Domäne unten in eigenen Worten.",
       "domainPlaceholder": "z. B. Einzelhandelspreise, klinische Studien, Flottenlogistik",
-      "questionsLabel": "Welche Fragen soll es beantworten helfen? (optional)",
+      "questionsLabel": "Bei welchen Fragen soll es die Beantwortung unterstützen? (optional)",
       "questionAria": "Frage {{n}}",
       "questionPlaceholder": "z. B. Welche Kunden sind im letzten Quartal abgewandert?",
       "removeQuestion": "Frage {{n}} entfernen",
@@ -760,7 +760,7 @@
     "setStatus": "Status festlegen"
   },
   "search": {
-    "matchedLanguage": "Treffer: {{lang}}"
+    "matchedLanguage": "Treffer in: {{lang}}"
   },
   "collection": {
     "typeTooltip": "Glossar, Taxonomie und Ontologie sind Stufen auf einer Reifeskala, keine unterschiedlichen Werkzeuge. Glossar = eine flache Liste abgestimmter Begriffe und Definitionen. Taxonomie = Begriffe in einer Ober-/Unterbegriff-Hierarchie. Ontologie = formale Klassen und Eigenschaften, über die eine Maschine schlussfolgern kann. Wählen Sie Ihren aktuellen Stand; Struktur können Sie später ergänzen."

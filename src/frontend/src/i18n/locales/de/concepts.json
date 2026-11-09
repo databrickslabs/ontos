@@ -48,11 +48,11 @@
       },
       "glossary": {
         "name": "UC Glossary",
-        "desc": "Das governte Geschäftsglossar direkt in der Plattform.",
-        "note": "Synchronisiert Konzepte in das native Geschäftsglossar von Unity Catalog, die governte Ebene, aus der Genie Ontology liest. Verfügbar mit der GA von UC Glossary."
+        "desc": "Das verwaltete Geschäftsglossar direkt in der Plattform.",
+        "note": "Synchronisiert Konzepte in das native Geschäftsglossar von Unity Catalog, die verwaltete Ebene, aus der Genie Ontology liest. Verfügbar mit der GA von UC Glossary."
       },
       "title": "Bereitstellen",
-      "tip": "Bereitstellen schreibt Ihre governten Metadaten auf die Plattform. Nachgelagerte Tools (Genie, Suche, Agents) lesen sie von dort. Tags = Richtlinien & Auffindbarkeit. Beschreibungen = was Genie liest. Glossar = die governte Geschäftsebene.",
+      "tip": "Bereitstellen schreibt Ihre verwalteten Metadaten auf die Plattform. Nachgelagerte Tools (Genie, Suche, Agents) lesen sie von dort. Tags = Richtlinien & Auffindbarkeit. Beschreibungen = was Genie liest. Glossar = die verwaltete Geschäftsebene.",
       "pendingTitle": "Ausstehende Tag-Änderungen",
       "pendingSubtitle": "Verknüpfungen zwischen Konzepten und Assets, die seit der letzten erfolgreichen Tag-Synchronisierung erstellt wurden. Ein erneuter Lauf von uc_tag_sync würde diese bereitstellen.",
       "pendingEmpty": "Nichts ausstehend.",
@@ -68,7 +68,7 @@
       "syncNow": "Jetzt synchronisieren",
       "about": "Über dieses Bereitstellungsziel"
     },
-    "subtitle": "Ordnen Sie Ihre Konzepte Assets zu und stellen Sie anschließend governte Metadaten auf der Plattform bereit.",
+    "subtitle": "Ordnen Sie Ihre Konzepte Assets zu und stellen Sie anschließend verwaltete Metadaten auf der Plattform bereit.",
     "deliverTo": "Bereitstellen in",
     "platformTip": "Bereitstellungsplattformen stammen aus den in den Einstellungen konfigurierten Verbindungen. Unity Catalog ist der Standard. Die folgenden Bereitstellungsziele passen sich an die gewählte Plattform an.",
     "manageConnections": "Verbindungen verwalten ↗",
@@ -100,7 +100,7 @@
       "applied": "{{count}} Treffer übernommen. Sie werden bei der nächsten Bereitstellung synchronisiert.",
       "applyError": "Treffer konnten nicht übernommen werden: ",
       "placeholderNote": "Beispieltreffer zur Veranschaulichung.",
-      "reject": "Verwerfen",
+      "reject": "Ablehnen",
       "accept": "Akzeptieren",
       "drift": "Zu behebende Schemaabweichung",
       "openFull": "Vollständiges Review Board öffnen",

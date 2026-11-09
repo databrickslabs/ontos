@@ -584,7 +584,7 @@
   },
   "define": {
     "requiresWrite": "Schrijftoegang vereist",
-    "builds": "Bouwt",
+    "builds": "Resultaat",
     "whatYouCanBuild": "Wat u kunt bouwen",
     "schemeRdfNote": "Elk schema is een skos:ConceptScheme.",
     "needsReview": "Beoordeling nodig",
@@ -610,9 +610,9 @@
       "buildsNote": "* Wat het bestand ook bevat. Geïmporteerde termen blijven alleen-lezen."
     },
     "inProgress": "In uitvoering",
-    "noInProgress": "Er wordt niets aangemaakt. Begin met een van de bovenstaande paden.",
+    "noInProgress": "Er is niets in uitvoering. Begin met een van de bovenstaande paden.",
     "generatorRun": "Generatorrun",
-    "draftPending": "Concept nog niet toegewezen aan een conceptschema.",
+    "draftPending": "Conceptversie nog niet toegewezen aan een conceptschema.",
     "stepCount": "{{count}} stappen",
     "review": "Beoordelen",
     "guided": {
@@ -763,6 +763,6 @@
     "matchedLanguage": "gevonden: {{lang}}"
   },
   "collection": {
-    "typeTooltip": "Glossarium, taxonomie en ontologie zijn stappen op een volwassenheidsladder, geen verschillende tools. Glossarium = een platte lijst met afgesproken termen en definities. Taxonomie = termen geordend in een bredere/smallere hiërarchie. Ontologie = formele klassen en eigenschappen waarmee een machine kan redeneren. Kies waar je nu staat; je kunt later structuur toevoegen."
+    "typeTooltip": "Glossary, taxonomie en ontologie zijn stappen op een volwassenheidsladder, geen verschillende tools. Glossary = een platte lijst met afgesproken termen en definities. Taxonomie = termen geordend in een hiërarchie van ruimere en engere termen. Ontologie = formele klassen en eigenschappen waarmee een machine kan redeneren. Kies waar u nu staat; u kunt later structuur toevoegen."
   }
 }

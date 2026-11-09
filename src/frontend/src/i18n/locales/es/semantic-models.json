@@ -370,7 +370,7 @@
   },
   "import": {
     "title": "Importar conceptos",
-    "descriptionMulti": "Suelta uno o más archivos de ontología y elige cómo se incorporan. El archivo es solo un medio de transporte.",
+    "descriptionMulti": "Suelta uno o más archivos de ontología y elige cómo se incorporan. El archivo es solo un contenedor.",
     "sourceFiles": "Archivos de origen",
     "addMoreFiles": "Añadir más archivos…",
     "chooseFiles": "Elegir archivos…",
@@ -684,7 +684,7 @@
   },
   "define": {
     "requiresWrite": "Requiere acceso de escritura",
-    "builds": "Genera",
+    "builds": "Resultados",
     "whatYouCanBuild": "Qué puedes crear",
     "schemeRdfNote": "Cada esquema es un skos:ConceptScheme.",
     "needsReview": "Requiere revisión",

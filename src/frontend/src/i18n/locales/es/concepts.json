@@ -36,7 +36,7 @@
       "description": "Escribe metadatos gobernados en los activos de {{platform}} vinculados.",
       "tags": {
         "name": "Etiquetas",
-        "desc": "Etiquetas de gobierno clave/valor en tablas y columnas. Impulsan el descubrimiento y las políticas de acceso.",
+        "desc": "Etiquetas de gobernanza clave/valor en tablas y columnas. Impulsan el descubrimiento y las políticas de acceso.",
         "via": "mediante uc_tag_sync",
         "notConfigured": "La entrega de etiquetas no está configurada. Para activarla, instala el job uc_tag_sync en Configuración > Jobs.",
         "note": "La entrega de etiquetas se ejecuta a través del job compartido uc_tag_sync, que también cubre otros aspectos además de la asignación semántica. Configura su alcance y su programación en Configuración > Jobs."
@@ -54,7 +54,7 @@
       "title": "Entregar",
       "tip": "Entregar escribe tus metadatos gobernados en la plataforma. Las herramientas posteriores (Genie, búsqueda, agentes) los leen desde allí. Etiquetas = políticas y descubrimiento. Descripciones = lo que lee Genie. Glosario = la capa de negocio gobernada.",
       "pendingTitle": "Cambios de etiquetas pendientes",
-      "pendingSubtitle": "Vínculos entre conceptos y activos creados desde la última sincronización de etiquetas correcta. Una nueva ejecución de uc_tag_sync los entregaría.",
+      "pendingSubtitle": "Vínculos entre conceptos y activos creados desde la última sincronización correcta de etiquetas. Una nueva ejecución de uc_tag_sync los entregaría.",
       "pendingEmpty": "No hay nada pendiente.",
       "pendingInScheme": "en",
       "pendingAppliesTo": "se aplica a",

@@ -6,6 +6,7 @@
     "loading": "Laden...",
     "cancel": "Annuleren",
     "close": "Sluiten",
+    "openMenu": "Menu openen",
     "delete": "Verwijderen",
     "deleteSelected": "Geselecteerde Verwijderen ({{count}})",
     "edit": "Bewerken",

@@ -16,6 +16,7 @@ import {
   TableSkeleton,
 } from '@/components/common/list-view-skeleton';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
+import { complianceRunWarningText } from '@/lib/compliance-run-warning';
 
 interface Run {
   id: string; // UUID
@@ -29,6 +30,8 @@ interface Run {
   error_message?: string;
   error_code?: string | null;
   error_params?: Record<string, unknown> | null;
+  warning_code?: string | null;
+  warning_params?: Record<string, unknown> | null;
 }
 
 interface Result {
@@ -144,6 +147,11 @@ export default function ComplianceRunDetails() {
           </CardDescription>
           {run.status === 'failed' && run.error_message && (
             <div className="text-sm text-destructive">{t('compliance:runDetails.errorLabel')} {complianceRunErrorText(t, run)}</div>
+          )}
+          {run.status !== 'failed' && run.warning_code && (
+            <div className="text-sm text-amber-600" data-testid="run-warning">
+              {complianceRunWarningText(t, run)}
+            </div>
           )}
         </CardHeader>
         <CardContent>

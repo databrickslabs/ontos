@@ -210,15 +210,27 @@ async def delete_policy(
     return {"status": "success"}
 
 
-def _run_error_code(run) -> dict:
-    """The run's error code and parameters, which the UI translates."""
+def _json_params(value):
     import json
 
     try:
-        params = json.loads(run.error_params) if run.error_params else None
+        return json.loads(value) if value else None
     except (TypeError, ValueError):
-        params = None
-    return {'error_code': run.error_code, 'error_params': params}
+        return None
+
+
+def _run_error_code(run) -> dict:
+    """The run's error code and parameters, which the UI translates."""
+    return {'error_code': run.error_code, 'error_params': _json_params(run.error_params)}
+
+
+def _run_codes(run) -> dict:
+    """The run's error and warning codes and their parameters, which the UI translates."""
+    return {
+        **_run_error_code(run),
+        'warning_code': run.warning_code,
+        'warning_params': _json_params(run.warning_params),
+    }
 
 
 @router.post("/compliance/policies/{policy_id}/runs")
@@ -265,7 +277,7 @@ async def run_policy(
         'failure_count': run.failure_count,
         'score': run.score,
         'error_message': run.error_message,
-        **_run_error_code(run),
+        **_run_codes(run),
     }
 
 
@@ -290,7 +302,7 @@ async def list_runs(
             'failure_count': r.failure_count,
             'score': r.score,
             'error_message': r.error_message,
-            **_run_error_code(r),
+            **_run_codes(r),
         } for r in runs
     ]
 
@@ -317,7 +329,7 @@ async def get_run_results(
             'failure_count': run.failure_count,
             'score': run.score,
             'error_message': run.error_message,
-            **_run_error_code(run),
+            **_run_codes(run),
         },
         'results': [
             {

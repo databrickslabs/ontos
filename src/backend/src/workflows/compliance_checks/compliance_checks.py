@@ -325,9 +325,15 @@ def load_policies(
 
     Returns:
         List of policy dictionaries
+
+    Policies that are maturity gates (linked from ``maturity_gates``) are never
+    returned: the maturity evaluator runs them against the entity whose level
+    is checked, and run here they would match no entity.
     """
     # Build WHERE clause
-    conditions = []
+    conditions = [
+        "id NOT IN (SELECT compliance_policy_id FROM maturity_gates)",
+    ]
 
     if policy_filter == 'active':
         conditions.append("is_active = TRUE")
@@ -376,6 +382,13 @@ def load_policies(
     return policies
 
 
+def _json_or_none(value: Optional[str]) -> Any:
+    try:
+        return json.loads(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
 def run_policy(
     db: Session,
     policy: Dict[str, Any],
@@ -413,6 +426,11 @@ def run_policy(
         print(f"  Passed: {run.success_count}")
         print(f"  Failed: {run.failure_count}")
         print(f"  Score: {run.score}%")
+        # A finished run can report something about its rule (e.g. an ignored tail)
+        warning = None
+        if run.warning_code:
+            warning = {'code': run.warning_code, 'params': _json_or_none(run.warning_params)}
+            print(f"  WARNING: {run.warning_code} {warning['params'] or ''}".rstrip())
 
         return {
             "policy_id": policy['id'],
@@ -422,7 +440,8 @@ def run_policy(
             "success_count": run.success_count,
             "failure_count": run.failure_count,
             "score": run.score,
-            "error": run.error_message
+            "error": run.error_message,
+            "warning": warning,
         }
 
     except Exception as e:
@@ -581,6 +600,12 @@ def main() -> None:
                 status = r.get("status", "unknown")
                 score = r.get("score", 0)
                 print(f"  - {r['policy_name']}: {status} (score: {score}%)")
+
+        warned = [r for r in results if r.get("warning")]
+        if warned:
+            print(f"Policies whose run reported a warning ({len(warned)}):")
+            for r in warned:
+                print(f"  - {r['policy_name']}: {r['warning']['code']} {r['warning']['params']}")
 
         print("")
 

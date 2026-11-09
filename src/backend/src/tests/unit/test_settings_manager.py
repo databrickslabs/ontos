@@ -343,6 +343,7 @@ class TestSettingsManager:
             'settings-asset-types',
             'settings-certification-levels',
             'settings-maturity-levels',
+            'settings-data-product-types',
             'settings-general',
             'settings-ui',
             'settings-connectors',

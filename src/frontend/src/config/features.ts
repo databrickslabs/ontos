@@ -223,14 +223,34 @@ import {
       return feature?.name || pathSegment;
   };
   
+  /** The role feature id a menu entry belongs to (its permission id when it has one). */
+  export const getNavFeatureId = (feature: FeatureConfig): string =>
+    feature.permissionId || feature.id;
+
+  /**
+   * Whether the user's roles hide this entry from the menus (#1325). Visibility only:
+   * the page stays reachable by link when the user has access.
+   */
+  export const isHiddenInNav = (
+      feature: FeatureConfig,
+      hiddenFeatures: ReadonlySet<string> | readonly string[] = [],
+  ): boolean => {
+      const id = getNavFeatureId(feature);
+      return hiddenFeatures instanceof Set
+          ? hiddenFeatures.has(id)
+          : (hiddenFeatures as readonly string[]).includes(id);
+  };
+
   // Helper function to group features for navigation
   export const getNavigationGroups = (
-      allowedMaturities: FeatureMaturity[] = ['ga']
+      allowedMaturities: FeatureMaturity[] = ['ga'],
+      hiddenFeatures: ReadonlySet<string> | readonly string[] = [],
     ): { name: FeatureGroup; items: FeatureConfig[] }[] => {
       const grouped: { [key in FeatureGroup]?: FeatureConfig[] } = {};
   
       features
         .filter((feature) => allowedMaturities.includes(feature.maturity))
+        .filter((feature) => !isHiddenInNav(feature, hiddenFeatures))
         .forEach((feature) => {
           if (!grouped[feature.group]) {
             grouped[feature.group] = [];
@@ -250,10 +270,12 @@ import {
   
   // Helper function to get features for landing pages (Home, About)
   export const getLandingPageFeatures = (
-      allowedMaturities: FeatureMaturity[] = ['ga']
+      allowedMaturities: FeatureMaturity[] = ['ga'],
+      hiddenFeatures: ReadonlySet<string> | readonly string[] = [],
   ): FeatureConfig[] => {
       return features.filter(
           (feature) =>
           feature.showInLanding && allowedMaturities.includes(feature.maturity)
+          && !isHiddenInNav(feature, hiddenFeatures)
       );
   };

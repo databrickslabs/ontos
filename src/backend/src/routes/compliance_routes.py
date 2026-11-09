@@ -219,11 +219,15 @@ def _json_params(value):
         return None
 
 
+def _run_error_code(run) -> dict:
+    """The run's error code and parameters, which the UI translates."""
+    return {'error_code': run.error_code, 'error_params': _json_params(run.error_params)}
+
+
 def _run_codes(run) -> dict:
     """The run's error and warning codes and their parameters, which the UI translates."""
     return {
-        'error_code': run.error_code,
-        'error_params': _json_params(run.error_params),
+        **_run_error_code(run),
         'warning_code': run.warning_code,
         'warning_params': _json_params(run.warning_params),
     }

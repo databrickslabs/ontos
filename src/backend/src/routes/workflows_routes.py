@@ -941,7 +941,7 @@ async def update_workflow(
             workflow_type=workflow.workflow_type or existing.workflow_type,
             steps=workflow.steps,
         )
-        validation = manager.validate_workflow(full_workflow)
+        validation = manager.validate_workflow(full_workflow, stored_trigger=existing.trigger)
         validation = _with_policy_errors(
             manager, validation, full_workflow.steps, full_workflow.is_active,
         )
@@ -952,7 +952,10 @@ async def update_workflow(
     trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
     if workflow.trigger is not None and workflow.steps is None:
         # validate_workflow above checks the schedule only when steps are sent
-        trigger_errors = [*trigger_errors, *manager.schedule_errors(workflow.trigger)]
+        trigger_errors = [
+            *trigger_errors,
+            *manager.changed_schedule_errors(workflow.trigger, existing.trigger),
+        ]
     if trigger_errors:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
             WorkflowValidationResult(valid=False, errors=trigger_errors)))
@@ -1199,7 +1202,7 @@ async def validate_workflow(
             raise HTTPException(status_code=404, detail="Workflow not found")
         stored_trigger = existing.trigger
         workflow.trigger = manager.with_stored_schedule(workflow.trigger, stored_trigger)
-    validation = manager.validate_workflow(workflow)
+    validation = manager.validate_workflow(workflow, stored_trigger=stored_trigger)
     trigger_errors = manager.trigger_save_errors(workflow.trigger, stored_trigger)
     if trigger_errors:
         # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes

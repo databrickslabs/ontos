@@ -705,8 +705,10 @@ class WorkflowsManager:
         
         return matching
 
-    def validate_workflow(self, workflow: ProcessWorkflowCreate) -> WorkflowValidationResult:
-        """Validate a workflow definition."""
+    def validate_workflow(
+        self, workflow: ProcessWorkflowCreate, stored_trigger: Optional[WorkflowTrigger] = None,
+    ) -> WorkflowValidationResult:
+        """Validate a workflow definition; ``stored_trigger`` when it updates a stored one."""
         errors = []
         warnings = []
 
@@ -788,7 +790,7 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
-        errors.extend(self.schedule_errors(workflow.trigger))
+        errors.extend(self.changed_schedule_errors(workflow.trigger, stored_trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -1004,6 +1006,23 @@ class WorkflowsManager:
         except QuartzCronError as e:
             return [CodedMessage(str(e), e.code, **e.params)]
         return []
+
+    @classmethod
+    def changed_schedule_errors(
+        cls, new: WorkflowTrigger, stored: Optional[WorkflowTrigger],
+    ) -> List[str]:
+        """``schedule_errors``, unless ``new`` keeps the stored schedule and timezone.
+
+        A stored schedule the checks refuse today (saved before them, or with no run left)
+        doesn't block saves that leave it as is; the scheduler doesn't run it either way.
+        A trigger switched to ``scheduled``, or a changed schedule or timezone, is checked.
+        """
+        if (stored is not None and new.type == TriggerType.SCHEDULED
+                and stored.type == TriggerType.SCHEDULED
+                and (new.schedule or '') == (stored.schedule or '')
+                and (new.timezone or '') == (stored.timezone or '')):
+            return []
+        return cls.schedule_errors(new)
 
     @staticmethod
     def with_stored_schedule(

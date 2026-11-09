@@ -110,3 +110,38 @@ def test_a_trigger_only_put_with_a_valid_schedule_is_saved(client, db_session):
 
     assert saved.status_code == 200, saved.text
     assert _stored_trigger(db_session, wf_id)['schedule'] == '0 30 7 ? * MON-FRI'
+
+
+# A stored schedule the checks would refuse now (saved before them, or expired) is only
+# checked again when the save changes it: the scheduler doesn't run it either way.
+
+def test_a_steps_only_save_keeps_an_expired_stored_schedule(client, db_session):
+    wf_id = _stored_scheduled(db_session, schedule='0 0 6 * * ? 2020', timezone='UTC')
+    steps = [{'step_id': 'done', 'name': 'Done', 'step_type': 'pass', 'order': 0}]
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'steps': steps})
+
+    assert saved.status_code == 200, saved.text
+    assert _stored_trigger(db_session, wf_id)['schedule'] == '0 0 6 * * ? 2020'
+
+
+def test_a_designer_save_keeps_a_stored_unix_cron(client, db_session):
+    wf_id = _stored_scheduled(db_session, schedule='0 6 * * *', timezone=None)
+    body = _designer_body(client, wf_id)
+    body['description'] = 'edited'
+
+    saved = client.put(f'/api/workflows/{wf_id}', json=body)
+
+    assert saved.status_code == 200, saved.text
+    assert _stored_trigger(db_session, wf_id)['schedule'] == '0 6 * * *'
+
+
+def test_a_save_that_changes_the_schedule_to_an_invalid_one_is_refused(client, db_session):
+    wf_id = _stored_scheduled(db_session)
+    body = _designer_body(client, wf_id)
+    body['trigger']['schedule'] = '0 6 * * *'
+
+    saved = client.put(f'/api/workflows/{wf_id}', json=body)
+
+    assert saved.status_code == 400, saved.text
+    assert 'cron_field_count' in _issue_codes(saved)

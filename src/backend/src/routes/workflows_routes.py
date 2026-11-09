@@ -900,7 +900,7 @@ async def update_workflow(
     existing = manager.get_workflow(workflow_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    if workflow.steps is None and workflow.is_active:
+    if workflow.steps is None and workflow.is_active and not existing.is_active:
         # Activating without touching the steps: the stored steps must be able to run
         _refuse_unrunnable_policy_steps(manager, existing)
     
@@ -1030,8 +1030,9 @@ async def toggle_workflow_active(
     existing = manager.get_workflow(workflow_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    if is_active:
-        # A workflow whose policy_check steps point at missing policies would fail on every event
+    if is_active and not existing.is_active:
+        # A workflow whose policy_check steps point at missing policies would fail on every
+        # event; checked only on a real inactive -> active change, like the overlap check
         _refuse_unrunnable_policy_steps(manager, existing)
     conflicts = manager.activation_conflicts(workflow_id) if is_active and not existing.is_active else []
     if conflicts and not confirm_overlap:
@@ -1157,6 +1158,10 @@ async def validate_workflow(
 
     Checked as a new workflow (POST), or with ``workflow_id`` as an update of that stored
     workflow (PUT): stored unknown types and pairs a changed trigger keeps are accepted.
+
+    Applies the save rules: a ``policy_check`` step whose policy doesn't exist is an
+    error for an active workflow (the save would be refused) and a warning for an
+    inactive one (it saves, but can't be activated until a policy is selected).
     """
     stored_trigger = None
     if workflow_id:
@@ -1166,13 +1171,20 @@ async def validate_workflow(
         stored_trigger = existing.trigger
     validation = manager.validate_workflow(workflow)
     trigger_errors = manager.trigger_save_errors(workflow.trigger, stored_trigger)
-    if not trigger_errors:
+    if trigger_errors:
+        # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes
+        added = WorkflowValidationResult(valid=False, errors=trigger_errors)
+        validation = WorkflowValidationResult(
+            valid=False, errors=[*validation.errors, *added.errors],
+            warnings=validation.warnings, issues=[*validation.issues, *added.issues],
+        )
+    if workflow.is_active:
+        return _with_policy_errors(manager, validation, workflow.steps, True)
+    missing = manager.policy_reference_errors(workflow.steps)
+    if not missing:
         return validation
-    # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes
-    added = WorkflowValidationResult(valid=False, errors=trigger_errors)
-    return WorkflowValidationResult(
-        valid=False, errors=[*validation.errors, *added.errors], warnings=validation.warnings,
-        issues=[*validation.issues, *added.issues],
+    return validation.model_copy(
+        update={'warnings': [*validation.warnings, *(str(m) for m in missing)]},
     )
 
 

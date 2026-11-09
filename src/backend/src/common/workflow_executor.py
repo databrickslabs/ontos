@@ -1538,8 +1538,10 @@ class PolicyCheckStepHandler(StepHandler):
     def execute(self, context: StepContext) -> StepResult:
         from src.db_models.compliance import CompliancePolicyDb
         from src.common.compliance_dsl import evaluate_rule_on_object
-        
-        policy_id = self._config.get('policy_id', '')
+        from src.common.workflow_step_config import policy_id_of
+
+        # Read as activation reads it (policy_reference_errors), so both agree
+        policy_id = policy_id_of(self._config)
         if not policy_id:
             return StepResult(passed=False, error="No policy_id configured")
         

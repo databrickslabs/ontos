@@ -256,3 +256,98 @@ def test_other_validation_errors_keep_their_codes_next_to_the_policy_error(db_se
         ('condition_invalid', {'step': 'c1'}),
         ('policy_check_policy_missing', {'step': 'check', 'policyId': 'missing'}),
     ]
+
+
+def _validate(manager, workflow):
+    from src.routes.workflows_routes import validate_workflow
+
+    return asyncio.run(validate_workflow(request=MagicMock(), workflow=workflow, manager=manager))
+
+
+@pytest.mark.parametrize('policy_id', ['', 'naming-conventions', 'required-tags'])
+def test_validate_reports_a_missing_policy_of_an_active_workflow_as_an_error(
+    db_session, policy_id
+):
+    # Old installs still store the placeholder slugs: they are reported as unknown ids
+    result = _validate(WorkflowsManager(db_session), _workflow(policy_id))
+
+    assert result.valid is False
+    [issue] = result.issues
+    assert issue.code == 'policy_check_policy_missing'
+    assert issue.params == {'step': 'naming-check', 'policyId': policy_id}
+
+
+def test_validate_warns_about_a_missing_policy_of_an_inactive_workflow(db_session):
+    # Saving an inactive workflow is allowed; activating it will be refused
+    result = _validate(
+        WorkflowsManager(db_session), _workflow('naming-conventions', is_active=False),
+    )
+
+    assert result.valid is True
+    assert result.issues == []
+    assert result.warnings == [
+        "Step 'naming-check': the policy to check 'naming-conventions' does not exist",
+    ]
+
+
+def test_validate_accepts_an_existing_policy(db_session):
+    _policy(db_session)
+
+    result = _validate(WorkflowsManager(db_session), _workflow('pol-1'))
+
+    assert result.valid is True
+    assert result.warnings == []
+
+
+@pytest.mark.parametrize('policy_id', [123, ['pol-1'], {'id': 'pol-1'}])
+def test_a_policy_id_that_is_not_a_string_is_a_coded_400(db_session, policy_id):
+    _policy(db_session)
+    manager = WorkflowsManager(db_session)
+
+    with pytest.raises(HTTPException) as raised:
+        _create(db_session, manager, _workflow(policy_id))
+
+    assert raised.value.status_code == 400
+    [issue] = raised.value.detail['params']['issues']
+    assert issue['code'] == 'policy_check_policy_missing'
+    assert issue['params'] == {'step': 'naming-check', 'policyId': str(policy_id)}
+
+
+def test_activation_and_the_policy_check_step_read_the_policy_id_the_same_way(db_session):
+    from src.common.workflow_executor import PolicyCheckStepHandler
+
+    # Inactive, so the step passes as "skipped" once it finds the policy
+    db_session.add(CompliancePolicyDb(
+        id='pol-2', name='Naming', rule='MATCH (o:Object) ASSERT true', is_active=False,
+    ))
+    db_session.flush()
+    manager = WorkflowsManager(db_session)
+    created = manager.create_workflow(_workflow('  pol-2  ', is_active=False))
+
+    assert _toggle(db_session, manager, created.id, True).is_active is True
+    result = PolicyCheckStepHandler(db_session, {'policy_id': '  pol-2  '}).execute(MagicMock())
+
+    assert result.passed is True
+    assert result.data['policy_id'] == 'pol-2'
+
+
+def test_toggling_an_already_active_workflow_on_is_a_no_op_even_with_a_stale_policy(db_session):
+    # E.g. the policy was deleted after the workflow was activated
+    manager = WorkflowsManager(db_session)
+    created = manager.create_workflow(_workflow('deleted-policy'))
+
+    result = _toggle(db_session, manager, created.id, True)
+
+    assert result.is_active is True
+
+
+def test_a_save_without_steps_of_an_active_workflow_with_a_stale_policy_is_allowed(db_session):
+    manager = WorkflowsManager(db_session)
+    created = manager.create_workflow(_workflow('deleted-policy'))
+
+    result = _update(
+        db_session, manager, created.id, ProcessWorkflowUpdate(is_active=True, description='x'),
+    )
+
+    assert result.is_active is True
+    assert result.description == 'x'

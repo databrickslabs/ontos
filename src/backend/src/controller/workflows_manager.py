@@ -414,8 +414,10 @@ class WorkflowsManager:
         found") on every event it handles, so it can't be activated. A step
         with no ``policy_id`` (a template still to be configured) counts too.
         """
+        from src.common.workflow_step_config import policy_id_of
+
         checks = [
-            (step.step_id, ((step.config or {}).get('policy_id') or '').strip())
+            (step.step_id, policy_id_of(step.config))
             for step in steps
             if step.step_type == StepType.POLICY_CHECK
         ]

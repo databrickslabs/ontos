@@ -368,8 +368,10 @@ def test_before_update_gates_see_only_the_proposed_change(db_session):
 
 
 def test_before_update_needs_no_stored_entity(db_session):
-    # The proposed change is all the rule sees, so nothing is loaded
-    policy = _policy(db_session, PURPOSE_RULE)
+    # Without a WHERE the proposed change is all the rule sees, so nothing is loaded
+    policy = _policy(
+        db_session, "MATCH (c:data_contract) ASSERT LENGTH(c.description) >= 70",
+    )
 
     with patch.object(AppEntityLoader, 'load_entity') as load_entity:
         result = _step(
@@ -383,6 +385,64 @@ def test_before_update_needs_no_stored_entity(db_session):
     assert result.passed is True
     assert not (result.data or {}).get('error_code')
     load_entity.assert_not_called()
+
+
+def test_before_update_where_sees_the_stored_entity(db_session):
+    # An update that doesn't resend the status is still an update of an
+    # active contract: the WHERE selects it and the ASSERT (on the proposed
+    # purpose only, #1019) decides; it doesn't pass as not applicable.
+    policy = _policy(db_session, PURPOSE_RULE)
+    contract = _contract(db_session, 'contract', 'active', LONG)
+
+    shorter = _step(
+        db_session, policy, 'data_contract', contract.id,
+        _before_update_payload(description=ContractDescription(purpose='Short.', usage='u')),
+        trigger_type=TriggerType.BEFORE_UPDATE,
+    )
+
+    assert shorter.passed is False
+    assert 'not_applicable' not in shorter.data
+
+
+def test_a_before_update_where_on_a_missing_entity_fails_the_step(db_session):
+    # As for the other triggers: the stored entity the WHERE needs is gone
+    policy = _policy(db_session, PURPOSE_RULE)
+    missing = str(uuid.uuid4())
+
+    result = _step(
+        db_session, policy, 'data_contract', missing,
+        _before_update_payload(description=ContractDescription(purpose=LONG, usage='u')),
+        trigger_type=TriggerType.BEFORE_UPDATE,
+    )
+
+    assert result.passed is False
+    assert result.data['error_code'] == 'rule_entity_not_found'
+
+
+def test_a_proposed_tag_lookup_failure_fails_the_step_and_keeps_the_transaction(db_session):
+    policy = _policy(db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('confidential')")
+    contract = _contract(db_session, 'contract', 'active', LONG)
+    real_get = db_session.get
+
+    def get(model, *args, **kwargs):
+        if model is TagDb:
+            raise OperationalError('SELECT tags', {}, Exception('db down'))
+        return real_get(model, *args, **kwargs)
+
+    with patch.object(db_session, 'get', side_effect=get):
+        result = _step(
+            db_session, policy, 'data_contract', contract.id,
+            _before_update_payload(tags=[{'tag_id': str(uuid.uuid4())}]),
+            trigger_type=TriggerType.BEFORE_UPDATE,
+        )
+
+    assert result.passed is False
+    assert 'db down' not in result.error
+    assert result.data['error_code'] == 'rule_entity_load_failed'
+    assert result.data['error_params'] == {
+        'entityType': 'data_contract', 'entityId': contract.id,
+    }
+    assert db_session.get(CompliancePolicyDb, policy.id) is not None
 
 
 @pytest.mark.parametrize('name, expected', [('contract', True), ('other', False)])
@@ -570,9 +630,11 @@ def test_load_entity_gives_the_dict_load_entities_gives(db_session, entity_type,
     assert listed and loader.load_entity(entity_type, entity.id) == listed[0]
 
 
-def test_a_review_policy_applies_to_a_data_asset_review(db_session):
-    # Workflows name the type data_asset_review; rules and the loader, review
-    policy = _policy(db_session, "MATCH (r:review) ASSERT r.status = 'approved'")
+@pytest.mark.parametrize('match_type', ['review', 'data_asset_review'])
+def test_a_review_policy_applies_to_a_data_asset_review(db_session, match_type):
+    # Workflows name the type data_asset_review; rules and the loader, review.
+    # MATCH with either name selects it.
+    policy = _policy(db_session, f"MATCH (r:{match_type}) ASSERT r.status = 'approved'")
     review = _review(db_session)
     review.status = 'approved'
     db_session.flush()

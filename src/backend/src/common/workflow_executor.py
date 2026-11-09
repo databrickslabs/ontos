@@ -15,7 +15,8 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from functools import partial
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -402,8 +403,6 @@ def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     find raises ``RuleEntityNotFoundError`` (the step fails) instead of
     falling back to the payload.
     """
-    from src.common.compliance_entities import AppEntityLoader
-
     obj = _rule_object(db, context)
     payload = context.entity if isinstance(context.entity, dict) else {}
     trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
@@ -416,23 +415,53 @@ def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
         except Exception as e:
             raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
         return {**obj, **proposed}
+    if trigger_type in ('before_create', 'on_delete'):
+        return obj
+    loaded = _compliance_entity(db, context)
+    return {**obj, **loaded} if loaded is not None else obj
+
+
+def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str, Any]]:
+    """The stored entity as AppEntityLoader gives it to a run.
+
+    None for a type the loader doesn't read and a step without an entity id.
+    As in ``_rule_object``, a failed load raises ``RuleEntityLoadError`` and
+    a missing entity ``RuleEntityNotFoundError`` (the step fails): the
+    payload alone could let the rule pass.
+    """
+    from src.common.compliance_entities import AppEntityLoader
+
     entity_type = (context.entity_type or '').lower()
     entity_type = _COMPLIANCE_TYPES.get(entity_type, entity_type)
-    if (
-        trigger_type in ('before_create', 'on_delete')
-        or entity_type not in AppEntityLoader.SUPPORTED_TYPES
-        or not context.entity_id
-    ):
-        return obj
+    if entity_type not in AppEntityLoader.SUPPORTED_TYPES or not context.entity_id:
+        return None
     try:
         loaded = AppEntityLoader(db).load_entity(entity_type, str(context.entity_id))
     except Exception as e:
         # As in _rule_object: the cause stays in the server log
         raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
     if not loaded:
-        # As in _rule_object: the payload alone could let the rule pass
         raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
-    return {**obj, **loaded}
+    return loaded
+
+
+def _policy_where_object(
+    db: Session, context: 'StepContext', rule_object: Dict[str, Any],
+) -> Dict[str, Any]:
+    """What a policy check's WHERE sees: the entity as it will be.
+
+    The rule object, except for ``before_update`` gates: their rule object is
+    only the proposed change, and a WHERE on a field the update doesn't carry
+    (``c.status = 'active'`` on an update of the description) would leave the
+    entity unselected and let the gate pass. Their WHERE sees the stored
+    entity with the proposed change over it; ASSERT still sees only the
+    change (#1019).
+    """
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    if getattr(trigger_type, 'value', trigger_type) != 'before_update':
+        return rule_object
+    stored = _compliance_entity(db, context)
+    return {**stored, **rule_object} if stored is not None else rule_object
 
 
 class ValidationStepHandler(StepHandler):
@@ -1697,7 +1726,8 @@ class PolicyCheckStepHandler(StepHandler):
             if not self._match_selects(parsed, context):
                 return self._not_applicable(policy, context, 'match_type')
             rule_object = _policy_rule_object(self._db, context)
-            if not self._where_selects(parsed, policy, context, rule_object):
+            where_object = partial(_policy_where_object, self._db, context, rule_object)
+            if not self._where_selects(parsed, policy, context, where_object):
                 return self._not_applicable(policy, context, 'where')
 
             # Evaluate the policy's rule against the entity
@@ -1745,14 +1775,16 @@ class PolicyCheckStepHandler(StepHandler):
 
     @staticmethod
     def _match_selects(parsed: Optional[Dict[str, Any]], context: StepContext) -> bool:
+        # Both names of a type select it (MATCH (r:data_asset_review) or (r:review))
         match_type = ((parsed or {}).get('match_type') or '').lower()
+        match_type = _COMPLIANCE_TYPES.get(match_type, match_type)
         entity_type = (context.entity_type or '').lower()
         return match_type in ('', 'object', _COMPLIANCE_TYPES.get(entity_type, entity_type))
 
     @staticmethod
     def _where_selects(
         parsed: Optional[Dict[str, Any]], policy, context: StepContext,
-        rule_object: Dict[str, Any],
+        where_object: Callable[[], Dict[str, Any]],
     ) -> bool:
         """Whether WHERE selects the entity.
 
@@ -1765,8 +1797,9 @@ class PolicyCheckStepHandler(StepHandler):
         where = (parsed or {}).get('where_clause')
         if where is None:
             return True
+        obj = where_object()  # Loaded only for a WHERE; its errors fail the step as coded
         try:
-            return bool(Evaluator(rule_object).evaluate(where))
+            return bool(Evaluator(obj).evaluate(where))
         except Exception as e:
             # The cause stays in the server log (execute logs it with the chain)
             raise RuleWhereEvaluationError(

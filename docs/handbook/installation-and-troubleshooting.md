@@ -73,6 +73,14 @@ conceptually:
   toggle lives in workspace Previews. Without OBO, the app falls back
   to SP-only auth and most lifecycle actions fail because they need
   the calling user's permissions to grant securely.
+- **Domain Sync account permission.** Domain Sync is performed by the
+  Ontos app service principal rather than by each initiating user's OBO
+  token. After the app is created, an account admin must grant its service
+  principal the account role `roles/discovery.manager` (`MANAGE DISCOVER`).
+  Ontos RBAC still controls who can start a sync; the app role makes the
+  result independent of which authorized Ontos administrator starts it.
+  Do not add a `domains` entry to `user_api_scopes`: Databricks Apps does
+  not support that OBO scope.
 - Optionally, a **Marketplace listing** in the workspace's regional
   Marketplace feed.
 

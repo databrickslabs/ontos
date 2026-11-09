@@ -77,3 +77,32 @@ def block_types(content: Any) -> list:
         t = b.get("type") if isinstance(b, dict) else getattr(b, "type", None)
         types.append(t if isinstance(t, str) else type(b).__name__)
     return types
+
+
+def _block_refusal(block: Any) -> str:
+    if isinstance(block, dict):
+        kind, text = block.get("type"), block.get("refusal")
+    else:
+        kind, text = getattr(block, "type", None), getattr(block, "refusal", None)
+    return text if kind == "refusal" and isinstance(text, str) else ""
+
+
+def refusal_text(message: Any) -> str:
+    """The model's refusal in a chat-completion ``message``, or "" if it didn't refuse.
+
+    Reads the OpenAI ``message.refusal`` field and ``{"type": "refusal",
+    "refusal": "..."}`` content blocks (which :func:`block_text` drops, so a
+    refusal is never counted as answer text). Multiple refusals are joined
+    with a blank line.
+    """
+    parts = []
+    top = getattr(message, "refusal", None)
+    if isinstance(top, str) and top.strip():
+        parts.append(top.strip())
+    content = getattr(message, "content", None)
+    blocks = content if isinstance(content, (list, tuple)) else [content]
+    for block in blocks:
+        text = _block_refusal(block).strip()
+        if text and text not in parts:
+            parts.append(text)
+    return "\n\n".join(parts)

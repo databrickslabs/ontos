@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from src.common.api_errors import new_error_id
 from src.common.config import Settings, get_settings
-from src.common.llm_content import block_types, coerce_message_text
+from src.common.llm_content import block_types, coerce_message_text, refusal_text
 from src.common.logging import get_logger
 from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
@@ -839,6 +839,10 @@ class LLMSearchManager:
                 # emits them occasionally. ``****`` (4+) is never valid
                 # CommonMark, so stripping it is safe.
                 cleaned_content = _strip_asterisk_runs(cleaned_content)
+                if not cleaned_content.strip():
+                    # A refusal (OpenAI ``refusal`` block or field) is the
+                    # model's reply: show it rather than an empty-answer error.
+                    cleaned_content = refusal_text(assistant_message)
                 if not cleaned_content.strip():
                     # Reasoning-only or blank content: fail the turn with a code
                     # instead of storing an empty reply.

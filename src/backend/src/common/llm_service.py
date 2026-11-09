@@ -13,10 +13,25 @@ from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
 from src.common.config import Settings, get_settings
-from src.common.llm_content import block_types, coerce_message_text
+from src.common.llm_content import block_types, coerce_message_text, refusal_text
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Output budget of the Phase 1 safety check. The answer is one word (SAFE /
+# UNSAFE plus a reason), but reasoning models spend part of the budget on
+# reasoning first: at 256 tokens the reply often had no answer left
+# (finish_reason=length), and the check failed closed on harmless content.
+PHASE1_MAX_TOKENS = 2048
+# Output budget of the Phase 2 content analysis.
+PHASE2_MAX_TOKENS = 2048
+
+
+@dataclass
+class _LLMReply:
+    """Answer text (text blocks only) and refusal text of one completion."""
+    text: str
+    refusal: str
 
 
 @dataclass
@@ -81,8 +96,15 @@ class LLMService:
             user_token: Per-user access token (for Databricks Apps)
 
         Returns:
-            Response content string or None on failure
+            Response content string or None on failure (a refusal is not content)
         """
+        reply = self._complete(messages, max_tokens=max_tokens, user_token=user_token)
+        return reply.text if reply is not None and reply.text else None
+
+    def _complete(
+        self, messages: list[Dict[str, str]], max_tokens: int, user_token: Optional[str] = None
+    ) -> Optional[_LLMReply]:
+        """Call the endpoint; None when there is neither answer text nor a refusal."""
         endpoint = self.get_endpoint()
         if not endpoint:
             logger.error("Cannot call LLM: No endpoint configured")
@@ -107,8 +129,15 @@ class LLMService:
                 # Reasoning models return a block list; keep only the text
                 # blocks so an all-reasoning response counts as "no content".
                 content = coerce_message_text(raw_content).strip()
-                if content:
-                    return content
+                refusal = refusal_text(choice.message)
+                if refusal:
+                    logger.warning(
+                        "LLM refused the request (finish_reason=%s, block types: %s)",
+                        finish_reason,
+                        block_types(raw_content),
+                    )
+                if content or refusal:
+                    return _LLMReply(text=content, refusal=refusal)
 
             logger.warning(
                 "LLM returned no content in response (finish_reason=%s, block types: %s)",
@@ -139,11 +168,17 @@ class LLMService:
             {"role": "user", "content": content}
         ]
 
-        response = self._call_llm(messages, max_tokens=256, user_token=user_token)
+        reply = self._complete(messages, max_tokens=PHASE1_MAX_TOKENS, user_token=user_token)
 
-        if response is None:
+        if reply is not None and reply.refusal:
+            # A refusal is not a verdict: fail closed, even next to a "SAFE" text block.
+            logger.warning("Phase 1 FAILED: the model refused the security check")
+            return False, reply.refusal
+
+        if reply is None or not reply.text:
             logger.error("Phase 1 security check failed: No response from LLM")
             return False, "Security check failed: Unable to verify content safety"
+        response = reply.text
 
         # Check if response indicates content is safe
         response_upper = response.upper()
@@ -182,7 +217,9 @@ class LLMService:
             {"role": "user", "content": content}
         ]
 
-        response = self._call_llm(messages, max_tokens=2048, user_token=user_token)
+        reply = self._complete(messages, max_tokens=PHASE2_MAX_TOKENS, user_token=user_token)
+        # A refusal is the model's reply to the analysis: show it instead of failing.
+        response = (reply.text or reply.refusal) if reply is not None else None
 
         if response:
             logger.info("Phase 2 COMPLETED: Content analysis successful")

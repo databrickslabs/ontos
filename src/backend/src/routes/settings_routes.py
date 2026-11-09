@@ -33,6 +33,7 @@ from ..common.sanitization import sanitize_markdown_input
 from ..common.search_config_loader import get_search_config_loader
 from ..common.authorization import PermissionChecker, require_demo_admin_or_setup_token
 from ..common.features import FeatureAccessLevel
+from ..common.api_errors import CodedValueError
 
 # Configure logging
 from src.common.logging import get_logger, redact_sensitive_keys
@@ -300,6 +301,10 @@ async def create_role(
             details["created_role_id"] = str(created_role.id)
         
         return created_role
+    except CodedValueError as e:
+        # Coded refusals (e.g. unknown hidden_nav_features) keep their code and params.
+        details["exception"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ValueError as e:
         logger.warning("Validation error creating role '%s': %s", role_data.name, e)
         details["exception"] = str(e)
@@ -364,6 +369,9 @@ async def update_role(
         success = True
         
         return updated_role
+    except CodedValueError as e:
+        details["exception"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ValueError as e:
         logger.warning("Validation error updating role %s: %s", role_id, e)
         details["exception"] = str(e)

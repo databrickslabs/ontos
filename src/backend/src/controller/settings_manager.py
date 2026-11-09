@@ -31,6 +31,7 @@ from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdat
 from src.models.workflow_installations import WorkflowInstallation
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
 from src.common.logging import get_logger
+from src.common.api_errors import CodedValueError
 from src.repositories.settings_repository import app_role_repo, role_hierarchy_repo
 from src.repositories.workflow_installations_repository import workflow_installation_repo
 from src.repositories.app_settings_repository import app_settings_repo
@@ -41,6 +42,12 @@ from src.db_models.teams import TeamDb, TeamMemberDb
 from src.db_models.projects import ProjectDb
 
 logger = get_logger(__name__)
+
+
+class RoleNavFeatureUnknownError(CodedValueError):
+    """A role hides feature ids that don't exist in the feature configuration."""
+
+    code = 'role_nav_feature_unknown'
 
 # Define the path for storing roles configuration
 # ROLES_YAML_PATH = Path("api/data/app_roles.yaml")
@@ -1918,6 +1925,21 @@ class SettingsManager:
             logger.warning(f"Could not parse or convert home_sections JSON for role ID {role_db.id}: {getattr(role_db, 'home_sections', None)}. Error: {e}")
             home_sections = []
 
+        # Feature ids hidden from this role's navigation (#1325). Ids dropped from the
+        # feature config later are filtered out so they never reach the API.
+        try:
+            hidden_raw = json.loads(getattr(role_db, 'hidden_nav_features', '[]') or '[]')
+            known_features = get_feature_config()
+            hidden_nav_features = [
+                f for f in hidden_raw if isinstance(f, str) and f in known_features
+            ] if isinstance(hidden_raw, list) else []
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(
+                "Could not parse hidden_nav_features JSON for role ID %s: %s",
+                role_db.id, e,
+            )
+            hidden_nav_features = []
+
         # Parse approval privileges
         try:
             approval_privs_raw = json.loads(getattr(role_db, 'approval_privileges', '{}') or '{}')
@@ -1959,6 +1981,7 @@ class SettingsManager:
             assigned_users=assigned_users,
             feature_permissions=feature_permissions,
             home_sections=home_sections,
+            hidden_nav_features=hidden_nav_features,
             approval_privileges=approval_privileges,
             deployment_policy=deployment_policy,
             is_admin=getattr(role_db, 'is_admin', False),
@@ -2128,6 +2151,7 @@ class SettingsManager:
 
         # Validate permissions against allowed levels
         self._validate_permissions(role.feature_permissions)
+        self._validate_hidden_nav_features(role.hidden_nav_features)
 
         try:
             # Pass the Pydantic model directly to the repository
@@ -2203,6 +2227,23 @@ class SettingsManager:
                     f"Invalid access level '{level.value}' for feature '{feature_id}'. "
                     f"Allowed levels are: {allowed_str}"
                 )
+
+    @staticmethod
+    def _validate_hidden_nav_features(feature_ids: Optional[List[str]]) -> None:
+        """Refuse feature ids that aren't in the feature configuration (#1325).
+
+        Unlike stale permission keys, these come straight from the role editor, so an
+        unknown id is a client error and is answered with a coded 400 instead of
+        being dropped silently. Search and My Requests have no feature id and can't
+        be hidden per role.
+        """
+        feature_config = get_feature_config()
+        unknown = [fid for fid in (feature_ids or []) if fid not in feature_config]
+        if unknown:
+            raise RoleNavFeatureUnknownError(
+                f"Unknown feature ids in hidden_nav_features: {', '.join(map(str, unknown))}",
+                feature_ids=unknown,
+            )
 
     def _queue_role_delivery(
         self,
@@ -2284,6 +2325,8 @@ class SettingsManager:
             user: Username of updater (for delivery tracking)
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
         """
+        # No DB access needed: refuse before the try so nothing is rolled back.
+        self._validate_hidden_nav_features(role_update.hidden_nav_features)
         try:
             role_db = self.app_role_repo.get(db=self._db, id=role_id)
             if not role_db:

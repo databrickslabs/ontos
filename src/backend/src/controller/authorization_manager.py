@@ -266,3 +266,43 @@ class AuthorizationManager:
             if user_group_set.intersection(role_groups) or (user_email_norm and user_email_norm in role_users):
                 role_ids.add(str(role.id))
         return role_ids
+
+    def get_user_hidden_nav_features(
+        self,
+        user_groups: Optional[List[str]],
+        applied_role_override_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+    ) -> List[str]:
+        """Feature ids the viewer's menus hide (sidebar, home quick actions, About) (#1325).
+
+        Roles are resolved like the permissions (``get_user_effective_role_ids``: the
+        applied role override pins one role, otherwise group or email matches). A
+        feature is hidden only when every resolved role that grants it at least
+        Read-only hides it, so one role that shows it is enough. A resolved
+        ``is_admin`` role hides nothing. Visibility only: access is unchanged.
+        """
+        role_ids = self.get_user_effective_role_ids(
+            user_groups,
+            applied_role_override_id=applied_role_override_id,
+            user_email=user_email,
+        )
+        if not role_ids:
+            return []
+        roles = [r for r in self._settings_manager.list_app_roles() if str(r.id) in role_ids]
+        if not roles or any(getattr(r, 'is_admin', False) for r in roles):
+            return []
+
+        read_only = ACCESS_LEVEL_ORDER[FeatureAccessLevel.READ_ONLY]
+        hidden: List[str] = []
+        for feature_id in get_feature_config():
+            granting = [
+                r for r in roles
+                if ACCESS_LEVEL_ORDER.get(
+                    (r.feature_permissions or {}).get(feature_id, FeatureAccessLevel.NONE), 0
+                ) >= read_only
+            ]
+            if granting and all(
+                feature_id in (r.hidden_nav_features or []) for r in granting
+            ):
+                hidden.append(feature_id)
+        return hidden

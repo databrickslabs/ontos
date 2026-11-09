@@ -82,6 +82,13 @@ class AppRoleBase(BaseModel):
     )
     feature_permissions: Dict[str, FeatureAccessLevel] = Field(default_factory=dict)
     home_sections: List[HomeSection] = Field(default_factory=list, description="Home sections visible for this role")
+    hidden_nav_features: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Feature ids hidden from this role's navigation (sidebar, home quick actions, "
+            "About). Visibility only: access levels are unchanged. Empty = all shown."
+        ),
+    )
     approval_privileges: Dict[ApprovalEntity, bool] = Field(default_factory=dict, description="Entity-level approval capabilities")
     deployment_policy: Optional[DeploymentPolicy] = Field(None, description="Policy for catalog/schema deployment restrictions")
     is_admin: bool = Field(default=False, description="Whether this role is the admin role")
@@ -98,6 +105,19 @@ class AppRoleBase(BaseModel):
         default_factory=list,
         description="Role IDs that can approve access requests for this role."
     )
+
+    @field_validator('hidden_nav_features', mode='before')
+    @classmethod
+    def _dedupe_hidden_nav_features(cls, v):
+        """Strip and dedupe feature ids (preserve order); unknown ids are refused by the manager."""
+        if v is None or not isinstance(v, list):
+            return v  # None = unchanged on update; let Pydantic raise the type error otherwise
+        out: List[str] = []
+        for entry in v:
+            fid = entry.strip() if isinstance(entry, str) else entry
+            if fid not in out:
+                out.append(fid)
+        return out
 
     @field_validator('assigned_users', mode='before')
     @classmethod
@@ -133,6 +153,7 @@ class AppRoleUpdate(AppRoleBase):
     assigned_users: Optional[List[str]] = None
     feature_permissions: Optional[Dict[str, FeatureAccessLevel]] = None
     home_sections: Optional[List[HomeSection]] = None
+    hidden_nav_features: Optional[List[str]] = None
     approval_privileges: Optional[Dict[ApprovalEntity, bool]] = None
     deployment_policy: Optional[DeploymentPolicy] = None
     is_admin: Optional[bool] = None

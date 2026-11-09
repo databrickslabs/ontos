@@ -1005,6 +1005,23 @@ class WorkflowsManager:
             return [CodedMessage(str(e), e.code, **e.params)]
         return []
 
+    @staticmethod
+    def with_stored_schedule(
+        new: Optional[WorkflowTrigger], stored: Optional[WorkflowTrigger],
+    ) -> Optional[WorkflowTrigger]:
+        """A sent ``scheduled`` trigger keeps the stored ``schedule``/``timezone`` it leaves out.
+
+        The designer doesn't edit schedules and sends neither field, so without this its
+        save of a scheduled workflow would drop the schedule. A field that is sent, even
+        empty, is used as sent (and validated).
+        """
+        if (new is None or stored is None or new.type != TriggerType.SCHEDULED
+                or stored.type != TriggerType.SCHEDULED):
+            return new
+        kept = {field: getattr(stored, field) for field in ('schedule', 'timezone')
+                if field not in new.model_fields_set}
+        return new.model_copy(update=kept) if kept else new
+
     def _validate_gate_exemptions(self, trigger: WorkflowTrigger) -> List[str]:
         """``disabled_for`` is for status gates only, and must name existing entities."""
         exemptions = trigger.disabled_for

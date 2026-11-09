@@ -201,10 +201,18 @@ class ConnectionsManager:
     def list_connector_types(self) -> List[Dict[str, Any]]:
         """Return metadata about registered connector types available for use.
 
-        Connectors that are not available (``is_available`` is False) are
+        Connectors that are not selectable (``is_selectable`` is False) are
         filtered out so mockup/stub connectors (e.g. Snowflake, PowerBI, Kafka)
-        do not appear in the Add Connection dropdown. The default connector type
-        is always retained so the primary connection path is never hidden.
+        do not appear in the Add Connection dropdown.
+
+        Selectability is a *static* implementation-status flag and must not be
+        confused with the runtime ``is_available`` check: ``is_available``
+        reflects whether an already-configured connection can currently reach
+        its backend, which is False for a not-yet-configured connector such as
+        BigQuery (no project/credentials at startup). Gating the dropdown on
+        ``is_available`` would therefore hide fully implemented connectors that
+        the user has not configured yet — which is exactly what this dialog is
+        for.
         """
         registry = get_registry()
         default_type = getattr(registry, "_default_connector_type", None)
@@ -219,9 +227,9 @@ class ConnectionsManager:
             }
             try:
                 connector = registry.get_connector(ctype)
-                # Hide unavailable connectors (stubs hard-code is_available=False),
-                # but always keep the default connector type.
-                if not connector.is_available and ctype != default_type:
+                # Hide stub/mockup connectors (is_selectable=False), but always
+                # keep the default connector type.
+                if not connector.is_selectable and ctype != default_type:
                     continue
                 info["display_name"] = connector.display_name
                 info["description"] = connector.description

@@ -187,6 +187,7 @@ class TestChangeLogManager:
             mock_db,
             entity_type="data_product",
             entity_id="product-123",
+            action=None,
             limit=100,
         )
 
@@ -213,6 +214,7 @@ class TestChangeLogManager:
             mock_db,
             entity_type="data_product",
             entity_id="product-123",
+            action=None,
             limit=50,
         )
 
@@ -220,6 +222,7 @@ class TestChangeLogManager:
             mock_db,
             entity_type="data_product",
             entity_id="product-123",
+            action=None,
             limit=50,
         )
 

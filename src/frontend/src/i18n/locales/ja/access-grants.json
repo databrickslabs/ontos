@@ -2,16 +2,23 @@
   "request": {
     "title": "アクセスをリクエスト",
     "description": "この{{entityType}}を表示・使用する権限をリクエストします。",
+    "dialogTitle": "期間限定アクセスをリクエスト",
+    "dialogDescription": "この {{entityType}} への一時的なアクセスをリクエストします。必要なアクセス期間を選択し、理由を記入してください。",
+    "permissionLabel": "権限レベル",
     "reason": {
       "label": "アクセス理由",
+      "fullLabel": "アクセスリクエストの理由",
       "placeholder": "この{{entityType}}へのアクセスが必要な理由を説明してください...",
+      "detailedPlaceholder": "このリソースへのアクセスが必要な理由を説明してください。想定しているユースケース、プロジェクト要件、業務上の正当性などの詳細を記載してください...",
       "required": "アクセスをリクエストする理由を入力してください",
-      "minLength": "より詳細な理由を入力してください（10文字以上）"
+      "minLength": "より詳細な理由を入力してください（10文字以上）",
+      "help": "10文字以上必要です。この情報は管理者によって確認されます。"
     },
     "duration": {
       "label": "アクセス期間",
       "placeholder": "期間を選択",
       "helpText": "選択した期間後にアクセスは期限切れになります。期限前に更新をリクエストできます。",
+      "help": "アクセス権はこの期間の経過後に自動的に失効します。",
       "days": "{{count}}日",
       "days_plural": "{{count}}日",
       "months": "{{count}}ヶ月",
@@ -20,8 +27,13 @@
       "years_plural": "{{count}}年"
     },
     "submit": "リクエストを送信",
-    "cancel": "キャンセル",
+    "submitting": "リクエストを送信中...",
+    "submitButtonWithDuration": "{{duration}} のアクセスをリクエスト",
     "success": "アクセスリクエストが正常に送信されました",
+    "submittedTitle": "リクエストを送信しました",
+    "submittedDescription_one": "{{count}} 日間のアクセスリクエストを送信しました。判断結果は通知されます。",
+    "submittedDescription_other": "{{count}} 日間のアクセスリクエストを送信しました。判断結果は通知されます。",
+    "cancel": "キャンセル",
     "error": "アクセスリクエストの送信に失敗しました"
   },
   "panel": {
@@ -29,20 +41,123 @@
     "description": "このリソースへの期限付きアクセスを持つユーザー",
     "noGrants": "このリソースへのアクセス権限はありません",
     "noGrantsHint": "ユーザーは「アクセスをリクエスト」ボタンを使用して期限付きアクセスをリクエストできます。",
-    "columns": {
-      "user": "ユーザー",
-      "permission": "権限レベル",
-      "granted": "付与日",
-      "expires": "有効期限",
-      "actions": "操作"
-    },
+    "requestButton": "アクセスをリクエスト",
+    "refresh": "更新",
+    "activeGrants": "有効な付与",
+    "activeGrantsCount": "有効な付与（{{count}}）",
+    "pendingRequests": "保留中のリクエスト",
+    "pendingRequestsCount": "保留中のリクエスト（{{count}}）",
+    "expiresAt": "有効期限",
+    "grantedAt": "付与日",
+    "requestedAt": "リクエスト日",
     "revoke": "取り消し",
-    "revokeConfirm": "このアクセス権限を取り消してもよろしいですか？"
+    "revokeConfirm": "このアクセス権限を取り消してもよろしいですか？",
+    "revokeConfirmDetailed": "<bold>{{user}}</bold> のアクセス権を取り消してもよろしいですか？この操作は取り消せません。",
+    "revokeTitle": "アクセスを取り消す",
+    "revokeSuccess": "アクセスを取り消しました",
+    "revokedTitle": "アクセスを取り消しました",
+    "revokedDescription": "{{user}} のアクセス権が取り消されました。",
+    "revokeError": "アクセスの取り消しに失敗しました",
+    "review": "確認",
+    "expiringBadge": "{{count}} 件が失効間近",
+    "expiringSoonTooltip_one": "{{count}} 件の付与がまもなく失効します",
+    "expiringSoonTooltip_other": "{{count}} 件の付与がまもなく失効します",
+    "durationDays_one": "{{count}} 日",
+    "durationDays_other": "{{count}} 日",
+    "expiresTooltip": "有効期限: {{date}}",
+    "handle": "リクエストを処理",
+    "columns": {
+      "actions": "操作",
+      "expires": "有効期限",
+      "granted": "付与日",
+      "grantedBy": "付与者",
+      "permission": "権限レベル",
+      "user": "ユーザー",
+      "requester": "リクエスト元",
+      "duration": "期間"
+    },
+    "expiry": {
+      "unknown": "不明",
+      "expired": "失効済み",
+      "today": "今日",
+      "days_one": "{{count}} 日",
+      "days_other": "{{count}} 日",
+      "weeks_one": "{{count}} 週間",
+      "weeks_other": "{{count}} 週間",
+      "months_one": "{{count}} か月",
+      "months_other": "{{count}} か月"
+    }
+  },
+  "handle": {
+    "title": "アクセスリクエストを処理",
+    "description": "このアクセスリクエストを確認し、承認または却下してください。",
+    "approve": "承認",
+    "approveWithDuration": "承認（{{duration}}）",
+    "deny": "却下",
+    "clarify": "追加情報を要求",
+    "grantDuration": "付与期間",
+    "durationToGrant": "付与する期間",
+    "permissionToGrant": "付与する権限レベル",
+    "requestedSuffix": "（リクエスト済み）",
+    "response": "返信メッセージ",
+    "responsePlaceholder": "フィードバックまたは追加情報を入力してください...",
+    "messageLabel": "リクエスト元へのメッセージ（任意）",
+    "messagePlaceholder": "リクエスト元へのメッセージを追加してください（例: 承認条件、却下理由）...",
+    "adjustNote": "承認する場合、付与するアクセス内容を調整できます:",
+    "approvedTitle": "リクエストを承認しました",
+    "deniedTitle": "リクエストを却下しました",
+    "approvedDescription": "{{duration}} のアクセス権を付与しました。",
+    "deniedDescription": "リクエスト元に通知されました。",
+    "error": "判断の処理に失敗しました",
+    "approveSuccess": "アクセスリクエストを承認しました",
+    "denySuccess": "アクセスリクエストを却下しました",
+    "clarifySuccess": "追加情報を要求しました",
+    "fields": {
+      "requester": "リクエスト元:",
+      "resource": "リソース:",
+      "requestedDuration": "リクエストされた期間:",
+      "requestedPermission": "リクエストされた権限:",
+      "submitted": "送信日時:",
+      "reason": "理由:"
+    }
   },
   "entityTypes": {
     "data_product": "データプロダクト",
     "dataset": "データセット",
     "data_contract": "データコントラクト"
+  },
+  "entityTypeLabels": {
+    "data_product": "データプロダクト",
+    "data_contract": "データコントラクト",
+    "table": "テーブル",
+    "schema": "スキーマ",
+    "catalog": "カタログ"
+  },
+  "permissionLevels": {
+    "READ": "読み取り",
+    "WRITE": "書き込み",
+    "MANAGE": "管理"
+  },
+  "permissionOptions": {
+    "READ": "読み取り専用",
+    "WRITE": "読み取りと書き込み",
+    "MANAGE": "フルアクセス（管理）"
+  },
+  "permissionSelectPlaceholder": "権限レベルを選択",
+  "statuses": {
+    "active": "有効",
+    "expired": "失効済み",
+    "revoked": "取り消し済み",
+    "pending": "保留中"
+  },
+  "resource": "リソース",
+  "resourceCapitalized": "リソース",
+  "duration": {
+    "days_one": "{{count}} 日",
+    "days_other": "{{count}} 日",
+    "months_one": "{{count}} か月",
+    "months_other": "{{count}} か月",
+    "years_one": "{{count}} 年",
+    "years_other": "{{count}} 年"
   }
 }
-

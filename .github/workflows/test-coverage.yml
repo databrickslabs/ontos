@@ -11,10 +11,10 @@ on:
   # waiting on checks that never report.
   merge_group:
 
+# Least privilege: read-only by default. Each job requests what it needs;
+# only the lockfile job writes (auto-commit + PR comment).
 permissions:
-  id-token: write
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   backend-tests:
@@ -23,10 +23,13 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
@@ -57,7 +60,7 @@ jobs:
             -v
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./src/coverage.xml
           flags: backend
@@ -71,7 +74,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload HTML coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: backend-coverage-html
@@ -99,10 +102,13 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-node-jfrog
         with:
@@ -117,7 +123,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./src/frontend/coverage/lcov.info
           flags: frontend
@@ -128,7 +134,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload HTML coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: frontend-coverage-html
@@ -146,8 +152,18 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 20
-    # E2E tests temporarily disabled on all branches
-    if: false
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
+    # Playwright E2E: pushes to main and pull requests targeting development.
+    # Not run for merge_group, so it is not part of the merge-queue checks.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'development')
+    # A new push to the same pull request cancels the run still in progress
+    concurrency:
+      group: e2e-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
     services:
       postgres:
@@ -166,7 +182,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
@@ -188,7 +204,7 @@ jobs:
         run: npm ci
 
       - name: Cache Playwright browsers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -246,7 +262,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: playwright-report
@@ -254,7 +270,7 @@ jobs:
           retention-days: 7
 
       - name: Upload test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: playwright-results
@@ -267,10 +283,13 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-node-jfrog
         with:
@@ -290,10 +309,14 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write # auto-commit regenerated lockfiles
+      pull-requests: write # comment on the PR
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Check out the PR head branch (not the merge commit) so we can push back.
           # Falls back to the default ref for push events.
@@ -312,7 +335,7 @@ jobs:
           cache: ''
 
       - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
       - name: Regenerate lockfiles
         run: ./scripts/lock-requirements.sh
@@ -341,14 +364,17 @@ jobs:
 
       - name: Auto-commit lockfile updates to PR branch
         if: github.event_name == 'pull_request' && steps.drift.outputs.drifted == 'true' && steps.fork.outputs.is_fork == 'false'
+        env:
+          # Branch names are user-controlled: pass them via env, not inline.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt
           git commit -m "chore: regenerate requirements lockfiles"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          echo "Pushed regenerated lockfiles to ${{ github.event.pull_request.head.ref }}."
+          git push origin "HEAD:${HEAD_REF}"
+          echo "Pushed regenerated lockfiles to ${HEAD_REF}."
           echo "CI will re-run on the new SHA (requires LOCKFILE_BOT_TOKEN secret to be a PAT)."
 
       - name: Comment on PR
@@ -376,14 +402,23 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
     # Skip on PRs that intentionally carry a divergent migration branch.
     # The label is the documented escape hatch for the rare case where two
     # heads are deliberate and a merge revision is planned in the PR itself.
-    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'alembic-branch')
+    # It also runs in the merge queue: queued PRs are built together, so two
+    # PRs that each add a migration on the same parent pass on their own and
+    # would land with two heads (the app can't start then). The label doesn't
+    # apply there: the queued tree must end with a single head either way.
+    if: >-
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'alembic-branch'))
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Fetch enough history to diff against the PR base.
           fetch-depth: 0
@@ -400,12 +435,15 @@ jobs:
           hatch -e dev run pip install --require-hashes -r backend/requirements.txt
 
       - name: Fetch PR base ref
+        if: github.event_name == 'pull_request'
         run: git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
 
       - name: Enforce single alembic head + base-ancestry
         working-directory: ./src
         env:
-          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          # In the merge queue the base is the commit the queued batch sits on
+          # (an ancestor of the checked-out queue commit, so no extra fetch).
+          BASE_REF: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.event.pull_request.base.ref) }}
         run: |
           hatch -e dev run python ../scripts/check-alembic-heads.py
 
@@ -415,10 +453,13 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # JFrog OIDC
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-node-jfrog
         with:
@@ -442,16 +483,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download backend coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: backend-coverage-html
           path: ./coverage/backend
 
       - name: Download frontend coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: frontend-coverage-html
           path: ./coverage/frontend
@@ -465,7 +506,7 @@ jobs:
           echo "- Frontend: coverage/frontend/" >> coverage-summary.md
 
       - name: Upload combined coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: combined-coverage-reports
           path: ./coverage/

@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Table,
   Layout,
+  BarChart3,
   FolderKanban,
   Pencil,
   Trash2,
@@ -51,10 +52,14 @@ import remarkGfm from 'remark-gfm';
 import { useCopilotContext } from '@/hooks/use-copilot-context';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 
+// Tables and views can be previewed; a metric view only answers queries
+// that aggregate its measures, so it has no data preview.
+const hasViewableData = (type?: string) => type === 'table' || type === 'view';
+
 interface CatalogItem {
   id: string;
   name: string;
-  type: 'catalog' | 'schema' | 'table' | 'view';
+  type: 'catalog' | 'schema' | 'table' | 'view' | 'metric';
   children: CatalogItem[];
   hasChildren: boolean;
 }
@@ -361,7 +366,7 @@ const CatalogCommander: React.FC = () => {
         console.warn('Table not found:', tableId);
         toast({
           title: t('common:error'),
-          description: `Table "${tableName}" not found in ${schemaId}`,
+          description: t('messages.tableNotFound', { name: tableName, schema: schemaId }),
           variant: 'destructive',
         });
       }
@@ -376,7 +381,7 @@ const CatalogCommander: React.FC = () => {
       console.error('Error navigating to table:', err);
       toast({
         title: t('common:error'),
-        description: `Failed to navigate to ${tablePath}`,
+        description: t('messages.failedToNavigate', { path: tablePath }),
         variant: 'destructive',
       });
     }
@@ -422,8 +427,8 @@ const CatalogCommander: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Chat request failed' }));
-        throw new Error(error.detail || 'Chat request failed');
+        const error = await response.json().catch(() => ({ detail: t('errors.chatRequestFailed') }));
+        throw new Error(error.detail || t('errors.chatRequestFailed'));
       }
 
       const data = await response.json();
@@ -432,11 +437,11 @@ const CatalogCommander: React.FC = () => {
       // Add assistant response
       setAskMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.message.content || 'No response',
+        content: data.message.content || t('messages.noResponse'),
         timestamp: data.message.timestamp || new Date().toISOString()
       }]);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      const errorMessage = err instanceof Error ? err.message : t('errors.failedToSendMessage');
       toast({
         title: t('errors.error'),
         description: errorMessage,
@@ -486,8 +491,8 @@ const CatalogCommander: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Chat request failed' }));
-        throw new Error(error.detail || 'Chat request failed');
+        const error = await response.json().catch(() => ({ detail: t('errors.chatRequestFailed') }));
+        throw new Error(error.detail || t('errors.chatRequestFailed'));
       }
 
       const data = await response.json();
@@ -496,11 +501,11 @@ const CatalogCommander: React.FC = () => {
       // Add assistant response
       setAskMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.message.content || 'No response',
+        content: data.message.content || t('messages.noResponse'),
         timestamp: data.message.timestamp || new Date().toISOString()
       }]);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      const errorMessage = err instanceof Error ? err.message : t('errors.failedToSendMessage');
       toast({
         title: t('errors.error'),
         description: errorMessage,
@@ -581,6 +586,8 @@ const CatalogCommander: React.FC = () => {
         return <Table className="h-4 w-4 text-orange-500" />;
       case 'view':
         return <Layout className="h-4 w-4 text-purple-500" />;
+      case 'metric':
+        return <BarChart3 className="h-4 w-4 text-amber-500" />;
       default:
         return null;
     }
@@ -631,7 +638,7 @@ const CatalogCommander: React.FC = () => {
         <div className="flex gap-2">
           <Button
             onClick={() => handleViewDataset(getSelectedNodeDetails()?.id || '')}
-            disabled={!selectedItems.length || getSelectedNodeDetails()?.type !== 'table'}
+            disabled={!selectedItems.length || !hasViewableData(getSelectedNodeDetails()?.type)}
             variant="outline"
             size="sm"
             className="h-9"
@@ -875,7 +882,7 @@ const CatalogCommander: React.FC = () => {
                           onValueChange={setSelectedTargetEstate}
                         >
                           <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Select Estate" />
+                            <SelectValue placeholder={t('labels.selectEstate')} />
                           </SelectTrigger>
                           <SelectContent>
                             {estates.map(estate => (
@@ -915,7 +922,7 @@ const CatalogCommander: React.FC = () => {
                         <div className="flex flex-col items-center justify-center h-full min-h-[200px] p-4">
                           <div className="text-destructive text-sm mb-3">{error}</div>
                           <Button size="sm" variant="outline" onClick={() => fetchCatalogs()}>
-                            Retry
+                            {t('actions.retry')}
                           </Button>
                         </div>
                       ) : (
@@ -1141,7 +1148,7 @@ const CatalogCommander: React.FC = () => {
                                   <span className="text-sm text-muted-foreground">{t('labels.fullPath')}</span>
                                   <code className="text-xs bg-muted p-2 rounded border break-all col-span-2 font-mono">{node.id}</code>
                                 </div>
-                                {node.type === 'table' && (
+                                {hasViewableData(node.type) && (
                                   <>
                                     <Separator />
                                     <div className="flex items-center justify-between">

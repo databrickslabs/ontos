@@ -18,8 +18,22 @@
  *      progress indicator (non-visual + pass/fail filtered out).
  *   6. Empty / missing steps array is treated as terminal (safety).
  */
-import { describe, it, expect } from 'vitest';
-import { computePreviewNextStep } from './approval-wizard-dialog';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import ApprovalWizardDialog, { computePreviewNextStep } from './approval-wizard-dialog';
+import { Toaster } from '@/components/ui/toaster';
+import { toast } from '@/hooks/use-toast';
+
+const { mockGet, mockPost } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPost: vi.fn() }));
+
+vi.mock('@/hooks/use-api', () => ({
+  useApi: () => ({ get: mockGet, post: mockPost }),
+}));
+
+vi.mock('@/stores/user-store', () => ({
+  useUserStore: (selector: (s: unknown) => unknown) =>
+    selector({ userInfo: { email: 'a@b.com', groups: [] }, fetchUserInfo: vi.fn().mockResolvedValue(undefined) }),
+}));
 
 type Step = Parameters<typeof computePreviewNextStep>[0] extends (infer S)[] | undefined ? S : never;
 
@@ -118,5 +132,81 @@ describe('computePreviewNextStep', () => {
     // target was deleted. Treat as terminal so preview at least finishes.
     const steps = [step({ step_id: 's1', step_type: 'user_action', on_pass: 'gone' })];
     expect(computePreviewNextStep(steps, 's1')).toEqual({ kind: 'terminal' });
+  });
+});
+
+/**
+ * Escape on the completion screen. The caller typically toasts the submit
+ * outcome as the wizard completes; that toast is the topmost Radix layer, so
+ * Escape only dismissed it and the wizard needed a second press to close.
+ */
+describe('ApprovalWizardDialog completion screen Escape', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockPost.mockReset();
+    mockGet.mockResolvedValue({
+      data: {
+        id: 'wf-1',
+        name: 'Request Access',
+        steps: [{ step_id: 'reason', name: 'Reason', step_type: 'user_action', order: 0, config: {} }],
+      },
+    });
+    mockPost.mockImplementation(async (url: string) => {
+      if (url === '/api/approvals/sessions') {
+        return {
+          data: {
+            session_id: 's-1',
+            current_step: {
+              step_id: 'reason',
+              name: 'Reason',
+              step_type: 'user_action',
+              order: 0,
+              config: { requires_input: false, required_fields: [] },
+            },
+            step_results: [],
+          },
+        };
+      }
+      return { data: { complete: true, agreement_id: 'agr-1' } };
+    });
+  });
+
+  async function openAtCompletion(withToast: boolean) {
+    const onOpenChange = vi.fn();
+    render(
+      <>
+        <ApprovalWizardDialog
+          isOpen
+          onOpenChange={onOpenChange}
+          entityType="data_product"
+          entityId="dp-1"
+          entityName="Orders"
+          preselectedWorkflowId="wf-1"
+          autoStartWithPreselected
+          onSessionComplete={() => {
+            if (withToast) toast({ title: 'Request submitted' });
+          }}
+        />
+        <Toaster />
+      </>,
+    );
+    const complete = await screen.findByRole('button', { name: /complete|proceed/i });
+    fireEvent.click(complete);
+    await screen.findByText(/agreement recorded/i);
+    if (withToast) await screen.findByText('Request submitted');
+    return { onOpenChange };
+  }
+
+  it('closes on the first Escape while a completion toast is showing', async () => {
+    const { onOpenChange } = await openAtCompletion(true);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('closes once, not twice, on Escape without a toast', async () => {
+    const { onOpenChange } = await openAtCompletion(false);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onOpenChange.mock.calls.filter(([open]) => open === false)).toHaveLength(1);
   });
 });

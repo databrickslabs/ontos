@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+const devPort = new URL(baseURL).port || '3000'
+
 // See https://playwright.dev/docs/test-configuration
 export default defineConfig({
   timeout: 90_000,
@@ -26,7 +29,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? 'html' : 'list',
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     video: 'retain-on-failure',
     // Dismiss the Ask Ontos copilot side-panel that opens by default for
@@ -36,7 +39,7 @@ export default defineConfig({
       storageState: {
         cookies: [],
         origins: [{
-          origin: process.env.BASE_URL || 'http://localhost:3000',
+          origin: baseURL,
           localStorage: [{ name: 'copilot-sidebar-visited', value: 'true' }],
         }],
       },
@@ -46,8 +49,8 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: 'npm run dev:frontend -- --port 3000',
-    url: 'http://localhost:3000',
+    command: `npm run dev:frontend -- --port ${devPort}`,
+    url: baseURL,
     reuseExistingServer: true,
     stdout: 'pipe',
     stderr: 'pipe',

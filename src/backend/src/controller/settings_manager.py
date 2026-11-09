@@ -8,9 +8,15 @@ import yaml
 from databricks.sdk import WorkspaceClient
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy import func
 
+from src.common.instance_identity import (
+    INSTANCE_ID_SETTING_KEY,
+    INSTANCE_NAME_SETTING_KEY,
+    validate_instance_id,
+    validate_instance_name,
+)
 from src.common.config import Settings
 from src.common.sanitization import (
     APP_SHORT_NAME_MAX_LEN,
@@ -88,6 +94,10 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_ONLY,
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.ADMIN,
+        # Concepts (Concept Browser) + Enrich (Term Mapping). The DGO is the
+        # concept APPROVER/certifier, so ADMIN on both.
+        'semantic-models': FeatureAccessLevel.ADMIN,
+        'term-mapping': FeatureAccessLevel.ADMIN,
         'compliance': FeatureAccessLevel.ADMIN,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'estate-manager': FeatureAccessLevel.ADMIN,
@@ -107,6 +117,12 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_ONLY,
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_WRITE,
+        # Concepts (Concept Browser) + Enrich (Term Mapping). The Data Steward is
+        # the concept CURATOR/AUTHOR: create, edit, submit for review, map to
+        # assets. READ_WRITE (not ADMIN) so they can't certify or bypass the
+        # review gate — that's the DGO/Admin's job.
+        'semantic-models': FeatureAccessLevel.READ_WRITE,
+        'term-mapping': FeatureAccessLevel.READ_WRITE,
         'compliance': FeatureAccessLevel.READ_ONLY,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'data-asset-reviews': FeatureAccessLevel.READ_WRITE,
@@ -121,6 +137,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_ONLY,
         'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_ONLY,
+        # Consumers browse concepts read-only.
+        'semantic-models': FeatureAccessLevel.READ_ONLY,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
@@ -133,6 +151,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'teams': FeatureAccessLevel.READ_WRITE,
         'projects': FeatureAccessLevel.READ_WRITE,
         'business-glossary': FeatureAccessLevel.READ_ONLY,
+        # Producers reference concepts when building products — browse read-only.
+        'semantic-models': FeatureAccessLevel.READ_ONLY,
         'process-workflows': FeatureAccessLevel.READ_ONLY,  # View workflows, Admin manages
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
         'comments': FeatureAccessLevel.READ_WRITE,  # All users can comment
@@ -200,6 +220,32 @@ class SettingsManager:
         # after the initial JobsManager creation above
         self._reinitialize_workspace_deployer()
 
+    def _update_instance_identity(self, settings: dict) -> None:
+        """Validate and persist ontos_instance_id / ontos_instance_name from a settings payload."""
+        # Instance identity: a blank value clears the override and reverts to the
+        # env/derived default; otherwise the value is validated and persisted.
+        if 'ontos_instance_id' in settings:
+            value = validate_instance_id(settings.get('ontos_instance_id'))
+            if value:
+                app_settings_repo.set(self._db, INSTANCE_ID_SETTING_KEY, value)
+                self._settings.ONTOS_INSTANCE_ID = value
+            else:
+                app_settings_repo.delete(self._db, INSTANCE_ID_SETTING_KEY)
+                self._settings.ONTOS_INSTANCE_ID = self._settings.instance_id_default
+            logger.info(f"Updated {INSTANCE_ID_SETTING_KEY} to: {self._settings.ONTOS_INSTANCE_ID}")
+
+        if 'ontos_instance_name' in settings:
+            value = validate_instance_name(settings.get('ontos_instance_name'))
+            if value:
+                app_settings_repo.set(self._db, INSTANCE_NAME_SETTING_KEY, value)
+                self._settings.ONTOS_INSTANCE_NAME = value
+            else:
+                app_settings_repo.delete(self._db, INSTANCE_NAME_SETTING_KEY)
+                self._settings.ONTOS_INSTANCE_NAME = self._settings.instance_name_default
+            logger.info(
+                f"Updated {INSTANCE_NAME_SETTING_KEY} to: {self._settings.ONTOS_INSTANCE_NAME}"
+            )
+
     def _load_persisted_settings(self) -> None:
         """Load persisted settings from database and apply to in-memory Settings."""
         try:
@@ -210,7 +256,45 @@ class SettingsManager:
             if 'WORKSPACE_DEPLOYMENT_PATH' in all_settings and all_settings['WORKSPACE_DEPLOYMENT_PATH'] is not None:
                 self._settings.WORKSPACE_DEPLOYMENT_PATH = all_settings['WORKSPACE_DEPLOYMENT_PATH']
                 logger.debug(f"Loaded WORKSPACE_DEPLOYMENT_PATH from database: {all_settings['WORKSPACE_DEPLOYMENT_PATH']}")
+
+            # SCHEMA_IMPORT_ASYNC_THRESHOLD (item count at/above which the importer offers a background run)
+            if all_settings.get('SCHEMA_IMPORT_ASYNC_THRESHOLD') is not None:
+                try:
+                    self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD = int(all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD'])
+                    logger.debug(f"Loaded SCHEMA_IMPORT_ASYNC_THRESHOLD from database: {all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD']}")
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid SCHEMA_IMPORT_ASYNC_THRESHOLD in database: {all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD']}")
+
+            # SCHEMA_IMPORT_CHILD_LIMIT (Schema Importer per-path fetch cap)
+            if all_settings.get('SCHEMA_IMPORT_CHILD_LIMIT') is not None:
+                try:
+                    self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int(all_settings['SCHEMA_IMPORT_CHILD_LIMIT'])
+                    logger.debug(f"Loaded SCHEMA_IMPORT_CHILD_LIMIT from database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid SCHEMA_IMPORT_CHILD_LIMIT in database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
             
+            # Instance identity overrides (win over env and derived defaults)
+            # An invalid stored value (edited by hand in the database) is skipped, as with
+            # the other persisted settings, and the env/derived default stays in effect.
+            if all_settings.get(INSTANCE_ID_SETTING_KEY):
+                try:
+                    self._settings.ONTOS_INSTANCE_ID = (
+                        validate_instance_id(all_settings[INSTANCE_ID_SETTING_KEY], 'stored')
+                        or self._settings.ONTOS_INSTANCE_ID
+                    )
+                    logger.debug(f"Loaded {INSTANCE_ID_SETTING_KEY} from database")
+                except ValueError as e:
+                    logger.error(f"Ignoring the stored {INSTANCE_ID_SETTING_KEY}: {e}")
+            if all_settings.get(INSTANCE_NAME_SETTING_KEY):
+                try:
+                    self._settings.ONTOS_INSTANCE_NAME = (
+                        validate_instance_name(all_settings[INSTANCE_NAME_SETTING_KEY], 'stored')
+                        or self._settings.ONTOS_INSTANCE_NAME
+                    )
+                    logger.debug(f"Loaded {INSTANCE_NAME_SETTING_KEY} from database")
+                except ValueError as e:
+                    logger.error(f"Ignoring the stored {INSTANCE_NAME_SETTING_KEY}: {e}")
+
             # Databricks Unity Catalog settings
             if 'DATABRICKS_CATALOG' in all_settings and all_settings['DATABRICKS_CATALOG']:
                 self._settings.DATABRICKS_CATALOG = all_settings['DATABRICKS_CATALOG']
@@ -949,7 +1033,6 @@ class SettingsManager:
                     name='Admin Team',
                     title='Default Administrator Team',
                     description='Auto-created team for system administrators',
-                    domain_id=None,
                     extra_metadata='{}',
                     created_by='system@startup.ucapp',
                     updated_by='system@startup.ucapp'
@@ -1250,6 +1333,15 @@ class SettingsManager:
             'available_workflows': available,
             'current_settings': self._settings.to_dict(),
             'workspace_deployment_path': self._settings.WORKSPACE_DEPLOYMENT_PATH,
+            # Schema Importer: threshold at/above which a background import is offered
+            'schema_import_async_threshold': self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD,
+            # Schema Importer per-path child fetch limit
+            'schema_import_child_limit': self._settings.SCHEMA_IMPORT_CHILD_LIMIT,
+            # Instance identity (effective values + the defaults used when no override is set)
+            'ontos_instance_id': self._settings.ONTOS_INSTANCE_ID,
+            'ontos_instance_name': self._settings.ONTOS_INSTANCE_NAME,
+            'ontos_instance_id_default': self._settings.instance_id_default,
+            'ontos_instance_name_default': self._settings.instance_name_default,
             # Databricks Unity Catalog settings
             'databricks_catalog': self._settings.DATABRICKS_CATALOG,
             'databricks_schema': self._settings.DATABRICKS_SCHEMA,
@@ -1274,6 +1366,7 @@ class SettingsManager:
             'git_repo_url': self._settings.GIT_REPO_URL,
             'git_branch': self._settings.GIT_BRANCH,
             'git_username': self._settings.GIT_USERNAME,
+            'git_password_set': bool(self._settings.GIT_PASSWORD),
             # UI Customization settings
             'ui_i18n_enabled': self._settings.UI_I18N_ENABLED,
             'ui_custom_logo_url': self._settings.UI_CUSTOM_LOGO_URL,
@@ -1284,26 +1377,17 @@ class SettingsManager:
             'ui_favicon_url': self._settings.UI_FAVICON_URL,
         }
 
-    def update_settings(self, settings: dict) -> Settings:
-        """Update settings"""
-        # Persist configured cluster ID string; do not scan clusters
-        desired_cluster_id: Optional[str] = settings.get('job_cluster_id')
-        desired_enabled: List[str] = settings.get('enabled_jobs', []) or []
-        
-        logger.info(f"SettingsManager.update_settings received cluster_id: {desired_cluster_id}")
-        logger.info(f"SettingsManager.update_settings current stored cluster_id: {self._settings.job_cluster_id}")
+    # Settings the Git service reads: its remote and its export location.
+    _GIT_SETTING_ATTRS = (
+        'GIT_REPO_URL', 'GIT_BRANCH', 'GIT_USERNAME', 'GIT_PASSWORD',
+        'DATABRICKS_CATALOG', 'DATABRICKS_SCHEMA', 'DATABRICKS_VOLUME',
+    )
 
-        # Handle workspace_deployment_path BEFORE workflow changes so the deployer
-        # is initialized when install_workflow runs
-        if 'workspace_deployment_path' in settings:
-            new_path = settings.get('workspace_deployment_path')
-            if new_path == '':
-                new_path = None
-            app_settings_repo.set(self._db, 'WORKSPACE_DEPLOYMENT_PATH', new_path)
-            self._settings.WORKSPACE_DEPLOYMENT_PATH = new_path
-            logger.info(f"Updated WORKSPACE_DEPLOYMENT_PATH to: {new_path}")
-            self._reinitialize_workspace_deployer()
+    def _git_setting_values(self) -> tuple:
+        return tuple(getattr(self._settings, attr, None) for attr in self._GIT_SETTING_ATTRS)
 
+    def _apply_job_changes(self, desired_enabled: List[str], desired_cluster_id: Optional[str]) -> None:
+        """Install and remove Databricks jobs so the installed set matches ``desired_enabled``."""
         # Compute job enable/disable delta against current state from DB (source of truth)
         try:
             enabled_installations = workflow_installation_repo.get_all_installed(self._db)
@@ -1444,11 +1528,77 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    def update_settings(self, settings: dict) -> Settings:
+        """Update settings"""
+        git_values_before = self._git_setting_values()
+        # Persist configured cluster ID string; do not scan clusters
+        cluster_in_payload = 'job_cluster_id' in settings
+        desired_cluster_id: Optional[str] = (
+            settings.get('job_cluster_id') if cluster_in_payload else self._settings.job_cluster_id
+        )
+        desired_enabled: List[str] = settings.get('enabled_jobs', []) or []
+        
+        logger.info(f"SettingsManager.update_settings received cluster_id: {desired_cluster_id}")
+        logger.info(f"SettingsManager.update_settings current stored cluster_id: {self._settings.job_cluster_id}")
+
+        # Handle workspace_deployment_path BEFORE workflow changes so the deployer
+        # is initialized when install_workflow runs
+        if 'workspace_deployment_path' in settings:
+            new_path = settings.get('workspace_deployment_path')
+            if new_path == '':
+                new_path = None
+            app_settings_repo.set(self._db, 'WORKSPACE_DEPLOYMENT_PATH', new_path)
+            self._settings.WORKSPACE_DEPLOYMENT_PATH = new_path
+            logger.info(f"Updated WORKSPACE_DEPLOYMENT_PATH to: {new_path}")
+            self._reinitialize_workspace_deployer()
+
+        # Schema Importer async threshold (positive integer)
+        if 'schema_import_async_threshold' in settings:
+            value = settings.get('schema_import_async_threshold')
+            try:
+                int_val = int(value)
+            except (ValueError, TypeError):
+                raise ValueError("schema_import_async_threshold must be a positive integer")
+            if int_val < 1:
+                raise ValueError("schema_import_async_threshold must be a positive integer")
+            app_settings_repo.set(self._db, 'SCHEMA_IMPORT_ASYNC_THRESHOLD', str(int_val))
+            self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD = int_val
+            logger.info(f"Updated SCHEMA_IMPORT_ASYNC_THRESHOLD to: {int_val}")
+
+        # Schema Importer per-path child fetch limit (bounded 1..10000 per the
+        # connector contract, ListAssetsOptions)
+        if 'schema_import_child_limit' in settings:
+            value = settings.get('schema_import_child_limit')
+            try:
+                int_val = int(value)
+            except (ValueError, TypeError):
+                raise ValueError("schema_import_child_limit must be an integer between 1 and 10000")
+            if not (1 <= int_val <= 10000):
+                raise ValueError("schema_import_child_limit must be between 1 and 10000")
+            app_settings_repo.set(self._db, 'SCHEMA_IMPORT_CHILD_LIMIT', str(int_val))
+            self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int_val
+            logger.info(f"Updated SCHEMA_IMPORT_CHILD_LIMIT to: {int_val}")
+
+        self._update_instance_identity(settings)
+
+        # Jobs are reconciled only when the payload carries them: every other
+        # settings form (Git, General, UI customization, Delivery) saves only
+        # its own keys, and treating a missing `enabled_jobs` as an empty list
+        # used to uninstall every Databricks job. An explicit empty list (the
+        # Jobs screen with everything switched off) still removes them.
+        jobs_in_payload = 'enabled_jobs' in settings
+        if jobs_in_payload:
+            self._apply_job_changes(desired_enabled, desired_cluster_id)
+
         # Update stored settings after applying infra changes
-        self._settings.job_cluster_id = desired_cluster_id
-        self._settings.enabled_jobs = sorted(list(set(desired_enabled)))
-        self._settings.sync_enabled = settings.get('sync_enabled', False)
-        self._settings.sync_repository = settings.get('sync_repository')
+        if cluster_in_payload:
+            self._settings.job_cluster_id = desired_cluster_id
+        if jobs_in_payload:
+            self._settings.enabled_jobs = sorted(list(set(desired_enabled)))
+        if 'sync_enabled' in settings:
+            self._settings.sync_enabled = settings.get('sync_enabled', False)
+        if 'sync_repository' in settings:
+            self._settings.sync_repository = settings.get('sync_repository')
         self._settings.updated_at = datetime.utcnow()
         
         # Handle Databricks Unity Catalog settings
@@ -1564,11 +1714,19 @@ class SettingsManager:
             self._settings.GIT_USERNAME = value
             logger.info(f"Updated GIT_USERNAME")
         
-        if 'git_password' in settings:
-            value = settings.get('git_password') or None
+        # The token is write-only: the settings page never gets it back, so it
+        # sends an empty field when the user didn't retype it. An empty or
+        # missing value keeps the saved token; `git_password_clear` removes it.
+        # A new token in the same payload wins over a clear.
+        if settings.get('git_password'):
+            value = settings['git_password']
             app_settings_repo.set(self._db, 'GIT_PASSWORD', value)
             self._settings.GIT_PASSWORD = value
-            logger.info(f"Updated GIT_PASSWORD")
+            logger.info("Updated GIT_PASSWORD")
+        elif settings.get('git_password_clear'):
+            app_settings_repo.set(self._db, 'GIT_PASSWORD', None)
+            self._settings.GIT_PASSWORD = None
+            logger.info("Cleared GIT_PASSWORD")
         
         # UI Customization settings
         if 'ui_i18n_enabled' in settings:
@@ -1624,8 +1782,10 @@ class SettingsManager:
             self._settings.UI_FAVICON_URL = value
             logger.info(f"Updated UI_FAVICON_URL")
 
-        # Reinitialize Git service if any Git settings were changed
-        git_settings_changed = any(key in settings for key in ['git_repo_url', 'git_branch', 'git_username', 'git_password'])
+        # Reinitialize the Git service only when a value it reads changed. The
+        # export location comes from the volume settings, so they count too; the
+        # General settings form always sends them, so presence alone isn't a change.
+        git_settings_changed = self._git_setting_values() != git_values_before
         if git_settings_changed:
             try:
                 from src.common.git import reinitialize_git_service
@@ -1713,6 +1873,13 @@ class SettingsManager:
             logger.warning(f"Could not parse assigned_groups JSON for role ID {role_db.id}: {role_db.assigned_groups}")
             assigned_groups = []
 
+        # Individual user assignment (by email), parallel to assigned_groups (#196/#760)
+        try:
+            assigned_users = json.loads(getattr(role_db, 'assigned_users', '[]') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"Could not parse assigned_users JSON for role ID {role_db.id}: {getattr(role_db, 'assigned_users', None)}")
+            assigned_users = []
+
         # Feature ID migrations (renamed features)
         FEATURE_ID_MIGRATIONS = {
             'security': 'security-features',
@@ -1789,11 +1956,13 @@ class SettingsManager:
             name=role_db.name,
             description=role_db.description,
             assigned_groups=assigned_groups,
+            assigned_users=assigned_users,
             feature_permissions=feature_permissions,
             home_sections=home_sections,
             approval_privileges=approval_privileges,
             deployment_policy=deployment_policy,
             is_admin=getattr(role_db, 'is_admin', False),
+            can_adopt_entity_ids=getattr(role_db, 'can_adopt_entity_ids', False),
             requestable_by_roles=requestable_by_roles,
             approver_roles=approver_roles,
             # created_at=role_db.created_at, # Uncomment if needed
@@ -1827,8 +1996,15 @@ class SettingsManager:
             for feature_id, config in features_config.items()
         }
 
-    def list_app_roles(self) -> List[AppRole]:
-        """Lists all configured application roles from the database."""
+    def list_app_roles(self, _retry: bool = True) -> List[AppRole]:
+        """Lists all configured application roles from the database.
+
+        The manager's session lives as long as the app. When the database has
+        closed its connection (e.g. Lakebase dropping idle connections), the
+        first query fails: roll back, which releases the dead connection, and
+        retry once. Other database errors propagate, because an empty role list
+        would make every permission check answer 403.
+        """
         try:
             roles_db = self.app_role_repo.get_all_roles(db=self._db)
 
@@ -1884,9 +2060,12 @@ class SettingsManager:
 
             return [self._map_db_to_api(role_db) for role_db in roles_db]
         except SQLAlchemyError as e:
-            logger.error(f"Database error listing roles: {e}", exc_info=True)
             self._db.rollback()
-            return [] # Return empty list on error
+            if _retry and isinstance(e, DBAPIError) and e.connection_invalidated:
+                logger.warning("Database connection was closed; retrying role lookup: %s", e)
+                return self.list_app_roles(_retry=False)
+            logger.error("Database error listing roles: %s", e, exc_info=True)
+            raise
 
     def list_app_roles_for_approval(self, approval_entity: Optional[str] = None) -> List[AppRole]:
         """Lists app roles filtered by approval privilege for a given entity type.
@@ -2186,27 +2365,40 @@ class SettingsManager:
             self._db.rollback()
             raise
 
-    def get_requestable_roles_for_user(self, user_groups: Optional[List[str]] = None) -> List[AppRole]:
+    def get_requestable_roles_for_user(
+        self,
+        user_groups: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
+    ) -> List[AppRole]:
         """Get list of roles that the user can request based on their current role(s).
-        
+
         Args:
-            user_groups: List of groups the user belongs to. If None or empty, returns 
-                        roles requestable by users with no role.
-        
+            user_groups: List of groups the user belongs to. If None or empty (and no
+                        email match), returns roles requestable by users with no role.
+            user_email: Optional email; roles whose ``assigned_users`` contains it count
+                        as roles the user already holds (#196/#760), so they are excluded
+                        from the requestable list.
+
         Returns:
             List of AppRole objects that the user can request.
         """
         try:
-            # First, determine what role(s) the user currently has
+            # First, determine what role(s) the user currently has (by group OR email).
+            # `(x or '')` coalesces None entries in group/user lists rather than
+            # failing: this is an authorization read path, and raising on a single
+            # malformed row would lock the user out of the whole app. Empty strings
+            # never match a real group/email, so dirty data is simply ignored here.
+            user_group_set = set((g or '').lower() for g in (user_groups or []))
+            user_email_norm = (user_email or "").strip().lower() or None
             user_role_ids: List[str] = []
-            if user_groups:
+            if user_group_set or user_email_norm:
                 all_roles = self.list_app_roles()
                 for role in all_roles:
-                    if role.assigned_groups:
-                        # Check if any of the user's groups match the role's assigned groups
-                        if any(group in role.assigned_groups for group in user_groups):
-                            user_role_ids.append(str(role.id))
-            
+                    role_groups = set((g or '').lower() for g in (role.assigned_groups or []))
+                    role_users = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
+                    if user_group_set.intersection(role_groups) or (user_email_norm and user_email_norm in role_users):
+                        user_role_ids.append(str(role.id))
+
             # Get roles requestable based on user's current roles
             requestable_role_ids: set = set()
             
@@ -2230,9 +2422,9 @@ class SettingsManager:
                 if role:
                     result.append(role)
             
-            logger.debug(f"User with groups {user_groups} can request {len(result)} roles")
+            logger.debug(f"User with groups {user_groups} / email {user_email} can request {len(result)} roles")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting requestable roles for user: {e}", exc_info=True)
             return []
@@ -2258,18 +2450,24 @@ class SettingsManager:
             logger.error(f"Error getting approver role names for role {role_id}: {e}", exc_info=True)
             return []
 
-    def can_user_request_role(self, role_id: str, user_groups: Optional[List[str]] = None) -> bool:
+    def can_user_request_role(
+        self,
+        role_id: str,
+        user_groups: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
+    ) -> bool:
         """Check if a user can request a specific role.
-        
+
         Args:
             role_id: ID of the role the user wants to request
             user_groups: List of groups the user belongs to
-            
+            user_email: Optional email for direct-assignment awareness (#196/#760)
+
         Returns:
             True if the user can request the role, False otherwise.
         """
         try:
-            requestable_roles = self.get_requestable_roles_for_user(user_groups)
+            requestable_roles = self.get_requestable_roles_for_user(user_groups, user_email=user_email)
             return any(str(role.id) == role_id for role in requestable_roles)
         except Exception as e:
             logger.error(f"Error checking if user can request role {role_id}: {e}", exc_info=True)
@@ -2342,12 +2540,53 @@ class SettingsManager:
             logger.error(f"Failed to log role request decision to change log: {e}", exc_info=True)
             # Don't fail the request if logging fails
 
-        # 3. Log decision (admin feedback only, no actual group assignment)
+        # 3. On approval, actually grant the role by adding the requester to the
+        #    role's assigned_users (#760/#311). This is the individual-user
+        #    assignment mechanism (#196) — the app cannot modify Databricks groups,
+        #    so email-based direct assignment is how an approved requester gains
+        #    access. Denial changes nothing.
         if request_data.approved:
-            logger.info(
-                f"Role request APPROVED for {request_data.requester_email} (Role: {role_name}). "
-                f"(Actual group assignment should be handled via external ITSM process)."
-            )
+            # Normalize consistently with the other assigned_users sites (strip →
+            # lower → empty becomes None).
+            email_norm = (request_data.requester_email or "").strip().lower() or None
+            try:
+                # Lock the role row for the read-modify-write so concurrent approvals
+                # to the SAME role serialize instead of clobbering each other's
+                # assigned_users (row lock on Postgres; a no-op but harmless on SQLite).
+                role_db = (
+                    db.query(AppRoleDb)
+                    .filter(AppRoleDb.id == str(request_data.role_id))
+                    .with_for_update()
+                    .first()
+                )
+                if not role_db:
+                    raise ValueError(f"Role with ID '{request_data.role_id}' not found for grant")
+                existing = json.loads(getattr(role_db, "assigned_users", "[]") or "[]")
+                emails = [e for e in existing if isinstance(e, str)]
+                already = bool(email_norm) and email_norm in {e.strip().lower() for e in emails}
+                if email_norm and not already:
+                    emails.append(email_norm)
+                    self.app_role_repo.update(db=db, db_obj=role_db, obj_in={"assigned_users": emails})
+                    db.commit()
+                    logger.info(f"Granted role '{role_name}' to '{email_norm}' via assigned_users (#760).")
+                    # Record the grant in the change log (who was granted what).
+                    try:
+                        change_log_manager.log_change_with_details(
+                            db=db,
+                            entity_type="app_role",
+                            entity_id=request_data.role_id,
+                            action="user_assigned",
+                            username="admin",
+                            details={"granted_email": email_norm, "role_name": role_name, "via": "role_request_approval"},
+                        )
+                    except Exception as cle:
+                        logger.error(f"Failed to change-log role grant: {cle}", exc_info=True)
+                else:
+                    logger.info(f"User '{email_norm}' already assigned to role '{role_name}'; no assignment change.")
+            except Exception as ge:
+                logger.error(f"Failed to grant role '{role_name}' to '{email_norm}': {ge}", exc_info=True)
+                # The grant is the whole point of approval — surface the failure.
+                raise
         else:
             logger.info(f"Role request DENIED for {request_data.requester_email} (Role: {role_name}).")
 

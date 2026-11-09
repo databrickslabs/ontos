@@ -25,7 +25,9 @@ import DataProducts from './views/data-products';
 import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
 import DataContractDetails from './views/data-contract-details';
-import BusinessTermsView from './views/business-terms';
+import ExploreView from './views/explore';
+import DefineView from './views/define';
+import EnrichView from './views/enrich';
 import ConceptDetailView from './views/concept-detail';
 import Compliance from './views/compliance';
 import CompliancePolicyDetails from './views/compliance-policy-details';
@@ -67,10 +69,10 @@ import BusinessOwnersView from './views/business-owners';
 import MyProducts from './views/my-products';
 import MyRequests from './views/my-requests';
 import OntologySearchView from './views/ontology-search';
-import OntologyHomeView from './views/ontology-home';
 import CollectionsView from './views/collections';
 import HierarchyBrowserView from './views/hierarchy-browser';
 import SchemaImporterView from './views/schema-importer';
+import SyncDomainsView from './views/sync-domains';
 import OwnerConsumersView from './views/owner-consumers';
 import OntologyGeneratorView from './views/ontology-generator';
 
@@ -196,6 +198,7 @@ export default function App() {
               <Route path="/business-roles" element={<Navigate to="/settings/business-roles" replace />} />
               <Route path="/business-owners" element={<BusinessOwnersView />} />
               <Route path="/schema-importer" element={<SchemaImporterView />} />
+              <Route path="/domain-sync" element={<SyncDomainsView />} />
               <Route path="/ontology-generator" element={<Navigate to="/concepts/generator" replace />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />
               <Route path="/data-asset-reviews/:requestId" element={<DataAssetReviewDetails />} />
@@ -205,13 +208,25 @@ export default function App() {
               {/* Concepts - sidebar layout with nested routes */}
               <Route path="/concepts" element={<ConceptsLayout />}>
                 <Route index element={<Navigate to="/concepts/browser" replace />} />
+                {/* Define landing: Author / Generate / Import path cards + in-progress list */}
+                <Route path="define" element={<DefineView />} />
+                {/* Enrich: Map (coverage + inline review) + Deliver lanes */}
+                <Route path="enrich" element={<EnrichView />} />
                 <Route path="collections" element={<CollectionsView />} />
-                <Route path="browser" element={<BusinessTermsView />} />
-                <Route path="browser/:iri" element={<ConceptDetailView />} />
+                {/* Unified Explore surface: List | Tree | Graph over one fetch. */}
+                <Route path="browser" element={<ExploreView />} />
+                <Route path="browser/*" element={<ConceptDetailView />} />
+                {/* Search (SPARQL/console) — reachable as its own route, NOT an
+                    Explore view-mode. */}
                 <Route path="search" element={<OntologySearchView />} />
-                <Route path="graph" element={<OntologyHomeView />} />
+                {/* Graph is now a view-mode inside Explore. Preserve the old
+                    /concepts/graph URL by redirecting into the unified surface. */}
+                <Route path="graph" element={<Navigate to="/concepts/browser?view=graph" replace />} />
+                {/* Instance/estate hierarchy — kept alive; belongs to estate, not Explore. */}
                 <Route path="hierarchy" element={<HierarchyBrowserView />} />
                 <Route path="generator" element={<OntologyGeneratorView />} />
+                {/* Define > Import — reuses SchemaImporterView inside the Concepts shell */}
+                <Route path="import" element={<SchemaImporterView />} />
                 <Route path="mapping" element={<TermMappingView />} />
               </Route>
               {/* Old top-level alias from the closed PR */}

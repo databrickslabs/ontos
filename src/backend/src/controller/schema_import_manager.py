@@ -5,7 +5,8 @@ Bridges external connectors with persisted Ontos assets.  Provides browse,
 preview, and import operations.
 """
 
-from typing import Any, Dict, List, Optional
+import threading
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -34,8 +35,19 @@ from src.models.schema_import import (
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.repositories.assets_repository import asset_repo, asset_type_repo
 from src.repositories.connections_repository import connections_repo
+from src.repositories.app_settings_repository import app_settings_repo
 
 logger = get_logger(__name__)
+
+# Persisted app_settings key (and bounds) for the per-path child fetch limit.
+# The bounds mirror the connector contract (ListAssetsOptions: 1..10000).
+# The default matches Settings.SCHEMA_IMPORT_CHILD_LIMIT and preserves the
+# historic hardcoded value; the runtime source of truth is the persisted
+# app_settings row (written by SettingsManager), read here per request.
+_CHILD_LIMIT_SETTING_KEY = "SCHEMA_IMPORT_CHILD_LIMIT"
+_CHILD_LIMIT_DEFAULT = 500
+_CHILD_LIMIT_MIN = 1
+_CHILD_LIMIT_MAX = 10000
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +62,7 @@ _TYPE_MAP: Dict[str, tuple] = {
     UnifiedAssetType.UC_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_VIEW.value: ("View", "hasView"),
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: ("View", "hasView"),
+    UnifiedAssetType.UC_METRIC.value: ("View", "hasView"),  # metric view
     UnifiedAssetType.UC_STREAMING_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_FUNCTION.value: ("System", "hasPart"),
     UnifiedAssetType.UC_MODEL.value: ("ML Model", "hasPart"),
@@ -92,6 +105,7 @@ _LEAF_ASSET_TYPES = {
     UnifiedAssetType.UC_TABLE.value,
     UnifiedAssetType.UC_VIEW.value,
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+    UnifiedAssetType.UC_METRIC.value,
     UnifiedAssetType.UC_STREAMING_TABLE.value,
     UnifiedAssetType.BQ_TABLE.value,
     UnifiedAssetType.BQ_VIEW.value,
@@ -119,6 +133,27 @@ class SchemaImportManager:
     ):
         self._connections = connections_manager
         self._assets = assets_manager
+
+    def _child_limit(self, db: Session) -> int:
+        """Resolve the per-path child fetch limit.
+
+        Precedence: persisted General Setting (SCHEMA_IMPORT_CHILD_LIMIT) →
+        module default (500, matching Settings.SCHEMA_IMPORT_CHILD_LIMIT). The
+        value is clamped to the connector contract's 1..10000 range so a
+        stale/invalid persisted value can never violate ListAssetsOptions.
+        """
+        raw = app_settings_repo.get_by_key(db, _CHILD_LIMIT_SETTING_KEY)
+        if raw is None:
+            limit = _CHILD_LIMIT_DEFAULT
+        else:
+            try:
+                limit = int(raw)
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Invalid {_CHILD_LIMIT_SETTING_KEY} value '{raw}'; falling back to {_CHILD_LIMIT_DEFAULT}"
+                )
+                limit = _CHILD_LIMIT_DEFAULT
+        return max(_CHILD_LIMIT_MIN, min(_CHILD_LIMIT_MAX, limit))
 
     # ------------------------------------------------------------------
     # Browse
@@ -148,6 +183,10 @@ class SchemaImportManager:
             browse_error_detail = str(exc)
             containers = []
 
+        # Sort containers alphabetically (case-insensitive) so the tree is
+        # scannable regardless of the order the connector/API returns them.
+        containers = sorted(containers, key=lambda c: (c.get("name") or "").lower())
+
         for c in containers:
             nodes.append(BrowseNode(
                 name=c.get("name", ""),
@@ -159,9 +198,23 @@ class SchemaImportManager:
             ))
 
         # Also list leaf assets at this path
+        child_limit = self._child_limit(db)
+        truncated = False
         try:
-            options = ListAssetsOptions(path=path or "", limit=500)
+            options = ListAssetsOptions(path=path or "", limit=child_limit)
             assets = connector.list_assets(options=options)
+            # A full page back from the connector means there may be more leaf
+            # assets than the configured limit — signal truncation to the UI.
+            # Only when this level is a *leaf-asset* level, though: at container
+            # levels (catalogs → schemas) list_containers already returned the
+            # complete, unbounded set and this list_assets call just re-lists the
+            # same containers (deduped below), so a full page here is not real
+            # truncation. Guarding on `not containers` avoids that false positive.
+            if not containers and len(assets) >= child_limit:
+                truncated = True
+            # Sort leaf assets alphabetically within their group; container
+            # nodes stay first (above), columns keep metadata order (below).
+            assets = sorted(assets, key=lambda a: (a.name or "").lower())
             container_paths = {n.path for n in nodes}
             for asset in assets:
                 if asset.identifier in container_paths:
@@ -211,6 +264,8 @@ class SchemaImportManager:
             nodes=nodes,
             error=browse_error,
             error_detail=browse_error_detail,
+            truncated=truncated,
+            truncated_at=child_limit if truncated else None,
         )
 
     # ------------------------------------------------------------------
@@ -259,8 +314,18 @@ class SchemaImportManager:
         db: Session,
         request: ImportRequest,
         current_user_id: str,
+        progress_callback: Optional[Callable[[int, int, "ImportResult"], None]] = None,
+        cancel_event: Optional["threading.Event"] = None,
     ) -> ImportResult:
-        """Import selected resources (and nested children) as Ontos assets."""
+        """Import selected resources (and nested children) as Ontos assets.
+
+        Args:
+            progress_callback: optional ``(processed, total, result)`` hook invoked
+                as assets are created, so an async caller can persist live progress.
+            cancel_event: optional ``threading.Event``; when set, the creation loop
+                stops early and the (partial) result is returned. The caller inspects
+                the event to record a ``cancelled`` status.
+        """
         connector = self._connections.get_connector_for_connection(request.connection_id)
         if connector is None:
             raise ValueError(f"Connection '{request.connection_id}' not found or connector unavailable")
@@ -302,7 +367,21 @@ class SchemaImportManager:
         metadata_cache: Dict[str, Any] = {}
 
         # 2. Create assets (parents before children — items are in BFS order)
+        total_items = len(preview_items)
+        processed = 0
+        if progress_callback:
+            progress_callback(0, total_items, result)
+
         for item in preview_items:
+            # Cooperative cancellation: stop before starting the next item.
+            if cancel_event is not None and cancel_event.is_set():
+                logger.info("Import cancelled after %d/%d items", processed, total_items)
+                break
+
+            processed += 1
+            if progress_callback:
+                progress_callback(processed, total_items, result)
+
             # Skip items the user explicitly excluded
             if item.path in excluded:
                 continue
@@ -695,7 +774,7 @@ class SchemaImportManager:
 
         if should_recurse:
             try:
-                options = ListAssetsOptions(path=path, limit=500)
+                options = ListAssetsOptions(path=path, limit=self._child_limit(db))
                 children = connector.list_assets(options=options)
                 for child in children:
                     if child.identifier in seen_paths or child.identifier == path:
@@ -880,6 +959,7 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.UC_TABLE.value: "table",
     UnifiedAssetType.UC_VIEW.value: "view",
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: "view",
+    UnifiedAssetType.UC_METRIC.value: "metric",
     UnifiedAssetType.UC_STREAMING_TABLE.value: "table",
     UnifiedAssetType.UC_FUNCTION.value: "function",
     UnifiedAssetType.UC_MODEL.value: "model",
@@ -945,6 +1025,7 @@ def _has_children(asset_type: Optional[UnifiedAssetType]) -> bool:
         UnifiedAssetType.UC_TABLE.value,
         UnifiedAssetType.UC_VIEW.value,
         UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+        UnifiedAssetType.UC_METRIC.value,
         UnifiedAssetType.UC_STREAMING_TABLE.value,
         UnifiedAssetType.UC_FUNCTION.value,
         # BigQuery leaves with column-bearing metadata

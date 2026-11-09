@@ -1,0 +1,62 @@
+# ============================================================================
+# Linked fixture — Product P2: Executive Dashboard  (id 7f6def4c-…)
+# ----------------------------------------------------------------------------
+# References:
+#   inputPorts[0].contractId  -> c8e034aa-… (C2 Sales Aggregates) [consumes P1's output]
+#   outputPorts[0].contractId -> 7fdfef67-… (C3 Executive Metrics) [produces]
+# Referenced BY:
+#   exec_metrics.odcs.yaml dataProduct -> this product's id        [reciprocal]
+#
+# Demonstrates cross-product chaining: P2 consumes the very contract (C2) that
+# P1 produces, so the two products link through a shared contract after import.
+# ============================================================================
+apiVersion: v1.0.0
+kind: DataProduct
+id: 7f6def4c-9f8e-4b95-aa80-e18fc071c301
+name: Executive Dashboard
+version: 1.0.0
+status: active
+domain: executive
+tenant: AcmeRetail
+
+description:
+  purpose: Rolls daily sales aggregates up into board-level KPIs.
+  usage: Backs the executive KPI dashboard.
+
+inputPorts:
+  - name: sales-aggregates-in
+    version: 1.0.0
+    # -> C2 Sales Aggregates (produced by P1 Sales Analytics)
+    contractId: c8e034aa-0145-4e41-ae9b-b64dbcea41c8
+    assetType: table
+    assetIdentifier: main.sales.sales_aggregates_daily
+
+outputPorts:
+  - id: op-exec-metrics
+    name: exec-metrics-out
+    version: 1.0.0
+    type: Table
+    description: Monthly executive KPI rollups.
+    # -> C3 Executive Metrics
+    contractId: 7fdfef67-477b-4428-b53a-8fc2c4284f53
+    assetType: table
+    assetIdentifier: main.executive.exec_kpi_monthly
+    server:
+      database: main
+      schema: executive
+      table: exec_kpi_monthly
+    tags:
+      - governance/certified
+
+team:
+  name: Executive Reporting Team
+  description: Owns board-level reporting products.
+  members:
+    - username: ghopper@example.com
+      name: Grace Hopper
+      role: owner
+      dateIn: "2023-01-01"
+
+tags:
+  - domain/executive
+  - governance/certified

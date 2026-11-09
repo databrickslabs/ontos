@@ -1,10 +1,15 @@
 [build-system]
-requires = ["hatchling>=1.21.0", "hatch-requirements-txt~=0.4.1"]
+# hatchling capped <1.32: 1.32.0 enforces "readme must be within the project
+# directory" and rejects this package's ``readme = "../README.md"`` (the README
+# lives at the repo root, one level above src/). Uncapped, a fresh CI/dev env
+# pulls 1.32.x and every hatch-built job fails at metadata generation. Cap until
+# the readme is relocated into src/ or the field is made project-local.
+requires = ["hatchling>=1.21.0,<1.32", "hatch-requirements-txt~=0.4.1"]
 build-backend = "hatchling.build"
 
 [project]
 name = "ontos"
-version = "1.0.2"
+version = "1.1.0"
 description = "A Business Catalog for the Databricks Platform"
 readme = "../README.md"
 authors = [
@@ -31,6 +36,7 @@ dependencies = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-asyncio>=0.23",
+    "pytest-xdist>=3.5",
     "ruff>=0.8.0",
     "pre-commit>=3.0.0",
     "fpdf2>=2.8.0",

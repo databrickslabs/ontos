@@ -22,11 +22,6 @@ class TestSemanticUploadIntegration:
     """Integration tests for semantic link creation during ODCS upload."""
 
     @pytest.fixture
-    def client(self):
-        """Test client for API requests."""
-        return TestClient(app)
-
-    @pytest.fixture
     def odcs_contract_with_semantics(self):
         """Sample ODCS contract with semantic assignments at all levels."""
         return {
@@ -115,14 +110,14 @@ class TestSemanticUploadIntegration:
             ]
         }
 
-    def test_upload_yaml_with_semantic_assignments(self, client, db: Session, odcs_contract_with_semantics):
+    def test_upload_yaml_with_semantic_assignments(self, client, db_session: Session, odcs_contract_with_semantics):
         """Test uploading a YAML file with semantic assignments creates EntitySemanticLinkDb records."""
         # Convert to YAML
         yaml_content = yaml.dump(odcs_contract_with_semantics, default_flow_style=False)
 
         # Create file upload
         files = {
-            "file": ("semantic-test.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
+            "files": ("semantic-test.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
         }
 
         # Mock authentication and permissions
@@ -131,15 +126,15 @@ class TestSemanticUploadIntegration:
 
         assert response.status_code == 200
         contract_data = response.json()
-        contract_id = contract_data["id"]
+        contract_id = contract_data["created_ids"][0]
 
         # Verify the contract was created
-        contract_db = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        contract_db = db_session.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
         assert contract_db is not None
         assert contract_db.name == "semantic-test-contract"
 
         # Verify semantic links were created
-        semantic_manager = SemanticLinksManager(db)
+        semantic_manager = SemanticLinksManager(db_session)
 
         # Check contract-level semantic link
         contract_links = semantic_manager.list_for_entity(
@@ -194,20 +189,20 @@ class TestSemanticUploadIntegration:
         assert order_id_links[0].iri == "https://example.com/business-concept/order-id"
 
         # Verify total count of semantic links
-        all_links = db.query(EntitySemanticLinkDb).filter(
+        all_links = db_session.query(EntitySemanticLinkDb).filter(
             EntitySemanticLinkDb.entity_id.like(f"{contract_id}%")
         ).all()
         # Expected: 1 contract + 1 schema + 3 properties = 5 total
         assert len(all_links) == 5
 
-    def test_upload_json_with_semantic_assignments(self, client, db: Session, odcs_contract_with_semantics):
+    def test_upload_json_with_semantic_assignments(self, client, db_session: Session, odcs_contract_with_semantics):
         """Test uploading a JSON file with semantic assignments."""
         # Convert to JSON
         json_content = json.dumps(odcs_contract_with_semantics, indent=2)
 
         # Create file upload
         files = {
-            "file": ("semantic-test.json", BytesIO(json_content.encode()), "application/json")
+            "files": ("semantic-test.json", BytesIO(json_content.encode()), "application/json")
         }
 
         # Mock authentication and permissions
@@ -216,18 +211,18 @@ class TestSemanticUploadIntegration:
 
         assert response.status_code == 200
         contract_data = response.json()
-        contract_id = contract_data["id"]
+        contract_id = contract_data["created_ids"][0]
 
         # Verify semantic links were created (same checks as YAML test)
-        semantic_manager = SemanticLinksManager(db)
+        semantic_manager = SemanticLinksManager(db_session)
 
-        all_links = db.query(EntitySemanticLinkDb).filter(
+        all_links = db_session.query(EntitySemanticLinkDb).filter(
             EntitySemanticLinkDb.entity_id.like(f"{contract_id}%")
         ).all()
         # Expected: 1 contract + 1 schema + 3 properties = 5 total
         assert len(all_links) == 5
 
-    def test_upload_contract_without_semantic_assignments(self, client, db: Session):
+    def test_upload_contract_without_semantic_assignments(self, client, db_session: Session):
         """Test uploading a contract without semantic assignments creates no semantic links."""
         contract_without_semantics = {
             "name": "no-semantics-contract",
@@ -253,7 +248,7 @@ class TestSemanticUploadIntegration:
 
         yaml_content = yaml.dump(contract_without_semantics, default_flow_style=False)
         files = {
-            "file": ("no-semantics.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
+            "files": ("no-semantics.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
         }
 
         with client:
@@ -261,17 +256,20 @@ class TestSemanticUploadIntegration:
 
         assert response.status_code == 200
         contract_data = response.json()
-        contract_id = contract_data["id"]
+        contract_id = contract_data["created_ids"][0]
 
         # Verify no semantic links were created
-        all_links = db.query(EntitySemanticLinkDb).filter(
+        all_links = db_session.query(EntitySemanticLinkDb).filter(
             EntitySemanticLinkDb.entity_id.like(f"{contract_id}%")
         ).all()
         assert len(all_links) == 0
 
-    def test_upload_with_mixed_authoritative_definitions(self, client, db: Session):
+    def test_upload_with_mixed_authoritative_definitions(self, client, db_session: Session):
         """Test that only semantic assignment types create semantic links, others are preserved."""
         contract_with_mixed_auth_defs = {
+            # Without kind/apiVersion the upload skips the file as not an ODCS contract
+            "kind": "DataContract",
+            "apiVersion": "v3.1.0",
             "name": "mixed-auth-defs-contract",
             "version": "1.0.0",
             "status": "draft",
@@ -294,7 +292,7 @@ class TestSemanticUploadIntegration:
 
         yaml_content = yaml.dump(contract_with_mixed_auth_defs, default_flow_style=False)
         files = {
-            "file": ("mixed-auth-defs.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
+            "files": ("mixed-auth-defs.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
         }
 
         with client:
@@ -302,10 +300,10 @@ class TestSemanticUploadIntegration:
 
         assert response.status_code == 200
         contract_data = response.json()
-        contract_id = contract_data["id"]
+        contract_id = contract_data["created_ids"][0]
 
         # Verify only one semantic link was created (for the semantic assignment type)
-        semantic_links = db.query(EntitySemanticLinkDb).filter(
+        semantic_links = db_session.query(EntitySemanticLinkDb).filter(
             EntitySemanticLinkDb.entity_id == contract_id,
             EntitySemanticLinkDb.entity_type == "data_contract"
         ).all()
@@ -315,7 +313,7 @@ class TestSemanticUploadIntegration:
         # Verify all authoritative definitions were preserved in the database
         # (This would need to query the DataContractAuthoritativeDefinitionDb table)
         from src.db_models.data_contracts import DataContractAuthoritativeDefinitionDb
-        auth_defs = db.query(DataContractAuthoritativeDefinitionDb).filter(
+        auth_defs = db_session.query(DataContractAuthoritativeDefinitionDb).filter(
             DataContractAuthoritativeDefinitionDb.contract_id == contract_id
         ).all()
         assert len(auth_defs) == 3
@@ -329,12 +327,12 @@ class TestSemanticUploadIntegration:
         }
         assert auth_def_types == expected_types
 
-    def test_round_trip_upload_then_export(self, client, db: Session, odcs_contract_with_semantics):
+    def test_round_trip_upload_then_export(self, client, db_session: Session, odcs_contract_with_semantics):
         """Test that uploading and then exporting preserves semantic assignments."""
         # Upload the contract
         yaml_content = yaml.dump(odcs_contract_with_semantics, default_flow_style=False)
         files = {
-            "file": ("round-trip-test.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
+            "files": ("round-trip-test.yaml", BytesIO(yaml_content.encode()), "application/x-yaml")
         }
 
         with client:
@@ -342,7 +340,7 @@ class TestSemanticUploadIntegration:
 
         assert upload_response.status_code == 200
         contract_data = upload_response.json()
-        contract_id = contract_data["id"]
+        contract_id = contract_data["created_ids"][0]
 
         # Export the contract
         with client:

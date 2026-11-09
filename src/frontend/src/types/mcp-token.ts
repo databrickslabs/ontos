@@ -9,6 +9,7 @@ export interface MCPTokenCreate {
   name: string;
   scopes: string[];
   expires_days?: number | null;
+  is_keyless_default?: boolean;
 }
 
 export interface MCPTokenResponse {
@@ -30,6 +31,7 @@ export interface MCPTokenInfo {
   expires_at: string | null;
   is_active: boolean;
   is_expired: boolean;
+  is_keyless_default: boolean;
 }
 
 export interface MCPTokenList {

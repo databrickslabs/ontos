@@ -24,53 +24,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ESTATE_EDIT_PARAM } from '@/lib/estate-paths';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 import { DataTable } from '@/components/ui/data-table';
 import EstateGraphView from '@/components/estates/estate-graph-view';
 
 // --- TypeScript Interfaces corresponding to Pydantic Models ---
-type CloudType = 'aws' | 'azure' | 'gcp';
-type SyncStatus = 'pending' | 'running' | 'success' | 'failed';
-type ConnectionType = 'delta_share' | 'database';
-type SharingResourceType = 'data_product' | 'business_glossary';
-type SharingRuleOperator = 'equals' | 'contains' | 'starts_with' | 'regex';
-
-interface SharingRule {
-  filter_type: string;
-  operator: SharingRuleOperator;
-  filter_value: string;
-}
-
-interface SharingPolicy {
-  id?: string;
-  name: string;
-  description?: string;
-  resource_type: SharingResourceType;
-  rules: SharingRule[];
-  is_enabled: boolean;
-  created_at: string; // ISO datetime string
-  updated_at: string; // ISO datetime string
-}
-
-interface Estate {
-  id: string;
-  name: string;
-  description: string;
-  workspace_url: string;
-  cloud_type: CloudType;
-  metastore_name: string;
-  connection_type: ConnectionType;
-  sharing_policies: SharingPolicy[];
-  is_enabled: boolean;
-  sync_schedule: string;
-  last_sync_time?: string;
-  last_sync_status?: SyncStatus;
-  last_sync_error?: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { CloudType, ConnectionType, Estate } from '@/types/estate';
+import { estateErrorText } from '@/lib/estate-error';
 // --- End TypeScript Interfaces ---
 
 /**
@@ -90,6 +53,7 @@ export default function EstateManager() {
   const { toast } = useToast();
   const { get, post, put, delete: deleteEstateApi } = useApi();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [estates, setEstates] = useState<Estate[]>([]);
@@ -103,7 +67,8 @@ export default function EstateManager() {
     cloud_type: 'aws',
     metastore_name: '',
     connection_type: 'delta_share',
-    sharing_policies: [],
+    export_policies: [],
+    import_policies: [],
     is_enabled: true,
     sync_schedule: '0 0 * * *',
   });
@@ -113,7 +78,7 @@ export default function EstateManager() {
     fetchEstates();
     // Set breadcrumbs for this top-level view
     setStaticSegments([]); // No static parents other than Home
-    setDynamicTitle('Estate Manager');
+    setDynamicTitle(t('estates:title'));
 
     return () => {
         // Clear breadcrumbs when component unmounts
@@ -121,6 +86,18 @@ export default function EstateManager() {
         setDynamicTitle(null);
     };
   }, [setStaticSegments, setDynamicTitle]);
+
+  // The estate page's "Edit Estate" opens this list with ?edit=<id>
+  const editId = searchParams.get(ESTATE_EDIT_PARAM);
+  useEffect(() => {
+    if (!editId || isLoading) return;
+    const estate = estates.find((e) => e.id === editId);
+    if (estate) openDialog(estate);
+    const next = new URLSearchParams(searchParams);
+    next.delete(ESTATE_EDIT_PARAM);
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, isLoading, estates]);
 
   const fetchEstates = async () => {
     try {
@@ -159,7 +136,8 @@ export default function EstateManager() {
         cloud_type: formData.cloud_type!,
         metastore_name: formData.metastore_name!,
         connection_type: formData.connection_type!,
-        sharing_policies: formData.sharing_policies || [],
+        export_policies: formData.export_policies || [],
+        import_policies: formData.import_policies || [],
         is_enabled: formData.is_enabled === undefined ? true : formData.is_enabled,
         sync_schedule: formData.sync_schedule || '0 0 * * *',
         created_at: selectedEstate?.created_at || new Date().toISOString(),
@@ -176,7 +154,7 @@ export default function EstateManager() {
         response = await post<Estate>('/api/estates', createPayload);
       }
       
-      if (response.error) throw new Error(response.error);
+      if (response.error) throw new Error(estateErrorText(response, t));
       if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
         throw new Error(response.data.detail);
       }
@@ -244,7 +222,8 @@ export default function EstateManager() {
       setFormData({
         ...estate,
         connection_type: estate.connection_type || 'delta_share',
-        sharing_policies: estate.sharing_policies || [],
+        export_policies: estate.export_policies || [],
+        import_policies: estate.import_policies || [],
       });
     } else {
       setSelectedEstate(null);
@@ -255,7 +234,8 @@ export default function EstateManager() {
         cloud_type: 'aws',
         metastore_name: '',
         connection_type: 'delta_share',
-        sharing_policies: [],
+        export_policies: [],
+        import_policies: [],
         is_enabled: true,
         sync_schedule: '0 0 * * *',
       });
@@ -322,7 +302,7 @@ export default function EstateManager() {
         const status = row.original.last_sync_status;
         const error = row.original.last_sync_error;
 
-        if (!status) return <Badge variant="outline">Never Synced</Badge>;
+        if (!status) return <Badge variant="outline">{t('estates:table.neverSynced')}</Badge>;
 
         let badgeVariant: "default" | "destructive" | "secondary" | "outline" = 'outline';
         if (status === 'success') badgeVariant = 'default';
@@ -342,10 +322,10 @@ export default function EstateManager() {
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p>Status: {statusText}</p>
-                {lastSyncTime && <p>Time: {new Date(lastSyncTime).toLocaleString()}</p>}
-                {status === 'failed' && error && <p className="text-red-400">Error: {error}</p>}
-                {(status === 'running' || status === 'pending') && <p>Sync in progress or queued...</p>}
+                <p>{t('estates:table.syncTooltip.status', { status: statusText })}</p>
+                {lastSyncTime && <p>{t('estates:table.syncTooltip.time', { time: new Date(lastSyncTime).toLocaleString() })}</p>}
+                {status === 'failed' && error && <p className="text-red-400">{t('estates:table.syncTooltip.error', { error })}</p>}
+                {(status === 'running' || status === 'pending') && <p>{t('estates:table.syncTooltip.inProgress')}</p>}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -361,7 +341,7 @@ export default function EstateManager() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">{t('estates:table.openMenu')}</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -446,7 +426,7 @@ export default function EstateManager() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., US Production Workspace"
+                placeholder={t('estates:form.namePlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -456,7 +436,7 @@ export default function EstateManager() {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., Primary production environment for US region"
+                placeholder={t('estates:form.descriptionPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -466,7 +446,7 @@ export default function EstateManager() {
                 value={formData.workspace_url}
                 onChange={(e) => setFormData({ ...formData, workspace_url: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., https://myworkspace.cloud.databricks.com"
+                placeholder={t('estates:form.workspaceUrlPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -507,7 +487,7 @@ export default function EstateManager() {
                 value={formData.metastore_name}
                 onChange={(e) => setFormData({ ...formData, metastore_name: e.target.value })}
                 className="col-span-3"
-                placeholder="e.g., primary_prod_metastore"
+                placeholder={t('estates:form.metastoreNamePlaceholder')}
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">

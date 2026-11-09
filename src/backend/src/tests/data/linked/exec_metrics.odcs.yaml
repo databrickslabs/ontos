@@ -1,0 +1,60 @@
+# ============================================================================
+# Linked fixture — Contract C3: Executive Metrics  (id 7fdfef67-…)
+# ----------------------------------------------------------------------------
+# Referenced BY: executive_dashboard.odps.yaml outputPorts[0].contractId (produced by P2)
+# References:    dataProduct -> 7f6def4c-… (P2 Executive Dashboard)
+#
+# Terminal contract of the chain: produced by P2 and names P2 back.
+# ============================================================================
+id: 7fdfef67-477b-4428-b53a-8fc2c4284f53
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: active
+name: Executive Metrics
+domain: executive
+tenant: AcmeRetail
+
+# Reciprocal link back to the producing data product (by its stable UUID).
+dataProduct: 7f6def4c-9f8e-4b95-aa80-e18fc071c301
+
+description:
+  purpose: Board-level KPI rollups computed from daily sales aggregates.
+  usage: Powers the executive dashboard; not for operational reporting.
+
+schema:
+  - id: kpi_obj
+    name: kpi_monthly
+    physicalName: exec_kpi_monthly
+    physicalType: table
+    businessName: Monthly Executive KPIs
+    description: One row per month.
+    tags: [ 'domain/executive', 'governance/certified' ]
+    properties:
+      - id: month_prop
+        name: month
+        logicalType: date
+        physicalType: date
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        classification: public
+        description: KPI month (first day of month, UTC).
+      - id: revenue_prop
+        name: total_revenue
+        logicalType: number
+        physicalType: decimal(16,2)
+        required: true
+        classification: confidential
+        description: Total monthly revenue (USD).
+      - id: growth_prop
+        name: mom_growth_pct
+        logicalType: number
+        physicalType: decimal(6,3)
+        required: false
+        classification: confidential
+        description: Month-over-month revenue growth (%).
+
+tags:
+  - domain/executive
+  - governance/certified

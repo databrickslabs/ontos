@@ -1,3 +1,4 @@
+import { buildKgSearchParams, DEFAULT_KG_SPARQL } from '@/lib/kg-search-url';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -61,6 +62,7 @@ interface KGSearchProps {
 
 // Helper component for app entity hover
 const AppEntityHover: React.FC<{ iri: string; children: React.ReactNode }> = ({ iri, children }) => {
+  const { t } = useTranslation(['search', 'common']);
   const info = parseAppEntity(iri);
   const [details, setDetails] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -87,15 +89,15 @@ const AppEntityHover: React.FC<{ iri: string; children: React.ReactNode }> = ({ 
       <HoverCardTrigger asChild>{children as any}</HoverCardTrigger>
       <HoverCardContent className="w-96 text-xs">
         {!details ? (
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-muted-foreground">{t('common:states.loading')}</div>
         ) : (
           <div className="space-y-1">
             <div className="font-medium text-sm">{details.info?.title || details.name || info.entityId}</div>
-            <div className="text-muted-foreground">Type: {info.entityType.replace('_', ' ')}</div>
+            <div className="text-muted-foreground">{t('search:kg.hover.type', { type: info.entityType.replace('_', ' ') })}</div>
             <div className="text-muted-foreground">
-              <div className="truncate">ID: {info.entityId}</div>
-              {details.info?.owner && <div className="truncate">Owner: {details.info.owner}</div>}
-              {details.info?.status && <div className="truncate">Status: {details.info.status}</div>}
+              <div className="truncate">{t('search:kg.hover.id', { id: info.entityId })}</div>
+              {details.info?.owner && <div className="truncate">{t('search:kg.hover.owner', { owner: details.info.owner })}</div>}
+              {details.info?.status && <div className="truncate">{t('search:kg.hover.status', { status: details.info.status })}</div>}
             </div>
             {details.info?.description && (
               <div className="text-muted-foreground break-words max-h-24 overflow-auto">{details.info.description}</div>
@@ -108,7 +110,7 @@ const AppEntityHover: React.FC<{ iri: string; children: React.ReactNode }> = ({ 
                     ? `/settings/data-domains/${info.entityId}`
                     : `/data-contracts/${info.entityId}`;
                 window.location.href = path;
-              }}>Open</Button>
+              }}>{t('common:actions.open')}</Button>
           </div>
         )}
       </HoverCardContent>
@@ -163,24 +165,16 @@ export default function KGSearch({
     directionFilter: DirectionFilter;
     showConceptsOnly: boolean;
   }>) => {
-    const params = new URLSearchParams();
-
     // Get current values from URL for params we're not updating
     const currentParams = new URLSearchParams(location.search);
 
-    const newPrefix = updates.prefix !== undefined ? updates.prefix : currentParams.get('prefix') || '';
-    const newPath = updates.path !== undefined ? updates.path : (currentParams.get('path')?.split('|').filter(Boolean) || []);
-    const newSparql = updates.sparql !== undefined ? updates.sparql : currentParams.get('sparql') || 'SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10';
-    const newDirection = updates.directionFilter !== undefined ? updates.directionFilter : (currentParams.get('direction') as DirectionFilter || 'all');
-    const newConceptsOnly = updates.showConceptsOnly !== undefined ? updates.showConceptsOnly : currentParams.get('concepts_only') === 'true';
-
-    if (newPrefix) params.set('prefix', newPrefix);
-    if (newPath.length > 0) params.set('path', newPath.join('|'));
-    if (newSparql && newSparql !== 'SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10') params.set('sparql', newSparql);
-    if (newDirection && newDirection !== 'all') params.set('direction', newDirection);
-    if (newConceptsOnly) params.set('concepts_only', 'true');
-
-    params.set('tab', 'kg');
+    const params = buildKgSearchParams(location.search, {
+      prefix: updates.prefix !== undefined ? updates.prefix : currentParams.get('prefix') || '',
+      path: updates.path !== undefined ? updates.path : (currentParams.get('path')?.split('|').filter(Boolean) || []),
+      sparql: updates.sparql !== undefined ? updates.sparql : currentParams.get('sparql') || DEFAULT_KG_SPARQL,
+      directionFilter: updates.directionFilter !== undefined ? updates.directionFilter : (currentParams.get('direction') as DirectionFilter || 'all'),
+      showConceptsOnly: updates.showConceptsOnly !== undefined ? updates.showConceptsOnly : currentParams.get('concepts_only') === 'true',
+    });
     const queryString = params.toString();
     navigate(`${location.pathname}?${queryString}`, { replace: true });
   };
@@ -349,7 +343,7 @@ export default function KGSearch({
         <CardContent className="space-y-3 text-sm">
           <Input
             value={prefix}
-            placeholder="e.g., example.org/banking"
+            placeholder={t('search:kg.prefixPlaceholder')}
             onChange={(e) => setPrefix(e.target.value)}
           />
           <div className="space-y-2">
@@ -452,9 +446,9 @@ export default function KGSearch({
             <div className="mt-4 pt-4 border-t space-y-2">
               <h4 className="text-sm font-medium">{t('search:kg.resourceDetail', 'Resource detail')}</h4>
               {resourceDescription == null ? (
-                <div className="text-sm text-muted-foreground">Loading…</div>
+                <div className="text-sm text-muted-foreground">{t('search:kg.resourceLoading')}</div>
               ) : resourceDescription.triples.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No triples for this resource.</div>
+                <div className="text-sm text-muted-foreground">{t('search:kg.noTriples')}</div>
               ) : (
                 <div className="space-y-2 text-xs">
                   {resourceDescription.triples.map((trip, idx) => (
@@ -462,7 +456,7 @@ export default function KGSearch({
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-baseline">
                         <span className="font-medium text-muted-foreground">{shortPredicate(trip.predicate)}</span>
                         {trip.objectType === 'bnode' && trip.expanded && trip.expanded.length > 0 ? (
-                          <span className="text-muted-foreground">(blank node, expanded below)</span>
+                          <span className="text-muted-foreground">{t('search:kg.blankNodeExpanded')}</span>
                         ) : (
                           <span title={trip.object} className="truncate max-w-[280px]">{trip.object}</span>
                         )}

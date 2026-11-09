@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 // Input - unused
@@ -57,18 +58,37 @@ export interface TagSelectorProps {
 const TagSelector: React.FC<TagSelectorProps> = ({
   value,
   onChange,
-  placeholder = 'Select tags...',
+  placeholder,
   disabled = false,
   maxTags,
   allowCreate = true,
   label,
   className,
 }) => {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
   const { get } = useApi();
+
+  // Escape should close only this popover, not the surrounding modal Dialog.
+  // Radix's document-level Escape listeners (registered before this child mounts)
+  // otherwise close both; a window capture-phase listener fires first, so we
+  // intercept Escape while open, close the popover, and stop the event. Mirrors
+  // the DomainMultiSelector fix.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open]);
 
   // Check if user has permission to create tags
   const { hasPermission } = usePermissions();
@@ -199,39 +219,69 @@ const TagSelector: React.FC<TagSelectorProps> = ({
           >
             {value.length > 0 ? (
               <span className="truncate">
-                {value.length === 1 ? '1 tag selected' : `${value.length} tags selected`}
+                {t('common:tagSelector.selectedCount', { count: value.length })}
               </span>
             ) : (
-              placeholder
+              placeholder ?? t('common:tagSelector.selectPlaceholder')
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full p-0" align="start">
+        {/*
+          pointer-events-auto is the real scroll fix: a modal Dialog sets
+          `body { pointer-events: none }`, which cascades to this popover
+          (portaled to <body>, a sibling of the dialog), making it click/wheel-
+          through so the wheel scrolls the dialog behind it. Mirrors the
+          DomainMultiSelector fix.
+        */}
+        <PopoverContent
+          className="w-full p-0 pointer-events-auto"
+          align="start"
+          onKeyDown={(e) => {
+            // Escape closes only this popover, not the surrounding modal Dialog.
+            // Stop it before Radix's document-level Escape listeners fire and
+            // close the popover manually. Mirrors the DomainMultiSelector fix.
+            if (e.key === 'Escape' && open) {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+            }
+          }}
+        >
           <Command shouldFilter={false}>
             <CommandInput
-              placeholder="Search tags..."
+              placeholder={t('common:tagSelector.searchPlaceholder')}
               value={searchValue}
               onValueChange={setSearchValue}
             />
-            <div 
-              className="max-h-60 overflow-y-auto"
+            {/*
+              Single scroll container (primitive supplies overflow-y-auto;
+              max-h-60 caps height via twMerge). A wrapper <div> previously added
+              a second, shorter scroller that clipped long lists.
+              onWheel stopPropagation is REQUIRED: the modal Dialog's body-level
+              wheel scroll-lock would otherwise preventDefault the bubbled event
+              (this popover is portaled to <body>) and cancel the list's scroll.
+              overscroll-contain stops chaining at the edges. (Interactivity —
+              pointer-events-auto — is on PopoverContent above.) Mirrors the
+              DomainMultiSelector fix.
+            */}
+            <CommandList
+              className="max-h-60 overscroll-contain"
               onWheel={(e) => e.stopPropagation()}
             >
-              <CommandList>
                 {loading ? (
-                  <CommandEmpty>Loading tags...</CommandEmpty>
+                  <CommandEmpty>{t('common:states.loadingTags')}</CommandEmpty>
                 ) : (
                   <>
                     {filteredTags.length === 0 && !effectiveAllowCreate && (
-                      <CommandEmpty>No tags found.</CommandEmpty>
+                      <CommandEmpty>{t('common:states.noTagsFound')}</CommandEmpty>
                     )}
 
                     {filteredTags.length === 0 && effectiveAllowCreate && searchValue && !exactMatch && (
                       <CommandGroup>
                         <CommandItem onSelect={handleCreateTag}>
                           <Plus className="mr-2 h-4 w-4" />
-                          Create "{searchValue}"
+                          {t('common:tagSelector.create', { value: searchValue })}
                         </CommandItem>
                       </CommandGroup>
                     )}
@@ -273,21 +323,20 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                       <CommandGroup>
                         <CommandItem onSelect={handleCreateTag}>
                           <Plus className="mr-2 h-4 w-4" />
-                          Create "{searchValue}"
+                          {t('common:tagSelector.create', { value: searchValue })}
                         </CommandItem>
                       </CommandGroup>
                     )}
                   </>
                 )}
-              </CommandList>
-            </div>
+            </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
 
       {maxTags && (
         <p className="text-sm text-muted-foreground">
-          {value.length} of {maxTags} tags selected
+          {t('common:tagSelector.selectedOfMax', { count: value.length, max: maxTags })}
         </p>
       )}
     </div>

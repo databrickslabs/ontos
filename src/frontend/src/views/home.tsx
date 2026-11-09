@@ -104,14 +104,14 @@ export default function Home() {
 
           {/* My Actions */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4">My Actions</h2>
+            <h2 className="text-2xl font-semibold mb-4">{t('home:myActions.title')}</h2>
             <Card>
               <CardContent className="p-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
                   {/* Approvals */}
                   <div className="flex flex-col h-[500px]">
                     <div className="px-6 py-4 border-b bg-muted/30">
-                      <h3 className="font-semibold text-sm">Approvals</h3>
+                      <h3 className="font-semibold text-sm">{t('home:myActions.approvals')}</h3>
                     </div>
                     <div className="flex-1 overflow-hidden">
                       <RequiredActionsSection />
@@ -121,7 +121,7 @@ export default function Home() {
                   {/* Quick Actions */}
                   <div className="flex flex-col h-[500px]">
                     <div className="px-6 py-4 border-b bg-muted/30">
-                      <h3 className="font-semibold text-sm">Quick Actions</h3>
+                      <h3 className="font-semibold text-sm">{t('home:quickActions.title')}</h3>
                     </div>
                     <div className="flex-1 p-6 overflow-hidden">
                       <QuickActions />

@@ -8,6 +8,7 @@
  */
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import i18n from '@/i18n/config';
 import { renderWithProviders } from '@/test/utils';
 import RequestProductActionDialog from './request-product-action-dialog';
 
@@ -16,9 +17,10 @@ import RequestProductActionDialog from './request-product-action-dialog';
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockLookupWorkflowId = vi.fn();
+const mockToast = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() })
+  useToast: () => ({ toast: mockToast })
 }));
 
 vi.mock('@/hooks/use-api', () => ({
@@ -41,23 +43,32 @@ vi.mock('@/hooks/use-approval-wizard-trigger', async () => {
 });
 
 // ApprovalWizardDialog is mocked to a controllable harness so we can synthesize
-// onComplete with arbitrary wizardFields without driving the real wizard.
+// its callbacks with arbitrary wizardFields without driving the real wizard.
+// Like the real wizard, "Complete" fires onSessionComplete (the session
+// completed) and "Close" fires onComplete, then closes.
 // ``mockWizardFields`` is mutable so individual tests can exercise the
 // hoist-to-top-level behavior with different shapes (reason, duration, etc.).
 let mockWizardFields: Record<string, unknown> = { custom_field: 'foo', urgency: 'high' };
 
 vi.mock('@/components/workflows/approval-wizard-dialog', () => {
   return {
-    default: ({ isOpen, preselectedWorkflowId, onComplete }: any) =>
+    default: ({ isOpen, preselectedWorkflowId, onSessionComplete, onComplete, onOpenChange }: any) =>
       isOpen ? (
         <div data-testid="wizard-mock" data-workflow-id={preselectedWorkflowId}>
           <button
             data-testid="wizard-complete-btn"
-            onClick={() =>
-              onComplete?.('agr-123', null, mockWizardFields)
-            }
+            onClick={() => onSessionComplete?.('agr-123', null, mockWizardFields)}
           >
             Complete
+          </button>
+          <button
+            data-testid="wizard-close-btn"
+            onClick={() => {
+              onComplete?.('agr-123', null, mockWizardFields);
+              onOpenChange?.(false);
+            }}
+          >
+            Close
           </button>
         </div>
       ) : null,
@@ -240,6 +251,44 @@ describe('RequestProductActionDialog approval-wizard launch (Path B)', () => {
     expect(typed.reason).toBe('');
   });
 
+  it('submits as soon as the wizard completes, keeps the wizard open, and does not resubmit on close', async () => {
+    mockLookupWorkflowId.mockResolvedValue('wf-portable-1');
+    const onOpenChange = vi.fn();
+    const onSuccess = vi.fn();
+
+    renderWithProviders(
+      <RequestProductActionDialog
+        isOpen={true}
+        onOpenChange={onOpenChange}
+        onSuccess={onSuccess}
+        productId="prod-1"
+        productName="Test Product"
+        productStatus="active"
+      />,
+    );
+    await waitFor(() => expect(mockLookupWorkflowId).toHaveBeenCalledWith('for_request_access'));
+    fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+    await waitFor(() => expect(screen.getByTestId('wizard-mock')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('wizard-complete-btn'));
+
+    // Sent on completion: leaving the page on the completion screen no
+    // longer loses the request
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    // The wizard stays on its completion screen until the user closes it;
+    // onSuccess (reloads the page data) and closing the dialog wait for that
+    expect(screen.getByTestId('wizard-mock')).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByTestId('wizard-close-btn'));
+
+    await waitFor(() => expect(screen.queryByTestId('wizard-mock')).toBeNull());
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it('shows wizard-configured notice and skips dialog-side validation when wizard is configured', async () => {
     mockLookupWorkflowId.mockResolvedValue('wf-portable-1');
 
@@ -414,5 +463,125 @@ describe('RequestProductActionDialog hoist wizard fields → top-level payload',
     // in BE integration tests.
     expect(typeof body.requested_duration_days).toBe('number');
     expect(body.reason).toBe('meaningful reason text here');
+  });
+});
+
+describe('RequestProductActionDialog when the request workflow fails', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockResolvedValue({ data: [] });
+    mockLookupWorkflowId.mockResolvedValue(null);
+  });
+
+  async function submitAccessRequest() {
+    renderWithProviders(
+      <RequestProductActionDialog
+        isOpen={true}
+        onOpenChange={vi.fn()}
+        productId="prod-1"
+        productName="Test Product"
+        productStatus="active"
+      />,
+    );
+    const reasonField = document.getElementById('access-message') as HTMLTextAreaElement;
+    fireEvent.change(reasonField, { target: { value: 'Need access for the Q3 analytics rollup.' } });
+    fireEvent.click(screen.getByRole('button', {
+      name: i18n.t('data-products:requestAction.buttons.sendRequest'),
+    }));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1));
+    return mockToast.mock.calls[0][0];
+  }
+
+  it('warns with a generic text instead of promising a decision', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        workflow_status: 'failed',
+        workflow_error_code: 'request_workflow_failed',
+        workflow_error_params: { workflow: 'Data Product Access Request' },
+      },
+    });
+
+    const toast = await submitAccessRequest();
+
+    expect(toast.variant).toBe('destructive');
+    expect(toast.description).toBe(
+      'Nobody was asked to decide on your access request: its workflow ' +
+        '"Data Product Access Request" could not start. Please contact an administrator.',
+    );
+    expect(toast.description).not.toMatch(/you will be notified/i);
+  });
+
+  it('names the request type in the UI language', async () => {
+    await i18n.changeLanguage('pt');
+    mockPost.mockResolvedValue({
+      data: {
+        workflow_status: 'failed',
+        workflow_error_code: 'request_workflow_failed',
+        workflow_error_params: { workflow: 'Data Product Access Request' },
+      },
+    });
+
+    try {
+      const toast = await submitAccessRequest();
+
+      expect(toast.description).toBe(
+        'Ninguém foi acionado para decidir sobre sua solicitação de acesso: o workflow '
+          + '"Data Product Access Request" não pôde ser iniciado. Contate um administrador.',
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('confirms the request when its workflow is waiting for a decision', async () => {
+    mockPost.mockResolvedValue({ data: { workflow_status: 'paused' } });
+
+    const toast = await submitAccessRequest();
+
+    expect(toast.variant).toBeUndefined();
+    expect(toast.description).toMatch(/you will be notified/i);
+  });
+
+  it('warns when some workflows succeed/pause but others fail (partial failure)', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        workflow_status: 'partially_failed',
+        workflow_error_code: 'request_workflow_partially_failed',
+        workflow_error_params: { failed_workflows: ['Data Product Access Audit', 'Compliance Check'] },
+      },
+    });
+
+    const toast = await submitAccessRequest();
+
+    expect(toast.variant).toBe('destructive');
+    expect(toast.description).toBe(
+      'One of the access request workflows failed: Data Product Access Audit, Compliance Check. ' +
+        'Other approvals may still be pending.',
+    );
+    expect(toast.description).not.toContain('Nobody was asked');
+  });
+
+  it('names partial failure workflows in the UI language', async () => {
+    await i18n.changeLanguage('pt');
+    mockPost.mockResolvedValue({
+      data: {
+        workflow_status: 'partially_failed',
+        workflow_error_code: 'request_workflow_partially_failed',
+        workflow_error_params: { failed_workflows: ['Access Audit'] },
+      },
+    });
+
+    try {
+      const toast = await submitAccessRequest();
+
+      expect(toast.variant).toBe('destructive');
+      expect(toast.description).toBe(
+        'Um dos workflows de solicitação de acesso falhou: Access Audit. ' +
+          'Outras aprovações podem ainda estar pendentes.',
+      );
+      expect(toast.description).not.toContain('Ninguém foi acionado');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 });

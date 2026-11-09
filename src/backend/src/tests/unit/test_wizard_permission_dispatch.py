@@ -21,6 +21,7 @@ from src.models.users import UserInfo
 from src.routes.workflows_routes import (
     APP_ACTION_TRIGGER_TYPES,
     WIZARD_PERMISSION_DISPATCH,
+    _WIZARD_ENTITY_PERMISSION_OVERRIDES,
     enforce_wizard_permission,
 )
 
@@ -68,15 +69,11 @@ def test_dispatch_expected_features() -> None:
         TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
         TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
         TriggerType.ON_FIRST_ACCESS.value:           None,
-        # PR L — relaxed further from PR K's notifications:READ_WRITE
-        # down to notifications:READ_ONLY. The outer gate's only job is
-        # to confirm the caller is part of the notification system at
-        # all (rejects users with notifications:None). Approving a
-        # notification routed to you is read + respond, not a separate
-        # "write" action on the notifications feature itself. Real
-        # authorization remains the per-execution check inside
+        # #971 — authenticated only. `notifications` is admin-only, so the
+        # former notifications:READ_ONLY gate rejected every non-admin
+        # approver. Authorization is the per-execution check inside
         # POST /handle-approval.
-        TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_ONLY),
+        TriggerType.FOR_APPROVAL_RESPONSE.value:     None,
     }
     assert WIZARD_PERMISSION_DISPATCH == expected
 
@@ -184,18 +181,15 @@ def test_on_first_access_any_authenticated_user_allowed() -> None:
     ))
 
 
-def test_for_approval_response_user_without_notifications_denied() -> None:
-    """PR L — outer gate is `notifications:READ_ONLY`. A user with
-    `notifications:None` is rejected at the outer gate before reaching
-    the per-execution check inside POST /handle-approval. Defense-in-
-    depth: a recipient-matching bug in the per-execution check still
-    can't be probed by users with zero notification access."""
+def test_for_approval_response_user_without_notifications_allowed() -> None:
+    """#971 — approvers need no notifications permission (it is admin-only
+    and cannot be granted to other roles). A user with zero feature
+    permissions, e.g. one holding only a business role, passes the wizard
+    gate; the per-execution check inside POST /handle-approval decides."""
     request = _request_with_perms(effective={"notifications": FeatureAccessLevel.NONE})
-    with pytest.raises(HTTPException) as exc:
-        _run(enforce_wizard_permission(
-            TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["consumers"]), request
-        ))
-    assert exc.value.status_code == 403
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["business-owners"]), request
+    ))
 
 
 def test_for_approval_response_business_owner_with_read_only_allowed() -> None:
@@ -256,9 +250,94 @@ def test_unknown_trigger_silent_when_raise_on_unknown_false() -> None:
     ))
 
 
+# ---------------------------------------------------------------------------
+# Entity-aware overrides — for_request_status_change is shared by data
+# products (data-products) and ontology concepts (semantic-models). A concept
+# steward must not be gated behind data-products write.
+# ---------------------------------------------------------------------------
+
+
+def test_status_change_override_table_shape() -> None:
+    """Lock the override map: concept status-change routes to semantic-models."""
+    assert _WIZARD_ENTITY_PERMISSION_OVERRIDES == {
+        (TriggerType.FOR_REQUEST_STATUS_CHANGE.value, "ontology_concept"):
+            ("semantic-models", FeatureAccessLevel.READ_WRITE),
+    }
+
+
+def test_status_change_concept_steward_with_semantic_models_allowed() -> None:
+    """Concept steward: semantic-models:READ_WRITE, no data-products write.
+    Must clear the concept status-change wizard gate (not 403)."""
+    request = _request_with_perms(effective={
+        "semantic-models": FeatureAccessLevel.READ_WRITE,
+        "data-products": FeatureAccessLevel.NONE,
+    })
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["stewards"]), request,
+        entity_type="ontology_concept",
+    ))
+
+
+def test_status_change_concept_user_without_semantic_models_denied() -> None:
+    """User with neither semantic-models nor data-products write is 403'd
+    for the concept status-change wizard."""
+    request = _request_with_perms(effective={
+        "semantic-models": FeatureAccessLevel.NONE,
+        "data-products": FeatureAccessLevel.NONE,
+    })
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["stewards"]), request,
+            entity_type="ontology_concept",
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_status_change_product_default_gate_unchanged() -> None:
+    """No entity_type (or data_product) still gates on data-products:READ_WRITE
+    — existing product behavior is unchanged."""
+    request = _request_with_perms(effective={"data-products": FeatureAccessLevel.READ_WRITE})
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["producers"]), request
+    ))
+    request2 = _request_with_perms(effective={"data-products": FeatureAccessLevel.READ_WRITE})
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["producers"]), request2,
+        entity_type="data_product",
+    ))
+
+
+def test_status_change_product_gate_denies_concept_only_steward() -> None:
+    """A concept steward (semantic-models only, no data-products) hitting the
+    PRODUCT variant of the trigger is still 403'd — the override is entity
+    scoped and does not leak to products."""
+    request = _request_with_perms(effective={
+        "semantic-models": FeatureAccessLevel.READ_WRITE,
+        "data-products": FeatureAccessLevel.NONE,
+    })
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["stewards"]), request,
+            entity_type="data_product",
+        ))
+    assert exc.value.status_code == 403
+
+
 def test_user_with_no_groups_denied() -> None:
     """Same as PermissionChecker: empty groups → 403 before we touch perms."""
     request = _request_with_perms(effective={"access-grants": FeatureAccessLevel.ADMIN})
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_ACCESS.value, _user(groups=[], email=""), request
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_user_no_groups_email_but_no_role_denied() -> None:
+    """No groups but has an email, and no role grants the feature → 403 via the
+    permission check (not the early guard). Confirms email-only users are still
+    denied when their email matches no role's assigned_users (#196/#760)."""
+    request = _request_with_perms(effective={})
     with pytest.raises(HTTPException) as exc:
         _run(enforce_wizard_permission(
             TriggerType.FOR_REQUEST_ACCESS.value, _user(groups=[]), request

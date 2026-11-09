@@ -53,7 +53,12 @@ export enum AssetType {
 
     // Term-mapping suggestions (one ReviewedAsset == one MappingSuggestionDb)
     CONCEPT_MAPPING_SUGGESTION = "concept_mapping_suggestion",
-    
+
+    // Knowledge system assets
+    KNOWLEDGE_CONCEPT = "knowledge_concept",
+    CONCEPT_CHANGESET = "concept_changeset",
+    KNOWLEDGE_COLLECTION = "knowledge_collection",
+
     // Generic/external
     EXTERNAL = "external",
     OTHER = "other",
@@ -126,6 +131,32 @@ export interface CatalogItem {
 
 // Type for Asset Definition (plain text)
 export type AssetDefinition = string;
+
+/** A dimension or measure of a Unity Catalog metric view. */
+export interface MetricViewField {
+    name: string;
+    expr?: string | null;
+    display_name?: string | null;
+    comment?: string | null;
+}
+
+/** GET /api/data-asset-reviews/{id}/assets/{id}/metric-view */
+export interface MetricViewDefinition {
+    definition: string; // The metric view's YAML
+    metric_view: {
+        version?: string | null;
+        source?: string | null;
+        filter?: string | null;
+        joins: { name?: string | null; source?: string | null; on?: string | null; using?: string[] | null }[];
+        dimensions: MetricViewField[];
+        measures: MetricViewField[];
+        materialization?: {
+            schedule?: string | null;
+            mode?: string | null;
+            materialized_views: { name?: string | null; type?: string | null }[];
+        } | null;
+    } | null; // null when the YAML could not be parsed
+}
 
 // Type for Table Preview Data (reuse from Catalog Commander or define similarly)
 export interface TablePreview {

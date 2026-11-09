@@ -16,6 +16,7 @@ const languages = [
   { code: 'it', name: 'Italiano', flag: '🇮🇹' },
   { code: 'es', name: 'Español', flag: '🇪🇸' },
   { code: 'nl', name: 'Nederlands', flag: '🇳🇱' },
+  { code: 'pt', name: 'Português', flag: '🇧🇷' },
 ];
 
 export function LanguageSelector() {

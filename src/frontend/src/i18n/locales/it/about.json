@@ -1,18 +1,36 @@
 {
   "title": "Informazioni su {{appName}}",
+  "intro": "Questa applicazione viene eseguita come Databricks App e fornisce Unity Catalog e servizi correlati incentrati sulla gestione dei metadati, governance e strumenti operativi.",
   "version": "Versione",
   "runningSince": "In esecuzione da",
   "loading": "Caricamento...",
   "unavailable": "Non disponibile",
-  "intro": "Questa applicazione viene eseguita come Databricks App e fornisce Unity Catalog e servizi correlati incentrati sulla gestione dei metadati, governance e strumenti operativi.",
   "coreFeatures": "Funzionalità principali",
   "noFeatures": "Nessuna funzionalità disponibile per le anteprime delle funzionalità selezionate.",
   "techStack": "Stack tecnologico",
   "stack": {
-    "frontend": { "title": "Frontend", "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite" },
-    "backend": { "title": "Backend", "desc": "Python, FastAPI" },
-    "database": { "title": "Database", "desc": "PostgreSQL" },
-    "platform": { "title": "Piattaforma", "desc": "Databricks Apps" }
+    "frontend": {
+      "title": "Frontend",
+      "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite"
+    },
+    "backend": {
+      "title": "Backend",
+      "desc": "Python, FastAPI"
+    },
+    "database": {
+      "title": "Database",
+      "desc": "PostgreSQL"
+    },
+    "platform": {
+      "title": "Piattaforma",
+      "desc": "Databricks Apps"
+    }
+  },
+  "userGuide": {
+    "title": "Guida utente",
+    "tableOfContents": "Indice",
+    "loadError": "Impossibile caricare la guida utente: {{statusText}}",
+    "loadErrorGeneric": "Impossibile caricare la guida utente"
   },
   "learnMore": "Contribuisci e scopri di più",
   "cta": {
@@ -21,56 +39,56 @@
   },
   "details": {
     "data-domains": [
-      "• Definire e gestire domini dati, sottodomini e strutture di proprietà.",
-      "• Visualizzare le relazioni tra domini e prodotti dati dipendenti.",
-      "• Assegnare risorse e prodotti ai domini per una maggiore responsabilità.",
-      "• Segue lo standard BITOL Open Data Domain Standard (ODDS)."
+      "• Definisci e gestisci domini di dati, sottodomini e strutture di proprietà.",
+      "• Visualizza le relazioni tra domini e prodotti di dati dipendenti.",
+      "• Assegna asset e prodotti ai domini per una responsabilità più chiara.",
+      "• Segue il BITOL Open Data Domain Standard (ODDS)."
     ],
     "data-contracts": [
-      "• Strumentare i prodotti dati con metadati tecnici basati sull'Open Data Contract Standard (ODCS).",
-      "• Validazione dello schema, controlli di qualità, verifica del controllo degli accessi, visualizzazione dati di esempio.",
-      "• I contratti possono essere testuali (es., JSON/YAML); supporta lo schema JSON BITOL ODCS."
+      "• Struttura i prodotti di dati con metadati tecnici basati sull'Open Data Contract Standard (ODCS).",
+      "• Validazione dello schema, controlli di qualità, verifica del controllo degli accessi, visualizzazione di dati di esempio.",
+      "• I contratti possono essere basati su testo (ad es. JSON/YAML); supporta lo schema JSON BITOL ODCS."
     ],
     "data-products": [
-      "• Raggruppare risorse Databricks (tabelle, viste, funzioni, modelli, dashboard, job, notebook).",
-      "• Utilizzare tag (es., data-product-name, data-product-domain)."
+      "• Raggruppa asset Databricks (tabelle, viste, funzioni, modelli, dashboard, job, notebook).",
+      "• Usa tag (ad es. data-product-name, data-product-domain)."
     ],
     "business-glossary": [
-      "• Glossari gerarchici per unità organizzativa (azienda, LOB, dipartimento, team, progetto).",
+      "• Glossari gerarchici per unità organizzativa (azienda, LOB, reparto, team, progetto).",
       "• Uniti dal basso verso l'alto per gli utenti, consentendo sovrascritture.",
-      "• I termini hanno tag, descrizioni markdown, stato del ciclo di vita, risorse assegnate."
+      "• I termini hanno tag, descrizioni in markdown, stato del ciclo di vita e asset assegnati."
     ],
     "master-data": [
-      "• Integrazione con Zingg.ai per capacità MDM."
+      "• Si integra con Zingg.ai per le funzionalità MDM."
     ],
     "compliance": [
-      "• Definire e verificare le regole di conformità.",
-      "• Calcolare un punteggio di conformità complessivo."
+      "• Definisci e verifica le regole di conformità.",
+      "• Calcola un punteggio di conformità complessivo."
     ],
     "estate-manager": [
       "• Vista centralizzata di più workspace.",
-      "• Monitorare l'utilizzo delle risorse e i costi.",
-      "• Gestire le configurazioni tra gli estate."
+      "• Monitora l'utilizzo delle risorse e i costi.",
+      "• Gestisci le configurazioni tra i vari estate."
     ],
     "security": [
-      "• Abilitare funzionalità di sicurezza avanzate (es., privacy differenziale) sulle risorse."
+      "• Abilita funzionalità di sicurezza avanzate (ad es. privacy differenziale) sugli asset."
     ],
     "entitlements": [
-      "• Definire personas riutilizzabili (es., Analista, Ingegnere).",
-      "• Assegnare personas ai gruppi Databricks.",
-      "• Semplificare la gestione dei privilegi su larga scala."
+      "• Definisci persona riutilizzabili (ad es. Analista, Ingegnere).",
+      "• Assegna le persona ai gruppi Databricks.",
+      "• Semplifica la gestione dei privilegi su larga scala."
     ],
     "entitlements-sync": [
-      "• Mantenere i diritti allineati con i sistemi esterni (es., IDP).",
-      "• Rilevare e risolvere i conflitti di sincronizzazione.",
-      "• Mantenere i registri di audit di tutte le modifiche."
+      "• Mantieni gli entitlement allineati con i sistemi esterni (ad es. IDP).",
+      "• Rileva e risolvi i conflitti di sincronizzazione.",
+      "• Mantieni i log di audit di tutte le modifiche."
     ],
     "catalog-commander": [
-      "• Esploratore a doppio pannello ispirato a Norton Commander per gestire le risorse del catalogo.",
-      "• Copiare/spostare facilmente tabelle e schemi."
+      "• Explorer a doppio riquadro ispirato a Norton Commander per gestire gli asset del catalogo.",
+      "• Copia/sposta tabelle e schemi con facilità."
     ],
     "data-asset-reviews": [
-      "• Flusso di lavoro per rivedere e approvare risorse (tabelle, viste, funzioni).",
+      "• Flusso di lavoro per la revisione e l'approvazione degli asset (tabelle, viste, funzioni).",
       "• Include notifiche per revisori e richiedenti."
     ]
   }

@@ -1,5 +1,6 @@
 import { useState, useCallback, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronRight, ChevronDown, Loader2, ExternalLink,
   Box, Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain,
@@ -56,6 +57,7 @@ export function HierarchyTreeNode({
   onSelect,
   isLazy = false,
 }: HierarchyTreeNodeProps) {
+  const { t } = useTranslation(['data-catalog', 'common']);
   const [expanded, setExpanded] = useState(depth < 1);
   const [children, setChildren] = useState<InstanceHierarchyNode[]>(node.children || []);
   const [loading, setLoading] = useState(false);
@@ -126,7 +128,7 @@ export function HierarchyTreeNode({
           onKeyDown={handleKeyDown}
           className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-muted-foreground/10"
           tabIndex={0}
-          aria-label={expanded ? 'Collapse' : 'Expand'}
+          aria-label={expanded ? t('data-catalog:hierarchy.collapse') : t('data-catalog:hierarchy.expand')}
         >
           {loading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -184,7 +186,7 @@ export function HierarchyTreeNode({
               <ExternalLink className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">View details</TooltipContent>
+          <TooltipContent side="right">{t('data-catalog:hierarchy.viewDetails')}</TooltipContent>
         </Tooltip>
       </div>
 
@@ -204,12 +206,12 @@ export function HierarchyTreeNode({
           {loading && (
             <div className="flex items-center gap-2 py-2" style={{ paddingLeft: paddingLeft + 16 }}>
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Loading...</span>
+              <span className="text-xs text-muted-foreground">{t('common:states.loading')}</span>
             </div>
           )}
           {!loading && loaded && children.length === 0 && hasChildren && (
             <div className="py-1 text-xs text-muted-foreground italic" style={{ paddingLeft: paddingLeft + 24 }}>
-              No children found
+              {t('data-catalog:hierarchy.noChildrenFound')}
             </div>
           )}
         </div>

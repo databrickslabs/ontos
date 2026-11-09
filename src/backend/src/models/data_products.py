@@ -12,12 +12,17 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 import json
 
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+# ODPS has no status on an output port; the ODPS export carries Ontos's port status
+# as this port custom property, and imports read it back.
+ONTOS_PORT_STATUS_PROPERTY = "ontosPortStatus"
 
 
 # ============================================================================
@@ -86,8 +91,18 @@ class AuthoritativeDefinition(BaseModel):
 class CustomProperty(BaseModel):
     """ODPS v1.0.0 Custom Property"""
     property: str = Field(..., description="Property name in camelCase")
-    value: Any = Field(..., description="Property value (can be any type)")
+    value: Any = Field(None, description="Property value (can be any type, including null)")
     description: Optional[str] = Field(None, description="Optional description")
+
+    # Normalize the legacy literal string "null" back to None. Older writes
+    # persisted a null value via json.dumps(None) == "null" (fixed on the write
+    # side), so this keeps values read from those rows presenting as real nulls
+    # instead of the four-character string.
+    @field_validator('value', mode='before')
+    def normalize_null_value(cls, v):
+        if v == "null":
+            return None
+        return v
 
     model_config = {"from_attributes": True}
 
@@ -113,6 +128,7 @@ class InputPort(BaseModel):
     name: str = Field(..., description="Name of the input port")
     version: str = Field(..., description="Version of the input port")
     contractId: str = Field(..., alias="contract_id", description="Contract ID for the input port (REQUIRED in ODPS)")
+    contractName: Optional[str] = Field(None, alias="contract_name", description="Contract name (resolved at query time)")
 
     # ODPS optional fields
     tags: Optional[List[str]] = Field(None, description="Tags for categorization")
@@ -206,6 +222,26 @@ class OutputPort(BaseModel):
     autoApprove: bool = Field(False, alias="auto_approve", description="Auto-approve flag")
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _read_port_status_property(cls, data):
+        # An ODPS export carries the port status as the ontosPortStatus custom
+        # property; a bare `status` (older exports, the API) wins when both are set.
+        if not isinstance(data, dict) or not isinstance(data.get('customProperties'), list):
+            return data
+        props = data['customProperties']
+        status_props = [
+            cp for cp in props
+            if isinstance(cp, dict) and cp.get('property') == ONTOS_PORT_STATUS_PROPERTY
+        ]
+        if not status_props:
+            return data
+        data = dict(data)
+        if data.get('status') is None:
+            data['status'] = status_props[0].get('value')
+        data['customProperties'] = [cp for cp in props if cp not in status_props] or None
+        return data
 
     @field_validator('deliveryMethodId', mode='before')
     @classmethod
@@ -342,7 +378,9 @@ class DataProduct(BaseModel):
     # ODPS v1.0.0 optional fields
     name: Optional[str] = Field(None, description="Name of the data product")
     version: Optional[str] = Field(None, description="Version of the data product")
-    domain: Optional[str] = Field(None, description="Business domain")
+    domain: Optional[str] = Field(None, description="Primary business domain name (populated by the manager)")
+    domain_ids: List[str] = Field(default_factory=list, description="Assigned data domain IDs (primary first)")
+    primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     tenant: Optional[str] = Field(None, description="Organization identifier")
     owner_team_id: Optional[str] = Field(None, description="Owner team UUID")
     owner_team_name: Optional[str] = Field(None, description="Owner team name (resolved at query time)")
@@ -518,7 +556,9 @@ class DataProductCreate(BaseModel):
     # ODPS optional
     name: Optional[str] = Field(None, description="Product name")
     version: Optional[str] = Field(None, description="Product version")
-    domain: Optional[str] = Field(None, description="Domain")
+    domain: Optional[str] = Field(None, description="Legacy single domain (name or ID); prefer domain_ids")
+    domain_ids: Optional[List[str]] = Field(None, description="Assigned data domain IDs (primary included)")
+    primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     tenant: Optional[str] = Field(None, description="Tenant")
     owner_team_id: Optional[str] = Field(None, description="Owner team UUID")
     project_id: Optional[str] = Field(None, description="Project association")
@@ -598,6 +638,8 @@ class DataProductUpdate(BaseModel):
     version: Optional[str] = None
     status: Optional[str] = None
     domain: Optional[str] = None
+    domain_ids: Optional[List[str]] = None
+    primary_domain_id: Optional[str] = None
     tenant: Optional[str] = None
     owner_team_id: Optional[str] = None
     project_id: Optional[str] = None

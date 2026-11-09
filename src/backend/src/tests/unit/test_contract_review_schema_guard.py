@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.orm import Session
 
-from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.data_contracts_manager import DataContractsManager, ReviewSchemaRequiredError
 from src.db_models.data_contracts import DataContractDb, SchemaObjectDb
 
 
@@ -31,13 +31,20 @@ class TestRequireSchemaBeforeReview:
         manager = _manager()
         cid = _draft(db_session)
 
-        with pytest.raises(ValueError, match="schema is required"):
+        with pytest.raises(ReviewSchemaRequiredError, match="schema is required") as raised:
             manager.request_steward_review(
                 db=db_session,
                 notifications_manager=MagicMock(),
                 contract_id=cid,
                 requester_email="producer@example.com",
             )
+
+        # A ValueError with a code the UI translates (the English text is unchanged)
+        assert isinstance(raised.value, ValueError)
+        assert raised.value.code == "review_schema_required"
+        assert str(raised.value) == (
+            "A schema is required before a contract can be proposed for review."
+        )
 
         # State must remain draft — the failed guard must not transition it.
         contract = db_session.query(DataContractDb).filter_by(id=cid).one()

@@ -1,0 +1,65 @@
+{
+  "title": "Responsáveis pelo negócio",
+  "subtitle": "Atribuições de responsabilidade que rastreiam quem é responsável pelo quê.",
+  "addNew": "Atribuir responsável",
+  "editOwner": "Editar atribuição",
+  "removeOwner": "Remover responsável",
+  "table": {
+    "object": "Objeto",
+    "objectType": "Tipo de objeto",
+    "owner": "Responsável",
+    "role": "Papel",
+    "status": "Status",
+    "assignedAt": "Atribuído",
+    "removedAt": "Removido",
+    "actions": "Ações"
+  },
+  "objectTypes": {
+    "data_product": "Produto de dados",
+    "data_contract": "Contrato de dados",
+    "dataset": "Conjunto de dados",
+    "data_domain": "Domínio de dados",
+    "business_term": "Termo de negócio",
+    "policy": "Política",
+    "asset": "Ativo",
+    "tag": "Tag"
+  },
+  "statusLabels": {
+    "active": "Ativo",
+    "inactive": "Inativo"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar responsáveis pelo negócio.",
+    "deniedCreate": "Você não tem permissão para atribuir responsáveis.",
+    "deniedEdit": "Você não tem permissão para editar atribuições de responsáveis.",
+    "deniedDelete": "Você não tem permissão para remover responsáveis.",
+    "permissionDenied": "Permissão negada"
+  },
+  "messages": {
+    "errorFetching": "Erro ao buscar responsáveis pelo negócio",
+    "errorRemoving": "Erro ao remover responsável pelo negócio",
+    "removed": "Responsável removido",
+    "removedSuccess": "A atribuição de responsabilidade foi removida com sucesso.",
+    "errorLoadingData": "Erro ao carregar dados"
+  },
+  "removeDialog": {
+    "title": "Remover responsável?",
+    "description": "Isso desativará a atribuição de responsabilidade. O histórico será preservado.",
+    "reasonLabel": "Motivo (opcional)",
+    "reasonPlaceholder": "Digite o motivo da remoção...",
+    "cancel": "Cancelar",
+    "remove": "Remover"
+  },
+  "emptyState": {
+    "title": "Nenhuma atribuição de responsabilidade ainda",
+    "description": "Atribua responsáveis pelo negócio a produtos de dados, contratos e outros objetos."
+  },
+  "panel": {
+    "title": "Responsáveis",
+    "currentOwners": "Responsáveis atuais",
+    "previousOwners": "Responsáveis anteriores",
+    "noOwners": "Nenhum responsável atribuído",
+    "assignOwner": "Atribuir responsável",
+    "history": "Mostrar histórico"
+  }
+}

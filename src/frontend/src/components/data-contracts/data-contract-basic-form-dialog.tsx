@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -15,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { useDomains } from '@/hooks/use-domains'
+import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
@@ -34,6 +35,8 @@ type BasicFormProps = {
     owner_team_id?: string
     project_id?: string
     domain?: string
+    domainIds?: string[]
+    primaryDomainId?: string | null
     tenant?: string
     descriptionUsage?: string
     descriptionPurpose?: string
@@ -42,14 +45,18 @@ type BasicFormProps = {
   }
 }
 
-const statuses = ['draft', 'active', 'deprecated', 'archived']
+// The lifecycle statuses of a contract (src.models.lifecycle). Certification
+// is a separate field, and an existing contract's status changes only through
+// Change Status.
+const statuses = ['draft', 'proposed', 'under_review', 'approved', 'active', 'deprecated', 'retired']
 
 export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSubmit, initial }: BasicFormProps) {
-  const { domains, loading: domainsLoading } = useDomains()
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+  const isEdit = Boolean(initial)
 
   // Form state
   const [name, setName] = useState('')
@@ -57,7 +64,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [status, setStatus] = useState('draft')
   const [ownerTeamId, setOwnerTeamId] = useState('')
   const [projectId, setProjectId] = useState('')
-  const [domain, setDomain] = useState('')
+  const [domainIds, setDomainIds] = useState<string[]>([])
+  const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null)
   const [tenant, setTenant] = useState('')
   const [descriptionUsage, setDescriptionUsage] = useState('')
   const [descriptionPurpose, setDescriptionPurpose] = useState('')
@@ -100,7 +108,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       status: initial.status || 'draft',
       ownerTeamId: initial.owner_team_id || '',
       projectId: initial.project_id || '',
-      domain: initial.domain || '',
+      domainIds: initial.domainIds || (initial.domain ? [initial.domain] : []),
+      primaryDomainId: initial.primaryDomainId ?? initial.domain ?? null,
       tenant: initial.tenant || '',
       descriptionUsage: initial.descriptionUsage || '',
       descriptionPurpose: initial.descriptionPurpose || '',
@@ -112,7 +121,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       status: 'draft',
       ownerTeamId: '',
       projectId: currentProject?.id || '',
-      domain: '',
+      domainIds: [],
+      primaryDomainId: null,
       tenant: '',
       descriptionUsage: '',
       descriptionPurpose: '',
@@ -125,7 +135,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     setStatus(initValues.status)
     setOwnerTeamId(initValues.ownerTeamId)
     setProjectId(initValues.projectId)
-    setDomain(initValues.domain)
+    setDomainIds(initValues.domainIds)
+    setPrimaryDomainId(initValues.primaryDomainId)
     setTenant(initValues.tenant)
     setDescriptionUsage(initValues.descriptionUsage)
     setDescriptionPurpose(initValues.descriptionPurpose)
@@ -150,14 +161,15 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       status !== initialFormValues.status ||
       ownerTeamId !== initialFormValues.ownerTeamId ||
       projectId !== initialFormValues.projectId ||
-      domain !== initialFormValues.domain ||
+      domainIds.join(',') !== (initialFormValues.domainIds || []).join(',') ||
+      (primaryDomainId || '') !== (initialFormValues.primaryDomainId || '') ||
       tenant !== initialFormValues.tenant ||
       descriptionUsage !== initialFormValues.descriptionUsage ||
       descriptionPurpose !== initialFormValues.descriptionPurpose ||
       descriptionLimitations !== initialFormValues.descriptionLimitations ||
       currentTagsNormalized !== initialTagsNormalized
     )
-  }, [initialFormValues, name, version, status, ownerTeamId, projectId, domain, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
+  }, [initialFormValues, name, version, status, ownerTeamId, projectId, domainIds, primaryDomainId, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
 
   const handleCloseAttempt = () => {
     if (isFormDirty && !isSubmitting) {
@@ -175,13 +187,13 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const handleSubmit = async () => {
     // Validate required fields
     if (!name || !name.trim()) {
-      toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:form.validationErrorTitle', 'Validation Error'), description: t('data-contracts:form.nameRequired', 'Contract name is required'), variant: 'destructive' })
       return
     }
 
     console.log('[DEBUG FORM] State values before submit:')
     console.log('  - projectId:', projectId)
-    console.log('  - domain:', domain)
+    console.log('  - domainIds:', domainIds)
     console.log('  - ownerTeamId:', ownerTeamId)
     
     setIsSubmitting(true)
@@ -202,7 +214,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
         apiVersion: 'v3.1.0',
-        domainId: domain && domain !== '__none__' ? domain : undefined,
+        domainIds: domainIds,
+        primaryDomainId: primaryDomainId,
         tenant: tenant.trim() || undefined,
         tags: normalizedTags.length > 0 ? normalizedTags as any : undefined,
         description: {
@@ -218,8 +231,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       onOpenChange(false)
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save contract',
+        title: t('data-contracts:messages.error', 'Error'),
+        description: error?.message || t('data-contracts:form.saveError', 'Failed to save contract'),
         variant: 'destructive',
       })
     } finally {
@@ -239,11 +252,11 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
           }}
         >
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Contract Metadata' : 'Create New Data Contract'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-contracts:basicForm.editTitle', 'Edit Contract Metadata') : t('data-contracts:basicForm.createTitle', 'Create New Data Contract')}</DialogTitle>
           <DialogDescription>
             {initial
-              ? 'Update the core metadata for this data contract.'
-              : 'Enter basic information to create a new data contract. You can add schemas, quality rules, and other details after creation.'}
+              ? t('data-contracts:basicForm.editDescription', 'Update the core metadata for this data contract.')
+              : t('data-contracts:basicForm.createDescription', 'Enter basic information to create a new data contract. You can add schemas, quality rules, and other details after creation.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -251,20 +264,20 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">
-              Name <span className="text-destructive">*</span>
+              {t('data-contracts:form.name', 'Name')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Customer Data Contract"
+              placeholder={t('data-contracts:basicForm.namePlaceholder', 'e.g., Customer Data Contract')}
             />
           </div>
 
           {/* Version & Status */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="version">Version</Label>
+              <Label htmlFor="version">{t('data-contracts:form.version', 'Version')}</Label>
               <Input
                 id="version"
                 value={version}
@@ -273,25 +286,30 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Label htmlFor="status">{t('data-contracts:form.status', 'Status')}</Label>
+              <Select value={status} onValueChange={setStatus} disabled={isEdit}>
                 <SelectTrigger id="status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {statuses.map((s) => (
+                  {(statuses.includes(status) ? statuses : [status, ...statuses]).map((s) => (
                     <SelectItem key={s} value={s}>
-                      {s}
+                      {t(`data-contracts:status.${s}`, s)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {isEdit && (
+                <p className="text-xs text-muted-foreground">
+                  {t('data-contracts:form.statusChangeHint')}
+                </p>
+              )}
             </div>
           </div>
 
       {/* Owner Team */}
       <div className="space-y-2">
-        <Label htmlFor="ownerTeamId">Owner Team</Label>
+        <Label htmlFor="ownerTeamId">{t('data-contracts:form.ownerTeam', 'Owner Team')}</Label>
         <Select 
           value={ownerTeamId || '__none__'} 
           onValueChange={(value) => {
@@ -301,10 +319,10 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
           disabled={teamsLoading}
         >
           <SelectTrigger id="ownerTeamId">
-            <SelectValue placeholder="Select an owner team (optional)" />
+            <SelectValue placeholder={t('data-contracts:basicForm.selectOwnerTeamOptional', 'Select an owner team (optional)')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none__">None</SelectItem>
+            <SelectItem value="__none__">{t('common:states.none', 'None')}</SelectItem>
             {teams.map((team) => (
               <SelectItem key={team.id} value={team.id}>
                 {team.name}
@@ -316,7 +334,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
 
       {/* Project */}
       <div className="space-y-2">
-        <Label htmlFor="projectId">Project</Label>
+        <Label htmlFor="projectId">{t('data-contracts:form.project', 'Project')}</Label>
         <Select 
           value={projectId || '__none__'} 
           onValueChange={(value) => {
@@ -326,91 +344,80 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
           disabled={projectsLoading}
         >
           <SelectTrigger id="projectId">
-            <SelectValue placeholder="Select a project (optional)" />
+            <SelectValue placeholder={t('data-contracts:basicForm.selectProjectOptional', 'Select a project (optional)')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none__">None</SelectItem>
+            <SelectItem value="__none__">{t('common:states.none', 'None')}</SelectItem>
             {availableProjects.map((project) => (
               <SelectItem key={project.id} value={project.id}>
-                {project.name} ({project.team_count} teams)
+                {t('data-contracts:basicForm.projectOption', '{{name}} ({{count}} teams)', { name: project.name, count: project.team_count })}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          You can only select projects you are a member of
+          {t('data-contracts:basicForm.projectHint', 'You can only select projects you are a member of')}
         </p>
       </div>
 
-      {/* Domain */}
+      {/* Domains */}
       <div className="space-y-2">
-        <Label htmlFor="domain">Domain</Label>
-        <Select 
-          value={domain || '__none__'} 
-          onValueChange={(value) => {
-            console.log('[DEBUG] Domain onValueChange fired:', value);
-            setDomain(value === '__none__' ? '' : value);
-          }} 
-          disabled={domainsLoading}
-        >
-          <SelectTrigger id="domain">
-            <SelectValue placeholder="Select a domain (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">None</SelectItem>
-            {domains.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="domain">{t('data-contracts:form.domains', 'Domains')}</Label>
+        <DomainMultiSelector
+          value={domainIds}
+          primaryDomainId={primaryDomainId}
+          onChange={(nextIds, nextPrimary) => {
+            setDomainIds(nextIds)
+            setPrimaryDomainId(nextPrimary)
+          }}
+          placeholder={t('data-contracts:form.selectDomainsOptional', 'Select domains (optional)')}
+        />
       </div>
 
           {/* Tenant */}
           <div className="space-y-2">
-            <Label htmlFor="tenant">Tenant</Label>
+            <Label htmlFor="tenant">{t('data-contracts:form.tenant', 'Tenant')}</Label>
             <Input
               id="tenant"
               value={tenant}
               onChange={(e) => setTenant(e.target.value)}
-              placeholder="e.g., retail-demo"
+              placeholder={t('data-contracts:basicForm.tenantPlaceholder', 'e.g., retail-demo')}
             />
           </div>
 
           {/* Description sections */}
           <div className="space-y-4 pt-2">
-            <Label className="text-base font-semibold">Description</Label>
+            <Label className="text-base font-semibold">{t('data-contracts:form.description', 'Description')}</Label>
 
             <div className="space-y-2">
-              <Label htmlFor="descriptionPurpose">Purpose</Label>
+              <Label htmlFor="descriptionPurpose">{t('data-contracts:basicForm.purpose', 'Purpose')}</Label>
               <Textarea
                 id="descriptionPurpose"
                 value={descriptionPurpose}
                 onChange={(e) => setDescriptionPurpose(e.target.value)}
-                placeholder="What is the purpose of this data contract?"
+                placeholder={t('data-contracts:basicForm.purposePlaceholder', 'What is the purpose of this data contract?')}
                 rows={2}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="descriptionUsage">Usage</Label>
+              <Label htmlFor="descriptionUsage">{t('data-contracts:basicForm.usage', 'Usage')}</Label>
               <Textarea
                 id="descriptionUsage"
                 value={descriptionUsage}
                 onChange={(e) => setDescriptionUsage(e.target.value)}
-                placeholder="How should this data be used?"
+                placeholder={t('data-contracts:basicForm.usagePlaceholder', 'How should this data be used?')}
                 rows={2}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="descriptionLimitations">Limitations</Label>
+              <Label htmlFor="descriptionLimitations">{t('data-contracts:basicForm.limitations', 'Limitations')}</Label>
               <Textarea
                 id="descriptionLimitations"
                 value={descriptionLimitations}
                 onChange={(e) => setDescriptionLimitations(e.target.value)}
-                placeholder="What are the limitations or restrictions?"
+                placeholder={t('data-contracts:basicForm.limitationsPlaceholder', 'What are the limitations or restrictions?')}
                 rows={2}
               />
             </div>
@@ -418,25 +425,25 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
 
           {/* Tags Section */}
           <div className="space-y-2 border-t pt-4">
-            <Label>Tags</Label>
+            <Label>{t('data-contracts:form.tags', 'Tags')}</Label>
             <TagSelector
               value={tags}
               onChange={setTags}
-              placeholder="Search and select tags for this data contract..."
+              placeholder={t('data-contracts:basicForm.tagsPlaceholder', 'Search and select tags for this data contract...')}
               allowCreate={true}
             />
             <p className="text-xs text-muted-foreground">
-              Add tags to categorize and organize this data contract
+              {t('data-contracts:basicForm.tagsHint', 'Add tags to categorize and organize this data contract')}
             </p>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCloseAttempt} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Save Changes' : 'Create Contract'}
+            {isSubmitting ? t('data-contracts:form.saving', 'Saving...') : initial ? t('common:actions.saveChanges', 'Save Changes') : t('data-contracts:form.createContract', 'Create Contract')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -445,14 +452,14 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+          <AlertDialogTitle>{t('common:confirmations.discardChanges', 'Discard unsaved changes?')}</AlertDialogTitle>
           <AlertDialogDescription>
-            You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+            {t('data-contracts:basicForm.discardDescription', 'You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Continue Editing</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+          <AlertDialogCancel>{t('data-contracts:basicForm.continueEditing', 'Continue Editing')}</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmDiscard}>{t('data-contracts:basicForm.discardChanges', 'Discard Changes')}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -1,0 +1,10 @@
+{
+  "title": "Conceitos",
+  "nav": {
+    "collections": "Esquemas de conceitos",
+    "browser": "Conceitos",
+    "search": "Pesquisa",
+    "graph": "Grafo",
+    "hierarchy": "Hierarquia"
+  }
+}

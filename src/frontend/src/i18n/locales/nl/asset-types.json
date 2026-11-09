@@ -1,0 +1,80 @@
+{
+  "title": "Asset-types",
+  "subtitle": "Herbruikbare sjablonen die bepalen hoe verschillende soorten assets zijn gestructureerd.",
+  "addNew": "Asset-type toevoegen",
+  "editAssetType": "Asset-type bewerken",
+  "deleteAssetType": "Asset-type verwijderen",
+  "systemBadge": "Systeem",
+  "openMenu": "Menu openen",
+  "table": {
+    "name": "Naam",
+    "description": "Beschrijving",
+    "category": "Categorie",
+    "status": "Status",
+    "assetCount": "Assets",
+    "lastUpdated": "Laatst bijgewerkt",
+    "actions": "Acties"
+  },
+  "categories": {
+    "data": "Data",
+    "analytics": "Analytics",
+    "integration": "Integratie",
+    "system": "Systeem",
+    "custom": "Aangepast"
+  },
+  "statuses": {
+    "active": "Actief",
+    "deprecated": "Verouderd"
+  },
+  "permissions": {
+    "deniedView": "U hebt geen toestemming om asset-types te bekijken.",
+    "deniedCreate": "U hebt geen toestemming om asset-types aan te maken.",
+    "deniedEdit": "U hebt geen toestemming om asset-types te bewerken.",
+    "deniedDelete": "U hebt geen toestemming om asset-types te verwijderen.",
+    "permissionDenied": "Toegang geweigerd"
+  },
+  "messages": {
+    "errorFetching": "Fout bij ophalen van asset-types",
+    "loadFailed": "Laden van asset-types mislukt",
+    "errorDeleting": "Fout bij verwijderen van asset-type",
+    "deleted": "Asset-type verwijderd",
+    "deletedSuccess": "Het asset-type is succesvol verwijderd.",
+    "errorLoadingData": "Fout bij laden van gegevens"
+  },
+  "deleteDialog": {
+    "title": "Asset-type verwijderen?",
+    "description": "Deze actie kan niet ongedaan worden gemaakt. Bestaande assets van dit type kunnen wees worden.",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen"
+  },
+  "emptyState": {
+    "title": "Nog geen asset-types gedefinieerd",
+    "description": "Maak uw eerste asset-type aan om te beginnen met het definiëren van asset-sjablonen."
+  },
+  "form": {
+    "createTitle": "Asset-type aanmaken",
+    "createDescription": "Voeg een nieuw asset-type-sjabloon toe.",
+    "editTitle": "Asset-type bewerken",
+    "editDescription": "Werk de details van dit asset-type bij.",
+    "create": "Aanmaken",
+    "update": "Wijzigingen opslaan",
+    "noCategory": "Geen categorie",
+    "labels": {
+      "icon": "Pictogram"
+    },
+    "placeholders": {
+      "name": "bijv. Dashboard",
+      "description": "Beschrijf dit asset-type...",
+      "category": "Selecteer een categorie",
+      "icon": "bijv. BarChart"
+    },
+    "toasts": {
+      "created": "Asset-type aangemaakt",
+      "createdDescription": "\"{{name}}\" is aangemaakt.",
+      "updated": "Asset-type bijgewerkt",
+      "updatedDescription": "\"{{name}}\" is bijgewerkt.",
+      "createFailed": "Aanmaken mislukt",
+      "updateFailed": "Bijwerken mislukt"
+    }
+  }
+}

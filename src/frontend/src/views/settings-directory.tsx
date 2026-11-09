@@ -11,6 +11,7 @@
  */
 
 import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Loader2, Plug2 } from 'lucide-react';
 
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
@@ -44,18 +45,19 @@ import type {
 // the provider up via its registry on the backend.
 const PROVIDER_OPTIONS: Array<{
   value: 'entra' | 'lakebase' | 'file';
-  label: string;
 }> = [
-  { value: 'entra', label: 'Microsoft Entra ID' },
-  { value: 'lakebase', label: 'Lakebase table' },
-  { value: 'file', label: 'CSV file (test / demo)' },
+  { value: 'entra' },
+  { value: 'lakebase' },
+  { value: 'file' },
 ];
 
+// Each entry pairs a translation key (label) with its literal reference
+// value (a URL / grant type — not translatable).
 const ENTRA_HELP_LINES = [
-  ['Token URL', 'https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token'],
-  ['Base URL', 'https://graph.microsoft.com'],
-  ['Scope', 'https://graph.microsoft.com/.default'],
-  ['Grant type', 'client_credentials'],
+  ['tokenUrl', 'https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token'],
+  ['baseUrl', 'https://graph.microsoft.com'],
+  ['scope', 'https://graph.microsoft.com/.default'],
+  ['grantType', 'client_credentials'],
 ] as const;
 
 const LAKEBASE_SCHEMA_SQL = `CREATE TABLE main.directory.principals (
@@ -73,6 +75,7 @@ user,bob@example.com,Bob Builder,bob@example.com
 group,Producers,Data Producers,producers-guid`;
 
 export default function SettingsDirectoryView() {
+  const { t } = useTranslation(['settings', 'common']);
   const { get, put, post } = useApi();
   const { toast } = useToast();
   const refreshStore = useDirectoryStore((s) => s.refresh);
@@ -150,11 +153,11 @@ export default function SettingsDirectoryView() {
       if (res.error) throw new Error(res.error);
       setStatus(res.data);
       await refreshStore();
-      toast({ title: 'Directory settings saved' });
+      toast({ title: t('directory.messages.saveSuccess') });
     } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: 'Failed to save',
+        title: t('directory.messages.saveFailed'),
         description: err.message ?? String(err),
       });
     } finally {
@@ -168,18 +171,18 @@ export default function SettingsDirectoryView() {
       const res = await post<DirectoryTestResult>('/api/directory/test', {});
       if (res.error) throw new Error(res.error);
       if (res.data.healthy) {
-        toast({ title: 'Directory test succeeded' });
+        toast({ title: t('directory.messages.testSuccess') });
       } else {
         toast({
           variant: 'destructive',
-          title: 'Directory test failed',
-          description: res.data.error ?? 'Unknown error',
+          title: t('directory.messages.testFailed'),
+          description: res.data.error ?? t('directory.messages.unknownError'),
         });
       }
     } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: 'Directory test failed',
+        title: t('directory.messages.testFailed'),
         description: err.message ?? String(err),
       });
     } finally {
@@ -204,11 +207,11 @@ export default function SettingsDirectoryView() {
       setLakebaseTable('');
       setFilePath('');
       await refreshStore();
-      toast({ title: 'Directory settings cleared' });
+      toast({ title: t('directory.messages.clearSuccess') });
     } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: 'Failed to clear',
+        title: t('directory.messages.clearFailed'),
         description: err.message ?? String(err),
       });
     } finally {
@@ -219,7 +222,7 @@ export default function SettingsDirectoryView() {
   if (loading) {
     // Provider tabs + dynamic form fields + status row
     return (
-      <SettingsPageWrapper title="Directory" permissionId="settings-directory">
+      <SettingsPageWrapper title={t('directory.title')} permissionId="settings-directory">
         <div className="space-y-4">
           <SkeletonLine height="h-9" width="w-72" />
           <SettingsFormSkeleton sections={1} fieldsPerSection={4} showSaveBar={false} showTitle={false} />
@@ -262,25 +265,22 @@ export default function SettingsDirectoryView() {
   })();
 
   return (
-    <SettingsPageWrapper title="Directory" permissionId="settings-directory">
+    <SettingsPageWrapper title={t('directory.title')} permissionId="settings-directory">
       <div className="flex flex-col gap-6 max-w-2xl">
         <p className="text-sm text-muted-foreground">
-          Connect a principal directory so users and groups can be picked
-          throughout the app. v1 supports Microsoft Entra ID (via a UC HTTP
-          Connection), a Postgres / Lakebase table, or a local CSV file for
-          tests and demos.
+          {t('directory.intro')}
         </p>
 
         <div className="grid gap-2">
-          <Label htmlFor="directory-provider">Provider</Label>
+          <Label htmlFor="directory-provider">{t('directory.providerLabel')}</Label>
           <Select value={providerType} onValueChange={setProviderType} disabled={saving}>
             <SelectTrigger id="directory-provider">
-              <SelectValue placeholder="Select a provider…" />
+              <SelectValue placeholder={t('directory.providerPlaceholder')} />
             </SelectTrigger>
             <SelectContent>
               {PROVIDER_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
+                  {t(`directory.providers.${opt.value}`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -292,28 +292,28 @@ export default function SettingsDirectoryView() {
         <div className="flex gap-2">
           <Button onClick={handleSave} disabled={!canSave}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save
+            {t('common:actions.save')}
           </Button>
           <Button variant="outline" onClick={handleTest} disabled={!canTest}>
             {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Test connection
+            {t('directory.testConnection')}
           </Button>
           <Button
             variant="ghost"
             onClick={handleClear}
             disabled={saving || (!status?.provider_type && !status?.connection_name && !status?.lakebase_table && !status?.file_path)}
           >
-            Clear
+            {t('common:actions.clear')}
           </Button>
         </div>
 
         {status && (
           <p className="text-xs text-muted-foreground">
-            Status:{' '}
+            {t('directory.statusLabel')}{' '}
             {status.configured ? (
-              <span className="text-foreground">Configured ({status.provider_type})</span>
+              <span className="text-foreground">{t('directory.configured', { provider: status.provider_type })}</span>
             ) : (
-              <span>Not configured</span>
+              <span>{t('directory.notConfigured')}</span>
             )}
           </p>
         )}
@@ -337,10 +337,11 @@ function EntraPanel({
   connections: UcHttpConnection[];
   connectionsLoading: boolean;
 }) {
+  const { t } = useTranslation(['settings', 'common']);
   return (
     <>
       <div className="grid gap-2">
-        <Label htmlFor="directory-connection">UC HTTP Connection</Label>
+        <Label htmlFor="directory-connection">{t('directory.entra.connectionLabel')}</Label>
         <Select
           value={connectionName}
           onValueChange={setConnectionName}
@@ -350,10 +351,10 @@ function EntraPanel({
             <SelectValue
               placeholder={
                 connectionsLoading
-                  ? 'Loading connections…'
+                  ? t('directory.entra.loadingConnections')
                   : connections.length === 0
-                  ? 'No HTTP connections found'
-                  : 'Select a connection…'
+                  ? t('directory.entra.noConnections')
+                  : t('directory.entra.selectConnection')
               }
             />
           </SelectTrigger>
@@ -373,19 +374,18 @@ function EntraPanel({
         </Select>
       </div>
       <Alert>
-        <AlertTitle>Entra ID connection setup</AlertTitle>
+        <AlertTitle>{t('directory.entra.setupTitle')}</AlertTitle>
         <AlertDescription>
           <p className="mb-2 text-sm">
-            Create a Unity Catalog HTTP connection against Microsoft Graph with
-            client_credentials. The app&apos;s enterprise app must hold at least
-            <code className="mx-1">User.Read.All</code> and
-            <code className="mx-1">GroupMember.Read.All</code> (or
-            <code className="mx-1">Group.Read.All</code>) application scopes.
+            <Trans
+              i18nKey="settings:directory.entra.setupBody"
+              components={{ code: <code className="mx-1" /> }}
+            />
           </p>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
             {ENTRA_HELP_LINES.map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="text-muted-foreground">{k}</dt>
+                <dt className="text-muted-foreground">{t(`directory.entra.helpLabels.${k}`)}</dt>
                 <dd>
                   <code>{v}</code>
                 </dd>
@@ -407,30 +407,27 @@ function LakebasePanel({
   setLakebaseTable: (v: string) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation(['settings', 'common']);
   return (
     <>
       <div className="grid gap-2">
-        <Label htmlFor="directory-lakebase-table">Lakebase table</Label>
+        <Label htmlFor="directory-lakebase-table">{t('directory.lakebase.tableLabel')}</Label>
         <Input
           id="directory-lakebase-table"
           value={lakebaseTable}
           onChange={(e) => setLakebaseTable(e.target.value)}
-          placeholder="catalog.schema.table"
+          placeholder={t('directory.lakebase.tablePlaceholder')}
           disabled={saving}
         />
         <p className="text-xs text-muted-foreground">
-          Fully-qualified name of a Postgres table on the app&apos;s primary
-          Lakebase database. Identifier segments must contain only letters,
-          digits, and underscores.
+          {t('directory.lakebase.tableHelp')}
         </p>
       </div>
       <Alert>
-        <AlertTitle>Required schema</AlertTitle>
+        <AlertTitle>{t('directory.lakebase.schemaTitle')}</AlertTitle>
         <AlertDescription>
           <p className="text-sm">
-            Populate this table from your IdP sync pipeline. Indexes on
-            lower-cased columns are optional but recommended for snappy
-            prefix search.
+            {t('directory.lakebase.schemaBody')}
           </p>
           <pre className="mt-2 text-xs bg-muted/50 rounded-md p-2 overflow-x-auto">
             {LAKEBASE_SCHEMA_SQL}
@@ -450,30 +447,30 @@ function FilePanel({
   setFilePath: (v: string) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation(['settings', 'common']);
   return (
     <>
       <div className="grid gap-2">
-        <Label htmlFor="directory-file-path">CSV file path</Label>
+        <Label htmlFor="directory-file-path">{t('directory.file.pathLabel')}</Label>
         <Input
           id="directory-file-path"
           value={filePath}
           onChange={(e) => setFilePath(e.target.value)}
-          placeholder="/etc/ontos/principals.csv"
+          placeholder={t('directory.file.pathPlaceholder')}
           disabled={saving}
         />
         <p className="text-xs text-muted-foreground">
-          Absolute path to a CSV file readable by the app process. Re-read
-          automatically when the file&apos;s mtime advances; no restart needed.
+          {t('directory.file.pathHelp')}
         </p>
       </div>
       <Alert>
-        <AlertTitle>CSV format</AlertTitle>
+        <AlertTitle>{t('directory.file.formatTitle')}</AlertTitle>
         <AlertDescription>
           <p className="text-sm">
-            Required columns: <code>type</code>, <code>id</code>,
-            {' '}<code>display_name</code>. The <code>sub_label</code> column
-            is optional. <code>type</code> must be <code>user</code> or
-            {' '}<code>group</code>.
+            <Trans
+              i18nKey="settings:directory.file.formatBody"
+              components={{ code: <code /> }}
+            />
           </p>
           <pre className="mt-2 text-xs bg-muted/50 rounded-md p-2 overflow-x-auto">
             {FILE_HELP_CSV}

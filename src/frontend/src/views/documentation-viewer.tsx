@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BookOpenCheck, ChevronRight } from 'lucide-react';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { DocViewerSkeleton } from '@/components/common/list-view-skeleton';
+import { type DocFileKeys, docFileKeys, resolveDocHref } from '@/lib/doc-links';
+import { safeDecodeURIComponent } from '@/lib/safe-decode';
 
 // Helper function to slugify text for anchor IDs
 function slugify(text: string): string {
@@ -36,6 +38,9 @@ function buildToc(markdown: string) {
 export default function DocumentationViewer() {
   useTranslation('common');
   const { docName } = useParams<{ docName: string }>();
+  const navigate = useNavigate();
+  const { hash } = useLocation();
+  const [docFiles, setDocFiles] = useState<DocFileKeys>({});
   const [markdown, setMarkdown] = useState<string>('');
   const [title, setTitle] = useState<string>('Documentation');
   const [loading, setLoading] = useState(true);
@@ -84,6 +89,20 @@ export default function DocumentationViewer() {
 
     fetchDoc();
   }, [docName]);
+
+  // Doc file names → keys, to open links between docs (`other-doc.md`) in the app
+  useEffect(() => {
+    fetch('/api/user-docs')
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((docs) => setDocFiles(docFileKeys(docs || {})))
+      .catch(() => setDocFiles({}));
+  }, []);
+
+  // A link to a section of another doc: scroll to it once the doc is shown
+  useEffect(() => {
+    if (loading || !hash) return;
+    document.getElementById(safeDecodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, [loading, hash, markdown]);
 
   // Build table of contents
   const toc = useMemo(() => buildToc(markdown), [markdown]);
@@ -194,7 +213,11 @@ export default function DocumentationViewer() {
         {/* Main Content */}
         <div className="flex-1 min-w-0">
           <div className="max-w-4xl">
-            <MarkdownViewer markdown={markdown} />
+            <MarkdownViewer
+              markdown={markdown}
+              resolveLink={(href) => resolveDocHref(href, docFiles)}
+              onNavigate={(to) => navigate(to)}
+            />
           </div>
         </div>
       </div>

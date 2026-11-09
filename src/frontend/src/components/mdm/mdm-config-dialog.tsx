@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -36,14 +37,12 @@ interface DataContract {
   customProperties?: Record<string, any>;
 }
 
-const formSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  entity_type: z.nativeEnum(MdmEntityType),
-  master_contract_id: z.string().min(1, 'Master contract is required'),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = {
+  name: string;
+  description?: string;
+  entity_type: MdmEntityType;
+  master_contract_id: string;
+};
 
 interface MdmConfigDialogProps {
   isOpen: boolean;
@@ -102,8 +101,20 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
   const [survivorshipRules, setSurvivorshipRules] = useState<SurvivorshipRule[]>([]);
   const [rulesSource, setRulesSource] = useState<'contract' | 'default' | 'empty'>('empty');
 
+  const { t } = useTranslation(['mdm', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
+
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().min(1, t('mdm:config.nameRequired')),
+        description: z.string().optional(),
+        entity_type: z.nativeEnum(MdmEntityType),
+        master_contract_id: z.string().min(1, t('mdm:config.masterContractRequired')),
+      }),
+    [t]
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -162,8 +173,8 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
           setSurvivorshipRules(sr);
           setRulesSource('contract');
           toast({
-            title: 'Rules Loaded',
-            description: `Loaded ${mr.length} matching and ${sr.length} survivorship rules from contract.`,
+            title: t('mdm:config.rulesLoadedTitle'),
+            description: t('mdm:config.rulesLoaded', { matching: mr.length, survivorship: sr.length }),
           });
         } else {
           // Use sensible defaults if contract has no MDM rules
@@ -201,7 +212,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
       if (response.error) {
         console.error('[MDM Config] Creation failed:', response.error);
         toast({
-          title: 'Error',
+          title: t('common:status.error'),
           description: response.error,
           variant: 'destructive',
         });
@@ -210,21 +221,21 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
       if (response.data) {
         console.log('[MDM Config] Created successfully:', response.data);
         const configData = response.data as { name?: string };
-        toast({ title: 'Success', description: `MDM configuration "${configData.name}" created successfully` });
+        toast({ title: t('common:status.success'), description: t('mdm:config.createSuccess', { name: configData.name }) });
         onSuccess();
       } else {
         console.warn('[MDM Config] No data in response:', response);
         toast({
-          title: 'Warning',
-          description: 'Configuration may not have been created. Please refresh.',
+          title: t('common:status.warning'),
+          description: t('mdm:config.createUncertain'),
           variant: 'destructive',
         });
       }
     } catch (err: any) {
       console.error('[MDM Config] Exception creating config:', err);
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to create configuration',
+        title: t('common:status.error'),
+        description: err.message || t('mdm:config.createFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -236,18 +247,18 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>New MDM Configuration</DialogTitle>
+          <DialogTitle>{t('mdm:newConfiguration')}</DialogTitle>
           <DialogDescription>
-            Create a master data management configuration tied to a data contract.
+            {t('mdm:config.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Configuration Name</Label>
+            <Label htmlFor="name">{t('mdm:config.nameLabel')}</Label>
             <Input
               id="name"
-              placeholder="e.g., Customer Master"
+              placeholder={t('mdm:config.namePlaceholder')}
               {...form.register('name')}
             />
             {form.formState.errors.name && (
@@ -256,36 +267,36 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
-              placeholder="Describe the purpose of this MDM configuration..."
+              placeholder={t('mdm:config.descriptionPlaceholder')}
               rows={3}
               {...form.register('description')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="entity_type">Entity Type</Label>
+            <Label htmlFor="entity_type">{t('mdm:overview.entityType')}</Label>
             <Select
               value={form.watch('entity_type')}
               onValueChange={(value) => form.setValue('entity_type', value as MdmEntityType)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select entity type" />
+                <SelectValue placeholder={t('mdm:config.selectEntityType')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={MdmEntityType.CUSTOMER}>Customer</SelectItem>
-                <SelectItem value={MdmEntityType.PRODUCT}>Product</SelectItem>
-                <SelectItem value={MdmEntityType.SUPPLIER}>Supplier</SelectItem>
-                <SelectItem value={MdmEntityType.LOCATION}>Location</SelectItem>
-                <SelectItem value={MdmEntityType.OTHER}>Other</SelectItem>
+                <SelectItem value={MdmEntityType.CUSTOMER}>{t('mdm:entityTypes.customer')}</SelectItem>
+                <SelectItem value={MdmEntityType.PRODUCT}>{t('mdm:entityTypes.product')}</SelectItem>
+                <SelectItem value={MdmEntityType.SUPPLIER}>{t('mdm:entityTypes.supplier')}</SelectItem>
+                <SelectItem value={MdmEntityType.LOCATION}>{t('mdm:entityTypes.location')}</SelectItem>
+                <SelectItem value={MdmEntityType.OTHER}>{t('mdm:entityTypes.other')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="master_contract">Master Data Contract</Label>
+            <Label htmlFor="master_contract">{t('mdm:config.masterContractLabel')}</Label>
             <Select
               value={form.watch('master_contract_id')}
               onValueChange={(value) => form.setValue('master_contract_id', value)}
@@ -295,10 +306,10 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading...
+                    {t('common:states.loading')}
                   </span>
                 ) : (
-                  <SelectValue placeholder="Select master contract" />
+                  <SelectValue placeholder={t('mdm:config.selectMasterContract')} />
                 )}
               </SelectTrigger>
               <SelectContent>
@@ -309,7 +320,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
                 ))}
                 {contracts.length === 0 && !loading && (
                   <SelectItem value="_none" disabled>
-                    No active contracts available
+                    {t('mdm:messages.noActiveContracts')}
                   </SelectItem>
                 )}
               </SelectContent>
@@ -327,7 +338,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
               {loadingContract ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading rules from contract...
+                  {t('mdm:config.loadingRules')}
                 </div>
               ) : (
                 <>
@@ -335,16 +346,16 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
                     <Info className="h-4 w-4" />
                     <AlertDescription>
                       {rulesSource === 'contract' ? (
-                        <>Loaded {matchingRules.length} matching rules and {survivorshipRules.length} survivorship rules from contract's customProperties.</>
+                        <>{t('mdm:config.rulesFromContract', { matching: matchingRules.length, survivorship: survivorshipRules.length })}</>
                       ) : rulesSource === 'default' ? (
-                        <>Contract has no MDM rules defined. Using sensible defaults. You can edit them after creation.</>
+                        <>{t('mdm:config.rulesDefaults')}</>
                       ) : null}
                     </AlertDescription>
                   </Alert>
                   
                   {matchingRules.length > 0 && (
                     <div className="text-sm space-y-1">
-                      <p className="font-medium">Matching Rules:</p>
+                      <p className="font-medium">{t('mdm:config.matchingRulesHeading')}</p>
                       <ul className="list-disc list-inside text-muted-foreground pl-2">
                         {matchingRules.slice(0, 3).map((rule, i) => (
                           <li key={i}>
@@ -352,7 +363,7 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
                           </li>
                         ))}
                         {matchingRules.length > 3 && (
-                          <li className="text-xs">...and {matchingRules.length - 3} more</li>
+                          <li className="text-xs">{t('mdm:config.andMore', { count: matchingRules.length - 3 })}</li>
                         )}
                       </ul>
                     </div>
@@ -364,11 +375,11 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Configuration
+              {t('mdm:config.createButton')}
             </Button>
           </DialogFooter>
         </form>

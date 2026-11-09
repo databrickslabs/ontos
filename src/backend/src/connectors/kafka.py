@@ -79,6 +79,7 @@ class KafkaConnector(AssetConnector):
     connector_type = "kafka"
     display_name = "Apache Kafka"
     description = "Connector for Apache Kafka and Schema Registry (not yet implemented)"
+    is_selectable = False  # Stub: hide from the Add Connection dropdown
     
     def __init__(self, config: Optional[KafkaConnectorConfig] = None):
         """Initialize the Kafka connector."""

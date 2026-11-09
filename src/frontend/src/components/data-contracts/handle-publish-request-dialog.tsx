@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +25,7 @@ export default function HandlePublishRequestDialog({
   requesterEmail,
   onDecisionMade
 }: Props) {
+  const { t } = useTranslation(['data-contracts', 'common']);
   const { post } = useApi();
   const { toast } = useToast();
   const [message, setMessage] = useState('');
@@ -38,17 +40,21 @@ export default function HandlePublishRequestDialog({
       };
       const res = await post(`/api/data-contracts/${contractId}/handle-publish`, body);
       if (res.error) throw new Error(res.error);
-      
+
       toast({
-        title: decision === 'approve' ? 'Publish Approved' : 'Publish Denied',
-        description: `Marketplace publish request has been ${decision === 'approve' ? 'approved' : 'denied'}.`
+        title: decision === 'approve'
+          ? t('data-contracts:publishRequest.toast.approvedTitle', 'Publish Approved')
+          : t('data-contracts:publishRequest.toast.deniedTitle', 'Publish Denied'),
+        description: decision === 'approve'
+          ? t('data-contracts:publishRequest.toast.approvedDescription', 'Marketplace publish request has been approved.')
+          : t('data-contracts:publishRequest.toast.deniedDescription', 'Marketplace publish request has been denied.')
       });
       onDecisionMade();
       onOpenChange(false);
     } catch (e: any) {
       toast({
-        title: 'Failed',
-        description: e.message || 'Could not submit decision',
+        title: t('data-contracts:publishRequest.toast.failedTitle', 'Failed'),
+        description: e.message || t('data-contracts:publishRequest.toast.couldNotSubmit', 'Could not submit decision'),
         variant: 'destructive'
       });
     } finally {
@@ -62,55 +68,54 @@ export default function HandlePublishRequestDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Rocket className="h-5 w-5" />
-            Handle Marketplace Publish Request
+            {t('data-contracts:publishRequest.title', 'Handle Marketplace Publish Request')}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="p-3 bg-muted/50 rounded-lg border space-y-2">
             <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Requester:</span> {requesterEmail}
+              <span className="font-medium">{t('data-contracts:publishRequest.requesterLabel', 'Requester:')}</span> {requesterEmail}
             </div>
             <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Contract ID:</span> <span className="font-mono">{contractId}</span>
+              <span className="font-medium">{t('data-contracts:publishRequest.contractIdLabel', 'Contract ID:')}</span> <span className="font-mono">{contractId}</span>
             </div>
             {contractName && (
               <div className="text-sm font-medium">{contractName}</div>
             )}
           </div>
-          
+
           <div className="space-y-2">
-            <Label htmlFor="publish-message">Response Message (optional)</Label>
+            <Label htmlFor="publish-message">{t('data-contracts:publishRequest.responseMessageLabel', 'Response Message (optional)')}</Label>
             <Textarea
               id="publish-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Add notes about your decision..."
+              placeholder={t('data-contracts:publishRequest.responseMessagePlaceholder', 'Add notes about your decision...')}
               className="min-h-[100px]"
             />
             <p className="text-xs text-muted-foreground">
-              This message will be sent to the requester along with your decision.
+              {t('data-contracts:publishRequest.messageHint', 'This message will be sent to the requester along with your decision.')}
             </p>
           </div>
 
           <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-900 dark:text-blue-100">
-              <strong>Note:</strong> Approving this request will publish the contract to the organization-wide marketplace, making it visible to all users.
+              <strong>{t('data-contracts:publishRequest.noteLabel', 'Note:')}</strong> {t('data-contracts:publishRequest.noteText', 'Approving this request will publish the contract to the organization-wide marketplace, making it visible to all users.')}
             </p>
           </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={() => submitDecision('deny')} disabled={submitting}>
-            Deny
+            {t('data-contracts:publishRequest.deny', 'Deny')}
           </Button>
           <Button onClick={() => submitDecision('approve')} disabled={submitting}>
-            Approve & Publish
+            {t('data-contracts:publishRequest.approveAndPublish', 'Approve & Publish')}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-

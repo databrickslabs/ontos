@@ -16,11 +16,10 @@ from src.models.process_workflows import (
 )
 
 
-def _make_execution(status: ExecutionStatus, step_results=None) -> MagicMock:
-    """Create a mock WorkflowExecution."""
+def _make_execution(status: ExecutionStatus) -> MagicMock:
+    """Create a mock WorkflowExecution (only attributes the model has)."""
     exe = MagicMock(spec=WorkflowExecution)
     exe.status = status
-    exe.step_results = step_results or {}
     exe.current_step_id = 'step-1'
     return exe
 

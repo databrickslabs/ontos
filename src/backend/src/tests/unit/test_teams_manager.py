@@ -14,6 +14,16 @@ from sqlalchemy.orm import Session
 from src.controller.teams_manager import TeamsManager
 from src.models.teams import TeamCreate, TeamUpdate, TeamMemberCreate, TeamMemberUpdate
 from src.db_models.teams import TeamDb, TeamMemberDb
+from src.models.data_domains import DataDomainCreate
+from src.repositories.data_domain_repository import data_domain_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+
+def _make_domain(db_session, name: str) -> str:
+    """Create a real data domain and return its id (needed for FK-backed assignments)."""
+    d = data_domain_repo.create(db=db_session, obj_in=DataDomainCreate(name=name))
+    db_session.commit()
+    return d.id
 
 
 class TestTeamsManager:
@@ -63,19 +73,42 @@ class TestTeamsManager:
         assert result.description == sample_team_data.description
 
     def test_create_team_with_domain(self, manager, db_session):
-        """Test creating team with domain association."""
+        """Test creating team with (multi-)domain association."""
         # Arrange
+        domain_id = _make_domain(db_session, "Domain 123")
         team_data = TeamCreate(
             name="Domain Team",
             description="Team with domain",
-            domain_id="domain-123",
+            domain_ids=[domain_id],
+            primary_domain_id=domain_id,
         )
 
         # Act
         result = manager.create_team(db_session, team_data, current_user_id="user1")
 
         # Assert
-        assert result.domain_id == "domain-123"
+        assert result.domain_ids == [domain_id]
+        assert result.primary_domain_id == domain_id
+        assert len(result.domains) == 1 and result.domains[0].is_primary
+
+    def test_create_team_primary_not_in_domain_ids_is_clamped(self, manager, db_session):
+        """A primary_domain_id outside domain_ids must be clamped to the first id, not
+        propagated to set_domains_for_entity (which would raise ValueError -> HTTP 500)."""
+        a = _make_domain(db_session, "Alpha")
+        b = _make_domain(db_session, "Beta")
+        team_data = TeamCreate(
+            name="Clamp Team",
+            description="primary not in set",
+            domain_ids=[a, b],
+            primary_domain_id="not-a-member",
+        )
+
+        # Act — should not raise; primary falls back to the first domain id.
+        result = manager.create_team(db_session, team_data, current_user_id="user1")
+
+        # Assert
+        assert set(result.domain_ids) == {a, b}
+        assert result.primary_domain_id == a
 
     # =====================================================================
     # Get Team Tests
@@ -133,12 +166,12 @@ class TestTeamsManager:
         assert len(result) == 3
 
     def test_get_teams_by_domain(self, manager, db_session):
-        """Test filtering teams by domain."""
+        """Test filtering teams by domain (any-of via junction)."""
         # Arrange - Create teams with and without domain
+        domain_id = _make_domain(db_session, "Domain 123")
         team_with_domain = TeamDb(
             id=str(uuid.uuid4()),
             name="Domain Team",
-            domain_id="domain-123",
             created_by="test-user",
             updated_by="test-user",
             extra_metadata='{}',
@@ -153,21 +186,25 @@ class TestTeamsManager:
         db_session.add(team_with_domain)
         db_session.add(team_without_domain)
         db_session.commit()
+        entity_domain_repo.set_domains_for_entity(
+            db_session, entity_type="team", entity_id=team_with_domain.id, domain_ids=[domain_id]
+        )
+        db_session.commit()
 
         # Act
-        result = manager.get_teams_by_domain(db_session, "domain-123")
+        result = manager.get_teams_by_domain(db_session, domain_id)
 
         # Assert
         assert len(result) == 1
         assert result[0].name == "Domain Team"
 
     def test_get_standalone_teams(self, manager, db_session):
-        """Test getting teams without domain."""
+        """Test getting teams without any domain assignment."""
         # Arrange
+        domain_id = _make_domain(db_session, "Domain 123")
         standalone_team = TeamDb(
             id=str(uuid.uuid4()),
             name="Standalone Team",
-            domain_id=None,
             created_by="test-user",
             updated_by="test-user",
             extra_metadata='{}',
@@ -175,13 +212,16 @@ class TestTeamsManager:
         domain_team = TeamDb(
             id=str(uuid.uuid4()),
             name="Domain Team",
-            domain_id="domain-123",
             created_by="test-user",
             updated_by="test-user",
             extra_metadata='{}',
         )
         db_session.add(standalone_team)
         db_session.add(domain_team)
+        db_session.commit()
+        entity_domain_repo.set_domains_for_entity(
+            db_session, entity_type="team", entity_id=domain_team.id, domain_ids=[domain_id]
+        )
         db_session.commit()
 
         # Act

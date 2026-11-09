@@ -17,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useFormatLabel } from '@/lib/format-label';
+import { getOtherTypeName } from '@/lib/relationship-type';
 import type { RelationshipDefinition, EntityRelationships } from '@/types/ontology-schema';
 
 interface LinkCandidate {
@@ -34,7 +35,13 @@ interface PendingRelationship {
   target_type: string;
   target_id: string;
   relationship_type: string;
-  target_name: string;
+  /** Step the row came from: the candidate is the target if outgoing, the source if incoming. */
+  direction: RelationshipDefinition['direction'];
+  /** Display name of the picked candidate. */
+  candidate_name: string;
+  /** Display-only type labels; the *_type fields are what gets sent to the API. */
+  source_type_label?: string | null;
+  target_type_label?: string | null;
 }
 
 const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
@@ -48,8 +55,7 @@ const TARGET_TYPE_ICONS: Record<string, React.ElementType> = {
 };
 
 function getIconForRelationship(rel: RelationshipDefinition): React.ElementType {
-  const typeName = rel.target_type_label || rel.target_type_iri.split('#').pop() || '';
-  return TARGET_TYPE_ICONS[typeName] || Link2;
+  return TARGET_TYPE_ICONS[getOtherTypeName(rel)] || Link2;
 }
 
 interface LineageEditorProps {
@@ -70,7 +76,7 @@ export function LineageEditor({
   onSuccess,
 }: LineageEditorProps) {
   const { toast } = useToast();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation('common');
   const formatLabel = useFormatLabel();
   const [currentStep, setCurrentStep] = useState(0);
   const [pendingRelationships, setPendingRelationships] = useState<PendingRelationship[]>([]);
@@ -85,8 +91,8 @@ export function LineageEditor({
       label: formatLabel(rel.label),
       relationship: rel,
     })),
-    { id: 'review', label: 'Review & Save', relationship: null },
-  ], [relationships, formatLabel]);
+    { id: 'review', label: t('common:lineageEditor.reviewStep'), relationship: null },
+  ], [relationships, formatLabel, t]);
 
   const isReviewStep = currentStep === steps.length - 1;
 
@@ -101,11 +107,11 @@ export function LineageEditor({
       try {
         const iri = `http://ontos.app/ontology#${entityType}`;
         const res = await fetch(`/api/ontology/entity-types/relationships?type_iri=${encodeURIComponent(iri)}&lang=${encodeURIComponent(i18n.language)}`);
-        if (!res.ok) throw new Error(`Failed to load relationships (${res.status})`);
+        if (!res.ok) throw new Error(t('common:lineageEditor.failedLoadRelationships', { status: res.status }));
         const data: EntityRelationships = await res.json();
         setRelationships([...data.outgoing, ...data.incoming]);
       } catch (err: any) {
-        setSchemaError(err.message || 'Failed to load ontology relationships');
+        setSchemaError(err.message || t('common:lineageEditor.failedLoadOntology'));
         setRelationships([]);
       } finally {
         setIsLoadingSchema(false);
@@ -162,8 +168,10 @@ export function LineageEditor({
     }
     setIsSaving(false);
     toast({
-      title: errorCount === 0 ? 'Lineage saved' : 'Partially saved',
-      description: `${successCount} relationship(s) created${errorCount > 0 ? `, ${errorCount} failed` : ''}.`,
+      title: errorCount === 0 ? t('common:lineageEditor.lineageSaved') : t('common:lineageEditor.partiallySaved'),
+      description: errorCount > 0
+        ? t('common:lineageEditor.saveResultWithFailed', { count: successCount, failed: errorCount })
+        : t('common:lineageEditor.saveResult', { count: successCount }),
       variant: errorCount > 0 ? 'destructive' : 'default',
     });
     onOpenChange(false);
@@ -175,18 +183,18 @@ export function LineageEditor({
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Manage Business Lineage
+            {t('common:lineageEditor.title')}
             <Badge variant="outline" className="text-xs font-normal">{entityName}</Badge>
           </DialogTitle>
           <DialogDescription>
-            Build or update the business lineage for this entity step by step.
+            {t('common:lineageEditor.description')}
           </DialogDescription>
         </DialogHeader>
 
         {isLoadingSchema ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-            <span className="text-sm text-muted-foreground">Loading relationship types...</span>
+            <span className="text-sm text-muted-foreground">{t('common:lineageEditor.loadingTypes')}</span>
           </div>
         ) : schemaError ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -197,7 +205,7 @@ export function LineageEditor({
           <div className="flex flex-col items-center justify-center py-12 gap-2">
             <Link2 className="h-6 w-6 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              No relationships defined for <span className="font-medium">{entityType}</span> in the ontology.
+              {t('common:lineageEditor.noRelationshipsDefinedBefore')} <span className="font-medium">{entityType}</span> {t('common:lineageEditor.noRelationshipsDefinedAfter')}
             </p>
           </div>
         ) : (
@@ -257,7 +265,7 @@ export function LineageEditor({
                   disabled={currentStep === 0}
                   onClick={() => setCurrentStep(s => s - 1)}
                 >
-                  <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Back
+                  <ChevronLeft className="mr-1 h-3.5 w-3.5" /> {t('common:actions.back')}
                 </Button>
                 {currentStep < steps.length - 1 && (
                   <Button
@@ -265,18 +273,18 @@ export function LineageEditor({
                     size="sm"
                     onClick={() => setCurrentStep(s => s + 1)}
                   >
-                    Next <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                    {t('common:actions.next')} <ChevronRight className="ml-1 h-3.5 w-3.5" />
                   </Button>
                 )}
               </div>
               <div className="flex gap-2 items-center">
                 <span className="text-xs text-muted-foreground">
-                  {pendingRelationships.length} relationship(s) queued
+                  {t('common:lineageEditor.queuedCount', { count: pendingRelationships.length })}
                 </span>
                 {isReviewStep && (
                   <Button size="sm" onClick={handleSave} disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                    Save All
+                    {t('common:lineageEditor.saveAll')}
                   </Button>
                 )}
               </div>
@@ -307,15 +315,17 @@ function CandidateSearchStep({
   const [candidates, setCandidates] = useState<LinkCandidate[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
-  const targetType = relationship.target_type_label || relationship.target_type_iri.split('#').pop() || '';
+  // The type to search and link: the target of an outgoing step, the source of an incoming one.
+  const otherType = getOtherTypeName(relationship);
 
   useEffect(() => {
     const search = async () => {
       setIsSearching(true);
       try {
         const params = new URLSearchParams({
-          target_type: targetType,
+          target_type: otherType,
           limit: '20',
         });
         if (searchQuery) params.set('query', searchQuery);
@@ -334,7 +344,7 @@ function CandidateSearchStep({
 
     const timer = setTimeout(search, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, targetType]);
+  }, [searchQuery, otherType]);
 
   const isAlreadyAdded = (candidateId: string) => {
     return pendingRelationships.some(r => {
@@ -346,38 +356,39 @@ function CandidateSearchStep({
   };
 
   const handleAdd = (candidate: LinkCandidate) => {
-    const rel: PendingRelationship = relationship.direction === 'outgoing'
+    const ends = relationship.direction === 'outgoing'
       ? {
-          source_type: entityType,
-          source_id: entityId,
-          target_type: targetType,
-          target_id: candidate.id,
-          relationship_type: relationship.property_name,
-          target_name: candidate.name,
+          source_type: entityType, source_id: entityId,
+          target_type: otherType, target_id: candidate.id,
         }
       : {
-          source_type: targetType,
-          source_id: candidate.id,
-          target_type: entityType,
-          target_id: entityId,
-          relationship_type: relationship.property_name,
-          target_name: candidate.name,
+          source_type: otherType, source_id: candidate.id,
+          target_type: entityType, target_id: entityId,
         };
-    onAddRelationship(rel);
+    onAddRelationship({
+      ...ends,
+      relationship_type: relationship.property_name,
+      direction: relationship.direction,
+      candidate_name: candidate.name,
+      // The definition's source/target labels belong to the same ends as the row's in both
+      // directions (an incoming definition already has the other type as its source).
+      source_type_label: relationship.source_type_label,
+      target_type_label: relationship.target_type_label,
+    });
   };
 
-  const searchLabel = formatLabel(relationship.label) || targetType;
+  const searchLabel = formatLabel(relationship.label) || otherType;
 
   return (
     <div className="space-y-3">
       <div>
-        <Label className="text-sm">Search {searchLabel}</Label>
+        <Label className="text-sm">{t('common:lineageEditor.searchLabel', { label: searchLabel })}</Label>
         <div className="relative mt-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search for ${searchLabel.toLowerCase()}...`}
+            placeholder={t('common:lineageEditor.searchPlaceholder', { label: searchLabel.toLowerCase() })}
             className="pl-9 h-9"
           />
         </div>
@@ -386,11 +397,11 @@ function CandidateSearchStep({
       <div className="space-y-1.5">
         {isSearching ? (
           <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+            <Loader2 className="h-4 w-4 animate-spin" /> {t('common:lineageEditor.searching')}
           </div>
         ) : candidates.length === 0 ? (
           <div className="text-sm text-muted-foreground p-3">
-            No candidates found. Try a different search term.
+            {t('common:lineageEditor.noCandidates')}
           </div>
         ) : (
           candidates.map((c) => {
@@ -420,9 +431,9 @@ function CandidateSearchStep({
                   onClick={() => handleAdd(c)}
                 >
                   {added ? (
-                    <><Check className="mr-1 h-3 w-3" /> Added</>
+                    <><Check className="mr-1 h-3 w-3" /> {t('common:lineageEditor.added')}</>
                   ) : (
-                    <><Plus className="mr-1 h-3 w-3" /> Add</>
+                    <><Plus className="mr-1 h-3 w-3" /> {t('common:actions.add')}</>
                   )}
                 </Button>
               </div>
@@ -440,12 +451,13 @@ interface ReviewStepProps {
 }
 
 function ReviewStep({ pendingRelationships, onRemove }: ReviewStepProps) {
+  const { t } = useTranslation('common');
   if (pendingRelationships.length === 0) {
     return (
       <div className="text-center py-8">
         <BookOpen className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">
-          No relationships queued. Go back to add some.
+          {t('common:lineageEditor.noneQueued')}
         </p>
       </div>
     );
@@ -454,30 +466,46 @@ function ReviewStep({ pendingRelationships, onRemove }: ReviewStepProps) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground mb-3">
-        {pendingRelationships.length} relationship(s) will be created when you save.
+        {t('common:lineageEditor.willBeCreated', { count: pendingRelationships.length })}
       </p>
-      {pendingRelationships.map((rel, i) => (
-        <Card key={i}>
-          <CardContent className="p-3 flex items-center justify-between">
-            <div className="text-sm">
-              <span className="font-medium">{rel.source_type}</span>
-              <span className="mx-2 text-muted-foreground">
-                —[{rel.relationship_type}]→
-              </span>
-              <span className="font-medium">{rel.target_name}</span>
-              <Badge variant="outline" className="ml-2 text-[9px]">{rel.target_type}</Badge>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-destructive hover:text-destructive"
-              onClick={() => onRemove(i)}
-            >
-              Remove
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+      {pendingRelationships.map((rel, i) => {
+        const sourceLabel = rel.source_type_label || rel.source_type;
+        const targetLabel = rel.target_type_label || rel.target_type;
+        const incoming = rel.direction === 'incoming';
+        // The candidate (name + type badge) sits on its own side of the arrow; the
+        // current entity's side shows its type.
+        const candidate = (typeLabel: string) => (
+          <>
+            <span className="font-medium">{rel.candidate_name}</span>
+            <Badge variant="outline" className="ml-2 text-[9px]">{typeLabel}</Badge>
+          </>
+        );
+        return (
+          <Card key={i}>
+            <CardContent className="p-3 flex items-center justify-between">
+              <div className="text-sm">
+                {incoming
+                  ? candidate(sourceLabel)
+                  : <span className="font-medium">{sourceLabel}</span>}
+                <span className="mx-2 text-muted-foreground">
+                  —[{rel.relationship_type}]→
+                </span>
+                {incoming
+                  ? <span className="font-medium">{targetLabel}</span>
+                  : candidate(targetLabel)}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-destructive hover:text-destructive"
+                onClick={() => onRemove(i)}
+              >
+                {t('common:actions.remove')}
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

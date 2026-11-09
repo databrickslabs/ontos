@@ -322,6 +322,19 @@ segment such as `0000`, `0001`, `0002`, …) so that we can discern demo
 records from data entered manually by users, and so that `DELETE demo-data`
 can clean up exactly what was inserted.
 
+`DELETE /api/settings/demo-data` also deletes the records added later that
+are part of a demo record, also when users added them: subscriptions to a
+demo product, runs and results of a demo compliance policy, custom properties
+of a demo product, and what users added about a demo entity: comments and
+ratings, documentation and links, semantic links, tag and domain assignments,
+cost and quality items. The entity change log stays. User data that only
+refers to demo data (an asset of a demo asset type, a product owned by a demo
+team), an access grant or an agreement on a demo entity, and a relationship
+between a demo entity and a user's one stop the clear instead: nothing is
+deleted and the response lists it. Call it with `?dry_run=true` first to see both, without changing
+anything: `added_later` counts, per table, the records added after the demo
+was loaded.
+
 Open the `POST load` endpoint and click on "Try it out":
 
 ![](images/setup/a614e01cb5b297ce4c1a4eae473dfc7b.png)
@@ -344,8 +357,14 @@ to reflect other industries or individual customers without affecting the
 other packs.
 
 Use the `DELETE demo-data` endpoint shown above to clear all demo records
-across every preset (it deletes by demo UUID prefix, so any combination of
-loaded packs is removed).
+across every preset (it deletes the ids inserted by the packs, so any
+combination of loaded packs is removed), together with the records that are
+part of them and were added later (runs and results of a demo compliance
+policy, custom properties of a demo product, ...). With `dry_run=true` it only
+lists what it would delete. Records created by users that refer to demo data
+(an asset of a demo asset type, a product owned by a demo team, ...) are never
+deleted or changed: if there are any, the call answers 409 with the list and
+deletes nothing. The clear is all or nothing.
 
 ## Troubleshooting
 

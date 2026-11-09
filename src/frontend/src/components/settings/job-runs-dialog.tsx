@@ -126,7 +126,7 @@ export function JobRunsDialog({ workflowId, workflowName, open, onOpenChange }: 
                             <button
                               onClick={() => toggleExpanded(run.id)}
                               className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                              aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                              aria-label={isExpanded ? t('settings:jobRuns.collapseDetails') : t('settings:jobRuns.expandDetails')}
                             >
                               {isExpanded ? (
                                 <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -160,7 +160,7 @@ export function JobRunsDialog({ workflowId, workflowName, open, onOpenChange }: 
                       <TableRow className="bg-gray-50 dark:bg-gray-800/50 border-t-0">
                         <TableCell colSpan={6} className="py-3 px-6">
                           <div className="text-sm text-gray-700 dark:text-gray-300">
-                            <span className="font-medium text-gray-900 dark:text-white">State Message:</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{t('settings:jobRuns.stateMessage')}</span>
                             <div className="mt-1 p-2 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 font-mono text-xs whitespace-pre-wrap">
                               {run.state_message}
                             </div>

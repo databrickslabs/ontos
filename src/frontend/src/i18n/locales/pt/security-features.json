@@ -1,0 +1,72 @@
+{
+  "title": "Recursos de segurança",
+  "subtitle": "Gerenciar configurações de segurança e privacidade de dados",
+  "newFeature": "Novo recurso de segurança",
+  "addFeature": "Adicionar recurso de segurança",
+  "editFeature": "Editar recurso de segurança",
+  "searchPlaceholder": "Buscar recursos de segurança...",
+  "loading": "Carregando recursos de segurança...",
+  "toast": {
+    "featureCreated": "Recurso de segurança criado com sucesso",
+    "featureUpdated": "Recurso de segurança atualizado com sucesso",
+    "featureDeleted": "Recurso de segurança excluído com sucesso",
+    "loadError": "Falha ao carregar recursos de segurança",
+    "saveError": "Falha ao salvar recurso de segurança",
+    "deleteError": "Falha ao excluir recurso de segurança"
+  },
+  "table": {
+    "name": "Nome",
+    "type": "Tipo",
+    "target": "Ativo de destino",
+    "status": "Status",
+    "enabled": "Habilitado",
+    "updated": "Atualizado",
+    "actions": "Ações",
+    "conditions": "Condições",
+    "lastUpdated": "Última atualização"
+  },
+  "messages": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "deleteConfirm": "Tem certeza de que deseja excluir este recurso de segurança?",
+    "deleteSuccess": "Recurso de segurança excluído com sucesso",
+    "deleteError": "Falha ao excluir recurso de segurança",
+    "enableSuccess": "Recurso de segurança habilitado",
+    "disableSuccess": "Recurso de segurança desabilitado"
+  },
+  "types": {
+    "encryption": "Criptografia",
+    "masking": "Mascaramento de dados",
+    "rowLevel": "Segurança em nível de linha",
+    "columnLevel": "Segurança em nível de coluna",
+    "differential": "Privacidade diferencial",
+    "rowFiltering": "Filtragem de linhas",
+    "columnMasking": "Mascaramento de colunas",
+    "differentialPrivacy": "Privacidade diferencial",
+    "homomorphicEncryption": "Criptografia homomórfica",
+    "envelopeEncryption": "Criptografia de envelope",
+    "tokenization": "Tokenização"
+  },
+  "details": {
+    "backToList": "Voltar para recursos de segurança",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "enable": "Habilitar",
+    "disable": "Desabilitar",
+    "notFound": "Recurso de segurança não encontrado",
+    "loading": "Carregando..."
+  },
+  "form": {
+    "createTitle": "Adicionar recurso de segurança",
+    "editTitle": "Editar recurso de segurança",
+    "name": "Nome",
+    "type": "Tipo",
+    "selectType": "Selecionar tipo",
+    "target": "Destino",
+    "configuration": "Configuração",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "saveChanges": "Salvar alterações",
+    "addFeature": "Adicionar recurso"
+  }
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,9 +26,10 @@ export default function WorkflowConfigurationDialog({
   workflowId,
   workflowName
 }: WorkflowConfigurationDialogProps) {
+  const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { get, put } = useApi();
-  
+
   const [parameterDefs, setParameterDefs] = useState<WorkflowParameterDefinition[]>([]);
   const [configuration, setConfiguration] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
@@ -72,8 +74,8 @@ export default function WorkflowConfigurationDialog({
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to load configuration',
+        title: t('common:status.error'),
+        description: error.message || t('settings:workflowConfig.loadError'),
         variant: 'destructive'
       });
     } finally {
@@ -90,15 +92,15 @@ export default function WorkflowConfigurationDialog({
       );
       
       toast({
-        title: 'Success',
-        description: 'Workflow configuration saved successfully'
+        title: t('common:status.success'),
+        description: t('settings:workflowConfig.saveSuccess')
       });
       
       onOpenChange(false);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to save configuration',
+        title: t('common:status.error'),
+        description: error.message || t('settings:workflowConfig.saveError'),
         variant: 'destructive'
       });
     } finally {
@@ -182,7 +184,7 @@ export default function WorkflowConfigurationDialog({
               onValueChange={(val) => setConfiguration({ ...configuration, [paramDef.name]: val })}
             >
               <SelectTrigger id={paramDef.name}>
-                <SelectValue placeholder="Select an option" />
+                <SelectValue placeholder={t('settings:workflowConfig.selectOption')} />
               </SelectTrigger>
               <SelectContent>
                 {paramDef.options?.map(option => (
@@ -240,9 +242,9 @@ export default function WorkflowConfigurationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Configure {workflowName}</DialogTitle>
+          <DialogTitle>{t('settings:workflowConfig.title', { name: workflowName })}</DialogTitle>
           <DialogDescription>
-            Set parameters for this workflow. These values will be used when the workflow runs.
+            {t('settings:workflowConfig.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -253,7 +255,7 @@ export default function WorkflowConfigurationDialog({
         ) : (
           <div className="space-y-6 py-4">
             {parameterDefs.length === 0 ? (
-              <p className="text-muted-foreground">No configurable parameters for this workflow.</p>
+              <p className="text-muted-foreground">{t('settings:workflowConfig.noParameters')}</p>
             ) : (
               parameterDefs.map(paramDef => renderField(paramDef))
             )}
@@ -262,11 +264,11 @@ export default function WorkflowConfigurationDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={loading || saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Configuration
+            {t('settings:workflowConfig.saveButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

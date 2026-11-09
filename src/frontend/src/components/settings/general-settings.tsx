@@ -22,7 +22,24 @@ interface AppSettings {
   llmSystemPrompt: string;
   llmDisclaimerText: string;
   allowJobEnablementRequests: boolean;
+  schemaImportChildLimit: number;
+  instanceId: string;
+  instanceName: string;
+  instanceIdDefault: string;
+  instanceNameDefault: string;
 }
+
+// Mirrors the backend rule for ONTOS_INSTANCE_ID (settings_manager.INSTANCE_ID_PATTERN)
+const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const INSTANCE_NAME_MAX_LENGTH = 128;
+// Mirrors the backend rule: no control characters (code point < 32) in the name
+const hasControlChars = (value: string) => Array.from(value).some((c) => c.charCodeAt(0) < 32);
+
+// Backend error codes (CodedValueError) -> the same i18n keys as the inline validation
+const SERVER_ERROR_KEYS: Record<string, string> = {
+  instance_id_invalid: 'settings:general.instanceIdentity.id.invalid',
+  instance_name_invalid: 'settings:general.instanceIdentity.name.invalid',
+};
 
 export default function GeneralSettings() {
   const { t } = useTranslation(['settings', 'common']);
@@ -41,6 +58,11 @@ export default function GeneralSettings() {
     llmSystemPrompt: '',
     llmDisclaimerText: '',
     allowJobEnablementRequests: false,
+    schemaImportChildLimit: 500,
+    instanceId: '',
+    instanceName: '',
+    instanceIdDefault: '',
+    instanceNameDefault: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -62,6 +84,11 @@ export default function GeneralSettings() {
             llmSystemPrompt: data.llm_system_prompt || '',
             llmDisclaimerText: data.llm_disclaimer_text || '',
             allowJobEnablementRequests: data.allow_job_enablement_requests || false,
+            schemaImportChildLimit: data.schema_import_child_limit ?? 500,
+            instanceId: data.ontos_instance_id || '',
+            instanceName: data.ontos_instance_name || '',
+            instanceIdDefault: data.ontos_instance_id_default || '',
+            instanceNameDefault: data.ontos_instance_name_default || '',
           });
         }
       } catch (error) {
@@ -73,7 +100,28 @@ export default function GeneralSettings() {
     fetchSettings();
   }, []);
 
+  const instanceId = settings.instanceId.trim();
+  const instanceName = settings.instanceName.trim();
+  const instanceIdError =
+    instanceId !== '' && !INSTANCE_ID_PATTERN.test(instanceId)
+      ? t(
+          'settings:general.instanceIdentity.id.invalid',
+          'Use 1-128 letters, digits, ".", "_", ":" or "-", starting with a letter or digit.'
+        )
+      : null;
+  const instanceNameError =
+    instanceName.length > INSTANCE_NAME_MAX_LENGTH || hasControlChars(instanceName)
+      ? t('settings:general.instanceIdentity.name.invalid', 'Use at most 128 characters, without control characters.')
+      : null;
+
   const handleSave = async () => {
+    if (instanceIdError || instanceNameError) {
+      toast({
+        title: t('settings:general.messages.saveError', 'Failed to save settings'),
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsSaving(true);
     try {
       const response = await fetch('/api/settings', {
@@ -89,6 +137,11 @@ export default function GeneralSettings() {
           llm_system_prompt: settings.llmSystemPrompt,
           llm_disclaimer_text: settings.llmDisclaimerText,
           allow_job_enablement_requests: settings.allowJobEnablementRequests,
+          schema_import_child_limit: settings.schemaImportChildLimit,
+          // A value equal to the default (or blank) clears the override, so an untouched
+          // field never pins the derived default.
+          ontos_instance_id: instanceId === settings.instanceIdDefault ? '' : instanceId,
+          ontos_instance_name: instanceName === settings.instanceNameDefault ? '' : instanceName,
         }),
       });
       if (response.ok) {
@@ -96,6 +149,20 @@ export default function GeneralSettings() {
           title: t('settings:general.messages.saveSuccess', 'Settings saved successfully'),
         });
       } else {
+        // Structured error ({code, message, params}): show it translated when we know the code.
+        const body = await response.json().catch(() => null);
+        const code = body?.detail && typeof body.detail === 'object' ? body.detail.code : null;
+        const translationKey = code ? SERVER_ERROR_KEYS[code] : undefined;
+        if (translationKey) {
+          toast({
+            title: t('settings:general.messages.saveError', 'Failed to save settings'),
+            description: String(
+              t(translationKey, { ...(body.detail.params ?? {}), defaultValue: body.detail.message })
+            ),
+            variant: 'destructive',
+          });
+          return;
+        }
         throw new Error('Failed to save settings');
       }
     } catch (error) {
@@ -190,6 +257,61 @@ export default function GeneralSettings() {
 
         <Separator />
 
+        {/* Instance Identity */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">
+            {t('settings:general.instanceIdentity.title', 'Instance Identity')}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="instanceId">
+                {t('settings:general.instanceIdentity.id.label', 'Instance ID')}
+              </Label>
+              <Input
+                id="instanceId"
+                name="instanceId"
+                value={settings.instanceId}
+                onChange={handleChange}
+                placeholder={settings.instanceIdDefault}
+                disabled={!hasWriteAccess || isLoading}
+                aria-invalid={!!instanceIdError}
+              />
+              {instanceIdError && <p className="text-sm text-destructive">{instanceIdError}</p>}
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'settings:general.instanceIdentity.id.help',
+                  'Stable identifier of this Ontos instance, stamped on exported entities. Default: {{default}}. Clear the field to restore the default.',
+                  { default: settings.instanceIdDefault }
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="instanceName">
+                {t('settings:general.instanceIdentity.name.label', 'Instance Name')}
+              </Label>
+              <Input
+                id="instanceName"
+                name="instanceName"
+                value={settings.instanceName}
+                onChange={handleChange}
+                placeholder={settings.instanceNameDefault}
+                disabled={!hasWriteAccess || isLoading}
+                aria-invalid={!!instanceNameError}
+              />
+              {instanceNameError && <p className="text-sm text-destructive">{instanceNameError}</p>}
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'settings:general.instanceIdentity.name.help',
+                  'Human-readable name of this instance. Default: {{default}}. Clear the field to restore the default.',
+                  { default: settings.instanceNameDefault }
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
         {/* Audit Log Settings */}
         <div className="space-y-2">
           <Label htmlFor="appAuditLogDir">
@@ -232,6 +354,41 @@ export default function GeneralSettings() {
               {t(
                 'settings:general.backgroundJobs.allowEnablementRequests.help',
                 'When a user hits a feature whose background job is not enabled, they can send a notification asking an administrator to enable it.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Schema Importer Settings */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">
+            {t('settings:general.schemaImporter.title', 'Schema Importer')}
+          </h3>
+          <div className="space-y-2 max-w-xs">
+            <Label htmlFor="schemaImportChildLimit">
+              {t('settings:general.schemaImporter.childLimit.label', 'Max objects fetched per level')}
+            </Label>
+            <Input
+              id="schemaImportChildLimit"
+              name="schemaImportChildLimit"
+              type="number"
+              min={1}
+              max={10000}
+              value={settings.schemaImportChildLimit}
+              onChange={(e) =>
+                setSettings(prev => ({
+                  ...prev,
+                  schemaImportChildLimit: e.target.value === '' ? 0 : parseInt(e.target.value, 10),
+                }))
+              }
+              disabled={!hasWriteAccess || isLoading}
+            />
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.schemaImporter.childLimit.help',
+                'Maximum number of tables/views/objects the importer fetches per catalog or schema when browsing (1–10000). Raise this for large estates; there is no pagination beyond this cap.'
               )}
             </p>
           </div>

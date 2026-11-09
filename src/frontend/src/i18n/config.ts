@@ -19,6 +19,7 @@ import settingsFR from './locales/fr/settings.json';
 import settingsIT from './locales/it/settings.json';
 import settingsES from './locales/es/settings.json';
 import settingsNL from './locales/nl/settings.json';
+import settingsPT from './locales/pt/settings.json';
 
 const resources: Resource = {};
 
@@ -51,6 +52,7 @@ const fallbackSettingsByLang: Record<string, any> = {
   it: settingsIT,
   es: settingsES,
   nl: settingsNL,
+  pt: settingsPT,
 };
 
 for (const [lang, data] of Object.entries(fallbackSettingsByLang)) {

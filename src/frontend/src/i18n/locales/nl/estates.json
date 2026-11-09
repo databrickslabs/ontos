@@ -13,7 +13,10 @@
     "deletingEstate": "Fout bij Verwijderen Estate",
     "triggeringSync": "Fout bij Starten Sync",
     "validationError": "Validatie Fout",
-    "validationMessage": "Vul alstublieft alle vereiste velden in: Naam, Beschrijving, Workspace URL, Metastore Naam, Cloud Type en Verbindingstype."
+    "validationMessage": "Vul alstublieft alle vereiste velden in: Naam, Beschrijving, Workspace URL, Metastore Naam, Cloud Type en Verbindingstype.",
+    "codes": {
+      "estate_name_conflict": "Er bestaat al een estate met de naam \"{{name}}\"."
+    }
   },
   "toast": {
     "estateCreated": "Estate succesvol aangemaakt",
@@ -40,7 +43,11 @@
     "syncSchedule": "Sync Schema",
     "enableSync": "Sync Inschakelen",
     "cancel": "Annuleren",
-    "save": "Opslaan"
+    "save": "Opslaan",
+    "namePlaceholder": "bijv. US Production Workspace",
+    "descriptionPlaceholder": "bijv. Primaire productieomgeving voor regio VS",
+    "workspaceUrlPlaceholder": "bijv. https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "bijv. primary_prod_metastore"
   },
   "connectionTypes": {
     "deltaShare": "Delta Share",
@@ -58,7 +65,15 @@
     "type": "Type",
     "status": "Status",
     "assets": "Assets",
-    "actions": "Acties"
+    "actions": "Acties",
+    "neverSynced": "Nooit gesynchroniseerd",
+    "openMenu": "Menu openen",
+    "syncTooltip": {
+      "status": "Status: {{status}}",
+      "time": "Tijd: {{time}}",
+      "error": "Fout: {{error}}",
+      "inProgress": "Sync bezig of in wachtrij..."
+    }
   },
   "filters": {
     "allStatus": "Alle Status"
@@ -86,6 +101,57 @@
     "viewDetails": "Details Bekijken",
     "notFound": "Estate niet gevonden",
     "loading": "Laden...",
+    "pageTitle": "Estate-details",
+    "backToEstateManager": "Terug naar Estate Manager",
+    "backToListButton": "Terug naar lijst",
+    "configureSyncJob": "Sync-taak configureren",
+    "syncEnabled": "Sync ingeschakeld",
+    "syncDisabled": "Sync uitgeschakeld",
+    "never": "Nooit",
+    "notFoundOrLoad": "Estate niet gevonden of kon niet worden geladen.",
+    "labels": {
+      "cloudProvider": "Cloud provider",
+      "lastSyncTime": "Laatste synctijd",
+      "lastSyncStatus": "Laatste syncstatus",
+      "lastSyncError": "Laatste syncfout",
+      "lastUpdatedAt": "Laatst bijgewerkt op"
+    },
+    "errors": {
+      "fetchTitle": "Fout bij ophalen van estate",
+      "fetchFailed": "Ophalen van estate-details mislukt.",
+      "couldNotLoad": "Kon estate-details niet laden.",
+      "noEstateData": "Estate-gegevens zijn niet beschikbaar om een beleid toe te voegen."
+    },
+    "policies": {
+      "add": "Beleid toevoegen",
+      "resourceTypeLabel": "Resourcetype:",
+      "rulesLabel": "Regels ({{count}}):",
+      "ruleText": {
+        "equals": "Filteren op <b>{{filterType}}</b> waarbij de waarde gelijk is aan <b>'{{value}}'</b>",
+        "contains": "Filteren op <b>{{filterType}}</b> waarbij de waarde <b>'{{value}}'</b> bevat",
+        "starts_with": "Filteren op <b>{{filterType}}</b> waarbij de waarde begint met <b>'{{value}}'</b>",
+        "regex": "Filteren op <b>{{filterType}}</b> waarbij de waarde overeenkomt met de reguliere expressie <b>'{{value}}'</b>"
+      },
+      "noRules": "Geen regels gedefinieerd voor dit beleid.",
+      "emptyHint": "Klik op \"Beleid toevoegen\" om te beginnen met het delen van resources.",
+      "editPolicyAlert": "Beleid bewerken: {{name}}",
+      "deletePolicyAlert": "Beleid verwijderen: {{name}}",
+      "addedTitle": "Beleid toegevoegd",
+      "addedDescription": "Deelbeleid \"{{name}}\" is succesvol toegevoegd.",
+      "addErrorTitle": "Fout bij toevoegen van beleid",
+      "addErrorDescription": "Kon het nieuwe deelbeleid niet opslaan. Probeer het opnieuw.",
+      "saveFailedNoData": "Opslaan van beleid mislukt. De server gaf geen gegevens terug.",
+      "export": {
+        "title": "Exportbeleid",
+        "sectionDescription": "Wat deze instantie met dit estate deelt.",
+        "emptyTitle": "Er is geen exportbeleid gedefinieerd voor dit estate."
+      },
+      "import": {
+        "title": "Importbeleid",
+        "sectionDescription": "Wat deze instantie van dit estate accepteert.",
+        "emptyTitle": "Er is geen importbeleid gedefinieerd voor dit estate."
+      }
+    },
     "overview": {
       "title": "Estate Overzicht",
       "type": "Type",
@@ -103,6 +169,54 @@
       "title": "Sync Geschiedenis",
       "noHistory": "Geen sync geschiedenis"
     }
+  },
+  "sharingPolicy": {
+    "dialogTitle": "Nieuw deelbeleid toevoegen",
+    "dialogDescription": "Definieer een nieuw beleid om resources van of met deze estate te delen.",
+    "submit": "Beleid toevoegen",
+    "addRule": "Regel toevoegen",
+    "rulesHeading": "Regels",
+    "ruleLabel": "Regel {{number}}",
+    "fields": {
+      "name": "Beleidsnaam",
+      "description": "Beschrijving (optioneel)",
+      "resourceType": "Resourcetype",
+      "enablePolicy": "Beleid inschakelen",
+      "filterType": "Filtertype",
+      "operator": "Operator",
+      "value": "Waarde"
+    },
+    "placeholders": {
+      "name": "bijv. Productiedataproducten delen",
+      "description": "Gedetailleerde beschrijving van het doel van het beleid...",
+      "resourceType": "Selecteer resourcetype",
+      "operator": "Selecteer operator",
+      "filterType": "bijv. tag, domein, status",
+      "value": "bijv. finance, Actief"
+    },
+    "operators": {
+      "equals": "Is gelijk aan",
+      "contains": "Bevat",
+      "starts_with": "Begint met",
+      "regex": "Komt overeen met regex"
+    },
+    "validation": {
+      "nameMin": "Beleidsnaam moet minimaal 3 tekens bevatten",
+      "filterTypeRequired": "Filtertype is vereist",
+      "filterValueRequired": "Filterwaarde is vereist",
+      "rulesMin": "Er is minimaal één regel vereist"
+    },
+    "toast": {
+      "submittedTitle": "Beleid ingediend",
+      "submittedDescription": "Deelbeleid \"{{name}}\" wordt verwerkt.",
+      "addErrorDescription": "Toevoegen van deelbeleid mislukt. Controleer de console voor details."
+    }
+  },
+  "resourceTypes": {
+    "data_product": "Dataproduct",
+    "data_contract": "Datacontract",
+    "business_term": "Bedrijfsterm",
+    "data_domain": "Datadomein",
+    "concept": "Concept"
   }
 }
-

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ interface EntityPatternsFieldProps {
 }
 
 export default function EntityPatternsField({ value, onChange, entityTypes }: EntityPatternsFieldProps) {
+  const { t } = useTranslation(['settings', 'common']);
   const [activeTab, setActiveTab] = useState<string>(entityTypes[0] || 'contract');
 
   // Ensure we have a pattern config for each entity type
@@ -55,8 +57,7 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Configure tag patterns for discovering and importing entities from Unity Catalog.
-          Use regular expressions to match tag keys and extract entity names.
+          {t('settings:tags.entityPatterns.intro')}
         </AlertDescription>
       </Alert>
 
@@ -77,9 +78,9 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                    <span className="capitalize">{entityType} Discovery</span>
+                    <span className="capitalize">{t('settings:tags.entityPatterns.discoveryTitle', { type: entityType })}</span>
                     <div className="flex items-center gap-2">
-                      <Label htmlFor={`${entityType}-enabled`}>Enable</Label>
+                      <Label htmlFor={`${entityType}-enabled`}>{t('settings:tags.enable')}</Label>
                       <Switch
                         id={`${entityType}-enabled`}
                         checked={pattern.enabled}
@@ -88,7 +89,7 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
                     </div>
                   </CardTitle>
                   <CardDescription>
-                    Configure patterns to discover {entityType}s from UC tags
+                    {t('settings:tags.entityPatterns.cardDescription', { type: entityType })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -99,7 +100,7 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
                   >
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" className="w-full justify-between p-0 hover:no-underline">
-                        <span className="text-sm font-medium">Filter Pattern (Optional)</span>
+                        <span className="text-sm font-medium">{t('settings:tags.entityPatterns.filterPatternOptional')}</span>
                         {filterExpanded[entityType] ? (
                           <ChevronDown className="h-4 w-4" />
                         ) : (
@@ -109,10 +110,10 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
                     </CollapsibleTrigger>
                     <CollapsibleContent className="space-y-3 pt-3">
                       <p className="text-sm text-muted-foreground">
-                        Optionally filter which objects to consider by matching additional tag patterns
+                        {t('settings:tags.entityPatterns.filterHelp')}
                       </p>
                       <div className="space-y-2">
-                        <Label>Filter Source</Label>
+                        <Label>{t('settings:tags.entityPatterns.filterSource')}</Label>
                         <Select
                           value={pattern.filter_source || 'key'}
                           onValueChange={(source) => updatePattern(entityType, { filter_source: source })}
@@ -121,13 +122,13 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="key">Tag Key</SelectItem>
-                            <SelectItem value="value">Tag Value</SelectItem>
+                            <SelectItem value="key">{t('settings:tags.entityPatterns.tagKey')}</SelectItem>
+                            <SelectItem value="value">{t('settings:tags.entityPatterns.tagValue')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Filter Pattern (Regex)</Label>
+                        <Label>{t('settings:tags.entityPatterns.filterPatternRegex')}</Label>
                         <Input
                           value={pattern.filter_pattern || ''}
                           onChange={(e) => updatePattern(entityType, { filter_pattern: e.target.value })}
@@ -139,9 +140,9 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
 
                   {/* Key Pattern (Required) */}
                   <div className="space-y-2">
-                    <Label className="text-base font-semibold">Key Pattern (Required)</Label>
+                    <Label className="text-base font-semibold">{t('settings:tags.entityPatterns.keyPatternRequired')}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Regex pattern to match tag keys that identify this entity type
+                      {t('settings:tags.entityPatterns.keyPatternHelp')}
                     </p>
                     <Input
                       value={pattern.key_pattern}
@@ -153,12 +154,12 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
 
                   {/* Value Extraction (Required) */}
                   <div className="space-y-3">
-                    <Label className="text-base font-semibold">Value Extraction (Required)</Label>
+                    <Label className="text-base font-semibold">{t('settings:tags.entityPatterns.valueExtractionRequired')}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Extract the {entityType} name from the matched tag
+                      {t('settings:tags.entityPatterns.valueExtractionHelp', { type: entityType })}
                     </p>
                     <div className="space-y-2">
-                      <Label>Extraction Source</Label>
+                      <Label>{t('settings:tags.entityPatterns.extractionSource')}</Label>
                       <Select
                         value={pattern.value_extraction_source}
                         onValueChange={(source) => updatePattern(entityType, { value_extraction_source: source })}
@@ -167,13 +168,13 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="key">Tag Key</SelectItem>
-                          <SelectItem value="value">Tag Value</SelectItem>
+                          <SelectItem value="key">{t('settings:tags.entityPatterns.tagKey')}</SelectItem>
+                          <SelectItem value="value">{t('settings:tags.entityPatterns.tagValue')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Extraction Pattern (Regex with Capture Group)</Label>
+                      <Label>{t('settings:tags.entityPatterns.extractionPatternLabel')}</Label>
                       <Input
                         value={pattern.value_extraction_pattern}
                         onChange={(e) => updatePattern(entityType, { value_extraction_pattern: e.target.value })}
@@ -181,7 +182,7 @@ export default function EntityPatternsField({ value, onChange, entityTypes }: En
                         required
                       />
                       <p className="text-xs text-muted-foreground">
-                        Use parentheses () to capture the {entityType} name. Example: <code>^data-{entityType}-(.+)$</code> extracts "ABC" from "data-{entityType}-ABC"
+                        {t('settings:tags.entityPatterns.extractionExampleBefore', { type: entityType })} <code>^data-{entityType}-(.+)$</code> {t('settings:tags.entityPatterns.extractionExampleAfter', { type: entityType })}
                       </p>
                     </div>
                   </div>

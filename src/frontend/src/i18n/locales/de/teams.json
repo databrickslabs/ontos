@@ -1,6 +1,7 @@
 {
   "title": "Teams",
   "subtitle": "Verwalten Sie Teams und ihre Mitglieder in Ihrer Organisation.",
+  "openMenu": "Menü öffnen",
   "addNewTeam": "Neues Team hinzufügen",
   "editTeam": "Team bearbeiten",
   "deleteTeam": "Team löschen",
@@ -53,6 +54,7 @@
       "createdDescription": "Team \"{{name}}\" wurde erfolgreich erstellt.",
       "updatedDescription": "Team \"{{name}}\" wurde erfolgreich aktualisiert.",
       "createFailedTitle": "Team konnte nicht erstellt werden",
+      "membersFailedTitle": "Team erstellt, aber Mitglieder konnten nicht gespeichert werden",
       "updateFailedTitle": "Team konnte nicht aktualisiert werden",
       "failedDescription": "Es ist ein unerwarteter Fehler aufgetreten."
     }

@@ -100,7 +100,11 @@ class ContractAdapter:
         if filters.contract_ids:
             q = q.filter(DataContractDb.id.in_(filters.contract_ids))
         if filters.domain_ids:
-            q = q.filter(DataContractDb.domain_id.in_(filters.domain_ids))
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+            matching_ids = entity_domain_repo.find_entity_ids_by_domains(
+                db, domain_ids=list(filters.domain_ids), entity_type="data_contract"
+            )
+            q = q.filter(DataContractDb.id.in_(matching_ids or ["__none__"]))
 
         contracts = q.all()
         emitted = 0

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +10,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Info, AlertCircle } from 'lucide-react';
 import { TagSyncConfig } from '@/types/workflow-configurations';
+import {
+  LIFECYCLE_STATUS_MAPPING,
+  defaultLifecycleEntry,
+  findEntryIndex,
+  supportsLifecycleMapping,
+  upsertEntry,
+} from './tag-sync-configs';
 
 interface TagSyncConfigsFieldProps {
   value: TagSyncConfig[];
@@ -43,27 +52,45 @@ const AVAILABLE_VARIABLES: Record<string, { key: string; description: string }[]
 // UC tag key validation
 const INVALID_TAG_CHARS = [',', '.', ':', '-', '/', '`', '='];
 
-function validateTagKey(key: string): string | null {
+function validateTagKey(key: string, t: TFunction): string | null {
   if (!key.trim()) {
-    return 'Tag key cannot be empty';
+    return t('settings:tags.syncConfigs.errors.empty');
   }
   if (key !== key.trim()) {
-    return 'Tag key cannot have leading/trailing spaces';
+    return t('settings:tags.syncConfigs.errors.spaces');
   }
   for (const char of INVALID_TAG_CHARS) {
     if (key.includes(char)) {
-      return `Tag key cannot contain '${char}'`;
+      return t('settings:tags.syncConfigs.errors.invalidChar', { char });
     }
   }
   return null;
 }
 
 export default function TagSyncConfigsField({ value, onChange, entityTypes }: TagSyncConfigsFieldProps) {
+  const { t } = useTranslation(['settings', 'common']);
   const [activeTab, setActiveTab] = useState<string>(entityTypes[0] || 'semantic_assignment');
 
-  // Ensure we have a config for each entity type
+  // User-facing descriptions for the available template variables
+  const variableDescriptions: Record<string, string> = {
+    '{LINK.IRI}': t('settings:tags.syncConfigs.variables.linkIri'),
+    '{LINK.LABEL}': t('settings:tags.syncConfigs.variables.linkLabel'),
+    '{LINK.SLUG}': t('settings:tags.syncConfigs.variables.linkSlug'),
+    '{DOMAIN.ID}': t('settings:tags.syncConfigs.variables.domainId'),
+    '{DOMAIN.NAME}': t('settings:tags.syncConfigs.variables.domainName'),
+    '{CONTRACT.ID}': t('settings:tags.syncConfigs.variables.contractId'),
+    '{CONTRACT.NAME}': t('settings:tags.syncConfigs.variables.contractName'),
+    '{CONTRACT.VERSION}': t('settings:tags.syncConfigs.variables.contractVersion'),
+    '{CONTRACT.STATUS}': t('settings:tags.syncConfigs.variables.contractStatus'),
+    '{PRODUCT.ID}': t('settings:tags.syncConfigs.variables.productId'),
+    '{PRODUCT.NAME}': t('settings:tags.syncConfigs.variables.productName'),
+    '{PRODUCT.VERSION}': t('settings:tags.syncConfigs.variables.productVersion'),
+    '{PRODUCT.STATUS}': t('settings:tags.syncConfigs.variables.productStatus'),
+  };
+
+  // Ensure we have a config for each entity type (the first entry without a mapping id)
   const getConfigForType = (entityType: string): TagSyncConfig => {
-    const existing = value.find(c => c.entity_type === entityType);
+    const existing = value[findEntryIndex(value, entityType)];
     if (existing) return existing;
 
     // Return default config based on entity type
@@ -96,16 +123,18 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
   };
 
   const updateConfig = (entityType: string, updates: Partial<TagSyncConfig>) => {
-    const newConfigs = [...value];
-    const index = newConfigs.findIndex(c => c.entity_type === entityType);
+    const index = findEntryIndex(value, entityType);
+    onChange(upsertEntry(value, index, getConfigForType(entityType), updates));
+  };
 
-    if (index >= 0) {
-      newConfigs[index] = { ...newConfigs[index], ...updates };
-    } else {
-      newConfigs.push({ ...getConfigForType(entityType), ...updates });
-    }
+  // The lifecycle status entry of a product or contract (mapping 'lifecycle_status')
+  const getLifecycleConfig = (entityType: string): TagSyncConfig =>
+    value[findEntryIndex(value, entityType, LIFECYCLE_STATUS_MAPPING)]
+    ?? defaultLifecycleEntry(entityType);
 
-    onChange(newConfigs);
+  const updateLifecycleConfig = (entityType: string, updates: Partial<TagSyncConfig>) => {
+    const index = findEntryIndex(value, entityType, LIFECYCLE_STATUS_MAPPING);
+    onChange(upsertEntry(value, index, defaultLifecycleEntry(entityType), updates));
   };
 
   // Render example tag key with current format
@@ -145,17 +174,18 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Configure which metadata to sync to Unity Catalog tags and customize tag key/value formats.
-          Use <code className="text-xs bg-muted px-1 py-0.5 rounded">{'{'} {'}'}</code> placeholders for dynamic values.
+          {t('settings:tags.syncConfigs.introBefore')}{' '}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">{'{'} {'}'}</code>{' '}
+          {t('settings:tags.syncConfigs.introAfter')}
         </AlertDescription>
       </Alert>
 
       <Alert variant="destructive" className="bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
         <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
         <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-          UC tag keys cannot contain: <code className="text-xs bg-yellow-100 dark:bg-yellow-900 px-1 py-0.5 rounded">
+          {t('settings:tags.syncConfigs.invalidCharsBefore')} <code className="text-xs bg-yellow-100 dark:bg-yellow-900 px-1 py-0.5 rounded">
             {INVALID_TAG_CHARS.join(' ')}
-          </code> or have leading/trailing spaces
+          </code> {t('settings:tags.syncConfigs.invalidCharsAfter')}
         </AlertDescription>
       </Alert>
 
@@ -171,7 +201,7 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
         {entityTypes.map(entityType => {
           const config = getConfigForType(entityType);
           const variables = AVAILABLE_VARIABLES[entityType] || [];
-          const keyValidation = config.tag_key_format ? validateTagKey(renderExampleKey(config)) : null;
+          const keyValidation = config.tag_key_format ? validateTagKey(renderExampleKey(config), t) : null;
 
           return (
             <TabsContent key={entityType} value={entityType}>
@@ -180,7 +210,7 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                   <CardTitle className="flex items-center justify-between">
                     <span>{formatEntityTypeName(entityType)}</span>
                     <div className="flex items-center gap-2">
-                      <Label htmlFor={`${entityType}-enabled`}>Enable</Label>
+                      <Label htmlFor={`${entityType}-enabled`}>{t('settings:tags.enable')}</Label>
                       <Switch
                         id={`${entityType}-enabled`}
                         checked={config.enabled}
@@ -189,13 +219,13 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                     </div>
                   </CardTitle>
                   <CardDescription>
-                    Configure tag format for {formatEntityTypeName(entityType).toLowerCase()}
+                    {t('settings:tags.syncConfigs.cardDescription', { type: formatEntityTypeName(entityType).toLowerCase() })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Available Variables */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Available Variables</Label>
+                    <Label className="text-sm font-medium">{t('settings:tags.syncConfigs.availableVariables')}</Label>
                     <div className="flex flex-wrap gap-2">
                       {variables.map(variable => (
                         <Badge key={variable.key} variant="secondary" className="text-xs font-mono">
@@ -206,7 +236,7 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                     <div className="text-xs text-muted-foreground space-y-1">
                       {variables.map(variable => (
                         <div key={variable.key}>
-                          <code className="bg-muted px-1 py-0.5 rounded">{variable.key}</code> - {variable.description}
+                          <code className="bg-muted px-1 py-0.5 rounded">{variable.key}</code> - {variableDescriptions[variable.key] ?? variable.description}
                         </div>
                       ))}
                     </div>
@@ -215,21 +245,21 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                   {/* Tag Key Format */}
                   <div className="space-y-2">
                     <Label htmlFor={`${entityType}-key-format`}>
-                      Tag Key Format
+                      {t('settings:tags.syncConfigs.keyFormatLabel')}
                       <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Input
                       id={`${entityType}-key-format`}
                       value={config.tag_key_format}
                       onChange={(e) => updateConfig(entityType, { tag_key_format: e.target.value })}
-                      placeholder="e.g., ontos_{VARIABLE}"
+                      placeholder={t('settings:tags.syncConfigs.keyFormatPlaceholder')}
                       className="font-mono text-sm"
                       disabled={!config.enabled}
                     />
                     {config.enabled && config.tag_key_format && (
                       <div className="text-xs space-y-1">
                         <div className="text-muted-foreground">
-                          Example: <code className="bg-muted px-1 py-0.5 rounded">{renderExampleKey(config)}</code>
+                          {t('settings:tags.syncConfigs.example')} <code className="bg-muted px-1 py-0.5 rounded">{renderExampleKey(config)}</code>
                         </div>
                         {keyValidation && (
                           <div className="text-red-500 flex items-center gap-1">
@@ -244,27 +274,96 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
                   {/* Tag Value Format */}
                   <div className="space-y-2">
                     <Label htmlFor={`${entityType}-value-format`}>
-                      Tag Value Format
+                      {t('settings:tags.syncConfigs.valueFormatLabel')}
                       <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Input
                       id={`${entityType}-value-format`}
                       value={config.tag_value_format}
                       onChange={(e) => updateConfig(entityType, { tag_value_format: e.target.value })}
-                      placeholder="e.g., {VARIABLE}"
+                      placeholder={t('settings:tags.syncConfigs.valueFormatPlaceholder')}
                       className="font-mono text-sm"
                       disabled={!config.enabled}
                     />
                     <p className="text-xs text-muted-foreground">
-                      The value that will be assigned to the tag
+                      {t('settings:tags.syncConfigs.valueFormatHelp')}
                     </p>
                   </div>
                 </CardContent>
               </Card>
+              {supportsLifecycleMapping(entityType) && (
+                <LifecycleStatusCard
+                  entityType={entityType}
+                  config={getLifecycleConfig(entityType)}
+                  onChange={(updates) => updateLifecycleConfig(entityType, updates)}
+                />
+              )}
             </TabsContent>
           );
         })}
       </Tabs>
     </div>
+  );
+}
+
+interface LifecycleStatusCardProps {
+  entityType: string;
+  config: TagSyncConfig;
+  onChange: (updates: Partial<TagSyncConfig>) => void;
+}
+
+// The tag value is fixed to the status variable: only the key and the switch are edited.
+function LifecycleStatusCard({ entityType, config, onChange }: LifecycleStatusCardProps) {
+  const { t } = useTranslation(['settings']);
+  const keyError = config.enabled ? validateTagKey(config.tag_key_format, t) : null;
+  const description = entityType === 'data_product'
+    ? t('settings:tags.syncConfigs.lifecycle.descriptionProduct')
+    : t('settings:tags.syncConfigs.lifecycle.descriptionContract');
+
+  return (
+    <Card className="mt-4" data-testid={`${entityType}-lifecycle-card`}>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>{t('settings:tags.syncConfigs.lifecycle.title')}</span>
+          <div className="flex items-center gap-2">
+            <Label htmlFor={`${entityType}-lifecycle-enabled`}>{t('settings:tags.enable')}</Label>
+            <Switch
+              id={`${entityType}-lifecycle-enabled`}
+              checked={config.enabled}
+              onCheckedChange={(enabled) => onChange({ enabled })}
+            />
+          </div>
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${entityType}-lifecycle-key-format`}>
+            {t('settings:tags.syncConfigs.keyFormatLabel')}
+            <span className="text-red-500 ml-1">*</span>
+          </Label>
+          <Input
+            id={`${entityType}-lifecycle-key-format`}
+            value={config.tag_key_format}
+            onChange={(e) => onChange({ tag_key_format: e.target.value })}
+            className="font-mono text-sm"
+            disabled={!config.enabled}
+          />
+          {keyError && (
+            <div className="text-xs text-red-500 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {keyError}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <div>
+            {t('settings:tags.syncConfigs.lifecycle.valueLabel')}{' '}
+            <code className="bg-muted px-1 py-0.5 rounded">{config.tag_value_format}</code>
+          </div>
+          <div>{t('settings:tags.syncConfigs.lifecycle.sharedKeyHint')}</div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

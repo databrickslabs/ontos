@@ -8,7 +8,7 @@ catalogs, schemas, and their metadata.
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -54,10 +54,9 @@ class GetCurrentUserTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_current_user] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}"
+                **tool_failure("get_current_user", e)
             )
 
 
@@ -141,10 +140,9 @@ class ListCatalogsTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[list_catalogs] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}"
+                **tool_failure("list_catalogs", e)
             )
 
 
@@ -213,10 +211,9 @@ class GetCatalogDetailsTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_catalog_details] FAILED for {catalog_name}: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(
+                        return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure(f"get_catalog_details {catalog_name}", e),
                 data={"catalog_name": catalog_name}
             )
 
@@ -328,10 +325,9 @@ class ListSchemasTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[list_schemas] FAILED for {catalog_name}: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(
+                        return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure(f"list_schemas {catalog_name}", e),
                 data={"catalog_name": catalog_name}
             )
 

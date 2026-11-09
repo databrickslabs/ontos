@@ -7,7 +7,7 @@ Tools for searching glossary terms and managing semantic links.
 from typing import Any, Dict, Optional
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -77,10 +77,9 @@ class SearchGlossaryTermsTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[search_glossary_terms] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure("search_glossary_terms", e),
                 data={"terms": []}
             )
 
@@ -182,8 +181,7 @@ class AddSemanticLinkTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[add_semantic_link] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("add_semantic_link", e))
 
 
 class ListSemanticLinksTool(BaseTool):
@@ -248,10 +246,9 @@ class ListSemanticLinksTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[list_semantic_links] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure("list_semantic_links", e),
                 data={"links": []}
             )
 
@@ -310,8 +307,7 @@ class RemoveSemanticLinkTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[remove_semantic_link] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("remove_semantic_link", e))
 
 
 class FindEntitiesByConceptTool(BaseTool):
@@ -370,10 +366,9 @@ class FindEntitiesByConceptTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[find_entities_by_concept] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure("find_entities_by_concept", e),
                 data={"entities": []}
             )
 
@@ -456,10 +451,9 @@ class ExecuteSparqlQueryTool(BaseTool):
                 data={"results": []}
             )
         except Exception as e:
-            logger.error(f"[execute_sparql_query] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure("execute_sparql_query", e),
                 data={"results": []}
             )
 
@@ -542,8 +536,7 @@ class GetConceptHierarchyTool(BaseTool):
             return ToolResult(success=True, data=result)
             
         except Exception as e:
-            logger.error(f"[get_concept_hierarchy] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_concept_hierarchy", e))
 
 
 class GetConceptNeighborsTool(BaseTool):
@@ -618,10 +611,9 @@ class GetConceptNeighborsTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_concept_neighbors] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
+                **tool_failure("get_concept_neighbors", e),
                 data={"outgoing": [], "incoming": []}
             )
 

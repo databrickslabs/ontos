@@ -1,12 +1,17 @@
 import json
 import uuid
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Set
 import os
 from pathlib import Path
 
 SOURCE_ID_PROPERTY = "sourceId"
+# Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
+# convention (both written during the transition; either read); ontosEntityId is the
+# current Ontos primary key, re-derived on export so a re-import can detect/rebind.
+ONTOS_ORIGINAL_ID_PROPERTY = "ontosOriginalId"
+ONTOS_ENTITY_ID_PROPERTY = "ontosEntityId"
 
 
 def _is_valid_uuid(value: str) -> bool:
@@ -16,9 +21,51 @@ def _is_valid_uuid(value: str) -> bool:
     except (ValueError, AttributeError):
         return False
 
+
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    ``uuid.UUID`` accepts upper/lower case, braced, URN and hyphenless spellings
+    (all of which refer to the same logical UUID), but the import duplicate
+    check compares strings. Canonicalizing before lookup and storage prevents a
+    second identity for the same logical UUID (#853 review item 2).
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _upsert_custom_property(data: dict, prop: str, value) -> None:
+    """Set a customProperties entry on an ODCS payload dict, tolerating the
+    list-of-{property,value} form and the legacy {key: value} dict form."""
+    cprops = data.get('customProperties')
+    if cprops is None:
+        cprops = data.get('custom_properties')
+    if isinstance(cprops, dict):
+        cprops[prop] = value
+        data['customProperties'] = cprops
+        return
+    if not isinstance(cprops, list):
+        cprops = []
+    cprops = [c for c in cprops if not (isinstance(c, dict) and c.get('property') == prop)]
+    cprops.append({"property": prop, "value": value})
+    data['customProperties'] = cprops
+
 import yaml
 from sqlalchemy.orm import Session
 
+from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.entity_kind import classify_import_entity, describe_import_entity
+from src.common.api_errors import CodedValueError
+from src.common.lifecycle_status import (
+    CONTRACT_STATUSES,
+    check_status_unchanged,
+    import_status,
+    normalize_new_status,
+)
 from src.models.data_contracts import (
     ColumnDefinition,
     DataContract,
@@ -39,7 +86,9 @@ from src.common.search_registry import searchable_asset
 
 from src.common.logging import get_logger
 from src.common.database import get_session_factory
+from src.common.api_errors import CodedValueError
 from src.common.errors import ConflictError
+from src.common.uc_tag_sync_trigger import request_uc_tag_sync_after_transition
 from src.db_models.data_contracts import (
     DataContractDb,
     DataContractTagDb,
@@ -55,15 +104,70 @@ from src.db_models.data_contracts import (
     DataContractSlaPropertyDb,
     DataContractAuthoritativeDefinitionDb,
     DataContractServerPropertyDb,
+    SchemaObjectAuthoritativeDefinitionDb,
+    SchemaPropertyAuthoritativeDefinitionDb,
+    SchemaObjectRelationshipDb,
+    SchemaPropertyRelationshipDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
+from src.utils.odcs_quality_operators import odcs_quality_check, operator_columns
+from src.utils.schema_editor_fields import keep_unsent_fields
+from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
+from src.utils.property_custom_properties import (
+    custom_properties_by_property,
+    object_custom_property_rows,
+    odcs_custom_properties,
+    property_custom_property_rows,
+    stable_ids_by_property,
+)
 from src.repositories.teams_repository import team_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.controller.domain_export_adapter import (
+    domain_export_adapter,
+    ONTOS_ORIGINAL_DOMAIN_PROPERTY,
+    original_domain_strings_from_props,
+)
 
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
+from src.common.api_errors import CodedValueError
 
 logger = get_logger(__name__)
 
+
+class InvalidVersionFormatError(CodedValueError):
+    """A new contract version that isn't ``X.Y.Z`` (or ``X.Y.Z-draft`` for a personal draft)."""
+
+    code = 'invalid_version_format'
+
+    def __init__(self, version: str, message: str):
+        super().__init__(message, version=version)
+
+
+def _relationship_read(rel) -> Dict[str, Any]:
+    """A stored schema-level relationship in its API (ODCS) form."""
+    def _decode(raw):
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return raw
+    out: Dict[str, Any] = {'id': rel.id, 'type': rel.relationship_type,
+                           'from': _decode(rel.from_value), 'to': _decode(rel.to_value)}
+    if rel.custom_properties_json:
+        out['customProperties'] = _decode(rel.custom_properties_json)
+    return out
+
+
+
+def _json_list(raw) -> list:
+    """A list stored as JSON text (older rows may hold the list itself)."""
+    if isinstance(raw, list):
+        return raw
+    try:
+        value = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return [raw] if raw else []
+    return value if isinstance(value, list) else [value]
 
 # Inherit from SearchableAsset and DeliveryMixin
 @searchable_asset
@@ -344,8 +448,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     # --- Implementation of SearchableAsset --- 
 
-    def _build_search_index_item(self, contract_db_obj, db, preloaded_tags=None) -> Optional[SearchIndexItem]:
-        """Build a SearchIndexItem from a contract DB object. Returns None if id or name missing."""
+    def _build_search_index_item(self, contract_db_obj, db, preloaded_tags=None, preloaded_domains=None) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a contract DB object. Returns None if id or name missing.
+
+        ``preloaded_domains`` (list of AssignedDomain) lets the bulk indexer batch the junction
+        lookup once instead of querying per contract; when omitted it queries per contract."""
         contract_id = getattr(contract_db_obj, 'id', None)
         name = getattr(contract_db_obj, 'name', None)
         if not contract_id or not name:
@@ -355,14 +462,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         version = getattr(contract_db_obj, 'version', None)
         status = getattr(contract_db_obj, 'status', None)
         description_usage = getattr(contract_db_obj, 'description_usage', None)
-        desc_parts: List[str] = []
-        if version:
-            desc_parts.append(str(version))
-        if status:
-            desc_parts.append(str(status))
-        if description_usage:
-            desc_parts.append(str(description_usage))
-        description = " • ".join([p for p in desc_parts if p])
+        # Keep description as the raw usage text. version + status are already
+        # surfaced as structured extra_data fields (and bubble up to the search
+        # result row via _RESULT_FIELDS) — composing them into a "1.0.0 • active
+        # • …" prefix wastes tokens for MCP agents and is harder to parse than
+        # just reading the structured fields.
+        description = str(description_usage) if description_usage else ""
 
         tag_names: List[str] = []
 
@@ -392,15 +497,89 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             except Exception as tag_err:
                 logger.debug(f"Could not load unified tags for contract {contract_id}: {tag_err}")
 
+        # Owner/team: resolve the native owning team, then fall back to the ODCS-supplied team
+        # (team-object name + member names) so a contract whose owner_team_id is unset is still
+        # findable by the team that only exists in the imported YAML.
         owner = ""
-        domain = ""
+        if getattr(contract_db_obj, 'owner_team_id', None):
+            try:
+                from uuid import UUID
+                owner_team = team_repo.get(db, id=UUID(str(contract_db_obj.owner_team_id)))
+                if owner_team:
+                    owner = owner_team.name or ""
+            except Exception as team_err:
+                logger.debug("Could not resolve owner_team_id for contract %s: %s", contract_id, team_err)
+
+        # Build the searchable team strings: team-object name + member DISPLAY NAMES.
+        # Deliberately exclude `member.username` — ODCS usernames are often email
+        # addresses and this index is readable by anyone with contracts:read; the
+        # UI already shows the username on the detail page without needing search
+        # to match on it (#921 review).
+        tm_name: str = ""
+        team_strings: List[str] = []
+        try:
+            tm = getattr(contract_db_obj, 'team_metadata', None)
+            if tm is not None and getattr(tm, 'name', None):
+                tm_name = tm.name
+                team_strings.append(tm_name)
+            for member in (getattr(contract_db_obj, 'team', None) or []):
+                m_name = getattr(member, 'name', None)
+                if m_name:
+                    team_strings.append(m_name)
+        except Exception as tm_err:
+            logger.debug("Could not load team for contract %s search index: %s", contract_id, tm_err)
+        # With no native owning team, fall back to the ODCS team-object name only.
+        # NOT to team_strings[0] — if `team_metadata.name` is unset, that would be
+        # the first member's name, which is not necessarily the owner (#921 review).
+        if not owner and tm_name:
+            owner = tm_name
+
+        # Index every assigned domain NAME so domain-keyed search matches by any of the
+        # contract's domains (primary or additional) — issue #520 story 14.
+        assigned_domain_names: List[str] = []
+        primary_domain = ""
+        try:
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_contract", entity_id=str(contract_id)
+            )
+            assigned_domain_names = [d.domain_name for d in assigned if d.domain_name]
+            primary_domain = next((d.domain_name for d in assigned if d.is_primary), "") or ""
+            tag_names = tag_names + assigned_domain_names
+        except Exception as dom_err:
+            logger.debug("Could not load domains for contract %s search index: %s", contract_id, dom_err)
+
+        # Fallback: index the original ODCS-supplied domain string(s) preserved as the
+        # ontosOriginalDomain custom property, so a contract imported with an unmatched domain
+        # (create_missing off → no native assignment) is still findable by that domain name.
+        # De-duped against native names so a resolved domain is not indexed twice.
+        try:
+            original_domains = [
+                d for d in original_domain_strings_from_props(getattr(contract_db_obj, 'custom_properties', None))
+                if d and d not in assigned_domain_names
+            ]
+            if original_domains:
+                tag_names = tag_names + original_domains
+                if not primary_domain:
+                    primary_domain = original_domains[0]
+        except Exception as od_err:
+            logger.debug("Could not load original domains for contract %s search index: %s", contract_id, od_err)
+
+        # Index team strings as tags too, so team-keyed search matches even without a native team.
+        tag_names = tag_names + team_strings
 
         extra_data = {
             "version": str(version) if version else "",
             "status": str(status) if status else "",
             "owner": owner,
-            "domain": domain,
+            "domain": primary_domain,
+            "team_members": ", ".join(team_strings),
         }
+
+        # Dedupe tag_names while preserving insertion order — same rationale as
+        # products: multiple sources (unified tags, assigned domains, …) can
+        # contribute the same string, and the result's tags[:5] slice would
+        # otherwise waste slots on duplicates.
+        tag_names = list(dict.fromkeys(t for t in tag_names if t))
 
         return SearchIndexItem(
             id=f"contract::{contract_id}",
@@ -443,8 +622,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 except Exception as e:
                     logger.debug(f"Batch tag loading for search index failed: {e}")
 
+                # Batch-load domains for all contracts at once (avoids N+1).
+                batch_domains: dict = {}
+                try:
+                    batch_domains = entity_domain_repo.get_domains_for_entities(
+                        db, entity_type="data_contract", entity_ids=contract_ids
+                    )
+                except Exception as e:
+                    logger.debug(f"Batch domain loading for search index failed: {e}")
+
                 for contract_db in contracts_db:
-                    item = self._build_search_index_item(contract_db, db, preloaded_tags=batch_tags.get(str(contract_db.id), []))
+                    item = self._build_search_index_item(
+                        contract_db, db,
+                        preloaded_tags=batch_tags.get(str(contract_db.id), []),
+                        preloaded_domains=batch_domains.get(str(contract_db.id), []),
+                    )
                     if item:
                         items.append(item)
 
@@ -787,23 +979,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
             'apiVersion': db_obj.api_version or 'v3.1.0',
+            'name': db_obj.name,
             'version': db_obj.version,
             'status': db_obj.status,
         }
         
-        # Resolve and include domain name if domain_id is set
-        domain_resolution_failed = False
+        # Apply multi-domain fields via the export adapter: primary name in `domain`,
+        # additional domains under customProperties.additionalDomains, plus app round-trip
+        # keys (domainIds / primaryDomainId). Best-effort; skip if resolution fails.
         try:
-            if getattr(db_obj, 'domain_id', None) and db_session is not None:
-                from src.repositories.data_domain_repository import data_domain_repo
-                domain = data_domain_repo.get(db_session, id=db_obj.domain_id)
-                if domain and getattr(domain, 'name', None):
-                    odcs['domain'] = domain.name
+            if db_session is not None:
+                domain_export_adapter.apply_odcs(odcs, db_session, "data_contract", db_obj.id)
         except Exception:
-            # Best-effort; skip if resolution fails
-            domain_resolution_failed = True
-
-        # Do not emit domainId in ODCS export; only emit human-readable domain name when resolvable
+            logger.warning("Failed to apply domain fields for contract %s", getattr(db_obj, 'id', '?'))
 
         # Add optional top-level fields
         if db_obj.tenant:
@@ -837,7 +1025,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if getattr(db_obj, 'sla_default_element', None):
             odcs['slaDefaultElement'] = db_obj.sla_default_element
         if getattr(db_obj, 'contract_created_ts', None):
-            odcs['contractCreatedTs'] = db_obj.contract_created_ts.isoformat()
+            created_ts = db_obj.contract_created_ts
+            # In UTC, as ODCS files usually write it, not the DB session's zone
+            # (a value without a zone is UTC: the import stores it that way)
+            if created_ts.tzinfo is None:
+                created_ts = created_ts.replace(tzinfo=timezone.utc)
+            created_ts = created_ts.astimezone(timezone.utc)
+            odcs['contractCreatedTs'] = created_ts.isoformat().replace('+00:00', 'Z')
             
         # Build description object
         description: Dict[str, Any] = {}
@@ -860,14 +1054,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     ad_item['id'] = auth_def.stable_id
                 auth_defs.append(ad_item)
             description['authoritativeDefinitions'] = auth_defs
-        else:
-            # For ODCS compliance testing, add sample authoritativeDefinitions under description
-            description['authoritativeDefinitions'] = [
-                {
-                    'type': 'privacy-statement',
-                    'url': 'https://example.com/gdpr.pdf'
-                }
-            ]
 
         if description:
             odcs['description'] = description
@@ -895,8 +1081,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if getattr(schema_obj, 'description', None):
                     schema_dict['description'] = schema_obj.description
                 if getattr(schema_obj, 'tags', None):
-                    # Tags are now rich objects managed by TagsManager
-                    schema_dict['tags'] = schema_obj.tags or []
+                    # Stored as a JSON list (see _create_schema_objects)
+                    schema_dict['tags'] = _json_list(schema_obj.tags)
                     
                 # Add properties with full ODCS field support
                 if hasattr(schema_obj, 'properties') and schema_obj.properties:
@@ -937,7 +1123,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['transformLogic'] = prop.transform_logic
                         if prop.transform_source_objects:
                             try:
-                                import json
                                 prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['transformSourceObjects'] = prop.transform_source_objects
@@ -945,7 +1130,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['description'] = prop.transform_description
                         if prop.examples:
                             try:
-                                import json
                                 prop_dict['examples'] = json.loads(prop.examples)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['examples'] = prop.examples
@@ -953,7 +1137,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['criticalDataElement'] = prop.critical_data_element
                         if prop.logical_type_options_json:
                             try:
-                                import json
                                 logical_type_options = json.loads(prop.logical_type_options_json)
                                 prop_dict.update(logical_type_options)  # Merge constraints into property
                             except (json.JSONDecodeError, TypeError):
@@ -967,17 +1150,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if hasattr(prop, 'physical_name') and prop.physical_name:
                             prop_dict['physicalName'] = prop.physical_name
                         else:
-                            # Use a naming convention: logical name with underscores
-                            logical_name = prop.name.replace(' ', '_').lower()
-                            # For common patterns, create a simple mapping
-                            if logical_name == 'transaction_reference_date':
-                                prop_dict['physicalName'] = 'txn_ref_dt'
-                            elif logical_name == 'rcvr_id':
-                                prop_dict['physicalName'] = 'rcvr_id'  # Same as logical
-                            elif logical_name == 'rcvr_cntry_code':
-                                prop_dict['physicalName'] = 'rcvr_cntry_code'  # Same as logical
-                            else:
-                                prop_dict['physicalName'] = logical_name
+                            # Naming convention: the logical name with underscores
+                            prop_dict['physicalName'] = prop.name.replace(' ', '_').lower()
 
                         if getattr(prop, 'business_name', None):
                             prop_dict['businessName'] = prop.business_name
@@ -985,26 +1159,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['encryptedName'] = prop.encrypted_name
                         if getattr(prop, 'transform_logic', None):
                             prop_dict['transformLogic'] = prop.transform_logic
-                        if getattr(prop, 'transform_source_objects', None):
-                            prop_dict['transformSourceObjects'] = prop.transform_source_objects
+                        # transformSourceObjects is set above, parsed from its JSON text
                         if getattr(prop, 'transform_description', None):
                             prop_dict['transformDescription'] = prop.transform_description
-
-                        # Legacy transform description for specific property (can be removed later)
-                        # For ODCS compliance, add transformDescription for properties that have transform logic
-                        if prop.transform_logic and prop.name == 'transaction_reference_date' and not prop_dict.get('transformDescription'):
-                            prop_dict['transformDescription'] = "defines the logic in business terms; logic for dummies"
 
                         # Property-level tags - always include, even if empty for ODCS compliance
                         # Tags are now rich objects managed by TagsManager
                         if hasattr(prop, 'tags') and prop.tags:
                             prop_dict['tags'] = prop.tags
                         else:
-                            # Add specific tags for ODCS compliance testing based on property
-                            if prop.name == 'rcvr_id':
-                                prop_dict['tags'] = ['uid']
-                            else:
-                                prop_dict['tags'] = []
+                            prop_dict['tags'] = []
 
                         # Property-level authoritative definitions (if relationship exists)
                         if hasattr(prop, 'authoritative_definitions') and prop.authoritative_definitions:
@@ -1018,48 +1182,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                     ad_item['id'] = auth_def.stable_id
                                 auth_defs.append(ad_item)
                             prop_dict['authoritativeDefinitions'] = auth_defs
-                        elif prop.name == 'rcvr_cntry_code':
-                            # Add sample authoritative definitions for ODCS compliance testing
-                            prop_dict['authoritativeDefinitions'] = [
-                                {
-                                    'url': 'https://collibra.com/asset/742b358f-71a5-4ab1-bda4-dcdba9418c25',
-                                    'type': 'businessDefinition'
-                                },
-                                {
-                                    'url': 'https://github.com/myorg/myrepo',
-                                    'type': 'transformationImplementation'
-                                },
-                                {
-                                    'url': 'jdbc:postgresql://localhost:5432/adventureworks/tbl_1/rcvr_cntry_code',
-                                    'type': 'implementation'
-                                }
-                            ]
 
-                        # Property-level custom properties (if relationship exists)
-                        if hasattr(prop, 'custom_properties') and prop.custom_properties:
-                            custom_props = []
-                            for custom_prop in prop.custom_properties:
-                                prop_value = custom_prop.value
-                                try:
-                                    # Try to parse JSON if it's a serialized object
-                                    import json
-                                    prop_value = json.loads(custom_prop.value)
-                                except (json.JSONDecodeError, TypeError):
-                                    pass  # Keep as string
-
-                                custom_props.append({
-                                    'property': custom_prop.property,
-                                    'value': prop_value
-                                })
-                            prop_dict['customProperties'] = custom_props
-                        elif prop.name == 'transaction_reference_date':
-                            # Add sample custom properties for ODCS compliance testing
-                            prop_dict['customProperties'] = [
-                                {
-                                    'property': 'anonymizationStrategy',
-                                    'value': 'none'
-                                }
-                            ]
+                        # Property-level custom properties
+                        if prop.custom_properties:
+                            prop_dict['customProperties'] = odcs_custom_properties(prop.custom_properties)
 
                         # Property-level quality rules - filter from schema object's quality checks
                         # Quality checks are stored at schema level with property_id linking to specific columns
@@ -1071,76 +1197,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             if property_quality_checks:
                                 quality = []
                                 for check in property_quality_checks:
-                                    quality_dict: Dict[str, Any] = {
-                                        'rule': check.rule or check.name,
-                                        'type': check.type,
-                                    }
-                                    if getattr(check, 'stable_id', None):
-                                        quality_dict['id'] = check.stable_id
-                                    if check.description:
-                                        quality_dict['description'] = check.description
-                                    if check.dimension:
-                                        quality_dict['dimension'] = check.dimension
-                                    if check.business_impact:
-                                        quality_dict['businessImpact'] = check.business_impact
-                                    if check.severity:
-                                        quality_dict['severity'] = check.severity
-                                    if check.method:
-                                        quality_dict['method'] = check.method
-                                    if check.schedule:
-                                        quality_dict['schedule'] = check.schedule
-                                    if check.scheduler:
-                                        quality_dict['scheduler'] = check.scheduler
-                                    if check.unit:
-                                        quality_dict['unit'] = check.unit
-                                    if check.tags:
-                                        quality_dict['tags'] = check.tags
-                                    if check.query:
-                                        quality_dict['query'] = check.query
-                                    if check.engine:
-                                        quality_dict['engine'] = check.engine
-                                    if check.implementation:
-                                        quality_dict['implementation'] = check.implementation
-
-                                    # Add comparison fields
-                                    for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
-                                                 'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
-                                        value = getattr(check, field, None)
-                                        if value:
-                                            camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
-                                            quality_dict[camel_case_field] = value
-
-                                    # Add custom properties for quality rules
-                                    if hasattr(check, 'custom_properties') and check.custom_properties:
-                                        custom_props = []
-                                        for custom_prop in check.custom_properties:
-                                            custom_props.append({
-                                                'property': custom_prop.property,
-                                                'value': custom_prop.value
-                                            })
-                                        quality_dict['customProperties'] = custom_props
-
+                                    quality_dict = odcs_quality_check(check, db_obj.api_version)
                                     quality.append(quality_dict)
                                 prop_dict['quality'] = quality
-                        elif prop.name == 'rcvr_cntry_code':
-                            # Add sample property-level quality rule for ODCS compliance testing
-                            prop_dict['quality'] = [
-                                {
-                                    'rule': 'nullCheck',
-                                    'description': 'column should not contain null values',
-                                    'dimension': 'completeness',
-                                    'type': 'library',
-                                    'severity': 'error',
-                                    'businessImpact': 'operational',
-                                    'schedule': '0 20 * * *',
-                                    'scheduler': 'cron',
-                                    'customProperties': [
-                                        {'property': 'FIELD_NAME', 'value': None},
-                                        {'property': 'COMPARE_TO', 'value': None},
-                                        {'property': 'COMPARISON_TYPE', 'value': 'Greater than'}
-                                    ]
-                                }
-                            ]
 
                         # Property-level relationships (ODCS v3.1.0)
                         if hasattr(prop, 'relationships') and prop.relationships:
@@ -1169,45 +1228,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         # Property-level checks have property_id set and are exported with their properties
                         if check.property_id is not None:
                             continue
-                        quality_dict: Dict[str, Any] = {
-                            'rule': check.rule or check.name,
-                            'type': check.type,
-                        }
-                        if getattr(check, 'stable_id', None):
-                            quality_dict['id'] = check.stable_id
-                        if check.description:
-                            quality_dict['description'] = check.description
-                        if check.dimension:
-                            quality_dict['dimension'] = check.dimension
-                        if check.business_impact:
-                            quality_dict['businessImpact'] = check.business_impact
-                        if check.severity:
-                            quality_dict['severity'] = check.severity
-                        if check.method:
-                            quality_dict['method'] = check.method
-                        if check.schedule:
-                            quality_dict['schedule'] = check.schedule
-                        if check.scheduler:
-                            quality_dict['scheduler'] = check.scheduler
-                        if check.unit:
-                            quality_dict['unit'] = check.unit
-                        if check.tags:
-                            quality_dict['tags'] = check.tags
-                        if check.query:
-                            quality_dict['query'] = check.query
-                        if check.engine:
-                            quality_dict['engine'] = check.engine
-                        if check.implementation:
-                            quality_dict['implementation'] = check.implementation
-
-                        # Add comparison fields
-                        for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
-                                     'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
-                            value = getattr(check, field, None)
-                            if value:
-                                camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
-                                quality_dict[camel_case_field] = value
-
+                        quality_dict = odcs_quality_check(check, db_obj.api_version)
                         quality.append(quality_dict)
                     schema_dict['quality'] = quality
 
@@ -1431,7 +1452,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if getattr(prop, 'stable_id', None):
                     cp_item['id'] = prop.stable_id
                 custom_props_list.append(cp_item)
-            odcs['customProperties'] = custom_props_list
+            # Preserve the additionalDomains entry apply_odcs injected above; a plain
+            # overwrite here drops additional domains on export/round-trip.
+            odcs['customProperties'] = domain_export_adapter.merge_custom_properties(
+                custom_props_list, odcs.get('customProperties')
+            )
+
+        # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
+        # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
+        _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
 
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
@@ -1510,14 +1539,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             odcs['servers'] = servers
 
         # Inject semantic assignments from EntitySemanticLinks
+        from contextlib import nullcontext
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.common.database import get_db_session
         from src.utils.semantic_helpers import get_semantic_assignment_type
 
         SEMANTIC_ASSIGNMENT_TYPE = get_semantic_assignment_type()
 
+        # Reuse the caller's session when one was passed, rather than opening a
+        # second session via get_db_session(). The read-only semantic lookups don't
+        # need their own session, and get_db_session() commits on exit — under the
+        # test harness's shared single SQLite connection that commit lands on the
+        # outer per-test transaction, defeating its rollback and leaking rows across
+        # tests; in production it was simply a redundant session + commit per export.
         try:
-            with get_db_session() as db:
+            session_cm = nullcontext(db_session) if db_session is not None else get_db_session()
+            with session_cm as db:
                 semantic_manager = SemanticLinksManager(db)
 
                 # Inject contract-level semantic assignments
@@ -1623,37 +1660,70 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 domain_obj = data_domain_repo.get_by_name(db, name=domain_name)
                 if domain_obj:
                     return domain_obj.id
-                # Auto-create missing domain
-                try:
-                    from src.controller.data_domains_manager import DataDomainManager
-                    from src.models.data_domains import DataDomainCreate
-                    manager = DataDomainManager(repository=data_domain_repo)
-                    created_read = manager.create_domain(
-                        db,
-                        domain_in=DataDomainCreate(name=domain_name, description=None, owner=['system'], tags=[], parent_id=None),
-                        current_user_id='system'
-                    )
-                    return str(created_read.id)
-                except Exception as ce:
-                    logger.warning(f"Auto-create domain failed for '{domain_name}': {ce}")
-                    return None
+                # No match → leave unassigned (#851). The previous silent auto-create is
+                # gone; auto-create is now an explicit, opt-in import toggle handled in the
+                # reconciliation path (domain_export_adapter.parse_odcs(create_missing=...)).
+                logger.info("Domain name '%s' not found; leaving unassigned.", domain_name)
+                return None
         except ValueError:
             raise
         except Exception as e:
             logger.warning(f"Domain resolution failed: {e}")
             return None
-    
-    def _create_schema_objects(self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None):
+
+    def _resolve_domain_assignment(self, db, data_dict: dict) -> tuple[List[str], Optional[str]]:
+        """Resolve a contract payload's domain assignment to (domain_ids, primary_domain_id).
+
+        Preference order:
+        1. ``domain_ids`` (list of IDs) + optional ``primary_domain_id``.
+        2. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
+        Each ID is validated (and names resolved) via ``_resolve_domain``.
+        """
+        raw_ids = data_dict.get('domain_ids') or data_dict.get('domainIds')
+        if isinstance(raw_ids, list) and raw_ids:
+            resolved = []
+            for did in raw_ids:
+                rid = self._resolve_domain(db, domain_id=str(did))
+                if rid:
+                    resolved.append(rid)
+            primary = data_dict.get('primary_domain_id') or data_dict.get('primaryDomainId')
+            if primary:
+                primary = self._resolve_domain(db, domain_id=str(primary))
+            if primary not in resolved:
+                primary = resolved[0] if resolved else None
+            return resolved, primary
+
+        # Legacy single-domain fallback.
+        single = None
+        if data_dict.get('domainId'):
+            single = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
+        elif data_dict.get('domain'):
+            single = self._resolve_domain(db, domain_name=data_dict.get('domain'))
+        return ([single], single) if single else ([], None)
+
+    def _create_schema_objects(
+        self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None,
+        custom_property_ids: Optional[Dict[str, Dict[str, Dict[str, str]]]] = None,
+        include_object_quality: bool = False,
+    ):
         """
         Create schema objects and properties for a contract using bulk inserts.
         
         Assigns UUIDs in Python to avoid per-row db.flush() round-trips.
+        ``custom_property_ids``: per schema and property name, the ODCS ids of
+        the property-level custom properties before an update recreated them.
+        ``include_object_quality``: also store the objects' own ``quality``
+        rules (ODCS files). The create and update routes send object-level
+        rules separately as ``qualityRules``, so they leave it off.
         """
         all_schema_objs = []
         all_properties = []
         all_obj_relationships = []
         all_prop_relationships = []
         all_quality_checks = []
+        all_prop_custom_props = []
+        all_obj_custom_props = []
+        all_auth_defs = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1680,6 +1750,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
             all_schema_objs.append(schema_obj)
 
+            # Schema-level (object) customProperties and authoritativeDefinitions
+            all_obj_custom_props.extend(object_custom_property_rows(
+                schema_obj_id,
+                schema_dict.get('customProperties') or schema_dict.get('custom_properties'),
+            ))
+            all_auth_defs.extend(self._authoritative_definition_rows(
+                SchemaObjectAuthoritativeDefinitionDb, 'schema_object_id', schema_obj_id,
+                schema_dict.get('authoritativeDefinitions'),
+            ))
+            if include_object_quality:
+                for rule_data in (schema_dict.get('quality') or []):
+                    all_quality_checks.append(
+                        self._build_quality_check_db(rule_data, object_id=schema_obj_id)
+                    )
+
             # Collect schema-level semantic link work
             schema_auth_defs = schema_dict.get('authoritativeDefinitions', [])
             if schema_auth_defs and current_user:
@@ -1687,7 +1772,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
             properties = schema_dict.get('properties', [])
 
-            for prop_data in (properties or []):
+            for position, prop_data in enumerate(properties or []):
                 if hasattr(prop_data, 'model_dump'):
                     prop_dict = prop_data.model_dump()
                 else:
@@ -1726,6 +1811,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     required=prop_dict.get('required', False),
                     unique=prop_dict.get('unique', False),
                     partitioned=prop_dict.get('partitioned', False),
+                    primary_key=bool(prop_dict.get('primaryKey')),
+                    position=position,
                     primary_key_position=prop_dict.get('primaryKeyPosition', -1) if prop_dict.get('primaryKey') else -1,
                     partition_key_position=prop_dict.get('partitionKeyPosition', -1) if prop_dict.get('partitioned') else -1,
                     classification=prop_dict.get('classification'),
@@ -1740,6 +1827,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     business_name=prop_dict.get('businessName')
                 )
                 all_properties.append(prop)
+
+                # Property-level (column) customProperties: list or dict form
+                all_prop_custom_props.extend(property_custom_property_rows(
+                    prop_id, prop_dict.get('customProperties') or prop_dict.get('custom_properties'),
+                    previous_ids=(custom_property_ids or {}).get(
+                        schema_dict.get('name', 'table'), {}
+                    ).get(prop_dict.get('name', 'column')),
+                ))
 
                 # Collect property-level (column) quality rules. These arrive
                 # nested under the column as `properties[].quality`; previously
@@ -1767,6 +1862,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ))
 
                 prop_auth_defs = prop_dict.get('authoritativeDefinitions', [])
+                all_auth_defs.extend(self._authoritative_definition_rows(
+                    SchemaPropertyAuthoritativeDefinitionDb, 'property_id', prop_id, prop_auth_defs,
+                ))
                 if prop_auth_defs and current_user:
                     prop_semantic_work.append((contract_id, schema_dict.get('name', 'table'), prop_dict.get('name', 'column'), prop_auth_defs))
 
@@ -1774,7 +1872,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             for rel_data in (schema_dict.get('relationships') or []):
                 if isinstance(rel_data, dict):
                     from src.db_models.data_contracts import SchemaObjectRelationshipDb
-                    from_val = rel_data.get('from', '')
+                    # `from_value` when the payload went through the API model (alias `from`)
+                    from_val = rel_data.get('from') or rel_data.get('from_value') or ''
                     to_val = rel_data.get('to', '')
                     all_obj_relationships.append(SchemaObjectRelationshipDb(
                         id=str(uuid4()),
@@ -1794,6 +1893,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_prop_relationships)
         if all_quality_checks:
             db.add_all(all_quality_checks)
+        if all_prop_custom_props:
+            db.add_all(all_prop_custom_props)
+        if all_obj_custom_props:
+            db.add_all(all_obj_custom_props)
+        if all_auth_defs:
+            db.add_all(all_auth_defs)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -1818,6 +1923,29 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     authoritative_definitions=auth_defs,
                     created_by=current_user
                 )
+
+    @staticmethod
+    def _authoritative_definition_rows(model, owner_column: str, owner_id: str, auth_defs) -> List:
+        """Rows of ``model`` for the ODCS ``authoritativeDefinitions`` of a schema
+        object or property.
+
+        Semantic assignments (``SEMANTIC_ASSIGNMENT_TYPE``) are left out: they are
+        stored as semantic links, and the export adds those back.
+        """
+        from src.utils.semantic_helpers import SEMANTIC_ASSIGNMENT_TYPE
+
+        rows = []
+        for auth_def in auth_defs or []:
+            item = auth_def.model_dump() if hasattr(auth_def, 'model_dump') else auth_def
+            if not isinstance(item, dict) or not item.get('url') or not item.get('type'):
+                continue
+            if item['type'] == SEMANTIC_ASSIGNMENT_TYPE:
+                continue
+            rows.append(model(**{
+                owner_column: owner_id, 'stable_id': item.get('id'),
+                'url': item['url'], 'type': item['type'],
+            }))
+        return rows
 
     @staticmethod
     def _build_quality_check_db(rule_data, object_id: str, property_id: Optional[str] = None) -> 'DataQualityCheckDb':
@@ -1846,18 +1974,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             type=rule_dict.get('type', 'library'),
             unit=rule_dict.get('unit'),
             tags=rule_dict.get('tags'),
-            rule=rule_dict.get('rule'),
+            # ODCS v3.1.0 library rules name it `metric` (`rule` is the older name)
+            rule=rule_dict.get('rule') or rule_dict.get('metric'),
             query=rule_dict.get('query'),
             engine=rule_dict.get('engine'),
             implementation=rule_dict.get('implementation'),
-            must_be=rule_dict.get('mustBe') or rule_dict.get('must_be'),
-            must_not_be=rule_dict.get('mustNotBe') or rule_dict.get('must_not_be'),
-            must_be_gt=rule_dict.get('mustBeGt') or rule_dict.get('must_be_gt'),
-            must_be_ge=rule_dict.get('mustBeGe') or rule_dict.get('must_be_ge'),
-            must_be_lt=rule_dict.get('mustBeLt') or rule_dict.get('must_be_lt'),
-            must_be_le=rule_dict.get('mustBeLe') or rule_dict.get('must_be_le'),
-            must_be_between_min=rule_dict.get('mustBeBetweenMin') or rule_dict.get('must_be_between_min'),
-            must_be_between_max=rule_dict.get('mustBeBetweenMax') or rule_dict.get('must_be_between_max'),
+            **operator_columns(rule_dict),
         )
 
     def _create_quality_checks(self, db, contract_id: str, quality_rules: List):
@@ -2066,6 +2188,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
                 db.add(auth_def_db)
     
+    @staticmethod
+    def _servers_payload(contract_data, data_dict: dict) -> Optional[List[dict]]:
+        """The servers of an update in the ODCS form `_create_servers` reads
+        (`schema`, not the model's `database_schema`), or None when the update
+        doesn't carry any. `servers` and the older `serverConfigs` are both read."""
+        for key in ('servers', 'serverConfigs'):
+            models = getattr(contract_data, key, None)
+            if models is not None:
+                return [m.model_dump(by_alias=True, exclude_none=True) if hasattr(m, 'model_dump') else dict(m)
+                        for m in models]
+            if isinstance(contract_data, dict) and data_dict.get(key) is not None:
+                return [dict(s) for s in data_dict[key]]
+        return None
+
     def _create_servers(self, db, contract_id: str, servers_data: List[dict]):
         """Create servers and server properties from ODCS servers array."""
         from src.db_models.data_contracts import DataContractServerPropertyDb
@@ -2176,18 +2312,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 scheduler=rule_data.get('scheduler'),
                 unit=rule_data.get('unit'),
                 tags=rule_data.get('tags'),
-                rule=rule_data.get('rule'),
+                rule=rule_data.get('rule') or rule_data.get('metric'),
                 query=rule_data.get('query'),
                 engine=rule_data.get('engine'),
                 implementation=rule_data.get('implementation'),
-                must_be=rule_data.get('must_be') or rule_data.get('mustBe'),
-                must_not_be=rule_data.get('must_not_be') or rule_data.get('mustNotBe'),
-                must_be_gt=rule_data.get('must_be_gt') or rule_data.get('mustBeGt'),
-                must_be_ge=rule_data.get('must_be_ge') or rule_data.get('mustBeGe'),
-                must_be_lt=rule_data.get('must_be_lt') or rule_data.get('mustBeLt'),
-                must_be_le=rule_data.get('must_be_le') or rule_data.get('mustBeLe'),
-                must_be_between_min=rule_data.get('must_be_between_min') or rule_data.get('mustBeBetweenMin'),
-                must_be_between_max=rule_data.get('must_be_between_max') or rule_data.get('mustBeBetweenMax')
+                **operator_columns(rule_data),
             )
             db.add(quality_rule_db)
     
@@ -2228,34 +2357,32 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if not data_dict.get('name') or not data_dict.get('name', '').strip():
                 raise ValueError("Contract name is required")
             
-            # Resolve domain_id from provided domainId or domain name
-            domain_id = None
-            if data_dict.get('domainId'):
-                domain_id = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
-            elif data_dict.get('domain'):
-                domain_id = self._resolve_domain(db, domain_name=data_dict.get('domain'))
+            # Resolve the domain assignment set (multi-domain). Accepts domain_ids +
+            # primary_domain_id (preferred) and falls back to legacy single domainId/domain name.
+            resolved_domain_ids, resolved_primary_domain_id = self._resolve_domain_assignment(db, data_dict)
 
-            # Reject a duplicate contract name within the same domain. This path
-            # always creates a *new* version family (new versions go through
-            # create_version), so any existing contract sharing the name+domain
-            # is a genuine duplicate, not another version of the same family
-            # (ONT-NEG-002). Name match is case-insensitive.
+            # Reject a duplicate contract name within the same (primary) domain. This
+            # path always creates a *new* version family (new versions go through
+            # create_version), so any existing contract sharing the name + primary
+            # domain is a genuine duplicate, not another version of the same family
+            # (ONT-NEG-002). Name match is case-insensitive. Domain now lives in the
+            # entity_domain_associations junction, so resolve each name match's primary
+            # domain there rather than reading the dropped DataContractDb.domain_id.
             from sqlalchemy import func as _sa_func
             from src.common.errors import ConflictError
             new_name = data_dict.get('name', '').strip()
-            dup_query = db.query(DataContractDb).filter(
+            name_matches = db.query(DataContractDb.id).filter(
                 _sa_func.lower(DataContractDb.name) == new_name.lower()
-            )
-            dup_query = (
-                dup_query.filter(DataContractDb.domain_id == domain_id)
-                if domain_id is not None
-                else dup_query.filter(DataContractDb.domain_id.is_(None))
-            )
-            if dup_query.first() is not None:
-                where = "domain" if domain_id is not None else "global scope"
-                raise ConflictError(
-                    f"A data contract named '{new_name}' already exists in this {where}"
+            ).all()
+            for (existing_id,) in name_matches:
+                existing_primary = entity_domain_repo.get_primary_domain_id(
+                    db, entity_type="data_contract", entity_id=str(existing_id)
                 )
+                if existing_primary == resolved_primary_domain_id:
+                    where = "domain" if resolved_primary_domain_id is not None else "global scope"
+                    raise ConflictError(
+                        f"A data contract named '{new_name}' already exists in this {where}"
+                    )
 
             # Resolve owner team if provided
             owner_team_id = data_dict.get('owner_team_id')
@@ -2290,7 +2417,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # When an owner team is supplied the draft is team-visible from the
             # start, so we leave draft_owner_id unset (tier-2 visibility). The
             # draft_owner_id is cleared again on the draft->proposed transition.
-            status_value = data_dict.get('status', 'draft')
+            # A new contract starts in one of the lifecycle statuses; `certified`
+            # is certification_level, set by the certify action.
+            status_value = normalize_new_status(data_dict.get('status'), CONTRACT_STATUSES)
             draft_owner_id = (
                 current_user
                 if (status_value or '').lower() == 'draft' and not owner_team_id
@@ -2309,7 +2438,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 api_version=data_dict.get('apiVersion', 'v3.1.0'),
                 tenant=data_dict.get('tenant'),
                 data_product=data_dict.get('dataProduct'),
-                domain_id=domain_id,
                 description_usage=description.get('usage'),
                 description_purpose=description.get('purpose'),
                 description_limitations=description.get('limitations'),
@@ -2317,6 +2445,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 updated_by=current_user,
             )
             created = data_contract_repo.create(db=db, obj_in=db_obj)
+
+            # Assign domains via the junction table.
+            if resolved_domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=created.id,
+                    domain_ids=resolved_domain_ids, primary_domain_id=resolved_primary_domain_id,
+                    assigned_by=current_user,
+                )
             
             # Create schema objects and properties if provided
             if data_dict.get('contract_schema') or data_dict.get('schema'):
@@ -2420,6 +2556,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db_obj = data_contract_repo.get(db, id=contract_id)
             if not db_obj:
                 raise ValueError("Contract not found")
+
+            # The status changes only through transition_status (change-status,
+            # request-status-change, approve/reject), which runs the gates; an
+            # update may only repeat it.
+            check_status_unchanged(db_obj.status, data_dict.get('status'))
             
             # Validate required fields
             if data_dict.get('name') is not None and (not data_dict['name'] or not data_dict['name'].strip()):
@@ -2428,14 +2569,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Extract tags (handled separately)
             tags_data = data_dict.get('tags')
             
-            # Handle domain_id - convert empty string to None and validate existence
-            domain_id = data_dict.get('domainId')
-            if domain_id is not None:
-                if not domain_id.strip():
-                    domain_id = None
-                else:
-                    domain_id = self._resolve_domain(db, domain_id=domain_id)
-            
+            # Determine whether the caller supplied a domain assignment (multi-domain).
+            domains_provided = any(
+                k in data_dict and data_dict.get(k) is not None
+                for k in ('domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain')
+            )
+            resolved_domain_ids, resolved_primary_domain_id = (
+                self._resolve_domain_assignment(db, data_dict) if domains_provided else ([], None)
+            )
+
             # Extract description fields from nested dict or flat keys
             description = data_dict.get('description')
             if isinstance(description, str):
@@ -2462,7 +2604,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 'description_limitations': desc_limitations,
                 'api_version': data_dict.get('apiVersion'),
                 'kind': data_dict.get('kind'),
-                'domain_id': domain_id,
             }
             for k, v in payload_map.items():
                 if v is not None:
@@ -2474,7 +2615,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             logger.info(f"[DEBUG MANAGER] Full update_payload: {update_payload}")
             
             updated = data_contract_repo.update(db=db, db_obj=db_obj, obj_in=update_payload)
-            
+
+            # Replace domain assignments when the caller supplied any domain field.
+            if domains_provided:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=updated.id,
+                    domain_ids=resolved_domain_ids, primary_domain_id=resolved_primary_domain_id,
+                    assigned_by=current_user,
+                )
+
             logger.info(f"[DEBUG MANAGER] After update, db_obj.owner_team_id = {updated.owner_team_id}")
             
             # Handle schema objects if provided
@@ -2493,6 +2642,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 }
                 incoming_names = set()
                 schemas_to_create = []
+                custom_property_ids = {}
+                # The stored objects as the export writes them: what an editor
+                # save leaves out is taken from here (utils/schema_editor_fields)
+                stored_objects = {
+                    o['name']: o for o in self.build_odcs_from_db(db_obj, db).get('schema', [])
+                } if existing_schemas else {}
 
                 for s in schema_data:
                     s_dict = s.model_dump() if hasattr(s, 'model_dump') else s
@@ -2515,6 +2670,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     else:
                         # New schema or schema with updated properties → recreate
                         if name in existing_schemas:
+                            custom_property_ids[name] = stable_ids_by_property(
+                                db, existing_schemas[name].id
+                            )
+                            if name in stored_objects:
+                                s_dict = keep_unsent_fields(s_dict, stored_objects[name])
                             db.query(SchemaObjectDb).filter(
                                 SchemaObjectDb.id == existing_schemas[name].id
                             ).delete()
@@ -2528,7 +2688,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         ).delete()
 
                 if schemas_to_create:
-                    self._create_schema_objects(db, contract_id, schemas_to_create, current_user)
+                    # Object-level quality kept from a recreated object is in
+                    # its `quality`; `qualityRules` (below) still replaces it
+                    self._create_schema_objects(
+                        db, contract_id, schemas_to_create, current_user,
+                        custom_property_ids=custom_property_ids,
+                        include_object_quality=True,
+                    )
             
             # Handle quality rules if provided
             if data_dict.get('qualityRules') is not None:
@@ -2595,6 +2761,32 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     logger.error(f"Failed to update tags for contract {contract_id}: {e}")
                     # Don't fail the entire update if tags fail
             
+            # Servers (the contract page sends the whole list): replace them,
+            # keeping the ODCS id of a server the payload names without one
+            servers_data = self._servers_payload(contract_data, data_dict)
+            if servers_data is not None:
+                stable_ids = {s.server: s.stable_id for s in updated.servers if s.server and s.stable_id}
+                updated.servers.clear()
+                db.flush()
+                for server in servers_data:
+                    if not server.get('id') and server.get('server') in stable_ids:
+                        server['id'] = stable_ids[server['server']]
+                self._create_servers(db, contract_id, servers_data)
+
+            # SLA: ODCS slaProperties replace all of them; the SLA form's four
+            # values are SLA properties of their own (see utils/contract_sla.py)
+            if data_dict.get('slaProperties') is not None:
+                from src.db_models.data_contracts import DataContractSlaPropertyDb
+                db.query(DataContractSlaPropertyDb).filter(
+                    DataContractSlaPropertyDb.contract_id == contract_id
+                ).delete(synchronize_session=False)
+                self._create_sla_properties(db, contract_id, data_dict['slaProperties'])
+            if 'sla' in data_dict:
+                from src.utils.contract_sla import apply_legacy_sla
+                apply_legacy_sla(db, contract_id, data_dict['sla'])
+            if 'slaDefaultElement' in data_dict:
+                updated.sla_default_element = data_dict['slaDefaultElement']
+
             # Handle custom properties if provided
             if data_dict.get('customProperties') is not None:
                 from src.db_models.data_contracts import DataContractCustomPropertyDb
@@ -2690,8 +2882,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Contract {contract_id} not found")
         
         contract_name = db_obj.name
-        
-        # Perform deletion
+
+        # Remove domain assignments, then perform deletion
+        entity_domain_repo.remove_all_for_entity(db, entity_type="data_contract", entity_id=contract_id)
         data_contract_repo.remove(db=db, id=contract_id)
         
         # Log to change log for timeline
@@ -2816,19 +3009,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self,
         db,
         parsed_odcs: dict,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        create_missing_domains: bool = False,
+        adopt_ids: bool = True,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
-        
+
         Args:
             db: Database session
             parsed_odcs: Parsed ODCS dictionary
             current_user: Username of current user
-            
+            create_missing_domains: When True, auto-create by name any domain that
+                doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+
         Returns:
             Created DataContractDb instance
-            
+
         Raises:
             ValueError: If validation fails
             Exception: If creation fails
@@ -2842,7 +3039,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 'uploaded_contract'
             )
             version_val = parsed_odcs.get('version', '1.0.0')
-            status_val = parsed_odcs.get('status', 'draft')
+            status_val = normalize_new_status(parsed_odcs.get('status'), CONTRACT_STATUSES)
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
             api_version_val = parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version', 'v3.1.0')
@@ -2854,40 +3051,80 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             elif not isinstance(description, dict):
                 description = {}
             
-            # Resolve domain_id from parsed payload
-            domain_id = None
-            parsed_domain_id = parsed_odcs.get('domainId') or parsed_odcs.get('domain_id')
-            parsed_domain_name = parsed_odcs.get('domain')
-            if parsed_domain_id:
-                domain_id = self._resolve_domain(db, domain_id=parsed_domain_id)
-            elif parsed_domain_name:
-                domain_id = self._resolve_domain(db, domain_name=parsed_domain_name)
-            
+            # Reconcile the domain assignment from the parsed payload: best-effort ID→name
+            # (authoritative ontosDomainId key first, then legacy keys, then the standard
+            # `domain` name). No match → unassigned unless create_missing_domains is set (#851).
+            import_domain_ids, import_primary_domain_id = domain_export_adapter.parse_odcs(
+                parsed_odcs, db, create_missing=create_missing_domains, created_by=current_user,
+            )
+            # Always preserve the raw incoming domain string(s) as provenance so the original
+            # is never lost (and a later export can surface it via ontosOriginalDomain).
+            original_domains = domain_export_adapter.extract_original_domain_strings(parsed_odcs)
+            if original_domains:
+                cprops = parsed_odcs.get('customProperties')
+                if not isinstance(cprops, list):
+                    cprops = [] if cprops is None else cprops
+                if isinstance(cprops, list):
+                    cprops = [
+                        c for c in cprops
+                        if not (isinstance(c, dict) and c.get('property') == ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+                    ]
+                    cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
+                    parsed_odcs['customProperties'] = cprops
+
             # Try to resolve owner as team name
             owner_team_id = self._resolve_team_name_to_id(db, owner_val)
-            
+
+            # Mirror the create() path (see there for the full rationale): a
+            # draft contract with no owning team would otherwise be invisible to
+            # its own uploader under the PRD #442 role-aware visibility filter,
+            # because the family is "elevated" only for the draft_owner or
+            # owner_team members. Stamp the uploader as the personal-draft owner
+            # so they can find the contract they just uploaded. Team-owned drafts
+            # are team-visible from the start, so draft_owner_id stays unset
+            # there; it is cleared again on the draft->proposed transition.
+            draft_owner_id_val = (
+                current_user
+                if (status_val or '').lower() == 'draft' and not owner_team_id
+                else None
+            )
+
             # Preserve original external ID (e.g. URN) as a custom property
             original_id = parsed_odcs.get('id')
-            if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
-                custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties') or []
-                if isinstance(custom_props, list):
-                    custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
-                elif isinstance(custom_props, dict):
-                    custom_props[SOURCE_ID_PROPERTY] = original_id
-                parsed_odcs['customProperties'] = custom_props
+            if original_id and isinstance(original_id, str):
+                # ontosOriginalId (#853) records the source id verbatim; legacy sourceId is
+                # also written for non-UUID ids during the transition.
+                _upsert_custom_property(parsed_odcs, ONTOS_ORIGINAL_ID_PROPERTY, original_id)
+                if not _is_valid_uuid(original_id):
+                    _upsert_custom_property(parsed_odcs, SOURCE_ID_PROPERTY, original_id)
 
-            # Create main contract record (always use auto-generated UUID)
+            # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
+            # so YAML-expressed cross-entity links survive import; else auto-generate.
+            # Canonicalize before lookup and storage so an upper/braced/urn spelling
+            # cannot bypass the duplicate check and create a second identity for the
+            # same logical UUID (#853 review item 2).
+            adopted_id = None
+            canon_id = _canonical_uuid(original_id) if isinstance(original_id, str) else None
+            if (
+                adopt_ids
+                and canon_id is not None
+                and data_contract_repo.get(db, canon_id) is None
+            ):
+                adopted_id = canon_id
+
+            # Create main contract record (adopt the file id when eligible, else default UUID).
             db_obj = DataContractDb(
+                **({"id": adopted_id} if adopted_id else {}),
                 name=name_val,
                 version=version_val,
                 status=status_val,
                 owner_team_id=owner_team_id,
                 kind=kind_val,
                 api_version=api_version_val,
+                draft_owner_id=draft_owner_id_val,
                 tenant=parsed_odcs.get('tenant'),
                 # Store dataProduct from imported ODCS for reference, but actual linkage is via Output Ports
                 data_product=parsed_odcs.get('dataProduct') or parsed_odcs.get('data_product'),
-                domain_id=domain_id,
                 description_usage=description.get('usage'),
                 description_purpose=description.get('purpose'),
                 description_limitations=description.get('limitations'),
@@ -2897,12 +3134,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 updated_by=current_user,
             )
             created = data_contract_repo.create(db=db, obj_in=db_obj)
-            
+
+            # Assign imported domains via the junction table.
+            if import_domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=created.id,
+                    domain_ids=import_domain_ids, primary_domain_id=import_primary_domain_id,
+                    assigned_by=current_user,
+                )
+
             # Parse and create schema objects if present
             # Accept both ODCS standard 'schema' and Pydantic field name 'contract_schema'
             schema_data = parsed_odcs.get('schema') or parsed_odcs.get('contract_schema', [])
             if isinstance(schema_data, list) and schema_data:
-                self._create_schema_objects(db, created.id, schema_data, current_user)
+                self._create_schema_objects(
+                    db, created.id, schema_data, current_user, include_object_quality=True,
+                )
             
             # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
             team_raw = parsed_odcs.get('team')
@@ -2983,7 +3230,206 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error creating contract from upload: {e}", exc_info=True)
             raise
-    
+
+    def parse_uploaded_entities(
+        self, file_content: str, filename: str, content_type: str
+    ) -> List[dict]:
+        """Parse an uploaded file into a list of ODCS entity dicts.
+
+        Parity with the products path (`upload_products_batch`): a file may hold a
+        single ODCS object or a top-level array of them. A dict yields ``[dict]``;
+        a list is returned as-is.
+
+        Only structured ODCS files (``.yaml``/``.yml``/``.json``) are accepted. We
+        deliberately do NOT fabricate a contract from free-form text — there is no
+        meaningful mapping from arbitrary prose (e.g. a README) to an ODCS entity,
+        and doing so previously produced junk contracts. An unsupported extension or
+        a non-structured payload raises ``ValueError``, which the batch importer
+        records as a failed item.
+        """
+        name = (filename or '').lower()
+        if name.endswith(('.yaml', '.yml')):
+            fmt = 'yaml'
+        elif name.endswith('.json'):
+            fmt = 'json'
+        elif content_type == 'application/x-yaml':
+            fmt = 'yaml'
+        elif content_type and 'json' in content_type:
+            fmt = 'json'
+        else:
+            raise ValueError(
+                f"Unsupported file type: {filename}. "
+                "Expected an ODCS Data Contract as .yaml, .yml, or .json."
+            )
+
+        try:
+            parsed = yaml.safe_load(file_content) if fmt == 'yaml' else json.loads(file_content)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML: {e}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {e}")
+
+        if isinstance(parsed, list):
+            return [item for item in parsed]
+        if isinstance(parsed, dict):
+            return [parsed]
+        raise ValueError("File must contain an ODCS object or an array of ODCS objects.")
+
+    def create_contracts_from_files(
+        self,
+        db,
+        files: List[tuple],
+        current_user: Optional[str] = None,
+        create_missing_domains: bool = False,
+        adopt_ids: bool = True,
+        on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
+    ) -> BatchImportResult:
+        """Import ODCS contracts from one or more uploaded files.
+
+        Args:
+            db: Database session.
+            files: List of ``(filename, content_text, content_type)`` tuples. Each
+                file may contain a single ODCS object or an array of them.
+            current_user: Username of the uploader.
+            create_missing_domains: opt-in "Create missing domains" import toggle (#851),
+                applied per-upload to every entity in the batch.
+            adopt_ids: "Adopt IDs from file" toggle (#853, default on). A valid, non-colliding
+                UUID is adopted as the primary key; otherwise a fresh UUID is generated.
+            on_duplicate: what to do when the payload id is a valid UUID that already exists —
+                "skip" (default, recorded as skipped) or "new" (import as a new copy with a
+                fresh UUID). Import stays create-only either way.
+
+        Returns:
+            A :class:`BatchImportResult`. Per-entity failures are captured as failed
+            items; one bad entity never aborts the batch (each contract commits in
+            its own transaction inside `create_from_upload`).
+        """
+        result = BatchImportResult()
+        index = 0
+        for filename, content_text, content_type in files:
+            try:
+                entities = self.parse_uploaded_entities(content_text, filename, content_type)
+            except Exception as e:  # pragma: no cover - defensive; parse falls back to text
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message=f"Could not parse file: {e}",
+                ))
+                index += 1
+                continue
+
+            if not entities:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no contract entities",
+                ))
+                index += 1
+                continue
+
+            for entity in entities:
+                source_id = entity.get('id') if isinstance(entity, dict) else None
+                if not isinstance(entity, dict):
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, status="failed",
+                        message="Entity is not an object/mapping",
+                    ))
+                    index += 1
+                    continue
+                # Only import a recognizable ODCS Data Contract. An ODPS product is
+                # routed to the right page; anything unrecognizable is skipped rather
+                # than fabricated into a junk contract. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the contracts table.
+                entity_kind = classify_import_entity(entity)
+                if entity_kind != "contract":
+                    if entity_kind == "product":
+                        skip_msg = (
+                            f"Skipped: this is an {describe_import_entity(entity)} "
+                            "(kind: DataProduct), not a Data Contract. "
+                            "Import it from the Data Products page."
+                        )
+                    else:
+                        skip_msg = (
+                            "Skipped: not a recognizable ODCS Data Contract "
+                            "(expected kind: DataContract or a contract schema)."
+                        )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="skipped", message=skip_msg,
+                    ))
+                    index += 1
+                    continue
+                # Duplicate-id handling (#853): a valid UUID already present is either
+                # skipped (default) or imported as a new copy with a fresh UUID.
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and data_contract_repo.get(db, canon_source) is not None)
+                if dup and on_duplicate == "skip":
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            entity_id=canon_source, name=entity.get('name'), status="skipped",
+                            message="already present (same id)",
+                        ))
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
+                    index += 1
+                    continue
+                try:
+                    # A status Ontos doesn't have is imported as draft, with a note
+                    status_value, status_note = import_status(
+                        entity.get('status'), CONTRACT_STATUSES
+                    )
+                    entity = {**entity, 'status': status_value}
+                    created = self.create_from_upload(
+                        db=db, parsed_odcs=entity, current_user=current_user,
+                        create_missing_domains=create_missing_domains,
+                        adopt_ids=adopt_ids and not dup,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        entity_id=created.id, name=created.name, status="created",
+                        **(status_note or {}),
+                    ))
+                except CodedValueError as e:
+                    # The app's own refusal (e.g. ``certified`` as a status):
+                    # its English message is safe to show, and its code lets
+                    # the UI translate it.
+                    logger.info(
+                        "Refused contract at batch index %d (file %s): %s", index, filename, e,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="failed",
+                        message=str(e), code=e.code, params=e.params or None,
+                    ))
+                except Exception as e:
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import contract at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="failed",
+                        message="Could not import this contract. See server logs for details.",
+                    ))
+                index += 1
+
+        logger.info(
+            "Contract batch import complete: %d created, %d skipped, %d failed (%d total)",
+            result.created, result.skipped, result.failed, result.total,
+        )
+        return result
+
     # --- Nested Resource CRUD Methods ---
     
     def create_custom_property(
@@ -3715,7 +4161,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db,
         contract_id: str,
         new_status: str,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        also_set: Optional[Dict[str, Any]] = None,
     ) -> DataContractDb:
         """
         Transition contract status. Validates contract exists and transition is valid.
@@ -3726,6 +4173,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             contract_id: Contract UUID
             new_status: New status value
             current_user: Username of current user
+            also_set: Other fields written in the same commit as the status,
+                only once the gates passed (e.g. a review request clears
+                ``draft_owner_id`` with its draft -> proposed change)
             
         Returns:
             Updated DataContractDb instance
@@ -3748,43 +4198,39 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Invalid status transition from {current_status} to {new_status}")
         
         # Run before_status_change workflows (gating)
-        try:
-            from src.common.workflow_triggers import get_trigger_registry
-            from src.models.process_workflows import EntityType as WFEntityType
-            trigger_registry = get_trigger_registry(db)
-            gate_passed, gate_executions = trigger_registry.before_status_change(
-                entity_type=WFEntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                from_status=current_status,
-                to_status=new_status,
-                entity_name=contract.name,
-                entity_data={"name": contract.name, "status": current_status},
-                user_email=current_user,
-            )
-            if not gate_passed:
-                failed = [e for e in gate_executions if e.status.value != 'succeeded']
-                reasons = "; ".join(
-                    e.step_results.get(e.current_step_id or '', {}).get('error', e.status.value)
-                    for e in failed
-                    if e.step_results
-                ) or "Workflow validation failed"
-                raise ValueError(
-                    f"Status transition from '{current_status}' to '{new_status}' "
-                    f"blocked by workflow: {reasons}"
-                )
-        except ValueError:
-            raise
-        except Exception as e:
-            logger.warning(f"before_status_change trigger error (non-fatal): {e}")
+        # (a gate that errors refuses the transition when it is fail_closed, #1103)
+        from src.common.workflow_triggers import run_status_gates
+        from src.models.process_workflows import EntityType as WFEntityType
+        run_status_gates(
+            db,
+            entity_type=WFEntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            from_status=current_status,
+            to_status=new_status,
+            entity_name=contract.name,
+            entity_data={"name": contract.name, "status": current_status},
+            user_email=current_user,
+        )
         
         try:
             updated = data_contract_repo.update(
                 db=db,
                 db_obj=contract,
-                obj_in={"status": new_status, "updated_by": current_user}
+                obj_in={**(also_set or {}), "status": new_status, "updated_by": current_user}
             )
             db.commit()
             db.refresh(updated)
+
+            # Keep the search index in lockstep with the status mutation so
+            # list_data_contracts / search_data_contracts can't return the stale
+            # pre-transition status (#954 review).
+            try:
+                self._update_search_index(updated, db)
+            except Exception as idx_err:
+                logger.warning(
+                    "Failed to refresh search index after contract %s status transition: %s",
+                    contract_id, idx_err,
+                )
 
             # Fire on_status_change workflow trigger
             from src.common.workflow_triggers import fire_trigger_safe
@@ -3799,12 +4245,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 entity_data={"name": contract.name, "status": new_status},
                 user_email=current_user,
             )
-
-            return updated
         except Exception as e:
             db.rollback()
             logger.error(f"Error transitioning contract status: {e}", exc_info=True)
             raise
+
+        # Outside the try above, whose rollback must not follow a committed transition.
+        request_uc_tag_sync_after_transition(
+            "data_contract", contract_id, current_status, new_status
+        )
+        return updated
 
     # --- DQX Profiling Methods ---
     
@@ -4328,10 +4778,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # Validate semantic version format (allow -draft suffix for personal drafts)
         if as_personal_draft:
             if not re.match(r'^\d+\.\d+\.\d+(-draft)?$', new_version):
-                raise ValueError("new_version must be in format X.Y.Z or X.Y.Z-draft")
+                raise InvalidVersionFormatError(
+                    new_version, "new_version must be in format X.Y.Z or X.Y.Z-draft")
         else:
             if not re.match(r'^\d+\.\d+\.\d+$', new_version):
-                raise ValueError("new_version must be in format X.Y.Z (e.g., 2.0.0)")
+                raise InvalidVersionFormatError(
+                    new_version, "new_version must be in format X.Y.Z (e.g., 2.0.0)")
         
         # Get source contract
         source_contract = data_contract_repo.get(db, id=contract_id)
@@ -4361,7 +4813,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add(new_contract)
             db.flush()
             db.refresh(new_contract)
-            
+
+            # Copy domain assignments from the source contract.
+            src_domains = entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_contract", entity_id=source_contract.id
+            )
+            if src_domains:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=new_contract.id,
+                    domain_ids=[d.domain_id for d in src_domains],
+                    primary_domain_id=next((d.domain_id for d in src_domains if d.is_primary), None),
+                    assigned_by=current_user or "system",
+                )
+
             # Clone all nested entities
             # Tags
             if source_contract.tags:
@@ -4436,10 +4900,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_id = schema_data.pop('id')
                     properties = schema_data.pop('properties', [])
                     authoritative_defs = schema_data.pop('authoritative_defs', [])
+                    schema_custom_props = schema_data.pop('custom_properties', [])
+                    quality_checks = schema_data.pop('quality_checks', [])
+                    schema_relationships = schema_data.pop('relationships', [])
                     
                     schema = SchemaObjectDb(id=schema_id, **schema_data)
                     db.add(schema)
                     db.flush()
+                    db.add_all(object_custom_property_rows(schema_id, schema_custom_props))
                     
                     # Schema-level authoritative definitions
                     for auth_def_data in authoritative_defs:
@@ -4449,19 +4917,35 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     for prop_data in properties:
                         prop_id = prop_data.pop('id')
                         prop_auth_defs = prop_data.pop('authoritative_defs', [])
+                        prop_custom_props = prop_data.pop('custom_properties', [])
+                        prop_relationships = prop_data.pop('relationships', [])
                         
                         prop = SchemaPropertyDb(id=prop_id, **prop_data)
                         db.add(prop)
                         db.flush()
+                        db.add_all(property_custom_property_rows(prop_id, prop_custom_props))
                         
                         # Property-level authoritative definitions
                         for prop_auth_def_data in prop_auth_defs:
                             from src.db_models.data_contracts import SchemaPropertyAuthoritativeDefinitionDb
                             db.add(SchemaPropertyAuthoritativeDefinitionDb(**prop_auth_def_data))
+                        for rel_data in prop_relationships:
+                            db.add(SchemaPropertyRelationshipDb(property_id=prop_id, **rel_data))
+
+                    # Quality checks (object- and property-level) and relationships
+                    for check_data in quality_checks:
+                        db.add(DataQualityCheckDb(object_id=schema_id, **check_data))
+                    for rel_data in schema_relationships:
+                        db.add(SchemaObjectRelationshipDb(schema_object_id=schema_id, **rel_data))
             
             db.commit()
             db.refresh(new_contract)
-            
+
+            # A new version is found in search right away, as with create_new_version.
+            # A personal draft is left out, as before: only its owner sees it.
+            if not as_personal_draft:
+                self._update_search_index(new_contract, db)
+
             return new_contract
             
         except Exception as e:
@@ -4528,12 +5012,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.refresh(draft)
             
             logger.info(f"Personal draft {draft_id} committed as version {new_version} by {current_user}")
-            return draft
-            
         except Exception as e:
             db.rollback()
             logger.error(f"Error committing personal draft {draft_id}: {e}", exc_info=True)
             raise
+
+        # The committed version is visible to the team now, so it is found in
+        # search right away, as a version made by the clone is; a personal
+        # draft is never indexed.
+        self._update_search_index(draft, db)
+        return draft
 
     def get_diff_from_parent(
         self,
@@ -4868,7 +5356,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             description_usage=original.description_usage,
             description_purpose=original.description_purpose,
             description_limitations=original.description_limitations,
-            domain_id=original.domain_id,
             parent_contract_id=original.id,
             version_family_id=original.version_family_id,
             created_by=current_user,
@@ -4876,9 +5363,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         db.add(clone)
         db.flush()
+
+        # Copy the original's domain assignments onto the clone.
+        original_domains = entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=original.id
+        )
+        if original_domains:
+            entity_domain_repo.set_domains_for_entity(
+                db, entity_type="data_contract", entity_id=clone.id,
+                domain_ids=[d.domain_id for d in original_domains],
+                primary_domain_id=next((d.domain_id for d in original_domains if d.is_primary), None),
+                assigned_by=current_user,
+            )
+
         db.commit()
         db.refresh(clone)
-        
+
         self._update_search_index(clone, db)
         return clone
     
@@ -4915,7 +5415,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             ValueError: If contract not found or invalid status
         """
         from datetime import datetime
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
 
         contract = data_contract_repo.get(db, id=contract_id)
@@ -4936,16 +5438,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             .count()
         )
         if schema_object_count == 0:
-            raise ValueError("A schema is required before a contract can be proposed for review.")
+            raise ReviewSchemaRequiredError()
 
-        # Transition to PROPOSED. Clear the personal-draft owner so the contract
-        # is promoted from tier-1 (creator-only) to organisation visibility; a
-        # contract under steward review must be discoverable by stewards and
-        # other team members, not just its author (PRD #442).
-        contract.status = 'proposed'
-        contract.draft_owner_id = None
-        db.add(contract)
-        db.flush()
+        # Transition to PROPOSED through transition_status, so the lifecycle
+        # check and the before_status_change gates run (a gate refusal raises
+        # its coded error here). The same commit clears the personal-draft
+        # owner, so the contract is promoted from tier-1 (creator-only) to
+        # organisation visibility together with its new status; a contract
+        # under steward review must be discoverable by stewards and other team
+        # members, not just its author (PRD #442).
+        contract = self.transition_status(
+            db=db, contract_id=contract_id, new_status='proposed',
+            current_user=current_user, also_set={'draft_owner_id': None},
+        )
         self._update_search_index(contract, db)
         
         now = datetime.utcnow()
@@ -4982,6 +5487,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Change log entry
         from src.controller.change_log_manager import change_log_manager
@@ -4998,24 +5504,87 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "to_status": contract.status,
                 "timestamp": now.isoformat(),
                 "summary": f"Review requested by {requester_email}" + (f": {message}" if message else ""),
-                "workflow_triggered": len(executions) > 0,
+                **outcome,
             },
         )
         
         # Build response
         result = {
             "status": contract.status, 
-            "message": "Review request submitted successfully",
+            "message": request_submitted_message("Review", outcome),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
     
+    def set_publication_scope(self, db, contract_id: str, scope: str,
+                              current_user: Optional[str] = None):
+        """Set a contract's marketplace publication scope and return the contract row.
+
+        Publishing (any scope but ``none``) needs an ``approved`` or ``active``
+        contract and fires ``on_publish`` when it wasn't published yet; ``none``
+        unpublishes it and fires ``on_unpublish`` when it was published.
+
+        Raises:
+            ValueError: If the contract is not found or can't be published
+        """
+        from datetime import datetime, timezone
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        contract_db = data_contract_repo.get(db, id=contract_id)
+        if not contract_db:
+            raise ValueError("Contract not found")
+        was_published = (contract_db.publication_scope or "none").lower() != "none"
+
+        if scope != "none":
+            status = (contract_db.status or "").lower()
+            if status not in ("active", "approved"):
+                raise ValueError(
+                    "Contract must be active or approved to publish. "
+                    f"Current status: {contract_db.status}"
+                )
+            contract_db.publication_scope = scope
+            contract_db.published_at = datetime.now(timezone.utc)
+            contract_db.published_by = current_user
+        else:
+            contract_db.publication_scope = "none"
+            contract_db.published_at = None
+            contract_db.published_by = None
+        db.add(contract_db)
+        db.commit()
+        db.refresh(contract_db)
+
+        try:
+            registry = get_trigger_registry(db)
+            if scope != "none" and not was_published:
+                registry.on_publish(
+                    entity_type=WFEntityType.DATA_CONTRACT,
+                    entity_id=contract_id,
+                    entity_name=contract_db.name,
+                    entity_data={
+                        "name": contract_db.name,
+                        "status": contract_db.status,
+                        "publication_scope": scope,
+                        "published_by": current_user,
+                    },
+                    user_email=current_user,
+                )
+            elif scope == "none" and was_published:
+                registry.on_unpublish(
+                    WFEntityType.DATA_CONTRACT,
+                    contract_id,
+                    entity_name=contract_db.name,
+                    user_email=current_user,
+                )
+        except Exception:
+            # The publication is committed; its on_publish / on_unpublish
+            # workflows didn't run, so log it as an error
+            logger.exception("Publication trigger failed for data contract %s", contract_id)
+
+        return contract_db
+
     def request_publish(
         self,
         db,
@@ -5047,7 +5616,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             ValueError: If contract not found, invalid status, or already published
         """
         from datetime import datetime
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import (
+            get_trigger_registry, request_submitted_message, request_workflow_outcome,
+        )
         from src.models.process_workflows import EntityType
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -5081,6 +5652,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             },
             user_email=requester_email,
         )
+        outcome = request_workflow_outcome(executions)
         
         # Change log entry
         from src.controller.change_log_manager import change_log_manager
@@ -5096,20 +5668,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "requested_scope": requested_scope,
                 "timestamp": now.isoformat(),
                 "summary": f"Publish requested by {requester_email}" + (f": {justification}" if justification else ""),
-                "workflow_triggered": len(executions) > 0,
+                **outcome,
             },
         )
         
         # Build response
         result = {
-            "message": "Publish request submitted successfully",
+            "message": request_submitted_message("Publish", outcome),
             "request_id": request_id,
         }
-        
-        if executions:
-            execution = executions[0]
-            result["execution_id"] = execution.id
-            result["workflow_status"] = execution.status.value
+        result.update({k: v for k, v in outcome.items() if k != "workflow_triggered"})
         
         return result
     
@@ -5213,7 +5781,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 "message": message,
             }
             
-            executions = trigger_registry.on_request_publish(
+            executions = trigger_registry.on_request_deploy(
                 entity_type=EntityType.DATA_CONTRACT,
                 entity_id=contract_id,
                 entity_name=contract.name,
@@ -5311,17 +5879,25 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from_status = (contract.status or '').lower()
         now = datetime.utcnow()
         
-        # Update contract status based on decision
+        # Update contract status based on decision, through transition_status
+        # so the lifecycle check and the before_status_change gates run
         if decision == 'approve':
             if from_status not in ('proposed', 'under_review'):
                 raise ValueError(f"Cannot approve from status {contract.status}")
-            contract.status = 'approved'
+            contract = self.transition_status(
+                db=db, contract_id=contract_id, new_status='approved',
+                current_user=current_user,
+            )
             notification_title = "Contract Review Approved"
             notification_desc = f"Your contract '{contract.name}' has been approved by the data steward."
         elif decision == 'reject':
             if from_status not in ('proposed', 'under_review'):
                 raise ValueError(f"Cannot reject from status {contract.status}")
-            contract.status = 'draft'  # ODCS: rejected contracts return to draft for revisions
+            # ODCS: rejected contracts return to draft for revisions
+            contract = self.transition_status(
+                db=db, contract_id=contract_id, new_status='draft',
+                current_user=current_user,
+            )
             notification_title = "Contract Review Rejected"
             notification_desc = f"Your contract '{contract.name}' was rejected and needs revisions."
         else:  # clarify
@@ -5354,7 +5930,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         requester_email = None
         try:
             from src.controller.change_log_manager import change_log_manager
-            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id, action="review_requested", limit=1)
             for change in recent_changes:
                 if change.action == "review_requested":
                     requester_email = change.details.get("requester_email")
@@ -5446,7 +6022,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         requested_scope = "organization"
         try:
             from src.controller.change_log_manager import change_log_manager
-            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id, action="publish_requested", limit=1)
             for change in recent_changes:
                 if change.action == "publish_requested":
                     requester_email = change.details.get("requester_email")
@@ -5495,8 +6071,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     },
                     user_email=approver_email,
                 )
-            except Exception as e:
-                logger.warning(f"on_publish trigger error (non-fatal): {e}")
+            except Exception:
+                logger.exception("on_publish trigger failed for data contract %s", contract_id)
         
         # Mark actionable notification as handled
         try:
@@ -5626,7 +6202,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         requester_email = None
         try:
             from src.controller.change_log_manager import change_log_manager
-            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id, action="deploy_requested", limit=1)
             for change in recent_changes:
                 if change.action == "deploy_requested":
                     requester_email = change.details.get("requester_email")
@@ -5814,12 +6390,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             allowed_transitions = self._get_allowed_status_transitions(from_status)
             if target_status_lower not in allowed_transitions:
                 raise ValueError(f"Invalid transition from '{from_status}' to '{target_status}'")
-            
-            contract.status = target_status_lower
-            contract.updated_at = now
-            db.commit()
-            db.refresh(contract)
-            self._update_search_index(contract, db)
+
+            # Through transition_status, like a product's approved request, so
+            # the before_status_change gates run and on_status_change fires.
+            contract = self.transition_status(
+                db=db,
+                contract_id=contract_id,
+                new_status=target_status_lower,
+                current_user=current_user,
+            )
             
             notification_title = "Status Change Approved"
             notification_desc = f"Your request to change status of contract '{contract.name}' from '{from_status}' to '{target_status}' has been approved."
@@ -5883,18 +6462,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         }
     
     def _get_allowed_status_transitions(self, current_status: str) -> List[str]:
-        """Get allowed status transitions from current status."""
-        transitions = {
-            'draft': ['proposed', 'deprecated'],
-            'proposed': ['draft', 'under_review', 'deprecated'],
-            'under_review': ['draft', 'approved', 'deprecated'],
-            'approved': ['active', 'deprecated'],
-            'active': ['certified', 'deprecated'],
-            'certified': ['deprecated'],
-            'deprecated': ['retired'],
-            'retired': [],
-        }
-        return transitions.get(current_status.lower(), [])
+        """Get allowed status transitions from current status.
+
+        The lifecycle map's (``DATA_CONTRACT_TRANSITIONS``), the one
+        ``transition_status`` applies. Certification isn't a status.
+        """
+        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
+
+        return list(DATA_CONTRACT_TRANSITIONS.get((current_status or 'draft').lower(), []))
     
     def get_team_members_for_import(
         self,
@@ -5999,6 +6574,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         latest_only=True,
         status=None,
         *,
+        domain_ids=None,
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[Set[str]] = None,
     ):
@@ -6018,8 +6594,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             is_visible_consumer,
         )
 
-        if domain_id:
-            query = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id)
+        wanted_domain_ids = list(domain_ids or [])
+        if domain_id and domain_id not in wanted_domain_ids:
+            wanted_domain_ids.append(domain_id)
+        if wanted_domain_ids:
+            # Any-of domain filter via the junction table (primary OR additional).
+            contract_ids = entity_domain_repo.find_entity_ids_by_domains(
+                db, domain_ids=wanted_domain_ids, entity_type="data_contract"
+            )
+            query = db.query(DataContractDb).filter(DataContractDb.id.in_(contract_ids or ["__none__"]))
             if not is_admin and project_id:
                 logger.debug(f"Filtering contracts by project_id: {project_id} and domain_id: {domain_id}")
                 query = query.filter(
@@ -6095,6 +6678,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         latest_only: bool = True,
         include_history: bool = False,
         *,
+        domain_ids: Optional[List[str]] = None,
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[Set[str]] = None,
     ):
@@ -6114,6 +6698,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             is_admin,
             latest_only,
             status=status,
+            domain_ids=domain_ids,
             caller_email=caller_email,
             caller_team_ids=caller_team_ids,
         )
@@ -6137,16 +6722,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not contracts:
             return []
 
-        # Batch-resolve domain names
-        domain_ids = {c.domain_id for c in contracts if c.domain_id}
-        domain_map = {}
-        if domain_ids:
-            try:
-                from src.db_models.data_domains import DataDomainDb
-                rows = db.query(DataDomainDb.id, DataDomainDb.name).filter(DataDomainDb.id.in_(domain_ids)).all()
-                domain_map = {str(r.id): r.name for r in rows}
-            except Exception as e:
-                logger.debug(f"Batch domain resolution failed: {e}")
+        # Batch-resolve domain assignments via the junction table (any-of, avoids N+1).
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="data_contract", entity_ids=[c.id for c in contracts]
+        )
 
         # Batch-resolve team names
         team_ids = {c.owner_team_id for c in contracts if c.owner_team_id}
@@ -6219,6 +6798,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 family_counts.get(family_id) if family_counts is not None else None
             )
 
+            assigned_domains = domains_map.get(c.id, [])
+            primary_domain = next((d for d in assigned_domains if d.is_primary), None)
+
             results.append(DataContractSummary(
                 id=c.id,
                 name=c.name,
@@ -6231,8 +6813,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 kind=c.kind,
                 apiVersion=c.api_version,
                 tenant=c.tenant,
-                domain=domain_map.get(c.domain_id) if c.domain_id else None,
-                domainId=c.domain_id,
+                domain=primary_domain.domain_name if primary_domain else None,
+                domainId=primary_domain.domain_id if primary_domain else None,
+                domainIds=[d.domain_id for d in assigned_domains],
+                primaryDomainId=primary_domain.domain_id if primary_domain else None,
                 dataProduct=c.data_product,
                 description=description,
                 tags=tags_map.get(c.id, []),
@@ -6273,20 +6857,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.repositories.data_domain_repository import data_domain_repo
         from src.repositories.tags_repository import entity_tag_repo
         
-        # Resolve domain name from domain_id if available
-        logger.debug(f"[BUILD API] db_contract.domain_id = {db_contract.domain_id}")
         logger.debug(f"[BUILD API] db_contract.project_id = {db_contract.project_id}")
         logger.debug(f"[BUILD API] db_contract.owner_team_id = {db_contract.owner_team_id}")
-        
-        domain_name = None
-        if db_contract.domain_id:
-            try:
-                domain = data_domain_repo.get(db, id=db_contract.domain_id)
-                if domain:
-                    domain_name = domain.name
-            except Exception as e:
-                logger.warning(f"Failed to resolve domain name for domain_id {db_contract.domain_id}: {e}")
-        
+
+        # Resolve domain assignments from the junction table.
+        assigned_domains = entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=db_contract.id
+        )
+        primary_domain = next((d for d in assigned_domains if d.is_primary), None)
+        domain_name = primary_domain.domain_name if primary_domain else None
+        contract_domain_ids = [d.domain_id for d in assigned_domains]
+        contract_primary_domain_id = primary_domain.domain_id if primary_domain else None
+
         # Build description
         description = None
         if db_contract.description_usage or db_contract.description_purpose or db_contract.description_limitations:
@@ -6311,9 +6893,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             all_props = (
                 db.query(SchemaPropertyDb)
                 .filter(SchemaPropertyDb.object_id.in_(schema_obj_ids))
-                .order_by(SchemaPropertyDb.name)
+                .order_by(*SCHEMA_PROPERTY_ORDER)
                 .all()
             )
+        prop_custom_props = custom_properties_by_property(db, [p.id for p in all_props])
         # Group properties by object_id
         props_by_object: Dict[str, list] = {}
         for p in all_props:
@@ -6335,7 +6918,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "physicalType": p.physical_type,
                     "required": p.required,
                     "unique": p.unique,
-                    "primaryKey": p.primary_key,
+                    # Rows stored before `primary_key` was set only have the position
+                    "primaryKey": bool(p.primary_key) or (p.primary_key_position is not None and p.primary_key_position >= 0),
                     "primaryKeyPosition": p.primary_key_position,
                     "partitioned": p.partitioned,
                     "partitionKeyPosition": p.partition_key_position,
@@ -6348,16 +6932,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "transformSourceObjects": p.transform_source_objects,
                     "transformDescription": p.transform_description,
                     "encryptedName": p.encrypted_name,
+                    "customProperties": prop_custom_props.get(p.id, {}),
                 }
                 item.update(options)
                 prop_items.append(item)
 
             schema_objects.append(SchemaObject(
                 name=schema_obj.name,
+                stableId=schema_obj.stable_id,
                 physicalName=schema_obj.physical_name,
                 businessName=schema_obj.business_name,
                 physicalType=schema_obj.physical_type,
                 description=schema_obj.description,
+                # The schema editor loads these and sends them back on save
+                dataGranularityDescription=schema_obj.data_granularity_description,
+                relationships=[_relationship_read(r) for r in schema_obj.relationships] or None,
                 properties=prop_items,
                 propertyCount=len(prop_items),
             ))
@@ -6371,6 +6960,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     'role': member.role or 'member',
                 }
                 # Add optional fields if present
+                if getattr(member, 'name', None):
+                    entry['name'] = member.name
                 if getattr(member, 'description', None):
                     entry['description'] = member.description
                 if getattr(member, 'date_in', None):
@@ -6395,13 +6986,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             for cp in db_contract.custom_properties:
                 custom_properties[cp.property] = cp.value
         
-        # SLA properties (flatten basic key/value)
-        sla = None
-        if getattr(db_contract, 'sla_properties', None):
-            sla = {}
-            for sp in db_contract.sla_properties:
-                if sp.property and sp.value is not None:
-                    sla[sp.property] = sp.value
+        # The SLA form's four values, kept as SLA properties
+        from src.utils.contract_sla import legacy_sla_from_rows
+        sla = legacy_sla_from_rows(getattr(db_contract, 'sla_properties', None))
+        sla_properties = [
+            {k: v for k, v in {
+                'property': sp.property, 'value': sp.value, 'unit': sp.unit,
+                'element': sp.element, 'driver': sp.driver,
+            }.items() if v is not None}
+            for sp in (getattr(db_contract, 'sla_properties', None) or [])
+            if sp.property and sp.value is not None
+        ]
         
         # Servers (full ODCS mapping)
         servers = []
@@ -6415,6 +7010,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 
                 # Create ServerConfig object
                 server_config = ServerConfig(
+                    id=getattr(s, 'stable_id', None),
                     server=s.server,
                     type=s.type,
                     description=s.description,
@@ -6512,7 +7108,41 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 project_name = project.name if project else None
             except Exception as e:
                 logger.debug(f"Could not resolve project: {e}")
-        
+
+        # Resolve the referenced data product (#854): the contract's `dataProduct` holds a
+        # raw id/name; resolve it to a (name, id) so the detail view can render a navigable
+        # link. By id first (the import/round-trip form), then a best-effort name match.
+        # Missing/ambiguous → name stays None and the UI falls back to the raw value.
+        data_product_name = None
+        data_product_id = None
+        if db_contract.data_product:
+            try:
+                from src.repositories.data_products_repository import data_product_repo
+                from src.db_models.data_products import DataProductDb
+                product = data_product_repo.get(db, id=db_contract.data_product)
+                if not product:
+                    # Product names are non-unique (versions, drafts): require a UNIQUE
+                    # match or leave the resolution empty — otherwise `.first()` picks
+                    # an arbitrary row and the UI links to the wrong product (#854 review).
+                    name_matches = (
+                        db.query(DataProductDb)
+                        .filter(DataProductDb.name == db_contract.data_product)
+                        .limit(2)
+                        .all()
+                    )
+                    if len(name_matches) == 1:
+                        product = name_matches[0]
+                    elif len(name_matches) > 1:
+                        logger.debug(
+                            "dataProduct %r matches multiple products; leaving unresolved",
+                            db_contract.data_product,
+                        )
+                if product:
+                    data_product_name = product.name
+                    data_product_id = product.id
+            except Exception as e:
+                logger.debug(f"Could not resolve data product: {e}")
+
         logger.debug(f"Building API model for contract {db_contract.id}")
 
         return DataContractRead(
@@ -6527,9 +7157,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             kind=db_contract.kind,
             apiVersion=db_contract.api_version,
             tenant=db_contract.tenant,
-            domain=domain_name,  # Resolved domain name
-            domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
+            domain=domain_name,  # Primary domain name
+            domainId=contract_primary_domain_id,  # Primary domain ID
+            domainIds=contract_domain_ids,  # All assigned domain IDs (primary first)
+            primaryDomainId=contract_primary_domain_id,
             dataProduct=db_contract.data_product,
+            dataProductName=data_product_name,
+            dataProductId=data_product_id,
             description=description,
             tags=tags,  # Include tags in response
             schema=schema_objects,
@@ -6537,6 +7171,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             support=support,
             customProperties=custom_properties,
             sla=sla,
+            slaProperties=sla_properties,
+            slaDefaultElement=getattr(db_contract, 'sla_default_element', None),
             servers=servers,
             authoritativeDefinitions=authoritative_definitions,
             qualityRules=quality_rules,
@@ -6668,3 +7304,48 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if contract_api:
             return contract_api.model_dump(by_alias=True)
         return {}
+
+
+# Module-level live-manager hook used by non-manager contexts (e.g.
+# workflow_executor) that need to refresh the search index after mutating a
+# contract row directly. The live DataContractsManager instance is registered
+# at startup once the SearchManager is wired to it.
+_live_contracts_manager: Optional["DataContractsManager"] = None
+
+
+def register_live_contracts_manager(mgr: "DataContractsManager") -> None:
+    """Called once at startup after the SearchManager is wired to the manager."""
+    global _live_contracts_manager
+    _live_contracts_manager = mgr
+
+
+def get_live_contracts_manager() -> "DataContractsManager":
+    """The live manager, or a bare one where startup hasn't registered it
+    (tests, early startup): the search index is then not refreshed."""
+    if _live_contracts_manager is not None:
+        return _live_contracts_manager
+    return DataContractsManager(data_dir=Path(__file__).parent.parent / 'data')
+
+
+def reindex_contract_in_search_index(contract_db_obj, db) -> None:
+    """Push a single contract row through the search-index upsert pipeline.
+    No-op if the manager hasn't been wired yet (test / early-startup paths)."""
+    mgr = _live_contracts_manager
+    if mgr is None:
+        return
+    try:
+        mgr._update_search_index(contract_db_obj, db)
+    except Exception as exc:
+        logger.warning(
+            "Failed to reindex contract %s: %s",
+            getattr(contract_db_obj, 'id', '<?>'), exc,
+        )
+
+
+class ReviewSchemaRequiredError(CodedValueError):
+    """A draft contract without a schema object can't be proposed for review."""
+
+    code = 'review_schema_required'
+
+    def __init__(self):
+        super().__init__("A schema is required before a contract can be proposed for review.")

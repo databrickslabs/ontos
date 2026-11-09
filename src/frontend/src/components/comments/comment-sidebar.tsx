@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MessageSquare, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText, FolderOpen, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
@@ -82,6 +83,32 @@ interface TimelineResponse {
   filter_type: string;
 }
 
+/**
+ * Build an entity comments/timeline API URL.
+ *
+ * IRI entity ids (anything containing '/', e.g. ontology concept IRIs) cannot
+ * travel as a path segment (the server decodes %2F before routing), so they use
+ * the `/by-iri/` variants with `?entity_id=`. Plain ids keep the path form.
+ */
+export function buildEntityCommentsUrl(
+  entityType: string,
+  entityId: string,
+  resource: 'comments' | 'timeline' | 'timeline/count',
+  query?: Record<string, string | null | undefined>,
+): string {
+  const params = new URLSearchParams();
+  const isIri = entityId.includes('/');
+  if (isIri) params.set('entity_id', entityId);
+  Object.entries(query ?? {}).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== '') params.set(k, v);
+  });
+  const qs = params.toString();
+  const base = isIri
+    ? `/api/entities/${entityType}/by-iri/${resource}`
+    : `/api/entities/${entityType}/${entityId}/${resource}`;
+  return qs ? `${base}?${qs}` : base;
+}
+
 const CommentSidebar: React.FC<CommentSidebarProps> = ({
   entityType,
   entityId,
@@ -90,6 +117,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   className,
   fetchCountOnMount = true,
 }) => {
+  const { t } = useTranslation(['comments', 'common']);
   const { get, post, put, delete: deleteApi, loading } = useApi();
   const { toast } = useToast();
   const { currentProject, availableProjects } = useProjectContext();
@@ -179,9 +207,11 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
     console.debug(`CommentSidebar: Fetching count for ${entityType}/${entityId}`);
 
-    const projectParam = currentProject?.id ? `&project_id=${currentProject.id}` : '';
     const response = await get<TimelineResponse>(
-      `/api/entities/${entityType}/${entityId}/timeline/count?filter_type=all${projectParam}`
+      buildEntityCommentsUrl(entityType, entityId, 'timeline/count', {
+        filter_type: 'all',
+        project_id: currentProject?.id,
+      })
     );
 
     if (response.error) {
@@ -201,20 +231,22 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   }, [entityType, entityId, get]);
 
   const fetchTimeline = async () => {
-    const projectParam = currentProject?.id ? `&project_id=${currentProject.id}` : '';
     const response = await get<TimelineResponse>(
-      `/api/entities/${entityType}/${entityId}/timeline?filter_type=${filterType}${projectParam}`
+      buildEntityCommentsUrl(entityType, entityId, 'timeline', {
+        filter_type: filterType,
+        project_id: currentProject?.id,
+      })
     );
     
     if (response.error) {
       toast({
-        title: 'Error',
-        description: `Failed to load timeline: ${response.error}`,
+        title: t('common:toast.error'),
+        description: t('comments:timeline.loadError', { error: response.error }),
         variant: 'destructive',
       });
       return;
     }
-    
+
     setTimeline(response.data.timeline || []);
     setTotalCount(response.data.total_count || 0);
   };
@@ -224,8 +256,8 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     
     if (!formData.comment.trim()) {
       toast({
-        title: 'Error',
-        description: 'Comment content is required',
+        title: t('common:toast.error'),
+        description: t('comments:validation.commentRequired'),
         variant: 'destructive',
       });
       return;
@@ -258,16 +290,16 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       
       if (response.error) {
         toast({
-          title: 'Error',
-          description: `Failed to update comment: ${response.error}`,
+          title: t('common:toast.error'),
+          description: t('comments:toast.updateError', { error: response.error }),
           variant: 'destructive',
         });
         return;
       }
-      
+
       toast({
-        title: 'Success',
-        description: 'Comment updated successfully',
+        title: t('common:toast.success'),
+        description: t('comments:toast.updateSuccess'),
       });
     } else {
       // Create new comment
@@ -281,22 +313,22 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       };
       
       const response = await post<Comment>(
-        `/api/entities/${entityType}/${entityId}/comments`,
+        buildEntityCommentsUrl(entityType, entityId, 'comments'),
         createData
       );
       
       if (response.error) {
         toast({
-          title: 'Error',
-          description: `Failed to create comment: ${response.error}`,
+          title: t('common:toast.error'),
+          description: t('comments:toast.createError', { error: response.error }),
           variant: 'destructive',
         });
         return;
       }
-      
+
       toast({
-        title: 'Success',
-        description: 'Comment created successfully',
+        title: t('common:toast.success'),
+        description: t('comments:toast.createSuccess'),
       });
     }
     
@@ -315,24 +347,24 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm('Are you sure you want to delete this comment?')) {
+    if (!confirm(t('comments:confirmDelete'))) {
       return;
     }
-    
+
     const response = await deleteApi(`/api/comments/${commentId}`);
-    
+
     if (response.error) {
       toast({
-        title: 'Error',
-        description: `Failed to delete comment: ${response.error}`,
+        title: t('common:toast.error'),
+        description: t('comments:toast.deleteError', { error: response.error }),
         variant: 'destructive',
       });
       return;
     }
-    
+
     toast({
-      title: 'Success',
-      description: 'Comment deleted successfully',
+      title: t('common:toast.success'),
+      description: t('comments:toast.deleteSuccess'),
     });
 
     await fetchTimeline();
@@ -406,23 +438,23 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   const CommentForm = React.useMemo(() => (
     <form onSubmit={handleSubmit} className="space-y-4 p-4 border-t">
       <div>
-        <Label htmlFor="title">Title (Optional)</Label>
+        <Label htmlFor="title">{t('comments:form.titleLabel')}</Label>
         <Input
           id="title"
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          placeholder="Add a title for this comment..."
+          placeholder={t('comments:form.titlePlaceholder')}
           className="mt-1"
         />
       </div>
-      
+
       <div>
-        <Label htmlFor="comment">Comment</Label>
+        <Label htmlFor="comment">{t('comments:form.commentLabel')}</Label>
         <Textarea
           id="comment"
           value={formData.comment}
           onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
-          placeholder="Write your comment..."
+          placeholder={t('comments:form.commentPlaceholder')}
           className="mt-1"
           rows={3}
           required
@@ -433,7 +465,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       {!editingComment && (
         <div>
           <div className="flex items-center gap-1 mb-1">
-            <Label htmlFor="composer-project">Post in project</Label>
+            <Label htmlFor="composer-project">{t('comments:form.postInProject')}</Label>
             {composerProjectId !== defaultComposerProjectId && (
               <TooltipProvider>
                 <Tooltip>
@@ -441,7 +473,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
                     <Info className="w-3 h-3 text-amber-500 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-[220px]">
-                    You&apos;re posting under a different project than the main view. The timeline list is unaffected.
+                    {t('comments:form.projectOverrideTooltip')}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -455,7 +487,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__global__">Global (no project)</SelectItem>
+              <SelectItem value="__global__">{t('comments:form.globalNoProject')}</SelectItem>
               {[...availableProjects]
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((p) => (
@@ -470,12 +502,12 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
       <div className="space-y-3">
         <div className="text-sm text-muted-foreground">
-          Target specific teams or roles (optional). Leave empty for visibility to all project members.
+          {t('comments:form.audienceHelp')}
         </div>
-        
+
         {/* Teams multi-select */}
         <div>
-          <Label htmlFor="teams">Teams</Label>
+          <Label htmlFor="teams">{t('comments:form.teamsLabel')}</Label>
           <div className="mt-1 space-y-2">
             {availableTeams.map(team => (
               <div key={team.id} className="flex items-center space-x-2">
@@ -504,7 +536,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               </div>
             ))}
             {availableTeams.length === 0 && (
-              <div className="text-xs text-muted-foreground">No teams available in current project</div>
+              <div className="text-xs text-muted-foreground">{t('comments:form.noTeams')}</div>
             )}
           </div>
         </div>
@@ -512,7 +544,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         {/* Roles multi-select — selection state tracks UUID (role.id) so that
             the audience token is emitted as role_id:<uuid> on save. */}
         <div>
-          <Label htmlFor="roles">App Roles</Label>
+          <Label htmlFor="roles">{t('comments:form.appRolesLabel')}</Label>
           <div className="mt-1 space-y-2">
             {availableRoles.map(role => (
               <div key={role.id} className="flex items-center space-x-2">
@@ -547,7 +579,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
             team / role checkbox lists -- picked values flow into the
             same ``audience`` field as plain emails / group names. */}
         <div>
-          <Label htmlFor="audience-principals">Users &amp; groups</Label>
+          <Label htmlFor="audience-principals">{t('comments:form.usersGroupsLabel')}</Label>
           <div className="mt-1">
             <PrincipalPicker
               id="audience-principals"
@@ -557,8 +589,8 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               onChange={(next) =>
                 setFormData({ ...formData, selectedPrincipals: next })
               }
-              placeholder="Add users or groups…"
-              aria-label="Audience users and groups"
+              placeholder={t('comments:form.principalsPlaceholder')}
+              aria-label={t('comments:form.principalsAria')}
             />
           </div>
         </div>
@@ -571,7 +603,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               return team ? (
                 <Badge key={`team-${teamId}`} variant="secondary" className="text-xs">
                   <Users className="w-3 h-3 mr-1" />
-                  Team: {team.name}
+                  {t('comments:badge.team', { name: team.name })}
                 </Badge>
               ) : null;
             })}
@@ -579,7 +611,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               const role = availableRoles.find(r => r.id === roleId);
               return (
                 <Badge key={`role-${roleId}`} variant="outline" className="text-xs">
-                  Role: {role?.name ?? roleId}
+                  {t('comments:badge.role', { name: role?.name ?? roleId })}
                 </Badge>
               );
             })}
@@ -590,16 +622,16 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={loading}>
           <Send className="w-4 h-4 mr-1" />
-          {editingComment ? 'Update' : 'Post'}
+          {editingComment ? t('common:actions.update') : t('comments:form.post')}
         </Button>
         {(editingComment || formData.title || formData.comment) && (
           <Button type="button" variant="outline" size="sm" onClick={resetForm}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
         )}
       </div>
     </form>
-  ), [formData, editingComment, loading, availableTeams, availableRoles, handleSubmit, resetForm, composerProjectId, defaultComposerProjectId, availableProjects]);
+  ), [formData, editingComment, loading, availableTeams, availableRoles, handleSubmit, resetForm, composerProjectId, defaultComposerProjectId, availableProjects, t]);
 
   const TimelineItem: React.FC<{ entry: TimelineEntry; canModify: boolean }> = ({ 
     entry, 
@@ -623,18 +655,18 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         return (
           <div className="text-sm space-y-1">
             {obj.requester_email && (
-              <div><span className="text-muted-foreground">Requester:</span> {obj.requester_email}</div>
+              <div><span className="text-muted-foreground">{t('comments:change.requesterLabel')}</span> {obj.requester_email}</div>
             )}
             {obj.decision && (
               <div className="flex items-center gap-1">
-                <span className="text-muted-foreground">Decision:</span>
+                <span className="text-muted-foreground">{t('comments:change.decisionLabel')}</span>
                 <Badge variant={obj.decision === 'approve' ? 'secondary' : obj.decision === 'deny' ? 'destructive' : 'outline'} className="text-xs">
                   {String(obj.decision)}
                 </Badge>
               </div>
             )}
             {obj.message && (
-              <div><span className="text-muted-foreground">Message:</span> {String(obj.message)}</div>
+              <div><span className="text-muted-foreground">{t('comments:change.messageLabel')}</span> {String(obj.message)}</div>
             )}
           </div>
         );
@@ -643,21 +675,21 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       // Special formatting for semantic link changes
       if (action.startsWith('SEMANTIC_LINK_')) {
         const operation = action === 'SEMANTIC_LINK_ADD'
-          ? 'linked'
+          ? t('comments:change.operationLinked')
           : action === 'SEMANTIC_LINK_REMOVE'
-          ? 'unlinked'
+          ? t('comments:change.operationUnlinked')
           : action.toLowerCase();
         const iri = typeof obj?.iri === 'string' ? obj.iri : undefined;
         const linkId = typeof obj?.link_id === 'string' ? obj.link_id : undefined;
         return (
           <div className="text-sm space-y-1">
             {iri && (
-              <div><span className="text-muted-foreground">Iri:</span> {iri}</div>
+              <div><span className="text-muted-foreground">{t('comments:change.iriLabel')}</span> {iri}</div>
             )}
             {linkId && (
-              <div><span className="text-muted-foreground">Link Id:</span> {linkId}</div>
+              <div><span className="text-muted-foreground">{t('comments:change.linkIdLabel')}</span> {linkId}</div>
             )}
-            <div><span className="text-muted-foreground">Operation:</span> {operation}</div>
+            <div><span className="text-muted-foreground">{t('comments:change.operationLabel')}</span> {operation}</div>
           </div>
         );
       }
@@ -716,7 +748,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
                   return (
                     <Badge key={`${token}-${idx}`} variant="secondary" className="text-xs">
                       <Users className="w-3 h-3 mr-1" />
-                      Team: {team?.name || teamId}
+                      {t('comments:badge.team', { name: team?.name || teamId })}
                     </Badge>
                   );
                 }
@@ -725,7 +757,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
                 if (roleLabel !== null) {
                   return (
                     <Badge key={`${token}-${idx}`} variant="outline" className="text-xs">
-                      Role: {roleLabel}
+                      {t('comments:badge.role', { name: roleLabel })}
                     </Badge>
                   );
                 }
@@ -751,7 +783,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
             <span>{entry.username}</span>
             <RelativeDate date={new Date(entry.timestamp)} />
             {entry.updated_at && (
-              <span className="italic">(edited)</span>
+              <span className="italic">{t('comments:timeline.edited')}</span>
             )}
           </div>
 
@@ -785,7 +817,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       <SheetTrigger asChild>
         <Button variant="outline" size="sm" className={cn("relative", className)}>
           <MessageSquare className="w-4 h-4 mr-1" />
-          Comments
+          {t('comments:trigger.button')}
           {totalCount > 0 && (
             <Badge variant="secondary" className="ml-2 h-5 px-1 text-xs">
               {totalCount}
@@ -793,12 +825,12 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
           )}
         </Button>
       </SheetTrigger>
-      
+
       <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col h-full p-0">
         <SheetHeader className="p-4 pb-2">
           <SheetTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
-            Activity Timeline
+            {t('comments:timeline.heading')}
             {totalCount > 0 && (
               <Badge variant="secondary" className="h-5 px-2 text-xs">
                 {totalCount}
@@ -808,13 +840,13 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
           {currentProject && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
               <FolderOpen className="w-3 h-3" />
-              <span>Project: {currentProject.name}</span>
+              <span>{t('comments:project.label', { name: currentProject.name })}</span>
             </div>
           )}
           {!currentProject && (
             <div className="flex items-center gap-1 text-xs text-amber-600 mt-1">
               <FolderOpen className="w-3 h-3" />
-              <span>No project context (global)</span>
+              <span>{t('comments:project.noContext')}</span>
             </div>
           )}
         </SheetHeader>
@@ -823,7 +855,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         <div className="px-4 pb-2">
           <div className="flex items-center gap-2 mb-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Filter:</span>
+            <span className="text-sm font-medium text-muted-foreground">{t('comments:filter.label')}</span>
           </div>
           <div className="flex gap-2">
             <Button
@@ -833,7 +865,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               className="flex-1"
             >
               <FileText className="w-3 h-3 mr-1" />
-              All
+              {t('common:states.all')}
             </Button>
             <Button
               variant={filterType === 'comments' ? 'default' : 'outline'}
@@ -842,7 +874,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               className="flex-1"
             >
               <MessageSquare className="w-3 h-3 mr-1" />
-              Comments
+              {t('comments:filter.comments')}
             </Button>
             <Button
               variant={filterType === 'changes' ? 'default' : 'outline'}
@@ -851,21 +883,21 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               className="flex-1"
             >
               <Clock className="w-3 h-3 mr-1" />
-              Changes
+              {t('comments:filter.changes')}
             </Button>
           </div>
         </div>
-        
+
         <div className="flex-1 flex flex-col min-h-0">
           <div className="p-4 pt-0">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setIsFormOpen(!isFormOpen)}
               className="w-full"
             >
               <Plus className="w-4 h-4 mr-1" />
-              Add Comment
+              {t('comments:actions.addComment')}
             </Button>
           </div>
           
@@ -889,20 +921,20 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
                 {filterType === 'comments' ? (
                   <>
                     <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No comments yet</p>
-                    <p className="text-xs">Be the first to add a comment!</p>
+                    <p className="text-sm">{t('comments:empty.commentsTitle')}</p>
+                    <p className="text-xs">{t('comments:empty.commentsSubtitle')}</p>
                   </>
                 ) : filterType === 'changes' ? (
                   <>
                     <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No changes recorded</p>
-                    <p className="text-xs">Changes will appear here when they occur</p>
+                    <p className="text-sm">{t('comments:empty.changesTitle')}</p>
+                    <p className="text-xs">{t('comments:empty.changesSubtitle')}</p>
                   </>
                 ) : (
                   <>
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No activity yet</p>
-                    <p className="text-xs">Comments and changes will appear here</p>
+                    <p className="text-sm">{t('comments:empty.allTitle')}</p>
+                    <p className="text-xs">{t('comments:empty.allSubtitle')}</p>
                   </>
                 )}
               </div>

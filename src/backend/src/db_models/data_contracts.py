@@ -31,7 +31,8 @@ class DataContractDb(Base):
     owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
     tenant = Column(String, nullable=True)
     data_product = Column(String, nullable=True)
-    domain_id = Column(String, ForeignKey("data_domains.id"), nullable=True, index=True)
+    # Domain assignment is polymorphic via entity_domain_associations (entity_type='data_contract');
+    # the legacy domain_id column was removed in favour of multi-domain assignment.
 
     # Project relationship (nullable for backward compatibility)
     project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)
@@ -271,10 +272,17 @@ class SchemaObjectDb(Base):
     description = Column(Text, nullable=True)  # ODCS description field
 
     contract = relationship("DataContractDb", back_populates="schema_objects")
-    properties = relationship("SchemaPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
+    # In the contract's order (`position`); rows without one come last, by name
+    properties = relationship(
+        "SchemaPropertyDb", back_populates="schema_object", cascade="all, delete-orphan",
+        order_by="[SchemaPropertyDb.position.is_(None), SchemaPropertyDb.position, SchemaPropertyDb.name]",
+    )
     quality_checks = relationship("DataQualityCheckDb", back_populates="schema_object", cascade="all, delete-orphan")
     authoritative_definitions = relationship("SchemaObjectAuthoritativeDefinitionDb", back_populates="schema_object", cascade="all, delete-orphan")
-    custom_properties = relationship("SchemaObjectCustomPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
+    custom_properties = relationship(
+        "SchemaObjectCustomPropertyDb", back_populates="schema_object", cascade="all, delete-orphan",
+        order_by="[SchemaObjectCustomPropertyDb.position.is_(None), SchemaObjectCustomPropertyDb.position]",
+    )
     relationships = relationship("SchemaObjectRelationshipDb", back_populates="schema_object", cascade="all, delete-orphan")
 
 
@@ -304,9 +312,14 @@ class SchemaPropertyDb(Base):
     logical_type_options_json = Column(Text, nullable=True)  # JSON string of ODCS type-specific options
     items_logical_type = Column(String, nullable=True)  # for arrays
     business_name = Column(String, nullable=True)  # ODCS businessName field at property level
+    position = Column(Integer, nullable=True)  # order within the schema object
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
     authoritative_definitions = relationship("SchemaPropertyAuthoritativeDefinitionDb", back_populates="property", cascade="all, delete-orphan")
+    custom_properties = relationship(
+        "SchemaPropertyCustomPropertyDb", back_populates="schema_property", cascade="all, delete-orphan",
+        order_by="[SchemaPropertyCustomPropertyDb.position.is_(None), SchemaPropertyCustomPropertyDb.position]",
+    )
     relationships = relationship("SchemaPropertyRelationshipDb", back_populates="property", cascade="all, delete-orphan")
 
 
@@ -457,7 +470,20 @@ class SchemaObjectCustomPropertyDb(Base):
     stable_id = Column(String, nullable=True)  # ODCS v3.1.0 StableId
     property = Column(String, nullable=False)
     value = Column(Text, nullable=True)
+    position = Column(Integer, nullable=True)  # order in the ODCS customProperties list
     schema_object = relationship("SchemaObjectDb", back_populates="custom_properties")
+
+
+class SchemaPropertyCustomPropertyDb(Base):
+    """ODCS property-level (column) custom properties; value stored as JSON"""
+    __tablename__ = "data_contract_schema_property_custom_properties"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)  # ODCS v3.1.0 StableId
+    property = Column(String, nullable=False)
+    value = Column(Text, nullable=True)
+    position = Column(Integer, nullable=True)  # order in the ODCS customProperties list
+    schema_property = relationship("SchemaPropertyDb", back_populates="custom_properties")
 
 
 class SchemaPropertyAuthoritativeDefinitionDb(Base):

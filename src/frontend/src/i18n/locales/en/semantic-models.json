@@ -9,7 +9,7 @@
   "searchPlaceholder": "Search terms...",
   "loading": "Loading semantic models...",
   "tabs": {
-    "collections": "Collections",
+    "collections": "Schemes",
     "concepts": "Concepts",
     "graph": "Graph"
   },
@@ -39,7 +39,7 @@
   "relations": {
     "title": "Relations",
     "loading": "Loading relations...",
-    "empty": "No relations found.",
+    "empty": "No concept-to-concept relations yet. Add broader / narrower / related links, or see the Linked Objects panel for assets and products linked to this concept.",
     "outgoingTooltip": "This concept → target",
     "incomingTooltip": "Source → this concept"
   },
@@ -51,13 +51,29 @@
     "none": "None",
     "groupBySource": "Group by Source",
     "showProperties": "Show Properties",
+    "showSystemSources": "Show system ontologies",
     "groupByDomain": "Group by Domain",
+    "groupByNone": "None",
+    "groupByScheme": "Scheme",
+    "groupByDimSource": "Source",
+    "groupByDimDomain": "Domain",
+    "noSourceFile": "No source file",
     "allTypes": "All Types",
     "allScopes": "All Scopes",
-    "allCollections": "All Collections"
+    "allCollections": "All Schemes",
+    "searchSchemes": "Search schemes...",
+    "sortBy": "Sort by",
+    "sortName": "Name",
+    "sortSize": "Size",
+    "groupTypeGlossary": "GLOSSARIES",
+    "groupTypeTaxonomy": "TAXONOMIES",
+    "groupTypeOntology": "ONTOLOGIES",
+    "groupTypeOther": "OTHER",
+    "importedDisable": "Imported — cannot delete",
+    "labelLanguage": "Label Language"
   },
   "groupBy": {
-    "collection": "By Collection",
+    "collection": "By Scheme",
     "type": "By Type",
     "flat": "Flat List"
   },
@@ -83,22 +99,29 @@
     "deleteConfirm": "Are you sure you want to delete this term?",
     "deleteSuccess": "Term deleted successfully",
     "deleteError": "Failed to delete term",
-    "collectionCreated": "Collection created successfully",
-    "collectionUpdated": "Collection updated successfully",
-    "collectionDeleted": "Collection deleted successfully",
-    "confirmDeleteCollection": "Are you sure you want to delete the collection \"{{name}}\"? This will delete all concepts in it.",
+    "collectionCreated": "Scheme created successfully",
+    "collectionUpdated": "Scheme updated successfully",
+    "collectionDeleted": "Scheme deleted successfully",
+    "confirmDeleteCollection": "Are you sure you want to delete the scheme \"{{name}}\"? This will delete all concepts in it.",
     "conceptCreated": "Concept created successfully",
     "conceptUpdated": "Concept updated successfully",
     "conceptDeleted": "Concept deleted successfully",
     "submittedForReview": "Concept submitted for review",
+    "submitReview": "Submitted for review",
+    "submitReviewGoverned": "Submitted for review — awaiting approval.",
+    "changesRequested": "Sent back to the owner with your comment.",
+    "withdrawReview": "Review withdrawn",
     "enterReviewerEmail": "Enter reviewer email address:",
     "conceptPromoted": "Concept promoted successfully",
     "conceptMigrated": "Concept migrated successfully",
-    "noCollections": "No collections found",
+    "noCollections": "No schemes found",
     "noConceptsFound": "No concepts found",
     "selectConcept": "Select a concept to view details",
     "linkAdded": "Link added successfully",
-    "linkRemoved": "Link removed successfully"
+    "linkRemoved": "Link removed successfully",
+    "statusChanged": "Status updated",
+    "saveFailed": "Failed to save concept",
+    "deleteConceptFailed": "Failed to delete concept"
   },
   "status": {
     "draft": "Draft",
@@ -119,6 +142,10 @@
     "delete": "Delete",
     "notFound": "Concept not found",
     "loading": "Loading...",
+    "loadError": "Failed to load concept",
+    "created": "Created",
+    "refreshing": "Refreshing...",
+    "openIriAria": "Open IRI",
     "linkedAssets": "Linked Assets",
     "synonyms": "Synonyms",
     "relatedTerms": "Related Terms"
@@ -134,7 +161,9 @@
     "childConcepts": "Child Concepts",
     "scope": "Scope",
     "concepts": "Concepts",
-    "source": "Source"
+    "source": "Source",
+    "sourceFile": "Imported from",
+    "sourceUrl": "Source URL"
   },
   "form": {
     "createTitle": "Create Term",
@@ -148,18 +177,19 @@
     "save": "Save"
   },
   "collections": {
-    "title": "Collections",
+    "title": "Schemes",
     "glossary": "Glossary",
     "taxonomy": "Taxonomy",
     "ontology": "Ontology"
   },
   "actions": {
     "createConcept": "Create Concept",
-    "createCollection": "Create Collection"
+    "createCollection": "Create Scheme"
   },
   "badges": {
     "imported": "Imported",
-    "custom": "Custom"
+    "custom": "Custom",
+    "readonly": "Read-only"
   },
   "links": {
     "outgoing": "Outgoing Links",
@@ -185,10 +215,71 @@
       "title": "Delete Concept",
       "description": "Are you sure you want to delete \"{{label}}\"? This action cannot be undone. Only draft concepts can be deleted."
     },
+    "deleteScheme": {
+      "title": "Delete Scheme",
+      "description": "Are you sure you want to delete \"{{label}}\"? This will delete all concepts in this scheme and cannot be undone."
+    },
     "linkEditor": {
       "title": "Create Link",
       "description": "Define a relationship between two concepts"
+    },
+    "deprecate": {
+      "title": "Deprecate concept",
+      "description": "Optionally specify one or more successor concepts to indicate what this concept was replaced by.",
+      "successors": "Successor concepts",
+      "noSuccessors": "None selected",
+      "addSuccessor": "+ Add successor"
     }
+  },
+  "lifecycle": {
+    "changeStatus": "Change status",
+    "submitReview": "Submit for review",
+    "withdrawReview": "Withdraw Review",
+    "approve": "Approve",
+    "requestChanges": "Request changes",
+    "publish": "Publish",
+    "certify": "Certify",
+    "deprecate": "Deprecate",
+    "archive": "Archive"
+  },
+  "requestChanges": {
+    "title": "Request changes",
+    "description": "Send this concept back to the owner as a draft, with your comment.",
+    "comment": "Comment for the owner",
+    "placeholder": "What should change before this can be approved?",
+    "submit": "Send back"
+  },
+  "submitReview": {
+    "title": "Submit for Review",
+    "description": "Assign an optional reviewer and add notes.",
+    "reviewer": "Reviewer (optional)",
+    "reviewerPlaceholder": "Select a reviewer...",
+    "notes": "Notes (optional)",
+    "notesPlaceholder": "Add context or instructions...",
+    "submit": "Submit",
+    "checking": "Checking for approval workflow…",
+    "governedBanner": "This concept is governed by the '{{workflow}}' approval workflow. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+    "governedBannerMulti": "This concept is governed by {{count}} approval workflows. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+    "ungovernedBanner": "No approval workflow is attached. Submitting moves this concept straight to Under Review; any user with write access can then approve it."
+  },
+  "concept": {
+    "inReview": "In Review",
+    "reviewerComment": "Reviewer comment",
+    "sparql": "SPARQL",
+    "sparqlTitle": "SPARQL query",
+    "sparqlDescription": "Query the knowledge graph. Pre-seeded with this concept."
+  },
+  "hierarchy": {
+    "title": "Hierarchy",
+    "parent": "Parent",
+    "children": "Children",
+    "none": "No broader or narrower concepts.",
+    "viewLabel": "Hierarchy view",
+    "list": "List",
+    "graph": "Graph"
+  },
+  "versionDiff": {
+    "compare": "Compare"
   },
   "rdfSources": {
     "syntaxColumn": "Syntax",
@@ -217,5 +308,324 @@
       "appEntities": "App Entities",
       "demoGraph": "Demo business concepts"
     }
+  },
+  "versionHistory": {
+    "title": "Version history",
+    "saveNewVersion": "Save new version",
+    "saveDescription": "Edit the definition and save it as a new version. The previous definition is kept in the history.",
+    "willCreate": "This will create v{{next}}.",
+    "whatChanged": "What changed?",
+    "notePlaceholder": "e.g. tightened the wording for clarity",
+    "saved": "New version saved",
+    "current": "Current",
+    "previous": "Previous version",
+    "previousDefinition": "Previous definition:",
+    "noDefinition": "No definition recorded for this version.",
+    "editedBy": "Edited by {{who}} on {{when}}",
+    "unknownEditor": "someone",
+    "none": "No previous versions yet.",
+    "unavailable": "Version history is unavailable.",
+    "replacedBy": "Replaced by {{label}}",
+    "saveNewVersionDraftLocked": "Available after this concept is approved (v1 must be approved before a new version)."
+  },
+  "import": {
+    "title": "Import files",
+    "descriptionMulti": "Drop one or more ontology files, then choose how they land. The file is just a carrier.",
+    "sourceFiles": "Source files",
+    "addMoreFiles": "Add more files…",
+    "chooseFiles": "Choose files…",
+    "supportedFormats": "Supported: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "howLand": "How should these land?",
+    "oneScheme": "One scheme",
+    "oneSchemeDesc": "Merge every file into a single concept scheme.",
+    "oneSchemePerFile": "One scheme per file",
+    "oneSchemePerFileDesc": "Each file becomes its own concept scheme.",
+    "perFileTodo": "One-scheme-per-file needs a backend that creates a scheme per file; for now all files land in the scheme below.",
+    "targetCollection": "Target concept scheme",
+    "selectCollection": "Select a scheme…",
+    "createNewScheme": "＋ Create a new scheme…",
+    "newSchemeName": "New scheme name (e.g. Finance Ontology)",
+    "noEditableCollections": "No editable schemes available. Create one first.",
+    "reconcileNote": "Overlapping or duplicate terms across schemes are reconciled later in the Review Board. Import just brings the graph in.",
+    "summary": "Imported {{files}} file(s), {{count}} triples total.",
+    "summaryPending": "Upload submitted for approval ({{files}} file(s))",
+    "fileOk": "{{count}} triples",
+    "filePending": "Pending approval",
+    "allFailed": "No files could be imported. See per-file errors below.",
+    "computingDiff": "Computing changes…",
+    "changelogTitle": "Changes applied from {{file}}",
+    "previewTitle": "Changes from {{file}}",
+    "changelogSummary": "Modifies {{modified}}, adds {{added}}, removes {{removed}} ({{unchanged}} unchanged).",
+    "bucketModified": "Modified (new version)",
+    "bucketNew": "New",
+    "bucketRemoved": "Removed (deprecated, not deleted)",
+    "stillReferenced": "used by {{count}}",
+    "submitMulti": "Import {{count}} file(s)",
+    "chooseFile": "Choose file…",
+    "file": "File",
+    "submit": "Import",
+    "success": "Import successful",
+    "conflict": {
+      "alreadyIn": "Already in {{scheme}}"
+    },
+    "readOnlyHint": "Only editable schemes can receive imports. Imported and system schemes are read-only."
+  },
+  "columns": {
+    "fromFile": "from {{file}}"
+  },
+  "propertyTypes": {
+    "object": "Object Property",
+    "datatype": "Datatype Property",
+    "annotation": "Annotation Property"
+  },
+  "conceptEditor": {
+    "editTitle": "Edit Entry",
+    "createDescription": "Add a new entry to a scheme.",
+    "collectionLabel": "Scheme",
+    "selectCollectionPlaceholder": "Select scheme...",
+    "selectTypePlaceholder": "Select type...",
+    "label": "Label",
+    "labelPlaceholder": "e.g., Revenue",
+    "definitionPlaceholder": "A clear, concise definition...",
+    "propertyConfiguration": "Property Configuration",
+    "propertyType": "Property Type",
+    "selectPropertyTypePlaceholder": "Select property type...",
+    "domainPlaceholder": "e.g., schema:Person or IRI...",
+    "domainHelp": "The class or type this property applies to (subject)",
+    "rangeDatatypePlaceholder": "e.g., xsd:string, xsd:integer...",
+    "rangeObjectPlaceholder": "e.g., schema:Organization or IRI...",
+    "rangeDatatypeHelp": "The datatype of the property value",
+    "rangeObjectHelp": "The class or type of the property value (object)",
+    "addSynonymPlaceholder": "Add synonym...",
+    "addExamplePlaceholder": "Add example...",
+    "certified": "Certified",
+    "expires": "Expires",
+    "promotedFrom": "Promoted from",
+    "migratedFrom": "Migrated from",
+    "history": "History",
+    "submitForReview": "Submit for Review",
+    "typeDescriptions": {
+      "concept": "A general term or notion (SKOS Concept)",
+      "class": "A category or type (RDFS/OWL Class)",
+      "property": "A relationship or attribute (RDF Property)",
+      "individual": "A specific instance (OWL Individual)",
+      "term": "A business glossary term"
+    },
+    "propertyTypeDescriptions": {
+      "object": "Relates to other concepts",
+      "datatype": "Relates to literal values",
+      "annotation": "Metadata annotation"
+    },
+    "createTitle": "Create Entry",
+    "noFittingScheme": "No editable scheme for this entry type yet ({{kind}}). Create one first.",
+    "parentConcept": "Parent Concept",
+    "addParent": "Add Parent",
+    "subclassOf": "Subclass of",
+    "selectClass": "Select Class",
+    "removeParent": "Remove {{name}}",
+    "selectSuperclass": "Select Superclass",
+    "selectParentConcept": "Select Parent Concept",
+    "searchClasses": "Search classes...",
+    "searchConceptsInScheme": "Search concepts in this scheme..."
+  },
+  "collectionEditor": {
+    "editTitle": "Edit Scheme",
+    "createDescription": "Create a new glossary, taxonomy, or ontology scheme.",
+    "editDescription": "Update scheme settings.",
+    "namePlaceholder": "e.g., Finance Glossary",
+    "descriptionPlaceholder": "Optional description...",
+    "parentCollection": "Parent Scheme",
+    "noneRootCollection": "None (root scheme)",
+    "editable": "Editable",
+    "editableHelp": "Allow creating and editing concepts in this scheme"
+  },
+  "promotion": {
+    "promoteConcept": "Promote Concept",
+    "demoteConcept": "Demote Concept",
+    "migrateConcept": "Migrate Concept",
+    "move": "Move",
+    "toDifferentCollection": "to a different scheme",
+    "actionLabel": "Action",
+    "promote": "Promote",
+    "migrate": "Migrate",
+    "currentLocation": "Current Location",
+    "selectTargetPlaceholder": "Select target scheme...",
+    "newIri": "New IRI",
+    "sourceConcept": "Source Concept",
+    "deprecateOriginal": "Deprecate original (recommended)",
+    "deleteOriginal": "Delete original",
+    "deleteHelp": "Only draft concepts can be deleted. Published concepts will be deprecated.",
+    "promoteWarning": "Promoted concepts require re-approval at the new scope level."
+  },
+  "collectionTree": {
+    "readOnly": "Read-only scheme",
+    "noCollectionsYet": "No schemes yet"
+  },
+  "knowledgeGraph": {
+    "rootFilter": {
+      "show_one": "Show {{label}} ({{count}} concept)",
+      "show_other": "Show {{label}} ({{count}} concepts)",
+      "hide_one": "Hide {{label}} ({{count}} concept)",
+      "hide_other": "Hide {{label}} ({{count}} concepts)",
+      "sourcesVisible": "{{visible}} of {{total}} sources visible",
+      "filterSources": "Filter Sources",
+      "showAll": "Show All",
+      "hideAll": "Hide All",
+      "toggleHint": "Click legend items to toggle visibility"
+    },
+    "layout": {
+      "placeholder": "Layout"
+    },
+    "layouts": {
+      "circular": "Circular",
+      "forceDirected": "Force-Directed",
+      "grid": "Grid",
+      "hierarchical": "Hierarchical",
+      "concentric": "Concentric"
+    },
+    "toolbar": {
+      "showDomainGroups": "Show domain groups",
+      "hideDomainGroups": "Hide domain groups",
+      "groups": "Groups",
+      "showNodeLabels": "Show node labels",
+      "hideNodeLabels": "Hide node labels",
+      "nodeLabels": "Node labels",
+      "showEdgeLabels": "Show edge labels",
+      "hideEdgeLabels": "Hide edge labels",
+      "edgeLabels": "Edge labels",
+      "size": "Size",
+      "nodeSize": "Node size",
+      "spacing": "Spacing",
+      "nodeSpacing": "Node spacing",
+      "spacingHint": "Re-runs layout. Affects edge length and node repulsion.",
+      "conceptCount_one": "{{count}} concept",
+      "conceptCount_other": "{{count}} concepts"
+    },
+    "fullscreen": {
+      "description": "Fullscreen view of the concept graph visualization",
+      "hint": "Click on nodes to select concepts. Use scroll to zoom, drag to pan."
+    }
+  },
+  "linkedConcepts": {
+    "empty": "No business concepts linked",
+    "removeAria": "Remove concept link"
+  },
+  "ontologyGenerator": {
+    "title": "Ontology Generator",
+    "subtitle": "Browse a remote system, select tables, and generate an OWL ontology from their schemas.",
+    "connectionDescription": "Select a data platform connection",
+    "noConnections": "No connections configured. Add one in Settings > Connectors.",
+    "chooseConnection": "Choose connection...",
+    "generationOptions": "Generation Options",
+    "generationOptionsDescription": "Customize the ontology generation",
+    "guidelines": "Guidelines",
+    "guidelinesPlaceholder": "E.g., Create a domain ontology for e-commerce data...",
+    "baseUri": "Base URI",
+    "dataProperties": "Data properties",
+    "relationships": "Relationships",
+    "inheritance": "Inheritance",
+    "cancelGeneration": "Cancel Generation",
+    "generateOntology": "Generate Ontology ({{count}} selected)",
+    "recentRuns": "Recent Runs",
+    "noRuns": "No runs yet",
+    "direct": "Direct",
+    "directGeneration": "Direct generation",
+    "deleteRun": "Delete run",
+    "paths": "Paths",
+    "steps": "Steps",
+    "started": "Started",
+    "finished": "Finished",
+    "resources": "Resources",
+    "resourcesWithName": "{{name}} — Resources",
+    "resourcesDescription": "Select the catalogs, schemas, or tables to generate an ontology from",
+    "selectedCount": "{{count}} selected",
+    "agentProgress": "Agent Progress",
+    "generatedTurtle": "Generated Turtle",
+    "saveToCollection": "Save to Scheme",
+    "empty": "(empty)",
+    "agentExecutionLog": "Agent Execution Log",
+    "agentLogSummary": "{{iterations}} iteration(s) · {{promptTokens}} prompt tokens · {{completionTokens}} completion tokens",
+    "noClasses": "No classes generated",
+    "noProperties": "No properties generated",
+    "noAgentSteps": "No agent steps recorded",
+    "runStatus": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "progress": {
+      "starting": "Starting...",
+      "working": "Working..."
+    },
+    "tabs": {
+      "classes": "Classes ({{count}})",
+      "properties": "Properties ({{count}})",
+      "turtle": "Turtle",
+      "agentLog": "Agent Log"
+    },
+    "table": {
+      "class": "Class",
+      "parent": "Parent",
+      "attributes": "Attributes",
+      "none": "none",
+      "property": "Property",
+      "range": "Range",
+      "objectType": "Object",
+      "dataType": "Data"
+    },
+    "toasts": {
+      "generatedTitle": "Ontology generated",
+      "generatedDescription": "{{classes}} classes, {{properties}} properties.",
+      "generatedFallback": "Generation completed.",
+      "cancelledTitle": "Generation cancelled",
+      "failedTitle": "Generation failed",
+      "unknownError": "Unknown error",
+      "startFailed": "Failed to start generation",
+      "startedTitle": "Generation started",
+      "startedDescription": "The LLM agent is working in the background.",
+      "cancelFailed": "Cancel failed",
+      "noResultTitle": "No result",
+      "noResultDescription": "This run has no result data.",
+      "deleteFailed": "Delete failed",
+      "turtleCopied": "Turtle content copied to clipboard.",
+      "saveFailed": "Save failed",
+      "savedTitle": "Saved to scheme",
+      "savedDescription_one": "{{count}} triple imported into \"{{name}}\".",
+      "savedDescription_other": "{{count}} triples imported into \"{{name}}\"."
+    },
+    "saveDialog": {
+      "title": "Save to Concept Scheme",
+      "description": "Create a new ontology scheme and import the generated triples into the knowledge graph.",
+      "nameLabel": "Scheme Name",
+      "namePlaceholder": "e.g., Customer Domain Ontology",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Describe the purpose of this ontology scheme...",
+      "importSummary": "{{classes}} classes and {{properties}} properties will be imported."
+    }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Include other schemes",
+    "thisScheme": "This scheme: {{label}}",
+    "noScheme": "No scheme",
+    "noMatchesInScheme": "No matches in this scheme.",
+    "noClassesInScheme": "No classes in this scheme yet.",
+    "noConceptsInScheme": "No concepts in this scheme yet.",
+    "includeOtherSchemesHint": "Tick \"Include other schemes\" to pick from another scheme."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossaries",
+    "groupTaxonomy": "Taxonomies",
+    "groupOntology": "Ontologies",
+    "inParent": "in {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Nothing to explore yet",
+    "emptyBody": "Import files or create concepts on the Define tab.",
+    "emptyCta": "Go to Define"
+  },
+  "define": {
+    "requiresWrite": "Requires write access"
   }
 }

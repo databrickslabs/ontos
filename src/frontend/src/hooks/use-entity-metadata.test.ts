@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useEntityMetadata, EntityKind, RichTextItem, LinkItem, DocumentItem } from './use-entity-metadata';
+import {
+  useEntityMetadata,
+  useMergedMetadata,
+  attachSharedAsset,
+  detachSharedAsset,
+  EntityKind,
+  RichTextItem,
+  LinkItem,
+  DocumentItem,
+} from './use-entity-metadata';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -164,10 +173,10 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalledTimes(4);
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/rich-texts');
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/links');
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/documents');
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/attachments');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/rich-texts?entity_id=contract-456');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/links?entity_id=contract-456');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/documents?entity_id=contract-456');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/attachments?entity_id=contract-456');
     });
 
     it('sets loading state during fetch', async () => {
@@ -528,7 +537,7 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalled();
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_domain/domain-123/rich-texts');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_domain/rich-texts?entity_id=domain-123');
     });
 
     it('works with data_product entity type', async () => {
@@ -541,7 +550,7 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalled();
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/product-123/rich-texts');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=product-123');
     });
 
     it('works with data_contract entity type', async () => {
@@ -554,7 +563,7 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalled();
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-123/rich-texts');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/rich-texts?entity_id=contract-123');
     });
   });
 
@@ -652,7 +661,7 @@ describe('useEntityMetadata Hook', () => {
       );
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/entity-1/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=entity-1');
       });
 
       fetchMock.mockClear();
@@ -660,7 +669,7 @@ describe('useEntityMetadata Hook', () => {
       rerender({ entityId: 'entity-2' });
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/entity-2/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=entity-2');
       });
     });
 
@@ -674,7 +683,7 @@ describe('useEntityMetadata Hook', () => {
       );
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/entity-123/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=entity-123');
       });
 
       fetchMock.mockClear();
@@ -682,8 +691,80 @@ describe('useEntityMetadata Hook', () => {
       rerender({ entityType: 'data_contract' as EntityKind });
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/entity-123/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/rich-texts?entity_id=entity-123');
       });
     });
+  });
+});
+
+describe('useMergedMetadata Hook', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.clearAllMocks();
+  });
+
+  it('passes the entity id as a query param', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = fetchMock;
+
+    renderHook(() => useMergedMetadata('data_product', 'urn:x/y#1', ['c-1', 'c-2'], 10));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    const url = new URL(fetchMock.mock.calls[0][0], 'http://localhost');
+    expect(url.pathname).toBe('/api/entities/data_product/metadata/merged');
+    expect(url.searchParams.get('entity_id')).toBe('urn:x/y#1');
+    expect(url.searchParams.get('contract_ids')).toBe('c-1,c-2');
+    expect(url.searchParams.get('max_level')).toBe('10');
+  });
+});
+
+describe('Shared asset attachments', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.clearAllMocks();
+  });
+
+  it('attachSharedAsset posts to the query-form URL with an encoded id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'att-1' }) });
+    global.fetch = fetchMock;
+
+    await attachSharedAsset('data_domain', 'urn:x/y#1', 'link', 'link-1', 5);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/entities/data_domain/attachments?entity_id=urn%3Ax%2Fy%231',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      asset_type: 'link',
+      asset_id: 'link-1',
+      level_override: 5,
+    });
+  });
+
+  it('detachSharedAsset deletes via the query-form URL with an encoded id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    global.fetch = fetchMock;
+
+    await detachSharedAsset('data_domain', 'urn:x/y#1', 'document', 'doc-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/entities/data_domain/attachments/document/doc-1?entity_id=urn%3Ax%2Fy%231',
+      { method: 'DELETE' }
+    );
+  });
+
+  it('detachSharedAsset tolerates 404 but throws on other errors', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    await expect(detachSharedAsset('data_domain', 'd-1', 'link', 'l-1')).resolves.toBeUndefined();
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    await expect(detachSharedAsset('data_domain', 'd-1', 'link', 'l-1')).rejects.toThrow('Failed to detach shared asset');
   });
 });

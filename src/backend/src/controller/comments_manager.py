@@ -1,5 +1,6 @@
 from typing import List, Optional, Set
 import json
+import uuid
 
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,19 @@ from src.db_models.comments import CommentStatus, CommentType as DbCommentType
 
 logger = get_logger(__name__)
 
+
+
+def _comment_uuid(comment_id) -> Optional[uuid.UUID]:
+    """The comment id as a UUID (the column type), or None when it isn't one.
+
+    Postgres also accepts the string, SQLite doesn't.
+    """
+    if isinstance(comment_id, uuid.UUID):
+        return comment_id
+    try:
+        return uuid.UUID(str(comment_id))
+    except ValueError:
+        return None
 
 class CommentsManager:
     def __init__(
@@ -268,7 +282,8 @@ class CommentsManager:
         """Update a comment if user has permission."""
         logger.info(f"Updating comment {comment_id} by {user_email}")
         
-        db_obj = self._comments_repo.get(db, comment_id)
+        comment_uuid = _comment_uuid(comment_id)
+        db_obj = self._comments_repo.get(db, comment_uuid) if comment_uuid else None
         if not db_obj:
             logger.warning(f"Comment {comment_id} not found")
             return None
@@ -299,7 +314,8 @@ class CommentsManager:
         """Delete a comment if user has permission. Soft delete by default."""
         logger.info(f"Deleting comment {comment_id} by {user_email}, hard_delete={hard_delete}")
         
-        db_obj = self._comments_repo.get(db, comment_id)
+        comment_uuid = _comment_uuid(comment_id)
+        db_obj = self._comments_repo.get(db, comment_uuid) if comment_uuid else None
         if not db_obj:
             logger.warning(f"Comment {comment_id} not found")
             return False
@@ -313,14 +329,14 @@ class CommentsManager:
         
         if hard_delete:
             # Permanently remove from database
-            removed = self._comments_repo.remove(db, id=comment_id)
+            removed = self._comments_repo.remove(db, id=comment_uuid)
             if removed:
                 db.commit()
                 return True
         else:
             # Soft delete - mark as deleted
             soft_deleted = self._comments_repo.soft_delete(
-                db, comment_id=comment_id, deleted_by=user_email
+                db, comment_id=comment_uuid, deleted_by=user_email
             )
             if soft_deleted:
                 db.commit()
@@ -330,7 +346,8 @@ class CommentsManager:
 
     def get_comment(self, db: Session, *, comment_id: str) -> Optional[Comment]:
         """Get a single comment by ID."""
-        db_obj = self._comments_repo.get(db, comment_id)
+        comment_uuid = _comment_uuid(comment_id)
+        db_obj = self._comments_repo.get(db, comment_uuid) if comment_uuid else None
         if not db_obj:
             return None
         return self._db_to_api_model(db_obj)
@@ -344,7 +361,8 @@ class CommentsManager:
         is_admin: bool = False
     ) -> bool:
         """Check if user can modify a specific comment."""
-        db_obj = self._comments_repo.get(db, comment_id)
+        comment_uuid = _comment_uuid(comment_id)
+        db_obj = self._comments_repo.get(db, comment_uuid) if comment_uuid else None
         if not db_obj:
             return False
         return self._comments_repo.can_user_modify(db_obj, user_email, is_admin)

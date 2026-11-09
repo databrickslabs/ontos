@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { AssetRead, AssetCreate, AssetUpdate } from '@/types/asset';
 import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema';
 import { useTranslation } from 'react-i18next';
@@ -36,11 +37,11 @@ interface AssetFormDialogProps {
   asset?: AssetRead | null;
 }
 
-const GROUP_LABELS: Record<string, string> = {
-  basic: 'Basic Information',
-  governance: 'Governance',
-  technical: 'Technical Details',
-  security: 'Security',
+const GROUP_LABEL_KEYS: Record<string, string> = {
+  basic: 'assetForm.groups.basic',
+  governance: 'assetForm.groups.governance',
+  technical: 'assetForm.groups.technical',
+  security: 'assetForm.groups.security',
 };
 
 function groupAndSortFields(fields: EntityFieldDefinition[]): [string, EntityFieldDefinition[]][] {
@@ -83,7 +84,7 @@ export function AssetFormDialog({
 
   const { get: apiGet, post: apiPost, put: apiPut } = useApi();
   const { toast } = useToast();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation('common');
   const isEdit = !!asset;
 
   const form = useForm<Record<string, any>>({
@@ -121,6 +122,12 @@ export function AssetFormDialog({
       defaults.status = asset.status || 'draft';
       defaults.platform = asset.platform || '';
       defaults.location = asset.location || '';
+      defaults.domain_ids = (asset.domains && asset.domains.length > 0)
+        ? asset.domains.map(d => d.domain_id)
+        : (asset.domain_id ? [asset.domain_id] : []);
+      defaults.primary_domain_id = asset.primary_domain_id
+        ?? asset.domains?.find(d => d.is_primary)?.domain_id
+        ?? asset.domain_id ?? null;
       const props = asset.properties || {};
       if (schema?.fields) {
         for (const f of schema.fields) {
@@ -134,6 +141,8 @@ export function AssetFormDialog({
       defaults.status = 'draft';
       defaults.platform = '';
       defaults.location = '';
+      defaults.domain_ids = [];
+      defaults.primary_domain_id = null;
       if (schema?.fields) {
         for (const f of schema.fields) {
           if (TOP_LEVEL_FIELDS.has(f.name) || SYSTEM_FIELDS.has(f.name)) continue;
@@ -172,11 +181,13 @@ export function AssetFormDialog({
           status: values.status || null,
           platform: values.platform || null,
           location: values.location || null,
+          domain_ids: values.domain_ids || [],
+          primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: `${assetTypeName} updated` });
+        toast({ title: t('common:assetForm.updatedToast', { name: assetTypeName }) });
         onSuccess(response.data!);
       } else {
         const payload: AssetCreate = {
@@ -186,16 +197,18 @@ export function AssetFormDialog({
           status: values.status || 'draft',
           platform: values.platform || null,
           location: values.location || null,
+          domain_ids: values.domain_ids || [],
+          primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPost<AssetRead>('/api/assets', payload);
         if (response.error) throw new Error(response.error);
-        toast({ title: `${assetTypeName} created` });
+        toast({ title: t('common:assetForm.createdToast', { name: assetTypeName }) });
         onSuccess(response.data!);
       }
       onOpenChange(false);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
+      toast({ variant: 'destructive', title: t('common:toast.error'), description: err.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -205,18 +218,18 @@ export function AssetFormDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit' : 'Create'} {assetTypeName}</DialogTitle>
+          <DialogTitle>{isEdit ? t('common:assetForm.editTitle', { name: assetTypeName }) : t('common:assetForm.createTitle', { name: assetTypeName })}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Update the properties of this ${assetTypeName.toLowerCase()}.`
-              : `Create a new ${assetTypeName.toLowerCase()} asset.`}
+              ? t('common:assetForm.editDescription', { name: assetTypeName.toLowerCase() })
+              : t('common:assetForm.createDescription', { name: assetTypeName.toLowerCase() })}
           </DialogDescription>
         </DialogHeader>
 
         {schemaLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading schema…</span>
+            <span className="ml-2 text-sm text-muted-foreground">{t('common:assetForm.loadingSchema')}</span>
           </div>
         ) : (
           <Form {...form}>
@@ -226,12 +239,12 @@ export function AssetFormDialog({
                 <FormField
                   control={form.control}
                   name="name"
-                  rules={{ required: 'Name is required', minLength: { value: 2, message: 'Min 2 characters' } }}
+                  rules={{ required: t('common:assetForm.nameRequired'), minLength: { value: 2, message: t('common:assetForm.nameMinLength') } }}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name *</FormLabel>
+                      <FormLabel>{t('common:assetForm.nameLabel')}</FormLabel>
                       <FormControl>
-                        <Input placeholder={`Enter ${assetTypeName.toLowerCase()} name`} {...field} />
+                        <Input placeholder={t('common:assetForm.namePlaceholder', { name: assetTypeName.toLowerCase() })} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -242,10 +255,10 @@ export function AssetFormDialog({
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel>{t('common:assetForm.descriptionLabel')}</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Optional description"
+                          placeholder={t('common:assetForm.descriptionPlaceholder')}
                           className="min-h-[80px]"
                           {...field}
                         />
@@ -258,21 +271,21 @@ export function AssetFormDialog({
                   <FormField
                     control={form.control}
                     name="status"
-                    rules={{ required: 'Status is required' }}
+                    rules={{ required: t('common:assetForm.statusRequired') }}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status *</FormLabel>
+                        <FormLabel>{t('common:assetForm.statusLabel')}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select status" />
+                              <SelectValue placeholder={t('common:assetForm.statusPlaceholder')} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="draft">Draft</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="deprecated">Deprecated</SelectItem>
-                            <SelectItem value="retired">Retired</SelectItem>
+                            <SelectItem value="draft">{t('common:assetForm.status.draft')}</SelectItem>
+                            <SelectItem value="active">{t('common:assetForm.status.active')}</SelectItem>
+                            <SelectItem value="deprecated">{t('common:assetForm.status.deprecated')}</SelectItem>
+                            <SelectItem value="retired">{t('common:assetForm.status.retired')}</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -284,9 +297,9 @@ export function AssetFormDialog({
                     name="platform"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Platform</FormLabel>
+                        <FormLabel>{t('common:assetForm.platformLabel')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. databricks, snowflake" {...field} />
+                          <Input placeholder={t('common:assetForm.platformPlaceholder')} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -298,9 +311,30 @@ export function AssetFormDialog({
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location</FormLabel>
+                      <FormLabel>{t('common:assetForm.locationLabel')}</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. catalog.schema.table" {...field} />
+                        <Input placeholder={t('common:assetForm.locationPlaceholder')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="domain_ids"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('common:assetForm.domainsLabel')}</FormLabel>
+                      <FormControl>
+                        <DomainMultiSelector
+                          value={field.value || []}
+                          primaryDomainId={form.watch('primary_domain_id')}
+                          onChange={(domainIds, primaryDomainId) => {
+                            field.onChange(domainIds);
+                            form.setValue('primary_domain_id', primaryDomainId);
+                          }}
+                          placeholder={t('common:assetForm.domainsPlaceholder')}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -313,7 +347,7 @@ export function AssetFormDialog({
                 <div key={group}>
                   <Separator className="my-4" />
                   <h4 className="text-sm font-semibold text-muted-foreground mb-3">
-                    {GROUP_LABELS[group] || group.charAt(0).toUpperCase() + group.slice(1)}
+                    {GROUP_LABEL_KEYS[group] ? t(`common:${GROUP_LABEL_KEYS[group]}`) : group.charAt(0).toUpperCase() + group.slice(1)}
                   </h4>
                   <div className="space-y-4">
                     {fields.map((f) => (
@@ -325,11 +359,11 @@ export function AssetFormDialog({
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
+                  {t('common:actions.cancel')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isEdit ? 'Save Changes' : `Create ${assetTypeName}`}
+                  {isEdit ? t('common:actions.saveChanges') : t('common:assetForm.createTitle', { name: assetTypeName })}
                 </Button>
               </DialogFooter>
             </form>
@@ -341,6 +375,7 @@ export function AssetFormDialog({
 }
 
 function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; form: any }) {
+  const { t } = useTranslation('common');
   const formatLabel = useFormatLabel();
   const fieldName = `prop_${f.name}`;
   const label = formatLabel(f.label);
@@ -350,14 +385,14 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: `${label} is required` } : undefined}
+        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
             <Select onValueChange={field.onChange} value={field.value || ''}>
               <FormControl>
                 <SelectTrigger>
-                  <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+                  <SelectValue placeholder={t('common:assetForm.selectFieldPlaceholder', { label: label.toLowerCase() })} />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
@@ -379,13 +414,13 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
       <FormField
         control={form.control}
         name={fieldName}
-        rules={f.is_required ? { required: `${label} is required` } : undefined}
+        rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
             <FormControl>
               <Textarea
-                placeholder={f.comment || `Enter ${label.toLowerCase()}`}
+                placeholder={f.comment || t('common:assetForm.enterFieldPlaceholder', { label: label.toLowerCase() })}
                 className="min-h-[80px]"
                 {...field}
               />
@@ -430,14 +465,14 @@ function DynamicFormField({ field: f, form }: { field: EntityFieldDefinition; fo
     <FormField
       control={form.control}
       name={fieldName}
-      rules={f.is_required ? { required: `${label} is required` } : undefined}
+      rules={f.is_required ? { required: t('common:assetForm.fieldRequired', { label }) } : undefined}
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}{f.is_required ? ' *' : ''}</FormLabel>
           <FormControl>
             <Input
               type={inputType}
-              placeholder={f.comment || `Enter ${label.toLowerCase()}`}
+              placeholder={f.comment || t('common:assetForm.enterFieldPlaceholder', { label: label.toLowerCase() })}
               {...field}
               value={field.value ?? ''}
             />

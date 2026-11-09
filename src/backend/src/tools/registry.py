@@ -7,8 +7,15 @@ for both LLM Search and MCP server endpoints.
 
 from typing import Any, Dict, List, Optional, Type
 
+from src.common.api_errors import new_error_id
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import (
+    TOOL_FAILED_CODE,
+    BaseTool,
+    ToolContext,
+    ToolResult,
+    tool_failed_message,
+)
 
 logger = get_logger(__name__)
 
@@ -169,10 +176,17 @@ class ToolRegistry:
             return result
             
         except Exception as e:
-            logger.error(f"Tool {name} raised exception: {type(e).__name__}: {e}", exc_info=True)
+            # The exception's text goes to the log only: the result is sent to
+            # the LLM (which may quote it to the user), stored in the chat
+            # session and returned to MCP clients.
+            error_id = new_error_id()
+            logger.error(
+                f"Tool {name} raised exception {error_id}: {type(e).__name__}: {e}", exc_info=True
+            )
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}"
+                error=tool_failed_message(error_id),
+                error_code=TOOL_FAILED_CODE,
             )
     
     def __len__(self) -> int:
@@ -192,6 +206,8 @@ def create_default_registry() -> ToolRegistry:
     from src.tools.data_products import (
         SearchDataProductsTool,
         GetDataProductTool,
+        GetDataProductsBulkTool,
+        ListDataProductsTool,
         CreateDraftDataProductTool,
         UpdateDataProductTool,
         DeleteDataProductTool
@@ -199,6 +215,8 @@ def create_default_registry() -> ToolRegistry:
     from src.tools.data_contracts import (
         SearchDataContractsTool,
         GetDataContractTool,
+        GetDataContractsBulkTool,
+        ListDataContractsTool,
         CreateDraftDataContractTool,
         UpdateDataContractTool,
         DeleteDataContractTool
@@ -265,13 +283,17 @@ def create_default_registry() -> ToolRegistry:
     # Data Products tools (full CRUD)
     registry.register(SearchDataProductsTool())
     registry.register(GetDataProductTool())
+    registry.register(GetDataProductsBulkTool())
+    registry.register(ListDataProductsTool())
     registry.register(CreateDraftDataProductTool())
     registry.register(UpdateDataProductTool())
     registry.register(DeleteDataProductTool())
-    
+
     # Data Contracts tools (full CRUD)
     registry.register(SearchDataContractsTool())
     registry.register(GetDataContractTool())
+    registry.register(GetDataContractsBulkTool())
+    registry.register(ListDataContractsTool())
     registry.register(CreateDraftDataContractTool())
     registry.register(UpdateDataContractTool())
     registry.register(DeleteDataContractTool())

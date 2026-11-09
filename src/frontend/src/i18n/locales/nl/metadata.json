@@ -113,7 +113,12 @@
     "selectDescription": "Selecteer een gedeelde asset om bij te voegen aan deze entiteit",
     "noSharedNotes": "Geen gedeelde notities beschikbaar",
     "noSharedLinks": "Geen gedeelde links beschikbaar",
-    "noSharedDocuments": "Geen gedeelde documenten beschikbaar"
+    "noSharedDocuments": "Geen gedeelde documenten beschikbaar",
+    "loading": "Gedeelde assets laden...",
+    "attach": "Bijvoegen",
+    "levelInfo": "Niveau: {{level}}",
+    "inheritable": "Overerfbaar",
+    "notInheritable": "Niet overerfbaar"
   },
   "messages": {
     "loadFailed": "Metadata laden mislukt",
@@ -122,16 +127,129 @@
   },
   "tags": {
     "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "description": "Pas governance-tags toe op dit object.",
+    "edit": "Tags bewerken",
+    "refresh": "Vernieuwen",
+    "placeholder": "Tags zoeken en selecteren...",
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "noTags": "Geen tags toegepast.",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "Tags bijgewerkt",
+      "saveFailed": "Tags bijwerken mislukt"
     }
+  },
+  "costs": {
+    "title": "Kostenbeheer",
+    "total": "Totaal",
+    "breakdown": "Uitsplitsing",
+    "noItems": "Geen items",
+    "addExpense": "Uitgave toevoegen",
+    "editExpense": "Uitgave bewerken",
+    "loading": "Laden",
+    "noItemsForMonth": "Geen kostenposten voor deze maand.",
+    "donutAria": "Kostenuitsplitsing",
+    "table": {
+      "title": "Titel",
+      "center": "Kostenplaats",
+      "monthRange": "Maandbereik",
+      "amountMonth": "Bedrag/maand"
+    },
+    "form": {
+      "title": "Titel",
+      "center": "Kostenplaats",
+      "customCenter": "Aangepaste kostenplaats",
+      "amountCents": "Bedrag (centen)",
+      "currency": "Valuta",
+      "startMonth": "Startmaand (JJJJ-MM)",
+      "endMonth": "Eindmaand (JJJJ-MM)",
+      "monthPlaceholder": "JJJJ-MM"
+    },
+    "validation": {
+      "required": "Vereist"
+    },
+    "messages": {
+      "loadFailed": "Laden van kosten mislukt",
+      "missingFields": "Ontbrekende vereiste velden",
+      "missingFieldsDescription": "Vul alstublieft alle verplichte velden in.",
+      "added": "Kosten toegevoegd",
+      "updated": "Kosten bijgewerkt",
+      "deleted": "Kosten verwijderd",
+      "deleteFailed": "Verwijderen mislukt",
+      "saveFailed": "Opslaan mislukt"
+    }
+  },
+  "quality": {
+    "title": "Datakwaliteit",
+    "overallScore": "Totaalscore",
+    "byDimension": "Per dimensie",
+    "noMeasurements": "Geen metingen",
+    "addMeasurement": "Meting toevoegen",
+    "editMeasurement": "Meting bewerken",
+    "lastMeasured": "Laatst gemeten {{date}}",
+    "loading": "Laden",
+    "noMeasurementsRecorded": "Geen kwaliteitsmetingen geregistreerd.",
+    "gaugeAria": "Kwaliteitsscore",
+    "table": {
+      "title": "Titel",
+      "dimension": "Dimensie",
+      "source": "Bron",
+      "score": "Score",
+      "measured": "Gemeten"
+    },
+    "form": {
+      "title": "Titel",
+      "dimension": "Dimensie",
+      "source": "Bron",
+      "score": "Score (%)",
+      "checksPassed": "Geslaagde controles",
+      "checksTotal": "Totaal aantal controles"
+    },
+    "validation": {
+      "required": "Vereist",
+      "range": "0-100"
+    },
+    "messages": {
+      "loadFailed": "Laden van kwaliteitsgegevens mislukt",
+      "missingFields": "Ontbrekende vereiste velden",
+      "added": "Meting toegevoegd",
+      "updated": "Meting bijgewerkt",
+      "deleted": "Meting verwijderd",
+      "deleteFailed": "Verwijderen mislukt",
+      "saveFailed": "Opslaan mislukt"
+    }
+  },
+  "ratings": {
+    "title": "Beoordelingen",
+    "youRated": "U beoordeelde: {{rating}}★",
+    "updateYourRating": "Uw beoordeling bijwerken",
+    "rateThisItem": "Beoordeel dit item",
+    "addReviewOptional": "Voeg een recensie toe (optioneel)",
+    "reviewPlaceholder": "Deel uw ervaring...",
+    "submitting": "Verzenden...",
+    "submitRating": "Beoordeling verzenden",
+    "labels": {
+      "poor": "Slecht",
+      "fair": "Matig",
+      "good": "Goed",
+      "veryGood": "Zeer goed",
+      "excellent": "Uitstekend"
+    }
+  },
+  "info": {
+    "entityInformation": "Entiteitsinformatie",
+    "subscribed": "Geabonneerd",
+    "tableOfContents": "Inhoudsopgave",
+    "noNotesAvailable": "Geen notities beschikbaar.",
+    "noLinks": "Geen links.",
+    "inherited": "Overgeërfd",
+    "shared": "Gedeeld",
+    "ratingsAndReviews": "Beoordelingen en recensies",
+    "loadingRatings": "Beoordelingen laden...",
+    "yourRating": "Uw beoordeling",
+    "addReviewPlaceholder": "Voeg een recensie toe (optioneel)...",
+    "goToDetails": "Ga naar details",
+    "alreadySubscribed": "Al geabonneerd",
+    "subscribe": "Abonneren"
   }
 }

@@ -63,6 +63,10 @@
     "requestAccess": "Zugriff anfordern",
     "moreRoles": "Und {{count}} weitere Rollen verfügbar..."
   },
+  "myActions": {
+    "title": "Meine Aktionen",
+    "approvals": "Genehmigungen"
+  },
   "quickActions": {
     "title": "Schnellzugriff",
     "loading": "Wird geladen...",
@@ -111,7 +115,13 @@
     "unknown": "Unbekannt",
     "status": "N/V",
     "untitled": "Ohne Titel",
-    "info": "Info"
+    "info": "Info",
+    "manage": "Verwalten",
+    "mySubscriptions": "Meine Abonnements",
+    "subscribe": "Abonnieren",
+    "subscribed": "Abonniert",
+    "unknownProduct": "Unbekanntes Produkt",
+    "viewAllSubscribed": "Alle Abonnements anzeigen"
   },
   "dataCurationSection": {
     "title": "Datenkuration",
@@ -151,7 +161,26 @@
     "openButton": "Öffnen",
     "markReadButton": "Als gelesen markieren",
     "readLabel": "Gelesen",
-    "alertMessage": "Diese Liste zeigt nur aktionserforderliche Benachrichtigungen, die Ihrer/Ihren Rolle(n) zugeordnet sind."
+    "alertMessage": "Diese Liste zeigt nur aktionserforderliche Benachrichtigungen, die Ihrer/Ihren Rolle(n) zugeordnet sind.",
+    "loadError": "Genehmigungen konnten nicht geladen werden",
+    "unknownUser": "Unbekannter Benutzer",
+    "unknownRole": "Unbekannte Rolle",
+    "approvalRequest": "Genehmigungsanfrage",
+    "badges": {
+      "roleRequest": "Rollenanfrage",
+      "contract": "Vertrag",
+      "product": "Produkt",
+      "approval": "Genehmigung"
+    },
+    "table": {
+      "type": "Typ",
+      "requesterName": "Antragsteller / Name",
+      "roleStatusReason": "Rolle / Status / Grund",
+      "date": "Datum",
+      "actions": "Aktionen"
+    },
+    "approveDenyRequest": "Anfrage genehmigen/ablehnen",
+    "approveDenyWorkflow": "Workflow-Anfrage genehmigen/ablehnen"
   },
   "marketplace": {
     "welcome": "Hallo",
@@ -182,7 +211,9 @@
       "browseToSubscribe": "Durchsuchen Sie den Tab \"Erkunden\", um Produkte zum Abonnieren zu finden.",
       "exploreProducts": "Datenprodukte erkunden",
       "owner": "Eigentümer",
-      "unknown": "Unbekannt"
+      "unknown": "Unbekannt",
+      "unknownProduct": "Unbekanntes Produkt",
+      "untitled": "Ohne Titel"
     },
     "datasets": {
       "available": "{{count}} Datensatz verfügbar",
@@ -218,6 +249,47 @@
       "three": "3 pro Zeile",
       "four": "4 pro Zeile"
     },
-    "openInDetails": "In Detailansicht öffnen"
+    "scopeFilter": {
+      "placeholder": "Geltungsbereich",
+      "all": "Alle Geltungsbereiche"
+    },
+    "openInDetails": "In Detailansicht öffnen",
+    "loadError": "Produkte konnten nicht geladen werden"
+  },
+  "myProducts": {
+    "title": "Meine Produkte",
+    "description": "Datenprodukte, die Sie abonniert haben.",
+    "loading": "Ihre Produkte werden geladen...",
+    "empty": "Sie haben noch keine Datenprodukte abonniert.",
+    "browseMarketplace": "Marktplatz durchsuchen"
+  },
+  "myRequests": {
+    "title": "Meine Anfragen",
+    "description": "Von Ihnen erstellte Anfragen, die eine Genehmigung erfordern (einschließlich Zugriff und Abonnements).",
+    "loading": "Ihre Anfragen werden geladen...",
+    "empty": "Sie haben noch keine Anfragen erstellt.",
+    "entity": "Entität",
+    "type": "Typ",
+    "status": "Status",
+    "requestedAt": "Angefragt",
+    "handledAt": "Erledigt",
+    "cancel": "Abbrechen",
+    "cancelSuccess": "Anfrage abgebrochen",
+    "statusPending": "Ausstehend",
+    "statusApproved": "Genehmigt",
+    "statusDenied": "Abgelehnt",
+    "statusCancelled": "Abgebrochen",
+    "statusExpired": "Abgelaufen",
+    "statusInProgress": "In Bearbeitung",
+    "statusCompleted": "Abgeschlossen",
+    "statusAbandoned": "Verworfen",
+    "typeAccess": "Zugriff",
+    "typeSubscription": "Abonnement",
+    "typeApproval": "Genehmigung",
+    "entityType": "Entitätstyp",
+    "name": "Name",
+    "entityTypeDataProduct": "Datenprodukt",
+    "entityTypeDataset": "Datensatz",
+    "entityTypeDataContract": "Datenvertrag"
   }
 }

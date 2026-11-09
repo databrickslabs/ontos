@@ -1,0 +1,113 @@
+{
+  "title": "Direitos de acesso",
+  "subtitle": "Gerenciar direitos e permissões de acesso",
+  "newEntitlement": "Novo direito de acesso",
+  "searchPlaceholder": "Buscar direitos de acesso...",
+  "loading": "Carregando direitos de acesso...",
+  "personas": {
+    "title": "Personas",
+    "createPersona": "Criar persona",
+    "editPersona": "Editar persona",
+    "createNewPersona": "Criar nova persona",
+    "personaName": "Nome da persona",
+    "noPersonas": "Nenhuma persona encontrada. Crie uma para começar.",
+    "privileges": "privilégios",
+    "accessPrivileges": "Privilégios de acesso",
+    "noPrivileges": "Nenhum privilégio configurado",
+    "groupAssignments": "Atribuições de grupo",
+    "noGroups": "Nenhum grupo atribuído",
+    "addPrivilege": "Adicionar privilégio",
+    "addGroups": "Adicionar grupos",
+    "securableId": "ID do protegível",
+    "securableType": "Tipo de protegível",
+    "permission": "Permissão",
+    "selectSecurableType": "Selecionar tipo",
+    "selectPermission": "Selecionar permissão",
+    "selectPersona": "Selecionar uma persona",
+    "selectPersonaHint": "Selecione uma persona para ver detalhes",
+    "createPersonaHint": "Ou crie uma nova usando o botão \"Criar persona\"",
+    "toast": {
+      "personaCreated": "Persona criada com sucesso",
+      "personaUpdated": "Persona atualizada com sucesso",
+      "personaDeleted": "Persona excluída com sucesso",
+      "privilegeAdded": "Privilégio adicionado com sucesso",
+      "privilegeRemoved": "Privilégio removido com sucesso",
+      "groupsUpdated": "Grupos atualizados com sucesso"
+    },
+    "errors": {
+      "loadFailed": "Falha ao carregar personas",
+      "saveFailed": "Falha ao salvar persona",
+      "deleteFailed": "Falha ao excluir persona",
+      "privilegeAddFailed": "Falha ao adicionar privilégio",
+      "privilegeRemoveFailed": "Falha ao remover privilégio",
+      "groupsUpdateFailed": "Falha ao atualizar grupos"
+    }
+  },
+  "filters": {
+    "allTypes": "Todos os tipos",
+    "allStatus": "Todos os status"
+  },
+  "table": {
+    "name": "Nome",
+    "type": "Tipo",
+    "principal": "Principal",
+    "resource": "Recurso",
+    "permissions": "Permissões",
+    "status": "Status",
+    "updated": "Atualizado",
+    "actions": "Ações"
+  },
+  "messages": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "deleteConfirm": "Tem certeza de que deseja excluir este direito de acesso?",
+    "deleteSuccess": "Direito de acesso excluído com sucesso",
+    "deleteError": "Falha ao excluir direito de acesso"
+  },
+  "sync": {
+    "title": "Sincronização de direitos de acesso",
+    "subtitle": "Sincronizar direitos de acesso com sistemas externos",
+    "lastSync": "Última sincronização",
+    "syncNow": "Sincronizar agora",
+    "syncing": "Sincronizando...",
+    "newConfig": "Nova configuração",
+    "editConfig": "Editar configuração",
+    "scheduleCron": "Agendamento (Cron)",
+    "catalogs": "Catálogos",
+    "never": "Nunca",
+    "confirmDelete": "Tem certeza de que deseja excluir esta configuração?",
+    "configCreated": "Configuração criada com sucesso",
+    "configUpdated": "Configuração atualizada com sucesso",
+    "configDeleted": "Configuração excluída com sucesso",
+    "errors": {
+      "loadConfigsFailed": "Falha ao carregar configurações",
+      "loadConnectionsFailed": "Falha ao carregar conexões",
+      "loadCatalogsFailed": "Falha ao carregar catálogos",
+      "saveConfigFailed": "Falha ao salvar configuração",
+      "deleteConfigFailed": "Falha ao excluir configuração"
+    },
+    "status": {
+      "success": "Sucesso",
+      "failed": "Falha",
+      "in_progress": "Em andamento"
+    }
+  },
+  "details": {
+    "backToList": "Voltar para direitos de acesso",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "notFound": "Direito de acesso não encontrado",
+    "loading": "Carregando..."
+  },
+  "form": {
+    "createTitle": "Criar direito de acesso",
+    "editTitle": "Editar direito de acesso",
+    "name": "Nome",
+    "type": "Tipo",
+    "principal": "Principal",
+    "resource": "Recurso",
+    "permissions": "Permissões",
+    "cancel": "Cancelar",
+    "save": "Salvar"
+  }
+}

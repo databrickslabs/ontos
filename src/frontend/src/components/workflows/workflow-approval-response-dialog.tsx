@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Dialog,
@@ -22,7 +23,10 @@ import {
 import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { approvalEntityTypeLabel, approvalFieldLabel, approvalFieldValue } from '@/lib/approval-payload-labels';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
+import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
@@ -69,41 +73,10 @@ interface WorkflowApprovalResponseDialogProps {
   onDecisionMade?: () => void;
 }
 
-const ENTITY_TYPE_LABELS: Record<string, string> = {
-  data_product: 'Data Product',
-  data_contract: 'Data Contract',
-  data_domain: 'Data Domain',
-  data_asset_review: 'Data Asset Review',
-  access_grant: 'Access Grant',
-  asset: 'Asset',
-};
-
-function humanizeEntityType(entityType: string | undefined | null): string {
-  if (!entityType) return 'Entity';
-  const key = entityType.toLowerCase();
-  if (ENTITY_TYPE_LABELS[key]) return ENTITY_TYPE_LABELS[key];
-  return entityType
-    .replace(/_/g, ' ')
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}
-
 const SKIP_KEYS = new Set([
   'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
   'request_id', 'workspace_id', 'execution_id', 'workflow_id',
 ]);
-
-function renderPayloadValue(val: unknown): string {
-  if (Array.isArray(val)) return val.join(', ');
-  if (typeof val === 'object' && val !== null) return JSON.stringify(val);
-  return String(val);
-}
-
-function humanizeKey(key: string): string {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 interface DetailRow {
   label: string;
@@ -113,16 +86,18 @@ interface DetailRow {
 function buildDetailRows(
   payload: WorkflowApprovalResponseDialogPayload,
   onNavigate: () => void,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  workflowText: (text: string) => string | undefined = (text) => text,
 ): DetailRow[] {
   const rows: DetailRow[] = [];
 
   if (payload.requester_email) {
-    rows.push({ label: 'Requester', value: payload.requester_email });
+    rows.push({ label: t('common:labels.requester'), value: payload.requester_email });
   }
 
   if (payload.on_behalf_of) {
     rows.push({
-      label: 'On behalf of',
+      label: t('workflows:approvalResponse.rows.onBehalfOf'),
       value: `${payload.on_behalf_of.type} ${payload.on_behalf_of.value}`,
     });
   }
@@ -135,14 +110,14 @@ function buildDetailRows(
       : undefined);
   const resourceId = payload.underlying_entity_id ?? payload.entity_id;
   if (resourceType || resourceName || resourceId) {
-    const typeLabel = humanizeEntityType(resourceType);
+    const typeLabel = approvalEntityTypeLabel(resourceType, t);
     const displayName = resourceName || resourceId || '—';
     const detailPath = getUnderlyingEntityDetailPath(
       payload as unknown as Record<string, unknown>,
     );
     const resourceText = `${typeLabel} · ${displayName}`;
     rows.push({
-      label: 'Resource',
+      label: t('workflows:approvalResponse.rows.resource'),
       value: detailPath ? (
         <RouterLink
           to={detailPath}
@@ -159,24 +134,48 @@ function buildDetailRows(
   }
 
   if (payload.permission_level) {
-    rows.push({ label: 'Permission', value: payload.permission_level });
+    rows.push({ label: t('common:labels.permission'), value: payload.permission_level });
   }
 
   if (typeof payload.requested_duration_days === 'number') {
     const d = payload.requested_duration_days;
-    rows.push({ label: 'Duration', value: `${d} day${d === 1 ? '' : 's'}` });
+    rows.push({ label: t('workflows:approvalResponse.rows.duration'), value: t('workflows:approvalResponse.days', { count: d }) });
   }
 
   if (payload.reason) {
-    rows.push({ label: 'Reason', value: payload.reason });
+    rows.push({ label: t('workflows:approvalResponse.rows.reason'), value: payload.reason });
   }
 
   if (payload.workflow_message) {
-    rows.push({ label: 'Message', value: payload.workflow_message });
+    rows.push({ label: t('common:labels.message'), value: payload.workflow_message });
   }
 
   if (payload.workflow_name) {
-    rows.push({ label: 'Workflow', value: payload.workflow_name });
+    // A shipped default workflow's name in the user's language
+    rows.push({
+      label: t('workflows:approvalResponse.rows.workflow'),
+      value: workflowText(payload.workflow_name) ?? payload.workflow_name,
+    });
+  }
+
+  // Concept approvals carry a definition (+ type / scheme) in full_payload.
+  // Surface them explicitly with clean labels near the top rather than letting
+  // the generic loop dump them as raw keys further down.
+  const conceptType = payload.full_payload?.concept_type;
+  if (typeof conceptType === 'string' && conceptType) {
+    rows.push({ label: 'Type', value: conceptType });
+  }
+  // Prefer the scheme's label captured at submit time over the raw key.
+  const sourceContext = payload.full_payload?.source_context;
+  const sourceLabel = payload.full_payload?.source_label;
+  const schemeValue =
+    typeof sourceLabel === 'string' && sourceLabel ? sourceLabel : sourceContext;
+  if (typeof schemeValue === 'string' && schemeValue) {
+    rows.push({ label: 'Scheme', value: schemeValue });
+  }
+  const definition = payload.full_payload?.definition;
+  if (typeof definition === 'string' && definition) {
+    rows.push({ label: 'Definition', value: definition });
   }
 
   if (payload.full_payload) {
@@ -186,13 +185,14 @@ function buildDetailRows(
       'permission_level', 'requested_duration_days', 'reason',
       'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
+      'definition', 'concept_type', 'source_context', 'source_label',
     ]);
     for (const [key, val] of Object.entries(payload.full_payload)) {
       if (key.startsWith('_')) continue;
       if (SKIP_KEYS.has(key)) continue;
       if (alreadySurfaced.has(key)) continue;
       if (val === null || val === undefined || val === '') continue;
-      rows.push({ label: humanizeKey(key), value: renderPayloadValue(val) });
+      rows.push({ label: approvalFieldLabel(key, t), value: approvalFieldValue(key, val, resourceType, t) });
     }
   }
 
@@ -206,8 +206,10 @@ export default function WorkflowApprovalResponseDialog({
   notificationId: _notificationId,
   onDecisionMade,
 }: WorkflowApprovalResponseDialogProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
+  const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
   const [stepConfig, setStepConfig] = useState<DefaultResponseWorkflowStep | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -268,42 +270,52 @@ export default function WorkflowApprovalResponseDialog({
     if (!payload?.execution_id) return;
     if (isReasonRequired && !reason.trim()) {
       toast({
-        title: 'Reason required',
-        description: 'Please enter a reason for your decision.',
+        title: t('workflows:approvalResponse.messages.reasonRequiredTitle'),
+        description: t('workflows:approvalResponse.messages.reasonRequiredDesc'),
         variant: 'destructive',
       });
       return;
     }
     setSubmitting(true);
     try {
-      const body: Record<string, unknown> = {
-        execution_id: payload.execution_id,
-        approved,
-        message: reason.trim() || (approved ? 'Approved' : 'Rejected'),
-      };
+      // Only what the approver wrote: without a reason the backend records a
+      // coded "Request denied" (approval_rejected) that each user sees in
+      // their own language, not the approver's word for it.
+      const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
       if (grantedPermission) body.permission_level = grantedPermission;
       const response = await post('/api/workflows/handle-approval', body);
       if (response.error) {
         toast({
-          title: 'Error',
-          description: response.error || 'Failed to process approval.',
+          title: t('common:toast.error'),
+          description: response.errorCode
+            ? t(`workflows:approvalResponse.errors.${response.errorCode}`, { defaultValue: response.error })
+            : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
         return;
       }
       toast({
-        title: approved ? 'Approved' : 'Rejected',
-        description: `${payload.entity_name || 'Request'} has been ${approved ? 'approved' : 'rejected'}.`,
+        title: approved ? t('workflows:approvalResponse.approved') : t('workflows:approvalResponse.rejected'),
+        description: approved
+          ? t('workflows:approvalResponse.messages.entityApproved', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') })
+          : t('workflows:approvalResponse.messages.entityRejected', { name: payload.entity_name || t('workflows:approvalResponse.requestFallback') }),
         variant: approved ? 'default' : 'destructive',
       });
+      // A concept approval changes the concept's lifecycle state (draft/
+      // approved). Nudge any open concept view to refetch. Scoped to concepts
+      // so other entity types don't trigger a needless knowledge-graph refresh.
+      if (payload.entity_type?.toLowerCase() === 'ontology_concept') {
+        bumpKnowledgeGraphRefresh('concept-approval-decision');
+      }
       onOpenChange(false);
       onDecisionMade?.();
     } catch (e) {
       console.error('Workflow approval failed:', e);
       toast({
-        title: 'Error',
-        description: 'Failed to process approval. Please try again.',
+        title: t('common:toast.error'),
+        description: t('workflows:approvalResponse.messages.processFailedRetry'),
         variant: 'destructive',
       });
     } finally {
@@ -311,29 +323,36 @@ export default function WorkflowApprovalResponseDialog({
     }
   };
 
-  const title = config.title ?? stepConfig?.step_name ?? 'Approve or reject';
+  // Shipped default texts in the user's language (as configured once edited)
+  const defaultText = useDefaultWorkflowText();
+  const title =
+    defaultText(config.title ?? stepConfig?.step_name) ?? t('workflows:approvalResponse.titleFallback');
   const description =
-    config.description ?? 'Provide a reason for your approval or rejection decision.';
+    defaultText(config.description) ?? t('workflows:approvalResponse.descriptionFallback');
 
-  const detailRows = payload ? buildDetailRows(payload, () => onOpenChange(false)) : [];
+  const detailRows = payload ? buildDetailRows(payload, () => onOpenChange(false), t, defaultText) : [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md flex flex-col max-h-[85vh] overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {loadingConfig ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-1 items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <>
+            {/* Cap height + scroll the body so a long concept payload
+                (definition + many rows) doesn't overflow the viewport. Header
+                and action buttons stay pinned outside this container. */}
+            <div className="flex-1 overflow-y-auto space-y-4 px-1 -mx-1">
             {detailRows.length > 0 && (
               <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Request details
+                  {t('workflows:approvalResponse.requestDetails')}
                 </div>
                 <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
                   {detailRows.map((row) => (
@@ -348,11 +367,11 @@ export default function WorkflowApprovalResponseDialog({
             {(payload?.requested_duration_days != null || payload?.permission_level) && (
               <div className="rounded-md border p-3 space-y-3">
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Adjust approval terms
+                  {t('workflows:approvalResponse.adjustTerms')}
                 </div>
                 {payload.requested_duration_days != null && (
                   <div className="space-y-1">
-                    <Label htmlFor="granted-days" className="text-sm">Duration (days)</Label>
+                    <Label htmlFor="granted-days" className="text-sm">{t('workflows:approvalResponse.durationDays')}</Label>
                     <Input
                       id="granted-days"
                       type="number"
@@ -366,10 +385,10 @@ export default function WorkflowApprovalResponseDialog({
                 )}
                 {payload.permission_level && (
                   <div className="space-y-1">
-                    <Label className="text-sm">Permission level</Label>
+                    <Label className="text-sm">{t('workflows:approvalResponse.permissionLevel')}</Label>
                     <Select value={grantedPermission} onValueChange={setGrantedPermission} disabled={submitting}>
                       <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Select permission" />
+                        <SelectValue placeholder={t('common:placeholders.selectPermission')} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="CAN_READ">CAN_READ</SelectItem>
@@ -384,20 +403,21 @@ export default function WorkflowApprovalResponseDialog({
             )}
             <div className="space-y-2">
               <Label htmlFor="approval-reason">
-                {reasonField?.label ?? 'Reason for approval or rejection'}
+                {defaultText(reasonField?.label) ?? t('workflows:approvalResponse.reasonLabel')}
                 {isReasonRequired && ' *'}
               </Label>
               <Textarea
                 id="approval-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Enter your reason..."
+                placeholder={t('workflows:approvalResponse.reasonPlaceholder')}
                 rows={3}
                 className="resize-none"
                 disabled={submitting}
               />
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0 shrink-0">
               <Button
                 variant="destructive"
                 disabled={submitting}
@@ -408,7 +428,7 @@ export default function WorkflowApprovalResponseDialog({
                 ) : (
                   <XCircle className="h-4 w-4" />
                 )}
-                Reject
+                {t('common:actions.reject')}
               </Button>
               <Button
                 variant="default"
@@ -421,7 +441,7 @@ export default function WorkflowApprovalResponseDialog({
                 ) : (
                   <Check className="h-4 w-4" />
                 )}
-                Approve
+                {t('common:actions.approve')}
               </Button>
             </DialogFooter>
           </>

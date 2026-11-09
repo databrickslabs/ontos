@@ -21,10 +21,19 @@ class TestTagsRoutes:
     def sample_tag_data(self):
         """Sample tag data for testing."""
         return {
-            "namespace_id": "test-namespace",
-            "tag_name": "test-tag",
+            "namespace_name": "test-namespace",
+            "name": "test-tag",
             "description": "Test tag",
         }
+
+    @pytest.fixture
+    def created_tag(self, client: TestClient, sample_namespace_data, sample_tag_data):
+        """A tag in its own namespace, created through the API."""
+        namespace = client.post("/api/tags/namespaces", json=sample_namespace_data)
+        assert namespace.status_code == 201, namespace.text
+        response = client.post("/api/tags", json=sample_tag_data)
+        assert response.status_code == 201, response.text
+        return response.json()
 
     def test_get_namespaces(self, client: TestClient, db_session: Session):
         """Test getting tag namespaces."""
@@ -45,28 +54,40 @@ class TestTagsRoutes:
         response = client.get("/api/tags/namespace/test-namespace")
         assert response.status_code in [200, 404]
 
-    def test_create_tag(self, client: TestClient, db_session: Session, sample_tag_data):
+    def test_create_tag(self, client: TestClient, db_session: Session, created_tag):
         """Test creating a tag."""
-        response = client.post("/api/tags", json=sample_tag_data)
-        assert response.status_code in [200, 201, 404]
+        assert created_tag["name"] == "test-tag"
+        assert created_tag["description"] == "Test tag"
 
-    def test_assign_tag_to_entity(self, client: TestClient, db_session: Session):
+        fetched = client.get(f"/api/tags/{created_tag['id']}")
+        assert fetched.status_code == 200
+        assert fetched.json()["name"] == "test-tag"
+
+    def test_assign_tag_to_entity(self, client: TestClient, db_session: Session, created_tag):
         """Test assigning a tag to an entity."""
-        assign_data = {
-            "namespace_id": "test-namespace",
-            "tag_name": "test-tag",
-            "entity_type": "data_product",
-            "entity_id": "test-product-123",
-        }
-        response = client.post("/api/tags/assign", json=assign_data)
-        assert response.status_code in [200, 201, 404]
+        response = client.post(
+            "/api/entities/data_product/test-product-123/tags:add",
+            params={"tag_id": created_tag["id"]},
+        )
+        assert response.status_code == 200, response.text
+        assigned = response.json()
+        assert assigned["tag_id"] == created_tag["id"]
+        assert assigned["fully_qualified_name"] == "test-namespace/test-tag"
 
-    def test_get_tags_for_entity(self, client: TestClient, db_session: Session):
+    def test_get_tags_for_entity(self, client: TestClient, db_session: Session, created_tag):
         """Test getting tags for an entity."""
-        response = client.get("/api/tags/entity/data_product/test-product-123")
+        client.post(
+            "/api/entities/data_product/test-product-123/tags:add",
+            params={"tag_id": created_tag["id"]},
+        ).raise_for_status()
+
+        response = client.get("/api/entities/data_product/test-product-123/tags")
         assert response.status_code == 200
-        # Should return list of tags
-        assert isinstance(response.json(), list)
+        assert [t["tag_id"] for t in response.json()] == [created_tag["id"]]
+
+        other = client.get("/api/entities/data_product/another-product/tags")
+        assert other.status_code == 200
+        assert other.json() == []
 
     def test_remove_tag_from_entity(self, client: TestClient, db_session: Session):
         """Test removing a tag from an entity."""

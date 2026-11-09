@@ -487,10 +487,19 @@ def get_obo_workspace_client(
     logger.info(f"Initializing NEW OBO workspace client for user: {user_email or 'unknown'}, host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
     # Create client with user's token
-    # Temporarily clear OAuth env vars to prevent SDK from using them
+    # Temporarily clear OAuth env vars to prevent SDK from using them.
+    # TODO(obo-env-race): popping and restoring process-global env vars is a
+    # race surface — a concurrent task that builds an SP WorkspaceClient while
+    # this block runs will see the vars gone and fail to authenticate. The MCP
+    # path hits this helper on every forwarded-token request, so the window is
+    # much wider than it was for Ask Ontos. A proper fix is to pass the SDK a
+    # per-call `credentials_strategy` (or construct the client without reading
+    # env at all) so no process-global state is touched. Tracked for a
+    # follow-up PR; leaving the pattern in place here keeps the OBO scope
+    # minimal and consistent with the existing Ask Ontos helper.
     saved_client_id = os.environ.pop('DATABRICKS_CLIENT_ID', None)
     saved_client_secret = os.environ.pop('DATABRICKS_CLIENT_SECRET', None)
-    
+
     try:
         client = WorkspaceClient(
             host=settings.DATABRICKS_HOST,

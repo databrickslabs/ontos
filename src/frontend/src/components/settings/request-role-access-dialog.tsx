@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +25,7 @@ export default function RequestRoleAccessDialog({
   roleName,
   roleDescription
 }: RequestRoleAccessDialogProps) {
+  const { t } = useTranslation(['settings', 'common']);
   const { post } = useApi();
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
@@ -34,12 +36,12 @@ export default function RequestRoleAccessDialog({
   const handleSubmit = async () => {
     // Validate reason
     if (!reason.trim()) {
-      setError('Please provide a reason for requesting this role');
+      setError(t('settings:roles.requestAccess.reasonRequired'));
       return;
     }
 
     if (reason.trim().length < 10) {
-      setError('Please provide a more detailed reason (at least 10 characters)');
+      setError(t('settings:roles.requestAccess.reasonTooShort'));
       return;
     }
 
@@ -56,8 +58,8 @@ export default function RequestRoleAccessDialog({
       }
 
       toast({
-        title: 'Request Submitted',
-        description: `Your request for the role "${roleName}" has been submitted and you will be notified of the decision.`
+        title: t('settings:roles.requestAccess.submittedTitle'),
+        description: t('settings:roles.requestAccess.submittedDescription', { role: roleName })
       });
 
       // Refresh notifications to show any new ones
@@ -68,10 +70,10 @@ export default function RequestRoleAccessDialog({
       onOpenChange(false);
 
     } catch (e: any) {
-      setError(e.message || 'Failed to submit role access request');
+      setError(e.message || t('settings:roles.requestAccess.submitFailed'));
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to submit role access request',
+        title: t('common:status.error'),
+        description: e.message || t('settings:roles.requestAccess.submitFailed'),
         variant: 'destructive'
       });
     } finally {
@@ -91,11 +93,10 @@ export default function RequestRoleAccessDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Request Role Access
+            {t('settings:roles.requestAccess.title')}
           </DialogTitle>
           <DialogDescription>
-            Submit a request for access to this application role.
-            Please provide a detailed reason for your request.
+            {t('settings:roles.requestAccess.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -103,7 +104,7 @@ export default function RequestRoleAccessDialog({
           {/* Role Information */}
           <div className="p-3 bg-muted/50 rounded-lg border">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium">Role:</span>
+              <span className="font-medium">{t('settings:roles.requestAccess.roleLabel')}</span>
               <span className="font-semibold text-foreground">{roleName}</span>
             </div>
             {roleDescription && (
@@ -114,18 +115,18 @@ export default function RequestRoleAccessDialog({
           {/* Reason Field */}
           <div className="space-y-2">
             <Label htmlFor="role-access-reason" className="text-sm font-medium">
-              Reason for Role Access Request *
+              {t('settings:roles.requestAccess.reasonLabel')}
             </Label>
             <Textarea
               id="role-access-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Please explain why you need this role. Include details about your responsibilities, project requirements, or business justification..."
+              placeholder={t('settings:roles.requestAccess.reasonPlaceholder')}
               className="min-h-[100px] resize-none"
               disabled={submitting}
             />
             <div className="text-xs text-muted-foreground">
-              Minimum 10 characters required. This information will be shared with administrators.
+              {t('settings:roles.requestAccess.reasonHelp')}
             </div>
           </div>
 
@@ -144,14 +145,14 @@ export default function RequestRoleAccessDialog({
             onClick={handleCancel}
             disabled={submitting}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting || !reason.trim()}
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submitting ? 'Sending Request...' : 'Send Request'}
+            {submitting ? t('settings:roles.requestAccess.sending') : t('settings:roles.requestAccess.send')}
           </Button>
         </DialogFooter>
       </DialogContent>

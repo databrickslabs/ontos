@@ -1,0 +1,133 @@
+{
+  "approvalResponse": {
+    "title": "理由を入力",
+    "description": "承認または却下の判断理由を入力してください。",
+    "fields": {
+      "reason": "承認または却下の理由"
+    }
+  },
+  "subscription": {
+    "title": "サブスクリプションの詳細",
+    "description": "このデータプロダクトの利用目的を入力してください。",
+    "fields": {
+      "reason": "サブスクライブする理由",
+      "useCase": "想定するユースケース"
+    }
+  },
+  "requestReview": {
+    "title": "レビューをリクエスト",
+    "description": "レビューをリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "レビューをリクエストする理由は何ですか?"
+    }
+  },
+  "requestAccess": {
+    "title": "アクセスをリクエスト",
+    "description": "アクセスをリクエストする理由を入力し、必要に応じて期間を設定してください。",
+    "fields": {
+      "reason": "アクセスが必要な理由は何ですか?",
+      "expiryDays": "希望する期間(日数。無期限の場合は空欄)"
+    }
+  },
+  "requestPublish": {
+    "title": "公開をリクエスト",
+    "description": "公開をリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "公開をリクエストする理由は何ですか?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "ステータス変更をリクエスト",
+    "description": "ステータス変更をリクエストする理由を入力してください。",
+    "fields": {
+      "reason": "このステータス変更をリクエストする理由は何ですか?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "理由を入力"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "オブジェクト名が命名規則に従っていません",
+      "tagging": "必須タグを適用できませんでした"
+    },
+    "dataProductApproval": {
+      "noContract": "データプロダクトにはデータコントラクトが必要です",
+      "rejected": "データプロダクトの公開リクエストは却下されました"
+    },
+    "dataContractValidation": {
+      "noSchema": "データコントラクトにはスキーマ定義が必要です"
+    },
+    "preCreationCompliance": {
+      "naming": "アセット名が命名規則ポリシーに準拠していません",
+      "tagging": "アセットに必須タグがありません"
+    },
+    "tablePreCreation": {
+      "invalidName": "テーブル名には小文字とアンダースコアのみ使用できます",
+      "reservedWord": "テーブル名に SQL の予約語は使用できません"
+    },
+    "contractReviewRequest": {
+      "rejected": "データコントラクトのレビューリクエストは却下されました"
+    },
+    "contractDeployRequest": {
+      "rejected": "データコントラクトのデプロイリクエストは却下されました"
+    },
+    "productReviewRequest": {
+      "rejected": "データプロダクトのレビューリクエストは却下されました"
+    },
+    "accessGrantRequest": {
+      "rejected": "アクセスリクエストは拒否されました"
+    },
+    "statusChangeRequest": {
+      "rejected": "ステータス変更リクエストは却下されました"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "データアセットのレビューで変更が必要です"
+    },
+    "roleAccessRequest": {
+      "rejected": "ロールへのアクセスリクエストは拒否されました"
+    },
+    "certificationRequestReview": {
+      "end": "認定ワークフローが失敗しました"
+    },
+    "publicationRequestReview": {
+      "end": "公開ワークフローが失敗しました"
+    },
+    "conceptReviewRequest": {
+      "rejected": "概念のレビューは承認されませんでした"
+    }
+  },
+  "workflowNames": {
+    "naming-convention-check": "命名規則の検証",
+    "data-product-approval": "データプロダクト公開の承認",
+    "data-contract-validation": "データコントラクトのスキーマ検証",
+    "pii-detection": "PII の検出と分類",
+    "pre-creation-compliance": "作成前のコンプライアンス検証",
+    "table-pre-creation": "作成前のテーブル検証",
+    "contract-review-request": "データコントラクトのレビュー依頼",
+    "contract-deploy-request": "データコントラクトのデプロイ依頼",
+    "product-review-request": "データプロダクトのレビュー依頼",
+    "access-grant-request": "アクセス付与の依頼",
+    "status-change-request": "ステータス変更の依頼",
+    "data-asset-review-request": "データアセットのレビュー依頼",
+    "project-access-request": "プロジェクトへのアクセス依頼",
+    "role-access-request": "ロールへのアクセス依頼",
+    "job-failure-notification": "ジョブ失敗の通知",
+    "job-success-notification": "ジョブ成功の通知",
+    "access-expiring-warning": "アクセス期限切れの警告",
+    "access-revoked-notification": "アクセス取り消しの通知",
+    "approval-response": "承認の応答",
+    "subscription": "サブスクリプション契約",
+    "request-review": "レビューを依頼",
+    "request-access": "アクセスを依頼",
+    "request-publish": "公開を依頼",
+    "request-status-change": "ステータス変更を依頼",
+    "before-status-change-default": "ステータス変更ゲート(デフォルト)",
+    "on-publish-notification": "公開の通知",
+    "on-unpublish-notification": "公開取り消しの通知",
+    "certification-request-review": "認定依頼のレビュー",
+    "publication-request-review": "公開依頼のレビュー",
+    "first-access-welcome": "ようこそ: 利用規約",
+    "on-request-access-grant-permissions-reference": "リファレンス: 依頼者に UC の SELECT を付与 (on_request_access)"
+  }
+}

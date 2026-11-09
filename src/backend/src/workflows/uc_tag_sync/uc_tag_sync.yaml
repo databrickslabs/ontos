@@ -94,6 +94,21 @@ configurable_parameters:
         enabled: true
         tag_key_format: "ontos_asset_type"
         tag_value_format: "{ASSET.TYPE}"
+      # Lifecycle status of the product (contract) using the table. On a table used by
+      # several, the best status wins (see "Shared tables" in uc_tag_sync.py). When both
+      # entries are enabled, the later one (the product's) wins the shared key.
+      # An entry with a "mapping" id is also added, when read, to a saved configuration
+      # with no entry of that entity_type and mapping (JobsManager.get_workflow_configuration).
+      - entity_type: "data_contract"
+        mapping: "lifecycle_status"
+        enabled: false
+        tag_key_format: "ontos_lifecycle_status"
+        tag_value_format: "{CONTRACT.STATUS}"
+      - entity_type: "data_product"
+        mapping: "lifecycle_status"
+        enabled: true
+        tag_key_format: "ontos_lifecycle_status"
+        tag_value_format: "{PRODUCT.STATUS}"
 
   - name: "prefix"
     type: "string"

@@ -2,6 +2,7 @@ from src.common.repository import CRUDBase
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.models.teams import TeamCreate, TeamUpdate, TeamMemberCreate, TeamMemberUpdate
 from src.common.logging import get_logger
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
@@ -9,11 +10,32 @@ from typing import List, Optional
 
 logger = get_logger(__name__)
 
+TEAM_ENTITY_TYPE = "team"
+
 
 class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
     def __init__(self):
         super().__init__(TeamDb)
         logger.info("TeamRepository initialized.")
+
+    def _resolve_domain_filter(
+        self, db: Session, domain_id: Optional[str], domain_ids: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        """Resolve a domain filter to the set of team IDs (any-of via the junction table).
+
+        Returns None when no domain filter is supplied (caller should not filter), or a
+        (possibly empty) list of team IDs when a filter is present.
+        """
+        ids: List[str] = []
+        if domain_ids:
+            ids.extend(domain_ids)
+        if domain_id:
+            ids.append(domain_id)
+        if not ids:
+            return None
+        return entity_domain_repo.find_entity_ids_by_domains(
+            db, domain_ids=ids, entity_type=TEAM_ENTITY_TYPE
+        )
 
     def get_with_members(self, db: Session, id: str) -> Optional[TeamDb]:
         """Gets a single team by ID, eager loading members."""
@@ -31,10 +53,16 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
             raise
 
     def get_multi_with_members(
-        self, db: Session, *, skip: int = 0, limit: int = 100, domain_id: Optional[str] = None
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        domain_id: Optional[str] = None,
+        domain_ids: Optional[List[str]] = None,
     ) -> List[TeamDb]:
-        """Gets multiple teams, eager loading members. Optionally filter by domain."""
-        logger.debug(f"Fetching multiple {self.model.__name__} with members, skip={skip}, limit={limit}, domain_id={domain_id}")
+        """Gets multiple teams, eager loading members. Optionally filter by domain(s) (any-of)."""
+        logger.debug(f"Fetching multiple {self.model.__name__} with members, skip={skip}, limit={limit}, domain_id={domain_id}, domain_ids={domain_ids}")
         try:
             query = (
                 db.query(self.model)
@@ -42,8 +70,9 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
                 .order_by(self.model.name)
             )
 
-            if domain_id is not None:
-                query = query.filter(self.model.domain_id == domain_id)
+            filter_ids = self._resolve_domain_filter(db, domain_id, domain_ids)
+            if filter_ids is not None:
+                query = query.filter(self.model.id.in_(filter_ids))
 
             return query.offset(skip).limit(limit).all()
         except SQLAlchemyError as e:
@@ -62,13 +91,18 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
             raise
 
     def get_teams_by_domain(self, db: Session, domain_id: str) -> List[TeamDb]:
-        """Gets all teams belonging to a specific domain."""
+        """Gets all teams that include this domain (primary OR additional; any-of)."""
         logger.debug(f"Fetching teams for domain: {domain_id}")
         try:
+            team_ids = entity_domain_repo.find_entity_ids_by_domain(
+                db, domain_id=domain_id, entity_type=TEAM_ENTITY_TYPE
+            )
+            if not team_ids:
+                return []
             return (
                 db.query(self.model)
                 .options(selectinload(self.model.members))
-                .filter(self.model.domain_id == domain_id)
+                .filter(self.model.id.in_(team_ids))
                 .order_by(self.model.name)
                 .all()
             )
@@ -78,16 +112,20 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
             raise
 
     def get_standalone_teams(self, db: Session) -> List[TeamDb]:
-        """Gets all standalone teams (not assigned to a domain)."""
+        """Gets all standalone teams (zero domain assignments)."""
         logger.debug("Fetching standalone teams")
         try:
-            return (
+            assigned_ids = entity_domain_repo.find_entity_ids_with_any_domain(
+                db, entity_type=TEAM_ENTITY_TYPE
+            )
+            query = (
                 db.query(self.model)
                 .options(selectinload(self.model.members))
-                .filter(self.model.domain_id.is_(None))
                 .order_by(self.model.name)
-                .all()
             )
+            if assigned_ids:
+                query = query.filter(self.model.id.notin_(assigned_ids))
+            return query.all()
         except SQLAlchemyError as e:
             logger.error(f"Database error fetching standalone teams: {e}", exc_info=True)
             db.rollback()

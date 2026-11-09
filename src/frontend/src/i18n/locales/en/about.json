@@ -14,6 +14,12 @@
     "database": { "title": "Database", "desc": "PostgreSQL" },
     "platform": { "title": "Platform", "desc": "Databricks Apps" }
   },
+  "userGuide": {
+    "title": "User Guide",
+    "tableOfContents": "Table of Contents",
+    "loadError": "Failed to load user guide: {{statusText}}",
+    "loadErrorGeneric": "Failed to load user guide"
+  },
   "learnMore": "Contribute & Learn More",
   "cta": {
     "github": "View on GitHub",

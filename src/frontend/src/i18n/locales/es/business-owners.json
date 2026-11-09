@@ -1,0 +1,65 @@
+{
+  "title": "Propietarios de negocio",
+  "subtitle": "Asignaciones de propiedad que rastrean quién es responsable de qué.",
+  "addNew": "Asignar propietario",
+  "editOwner": "Editar asignación",
+  "removeOwner": "Quitar propietario",
+  "table": {
+    "object": "Objeto",
+    "objectType": "Tipo de objeto",
+    "owner": "Propietario",
+    "role": "Rol",
+    "status": "Estado",
+    "assignedAt": "Asignado",
+    "removedAt": "Quitado",
+    "actions": "Acciones"
+  },
+  "objectTypes": {
+    "data_product": "Producto de datos",
+    "data_contract": "Contrato de datos",
+    "dataset": "Conjunto de datos",
+    "data_domain": "Dominio de datos",
+    "business_term": "Término de negocio",
+    "policy": "Política",
+    "asset": "Activo",
+    "tag": "Etiqueta"
+  },
+  "statusLabels": {
+    "active": "Activo",
+    "inactive": "Inactivo"
+  },
+  "permissions": {
+    "deniedView": "No tiene permiso para ver los propietarios de negocio.",
+    "deniedCreate": "No tiene permiso para asignar propietarios.",
+    "deniedEdit": "No tiene permiso para editar las asignaciones de propietario.",
+    "deniedDelete": "No tiene permiso para quitar propietarios.",
+    "permissionDenied": "Permiso denegado"
+  },
+  "messages": {
+    "errorFetching": "Error al obtener los propietarios de negocio",
+    "errorRemoving": "Error al quitar el propietario de negocio",
+    "removed": "Propietario quitado",
+    "removedSuccess": "La asignación de propiedad se quitó correctamente.",
+    "errorLoadingData": "Error al cargar los datos"
+  },
+  "removeDialog": {
+    "title": "¿Quitar propietario?",
+    "description": "Esto desactivará la asignación de propiedad. Se conservará el historial.",
+    "reasonLabel": "Motivo (opcional)",
+    "reasonPlaceholder": "Ingrese el motivo de la eliminación...",
+    "cancel": "Cancelar",
+    "remove": "Quitar"
+  },
+  "emptyState": {
+    "title": "Aún no hay asignaciones de propiedad",
+    "description": "Asigne propietarios de negocio a productos de datos, contratos y otros objetos."
+  },
+  "panel": {
+    "title": "Propietarios",
+    "currentOwners": "Propietarios actuales",
+    "previousOwners": "Propietarios anteriores",
+    "noOwners": "No hay propietarios asignados",
+    "assignOwner": "Asignar propietario",
+    "history": "Mostrar historial"
+  }
+}

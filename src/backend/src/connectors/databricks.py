@@ -34,6 +34,7 @@ from src.models.assets import (
     UnifiedAssetType,
 )
 from src.common.logging import get_logger
+from src.common.metric_views import parse_metric_view_definition
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,7 @@ TABLE_TYPE_MAPPING = {
     TableType.VIEW: UnifiedAssetType.UC_VIEW,
     TableType.MATERIALIZED_VIEW: UnifiedAssetType.UC_MATERIALIZED_VIEW,
     TableType.STREAMING_TABLE: UnifiedAssetType.UC_STREAMING_TABLE,
+    TableType.METRIC_VIEW: UnifiedAssetType.UC_METRIC,
 }
 
 
@@ -220,12 +222,14 @@ class DatabricksConnector(AssetConnector):
                 # Filter by asset types if specified
                 asset_types = options.asset_types
                 
-                # List tables/views
+                # List tables/views (and metric views, which the Tables API
+                # returns with table_type METRIC_VIEW)
                 if not asset_types or any(t in asset_types for t in [
                     UnifiedAssetType.UC_TABLE,
                     UnifiedAssetType.UC_VIEW,
                     UnifiedAssetType.UC_MATERIALIZED_VIEW,
                     UnifiedAssetType.UC_STREAMING_TABLE,
+                    UnifiedAssetType.UC_METRIC,
                 ]):
                     results.extend(self._list_tables(ws, catalog, schema, options, limit - len(results)))
                 
@@ -243,12 +247,7 @@ class DatabricksConnector(AssetConnector):
                 if not asset_types or UnifiedAssetType.UC_VOLUME in asset_types:
                     if len(results) < limit:
                         results.extend(self._list_volumes(ws, catalog, schema, options, limit - len(results)))
-                
-                # List metrics
-                if not asset_types or UnifiedAssetType.UC_METRIC in asset_types:
-                    if len(results) < limit:
-                        results.extend(self._list_metrics(ws, catalog, schema, options, limit - len(results)))
-            
+
             return results[:limit]
             
         except PermissionDenied as e:
@@ -491,37 +490,6 @@ class DatabricksConnector(AssetConnector):
         
         return results
     
-    def _list_metrics(
-        self,
-        ws: WorkspaceClient,
-        catalog: str,
-        schema: str,
-        options: ListAssetsOptions,
-        limit: int
-    ) -> List[AssetInfo]:
-        """
-        List UC metrics in a schema.
-        
-        Note: UC Metrics API may not be available in all workspaces.
-        This implementation uses the Lakeview/AI-BI metrics if available.
-        """
-        results = []
-        
-        # UC Metrics are a newer feature - try to list them if API is available
-        try:
-            # The metrics API is accessed through the Lakeview API in newer SDKs
-            # For now, we'll query the SYSTEM.INFORMATION_SCHEMA if available
-            # or use the REST API directly
-            
-            # This is a placeholder - actual implementation depends on
-            # which SDK version and features are available
-            logger.debug(f"Metrics listing for {catalog}.{schema} - feature may not be available")
-            
-        except Exception as e:
-            logger.debug(f"Error listing metrics in {catalog}.{schema}: {e}")
-        
-        return results
-    
     # -------------------------------------------------------------------------
     # Get Asset Metadata
     # -------------------------------------------------------------------------
@@ -682,7 +650,12 @@ class DatabricksConnector(AssetConnector):
             tags = {}
             if table.properties:
                 tags = {k: v for k, v in table.properties.items() if k.startswith("tag_")}
-            
+
+            properties = dict(table.properties or {})
+            if asset_type == UnifiedAssetType.UC_METRIC:
+                # A metric view's YAML spec: source, dimensions and measures
+                properties['metric_view'] = parse_metric_view_definition(table.view_definition)
+
             return AssetMetadata(
                 identifier=table.full_name or identifier,
                 name=table.name,
@@ -698,7 +671,7 @@ class DatabricksConnector(AssetConnector):
                 ownership=ownership,
                 statistics=statistics,
                 tags=tags,
-                properties=table.properties or {},
+                properties=properties,
                 created_at=table.created_at if hasattr(table, 'created_at') else None,
                 updated_at=table.updated_at if hasattr(table, 'updated_at') else None,
                 created_by=table.created_by if hasattr(table, 'created_by') else None,

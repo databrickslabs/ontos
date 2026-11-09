@@ -1,5 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { loadDemoData, clearDemoData } from './helpers/demo-data';
+
+// Adding a step opens its properties sheet (a modal that hides the toolbar from
+// the accessibility tree); close it so the next step can be added.
+async function addStep(page: Page, name: RegExp) {
+  await page.getByRole('button', { name }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
 
 test.beforeAll(async ({ request }) => {
   await loadDemoData(request);
@@ -39,19 +47,21 @@ test.describe('Workflow Editor — Edge Management', () => {
   test('adding steps auto-creates connecting edges', async ({ page }) => {
     await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
+    // The trigger node renders after the toolbar; wait for it before adding steps
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Start with just the trigger node
     const initialNodeCount = await page.locator('.react-flow__node').count();
     expect(initialNodeCount).toBe(1); // trigger only
 
     // Add an Approval step — auto-connects trigger → approval
-    await page.getByRole('button', { name: /Approval/ }).click();
+    await addStep(page, /Approval/);
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
     // One edge: trigger → approval
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
     // Add a Notification step — auto-connects approval → notification (pass edge)
-    await page.getByRole('button', { name: /Notification/ }).click();
+    await addStep(page, /Notification/);
     await expect(page.locator('.react-flow__node')).toHaveCount(3);
     // Two edges: trigger → approval, approval → notification
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
@@ -63,10 +73,12 @@ test.describe('Workflow Editor — Edge Management', () => {
   test('clicking an edge selects it and shows delete button', async ({ page }) => {
     await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
+    // The trigger node renders after the toolbar; wait for it before adding steps
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Add two steps to get an edge between them
-    await page.getByRole('button', { name: /Approval/ }).click();
-    await page.getByRole('button', { name: /Notification/ }).click();
+    await addStep(page, /Approval/);
+    await addStep(page, /Notification/);
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 
     // Click the second edge (approval → notification) to select it.
@@ -89,10 +101,12 @@ test.describe('Workflow Editor — Edge Management', () => {
   test('clicking the delete button removes the edge', async ({ page }) => {
     await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
+    // The trigger node renders after the toolbar; wait for it before adding steps
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Build a small graph: trigger → approval → notification
-    await page.getByRole('button', { name: /Approval/ }).click();
-    await page.getByRole('button', { name: /Notification/ }).click();
+    await addStep(page, /Approval/);
+    await addStep(page, /Notification/);
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 
     // Select the last edge (approval → notification)
@@ -114,9 +128,11 @@ test.describe('Workflow Editor — Edge Management', () => {
   test('approval node exposes pass and fail handles', async ({ page }) => {
     await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
+    // The trigger node renders after the toolbar; wait for it before adding steps
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Add an Approval step
-    await page.getByRole('button', { name: /Approval/ }).click();
+    await addStep(page, /Approval/);
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
 
     // The approval node (second node) should have two source handles
@@ -132,13 +148,18 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 6. Drag from fail handle to create a fail edge
   // -------------------------------------------------------------------------
   test('drag from fail handle creates a fail-labeled edge', async ({ page }) => {
+    // Four stacked nodes don't fit the default 720px viewport; the drop target
+    // must be on screen
+    await page.setViewportSize({ width: 1280, height: 1400 });
     await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
+    // The trigger node renders after the toolbar; wait for it before adding steps
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Add Approval + two Notification nodes
-    await page.getByRole('button', { name: /Approval/ }).click();
-    await page.getByRole('button', { name: /Notification/ }).click();
-    await page.getByRole('button', { name: /Notification/ }).click();
+    await addStep(page, /Approval/);
+    await addStep(page, /Notification/);
+    await addStep(page, /Notification/);
     await expect(page.locator('.react-flow__node')).toHaveCount(4);
     // Auto-edges: trigger→approval, approval→notification1, notification1→notification2
     await expect(page.locator('.react-flow__edge')).toHaveCount(3);
@@ -150,39 +171,36 @@ test.describe('Workflow Editor — Edge Management', () => {
     const targetHandle = targetNode.locator('.react-flow__handle[data-handlepos="top"]')
       .or(targetNode.locator('.react-flow__handle.react-flow__handle-top'));
 
-    // If handles are visible, attempt the drag; otherwise skip gracefully.
-    // ReactFlow handle visibility can depend on viewport/zoom.
-    const failHandleVisible = await failHandle.isVisible().catch(() => false);
-    const targetHandleVisible = await targetHandle.first().isVisible().catch(() => false);
+    // Both handles must be on screen (the viewport is enlarged above), so the drag
+    // really runs instead of the test passing without it
+    await expect(failHandle).toBeVisible();
+    await expect(targetHandle.first()).toBeVisible();
+    const sourceBox = await failHandle.boundingBox();
+    const targetBox = await targetHandle.first().boundingBox();
+    expect(sourceBox).not.toBeNull();
+    expect(targetBox).not.toBeNull();
 
-    if (failHandleVisible && targetHandleVisible) {
-      const sourceBox = await failHandle.boundingBox();
-      const targetBox = await targetHandle.first().boundingBox();
+    // Perform the drag from fail handle to target node
+    await page.mouse.move(
+      sourceBox!.x + sourceBox!.width / 2,
+      sourceBox!.y + sourceBox!.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      targetBox!.x + targetBox!.width / 2,
+      targetBox!.y + targetBox!.height / 2,
+      { steps: 10 },
+    );
+    await page.mouse.up();
 
-      if (sourceBox && targetBox) {
-        // Perform the drag from fail handle to target node
-        await page.mouse.move(
-          sourceBox.x + sourceBox.width / 2,
-          sourceBox.y + sourceBox.height / 2,
-        );
-        await page.mouse.down();
-        await page.mouse.move(
-          targetBox.x + targetBox.width / 2,
-          targetBox.y + targetBox.height / 2,
-          { steps: 10 },
-        );
-        await page.mouse.up();
+    // A new "Fail" edge should appear (4 total now)
+    // Allow a short wait for ReactFlow to process the connection
+    await expect(page.locator('.react-flow__edge')).toHaveCount(4, { timeout: 5_000 });
 
-        // A new "Fail" edge should appear (4 total now)
-        // Allow a short wait for ReactFlow to process the connection
-        await expect(page.locator('.react-flow__edge')).toHaveCount(4, { timeout: 5_000 });
-
-        // Verify a "Fail" label is present in the edge label renderer
-        await expect(
-          page.locator('.react-flow__edgelabel-renderer').getByText('Fail'),
-        ).toBeVisible();
-      }
-    }
+    // Verify a "Fail" label is present in the edge label renderer
+    await expect(
+      page.locator('.react-flow__edgelabel-renderer').getByText('Fail'),
+    ).toBeVisible();
   });
 
   // -------------------------------------------------------------------------
@@ -191,14 +209,16 @@ test.describe('Workflow Editor — Edge Management', () => {
   test('save workflow with steps and connections succeeds', async ({ page }) => {
     await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
+    // The trigger node renders after the toolbar; wait for it before adding steps
+    await expect(page.locator('.react-flow__node')).toHaveCount(1);
 
     // Fill in the workflow name (the inline Input with placeholder "Workflow name")
     const nameInput = page.getByPlaceholder('Workflow name');
     await nameInput.fill(`PW Edge Test ${Date.now()}`);
 
     // Add an Approval + Notification step (auto-connected)
-    await page.getByRole('button', { name: /Approval/ }).click();
-    await page.getByRole('button', { name: /Notification/ }).click();
+    await addStep(page, /Approval/);
+    await addStep(page, /Notification/);
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 
     // Click Save

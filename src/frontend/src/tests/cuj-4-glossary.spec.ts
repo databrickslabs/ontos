@@ -12,8 +12,8 @@ test.afterAll(async ({ request }) => {
 // ---------------------------------------------------------------------------
 // CUJ-4  Business Glossary — Collections
 // ---------------------------------------------------------------------------
-test.describe('CUJ-4 — Collections', () => {
-  test('collections list loads with items', async ({ page }) => {
+test.describe('CUJ-4: Schemes', () => {
+  test('schemes list loads with items', async ({ page }) => {
     await page.goto('/concepts/collections')
     // Wait for any list/table/card content to appear
     await expect(
@@ -21,12 +21,12 @@ test.describe('CUJ-4 — Collections', () => {
     ).toBeVisible({ timeout: 10_000 })
   })
 
-  test.describe.serial('create and delete collection', () => {
+  test.describe.serial('create and delete scheme', () => {
     const collectionName = `PW Glossary ${Date.now()}`
 
-    test('creates a new collection', async ({ page }) => {
+    test('creates a new scheme', async ({ page }) => {
       await page.goto('/concepts/collections')
-      await page.getByRole('button', { name: /create collection/i }).first().click()
+      await page.getByRole('button', { name: /create scheme/i }).first().click()
 
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
@@ -38,7 +38,7 @@ test.describe('CUJ-4 — Collections', () => {
       await expect(page.getByText(collectionName)).toBeVisible()
     })
 
-    test('deletes the created collection', async ({ page }) => {
+    test('deletes the created scheme', async ({ page }) => {
       await page.goto('/concepts/collections')
       await page.waitForLoadState('networkidle')
       const row = page.locator('table >> tbody >> tr', { hasText: collectionName })

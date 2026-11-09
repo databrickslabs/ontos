@@ -29,27 +29,28 @@ import {
 } from '@/types/settings';
 
 
-const MATCH_TYPE_LABELS: Record<MatchType, string> = {
-  [MatchType.PREFIX]: 'Prefix (start of word)',
-  [MatchType.SUBSTRING]: 'Substring (anywhere)',
-  [MatchType.EXACT]: 'Exact match only',
-  [MatchType.FUZZY]: 'Fuzzy (allow typos)',
+// i18n key suffixes (under the `settings:` namespace); rendered via t(`settings:${key}`)
+const MATCH_TYPE_LABEL_KEYS: Record<MatchType, string> = {
+  [MatchType.PREFIX]: 'search.matchType.prefix',
+  [MatchType.SUBSTRING]: 'search.matchType.substring',
+  [MatchType.EXACT]: 'search.matchType.exact',
+  [MatchType.FUZZY]: 'search.matchType.fuzzy',
 };
 
-const SORT_FIELD_LABELS: Record<SortField, string> = {
-  [SortField.MATCH_PRIORITY]: 'Field Priority (title > description > tags)',
-  [SortField.BOOST_SCORE]: 'Boost Score (weighted relevance)',
-  [SortField.TITLE_ASC]: 'Title (A → Z)',
-  [SortField.TITLE_DESC]: 'Title (Z → A)',
+const SORT_FIELD_LABEL_KEYS: Record<SortField, string> = {
+  [SortField.MATCH_PRIORITY]: 'search.sortField.matchPriority',
+  [SortField.BOOST_SCORE]: 'search.sortField.boostScore',
+  [SortField.TITLE_ASC]: 'search.sortField.titleAsc',
+  [SortField.TITLE_DESC]: 'search.sortField.titleDesc',
 };
 
-const ASSET_TYPE_DISPLAY_NAMES: Record<string, string> = {
-  'data-product': 'Data Products',
-  'data-contract': 'Data Contracts',
-  'glossary-term': 'Glossary Terms',
-  'data-asset-review': 'Asset Reviews',
-  'tag': 'Tags',
-  'data-domain': 'Data Domains',
+const ASSET_TYPE_DISPLAY_NAME_KEYS: Record<string, string> = {
+  'data-product': 'search.assetType.dataProduct',
+  'data-contract': 'search.assetType.dataContract',
+  'glossary-term': 'search.assetType.glossaryTerm',
+  'data-asset-review': 'search.assetType.dataAssetReview',
+  'tag': 'search.assetType.tag',
+  'data-domain': 'search.assetType.dataDomain',
 };
 
 interface FieldConfigEditorProps {
@@ -60,13 +61,14 @@ interface FieldConfigEditorProps {
   showSource?: boolean;
 }
 
-function FieldConfigEditor({ 
-  fieldName, 
-  config, 
-  onChange, 
+function FieldConfigEditor({
+  fieldName,
+  config,
+  onChange,
   disabled = false,
   showSource = false,
 }: FieldConfigEditorProps) {
+  const { t } = useTranslation(['settings', 'common']);
   return (
     <div className="border rounded-lg p-4 space-y-4 bg-card">
       <div className="flex items-center justify-between">
@@ -74,13 +76,13 @@ function FieldConfigEditor({
           <span className="font-medium capitalize">{fieldName}</span>
           {showSource && config.source && (
             <Badge variant="outline" className="text-xs">
-              source: {config.source}
+              {t('settings:search.fieldEditor.sourceBadge', { source: config.source })}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Label htmlFor={`${fieldName}-indexed`} className="text-sm text-muted-foreground">
-            Indexed
+            {t('settings:search.fieldEditor.indexed')}
           </Label>
           <Switch
             id={`${fieldName}-indexed`}
@@ -94,7 +96,7 @@ function FieldConfigEditor({
       {config.indexed && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm">Match Type</Label>
+            <Label className="text-sm">{t('settings:search.fieldEditor.matchType')}</Label>
             <Select
               value={config.match_type}
               onValueChange={(value) => onChange({ ...config, match_type: value as MatchType })}
@@ -104,9 +106,9 @@ function FieldConfigEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(MATCH_TYPE_LABELS).map(([value, label]) => (
+                {Object.entries(MATCH_TYPE_LABEL_KEYS).map(([value, labelKey]) => (
                   <SelectItem key={value} value={value}>
-                    {label}
+                    {t(`settings:${labelKey}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -114,7 +116,7 @@ function FieldConfigEditor({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm">Priority (1-100)</Label>
+            <Label className="text-sm">{t('settings:search.fieldEditor.priorityLabel')}</Label>
             <Input
               type="number"
               value={config.priority}
@@ -124,11 +126,11 @@ function FieldConfigEditor({
               disabled={disabled}
               className="w-24"
             />
-            <p className="text-xs text-muted-foreground">Lower = higher importance</p>
+            <p className="text-xs text-muted-foreground">{t('settings:search.fieldEditor.priorityHelp')}</p>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm">Boost (0-10)</Label>
+            <Label className="text-sm">{t('settings:search.fieldEditor.boostLabel')}</Label>
             <Input
               type="number"
               value={config.boost.toFixed(1)}
@@ -139,7 +141,7 @@ function FieldConfigEditor({
               disabled={disabled}
               className="w-24"
             />
-            <p className="text-xs text-muted-foreground">Score multiplier for ranking</p>
+            <p className="text-xs text-muted-foreground">{t('settings:search.fieldEditor.boostHelp')}</p>
           </div>
         </div>
       )}
@@ -149,7 +151,7 @@ function FieldConfigEditor({
 
 
 export default function SearchConfigEditor() {
-  const { t: _t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   
@@ -181,8 +183,8 @@ export default function SearchConfigEditor() {
     } catch (error) {
       console.error('Error loading search config:', error);
       toast({
-        title: 'Error loading configuration',
-        description: 'Failed to load search configuration. Please try again.',
+        title: t('settings:search.messages.loadErrorTitle'),
+        description: t('settings:search.messages.loadErrorDescription'),
         variant: 'destructive',
       });
     } finally {
@@ -215,14 +217,14 @@ export default function SearchConfigEditor() {
       setHasChanges(false);
       
       toast({
-        title: 'Configuration saved',
-        description: 'Search configuration has been updated. Consider rebuilding the index to apply changes.',
+        title: t('settings:search.messages.saveSuccessTitle'),
+        description: t('settings:search.messages.saveSuccessDescription'),
       });
     } catch (error) {
       console.error('Error saving config:', error);
       toast({
-        title: 'Error saving configuration',
-        description: 'Failed to save search configuration. Please try again.',
+        title: t('settings:search.messages.saveErrorTitle'),
+        description: t('settings:search.messages.saveErrorDescription'),
         variant: 'destructive',
       });
     } finally {
@@ -244,14 +246,14 @@ export default function SearchConfigEditor() {
       const result = await response.json();
       
       toast({
-        title: 'Index rebuilt',
-        description: `Search index rebuilt with ${result.index_size} items.`,
+        title: t('settings:search.messages.rebuildSuccessTitle'),
+        description: t('settings:search.messages.rebuildSuccessDescription', { count: result.index_size }),
       });
     } catch (error) {
       console.error('Error rebuilding index:', error);
       toast({
-        title: 'Error rebuilding index',
-        description: 'Failed to rebuild search index. Please try again.',
+        title: t('settings:search.messages.rebuildErrorTitle'),
+        description: t('settings:search.messages.rebuildErrorDescription'),
         variant: 'destructive',
       });
     } finally {
@@ -312,7 +314,7 @@ export default function SearchConfigEditor() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Failed to load search configuration. Please refresh the page.
+            {t('settings:search.loadFailedAlert')}
           </AlertDescription>
         </Alert>
       </div>
@@ -326,10 +328,10 @@ export default function SearchConfigEditor() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Search className="w-8 h-8" />
-              Search Configuration
+              {t('settings:search.title')}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Configure how the global search indexes and ranks results across different asset types.
+              {t('settings:search.description')}
             </p>
           </div>
           <Badge variant="outline">v{config.version}</Badge>
@@ -341,7 +343,7 @@ export default function SearchConfigEditor() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              You have unsaved changes. Save to persist your configuration.
+              {t('settings:search.unsavedChanges')}
             </AlertDescription>
           </Alert>
         )}
@@ -350,22 +352,22 @@ export default function SearchConfigEditor() {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="defaults" className="flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
-              Default Fields
+              {t('settings:search.tabs.defaultFields')}
             </TabsTrigger>
             <TabsTrigger value="asset-types" className="flex items-center gap-2">
               <Layers className="h-4 w-4" />
-              Asset Types
+              {t('settings:search.tabs.assetTypes')}
             </TabsTrigger>
             <TabsTrigger value="ranking" className="flex items-center gap-2">
               <ArrowUpDown className="h-4 w-4" />
-              Ranking
+              {t('settings:search.tabs.ranking')}
             </TabsTrigger>
           </TabsList>
 
           {/* Default Fields Tab */}
           <TabsContent value="defaults" className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              These settings apply to all asset types by default. Individual asset types can override these settings.
+              {t('settings:search.defaults.description')}
             </p>
             
             <div className="space-y-4">
@@ -393,7 +395,7 @@ export default function SearchConfigEditor() {
           {/* Asset Types Tab */}
           <TabsContent value="asset-types" className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Configure search behavior for each asset type. Enable/disable indexing and customize extra fields.
+              {t('settings:search.assetTypesTab.description')}
             </p>
 
             <Accordion type="multiple" className="space-y-2">
@@ -402,21 +404,21 @@ export default function SearchConfigEditor() {
                   <AccordionTrigger className="px-4 hover:no-underline">
                     <div className="flex items-center gap-3">
                       <span className="font-medium">
-                        {ASSET_TYPE_DISPLAY_NAMES[assetType] || assetType}
+                        {ASSET_TYPE_DISPLAY_NAME_KEYS[assetType] ? t(`settings:${ASSET_TYPE_DISPLAY_NAME_KEYS[assetType]}`) : assetType}
                       </span>
                       {assetConfig.enabled ? (
                         <Badge variant="default" className="text-xs">
                           <Check className="h-3 w-3 mr-1" />
-                          Enabled
+                          {t('common:labels.enabled')}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="text-xs">
-                          Disabled
+                          {t('common:labels.disabled')}
                         </Badge>
                       )}
                       {Object.keys(assetConfig.extra_fields).length > 0 && (
                         <Badge variant="outline" className="text-xs">
-                          +{Object.keys(assetConfig.extra_fields).length} extra fields
+                          {t('settings:search.assetTypesTab.extraFieldsBadge', { count: Object.keys(assetConfig.extra_fields).length })}
                         </Badge>
                       )}
                     </div>
@@ -432,7 +434,7 @@ export default function SearchConfigEditor() {
                           }
                           disabled={!hasWriteAccess}
                         />
-                        <Label htmlFor={`${assetType}-enabled`}>Enable indexing</Label>
+                        <Label htmlFor={`${assetType}-enabled`}>{t('settings:search.assetTypesTab.enableIndexing')}</Label>
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch
@@ -443,7 +445,7 @@ export default function SearchConfigEditor() {
                           }
                           disabled={!hasWriteAccess || !assetConfig.enabled}
                         />
-                        <Label htmlFor={`${assetType}-inherit`}>Inherit default field settings</Label>
+                        <Label htmlFor={`${assetType}-inherit`}>{t('settings:search.assetTypesTab.inheritDefaults')}</Label>
                       </div>
                     </div>
 
@@ -451,9 +453,9 @@ export default function SearchConfigEditor() {
                       <>
                         <Separator />
                         <div className="space-y-2">
-                          <h4 className="text-sm font-medium">Extra Fields</h4>
+                          <h4 className="text-sm font-medium">{t('settings:search.assetTypesTab.extraFieldsTitle')}</h4>
                           <p className="text-xs text-muted-foreground">
-                            Additional fields specific to this asset type.
+                            {t('settings:search.assetTypesTab.extraFieldsDescription')}
                           </p>
                           <div className="space-y-3">
                             {Object.entries(assetConfig.extra_fields).map(([fieldName, fieldConfig]) => (
@@ -485,12 +487,12 @@ export default function SearchConfigEditor() {
           {/* Ranking Tab */}
           <TabsContent value="ranking" className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Configure how search results are sorted. Results matching higher priority fields appear first.
+              {t('settings:search.ranking.description')}
             </p>
 
             <div className="grid gap-4">
               <div className="space-y-2">
-                <Label>Primary Sort</Label>
+                <Label>{t('settings:search.ranking.primarySort')}</Label>
                 <Select
                   value={config.ranking.primary_sort}
                   onValueChange={(value) => updateRanking({ ...config.ranking, primary_sort: value as SortField })}
@@ -500,20 +502,20 @@ export default function SearchConfigEditor() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(SORT_FIELD_LABELS).map(([value, label]) => (
+                    {Object.entries(SORT_FIELD_LABEL_KEYS).map(([value, labelKey]) => (
                       <SelectItem key={value} value={value}>
-                        {label}
+                        {t(`settings:${labelKey}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  The main criterion used to order results.
+                  {t('settings:search.ranking.primarySortHelp')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label>Secondary Sort (tie-breaker)</Label>
+                <Label>{t('settings:search.ranking.secondarySort')}</Label>
                 <Select
                   value={config.ranking.secondary_sort}
                   onValueChange={(value) => updateRanking({ ...config.ranking, secondary_sort: value as SortField })}
@@ -523,20 +525,20 @@ export default function SearchConfigEditor() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(SORT_FIELD_LABELS).map(([value, label]) => (
+                    {Object.entries(SORT_FIELD_LABEL_KEYS).map(([value, labelKey]) => (
                       <SelectItem key={value} value={value}>
-                        {label}
+                        {t(`settings:${labelKey}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Used when primary sort values are equal.
+                  {t('settings:search.ranking.secondarySortHelp')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label>Tertiary Sort</Label>
+                <Label>{t('settings:search.ranking.tertiarySort')}</Label>
                 <Select
                   value={config.ranking.tertiary_sort}
                   onValueChange={(value) => updateRanking({ ...config.ranking, tertiary_sort: value as SortField })}
@@ -546,15 +548,15 @@ export default function SearchConfigEditor() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(SORT_FIELD_LABELS).map(([value, label]) => (
+                    {Object.entries(SORT_FIELD_LABEL_KEYS).map(([value, labelKey]) => (
                       <SelectItem key={value} value={value}>
-                        {label}
+                        {t(`settings:${labelKey}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Final tie-breaker for results with equal primary and secondary values.
+                  {t('settings:search.ranking.tertiarySortHelp')}
                 </p>
               </div>
             </div>
@@ -571,7 +573,7 @@ export default function SearchConfigEditor() {
             ) : (
               <RefreshCw className="mr-2 h-4 w-4" />
             )}
-            Rebuild Search Index
+            {t('settings:search.buttons.rebuildIndex')}
           </Button>
 
           <Button
@@ -583,7 +585,7 @@ export default function SearchConfigEditor() {
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            Save Configuration
+            {t('settings:search.buttons.save')}
           </Button>
         </div>
       </div>

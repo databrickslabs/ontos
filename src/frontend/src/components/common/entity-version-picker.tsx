@@ -27,6 +27,7 @@
  * rather than catalog size.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Command,
   CommandEmpty,
@@ -114,6 +115,7 @@ export function EntityVersionPicker({
   className,
   emptyAction,
 }: EntityVersionPickerProps) {
+  const { t } = useTranslation('common')
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<FamilyRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -199,15 +201,15 @@ export function EntityVersionPicker({
   }, [value, rows])
 
   const triggerLabel = useMemo(() => {
-    if (!value) return placeholder || `Select ${entityKind}…`
+    if (!value) return placeholder || t('common:entityVersionPicker.selectPlaceholder', { kind: entityKind })
     if (value.scope === 'family') {
       const name = selectedRow?.name || value.displayName || value.familyId
-      return `${name} (latest)`
+      return t('common:entityVersionPicker.latestSuffix', { name })
     }
     const name = selectedRow?.name || value.displayName || value.entityId
     const version = selectedRow?.version || value.displayVersion
     return version ? `${name} · v${version}` : name
-  }, [value, selectedRow, entityKind, placeholder])
+  }, [value, selectedRow, entityKind, placeholder, t])
 
   const showScopeToggle = allowedScopes.length > 1
 
@@ -262,10 +264,10 @@ export function EntityVersionPicker({
                 : 'text-muted-foreground hover:text-foreground',
             )}
             aria-pressed={scope === 'entity'}
-            title="Pin a specific version"
+            title={t('common:entityVersionPicker.pinVersionTitle')}
           >
             <Pin className="h-3 w-3" />
-            Pin version
+            {t('common:entityVersionPicker.pinVersion')}
           </button>
           <button
             type="button"
@@ -277,10 +279,10 @@ export function EntityVersionPicker({
                 : 'text-muted-foreground hover:text-foreground',
             )}
             aria-pressed={scope === 'family'}
-            title="Always follow the family's latest visible version"
+            title={t('common:entityVersionPicker.followLatestTitle')}
           >
             <GitBranch className="h-3 w-3" />
-            Follow latest
+            {t('common:entityVersionPicker.followLatest')}
           </button>
         </div>
       )}
@@ -301,14 +303,14 @@ export function EntityVersionPicker({
         </PopoverTrigger>
         <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
           <Command>
-            <CommandInput placeholder={`Search ${entityKind}s…`} />
+            <CommandInput placeholder={t('common:entityVersionPicker.searchPlaceholder', { kind: entityKind })} />
             <CommandList>
               {loading ? (
-                <CommandEmpty>Loading…</CommandEmpty>
+                <CommandEmpty>{t('common:entityVersionPicker.loading')}</CommandEmpty>
               ) : (
                 <>
                   <CommandEmpty>
-                    No matching {entityKind}s.
+                    {t('common:entityVersionPicker.noMatching', { kind: entityKind })}
                     {emptyAction && <div className="mt-2">{emptyAction}</div>}
                   </CommandEmpty>
                   <CommandGroup>
@@ -334,7 +336,7 @@ export function EntityVersionPicker({
                               isSelected ? 'opacity-100' : 'opacity-0',
                             )}
                           />
-                          <span className="flex-1 truncate">{row.name || '(unnamed)'}</span>
+                          <span className="flex-1 truncate">{row.name || t('common:entityVersionPicker.unnamed')}</span>
                           {row.version && (
                             <Badge variant="secondary" className="text-[10px]">
                               v{row.version}

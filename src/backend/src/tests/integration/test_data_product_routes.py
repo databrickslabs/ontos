@@ -28,6 +28,7 @@ class TestDataProductRoutes:
             "description": {"purpose": "Test product via API"},
             "version": "1.0.0",
             "productType": "sourceAligned",
+            "status": "draft",
             "owner": "test@example.com",
             "tags": ["api-test"],
         }
@@ -122,16 +123,26 @@ class TestDataProductRoutes:
         assert response.status_code == 422
 
     def test_create_product_duplicate_id(self, client, sample_product_data):
-        """Test that duplicate ID returns 409 conflict."""
-        # Arrange - Create first product
-        client.post("/api/data-products", json=sample_product_data)
+        """A payload id that is already taken is not adopted (#853).
 
-        # Act - Try to create duplicate
+        The first product keeps the id; the second gets a fresh server-side one.
+        """
+        # Arrange - Create first product
+        first = client.post("/api/data-products", json=sample_product_data)
+        assert first.status_code == 201
+        assert first.json()["id"] == sample_product_data["id"]
+
+        # Act - Post the same id again
         response = client.post("/api/data-products", json=sample_product_data)
 
         # Assert
-        assert response.status_code == 409
-        assert "already exists" in response.json()["detail"]
+        assert response.status_code == 201
+        second_id = response.json()["id"]
+        assert second_id != sample_product_data["id"]
+        uuid.UUID(second_id)
+        listed = client.get(f"/api/data-products/{sample_product_data['id']}")
+        assert listed.status_code == 200
+        assert listed.json()["name"] == sample_product_data["name"]
 
     def test_create_product_requires_write_permission(
         self, client, mock_test_user, sample_product_data
@@ -227,7 +238,7 @@ class TestDataProductRoutes:
 
         # Assert
         assert response.status_code == 400
-        assert "mismatch" in response.json()["detail"].lower()
+        assert "does not match" in response.json()["detail"].lower()
 
     def test_update_product_requires_write_permission(
         self, client, mock_test_user, sample_product_data
@@ -360,14 +371,20 @@ class TestDataProductRoutes:
 
         assert response.status_code == 202
 
-    def test_publish_product_success(self, client, sample_product_data):
+    def test_publish_product_success(self, client, db_session, sample_product_data):
         """Test POST /api/data-products/{id}/publish."""
-        # Arrange
-        sample_product_data["status"] = "proposed"
+        from src.db_models.data_contracts import DataContractDb
+
+        # Arrange - publishing needs every output port's contract approved or active
+        contract = DataContractDb(name="Publish Contract", version="1.0.0", status="active")
+        db_session.add(contract)
+        db_session.flush()
+        # ODPS lifecycle: only an approved product is published (approved -> active)
+        sample_product_data["status"] = "approved"
         sample_product_data["outputPorts"] = [{
             "name": "test-output",
             "version": "1.0.0",
-            "contractId": "test-contract"
+            "contractId": contract.id
         }]
         create_response = client.post("/api/data-products", json=sample_product_data)
         product_id = create_response.json()["id"]
@@ -412,17 +429,19 @@ class TestDataProductRoutes:
     # Utility Endpoints
     # =================================================================
 
-    def test_get_statuses(self, client):
-        """Test GET /api/data-products/statuses returns all status values."""
+    def test_get_statuses(self, client, sample_product_data):
+        """Test GET /api/data-products/statuses returns the statuses in use."""
+        # Arrange - the route lists the distinct statuses of stored products
+        for status in ("draft", "proposed", "draft"):
+            data = {**sample_product_data, "id": str(uuid.uuid4()), "status": status}
+            assert client.post("/api/data-products", json=data).status_code == 201
+
         # Act
         response = client.get("/api/data-products/statuses")
 
         # Assert
         assert response.status_code == 200
-        statuses = response.json()
-        assert isinstance(statuses, list)
-        assert "draft" in statuses
-        assert "active" in statuses
+        assert response.json() == ["draft", "proposed"]
 
     def test_get_types(self, client):
         """Test GET /api/data-products/types returns product types."""
@@ -435,21 +454,23 @@ class TestDataProductRoutes:
 
     def test_get_owners(self, client, sample_product_data):
         """Test GET /api/data-products/owners returns distinct owners."""
-        # Arrange - Create products with different owners
-        for owner in ["owner1@test.com", "owner2@test.com"]:
+        # Arrange - owners are the names of the ODPS team members with role "owner"
+        for owner in ["owner1@test.com", "owner2@test.com", "owner1@test.com"]:
             data = sample_product_data.copy()
             data["id"] = str(uuid.uuid4())
-            data["owner"] = owner
-            client.post("/api/data-products", json=data)
+            data["team"] = {"members": [
+                {"username": owner, "name": owner, "role": "owner"},
+                {"username": "steward@test.com", "name": "steward@test.com",
+                 "role": "data steward"},
+            ]}
+            assert client.post("/api/data-products", json=data).status_code == 201
 
         # Act
         response = client.get("/api/data-products/owners")
 
         # Assert
         assert response.status_code == 200
-        owners = response.json()
-        assert "owner1@test.com" in owners
-        assert "owner2@test.com" in owners
+        assert response.json() == ["owner1@test.com", "owner2@test.com"]
 
     def test_get_published_products(self, client, db_session):
         """GET /api/data-products/published returns products with publication_scope != none."""
@@ -547,3 +568,99 @@ class TestDataProductRoutes:
         # This would require mocking the manager to raise an unexpected exception
         # Placeholder for more sophisticated error testing
         pass
+
+    # =================================================================
+    # POST /api/data-products/upload - Batch Import
+    # =================================================================
+
+    @pytest.fixture
+    def _upload_route_stubs(self, db_session):
+        """Upload endpoints depend on AuditManagerDep (503s without
+        ``app.state.audit_manager``) and ``app.state.data_products_manager``
+        (500 without it). Install a no-op audit stub and a real
+        DataProductsManager bound to the test DB session so the route
+        reaches ``create_products_from_files``."""
+        from src.app import app
+        from src.controller.data_products_manager import DataProductsManager
+
+        class _NoopAudit:
+            def log_action(self, **kwargs):
+                return None
+
+            def log_action_background(self, **kwargs):
+                return None
+
+        prev_audit = getattr(app.state, "audit_manager", None)
+        prev_dp = getattr(app.state, "data_products_manager", None)
+        app.state.audit_manager = _NoopAudit()
+        app.state.data_products_manager = DataProductsManager(db=db_session)
+        try:
+            yield
+        finally:
+            for attr, prev in (("audit_manager", prev_audit), ("data_products_manager", prev_dp)):
+                if prev is not None:
+                    setattr(app.state, attr, prev)
+                else:
+                    try:
+                        delattr(app.state, attr)
+                    except AttributeError:
+                        pass
+
+    def test_upload_product_minimal_odps_json_succeeds(
+        self, client: TestClient, _upload_route_stubs
+    ):
+        """Golden-path product upload — a minimal ODPS JSON file is accepted
+        and returns a BatchImportResult. Guards against the ``file_inputs``
+        regression that landed the merge and caused every upload to NameError
+        into a generic 500 (#862.1)."""
+        import yaml  # noqa: F401 — kept so parity tests can swap to yaml easily
+        product = {
+            "kind": "DataProduct",
+            "apiVersion": "v1",
+            "id": str(uuid.uuid4()),
+            "name": "Upload Minimal Product",
+            "productType": "sourceAligned",
+            "version": "1.0.0",
+        }
+        files = {"files": ("product.json", json.dumps(product).encode("utf-8"), "application/json")}
+        response = client.post("/api/data-products/upload", files=files)
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["created"] == 1
+        assert data["total"] == 1
+        assert data["items"][0]["status"] == "created"
+
+    def test_upload_create_missing_domains_requires_data_domains_write(
+        self, client: TestClient, monkeypatch, _upload_route_stubs
+    ):
+        """The ``create_missing_domains`` toggle creates top-level domains, so
+        it must require ``data-domains`` write on top of the product-write
+        permission (#851 review / #862.3). Without that, a 403 is returned
+        and nothing is created."""
+        # Deny data-domains write; keep every other check intact.
+        import src.routes.data_product_routes as route_mod
+        original = route_mod.user_has_feature_level
+
+        def deny_data_domains_write(auth_manager, user, feature_id, required_level):
+            if feature_id == "data-domains":
+                return False
+            return original(auth_manager, user, feature_id, required_level)
+
+        monkeypatch.setattr(route_mod, "user_has_feature_level", deny_data_domains_write)
+
+        product = {
+            "kind": "DataProduct",
+            "apiVersion": "v1",
+            "id": str(uuid.uuid4()),
+            "name": "Gated Upload Product",
+            "productType": "sourceAligned",
+            "version": "1.0.0",
+        }
+        files = {"files": ("product.json", json.dumps(product).encode("utf-8"), "application/json")}
+        response = client.post(
+            "/api/data-products/upload",
+            files=files,
+            data={"create_missing_domains": "true"},
+        )
+        assert response.status_code == 403, response.text
+        assert "data-domains" in response.json().get("detail", "")

@@ -1,0 +1,133 @@
+{
+  "approvalResponse": {
+    "title": "Enter a reason",
+    "description": "Provide a reason for your approval or rejection decision.",
+    "fields": {
+      "reason": "Reason for approval or rejection"
+    }
+  },
+  "subscription": {
+    "title": "Subscription Details",
+    "description": "Provide details about your intended use of this data product.",
+    "fields": {
+      "reason": "Reason for subscribing",
+      "useCase": "Intended use case"
+    }
+  },
+  "requestReview": {
+    "title": "Request review",
+    "description": "Provide a reason for your review request.",
+    "fields": {
+      "reason": "Why are you requesting a review?"
+    }
+  },
+  "requestAccess": {
+    "title": "Request access",
+    "description": "Provide a reason for your access request and optionally set a duration.",
+    "fields": {
+      "reason": "Why do you need access?",
+      "expiryDays": "Requested duration (days, leave blank for indefinite)"
+    }
+  },
+  "requestPublish": {
+    "title": "Request publish",
+    "description": "Provide a reason for your publish request.",
+    "fields": {
+      "reason": "Why are you requesting publication?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Request status change",
+    "description": "Provide a reason for your status change request.",
+    "fields": {
+      "reason": "Why are you requesting this status change?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Provide a reason"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Object name does not follow naming conventions",
+      "tagging": "Required tags could not be applied"
+    },
+    "dataProductApproval": {
+      "noContract": "Data product requires a data contract",
+      "rejected": "Data product publish request was rejected"
+    },
+    "dataContractValidation": {
+      "noSchema": "Data contract requires a schema definition"
+    },
+    "preCreationCompliance": {
+      "naming": "Asset name does not comply with naming convention policy",
+      "tagging": "Asset does not have required tags"
+    },
+    "tablePreCreation": {
+      "invalidName": "Table name must be lowercase with underscores only",
+      "reservedWord": "Table name cannot be a SQL reserved word"
+    },
+    "contractReviewRequest": {
+      "rejected": "Data contract review request was rejected"
+    },
+    "contractDeployRequest": {
+      "rejected": "Data contract deploy request was rejected"
+    },
+    "productReviewRequest": {
+      "rejected": "Data product review request was rejected"
+    },
+    "accessGrantRequest": {
+      "rejected": "Access request was denied"
+    },
+    "statusChangeRequest": {
+      "rejected": "Status change request was rejected"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "Data asset review requires changes"
+    },
+    "roleAccessRequest": {
+      "rejected": "Role access request was denied"
+    },
+    "certificationRequestReview": {
+      "end": "Certification workflow failed"
+    },
+    "publicationRequestReview": {
+      "end": "Publication workflow failed"
+    },
+    "conceptReviewRequest": {
+      "rejected": "Concept review was not approved"
+    }
+  },
+  "workflowNames": {
+    "naming-convention-check": "Naming Convention Validation",
+    "data-product-approval": "Data Product Publish Approval",
+    "data-contract-validation": "Data Contract Schema Validation",
+    "pii-detection": "PII Detection and Classification",
+    "pre-creation-compliance": "Pre-Creation Compliance Validation",
+    "table-pre-creation": "Table Pre-Creation Validation",
+    "contract-review-request": "Data Contract Review Request",
+    "contract-deploy-request": "Data Contract Deploy Request",
+    "product-review-request": "Data Product Review Request",
+    "access-grant-request": "Access Grant Request",
+    "status-change-request": "Status Change Request",
+    "data-asset-review-request": "Data Asset Review Request",
+    "project-access-request": "Project Access Request",
+    "role-access-request": "Role Access Request",
+    "job-failure-notification": "Job Failure Notification",
+    "job-success-notification": "Job Success Notification",
+    "access-expiring-warning": "Access Expiring Warning",
+    "access-revoked-notification": "Access Revoked Notification",
+    "approval-response": "Approval response",
+    "subscription": "Subscription Agreement",
+    "request-review": "Request Review",
+    "request-access": "Request Access",
+    "request-publish": "Request Publish",
+    "request-status-change": "Request Status Change",
+    "before-status-change-default": "Status Change Gate (Default)",
+    "on-publish-notification": "Publish Notification",
+    "on-unpublish-notification": "Unpublish Notification",
+    "certification-request-review": "Certification Request Review",
+    "publication-request-review": "Publication Request Review",
+    "first-access-welcome": "Welcome — Terms of Use",
+    "on-request-access-grant-permissions-reference": "Reference — Grant UC SELECT to requester (on_request_access)"
+  }
+}

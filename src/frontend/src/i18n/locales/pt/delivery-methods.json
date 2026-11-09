@@ -1,0 +1,75 @@
+{
+  "title": "Métodos de entrega",
+  "subtitle": "Defina como os dados são entregues aos consumidores por meio de entregáveis (ex.: Acesso a tabela, Endpoint de serviço).",
+  "addNew": "Adicionar método",
+  "editMethod": "Editar método",
+  "deleteMethod": "Excluir método",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menu",
+  "table": {
+    "name": "Nome",
+    "description": "Descrição",
+    "category": "Categoria",
+    "status": "Status",
+    "system": "Sistema",
+    "lastUpdated": "Última atualização",
+    "actions": "Ações"
+  },
+  "categories": {
+    "access": "Acesso",
+    "endpoint": "Endpoint",
+    "export": "Exportação",
+    "streaming": "Streaming"
+  },
+  "statuses": {
+    "active": "Ativo",
+    "deprecated": "Obsoleto"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar métodos de entrega.",
+    "deniedCreate": "Você não tem permissão para criar métodos de entrega.",
+    "deniedEdit": "Você não tem permissão para editar métodos de entrega.",
+    "deniedDelete": "Você não tem permissão para excluir métodos de entrega.",
+    "permissionDenied": "Permissão negada"
+  },
+  "messages": {
+    "errorFetching": "Erro ao buscar métodos de entrega",
+    "loadFailed": "Falha ao carregar métodos de entrega",
+    "errorDeleting": "Erro ao excluir método de entrega",
+    "deleted": "Método de entrega excluído",
+    "deletedSuccess": "O método de entrega foi excluído com sucesso.",
+    "errorLoadingData": "Erro ao carregar dados"
+  },
+  "deleteDialog": {
+    "title": "Excluir método de entrega?",
+    "description": "Esta ação não pode ser desfeita. Entregáveis existentes que usam este método podem ficar órfãos.",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  },
+  "emptyState": {
+    "title": "Nenhum método de entrega definido ainda",
+    "description": "Crie seu primeiro método de entrega (ex.: Acesso a tabela, Endpoint de serviço, Exportação de arquivo)."
+  },
+  "form": {
+    "createTitle": "Criar método de entrega",
+    "createDescription": "Adicione um novo método de entrega para distribuição de dados.",
+    "editTitle": "Editar método de entrega",
+    "editDescription": "Atualize os detalhes deste método de entrega.",
+    "create": "Criar",
+    "update": "Salvar alterações",
+    "noCategory": "Sem categoria",
+    "placeholders": {
+      "name": "ex.: Acesso a tabela",
+      "description": "Descreva como os dados são entregues...",
+      "category": "Selecione uma categoria"
+    },
+    "toasts": {
+      "created": "Método de entrega criado",
+      "createdDescription": "\"{{name}}\" foi criado.",
+      "updated": "Método de entrega atualizado",
+      "updatedDescription": "\"{{name}}\" foi atualizado.",
+      "createFailed": "Falha ao criar",
+      "updateFailed": "Falha ao atualizar"
+    }
+  }
+}

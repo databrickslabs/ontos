@@ -58,17 +58,18 @@ async def create_mcp_token(
     created_by = current_user.email if current_user else None
     
     manager = MCPTokensManager(db=db)
-    
+
     try:
         generated = manager.generate_token(
             name=token_data.name,
             scopes=token_data.scopes,
             created_by=created_by,
-            expires_days=token_data.expires_days
+            expires_days=token_data.expires_days,
+            is_keyless_default=token_data.is_keyless_default
         )
-        
+
         db.commit()
-        
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -79,7 +80,8 @@ async def create_mcp_token(
             details={
                 'token_id': str(generated.id),
                 'token_name': generated.name,
-                'scopes': generated.scopes
+                'scopes': generated.scopes,
+                'is_keyless_default': token_data.is_keyless_default
             }
         )
         
@@ -132,11 +134,12 @@ async def list_mcp_tokens(
             last_used_at=t.last_used_at,
             expires_at=t.expires_at,
             is_active=t.is_active,
-            is_expired=t.is_expired
+            is_expired=t.is_expired,
+            is_keyless_default=t.is_keyless_default
         )
         for t in tokens
     ]
-    
+
     return MCPTokenList(tokens=token_infos, total=len(token_infos))
 
 
@@ -171,7 +174,97 @@ async def get_mcp_token(
         last_used_at=token.last_used_at,
         expires_at=token.expires_at,
         is_active=token.is_active,
-        is_expired=token.is_expired
+        is_expired=token.is_expired,
+        is_keyless_default=token.is_keyless_default
+    )
+
+
+@router.post(
+    "/{token_id}/keyless-default",
+    response_model=MCPTokenInfo,
+    summary="Set Keyless Default",
+    description=(
+        "Designate this token as the keyless default. App-gate-authenticated MCP "
+        "requests that carry no X-API-Key resolve to this token's scopes, stamped "
+        "with the caller's forwarded identity. Supersedes any existing default."
+    )
+)
+async def set_keyless_default_token(
+    request: Request,
+    token_id: UUID,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(require_admin)
+):
+    """Designate an existing MCP token as the keyless default."""
+    logger.info(f"Setting keyless-default MCP token: id={token_id}")
+
+    manager = MCPTokensManager(db=db)
+
+    success = manager.set_keyless_default(token_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Token {token_id} not found"
+        )
+
+    db.commit()
+
+    token = manager.get_token(token_id)
+
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature='mcp-tokens',
+        action='SET_KEYLESS_DEFAULT',
+        success=True,
+        details={'token_id': str(token_id), 'token_name': token.name if token else 'unknown'}
+    )
+
+    return MCPTokenInfo(
+        id=token.id,
+        name=token.name,
+        scopes=token.scopes or [],
+        created_by=token.created_by,
+        created_at=token.created_at,
+        last_used_at=token.last_used_at,
+        expires_at=token.expires_at,
+        is_active=token.is_active,
+        is_expired=token.is_expired,
+        is_keyless_default=token.is_keyless_default
+    )
+
+
+@router.delete(
+    "/keyless-default",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Clear Keyless Default",
+    description="Clear the keyless default flag, disabling keyless MCP access."
+)
+async def clear_keyless_default_token(
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(require_admin)
+):
+    """Clear the keyless-default flag from whichever token carries it."""
+    logger.info("Clearing keyless-default MCP token")
+
+    manager = MCPTokensManager(db=db)
+    cleared = manager.clear_keyless_default()
+    db.commit()
+
+    audit_manager.log_action(
+        db=db,
+        username=current_user.username if current_user else 'unknown',
+        ip_address=request.client.host if request.client else None,
+        feature='mcp-tokens',
+        action='CLEAR_KEYLESS_DEFAULT',
+        success=True,
+        details={'cleared': cleared}
     )
 
 

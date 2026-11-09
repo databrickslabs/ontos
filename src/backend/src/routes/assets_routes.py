@@ -306,7 +306,8 @@ def get_all_assets(
     asset_type_id: Optional[UUID] = Query(None),
     asset_type_names: Optional[str] = Query(None, description="Comma-separated asset type names"),
     platform: Optional[str] = Query(None),
-    domain_id: Optional[str] = Query(None),
+    domain_id: Optional[str] = Query(None, description="Filter by a single domain ID (any-of)"),
+    domain_ids: Optional[str] = Query(None, description="Filter by multiple domain IDs, comma-separated (any-of)"),
     asset_status: Optional[str] = Query(None, alias="status"),
     name: Optional[str] = Query(None),
 ):
@@ -345,10 +346,11 @@ def get_all_assets(
         restrict_ids = None  # unrestricted
 
     type_names_list = [t.strip() for t in asset_type_names.split(",")] if asset_type_names else None
+    domain_ids_list = [d.strip() for d in domain_ids.split(",") if d.strip()] if domain_ids else None
     return manager.get_all_assets(
         db=db, skip=skip, limit=limit,
         asset_type_id=asset_type_id, asset_type_names=type_names_list,
-        platform=platform, domain_id=domain_id, status=asset_status, name=name,
+        platform=platform, domain_id=domain_id, domain_ids=domain_ids_list, status=asset_status, name=name,
         restrict_to_ids=restrict_ids,
     )
 

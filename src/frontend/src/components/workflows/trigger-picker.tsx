@@ -17,6 +17,7 @@
  * jsdom (which has known hang issues with <Select>).
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { Label } from '@/components/ui/label';
 import {
@@ -34,9 +35,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getTriggerLabel, getRequiredPermission } from '@/lib/workflow-labels';
+import { getTriggerLabel, getRequiredPermission, triggerSupportsConcepts } from '@/lib/workflow-labels';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Info } from 'lucide-react';
+import { Info, Layers } from 'lucide-react';
 
 /** Field-label constants for the trigger picker. Exported so the parent
  * form and tests can reference the same source of truth. */
@@ -110,6 +111,7 @@ export function TriggerPicker({
   workflowType,
   options: optionsProp,
 }: TriggerPickerProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   const { get } = useApi();
   const [options, setOptions] = useState<TriggerTypeOption[]>(optionsProp ?? []);
 
@@ -143,37 +145,50 @@ export function TriggerPicker({
 
   return (
     <div className="space-y-1">
-      <Label>{TRIGGER_PICKER_LABEL}</Label>
-      <p className="text-xs text-muted-foreground">{TRIGGER_PICKER_HELPER}</p>
+      <Label>{t('workflows:triggerPicker.label', TRIGGER_PICKER_LABEL)}</Label>
+      <p className="text-xs text-muted-foreground">{t('workflows:triggerPicker.helper', TRIGGER_PICKER_HELPER)}</p>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
           <SelectValue>
-            {value ? getTriggerLabel(value) : 'Select a trigger…'}
+            {value ? getTriggerLabel(value) : t('workflows:triggerPicker.placeholder')}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {groups.map(({ group, label, items }) => (
             <SelectGroup key={group}>
               <SelectLabel>{label}</SelectLabel>
-              {items.map((opt) => (
-                <TooltipProvider key={opt.value} delayDuration={400}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SelectItem value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <code className="text-xs">{opt.value}</code>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
+              {items.map((opt) => {
+                const supportsConcepts = triggerSupportsConcepts(opt.entity_types);
+                return (
+                  <TooltipProvider key={opt.value} delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SelectItem value={opt.value}>
+                          <span className="flex items-center gap-1.5">
+                            {opt.label}
+                            {/* Subtle marker: this trigger can drive concept
+                                workflows (its entity types include concepts). */}
+                            {supportsConcepts && (
+                              <Layers className="h-3 w-3 text-muted-foreground" aria-label="Supports concepts" />
+                            )}
+                          </span>
+                        </SelectItem>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <code className="text-xs">{opt.value}</code>
+                        {supportsConcepts && (
+                          <div className="mt-1 text-xs text-muted-foreground">Supports concept workflows</div>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
             </SelectGroup>
           ))}
           {groups.length === 0 && (
             <div className="px-2 py-1.5 text-sm text-muted-foreground">
-              No trigger types available.
+              {t('workflows:triggerPicker.noTypes')}
             </div>
           )}
         </SelectContent>
@@ -186,14 +201,15 @@ export function TriggerPicker({
             <AlertDescription className="text-xs">
               {required ? (
                 <>
-                  <strong>Required permission:</strong> users need{' '}
+                  <strong>{t('workflows:triggerPicker.requiredPermission.label')}</strong>{' '}
+                  {t('workflows:triggerPicker.requiredPermission.prefix')}{' '}
                   <code className="text-xs">
                     {required.feature}: {required.level}
                   </code>{' '}
-                  or higher to see and run this workflow. Set this in Settings → Roles.
+                  {t('workflows:triggerPicker.requiredPermission.suffix')}
                 </>
               ) : (
-                <>Available to any authenticated user.</>
+                <>{t('workflows:triggerPicker.availableToAny')}</>
               )}
             </AlertDescription>
           </Alert>

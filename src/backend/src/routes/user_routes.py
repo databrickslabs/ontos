@@ -125,13 +125,14 @@ async def get_current_user_permissions(
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
     settings_manager: SettingsManager = Depends(get_settings_manager)
 ) -> Dict[str, FeatureAccessLevel]:
-    """Get the effective feature permissions for the current user based on their groups."""
+    """Get the effective feature permissions for the current user based on their groups
+    and any direct email assignment (#196/#760)."""
     logger.info(f"Request received for /api/user/permissions for user '{user_details.user or user_details.email}'")
 
-    if not user_details.groups:
-        logger.warning(f"User '{user_details.user or user_details.email}' has no groups. Returning empty permissions.")
-        
-        return {}
+    # No-groups early-exit removed (#196/#760): a user with no groups but a direct
+    # email assignment (assigned_users) must still be resolved. The auth manager
+    # returns NONE for all features when neither groups nor email match — equivalent
+    # to the previous behavior for truly-unprivileged users.
 
     try:
         # Apply override if set for this user
@@ -139,8 +140,11 @@ async def get_current_user_permissions(
         if applied_role_id:
             role_perms = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
             return role_perms
-        # Otherwise compute from groups
-        return auth_manager.get_user_effective_permissions(user_details.groups)
+        # Otherwise compute from groups + email
+        return auth_manager.get_user_effective_permissions(
+            user_details.groups,
+            user_email=user_details.email,
+        )
 
     except HTTPException:
         raise # Re-raise exceptions from dependencies
@@ -165,13 +169,14 @@ async def get_actual_user_permissions(
     """
     logger.info(f"Request received for /api/user/actual-permissions for user '{user_details.user or user_details.email}'")
 
-    if not user_details.groups:
-        logger.warning(f"User '{user_details.user or user_details.email}' has no groups. Returning empty actual permissions.")
-        return {}
+    # No-groups early-exit removed (#196/#760) — see /api/user/permissions for rationale.
 
     try:
-        # Always compute from groups, never apply overrides
-        return auth_manager.get_user_effective_permissions(user_details.groups)
+        # Always compute from groups + email, never apply overrides
+        return auth_manager.get_user_effective_permissions(
+            user_details.groups,
+            user_email=user_details.email,
+        )
 
     except HTTPException:
         raise # Re-raise exceptions from dependencies
@@ -282,7 +287,7 @@ async def get_requestable_roles(
     logger.info(f"Request received for /api/user/requestable-roles for user '{user_details.user or user_details.email}'")
     
     try:
-        requestable_roles = settings_manager.get_requestable_roles_for_user(user_details.groups)
+        requestable_roles = settings_manager.get_requestable_roles_for_user(user_details.groups, user_email=user_details.email)
         logger.info(f"User '{user_details.email}' can request {len(requestable_roles)} roles")
         return requestable_roles
     except Exception as e:
@@ -323,7 +328,7 @@ async def request_role_access(
         raise HTTPException(status_code=500, detail="Error retrieving role details.")
 
     # Validate that the user can request this role based on their current roles
-    if not settings_manager.can_user_request_role(role_id, user_details.groups):
+    if not settings_manager.can_user_request_role(role_id, user_details.groups, user_email=user_details.email):
         logger.warning(f"User '{requester_email}' is not authorized to request role '{role_name}'")
         raise HTTPException(
             status_code=403,

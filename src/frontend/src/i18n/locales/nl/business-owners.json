@@ -1,0 +1,65 @@
+{
+  "title": "Business-eigenaren",
+  "subtitle": "Eigenaarstoewijzingen die bijhouden wie waarvoor verantwoordelijk is.",
+  "addNew": "Eigenaar toewijzen",
+  "editOwner": "Toewijzing bewerken",
+  "removeOwner": "Eigenaar verwijderen",
+  "table": {
+    "object": "Object",
+    "objectType": "Objecttype",
+    "owner": "Eigenaar",
+    "role": "Rol",
+    "status": "Status",
+    "assignedAt": "Toegewezen",
+    "removedAt": "Verwijderd",
+    "actions": "Acties"
+  },
+  "objectTypes": {
+    "data_product": "Dataproduct",
+    "data_contract": "Datacontract",
+    "dataset": "Dataset",
+    "data_domain": "Datadomein",
+    "business_term": "Bedrijfsterm",
+    "policy": "Beleid",
+    "asset": "Asset",
+    "tag": "Tag"
+  },
+  "statusLabels": {
+    "active": "Actief",
+    "inactive": "Inactief"
+  },
+  "permissions": {
+    "deniedView": "Je hebt geen toestemming om business-eigenaren te bekijken.",
+    "deniedCreate": "Je hebt geen toestemming om eigenaren toe te wijzen.",
+    "deniedEdit": "Je hebt geen toestemming om eigenaarstoewijzingen te bewerken.",
+    "deniedDelete": "Je hebt geen toestemming om eigenaren te verwijderen.",
+    "permissionDenied": "Geen Toegang"
+  },
+  "messages": {
+    "errorFetching": "Fout bij ophalen business-eigenaren",
+    "errorRemoving": "Fout bij verwijderen business-eigenaar",
+    "removed": "Eigenaar Verwijderd",
+    "removedSuccess": "De eigenaarstoewijzing is succesvol verwijderd.",
+    "errorLoadingData": "Fout bij Laden Data"
+  },
+  "removeDialog": {
+    "title": "Eigenaar verwijderen?",
+    "description": "Hiermee wordt de eigenaarstoewijzing gedeactiveerd. De historie blijft behouden.",
+    "reasonLabel": "Reden (optioneel)",
+    "reasonPlaceholder": "Voer reden voor verwijdering in...",
+    "cancel": "Annuleren",
+    "remove": "Verwijderen"
+  },
+  "emptyState": {
+    "title": "Nog geen eigenaarstoewijzingen",
+    "description": "Wijs business-eigenaren toe aan dataproducten, contracten en andere objecten."
+  },
+  "panel": {
+    "title": "Eigenaren",
+    "currentOwners": "Huidige eigenaren",
+    "previousOwners": "Vorige eigenaren",
+    "noOwners": "Geen eigenaren toegewezen",
+    "assignOwner": "Eigenaar toewijzen",
+    "history": "Historie tonen"
+  }
+}

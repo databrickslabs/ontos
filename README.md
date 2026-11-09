@@ -11,7 +11,7 @@ A comprehensive data governance and management platform built for Databricks Uni
 
 ## Overview
 
-**Ontos** provides enterprise teams with the tools to organize, govern, and deliver high-quality data products following Data Mesh principles and industry standards like [ODCS](https://github.com/bitol-io/open-data-contract-standard) (Open Data Contract Standard) and [ODPS](https://github.com/bitol-io/open-data-product-standard) (Open Data Product Specification).
+**Ontos** provides enterprise teams with the tools to organize, govern, and deliver high-quality data products following Data Mesh principles and industry standards like [ODCS](https://github.com/bitol-io/open-data-contract-standard) (Open Data Contract Standard) and [ODPS](https://github.com/bitol-io/open-data-product-standard) (Open Data Product Standard).
 
 ## Key Features
 

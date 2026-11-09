@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ export default function VersioningRecommendationDialog({
   onCreateNewVersion,
   isUpdating = false
 }: VersioningRecommendationDialogProps) {
+  const { t } = useTranslation('common')
   if (!analysis) return null
 
   const hasBreakingChanges = analysis.breaking_changes && analysis.breaking_changes.length > 0
@@ -67,11 +69,11 @@ export default function VersioningRecommendationDialog({
   const getVersionBumpBadge = (bump: string) => {
     switch (bump) {
       case 'major':
-        return <Badge variant="destructive" className="text-xs">MAJOR {bump.toUpperCase()}</Badge>
+        return <Badge variant="destructive" className="text-xs">{t('common:versioning.bump.major')} {bump.toUpperCase()}</Badge>
       case 'minor':
-        return <Badge className="bg-blue-500 text-xs">MINOR {bump.toUpperCase()}</Badge>
+        return <Badge className="bg-blue-500 text-xs">{t('common:versioning.bump.minor')} {bump.toUpperCase()}</Badge>
       case 'patch':
-        return <Badge variant="secondary" className="text-xs">PATCH {bump.toUpperCase()}</Badge>
+        return <Badge variant="secondary" className="text-xs">{t('common:versioning.bump.patch')} {bump.toUpperCase()}</Badge>
       default:
         return <Badge variant="outline" className="text-xs">{bump.toUpperCase()}</Badge>
     }
@@ -80,11 +82,11 @@ export default function VersioningRecommendationDialog({
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case 'critical':
-        return <Badge variant="destructive" className="text-xs">Critical</Badge>
+        return <Badge variant="destructive" className="text-xs">{t('common:versioning.severity.critical')}</Badge>
       case 'moderate':
-        return <Badge className="bg-blue-500 text-xs">Moderate</Badge>
+        return <Badge className="bg-blue-500 text-xs">{t('common:versioning.severity.moderate')}</Badge>
       case 'minor':
-        return <Badge variant="secondary" className="text-xs">Minor</Badge>
+        return <Badge variant="secondary" className="text-xs">{t('common:versioning.severity.minor')}</Badge>
       default:
         return <Badge variant="outline" className="text-xs">{severity}</Badge>
     }
@@ -96,19 +98,19 @@ export default function VersioningRecommendationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Changes Detected - Version Recommendation
+            {t('common:versioning.changesDetectedTitle')}
           </DialogTitle>
           <DialogDescription>
             {userCanOverride
-              ? "Review the detected changes and decide whether to update in place or create a new version."
-              : "Breaking changes detected. A new version is required to maintain compatibility."}
+              ? t('common:versioning.reviewDescription')
+              : t('common:versioning.newVersionRequired')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Version Bump Recommendation */}
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Recommended Version Bump:</span>
+            <span className="text-sm font-medium">{t('common:versioning.recommendedBump')}</span>
             {getVersionBumpBadge(analysis.version_bump)}
           </div>
 
@@ -117,7 +119,7 @@ export default function VersioningRecommendationDialog({
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Breaking Changes Detected!</strong> These changes may impact existing consumers and require a major version bump.
+                <strong>{t('common:versioning.breakingChanges')}</strong> {t('common:versioning.breakingChangesImpact')}
               </AlertDescription>
             </Alert>
           )}
@@ -125,20 +127,20 @@ export default function VersioningRecommendationDialog({
           {/* Tabbed Change Details */}
           <Tabs defaultValue="summary" className="w-full">
             <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="summary">Summary</TabsTrigger>
+              <TabsTrigger value="summary">{t('common:versioning.tabSummary')}</TabsTrigger>
               {hasBreakingChanges && (
                 <TabsTrigger value="breaking" className="text-red-600 dark:text-red-400">
-                  Breaking ({analysis.breaking_changes.length})
+                  {t('common:versioning.tabBreaking', { count: analysis.breaking_changes.length })}
                 </TabsTrigger>
               )}
               {hasNewFeatures && (
                 <TabsTrigger value="features" className="text-blue-600 dark:text-blue-400">
-                  Features ({analysis.new_features.length})
+                  {t('common:versioning.tabFeatures', { count: analysis.new_features.length })}
                 </TabsTrigger>
               )}
               {hasFixes && (
                 <TabsTrigger value="fixes">
-                  Fixes ({analysis.fixes.length})
+                  {t('common:versioning.tabFixes', { count: analysis.fixes.length })}
                 </TabsTrigger>
               )}
             </TabsList>
@@ -146,7 +148,7 @@ export default function VersioningRecommendationDialog({
             <TabsContent value="summary" className="space-y-3">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Change Summary</CardTitle>
+                  <CardTitle className="text-sm">{t('common:versioning.changeSummary')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="prose prose-sm max-w-none">
@@ -162,7 +164,7 @@ export default function VersioningRecommendationDialog({
                   <CardHeader>
                     <CardTitle className="text-sm flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 text-red-600" />
-                      Breaking Changes
+                      {t('common:versioning.breakingChangesHeading')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -185,7 +187,7 @@ export default function VersioningRecommendationDialog({
                   <CardHeader>
                     <CardTitle className="text-sm flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      New Features
+                      {t('common:versioning.newFeatures')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -208,7 +210,7 @@ export default function VersioningRecommendationDialog({
                   <CardHeader>
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Info className="h-4 w-4 text-gray-600" />
-                      Improvements & Fixes
+                      {t('common:versioning.improvementsFixes')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -230,7 +232,7 @@ export default function VersioningRecommendationDialog({
           {(analysis.schema_changes?.length || analysis.port_changes?.length) ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Detailed Changes</CardTitle>
+                <CardTitle className="text-sm">{t('common:versioning.detailedChanges')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -262,7 +264,7 @@ export default function VersioningRecommendationDialog({
             onClick={() => onOpenChange(false)}
             disabled={isUpdating}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           {userCanOverride && (
             <Button
@@ -270,7 +272,7 @@ export default function VersioningRecommendationDialog({
               onClick={onUpdateInPlace}
               disabled={isUpdating}
             >
-              Update In Place
+              {t('common:versioning.updateInPlace')}
             </Button>
           )}
           <Button
@@ -278,7 +280,7 @@ export default function VersioningRecommendationDialog({
             disabled={isUpdating}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            {isUpdating ? 'Creating...' : 'Create New Version'}
+            {isUpdating ? t('common:versioning.creating') : t('common:versioning.createNewVersion')}
           </Button>
         </DialogFooter>
       </DialogContent>

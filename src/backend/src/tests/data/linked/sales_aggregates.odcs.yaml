@@ -1,0 +1,94 @@
+# ============================================================================
+# Linked fixture — Contract C2: Sales Aggregates  (id c8e034aa-…)
+# ----------------------------------------------------------------------------
+# Referenced BY: sales_analytics.odps.yaml   outputPorts[0].contractId  (produced by P1)
+#                executive_dashboard.odps.yaml inputPorts[0].contractId (consumed by P2)
+# References:    dataProduct -> 9fd027b7-… (P1 Sales Analytics) — the product
+#                that produces this contract. Resolved id-first by #854 to
+#                dataProductName / dataProductId on read.
+#
+# This is the hinge of the mesh: produced by one product, consumed by another,
+# and it names its producing product back via `dataProduct`.
+# ============================================================================
+id: c8e034aa-0145-4e41-ae9b-b64dbcea41c8
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: active
+name: Sales Aggregates
+domain: sales
+tenant: AcmeRetail
+
+# Reciprocal link back to the producing data product (by its stable UUID).
+dataProduct: 9fd027b7-b920-4fa0-940e-c27d5db03f9b
+
+description:
+  purpose: Daily sales aggregates derived from raw orders.
+  usage: Feeds executive dashboards and downstream KPI products.
+
+# ODCS team-as-object. "Sales Governance Guild" does not exist natively, so on import
+# (create_missing off) it is preserved and must remain findable by team via search.
+team:
+  name: Sales Governance Guild
+  members:
+    - username: aturing@example.com
+      name: Alan Turing
+      role: owner
+    - username: adalovelace@example.com
+      name: Ada Lovelace
+      role: steward
+
+schema:
+  - id: sales_daily_obj
+    name: sales_daily
+    physicalName: sales_aggregates_daily
+    physicalType: table
+    businessName: Daily Sales Aggregates
+    description: One row per day per customer segment.
+    tags: [ 'domain/sales', 'governance/gold' ]
+    properties:
+      - id: sales_date_prop
+        name: sales_date
+        logicalType: date
+        physicalType: date
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        partitioned: true
+        partitionKeyPosition: 1
+        classification: public
+        description: Aggregation day (UTC).
+      - id: segment_prop
+        name: segment
+        logicalType: string
+        physicalType: varchar(32)
+        primaryKey: true
+        primaryKeyPosition: 2
+        required: true
+        classification: public
+        description: Customer segment.
+      - id: order_count_prop
+        name: order_count
+        logicalType: integer
+        physicalType: bigint
+        required: true
+        classification: public
+        description: Number of orders on the day for the segment.
+      - id: gross_revenue_prop
+        name: gross_revenue
+        logicalType: number
+        physicalType: decimal(14,2)
+        required: true
+        classification: public
+        description: Gross revenue in normalized currency (USD).
+    quality:
+      - metric: nullValues
+        mustBe: 0
+        type: library
+        dimension: completeness
+        severity: error
+        businessImpact: operational
+
+tags:
+  - domain/sales
+  - governance/gold

@@ -30,6 +30,23 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _debug_allowed(request: Request, user: UserInfo) -> bool:
+    """Whether the caller may get the chat's debug info.
+
+    The debug info carries the tools' raw results, including the text of the
+    errors they hit, so it is only returned to Ontos admins. Anyone else who
+    sets ``debug`` gets the normal response. Any lookup error means no.
+    """
+    try:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
+        if auth_manager is None:
+            return False
+        return bool(auth_manager.is_user_ontos_admin(user.groups or []))
+    except Exception:
+        logger.warning("Could not check whether the caller may see chat debug info.", exc_info=True)
+        return False
+
+
 def _derive_effective_role_label(request: Request, user: UserInfo) -> Optional[str]:
     """Derive a single human-readable Ontos role label for the user.
 
@@ -208,7 +225,7 @@ async def chat(
             user_message=message.content,
             user_id=current_user.email,
             session_id=message.session_id,
-            debug=message.debug,
+            debug=bool(message.debug) and _debug_allowed(request, current_user),
             role=role_label,
             page_name=message.page_name,
             page_url=message.page_url,

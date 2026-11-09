@@ -9,19 +9,106 @@ import os
 import sys
 import json
 import argparse
+import shutil
+import tempfile
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
-# Add parent directory to path to enable imports from src.*
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Bootstrap the backend package parent for local and file-based execution. The
+# serverless runner may execute this source without binding ``__file__``; main()
+# handles that case using the deployed backend source archive path.
+_entry_file = globals().get("__file__")
+if _entry_file is not None:
+    try:
+        sys.path.insert(0, str(Path(_entry_file).parent.parent.parent.parent))
+    except Exception as _exc:  # pragma: no cover - defensive; must never abort import
+        # Narrowly guarded so a surprising failure is diagnosable but never
+        # crashes module load. Use print because the logging stack isn't wired
+        # up at this point (matches the rest of this script's stdout logging).
+        print(f"WARNING: compliance_checks sys.path bootstrap failed: {_exc}", file=sys.stderr)
 
 from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from databricks.sdk import WorkspaceClient
+
+
+_extracted_backend_sources: Dict[str, str] = {}
+
+
+def _initialize_application_config(ws_client: WorkspaceClient) -> None:
+    from src.common.config import init_config
+
+    # Preserve an explicitly configured host; use the ambient client's resolved host
+    # only as fallback.
+    workspace_host = os.getenv("DATABRICKS_HOST") or ws_client.config.host
+    if not workspace_host:
+        raise RuntimeError("Databricks workspace host is unavailable")
+
+    os.environ["DATABRICKS_HOST"] = workspace_host
+    # Compliance checks use Unity Catalog REST APIs and Postgres, not a SQL warehouse.
+    # Keep DATABRICKS_HTTP_PATH intentionally unset unless the job supplies a real
+    # warehouse ID; setdefault preserves that environment-provided value.
+    os.environ.setdefault("DATABRICKS_WAREHOUSE_ID", "")
+    os.environ.setdefault("APP_AUDIT_LOG_DIR", tempfile.gettempdir())
+    init_config()
+
+
+def _add_backend_source_path(backend_source_path: Optional[str]) -> Optional[str]:
+    if not backend_source_path:
+        return None
+
+    source_path = Path(backend_source_path)
+    cached_path = _extracted_backend_sources.get(str(source_path))
+    if cached_path and Path(cached_path).is_dir():
+        import_path = cached_path
+        source_description = f"cached extraction of {source_path}"
+    elif source_path.is_dir():
+        import_path = str(source_path)
+        source_description = "source directory"
+    elif source_path.suffix.lower() == ".zip":
+        if not source_path.is_file():
+            print(f"WARNING: backend source archive not found: {source_path}", file=sys.stderr)
+            return None
+
+        extracted_path = tempfile.mkdtemp(prefix="ontos-compliance-backend-")
+        try:
+            with source_path.open("rb") as archive_file:
+                archive_bytes = archive_file.read()
+            with ZipFile(BytesIO(archive_bytes)) as archive:
+                root = Path(extracted_path).resolve()
+                for member in archive.infolist():
+                    member_dest = (root / member.filename).resolve()
+                    if not member_dest.is_relative_to(root):
+                        raise RuntimeError(
+                            f"unsafe zip member escapes extraction root: {member.filename}"
+                        )
+                archive.extractall(extracted_path)
+            if not (Path(extracted_path) / "src" / "__init__.py").is_file():
+                raise RuntimeError("archive does not contain the src package")
+        except (BadZipFile, OSError, RuntimeError) as exc:
+            shutil.rmtree(extracted_path, ignore_errors=True)
+            raise RuntimeError(
+                f"Failed to extract backend source archive {source_path}: {exc}"
+            ) from exc
+
+        import_path = extracted_path
+        _extracted_backend_sources[str(source_path)] = import_path
+        source_description = f"local extraction of {source_path}"
+    else:
+        print(f"WARNING: unsupported backend source path: {source_path}", file=sys.stderr)
+        return None
+
+    while import_path in sys.path:
+        sys.path.remove(import_path)
+    sys.path.insert(0, import_path)
+    print(f"Backend source added to sys.path: {import_path} ({source_description})")
+    return import_path
 
 
 # ============================================================================
@@ -124,6 +211,98 @@ def create_engine_from_params(
 
     url, auth_user = build_db_url(host, db, port, schema, instance_name, ws_client)
     return create_engine(url, pool_pre_ping=True)
+
+
+# ============================================================================
+# Database Schema Check
+# ============================================================================
+
+class SchemaRevisionError(RuntimeError):
+    """The database schema is older than the one this code reads."""
+
+
+def _alembic_script_location(import_path: Optional[str]) -> Optional[Path]:
+    """The Alembic scripts shipped with this code, if any.
+
+    The backend source archive carries them next to the ``src`` package; a
+    source directory (and a local checkout) has them in ``backend/alembic``.
+    """
+    candidates = []
+    if import_path:
+        candidates.append(Path(import_path) / "alembic")
+    if _entry_file is not None:
+        candidates.append(Path(_entry_file).resolve().parent.parent.parent.parent / "alembic")
+    for candidate in candidates:
+        if (candidate / "versions").is_dir():
+            return candidate
+    return None
+
+
+def check_schema_revision(engine: Engine, script_location: Optional[Path]) -> None:
+    """Fail when the database is behind the Alembic head of this code.
+
+    The app migrates its database on startup, but this job doesn't: run on a
+    database that missed a migration, the queries of the code fail, and the
+    rules on the entities they read can't be evaluated (#813). A database
+    newer than this code (the job was installed by an older app version) is
+    reported but not refused: reinstalling the workflow deploys the current
+    code.
+    """
+    if script_location is None:
+        print("  WARNING: no Alembic scripts with this code, database schema revision not checked")
+        return
+
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+    from alembic.script.revision import RevisionError
+    from alembic.util.exc import CommandError
+
+    script = ScriptDirectory(str(script_location))
+    try:
+        head = script.get_current_head()
+    except (CommandError, RevisionError):
+        heads = ", ".join(sorted(script.get_heads()))
+        message = (
+            f"The Alembic scripts shipped with this code have more than one head ({heads}), "
+            "so the revision the database should be at is unknown. Deploy code whose "
+            "migrations have a single head, then reinstall the Compliance Checks workflow."
+        )
+        print(f"  ERROR: {message}")
+        raise SchemaRevisionError(message)
+    with engine.connect() as conn:
+        current = MigrationContext.configure(conn).get_current_heads()
+
+    if current == (head,):
+        print(f"  ✓ Database schema at revision {head}")
+        return
+    if not current:
+        message = (
+            f"The database has no Alembic revision, but this code expects {head}. "
+            "Start the Ontos app against this database first: it creates and migrates the schema."
+        )
+        print(f"  ERROR: {message}")
+        raise SchemaRevisionError(message)
+
+    known = []
+    for revision in current:
+        try:
+            known.append(script.get_revision(revision) is not None)
+        except (CommandError, RevisionError):
+            known.append(False)
+    if not all(known):
+        print(
+            f"  WARNING: database schema revision {', '.join(current)} is newer than this "
+            f"code (head {head}); reinstall the Compliance Checks workflow to deploy the current code"
+        )
+        return
+
+    message = (
+        f"The database schema is at revision {', '.join(current)}, behind the revision "
+        f"this code expects ({head}). Upgrade the database before running compliance checks: "
+        "restart the Ontos app (it migrates on startup) or run `alembic upgrade head`."
+    )
+    print(f"  ERROR: {message}")
+    raise SchemaRevisionError(message)
 
 
 # ============================================================================
@@ -269,6 +448,7 @@ def main() -> None:
     parser.add_argument("--policy_severities", type=str, default=None)  # JSON array of severities
     parser.add_argument("--entity_limit", type=str, default=None)  # Limit entities checked per policy
     parser.add_argument("--verbose", type=str, default="false")
+    parser.add_argument("--backend_source_path", type=str, default=None)
 
     # Database connection parameters
     parser.add_argument("--lakebase_instance_name", type=str, required=True)
@@ -281,6 +461,8 @@ def main() -> None:
     parser.add_argument("--product_version", type=str, default="0.0.0")
 
     args, _ = parser.parse_known_args()
+
+    import_path = _add_backend_source_path(args.backend_source_path)
 
     # Parse arguments
     policy_filter = args.policy_filter
@@ -319,6 +501,10 @@ def main() -> None:
     ws = WorkspaceClient(product=args.product_name, product_version=args.product_version)
     print("  ✓ Workspace client initialized")
 
+    print("\nInitializing application settings...")
+    _initialize_application_config(ws)
+    print("  ✓ Application settings initialized")
+
     # Connect to database
     print("\nConnecting to database...")
     engine = create_engine_from_params(
@@ -330,6 +516,13 @@ def main() -> None:
         instance_name=args.lakebase_instance_name
     )
     print("  ✓ Database connection established")
+
+    print("\nChecking the database schema revision...")
+    try:
+        check_schema_revision(engine, _alembic_script_location(import_path))
+    except SchemaRevisionError:
+        # The ERROR line is already printed; a traceback would only bury it.
+        sys.exit(1)
 
     # Create session
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -390,6 +583,15 @@ def main() -> None:
                 print(f"  - {r['policy_name']}: {status} (score: {score}%)")
 
         print("")
+
+        # A run that couldn't evaluate its rule fails the job, so the failure
+        # shows on the job run and not only in the run history of the policy.
+        not_evaluated = [r for r in results if r.get("status") in ("failed", "error")]
+        if not_evaluated:
+            print(f"ERROR: {len(not_evaluated)} of {len(results)} policies could not be evaluated:")
+            for r in not_evaluated:
+                print(f"  - {r['policy_name']}: {r.get('error')}")
+            sys.exit(1)
 
     finally:
         db.close()

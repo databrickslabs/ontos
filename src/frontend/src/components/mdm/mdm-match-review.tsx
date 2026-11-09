@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Card,
   CardContent,
@@ -114,6 +115,7 @@ export default function MdmMatchReview({
   totalCount,
   readOnly = false,
 }: MdmMatchReviewProps) {
+  const { t } = useTranslation(['mdm', 'common']);
   const { get, put } = useApi();
   const { toast } = useToast();
 
@@ -130,7 +132,7 @@ export default function MdmMatchReview({
   useEffect(() => {
     const fetchCandidate = async () => {
       if (!parsedFqn) {
-        setError('Invalid MDM FQN format');
+        setError(t('mdm:matchReview.invalidFqn'));
         setLoading(false);
         return;
       }
@@ -153,7 +155,7 @@ export default function MdmMatchReview({
           initializeFieldValues(response.data);
         }
       } catch (err: any) {
-        setError(err.message || 'Failed to load match candidate');
+        setError(err.message || t('mdm:matchReview.loadFailed'));
       } finally {
         setLoading(false);
       }
@@ -281,7 +283,7 @@ export default function MdmMatchReview({
 
       if (response.error) {
         toast({
-          title: 'Error',
+          title: t('common:status.error'),
           description: response.error,
           variant: 'destructive',
         });
@@ -289,16 +291,16 @@ export default function MdmMatchReview({
       }
 
       toast({
-        title: 'Match Approved',
-        description: 'The match has been approved and merged record saved.',
+        title: t('mdm:matchReview.approvedTitle'),
+        description: t('mdm:matchReview.approvedDescription'),
       });
 
       onReviewComplete?.('approved');
       return true;
     } catch (err: any) {
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to approve match',
+        title: t('common:status.error'),
+        description: err.message || t('mdm:matchReview.approveFailed'),
         variant: 'destructive',
       });
       return false;
@@ -328,7 +330,7 @@ export default function MdmMatchReview({
 
       if (response.error) {
         toast({
-          title: 'Error',
+          title: t('common:status.error'),
           description: response.error,
           variant: 'destructive',
         });
@@ -336,15 +338,15 @@ export default function MdmMatchReview({
       }
 
       toast({
-        title: 'Match Rejected',
-        description: 'The match has been rejected.',
+        title: t('mdm:matchReview.rejectedTitle'),
+        description: t('mdm:matchReview.rejectedDescription'),
       });
 
       onReviewComplete?.('rejected');
     } catch (err: any) {
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to reject match',
+        title: t('common:status.error'),
+        description: err.message || t('mdm:matchReview.rejectFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -377,8 +379,8 @@ export default function MdmMatchReview({
     }));
 
     toast({
-      title: 'Smart Merge Applied',
-      description: 'Fields with empty master values now use source values.',
+      title: t('mdm:matchReview.smartMergeTitle'),
+      description: t('mdm:matchReview.smartMergeDescription'),
     });
   };
 
@@ -386,7 +388,7 @@ export default function MdmMatchReview({
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading match details...</span>
+        <span className="ml-2 text-muted-foreground">{t('mdm:matchReview.loadingDetails')}</span>
       </div>
     );
   }
@@ -404,7 +406,7 @@ export default function MdmMatchReview({
     return (
       <div className="flex items-center justify-center p-8 text-muted-foreground">
         <AlertCircle className="h-6 w-6 mr-2" />
-        <span>Match candidate not found</span>
+        <span>{t('mdm:matchReview.notFound')}</span>
       </div>
     );
   }
@@ -419,11 +421,11 @@ export default function MdmMatchReview({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <GitCompare className="h-5 w-5" />
-              <CardTitle className="text-lg">Match Review</CardTitle>
+              <CardTitle className="text-lg">{t('mdm:matchReview.title')}</CardTitle>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant={candidate.match_type !== MdmMatchType.NEW ? 'default' : 'secondary'}>
-                {candidate.match_type !== MdmMatchType.NEW ? 'Match Found' : 'New Record'}
+                {candidate.match_type !== MdmMatchType.NEW ? t('mdm:matchReview.matchFound') : t('mdm:matchReview.newRecord')}
               </Badge>
               <Badge 
                 variant={
@@ -437,10 +439,10 @@ export default function MdmMatchReview({
             </div>
           </div>
           <CardDescription>
-            Confidence Score: <span className="font-semibold">{(candidate.confidence_score * 100).toFixed(1)}%</span>
+            {t('mdm:matchReview.confidenceScore')}: <span className="font-semibold">{(candidate.confidence_score * 100).toFixed(1)}%</span>
             {candidate.matched_fields && candidate.matched_fields.length > 0 && (
               <span className="ml-4">
-                Matched on: {candidate.matched_fields.join(', ')}
+                {t('mdm:matchReview.matchedOn')}: {candidate.matched_fields.join(', ')}
               </span>
             )}
           </CardDescription>
@@ -453,7 +455,7 @@ export default function MdmMatchReview({
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Database className="h-5 w-5" />
-              Field Comparison
+              {t('mdm:matchReview.fieldComparison')}
             </CardTitle>
             {!readOnly && !isAlreadyReviewed && (
               <div className="flex gap-2">
@@ -462,10 +464,10 @@ export default function MdmMatchReview({
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="sm" onClick={applyAllMaster}>
                         <ArrowRight className="h-4 w-4 mr-1" />
-                        All Master
+                        {t('mdm:matchReview.allMaster')}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Use all values from master record</TooltipContent>
+                    <TooltipContent>{t('mdm:matchReview.allMasterTooltip')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <TooltipProvider>
@@ -473,10 +475,10 @@ export default function MdmMatchReview({
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="sm" onClick={applyAllSource}>
                         <ArrowRight className="h-4 w-4 mr-1 rotate-180" />
-                        All Source
+                        {t('mdm:matchReview.allSource')}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Use all values from source record</TooltipContent>
+                    <TooltipContent>{t('mdm:matchReview.allSourceTooltip')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <TooltipProvider>
@@ -484,10 +486,10 @@ export default function MdmMatchReview({
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="sm" onClick={applySmartMerge}>
                         <Sparkles className="h-4 w-4 mr-1" />
-                        Smart Merge
+                        {t('mdm:matchReview.smartMerge')}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Fill empty master fields with source values</TooltipContent>
+                    <TooltipContent>{t('mdm:matchReview.smartMergeTooltip')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
@@ -499,13 +501,13 @@ export default function MdmMatchReview({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[180px]">Field</TableHead>
-                  <TableHead>Master Value</TableHead>
+                  <TableHead className="w-[180px]">{t('mdm:matchReview.field')}</TableHead>
+                  <TableHead>{t('mdm:matchReview.masterValue')}</TableHead>
                   <TableHead className="w-[100px] text-center">
                     <ArrowLeftRight className="h-4 w-4 mx-auto" />
                   </TableHead>
-                  <TableHead>Source Value</TableHead>
-                  <TableHead className="w-[200px]">Final Value</TableHead>
+                  <TableHead>{t('mdm:matchReview.sourceValue')}</TableHead>
+                  <TableHead className="w-[200px]">{t('mdm:matchReview.finalValue')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -519,7 +521,7 @@ export default function MdmMatchReview({
                       <TableCell className="font-medium">
                         {fv.field}
                         {candidate.matched_fields?.includes(fv.field) && (
-                          <Badge variant="outline" className="ml-2 text-xs">matched</Badge>
+                          <Badge variant="outline" className="ml-2 text-xs">{t('mdm:matchReview.matched')}</Badge>
                         )}
                       </TableCell>
                       <TableCell 
@@ -574,7 +576,7 @@ export default function MdmMatchReview({
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">
-                              {fv.selectedSource === 'master' ? 'Master' : 'Source'}
+                              {fv.selectedSource === 'master' ? t('mdm:matchReview.master') : t('mdm:matchReview.source')}
                             </span>
                             <Button
                               variant="ghost"
@@ -602,10 +604,10 @@ export default function MdmMatchReview({
           <CardContent className="pt-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="review-comments">Review Comments (Optional)</Label>
+                <Label htmlFor="review-comments">{t('mdm:matchReview.commentsLabel')}</Label>
                 <Textarea
                   id="review-comments"
-                  placeholder="Add any notes about this review decision..."
+                  placeholder={t('mdm:matchReview.commentsPlaceholder')}
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                   rows={2}
@@ -618,7 +620,7 @@ export default function MdmMatchReview({
                 {/* Progress indicator */}
                 {currentIndex !== undefined && totalCount !== undefined && (
                   <div className="text-sm text-muted-foreground">
-                    Reviewing {currentIndex} of {totalCount}
+                    {t('mdm:matchReview.reviewingProgress', { current: currentIndex, total: totalCount })}
                   </div>
                 )}
                 {currentIndex === undefined && <div />}
@@ -632,7 +634,7 @@ export default function MdmMatchReview({
                       disabled={saving}
                     >
                       <SkipForward className="h-4 w-4 mr-2" />
-                      Skip
+                      {t('mdm:matchReview.skip')}
                     </Button>
                   )}
                   
@@ -646,7 +648,7 @@ export default function MdmMatchReview({
                     ) : (
                       <X className="h-4 w-4 mr-2" />
                     )}
-                    Reject
+                    {t('common:actions.reject')}
                   </Button>
                   
                   <Button
@@ -659,7 +661,7 @@ export default function MdmMatchReview({
                     ) : (
                       <Check className="h-4 w-4 mr-2" />
                     )}
-                    Approve
+                    {t('common:actions.approve')}
                   </Button>
 
                   {/* Save & Next button - only shown when there's a next item */}
@@ -674,7 +676,7 @@ export default function MdmMatchReview({
                       ) : (
                         <ChevronRight className="h-4 w-4 mr-2" />
                       )}
-                      Approve & Next
+                      {t('mdm:matchReview.approveAndNext')}
                     </Button>
                   )}
                 </div>
@@ -690,9 +692,9 @@ export default function MdmMatchReview({
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <AlertCircle className="h-5 w-5" />
               <span>
-                This match has already been {candidate.status.toLowerCase()}
-                {candidate.reviewed_by && ` by ${candidate.reviewed_by}`}
-                {candidate.reviewed_at && ` on ${new Date(candidate.reviewed_at).toLocaleString()}`}
+                {t('mdm:matchReview.alreadyReviewed', { status: candidate.status.toLowerCase() })}
+                {candidate.reviewed_by && ` ${t('mdm:matchReview.byReviewer', { reviewer: candidate.reviewed_by })}`}
+                {candidate.reviewed_at && ` ${t('mdm:matchReview.onDate', { date: new Date(candidate.reviewed_at).toLocaleString() })}`}
               </span>
             </div>
           </CardContent>

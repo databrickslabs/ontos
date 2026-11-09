@@ -1,6 +1,7 @@
 {
   "title": "Equipos",
   "subtitle": "Gestione equipos y sus miembros en su organización.",
+  "openMenu": "Abrir menú",
   "addNewTeam": "Agregar nuevo equipo",
   "editTeam": "Editar equipo",
   "deleteTeam": "Eliminar equipo",
@@ -53,6 +54,7 @@
       "createdDescription": "El equipo \"{{name}}\" se ha creado correctamente.",
       "updatedDescription": "El equipo \"{{name}}\" se ha actualizado correctamente.",
       "createFailedTitle": "Error al crear el equipo",
+      "membersFailedTitle": "Equipo creado, pero no se pudieron guardar los miembros",
       "updateFailedTitle": "Error al actualizar el equipo",
       "failedDescription": "Se produjo un error inesperado."
     }

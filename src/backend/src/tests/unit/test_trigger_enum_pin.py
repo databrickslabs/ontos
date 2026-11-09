@@ -30,6 +30,7 @@ _EXPECTED_TRIGGER_VALUES = [
     ("ON_REQUEST_REVIEW", "on_request_review"),
     ("ON_REQUEST_ACCESS", "on_request_access"),
     ("ON_REQUEST_PUBLISH", "on_request_publish"),
+    ("ON_REQUEST_DEPLOY", "on_request_deploy"),
     ("ON_REQUEST_STATUS_CHANGE", "on_request_status_change"),
     ("ON_JOB_SUCCESS", "on_job_success"),
     ("ON_JOB_FAILURE", "on_job_failure"),

@@ -6,6 +6,7 @@ Uses Claude Sonnet 4.5 via Databricks serving endpoints to answer
 business questions about data products, glossary terms, costs, and analytics.
 """
 
+import asyncio
 import json
 import re
 import uuid
@@ -13,8 +14,10 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
+from src.common.api_errors import new_error_id
 from src.common.config import Settings, get_settings
 from src.common.logging import get_logger
 from src.tools.system_prompts import get_system_prompt
@@ -27,6 +30,67 @@ from src.models.llm_search import (
 from src.tools import ToolRegistry, ToolContext, create_default_registry
 
 logger = get_logger(__name__)
+
+
+# Assistant replies for a failed chat turn, by code. ``content`` keeps this
+# English text (the session stores no code); the response also carries the
+# code so the UI shows it in the user's language.
+CHAT_ERROR_MESSAGES: Dict[str, str] = {
+    "chat_validation_failed": (
+        "I couldn't process the data of this request. Please try rephrasing your question. "
+        "The details are in the server log (error id {errorId})."
+    ),
+    "chat_timeout": (
+        "The request timed out. Please try a simpler question or try again later "
+        "(error id {errorId})."
+    ),
+    "chat_connection_failed": (
+        "I had trouble connecting to a required service. Please try again in a moment "
+        "(error id {errorId})."
+    ),
+    "chat_failed": (
+        "I encountered an error while processing your request. Please try rephrasing your "
+        "question or try again. The details are in the server log (error id {errorId})."
+    ),
+}
+
+
+def chat_error_code(exc: BaseException) -> str:
+    """The code of a failed chat turn, from the exception's type.
+
+    The text match at the end only covers client libraries whose timeout and
+    connection errors don't derive from the standard types.
+    """
+    try:
+        import openai
+
+        if isinstance(exc, openai.APITimeoutError):
+            return "chat_timeout"
+        if isinstance(exc, openai.APIConnectionError):
+            return "chat_connection_failed"
+    except ImportError:  # pragma: no cover - openai is a dependency
+        pass
+    try:
+        import httpx
+
+        if isinstance(exc, httpx.TimeoutException):
+            return "chat_timeout"
+        if isinstance(exc, httpx.NetworkError):
+            return "chat_connection_failed"
+    except ImportError:  # pragma: no cover
+        pass
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return "chat_timeout"
+    if isinstance(exc, ConnectionError):
+        return "chat_connection_failed"
+    if isinstance(exc, PydanticValidationError):
+        return "chat_validation_failed"
+    text = str(exc).lower()
+    if "timed out" in text or "timeout" in text:
+        return "chat_timeout"
+    if "connection" in text or "network" in text:
+        return "chat_connection_failed"
+    return "chat_failed"
 
 
 # Internal grounding markers — the system prompt instructs the model to emit
@@ -43,13 +107,59 @@ _CITATION_COMMENT_RE = re.compile(r"<!--\s*ref:\s*([^>]+?)\s*-->")
 _CONFIDENCE_LABEL_RE = re.compile(r"\s*\[(Confirmed|Documented|Inferred)\]")
 
 
-def _strip_internal_citations(text: str) -> Tuple[str, List[str], List[str]]:
+def _block_text(block: Any) -> str:
+    """Extract user-facing text from one content block, or "" if it carries none.
+
+    Reasoning / thinking blocks are deliberately dropped: they are the model's
+    internal scratchpad, not part of the answer shown to the user.
+    """
+    # dict-shaped block (raw JSON from the serving shim)
+    if isinstance(block, dict):
+        if block.get("type") in ("reasoning", "thinking"):
+            return ""
+        text = block.get("text")
+        return text if isinstance(text, str) else ""
+    # object-shaped block (OpenAI SDK / pydantic)
+    if getattr(block, "type", None) in ("reasoning", "thinking"):
+        return ""
+    text = getattr(block, "text", None)
+    if isinstance(text, str):
+        return text
+    if isinstance(block, str):
+        return block
+    return ""
+
+
+def _coerce_message_text(content: Any) -> str:
+    """Normalise an LLM message's ``content`` to a plain string.
+
+    Databricks' OpenAI-compatible serving shim returns ``content`` as a *list*
+    of structured blocks for reasoning-capable models (Claude Sonnet/Opus 5,
+    Claude Haiku 5.5, gpt-oss, and similar), e.g.
+    ``[{"type": "reasoning", ...}, {"type": "text", "text": "..."}]``. Older
+    models return a plain string. Downstream code (citation stripping, UI
+    rendering) assumes a string, so collapse any block list down to its
+    user-facing text here, keeping only text blocks and joining them.
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, (list, tuple)):
+        return "".join(_block_text(b) for b in content)
+    # Unknown scalar: prefer an embedded text field, else best-effort stringify.
+    return _block_text(content) or str(content)
+
+
+def _strip_internal_citations(text: Any) -> Tuple[str, List[str], List[str]]:
     """Remove internal grounding markers from the response.
 
     Returns (cleaned_text, citations, confidence_labels). The cleaned text has
     both kinds of markers removed and any triple-newlines created by the strip
-    collapsed back to doubles.
+    collapsed back to doubles. ``text`` is coerced to a string first so that
+    structured (list) content from reasoning-capable models is handled safely.
     """
+    text = _coerce_message_text(text)
     if not text:
         return text, [], []
     citations = [m.strip() for m in _CITATION_COMMENT_RE.findall(text)]
@@ -485,32 +595,17 @@ class LLMSearchManager:
             )
             
         except Exception as e:
-            logger.error(f"Error processing chat: {e}", exc_info=True)
-            
-            # Create a user-friendly error message
-            error_type = type(e).__name__
-            if "ValidationError" in str(e):
-                user_message = (
-                    "I encountered a validation error while processing a request. "
-                    "This typically happens when data doesn't match expected formats. "
-                    f"Details: {str(e)[:200]}"
-                )
-            elif "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                user_message = (
-                    "The request timed out. This might happen with complex queries. "
-                    "Please try a simpler question or try again later."
-                )
-            elif "connection" in str(e).lower() or "network" in str(e).lower():
-                user_message = (
-                    "I had trouble connecting to a required service. "
-                    "Please try again in a moment."
-                )
-            else:
-                user_message = (
-                    f"I encountered an error while processing your request ({error_type}). "
-                    "Please try rephrasing your question or try again."
-                )
-            
+            error_id = new_error_id()
+            code = chat_error_code(e)
+            logger.error(
+                "Error processing chat %s (%s, %s): %s", error_id, code, type(e).__name__, e,
+                exc_info=True,
+            )
+            # The exception's text stays in the log: it can hold SQL, hosts or
+            # internal data, and the message below is stored in the session.
+            user_message = CHAT_ERROR_MESSAGES[code].format(errorId=error_id)
+            error_fields = {"error_code": code, "error_params": {"errorId": error_id}}
+
             # Try to persist the error message to the session
             try:
                 error_msg = self._session_store.add_message(
@@ -519,7 +614,7 @@ class LLMSearchManager:
                 )
                 return ChatResponse(
                     session_id=session.id,
-                    message=error_msg,
+                    message=error_msg.model_copy(update=error_fields),
                     tool_calls_executed=0,
                     sources=[]
                 )
@@ -531,7 +626,8 @@ class LLMSearchManager:
                     id=str(uuid.uuid4()),
                     role=MessageRole.ASSISTANT,
                     content=user_message,
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
+                    **error_fields,
                 )
                 return ChatResponse(
                     session_id=session.id,
@@ -678,7 +774,11 @@ class LLMSearchManager:
                     "messages_sent": len(messages),
                     "has_tool_calls": bool(assistant_message.tool_calls),
                     "tool_calls": [],
-                    "response_preview": (assistant_message.content or "")[:200] if not assistant_message.tool_calls else None,
+                    "response_preview": (
+                        _coerce_message_text(assistant_message.content)[:200]
+                        if not assistant_message.tool_calls
+                        else None
+                    ),
                 }
             
             # Check if LLM wants to call tools

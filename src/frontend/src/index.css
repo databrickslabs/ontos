@@ -168,3 +168,11 @@
 .dark .react-flow [class*="bg-"][class*="-950"] .text-muted-foreground {
   @apply text-slate-200;
 }
+
+/* Concept Builder v2 — Simple/Advanced view mode.
+   The shared mode switch (components/concepts/mode-switch.tsx) sets
+   data-mode="advanced|simple" on <html>. Elements marked `.adv-only` are the
+   ontology layer (RDF/SKOS, IRIs, type mappings) and stay hidden in Simple. */
+html:not([data-mode="advanced"]) .adv-only {
+  display: none !important;
+}

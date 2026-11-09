@@ -1,18 +1,36 @@
 {
   "title": "Acerca de {{appName}}",
+  "intro": "Esta aplicación se ejecuta como una aplicación Databricks y proporciona Unity Catalog y servicios relacionados centrados en la gestión de metadatos, gobernanza y herramientas operativas.",
   "version": "Versión",
   "runningSince": "Ejecutándose desde",
   "loading": "Cargando...",
   "unavailable": "No disponible",
-  "intro": "Esta aplicación se ejecuta como una aplicación Databricks y proporciona Unity Catalog y servicios relacionados centrados en la gestión de metadatos, gobernanza y herramientas operativas.",
   "coreFeatures": "Características principales",
   "noFeatures": "No hay características disponibles para las vistas previas de funciones seleccionadas.",
   "techStack": "Stack tecnológico",
   "stack": {
-    "frontend": { "title": "Frontend", "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite" },
-    "backend": { "title": "Backend", "desc": "Python, FastAPI" },
-    "database": { "title": "Base de datos", "desc": "PostgreSQL" },
-    "platform": { "title": "Plataforma", "desc": "Databricks Apps" }
+    "frontend": {
+      "title": "Frontend",
+      "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite"
+    },
+    "backend": {
+      "title": "Backend",
+      "desc": "Python, FastAPI"
+    },
+    "database": {
+      "title": "Base de datos",
+      "desc": "PostgreSQL"
+    },
+    "platform": {
+      "title": "Plataforma",
+      "desc": "Databricks Apps"
+    }
+  },
+  "userGuide": {
+    "title": "Guía del usuario",
+    "tableOfContents": "Tabla de contenidos",
+    "loadError": "No se pudo cargar la guía del usuario: {{statusText}}",
+    "loadErrorGeneric": "No se pudo cargar la guía del usuario"
   },
   "learnMore": "Contribuye y aprende más",
   "cta": {
@@ -21,53 +39,53 @@
   },
   "details": {
     "data-domains": [
-      "• Definir y gestionar dominios de datos, subdominios y estructuras de propiedad.",
-      "• Visualizar relaciones entre dominios y productos de datos dependientes.",
-      "• Asignar activos y productos a dominios para mayor responsabilidad.",
-      "• Sigue el estándar BITOL Open Data Domain Standard (ODDS)."
+      "• Define y gestiona dominios de datos, subdominios y estructuras de propiedad.",
+      "• Visualiza las relaciones entre dominios y productos de datos dependientes.",
+      "• Asigna activos y productos a dominios para una responsabilidad más clara.",
+      "• Sigue el BITOL Open Data Domain Standard (ODDS)."
     ],
     "data-contracts": [
-      "• Instrumentar productos de datos con metadatos técnicos basados en el Open Data Contract Standard (ODCS).",
-      "• Validación de esquema, controles de calidad, verificación de control de acceso, visualización de datos de muestra.",
-      "• Los contratos pueden ser textuales (ej., JSON/YAML); soporta el esquema JSON BITOL ODCS."
+      "• Instrumenta productos de datos con metadatos técnicos basados en el Open Data Contract Standard (ODCS).",
+      "• Validación de esquema, comprobaciones de calidad, verificación del control de acceso, visualización de datos de muestra.",
+      "• Los contratos pueden ser basados en texto (p. ej., JSON/YAML); admite el esquema JSON BITOL ODCS."
     ],
     "data-products": [
-      "• Agrupar activos Databricks (tablas, vistas, funciones, modelos, dashboards, jobs, notebooks).",
-      "• Usar etiquetas (ej., data-product-name, data-product-domain)."
+      "• Agrupa activos de Databricks (tablas, vistas, funciones, modelos, dashboards, trabajos, notebooks).",
+      "• Usa etiquetas (p. ej., data-product-name, data-product-domain)."
     ],
     "business-glossary": [
       "• Glosarios jerárquicos por unidad organizativa (empresa, LOB, departamento, equipo, proyecto).",
-      "• Fusionados de abajo hacia arriba para usuarios, permitiendo sobrescrituras.",
-      "• Los términos tienen etiquetas, descripciones markdown, estado del ciclo de vida, activos asignados."
+      "• Combinados de abajo hacia arriba para los usuarios, permitiendo anulaciones.",
+      "• Los términos tienen etiquetas, descripciones en markdown, estado del ciclo de vida y activos asignados."
     ],
     "master-data": [
-      "• Integración con Zingg.ai para capacidades MDM."
+      "• Se integra con Zingg.ai para capacidades de MDM."
     ],
     "compliance": [
-      "• Definir y verificar reglas de cumplimiento.",
-      "• Calcular una puntuación de cumplimiento general."
+      "• Define y verifica reglas de cumplimiento.",
+      "• Calcula una puntuación general de cumplimiento."
     ],
     "estate-manager": [
-      "• Vista centralizada de múltiples espacios de trabajo.",
-      "• Monitorear uso de recursos y costos.",
-      "• Gestionar configuraciones entre estates."
+      "• Vista central de múltiples workspaces.",
+      "• Supervisa el uso de recursos y los costes.",
+      "• Gestiona configuraciones en todos los estates."
     ],
     "security": [
-      "• Habilitar características de seguridad avanzadas (ej., privacidad diferencial) en activos."
+      "• Habilita funciones de seguridad avanzadas (p. ej., privacidad diferencial) en los activos."
     ],
     "entitlements": [
-      "• Definir personas reutilizables (ej., Analista, Ingeniero).",
-      "• Asignar personas a grupos Databricks.",
-      "• Simplificar la gestión de privilegios a escala."
+      "• Define personas reutilizables (p. ej., Analista, Ingeniero).",
+      "• Asigna personas a grupos de Databricks.",
+      "• Simplifica la gestión de privilegios a escala."
     ],
     "entitlements-sync": [
-      "• Mantener los derechos alineados con sistemas externos (ej., IDP).",
-      "• Detectar y resolver conflictos de sincronización.",
-      "• Mantener registros de auditoría de todos los cambios."
+      "• Mantén los entitlements alineados con sistemas externos (p. ej., IDP).",
+      "• Detecta y resuelve conflictos de sincronización.",
+      "• Mantén registros de auditoría de todos los cambios."
     ],
     "catalog-commander": [
-      "• Explorador de dos paneles inspirado en Norton Commander para gestionar activos del catálogo.",
-      "• Copiar/mover tablas y esquemas fácilmente."
+      "• Explorador de doble panel inspirado en Norton Commander para gestionar activos del catálogo.",
+      "• Copia/mueve tablas y esquemas fácilmente."
     ],
     "data-asset-reviews": [
       "• Flujo de trabajo para revisar y aprobar activos (tablas, vistas, funciones).",

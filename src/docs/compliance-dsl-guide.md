@@ -43,6 +43,11 @@ ON_FAIL action
 | `UPPER(str)` | Convert to uppercase | `UPPER(obj.name)` |
 | `LOWER(str)` | Convert to lowercase | `LOWER(obj.name) = obj.name` |
 
+On data products, data contracts and domains, a tag key is the tag's
+`namespace/name` or its name; the name alone only works while no other namespace
+has a tag of that name on the entity (see the
+[DSL reference](compliance-dsl-reference.md#tag-functions)).
+
 ## Available Actions
 
 | Action | Syntax | Description |

@@ -198,8 +198,22 @@ endpoint to end users.
 
 Yes — that's what the MCP server is for. Create an MCP token in
 Settings → MCP Tokens with the scopes your session needs, register the
-Ontos MCP endpoint in your client's config, and your IDE agent will see
-the same tools Ask Ontos uses.
+Ontos MCP endpoint in your client's config (sending the token in the
+`X-API-Key` header), and your IDE agent will see the same tools Ask Ontos
+uses.
+
+**"Can I connect Genie One to Ontos's tools?"**
+
+Yes. Genie's native MCP connector carries a single credential (the app-gate
+OAuth), so it can't also send the `X-API-Key` the header-based clients use.
+Ontos bridges this with **keyless MCP**: an admin designates one read-only
+MCP token as the **keyless default** (Settings → MCP Tokens → star a token),
+and app-gate-authenticated requests that arrive without an `X-API-Key`
+resolve to that token's scopes, attributed to the calling user. You then
+register the Ontos `/api/mcp` endpoint as a Unity Catalog HTTP connection and
+add it in Genie One. Full walkthrough:
+[genie-one-mcp-setup.md](genie-one-mcp-setup.md). Because the keyless default
+applies to any authenticated app user, scope it read-only.
 
 **"If I create an MCP token, does that token bypass Ontos permissions?"**
 
@@ -207,4 +221,4 @@ No. The token is bound to a principal, and the principal's Ontos
 permissions still apply. The token's scopes are an *additional* restrict
 — they narrow what the token can do, never widen it.
 
-_Last verified against codebase: 2026-05-28_
+_Last verified against codebase: 2026-09-19_

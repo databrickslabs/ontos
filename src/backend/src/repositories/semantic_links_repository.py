@@ -16,6 +16,15 @@ class EntitySemanticLinksRepository(CRUDBase[EntitySemanticLinkDb, EntitySemanti
     def list_for_iri(self, db: Session, iri: str) -> List[EntitySemanticLinkDb]:
         return db.query(self.model).filter(self.model.iri == iri).all()
 
+    def count_for_iri(self, db: Session, iri: str) -> int:
+        """Count entity_semantic_links rows referencing an iri (P0-6 retire gate).
+
+        This is the physical UC/asset reference count: each row maps a UC FQN or
+        Ontos entity to this concept iri. Concept->concept references are counted
+        separately in the manager (via the in-memory graph).
+        """
+        return db.query(self.model).filter(self.model.iri == iri).count()
+
     def list_for_entity_prefix(
         self, db: Session, entity_id_prefix: str, entity_type: str
     ) -> List[EntitySemanticLinkDb]:
@@ -44,6 +53,20 @@ class EntitySemanticLinksRepository(CRUDBase[EntitySemanticLinkDb, EntitySemanti
 
     def list_all(self, db: Session) -> List[EntitySemanticLinkDb]:
         return db.query(self.model).all()
+
+    def list_for_iris(self, db: Session, iris: List[str]) -> List[EntitySemanticLinkDb]:
+        """Batch query for semantic links matching any of the given IRIs.
+
+        Args:
+            db: SQLAlchemy session
+            iris: List of IRI strings to query
+
+        Returns:
+            List of EntitySemanticLinkDb objects, empty if iris is empty
+        """
+        if not iris:
+            return []
+        return db.query(self.model).filter(self.model.iri.in_(iris)).all()
 
 
 entity_semantic_links_repo = EntitySemanticLinksRepository(EntitySemanticLinkDb)

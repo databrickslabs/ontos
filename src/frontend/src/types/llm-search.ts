@@ -47,6 +47,9 @@ export interface ChatMessage {
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   timestamp: string;
+  /** Set on an assistant message that reports a failure; `content` keeps the English text. */
+  error_code?: string | null;
+  error_params?: Record<string, unknown> | null;
 }
 
 export interface ChatMessageCreate {

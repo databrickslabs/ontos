@@ -1,0 +1,78 @@
+{
+  "title": "Ruoli aziendali",
+  "subtitle": "Ruoli denominati che possono essere assegnati agli utenti come proprietari di vari oggetti.",
+  "addNew": "Aggiungi ruolo",
+  "editRole": "Modifica ruolo",
+  "deleteRole": "Elimina ruolo",
+  "systemBadge": "Sistema",
+  "openMenu": "Apri menu",
+  "table": {
+    "name": "Nome",
+    "description": "Descrizione",
+    "category": "Categoria",
+    "status": "Stato",
+    "system": "Sistema",
+    "lastUpdated": "Ultimo aggiornamento",
+    "actions": "Azioni"
+  },
+  "categories": {
+    "governance": "Governance",
+    "technical": "Tecnico",
+    "business": "Business",
+    "operational": "Operativo"
+  },
+  "statuses": {
+    "active": "Attivo",
+    "deprecated": "Obsoleto"
+  },
+  "permissions": {
+    "deniedView": "Non disponi delle autorizzazioni per visualizzare i ruoli aziendali.",
+    "deniedCreate": "Non disponi delle autorizzazioni per creare ruoli aziendali.",
+    "deniedEdit": "Non disponi delle autorizzazioni per modificare i ruoli aziendali.",
+    "deniedDelete": "Non disponi delle autorizzazioni per eliminare i ruoli aziendali.",
+    "permissionDenied": "Autorizzazione negata"
+  },
+  "messages": {
+    "errorFetching": "Errore durante il recupero dei ruoli aziendali",
+    "loadFailed": "Impossibile caricare i ruoli aziendali",
+    "errorDeleting": "Errore durante l'eliminazione del ruolo aziendale",
+    "deleted": "Ruolo aziendale eliminato",
+    "deletedSuccess": "Il ruolo aziendale è stato eliminato correttamente.",
+    "errorLoadingData": "Errore durante il caricamento dei dati"
+  },
+  "deleteDialog": {
+    "title": "Eliminare il ruolo aziendale?",
+    "description": "Questa azione non può essere annullata. Le assegnazioni di proprietari esistenti che usano questo ruolo potrebbero rimanere orfane.",
+    "cancel": "Annulla",
+    "delete": "Elimina"
+  },
+  "emptyState": {
+    "title": "Nessun ruolo aziendale ancora definito",
+    "description": "Crea il tuo primo ruolo aziendale (es. Proprietario dati, Proprietario dominio)."
+  },
+  "form": {
+    "createTitle": "Crea ruolo aziendale",
+    "createDescription": "Aggiungi un nuovo ruolo aziendale che può essere assegnato agli utenti.",
+    "editTitle": "Modifica ruolo aziendale",
+    "editDescription": "Aggiorna i dettagli di questo ruolo aziendale.",
+    "create": "Crea",
+    "update": "Salva modifiche",
+    "noCategory": "Nessuna categoria",
+    "isApprover": "Approvatore del workflow",
+    "isApproverDescription": "Mostra questo ruolo negli elenchi a discesa degli approvatori del workflow e dei destinatari delle notifiche.",
+    "isApproverInUse": "Impossibile disabilitare — usato in {{count}} workflow: {{workflows}}.",
+    "placeholders": {
+      "name": "es. Proprietario dati",
+      "description": "Descrivi le responsabilità di questo ruolo...",
+      "category": "Seleziona una categoria"
+    },
+    "toasts": {
+      "created": "Ruolo aziendale creato",
+      "createdDescription": "\"{{name}}\" è stato creato.",
+      "updated": "Ruolo aziendale aggiornato",
+      "updatedDescription": "\"{{name}}\" è stato aggiornato.",
+      "createFailed": "Creazione non riuscita",
+      "updateFailed": "Aggiornamento non riuscito"
+    }
+  }
+}

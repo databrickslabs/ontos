@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import { Shapes } from 'lucide-react'
 
@@ -13,6 +14,7 @@ const iriTail = (iri: string) => (iri.split(/[\/#]/).pop() || iri)
 const displayLabel = (iri: string, label?: string) => isBadLabel(label) ? iriTail(iri) : (label || iriTail(iri))
 
 export default function LinkedConceptChips({ links, onRemove, trailing }: Props) {
+  const { t } = useTranslation(['semantic-models', 'common'])
   const [resolved, setResolved] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function LinkedConceptChips({ links, onRemove, trailing }: Props)
   if (!links || links.length === 0) {
     return (
       <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-sm text-muted-foreground">No business concepts linked</span>
+        <span className="text-sm text-muted-foreground">{t('semantic-models:linkedConcepts.empty')}</span>
         {trailing}
       </div>
     )
@@ -83,7 +85,7 @@ export default function LinkedConceptChips({ links, onRemove, trailing }: Props)
           </a>
           {onRemove && (
             <button
-              aria-label="Remove concept link"
+              aria-label={t('semantic-models:linkedConcepts.removeAria')}
               className="ml-1 text-muted-foreground hover:text-foreground"
               onClick={(e) => { e.preventDefault(); onRemove(l.id); }}
             >

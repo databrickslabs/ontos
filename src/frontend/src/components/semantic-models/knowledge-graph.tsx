@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 // @ts-expect-error - react-cytoscapejs doesn't have type declarations
 import CytoscapeComponent from 'react-cytoscapejs';
 import type { Core, ElementDefinition, LayoutOptions } from 'cytoscape';
@@ -23,6 +24,7 @@ import {
 import { ZoomIn, ZoomOut, Maximize, RotateCcw, Expand, Group, Ungroup, ChevronDown, Tag, Workflow, CircleDot, MoveHorizontal } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 import {
   Dialog,
   DialogContent,
@@ -63,6 +65,7 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
   getRootDescendants,
   selectedLanguage,
 }) => {
+  const { t } = useTranslation(['semantic-models', 'common']);
   const visibleCount = rootNodes.filter(r => !hiddenRoots.has(r.iri)).length;
   const totalCount = rootNodes.length;
 
@@ -108,7 +111,9 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
                 borderColor: color,
                 backgroundColor: isHidden ? undefined : `${color}15`
               }}
-              title={`${isHidden ? 'Show' : 'Hide'} ${label} (${descendants.size} concepts)`}
+              title={isHidden
+                ? t('semantic-models:knowledgeGraph.rootFilter.show', { label, count: descendants.size })
+                : t('semantic-models:knowledgeGraph.rootFilter.hide', { label, count: descendants.size })}
             >
               <div 
                 className="w-3 h-3 rounded-full flex-shrink-0"
@@ -137,30 +142,30 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-8 gap-2">
             <span className="font-medium">
-              {visibleCount} of {totalCount} sources visible
+              {t('semantic-models:knowledgeGraph.rootFilter.sourcesVisible', { visible: visibleCount, total: totalCount })}
             </span>
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-0" align="start">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-            <span className="text-sm font-medium">Filter Sources</span>
+            <span className="text-sm font-medium">{t('semantic-models:knowledgeGraph.rootFilter.filterSources')}</span>
             <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-7 px-2 text-xs"
                 onClick={handleShowAll}
               >
-                Show All
+                {t('semantic-models:knowledgeGraph.rootFilter.showAll')}
               </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-7 px-2 text-xs"
                 onClick={handleHideAll}
               >
-                Hide All
+                {t('semantic-models:knowledgeGraph.rootFilter.hideAll')}
               </Button>
             </div>
           </div>
@@ -206,7 +211,7 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
         </PopoverContent>
       </Popover>
       <span className="text-muted-foreground">
-        Click legend items to toggle visibility
+        {t('semantic-models:knowledgeGraph.rootFilter.toggleHint')}
       </span>
     </div>
   );
@@ -236,24 +241,43 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   showRootBadges = true,
   selectedLanguage = 'en',
 }) => {
+  const { t } = useTranslation(['semantic-models', 'common']);
   const cyRef = useRef<Core | null>(null);
   const fullscreenCyRef = useRef<Core | null>(null);
   const layoutRef = useRef<{ stop: () => void } | null>(null);
   const initialLayoutDoneRef = useRef(false);
   const fullscreenInitialLayoutDoneRef = useRef(false);
-  const [layout, setLayout] = useState<LayoutType>('cose');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showDomainBoxes, setShowDomainBoxes] = useState(true);
-  const [showNodeLabels, setShowNodeLabels] = useState(false);
-  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
-  const [nodeSize, setNodeSize] = useState(24);
-  const [spacing, setSpacing] = useState(80);
+  // User-facing display options are persisted (survive reloads) in the
+  // glossary preferences store; transient state above stays local.
+  const layout = useGlossaryPreferencesStore((s) => s.graphLayout);
+  const showDomainBoxes = useGlossaryPreferencesStore((s) => s.graphShowDomainBoxes);
+  const showNodeLabels = useGlossaryPreferencesStore((s) => s.graphShowNodeLabels);
+  const showEdgeLabels = useGlossaryPreferencesStore((s) => s.graphShowEdgeLabels);
+  const nodeSize = useGlossaryPreferencesStore((s) => s.graphNodeSize);
+  const spacing = useGlossaryPreferencesStore((s) => s.graphSpacing);
+  const setGraphOption = useGlossaryPreferencesStore((s) => s.setGraphOption);
+  const setLayout = useCallback((v: LayoutType) => setGraphOption('graphLayout', v), [setGraphOption]);
+  const setShowDomainBoxes = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => setGraphOption('graphShowDomainBoxes', v),
+    [setGraphOption],
+  );
+  const setShowNodeLabels = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => setGraphOption('graphShowNodeLabels', v),
+    [setGraphOption],
+  );
+  const setShowEdgeLabels = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => setGraphOption('graphShowEdgeLabels', v),
+    [setGraphOption],
+  );
+  const setNodeSize = useCallback((v: number) => setGraphOption('graphNodeSize', v), [setGraphOption]);
+  const setSpacing = useCallback((v: number) => setGraphOption('graphSpacing', v), [setGraphOption]);
   
   // Handler for toggling domain boxes
   const handleToggleDomainBoxes = useCallback(() => {
     setShowDomainBoxes(prev => !prev);
-  }, []);
+  }, [setShowDomainBoxes]);
 
   // Reset layout done ref when showDomainBoxes changes (component will remount)
   useEffect(() => {
@@ -776,14 +800,14 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
         <div className="flex items-center gap-2">
           <Select value={layout} onValueChange={(v) => setLayout(v as LayoutType)}>
             <SelectTrigger className="w-[160px] h-8">
-              <SelectValue placeholder="Layout" />
+              <SelectValue placeholder={t('semantic-models:knowledgeGraph.layout.placeholder')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="circle">Circular</SelectItem>
-              <SelectItem value="cose">Force-Directed</SelectItem>
-              <SelectItem value="grid">Grid</SelectItem>
-              <SelectItem value="breadthfirst">Hierarchical</SelectItem>
-              <SelectItem value="concentric">Concentric</SelectItem>
+              <SelectItem value="circle">{t('semantic-models:knowledgeGraph.layouts.circular')}</SelectItem>
+              <SelectItem value="cose">{t('semantic-models:knowledgeGraph.layouts.forceDirected')}</SelectItem>
+              <SelectItem value="grid">{t('semantic-models:knowledgeGraph.layouts.grid')}</SelectItem>
+              <SelectItem value="breadthfirst">{t('semantic-models:knowledgeGraph.layouts.hierarchical')}</SelectItem>
+              <SelectItem value="concentric">{t('semantic-models:knowledgeGraph.layouts.concentric')}</SelectItem>
             </SelectContent>
           </Select>
           
@@ -792,10 +816,10 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
             size="sm"
             className="h-8 gap-1.5"
             onClick={handleToggleDomainBoxes}
-            title={showDomainBoxes ? "Hide domain groups" : "Show domain groups"}
+            title={showDomainBoxes ? t('semantic-models:knowledgeGraph.toolbar.hideDomainGroups') : t('semantic-models:knowledgeGraph.toolbar.showDomainGroups')}
           >
             {showDomainBoxes ? <Group className="h-4 w-4" /> : <Ungroup className="h-4 w-4" />}
-            <span>Groups</span>
+            <span>{t('semantic-models:knowledgeGraph.toolbar.groups')}</span>
           </Button>
 
           <Button
@@ -803,10 +827,10 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
             size="sm"
             className="h-8 gap-1.5"
             onClick={() => setShowNodeLabels(prev => !prev)}
-            title={showNodeLabels ? "Hide node labels" : "Show node labels"}
+            title={showNodeLabels ? t('semantic-models:knowledgeGraph.toolbar.hideNodeLabels') : t('semantic-models:knowledgeGraph.toolbar.showNodeLabels')}
           >
             <Tag className="h-4 w-4" />
-            <span>Node labels</span>
+            <span>{t('semantic-models:knowledgeGraph.toolbar.nodeLabels')}</span>
           </Button>
 
           <Button
@@ -814,26 +838,26 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
             size="sm"
             className="h-8 gap-1.5"
             onClick={() => setShowEdgeLabels(prev => !prev)}
-            title={showEdgeLabels ? "Hide edge labels" : "Show edge labels"}
+            title={showEdgeLabels ? t('semantic-models:knowledgeGraph.toolbar.hideEdgeLabels') : t('semantic-models:knowledgeGraph.toolbar.showEdgeLabels')}
           >
             <Workflow className="h-4 w-4" />
-            <span>Edge labels</span>
+            <span>{t('semantic-models:knowledgeGraph.toolbar.edgeLabels')}</span>
           </Button>
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node size">
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5" title={t('semantic-models:knowledgeGraph.toolbar.nodeSize')}>
                 <CircleDot className="h-4 w-4" />
-                <span>Size</span>
+                <span>{t('semantic-models:knowledgeGraph.toolbar.size')}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64 p-3" align="start">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Node size</span>
+                <span className="text-sm font-medium">{t('semantic-models:knowledgeGraph.toolbar.nodeSize')}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums w-6 text-right">{nodeSize}</span>
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setNodeSize(24)}>
-                    Reset
+                    {t('common:actions.reset')}
                   </Button>
                 </div>
               </div>
@@ -843,25 +867,25 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 min={12}
                 max={48}
                 step={2}
-                aria-label="Node size"
+                aria-label={t('semantic-models:knowledgeGraph.toolbar.nodeSize')}
               />
             </PopoverContent>
           </Popover>
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node spacing">
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5" title={t('semantic-models:knowledgeGraph.toolbar.nodeSpacing')}>
                 <MoveHorizontal className="h-4 w-4" />
-                <span>Spacing</span>
+                <span>{t('semantic-models:knowledgeGraph.toolbar.spacing')}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64 p-3" align="start">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Spacing</span>
+                <span className="text-sm font-medium">{t('semantic-models:knowledgeGraph.toolbar.spacing')}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{spacing}</span>
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSpacing(80)}>
-                    Reset
+                    {t('common:actions.reset')}
                   </Button>
                 </div>
               </div>
@@ -871,30 +895,30 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 min={40}
                 max={240}
                 step={10}
-                aria-label="Node spacing"
+                aria-label={t('semantic-models:knowledgeGraph.toolbar.nodeSpacing')}
               />
               <p className="text-[10px] text-muted-foreground mt-2">
-                Re-runs layout. Affects edge length and node repulsion.
+                {t('semantic-models:knowledgeGraph.toolbar.spacingHint')}
               </p>
             </PopoverContent>
           </Popover>
 
           <Badge variant="secondary" className="text-xs">
-            {graphData.elements.filter(e => e.classes?.includes('concept-node')).length} concepts
+            {t('semantic-models:knowledgeGraph.toolbar.conceptCount', { count: graphData.elements.filter(e => e.classes?.includes('concept-node')).length })}
           </Badge>
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut} title="Zoom Out">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut} title={t('common:tooltips.zoomOut')}>
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn} title="Zoom In">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn} title={t('common:tooltips.zoomIn')}>
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleFit} title="Fit to View">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleFit} title={t('common:tooltips.fitToView')}>
             <Maximize className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleReset} title="Reset Layout">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleReset} title={t('common:tooltips.resetLayout')}>
             <RotateCcw className="h-4 w-4" />
           </Button>
           <div className="w-px h-6 bg-border mx-1" />
@@ -903,7 +927,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
             size="icon" 
             className="h-8 w-8" 
             onClick={() => setIsFullscreen(true)} 
-            title="Open Fullscreen"
+            title={t('common:tooltips.openFullscreen')}
           >
             <Expand className="h-4 w-4" />
           </Button>
@@ -947,22 +971,22 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <DialogTitle className="text-xl font-semibold">View Graph</DialogTitle>
+                <DialogTitle className="text-xl font-semibold">{t('common:labels.viewGraph')}</DialogTitle>
                 <DialogDescription className="sr-only">
-                  Fullscreen view of the concept graph visualization
+                  {t('semantic-models:knowledgeGraph.fullscreen.description')}
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-2">
                 <Select value={layout} onValueChange={(v) => setLayout(v as LayoutType)}>
                   <SelectTrigger className="w-[160px] h-8">
-                    <SelectValue placeholder="Layout" />
+                    <SelectValue placeholder={t('semantic-models:knowledgeGraph.layout.placeholder')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="circle">Circular</SelectItem>
-                    <SelectItem value="cose">Force-Directed</SelectItem>
-                    <SelectItem value="grid">Grid</SelectItem>
-                    <SelectItem value="breadthfirst">Hierarchical</SelectItem>
-                    <SelectItem value="concentric">Concentric</SelectItem>
+                    <SelectItem value="circle">{t('semantic-models:knowledgeGraph.layouts.circular')}</SelectItem>
+                    <SelectItem value="cose">{t('semantic-models:knowledgeGraph.layouts.forceDirected')}</SelectItem>
+                    <SelectItem value="grid">{t('semantic-models:knowledgeGraph.layouts.grid')}</SelectItem>
+                    <SelectItem value="breadthfirst">{t('semantic-models:knowledgeGraph.layouts.hierarchical')}</SelectItem>
+                    <SelectItem value="concentric">{t('semantic-models:knowledgeGraph.layouts.concentric')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
@@ -970,45 +994,45 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                   size="sm"
                   className="h-8 gap-1.5"
                   onClick={handleToggleDomainBoxes}
-                  title={showDomainBoxes ? "Hide domain groups" : "Show domain groups"}
+                  title={showDomainBoxes ? t('semantic-models:knowledgeGraph.toolbar.hideDomainGroups') : t('semantic-models:knowledgeGraph.toolbar.showDomainGroups')}
                 >
                   {showDomainBoxes ? <Group className="h-4 w-4" /> : <Ungroup className="h-4 w-4" />}
-                  <span>Groups</span>
+                  <span>{t('semantic-models:knowledgeGraph.toolbar.groups')}</span>
                 </Button>
                 <Button
                   variant={showNodeLabels ? "secondary" : "ghost"}
                   size="sm"
                   className="h-8 gap-1.5"
                   onClick={() => setShowNodeLabels(prev => !prev)}
-                  title={showNodeLabels ? "Hide node labels" : "Show node labels"}
+                  title={showNodeLabels ? t('semantic-models:knowledgeGraph.toolbar.hideNodeLabels') : t('semantic-models:knowledgeGraph.toolbar.showNodeLabels')}
                 >
                   <Tag className="h-4 w-4" />
-                  <span>Node labels</span>
+                  <span>{t('semantic-models:knowledgeGraph.toolbar.nodeLabels')}</span>
                 </Button>
                 <Button
                   variant={showEdgeLabels ? "secondary" : "ghost"}
                   size="sm"
                   className="h-8 gap-1.5"
                   onClick={() => setShowEdgeLabels(prev => !prev)}
-                  title={showEdgeLabels ? "Hide edge labels" : "Show edge labels"}
+                  title={showEdgeLabels ? t('semantic-models:knowledgeGraph.toolbar.hideEdgeLabels') : t('semantic-models:knowledgeGraph.toolbar.showEdgeLabels')}
                 >
                   <Workflow className="h-4 w-4" />
-                  <span>Edge labels</span>
+                  <span>{t('semantic-models:knowledgeGraph.toolbar.edgeLabels')}</span>
                 </Button>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node size">
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" title={t('semantic-models:knowledgeGraph.toolbar.nodeSize')}>
                       <CircleDot className="h-4 w-4" />
-                      <span>Size</span>
+                      <span>{t('semantic-models:knowledgeGraph.toolbar.size')}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-64 p-3" align="end">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Node size</span>
+                      <span className="text-sm font-medium">{t('semantic-models:knowledgeGraph.toolbar.nodeSize')}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground tabular-nums w-6 text-right">{nodeSize}</span>
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setNodeSize(24)}>
-                          Reset
+                          {t('common:actions.reset')}
                         </Button>
                       </div>
                     </div>
@@ -1018,24 +1042,24 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                       min={12}
                       max={48}
                       step={2}
-                      aria-label="Node size"
+                      aria-label={t('semantic-models:knowledgeGraph.toolbar.nodeSize')}
                     />
                   </PopoverContent>
                 </Popover>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node spacing">
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" title={t('semantic-models:knowledgeGraph.toolbar.nodeSpacing')}>
                       <MoveHorizontal className="h-4 w-4" />
-                      <span>Spacing</span>
+                      <span>{t('semantic-models:knowledgeGraph.toolbar.spacing')}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-64 p-3" align="end">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Spacing</span>
+                      <span className="text-sm font-medium">{t('semantic-models:knowledgeGraph.toolbar.spacing')}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{spacing}</span>
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSpacing(80)}>
-                          Reset
+                          {t('common:actions.reset')}
                         </Button>
                       </div>
                     </div>
@@ -1045,15 +1069,15 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                       min={40}
                       max={240}
                       step={10}
-                      aria-label="Node spacing"
+                      aria-label={t('semantic-models:knowledgeGraph.toolbar.nodeSpacing')}
                     />
                     <p className="text-[10px] text-muted-foreground mt-2">
-                      Re-runs layout. Affects edge length and node repulsion.
+                      {t('semantic-models:knowledgeGraph.toolbar.spacingHint')}
                     </p>
                   </PopoverContent>
                 </Popover>
                 <Badge variant="secondary" className="text-xs">
-                  {graphData.elements.filter(e => e.classes?.includes('concept-node')).length} concepts
+                  {t('semantic-models:knowledgeGraph.toolbar.conceptCount', { count: graphData.elements.filter(e => e.classes?.includes('concept-node')).length })}
                 </Badge>
               </div>
             </div>
@@ -1111,7 +1135,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           {/* Fullscreen toolbar */}
           <div className="px-4 py-2 border-t flex items-center justify-between bg-muted/20 flex-shrink-0">
             <div className="text-sm text-muted-foreground">
-              Click on nodes to select concepts. Use scroll to zoom, drag to pan.
+              {t('semantic-models:knowledgeGraph.fullscreen.hint')}
             </div>
             <div className="flex items-center gap-1">
               <Button 
@@ -1119,7 +1143,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 size="icon" 
                 className="h-8 w-8" 
                 onClick={() => fullscreenCyRef.current?.zoom((fullscreenCyRef.current?.zoom() || 1) / 1.3)} 
-                title="Zoom Out"
+                title={t('common:tooltips.zoomOut')}
               >
                 <ZoomOut className="h-4 w-4" />
               </Button>
@@ -1128,7 +1152,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 size="icon" 
                 className="h-8 w-8" 
                 onClick={() => fullscreenCyRef.current?.zoom((fullscreenCyRef.current?.zoom() || 1) * 1.3)} 
-                title="Zoom In"
+                title={t('common:tooltips.zoomIn')}
               >
                 <ZoomIn className="h-4 w-4" />
               </Button>
@@ -1137,7 +1161,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 size="icon" 
                 className="h-8 w-8" 
                 onClick={() => fullscreenCyRef.current?.fit(undefined, 60)} 
-                title="Fit to View"
+                title={t('common:tooltips.fitToView')}
               >
                 <Maximize className="h-4 w-4" />
               </Button>
@@ -1152,7 +1176,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                     cy.layout(layoutConfig).run();
                   }
                 }} 
-                title="Reset Layout"
+                title={t('common:tooltips.resetLayout')}
               >
                 <RotateCcw className="h-4 w-4" />
               </Button>

@@ -6,8 +6,8 @@ Provides CRUD operations for workflow definitions and execution management.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from typing import Any, Dict, List, Optional, Union
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
@@ -32,6 +32,7 @@ from src.models.process_workflows import (
     ProcessWorkflow,
     ProcessWorkflowCreate,
     ProcessWorkflowUpdate,
+    WorkflowScope,
     WorkflowExecution,
     WorkflowListResponse,
     WorkflowExecutionListResponse,
@@ -129,6 +130,7 @@ _TRIGGER_LABELS: Dict[str, str] = {
     "on_request_review": "After a review request is submitted",
     "for_request_publish": "When a user requests publish",
     "on_request_publish": "After a publish request is submitted",
+    "on_request_deploy": "After a deploy request is submitted",
     "for_request_certify": "When a user requests certification",
     "on_request_certify": "After a certification request is submitted",
     "for_request_status_change": "When a user requests status change",
@@ -164,7 +166,7 @@ _TRIGGER_GROUPS_REQUEST_FLOW = {
     "for_request_publish", "for_request_certify",
     "for_request_status_change", "for_approval_response",
     "on_subscribe", "on_unsubscribe",
-    "on_request_access", "on_request_review", "on_request_publish",
+    "on_request_access", "on_request_review", "on_request_publish", "on_request_deploy",
     "on_request_certify", "on_request_status_change",
     "on_revoke", "on_expiring", "on_first_access",
 }
@@ -190,7 +192,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_create": ["catalog", "schema", "table", "data_contract", "data_product", "domain"],
     "on_update": ["data_contract", "data_product", "domain"],
     "on_delete": ["data_contract", "data_product", "domain"],
-    "on_status_change": ["data_contract", "data_product", "data_asset_review"],
+    "on_status_change": ["data_contract", "data_product", "data_asset_review", "ontology_concept"],
     "on_publish": ["data_contract", "data_product"],
     "on_unpublish": ["data_contract", "data_product"],
     "on_certify": ["data_contract", "data_product"],
@@ -203,8 +205,13 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_review": ["data_contract", "data_product", "data_asset_review"],
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
+    "on_request_deploy": ["data_contract"],
     "on_request_certify": ["data_contract", "data_product"],
-    "on_request_status_change": ["data_product"],
+    # Concept curation: ontology_concept = single-concept Request Revision / review
+    # ping-pong (P2). concept_changeset (bulk RDF upload gate, P3) is intentionally
+    # NOT selectable — Scenario D (2026-08-18) disabled the gate; all file uploads
+    # land as Draft and follow per-concept review. Re-add if gating is re-opened.
+    "on_request_status_change": ["data_product", "ontology_concept"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],
@@ -217,7 +224,8 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "for_request_review": ["data_contract", "data_product", "data_asset_review"],
     "for_request_publish": ["data_contract", "data_product"],
     "for_request_certify": ["data_contract", "data_product"],
-    "for_request_status_change": ["data_product"],
+    # concept_changeset dropped here too — Scenario D disabled the bulk-upload gate.
+    "for_request_status_change": ["data_product", "ontology_concept"],
     "for_approval_response": [],  # system trigger — any entity
     # Background jobs
     "on_job_success": ["job"],
@@ -286,6 +294,31 @@ async def get_template_vars(
     return manager.get_template_vars(trigger, entity_type)
 
 
+def _execution_error_code(error_message: Optional[str], step_runs) -> Dict[str, Any]:
+    """The code of an execution's error, when it is a failed step's coded error.
+
+    The execution keeps only the English text; the failed step run with the
+    same text that carries ``error_code`` / ``error_params`` in its result data
+    gives the code, so the UI can show the error in the user's language.
+    """
+    if not error_message:
+        return {}
+    for run in reversed(list(step_runs or [])):
+        if run.passed or run.error_message != error_message or not run.result_data:
+            continue
+        try:
+            data = run.result_data
+            if isinstance(data, str):
+                data = json.loads(data)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        code = data.get('error_code') if isinstance(data, dict) else None
+        if isinstance(code, str):
+            params = data.get('error_params')
+            return {'error_code': code, 'error_params': params if isinstance(params, dict) else {}}
+    return {}
+
+
 @router.get("/executions", response_model=WorkflowExecutionListResponse)
 async def list_executions(
     request: Request,
@@ -347,6 +380,8 @@ async def list_executions(
             success_count=exe.success_count,
             failure_count=exe.failure_count,
             error_message=exe.error_message,
+            # step_executions are loaded with the executions
+            **_execution_error_code(exe.error_message, exe.step_executions),
             started_at=exe.started_at,
             finished_at=exe.finished_at,
             triggered_by=exe.triggered_by,
@@ -571,19 +606,29 @@ WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
     TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
     TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
     TriggerType.ON_FIRST_ACCESS.value:           None,  # authenticated only — first-login welcome screen
-    # `for_approval_response` — relaxed from `notifications:READ_WRITE`
-    # (PR K) down to `notifications:READ_ONLY` (PR L). The outer gate
-    # only needs to confirm the user is part of the notification system
-    # at all; the real authorization is the per-execution check inside
+    # `for_approval_response` — authenticated only (#971). The real
+    # authorization is the per-execution check inside
     # `POST /api/workflows/handle-approval`
-    # (`_assert_caller_authorized_for_execution`), which verifies the
-    # caller is the recipient (or role-member) of the actual approval
-    # notification — preventing horizontal privilege escalation.
-    # READ_WRITE is too tight: typical Business Owners hold a business
-    # role on the entity but only have notifications:Read-only at the
-    # app-role level (they read + respond to notifications routed to
-    # them; they don't author or modify notifications).
-    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_ONLY),
+    # (`_assert_caller_authorized_for_execution`): the caller must be the
+    # recipient (or role member) of the actual approval notification.
+    # It used to require `notifications:READ_ONLY` (PR L), which can no
+    # longer be granted since `notifications` became admin-only, and which
+    # approvers holding only a business role never have anyway.
+    TriggerType.FOR_APPROVAL_RESPONSE.value:     None,
+}
+
+
+# Entity-aware overrides for wizards whose "owning feature" depends on the
+# entity being acted on, not just the trigger type. `for_request_status_change`
+# is shared by data products (data-products feature) and ontology concepts
+# (semantic-models feature) — a concept steward with semantic-models:READ_WRITE
+# but no data-products write must not be 403'd when resolving/running the
+# concept review wizard. Keyed on (trigger_type, entity_type); falls through to
+# WIZARD_PERMISSION_DISPATCH when no override matches, so product behavior is
+# unchanged.
+_WIZARD_ENTITY_PERMISSION_OVERRIDES: Dict[tuple, tuple] = {
+    (TriggerType.FOR_REQUEST_STATUS_CHANGE.value, "ontology_concept"):
+        ("semantic-models", FeatureAccessLevel.READ_WRITE),
 }
 
 
@@ -592,6 +637,7 @@ async def enforce_wizard_permission(
     user_details: UserInfo,
     request: Request,
     *,
+    entity_type: Optional[str] = None,
     raise_on_unknown: bool = True,
 ) -> None:
     """Enforce the per-trigger permission gate from ``WIZARD_PERMISSION_DISPATCH``.
@@ -603,7 +649,16 @@ async def enforce_wizard_permission(
     If ``trigger_type`` isn't in the dispatch and ``raise_on_unknown`` is True
     (default), raises 400. Set to False for callers that have already
     validated the trigger (e.g. session handlers reading a stored workflow).
+
+    ``entity_type`` selects an entity-aware gate for triggers shared across
+    entities (see ``_WIZARD_ENTITY_PERMISSION_OVERRIDES``). When no override
+    matches, the per-trigger default from ``WIZARD_PERMISSION_DISPATCH`` is used.
     """
+    override = _WIZARD_ENTITY_PERMISSION_OVERRIDES.get((trigger_type, entity_type))
+    if override is not None:
+        feature_id, required_level = override
+        await enforce_feature_permission(feature_id, required_level, user_details, request)
+        return
     if trigger_type not in WIZARD_PERMISSION_DISPATCH:
         if raise_on_unknown:
             raise HTTPException(
@@ -644,7 +699,9 @@ async def get_workflow_for_trigger(
             detail=f"Invalid trigger_type. Allowed: {sorted(APP_ACTION_TRIGGER_TYPES)}",
         )
     # Per-trigger permission check — replaces the blanket settings:READ_ONLY gate.
-    await enforce_wizard_permission(trigger_type, user_details, request)
+    # entity_type selects the entity-aware gate for shared triggers (e.g.
+    # for_request_status_change on ontology_concept -> semantic-models).
+    await enforce_wizard_permission(trigger_type, user_details, request, entity_type=entity_type)
     workflow = manager.get_workflow_by_trigger_type(trigger_type, entity_type=entity_type)
     if not workflow:
         raise HTTPException(
@@ -687,7 +744,23 @@ async def get_workflow(
     if is_approval and trigger_type and trigger_type in WIZARD_PERMISSION_DISPATCH:
         # Reuse PR A's dispatch — None entries (e.g. on_first_access)
         # short-circuit to authenticated-only.
-        await enforce_wizard_permission(trigger_type, user_details, request, raise_on_unknown=False)
+        # For entity-aware triggers, derive the workflow's own entity_type so a
+        # concept-only approval workflow gets the semantic-models gate rather
+        # than the data-products default. A concept-only workflow declares
+        # 'ontology_concept' (and not 'data_product') in trigger.entity_types.
+        entity_types = (workflow.trigger.entity_types or []) if workflow.trigger else []
+        entity_types = [
+            (et.value if hasattr(et, "value") else et) for et in entity_types
+        ]
+        wf_entity_type = (
+            "ontology_concept"
+            if "ontology_concept" in entity_types and "data_product" not in entity_types
+            else None
+        )
+        await enforce_wizard_permission(
+            trigger_type, user_details, request,
+            entity_type=wf_entity_type, raise_on_unknown=False,
+        )
     else:
         # Process workflows, or approval workflows whose trigger isn't in
         # the dispatch table — keep the original admin-config gate.
@@ -697,6 +770,30 @@ async def get_workflow(
     return workflow
 
 
+def _invalid_workflow_detail(validation: WorkflowValidationResult) -> dict:
+    """400 detail of a workflow that failed validation.
+
+    ``errors`` keeps the English list older clients read; ``code`` and
+    ``params.issues`` let the designer show each error in the user's language.
+    """
+    return {
+        "code": "workflow_invalid",
+        "message": "; ".join(validation.errors),
+        "errors": validation.errors,
+        "params": {"issues": [issue.model_dump() for issue in validation.issues]},
+    }
+
+
+def _activation_overlap_detail(conflicts: list[dict]) -> dict:
+    return {
+        'code': 'workflow_activation_overlap',
+        'message': 'Another active workflow can match the same event.',
+        'params': {'conflicts': conflicts},
+        # Keep the top-level field for clients of the original toggle endpoint.
+        'conflicts': conflicts,
+    }
+
+
 @router.post("", response_model=ProcessWorkflow)
 async def create_workflow(
     request: Request,
@@ -704,6 +801,7 @@ async def create_workflow(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    confirm_overlap: bool = Query(False, description="Confirm creation despite overlaps"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
@@ -713,7 +811,13 @@ async def create_workflow(
     # Validate workflow
     validation = manager.validate_workflow(workflow)
     if not validation.valid:
-        raise HTTPException(status_code=400, detail={"errors": validation.errors})
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
+
+    conflicts = manager.activation_conflicts_for(
+        workflow.trigger, workflow.scope or WorkflowScope(type='all'),
+    ) if workflow.is_active else []
+    if conflicts and not confirm_overlap:
+        raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
     result = manager.create_workflow(workflow, created_by=user_email)
     
@@ -724,7 +828,12 @@ async def create_workflow(
         feature='process-workflows',
         action='CREATE',
         success=True,
-        details={'workflow_id': result.id, 'workflow_name': result.name}
+        details={
+            'workflow_id': result.id,
+            'workflow_name': result.name,
+            'overlap_confirmed': bool(conflicts and confirm_overlap),
+            'conflicting_workflow_ids': [item['id'] for item in conflicts],
+        }
     )
     
     return result
@@ -738,19 +847,19 @@ async def update_workflow(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    confirm_overlap: bool = Query(False, description="Confirm update despite overlaps"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Update an existing workflow."""
     user_email = current_user.email if current_user else None
+    existing = manager.get_workflow(workflow_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Workflow not found")
     
     # Validate if steps are being updated
     if workflow.steps is not None:
         # Create a full workflow for validation
-        existing = manager.get_workflow(workflow_id)
-        if not existing:
-            raise HTTPException(status_code=404, detail="Workflow not found")
-        
         full_workflow = ProcessWorkflowCreate(
             name=workflow.name or existing.name,
             description=workflow.description or existing.description,
@@ -761,7 +870,29 @@ async def update_workflow(
         )
         validation = manager.validate_workflow(full_workflow)
         if not validation.valid:
-            raise HTTPException(status_code=400, detail={"errors": validation.errors})
+            raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
+
+    resulting_active = workflow.is_active if workflow.is_active is not None else existing.is_active
+    resulting_trigger = workflow.trigger or existing.trigger
+    resulting_scope = workflow.scope or existing.scope or WorkflowScope(type='all')
+    # Only the fields the overlap check reads count: the designer omits `schedule`, and gate
+    # settings (`on_error`, `disabled_for`) don't change which events a workflow matches.
+    trigger_changed = workflow.trigger is not None and (
+        manager.activation_trigger_key(workflow.trigger)
+        != manager.activation_trigger_key(existing.trigger)
+    )
+    scope_was_sent = 'scope' in workflow.model_fields_set
+    scope_changed = scope_was_sent and (
+        (workflow.scope or WorkflowScope(type='all'))
+        != (existing.scope or WorkflowScope(type='all'))
+    )
+    becoming_active = resulting_active and not existing.is_active
+    check_overlap = resulting_active and (becoming_active or trigger_changed or scope_changed)
+    conflicts = manager.activation_conflicts_for(
+        resulting_trigger, resulting_scope, exclude_workflow_id=workflow_id,
+    ) if check_overlap else []
+    if conflicts and not confirm_overlap:
+        raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
     result = manager.update_workflow(workflow_id, workflow, updated_by=user_email)
     if not result:
@@ -774,7 +905,12 @@ async def update_workflow(
         feature='process-workflows',
         action='UPDATE',
         success=True,
-        details={'workflow_id': workflow_id, 'workflow_name': result.name}
+        details={
+            'workflow_id': workflow_id,
+            'workflow_name': result.name,
+            'overlap_confirmed': bool(conflicts and confirm_overlap),
+            'conflicting_workflow_ids': [item['id'] for item in conflicts],
+        }
     )
     
     return result
@@ -828,11 +964,19 @@ async def toggle_workflow_active(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     is_active: bool = Query(..., description="New active status"),
+    confirm_overlap: bool = Query(False, description="Confirm activation despite overlaps"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Toggle workflow active status."""
     user_email = current_user.email if current_user else None
+
+    existing = manager.get_workflow(workflow_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    conflicts = manager.activation_conflicts(workflow_id) if is_active and not existing.is_active else []
+    if conflicts and not confirm_overlap:
+        raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
     result = manager.toggle_active(workflow_id, is_active, updated_by=user_email)
     if not result:
@@ -845,7 +989,12 @@ async def toggle_workflow_active(
         feature='process-workflows',
         action='TOGGLE_ACTIVE',
         success=True,
-        details={'workflow_id': workflow_id, 'is_active': is_active}
+        details={
+            'workflow_id': workflow_id,
+            'is_active': is_active,
+            'overlap_confirmed': bool(conflicts and confirm_overlap),
+            'conflicting_workflow_ids': [item['id'] for item in conflicts],
+        }
     )
     
     return result
@@ -944,6 +1093,26 @@ async def validate_workflow(
 ) -> WorkflowValidationResult:
     """Validate a workflow definition."""
     return manager.validate_workflow(workflow)
+
+
+@router.post("/check-condition")
+async def check_condition(
+    request: Request,
+    body: Dict[str, Any] = Body(...),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
+) -> Dict[str, Any]:
+    """Check that a Conditional step's condition parses (used by the designer).
+
+    Returns ``{valid, code, params, message}``; ``code`` and ``params`` are for
+    the UI to translate, ``message`` is the English text.
+    """
+    from src.common.workflow_step_config import check_condition as _check_condition
+
+    condition = body.get('condition')
+    issue = _check_condition(condition if isinstance(condition, str) else None)
+    if issue is None:
+        return {'valid': True, 'code': None, 'params': {}, 'message': None}
+    return {'valid': False, **issue}
 
 
 @router.post("/load-defaults")
@@ -1187,6 +1356,73 @@ def _find_approval_notifications_for_execution(
     return matches
 
 
+def _pending_step_id(db: Session, execution_id: str) -> Optional[str]:
+    """Step the execution is paused at (``current_step_id``), if any."""
+    from src.db_models.process_workflows import WorkflowExecutionDb
+    row = db.query(WorkflowExecutionDb.current_step_id).filter(
+        WorkflowExecutionDb.id == execution_id
+    ).first()
+    step_id = row[0] if row else None
+    return step_id if isinstance(step_id, str) else None
+
+
+def _is_for_step(
+    notification: Union[Notification, NotificationDb], step_id: Optional[str]
+) -> bool:
+    """Whether an approval notification belongs to ``step_id``.
+
+    Notifications created before approvals recorded their step have no
+    ``step_id`` and still count, so approvals pending at upgrade time can
+    be answered.
+    """
+    payload = notification.action_payload
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            payload = None
+    notified_step = (payload or {}).get('step_id') if isinstance(payload, dict) else None
+    return step_id is None or notified_step is None or notified_step == step_id
+
+
+def _is_own_owner_approval(
+    db: Session, execution_id: str, step_id: Optional[str], user_info: UserInfo,
+) -> bool:
+    """Whether ``user_info`` requested the execution paused at an owner approval.
+
+    Owner approvals ('DomainOwner' / 'ContractApprover') leave out the
+    requester; when no other owner exists they go to the Data Stewards and
+    admins, roles the requester may hold. Their own decision is refused there.
+    """
+    from src.common.workflow_executor import _OWNER_APPROVER_TOKENS
+    from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
+
+    execution = db.get(WorkflowExecutionDb, execution_id)
+    if execution is None or not step_id or not execution.trigger_context:
+        return False
+    try:
+        requester = (json.loads(execution.trigger_context) or {}).get('user_email')
+    except (TypeError, ValueError):
+        return False
+    caller = {(user_info.email or '').lower(), (user_info.username or '').lower()} - {''}
+    if not requester or requester.lower() not in caller:
+        return False
+    step = db.query(WorkflowStepDb).filter(
+        WorkflowStepDb.workflow_id == execution.workflow_id,
+        WorkflowStepDb.step_id == step_id,
+    ).first()
+    try:
+        config = json.loads(step.config) if step and step.config else {}
+    except (TypeError, ValueError):
+        config = {}
+    approvers = config.get('approvers') if isinstance(config, dict) else None
+    tokens = str(approvers or '').split(',')
+    return any(
+        t.strip().lower().replace(' ', '').replace('_', '') in _OWNER_APPROVER_TOKENS
+        for t in tokens
+    )
+
+
 def _assert_caller_authorized_for_execution(
     db: Session,
     notifications_manager: NotificationsManager,
@@ -1196,17 +1432,20 @@ def _assert_caller_authorized_for_execution(
     """Authorize ``user_info`` to act on the paused workflow execution.
 
     A caller is authorized iff there exists at least one
-    ``workflow_approval`` notification for ``execution_id`` that the caller
+    ``workflow_approval`` notification for ``execution_id`` and for the step
+    it is paused at (see ``_is_for_step``) that the caller
     can access under
     ``NotificationsManager.can_user_access_notification`` (direct
-    recipient, role membership via ``recipient_role_id``, or admin
-    fallback for role-with-no-groups).
+    recipient, role membership via ``recipient_role_id``, or admin).
 
-    This is the per-execution check that backs the relaxed outer gate on
-    ``POST /handle-approval`` (notifications:READ_WRITE instead of
-    settings:READ_WRITE). It prevents horizontal privilege escalation —
-    a Business Owner with notifications RW cannot approve an execution
-    they were never notified about.
+    This is the only authorization on ``POST /handle-approval`` and the
+    ``for_approval_response`` wizard (no feature-level gate, see #971). It
+    prevents horizontal privilege escalation: a caller cannot approve an
+    execution they were never notified about.
+
+    Approval notifications without a recipient and without a role are
+    ignored: ``can_user_access_notification`` treats them as broadcast
+    (visible to everyone), which must never mean "anyone may approve".
 
     Raises 403 with a descriptive detail on failure. Returns the matching
     notifications on success so callers can avoid re-fetching them.
@@ -1214,11 +1453,24 @@ def _assert_caller_authorized_for_execution(
     NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
     so PR L can lift this for ``resume_workflow`` / similar.
     """
-    candidates = _find_approval_notifications_for_execution(db, execution_id)
+    pending_step = _pending_step_id(db, execution_id)
+    candidates = [
+        n for n in _find_approval_notifications_for_execution(db, execution_id)
+        if (n.recipient or n.recipient_role_id) and _is_for_step(n, pending_step)
+    ]
     if not candidates:
         raise HTTPException(
             status_code=403,
             detail="You are not an authorized approver for this execution",
+        )
+    if _is_own_owner_approval(db, execution_id, pending_step, user_info):
+        raise HTTPException(
+            status_code=403,
+            # code: translated by the UI (workflows:approvalResponse.errors.*)
+            detail={
+                'code': 'own_owner_approval',
+                'message': "This approval is for the owners; you can't approve your own request.",
+            },
         )
     for notification in candidates:
         if notifications_manager.can_user_access_notification(
@@ -1231,6 +1483,45 @@ def _assert_caller_authorized_for_execution(
     )
 
 
+def _mark_step_notifications_handled(
+    db: Session,
+    execution_id: str,
+    step_id: Optional[str],
+    approved: bool,
+    user_email: Optional[str],
+) -> None:
+    """Mark the unread approval notifications of ``step_id`` as handled.
+
+    Notifications of later steps, created while the workflow resumed, stay
+    open for their approvers.
+    """
+    notifications = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval',
+        NotificationDb.read == False
+    ).all()
+
+    for notif in notifications:
+        try:
+            payload = notif.action_payload
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if (
+                payload
+                and payload.get('execution_id') == execution_id
+                and _is_for_step(notif, step_id)
+            ):
+                notif.read = True
+                # Mark the action as handled with decision info
+                payload['handled'] = True
+                payload['decision'] = 'approved' if approved else 'rejected'
+                payload['handled_by'] = user_email
+                payload['handled_at'] = datetime.utcnow().isoformat()
+                notif.action_payload = json.dumps(payload)
+                db.add(notif)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+
 @router.post("/handle-approval")
 async def handle_workflow_approval(
     request: Request,
@@ -1239,29 +1530,18 @@ async def handle_workflow_approval(
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager),
-    # Outer gate is `notifications:READ_ONLY` (PR L). The real
-    # authorization is the per-execution check below
-    # (`_assert_caller_authorized_for_execution`), which confirms the
-    # caller was an actual recipient/role-member of the approval
-    # notification. The outer gate exists for defense-in-depth — it
-    # ensures the caller is part of the notification system at all
-    # (rejects users with `notifications:None`), but doesn't require
-    # write-level notification permissions which most non-admin
-    # Business Owners legitimately don't have. Approving a notification
-    # routed to you is *reading* + responding; not a separate "write"
-    # action on the notification feature itself.
+    # No feature-level gate: authenticated callers only. Authorization is
+    # the per-execution check below (`_assert_caller_authorized_for_execution`):
+    # the caller must be a recipient / role member of this execution's
+    # approval notification (admins may act on any approval).
     #
-    # Two-layer defense satisfied (per OWASP API1+API5):
-    #   * Function-level (outer): you can see notifications → can be a
-    #     workflow recipient. Excludes users with no notification access.
-    #   * Object-level (inner): you must be the specific recipient of
-    #     this execution's approval notification (or have admin bypass).
-    #
-    # History: was `settings:READ_WRITE` (pre-PR-K, semantically wrong),
-    # then `notifications:READ_WRITE` (PR K, too tight for non-admin
-    # BOs), now `notifications:READ_ONLY` (PR L, the minimum that
-    # preserves defense-in-depth without blocking legitimate approvers).
-    _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.READ_ONLY)),
+    # History: `settings:READ_WRITE` (pre-PR-K), `notifications:READ_WRITE`
+    # (PR K), `notifications:READ_ONLY` (PR L). Since the RBAC refactor
+    # (55af9736) `notifications` is admin-only ("end users see their own
+    # notifications without this permission"), so READ_ONLY can no longer be
+    # granted and the outer gate rejected every non-admin approver (#971).
+    # Approvers who hold only a business role have no app role at all, so
+    # any feature-level gate would still reject them.
 ) -> Dict[str, Any]:
     """Handle a workflow approval from a notification action.
 
@@ -1295,6 +1575,9 @@ async def handle_workflow_approval(
         )
 
         user_email = current_user.email if current_user else None
+        # Resuming may pause at the next approval step and notify its
+        # approvers; only the notifications of the step decided now are marked.
+        decided_step = _pending_step_id(db, execution_id)
 
         # Resume the workflow
         result = executor.resume_workflow(
@@ -1314,31 +1597,8 @@ async def handle_workflow_approval(
                 detail="Execution not found or not in paused state"
             )
         
-        # Mark the notification as handled
-        from src.repositories.notification_repository import notification_repo
-        from src.db_models.notifications import NotificationDb
-        
-        # Find and mark notifications for this execution as read
-        notifications = db.query(NotificationDb).filter(
-            NotificationDb.action_type == 'workflow_approval',
-            NotificationDb.read == False
-        ).all()
-        
-        for notif in notifications:
-            try:
-                payload = json.loads(notif.action_payload) if isinstance(notif.action_payload, str) else notif.action_payload
-                if payload and payload.get('execution_id') == execution_id:
-                    notif.read = True
-                    # Mark the action as handled with decision info
-                    payload['handled'] = True
-                    payload['decision'] = 'approved' if approved else 'rejected'
-                    payload['handled_by'] = user_email
-                    payload['handled_at'] = datetime.utcnow().isoformat()
-                    notif.action_payload = json.dumps(payload)
-                    db.add(notif)
-            except (json.JSONDecodeError, TypeError):
-                continue
-        
+        _mark_step_notifications_handled(db, execution_id, decided_step, approved, user_email)
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'unknown',
@@ -1587,11 +1847,14 @@ async def delete_executions_bulk(
 async def get_execution(
     execution_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('process-workflows', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> Dict[str, Any]:
     """Get detailed information about a workflow execution.
     
-    Returns the execution with all step execution details.
+    Returns the execution with all step execution details. Gated like the
+    executions list (the Workflows settings page, its only caller): the
+    details carry the trigger context and the steps' raw errors, which every
+    role's ``process-workflows`` read access must not open.
     """
     execution = workflow_execution_repo.get(db, execution_id)
     if not execution:
@@ -1622,6 +1885,8 @@ async def get_execution(
         step_executions.append({
             'id': se.id,
             'step_id': se.step_id,
+            'step_key': se.step_key,
+            'step_name': se.step_name,
             'status': se.status,
             'passed': se.passed,
             'result_data': json.loads(se.result_data) if se.result_data else None,
@@ -1641,6 +1906,7 @@ async def get_execution(
         'success_count': execution.success_count,
         'failure_count': execution.failure_count,
         'error_message': execution.error_message,
+        **_execution_error_code(execution.error_message, execution.step_executions),
         'triggered_by': execution.triggered_by,
         'started_at': execution.started_at.isoformat() if execution.started_at else None,
         'finished_at': execution.finished_at.isoformat() if execution.finished_at else None,

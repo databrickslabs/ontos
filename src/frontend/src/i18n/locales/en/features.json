@@ -25,15 +25,15 @@
   },
   "concepts": {
     "name": "Concepts",
-    "description": "Browse, search, and manage business concepts, collections, and hierarchies."
+    "description": "Browse, search, and manage business concepts, schemes, and hierarchies."
   },
   "semantic-models": {
     "name": "Concept Browser",
     "description": "Explore business glossary terms, concepts, and their relationships."
   },
   "collections": {
-    "name": "Concept Collections",
-    "description": "Organize concepts and assets into logical collections."
+    "name": "Concept Schemes",
+    "description": "Organize concepts and assets into logical schemes."
   },
   "process-workflows": {
     "name": "Workflows",

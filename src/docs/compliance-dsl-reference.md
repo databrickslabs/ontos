@@ -96,6 +96,28 @@ obj.owner != 'unknown' AND obj.status = 'active'
 NOT obj.deprecated
 ```
 
+## Literal Values
+
+Values on the right-hand side of a comparison may be:
+
+- **Strings** — single or double quoted, e.g. `'active'`, `"AES256"`
+- **Numbers** — integers or floats, e.g. `42`, `95.5`
+- **Booleans** — `True` / `False` (case-insensitive, so `true`/`false` also work)
+- **Lists** — e.g. `['table', 'view']` (used with `IN`)
+
+Booleans are real boolean values, so a rule can compare directly against a
+boolean entity property:
+
+```
+# has_owner is a boolean property on the entity
+ASSERT obj.has_owner = True
+ASSERT obj.has_pii != True
+```
+
+> Note: bare `True`/`False` are boolean literals, whereas `'true'`/`'false'`
+> are strings. Compare string properties and `TAG()` values against quoted
+> values. Numeric fields such as `1` and `0` are not equal to booleans.
+
 ## Functions
 
 ### Tag Functions
@@ -106,6 +128,14 @@ NOT obj.deprecated
 ASSERT HAS_TAG('data-product')
 ASSERT TAG('domain') = 'finance'
 ```
+
+For data products, data contracts and domains, `key` is the assigned tag's
+fully qualified name (`namespace/name`) or its name. The name alone works only
+while the entity has no tag of the same name in another namespace; when names
+repeat across namespaces, use the fully qualified name
+(`TAG('privacy/classification')`). A tag assigned without a value has the value
+`True`. If the tags can't be loaded, the run fails instead of treating the
+entities as untagged.
 
 ### String Functions
 - `UPPER(str)` - Convert to uppercase

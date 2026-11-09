@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { TableIcon as DefaultTableIcon } from 'lucide-react';
 
@@ -19,6 +20,7 @@ export const ViewModeToggle: React.FC<ViewModeToggleProps> = ({
   baseButtonClassName = "h-8 px-2", // Default from original views
   className = '',
 }) => {
+  const { t } = useTranslation('common');
   const TableIconToUse = tableViewIcon || <DefaultTableIcon className="h-4 w-4" />;
 
   return (
@@ -28,7 +30,7 @@ export const ViewModeToggle: React.FC<ViewModeToggleProps> = ({
         size="sm"
         onClick={() => onViewChange('table')}
         className={baseButtonClassName}
-        title="Table View"
+        title={t('common:viewMode.tableView')}
       >
         {TableIconToUse}
       </Button>
@@ -37,7 +39,7 @@ export const ViewModeToggle: React.FC<ViewModeToggleProps> = ({
         size="sm"
         onClick={() => onViewChange('graph')}
         className={baseButtonClassName}
-        title="Graph View"
+        title={t('common:viewMode.graphView')}
       >
         {graphViewIcon}
       </Button>

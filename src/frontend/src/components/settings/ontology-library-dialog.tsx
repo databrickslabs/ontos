@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -50,6 +51,7 @@ export default function OntologyLibraryDialog({
   onOpenChange,
   onImportSuccess,
 }: OntologyLibraryDialogProps) {
+  const { t } = useTranslation(['settings', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
 
@@ -117,8 +119,8 @@ export default function OntologyLibraryDialog({
       }
     } catch (e: any) {
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to load industry verticals',
+        title: t('common:status.error'),
+        description: e.message || t('settings:ontologyLibrary.messages.loadVerticalsFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -137,8 +139,8 @@ export default function OntologyLibraryDialog({
       }
     } catch (e: any) {
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to load ontologies',
+        title: t('common:status.error'),
+        description: e.message || t('settings:ontologyLibrary.messages.loadOntologiesFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -157,8 +159,8 @@ export default function OntologyLibraryDialog({
       }
     } catch (e: any) {
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to load modules',
+        title: t('common:status.error'),
+        description: e.message || t('settings:ontologyLibrary.messages.loadModulesFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -225,8 +227,8 @@ export default function OntologyLibraryDialog({
   const handleImport = async () => {
     if (!selectedVertical || !selectedOntology || selectedModules.size === 0) {
       toast({
-        title: 'No modules selected',
-        description: 'Please select at least one module to import.',
+        title: t('settings:ontologyLibrary.messages.noModulesTitle'),
+        description: t('settings:ontologyLibrary.messages.noModulesDescription'),
         variant: 'destructive',
       });
       return;
@@ -234,8 +236,8 @@ export default function OntologyLibraryDialog({
 
     if (selectedOntology.requires_license_agreement && !acceptLicense) {
       toast({
-        title: 'License agreement required',
-        description: 'Please accept the license terms to continue.',
+        title: t('settings:ontologyLibrary.messages.licenseRequiredTitle'),
+        description: t('settings:ontologyLibrary.messages.licenseRequiredDescription'),
         variant: 'destructive',
       });
       return;
@@ -255,7 +257,7 @@ export default function OntologyLibraryDialog({
 
       if (res.error) {
         toast({
-          title: 'Import failed',
+          title: t('settings:ontologyLibrary.messages.importFailed'),
           description: res.error,
           variant: 'destructive',
         });
@@ -264,15 +266,18 @@ export default function OntologyLibraryDialog({
 
       if (res.data?.success) {
         toast({
-          title: 'Import successful',
-          description: `Imported ${res.data.triple_count.toLocaleString()} triples as "${res.data.semantic_model_name}"`,
+          title: t('settings:ontologyLibrary.messages.importSuccessTitle'),
+          description: t('settings:ontologyLibrary.messages.importSuccessDescription', {
+            count: res.data.triple_count.toLocaleString(),
+            name: res.data.semantic_model_name,
+          }),
         });
 
         // Show warnings if any
         if (res.data.warnings.length > 0) {
           res.data.warnings.forEach((warning) => {
             toast({
-              title: 'Warning',
+              title: t('settings:ontologyLibrary.messages.warningTitle'),
               description: warning,
             });
           });
@@ -282,15 +287,15 @@ export default function OntologyLibraryDialog({
         onOpenChange(false);
       } else {
         toast({
-          title: 'Import failed',
-          description: res.data?.error || 'Unknown error occurred',
+          title: t('settings:ontologyLibrary.messages.importFailed'),
+          description: res.data?.error || t('common:errors.unknownError'),
           variant: 'destructive',
         });
       }
     } catch (e: any) {
       toast({
-        title: 'Import error',
-        description: e.message || 'Failed to import ontology',
+        title: t('settings:ontologyLibrary.messages.importErrorTitle'),
+        description: e.message || t('settings:ontologyLibrary.messages.importErrorDescription'),
         variant: 'destructive',
       });
     } finally {
@@ -392,10 +397,10 @@ export default function OntologyLibraryDialog({
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Library className="h-5 w-5" />
-            Industry Ontology Library
+            {t('settings:ontologyLibrary.title')}
           </DialogTitle>
           <DialogDescription>
-            Browse and import industry-standard ontologies organized by vertical.
+            {t('settings:ontologyLibrary.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -404,7 +409,7 @@ export default function OntologyLibraryDialog({
           <div className="w-64 flex-shrink-0 flex flex-col border rounded-lg overflow-hidden">
             <div className="p-2 border-b bg-muted/50">
               <span className="text-xs font-medium text-muted-foreground uppercase">
-                Industry Verticals
+                {t('settings:ontologyLibrary.verticalsHeading')}
               </span>
             </div>
             <ScrollArea className="flex-1">
@@ -441,12 +446,12 @@ export default function OntologyLibraryDialog({
           <div className="w-72 flex-shrink-0 flex flex-col border rounded-lg">
             <div className="p-2 border-b bg-muted/50 flex items-center gap-2">
               <span className="text-xs font-medium text-muted-foreground uppercase flex-1">
-                Ontologies
+                {t('settings:ontologyLibrary.ontologiesHeading')}
               </span>
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                 <Input
-                  placeholder="Filter..."
+                  placeholder={t('settings:ontologyLibrary.filterPlaceholder')}
                   className="h-7 w-32 pl-7 text-xs"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -460,7 +465,7 @@ export default function OntologyLibraryDialog({
                 </div>
               ) : filteredOntologies.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  {selectedVertical ? 'No ontologies found' : 'Select a vertical'}
+                  {selectedVertical ? t('settings:ontologyLibrary.noOntologiesFound') : t('settings:ontologyLibrary.selectVertical')}
                 </div>
               ) : (
                 <div className="p-1">
@@ -478,7 +483,7 @@ export default function OntologyLibraryDialog({
                         <span className="text-sm font-medium truncate">{o.name}</span>
                         {o.recommended_foundation && (
                           <Badge variant="outline" className="text-xs px-1 py-0">
-                            Foundation
+                            {t('settings:ontologyLibrary.foundationBadge')}
                           </Badge>
                         )}
                       </div>
@@ -489,11 +494,11 @@ export default function OntologyLibraryDialog({
                       )}
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="secondary" className="text-xs">
-                          {o.module_count} modules
+                          {t('settings:ontologyLibrary.moduleCount', { count: o.module_count })}
                         </Badge>
                         {o.requires_license_agreement && (
                           <Badge variant="outline" className="text-xs text-yellow-600">
-                            License
+                            {t('settings:ontologyLibrary.licenseBadge')}
                           </Badge>
                         )}
                       </div>
@@ -508,7 +513,7 @@ export default function OntologyLibraryDialog({
           <div className="flex-1 flex flex-col border rounded-lg min-w-0">
             <div className="p-2 border-b bg-muted/50 flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground uppercase">
-                Modules
+                {t('settings:ontologyLibrary.modulesHeading')}
               </span>
               {selectedOntology && (
                 <div className="flex items-center gap-2">
@@ -520,7 +525,7 @@ export default function OntologyLibraryDialog({
                       onClick={() => window.open(selectedOntology.website, '_blank')}
                     >
                       <ExternalLink className="h-3 w-3 mr-1" />
-                      Website
+                      {t('settings:ontologyLibrary.website')}
                     </Button>
                   )}
                   {selectedOntology.version && (
@@ -538,11 +543,11 @@ export default function OntologyLibraryDialog({
                 </div>
               ) : !selectedOntology ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  Select an ontology to see its modules
+                  {t('settings:ontologyLibrary.selectOntologyPrompt')}
                 </div>
               ) : moduleTree.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  No modules available
+                  {t('settings:ontologyLibrary.noModulesAvailable')}
                 </div>
               ) : (
                 <div className="p-2">{moduleTree.map((node) => renderTreeNode(node))}</div>
@@ -559,17 +564,23 @@ export default function OntologyLibraryDialog({
                     onCheckedChange={(checked) => setAcceptLicense(!!checked)}
                   />
                   <label htmlFor="accept-license" className="text-sm">
-                    I accept the{' '}
-                    <a
-                      href={selectedOntology.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline text-primary"
-                    >
-                      license terms
-                    </a>{' '}
-                    for {selectedOntology.name}
-                    {selectedOntology.license && ` (${selectedOntology.license})`}
+                    <Trans
+                      i18nKey="settings:ontologyLibrary.license.acceptLabel"
+                      values={{
+                        name: selectedOntology.name,
+                        license: selectedOntology.license ? ` (${selectedOntology.license})` : '',
+                      }}
+                      components={{
+                        terms: (
+                          <a
+                            href={selectedOntology.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-primary"
+                          />
+                        ),
+                      }}
+                    />
                   </label>
                 </div>
               </div>
@@ -583,17 +594,20 @@ export default function OntologyLibraryDialog({
           <div className="text-sm text-muted-foreground">
             {selectedModules.size > 0 ? (
               <span>
-                Selected: <strong>{selectedModules.size}</strong> module
-                {selectedModules.size !== 1 ? 's' : ''}
-                {selectedOntology && ` from ${selectedOntology.name}`}
+                <Trans
+                  i18nKey={selectedOntology ? 'settings:ontologyLibrary.footer.selectedFrom' : 'settings:ontologyLibrary.footer.selected'}
+                  count={selectedModules.size}
+                  values={{ count: selectedModules.size, ontology: selectedOntology?.name }}
+                  components={{ strong: <strong /> }}
+                />
               </span>
             ) : (
-              <span>Select modules to import</span>
+              <span>{t('settings:ontologyLibrary.footer.selectPrompt')}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button
               onClick={handleImport}
@@ -606,10 +620,10 @@ export default function OntologyLibraryDialog({
               {isImporting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Importing...
+                  {t('settings:ontologyLibrary.buttons.importing')}
                 </>
               ) : (
-                'Import Selected Modules'
+                t('settings:ontologyLibrary.buttons.import')
               )}
             </Button>
           </div>

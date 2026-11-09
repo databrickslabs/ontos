@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from src.common.authorization import PermissionChecker
-from src.common.config import Settings
 from src.common.features import FeatureAccessLevel
-from src.common.workspace_client import get_workspace_client
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
-from src.models.estate import Estate, CloudType, SyncStatus
+from src.common.manager_dependencies import get_estate_manager
+from src.models.estate import Estate
 from src.controller.estate_manager import EstateManager
 
 # Configure logging
@@ -13,32 +12,25 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Estates"])
 
-def get_estate_manager(request: Request) -> EstateManager:
-    """Dependency provider for EstateManager.
-
-    Manager auto-loads estates from YAML if file exists in data/estates.yaml.
-    """
-    settings = request.app.state.settings
-    client = get_workspace_client(settings=settings)
-    return EstateManager(client, settings)
-
 @router.get("/estates", response_model=list[Estate])
 async def list_estates(
+    db: DBSessionDep,
     estate_manager: EstateManager = Depends(get_estate_manager),
     _: bool = Depends(PermissionChecker('estate-manager', FeatureAccessLevel.READ_ONLY))
 ):
     """List all configured estates"""
     logger.info("Listing estates")
-    return await estate_manager.list_estates()
+    return estate_manager.list_estates(db)
 
 @router.get("/estates/{estate_id}", response_model=Estate)
 async def get_estate(
     estate_id: str,
+    db: DBSessionDep,
     estate_manager: EstateManager = Depends(get_estate_manager),
     _: bool = Depends(PermissionChecker('estate-manager', FeatureAccessLevel.READ_ONLY))
 ):
     """Get a specific estate by ID"""
-    estate = await estate_manager.get_estate(estate_id)
+    estate = estate_manager.get_estate(db, estate_id)
     if not estate:
         raise HTTPException(status_code=404, detail="Estate not found")
     return estate
@@ -65,9 +57,13 @@ async def create_estate(
     }
 
     try:
-        result = await estate_manager.create_estate(payload)
+        result = estate_manager.create_estate(db, payload, user=audit_user.username)
+        details["params"]["estate_id"] = result.id
         success = True
         return result
+    except ValueError as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
@@ -108,11 +104,14 @@ async def update_estate(
     }
 
     try:
-        updated_estate = await estate_manager.update_estate(estate_id, payload)
+        updated_estate = estate_manager.update_estate(db, estate_id, payload, user=audit_user.username)
         if not updated_estate:
             raise HTTPException(status_code=404, detail="Estate not found")
         success = True
         return updated_estate
+    except ValueError as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
@@ -146,7 +145,7 @@ async def delete_estate(
     details = {"params": {"estate_id": estate_id}}
 
     try:
-        ok = await estate_manager.delete_estate(estate_id)
+        ok = estate_manager.delete_estate(db, estate_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Estate not found")
         success = True
@@ -184,7 +183,7 @@ async def sync_estate(
     details = {"params": {"estate_id": estate_id}}
 
     try:
-        ok = await estate_manager.sync_estate(estate_id)
+        ok = estate_manager.sync_estate(db, estate_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Estate not found or sync disabled")
         success = True

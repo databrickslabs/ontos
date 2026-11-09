@@ -1,10 +1,12 @@
 import json
+from types import SimpleNamespace
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from src.repositories.teams_repository import team_repo, team_member_repo
 from src.repositories.data_domain_repository import data_domain_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.controller.tags_manager import TagsManager
 from src.models.teams import (
     TeamCreate,
@@ -18,12 +20,19 @@ from src.models.teams import (
 from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.errors import ConflictError, NotFoundError
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.team_role_override import pick_team_role_override
+from src.common.database import get_session_factory
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-class TeamsManager:
+class InvalidMemberSetError(ValueError):
+    """A submitted team member set has blank or duplicate identifiers."""
+
+
+class TeamsManager(SearchableAsset):
     def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.team_repo = team_repo
         self.team_member_repo = team_member_repo
@@ -31,29 +40,90 @@ class TeamsManager:
         self.tags_manager = tags_manager or TagsManager()
         logger.debug("TeamsManager initialized.")
 
+    # --- SearchableAsset Implementation ---
+    def _build_search_index_item(self, team: TeamDb) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a Team DB model."""
+        if not getattr(team, 'id', None) or not getattr(team, 'name', None):
+            return None
+        return SearchIndexItem(
+            id=f"team::{team.id}",
+            type="team",
+            feature_id="teams",
+            title=team.name,
+            description=getattr(team, 'description', '') or "",
+            link=f"/teams/{team.id}",
+            tags=[],
+            extra_data={"title": getattr(team, 'title', '') or ""},
+        )
+
+    def _update_search_index(self, team: TeamDb) -> None:
+        """Build + upsert the search-index item for a team (keeps global search fresh on
+        every create/update, not just at startup; #919 review)."""
+        try:
+            item = self._build_search_index_item(team)
+            if item:
+                self._notify_index_upsert(item)
+        except Exception as e:
+            logger.debug(f"Failed to upsert team {getattr(team, 'id', '?')} in search index: {e}")
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetch teams and map them to SearchIndexItem format for global search."""
+        logger.info("Fetching teams for search indexing...")
+        items: List[SearchIndexItem] = []
+        try:
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index teams.")
+                return []
+            with session_factory() as db:
+                for team in self.team_repo.get_multi_with_members(db, limit=10000):
+                    item = self._build_search_index_item(team)
+                    if item:
+                        items.append(item)
+            logger.info(f"Prepared {len(items)} teams for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping teams for search: {e}", exc_info=True)
+            return []
+
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""
         # Tags are now handled through TagsManager, remove from data
         if 'tags' in data:
             del data['tags']
+        # Domain assignment is handled through the junction table, not a column.
+        data.pop('domain_ids', None)
+        data.pop('primary_domain_id', None)
         if 'metadata' in data and isinstance(data['metadata'], dict):
             data['extra_metadata'] = json.dumps(data.pop('metadata'))
         elif 'metadata' in data:
             data.pop('metadata')
         return data
 
-    def _convert_db_to_read_model(self, db_team: TeamDb, db: Optional[Session] = None) -> TeamRead:
+    def _apply_domains(self, team_read: TeamRead, assigned_domains) -> TeamRead:
+        """Populate the read model's domain fields from a list of AssignedDomain."""
+        team_read.domains = assigned_domains or []
+        team_read.domain_ids = [d.domain_id for d in team_read.domains]
+        primary = next((d.domain_id for d in team_read.domains if d.is_primary), None)
+        team_read.primary_domain_id = primary
+        return team_read
+
+    def _convert_db_to_read_model(
+        self, db_team: TeamDb, db: Optional[Session] = None, assigned_domains=None
+    ) -> TeamRead:
         """Helper to convert DB model to Read model."""
         team_read = TeamRead.model_validate(db_team)
 
-        # Populate domain_name if domain_id exists and we have a session
-        if db and db_team.domain_id:
+        # Populate domain assignments (from batch map if provided, else fetch).
+        if assigned_domains is None and db:
             try:
-                domain = self.domain_repo.get(db, db_team.domain_id)
-                if domain:
-                    team_read.domain_name = domain.name
+                assigned_domains = entity_domain_repo.get_domains_for_entity(
+                    db, entity_type="team", entity_id=db_team.id
+                )
             except Exception as e:
-                logger.warning(f"Failed to resolve domain name for domain_id {db_team.domain_id}: {e}")
+                logger.warning(f"Failed to load domains for team {db_team.id}: {e}")
+                assigned_domains = []
+        self._apply_domains(team_read, assigned_domains or [])
 
         # Load tags from TagsManager
         if db:
@@ -68,13 +138,27 @@ class TeamsManager:
 
         return team_read
 
-    def _convert_db_to_summary_model(self, db_team: TeamDb) -> TeamSummary:
+    def _convert_many_to_read_models(self, db: Session, db_teams: List[TeamDb]) -> List[TeamRead]:
+        """Convert many teams to read models, batch-loading domain assignments (no N+1)."""
+        if not db_teams:
+            return []
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="team", entity_ids=[t.id for t in db_teams]
+        )
+        return [
+            self._convert_db_to_read_model(t, db, assigned_domains=domains_map.get(t.id, []))
+            for t in db_teams
+        ]
+
+    def _convert_db_to_summary_model(self, db_team: TeamDb, assigned_domains=None) -> TeamSummary:
         """Helper to convert DB model to Summary model."""
+        assigned_domains = assigned_domains or []
         return TeamSummary(
             id=db_team.id,
             name=db_team.name,
             title=db_team.title,
-            domain_id=db_team.domain_id,
+            domain_ids=[d.domain_id for d in assigned_domains],
+            primary_domain_id=next((d.domain_id for d in assigned_domains if d.is_primary), None),
             member_count=len(db_team.members) if db_team.members else 0
         )
 
@@ -94,6 +178,18 @@ class TeamsManager:
             logger.error(f"Error resolving domain name '{domain_name}': {e}")
             return None
 
+    @staticmethod
+    def _normalize_primary_domain(domain_ids: List[str], primary_domain_id: Optional[str]) -> Optional[str]:
+        """Clamp the primary to the assigned set: keep it when present, else fall back to
+        the first id (or None when unassigned). Mirrors the contract/product resolvers so a
+        primary_domain_id outside domain_ids can't reach set_domains_for_entity and turn its
+        ValueError into an HTTP 500."""
+        if not domain_ids:
+            return None
+        if primary_domain_id and primary_domain_id in domain_ids:
+            return primary_domain_id
+        return domain_ids[0]
+
     # Team CRUD operations
     def create_team(self, db: Session, team_in: TeamCreate, current_user_id: str) -> TeamRead:
         """Creates a new team."""
@@ -109,8 +205,10 @@ class TeamsManager:
         db_obj_data['created_by'] = current_user_id
         db_obj_data['updated_by'] = current_user_id
 
-        # Extract tags before serialization
+        # Extract tags + domains before serialization
         tags_data = db_obj_data.get('tags', [])
+        domain_ids = team_in.domain_ids or []
+        primary_domain_id = self._normalize_primary_domain(domain_ids, team_in.primary_domain_id)
         self._serialize_list_fields(db_obj_data)
 
         db_team = TeamDb(**db_obj_data)
@@ -119,6 +217,14 @@ class TeamsManager:
             db.add(db_team)
             db.flush()
             db.refresh(db_team)
+
+            # Assign domains via the junction table
+            if domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="team", entity_id=db_team.id,
+                    domain_ids=domain_ids, primary_domain_id=primary_domain_id,
+                    assigned_by=current_user_id,
+                )
 
             # Handle tags if provided
             if tags_data:
@@ -137,6 +243,8 @@ class TeamsManager:
                     )
 
             logger.info(f"Successfully created team '{db_team.name}' with id: {db_team.id}")
+            # Index the new team so global search finds it before the next full rebuild (#919 review).
+            self._update_search_index(db_team)
             return self._convert_db_to_read_model(db_team, db)
         except IntegrityError as e:
             db.rollback()
@@ -157,34 +265,50 @@ class TeamsManager:
             return None
         return self._convert_db_to_read_model(db_team, db)
 
-    def get_all_teams(self, db: Session, skip: int = 0, limit: int = 100, domain_id: Optional[str] = None) -> List[TeamRead]:
-        """Gets a list of all teams, optionally filtered by domain."""
-        logger.debug(f"Fetching teams with skip={skip}, limit={limit}, domain_id={domain_id}")
-        db_teams = self.team_repo.get_multi_with_members(db, skip=skip, limit=limit, domain_id=domain_id)
-        return [self._convert_db_to_read_model(team, db) for team in db_teams]
+    def get_all_teams(
+        self,
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        domain_id: Optional[str] = None,
+        domain_ids: Optional[List[str]] = None,
+    ) -> List[TeamRead]:
+        """Gets a list of all teams, optionally filtered by domain(s) (any-of)."""
+        logger.debug(f"Fetching teams with skip={skip}, limit={limit}, domain_id={domain_id}, domain_ids={domain_ids}")
+        db_teams = self.team_repo.get_multi_with_members(
+            db, skip=skip, limit=limit, domain_id=domain_id, domain_ids=domain_ids
+        )
+        return self._convert_many_to_read_models(db, db_teams)
 
-    def get_teams_summary(self, db: Session, domain_id: Optional[str] = None) -> List[TeamSummary]:
+    def get_teams_summary(
+        self, db: Session, domain_id: Optional[str] = None, domain_ids: Optional[List[str]] = None
+    ) -> List[TeamSummary]:
         """Gets a summary list of teams for dropdowns/selection."""
-        logger.debug(f"Fetching teams summary for domain_id={domain_id}")
-        db_teams = self.team_repo.get_multi_with_members(db, limit=1000, domain_id=domain_id)
-        return [self._convert_db_to_summary_model(team) for team in db_teams]
+        logger.debug(f"Fetching teams summary for domain_id={domain_id}, domain_ids={domain_ids}")
+        db_teams = self.team_repo.get_multi_with_members(
+            db, limit=1000, domain_id=domain_id, domain_ids=domain_ids
+        )
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="team", entity_ids=[t.id for t in db_teams]
+        )
+        return [self._convert_db_to_summary_model(t, domains_map.get(t.id, [])) for t in db_teams]
 
     def get_teams_by_domain(self, db: Session, domain_id: str) -> List[TeamRead]:
-        """Gets all teams belonging to a specific domain."""
+        """Gets all teams that include this domain (primary or additional)."""
         db_teams = self.team_repo.get_teams_by_domain(db, domain_id)
-        return [self._convert_db_to_read_model(team, db) for team in db_teams]
+        return self._convert_many_to_read_models(db, db_teams)
 
     def get_standalone_teams(self, db: Session) -> List[TeamRead]:
-        """Gets all standalone teams (not assigned to a domain)."""
+        """Gets all standalone teams (zero domain assignments)."""
         db_teams = self.team_repo.get_standalone_teams(db)
-        return [self._convert_db_to_read_model(team, db) for team in db_teams]
+        return self._convert_many_to_read_models(db, db_teams)
 
     def get_teams_for_user(
         self, db: Session, user_identifier: str, user_groups: Optional[List[str]] = None
     ) -> List[TeamRead]:
         """Gets all teams where a user is a member (either directly or via group)."""
         db_teams = self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
-        return [self._convert_db_to_read_model(team, db) for team in db_teams]
+        return self._convert_many_to_read_models(db, db_teams)
 
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:
         """Updates an existing team."""
@@ -203,14 +327,25 @@ class TeamsManager:
         update_data = team_in.model_dump(exclude_unset=True)
         update_data['updated_by'] = current_user_id
 
-        # Extract tags before serialization
+        # Extract tags + domains before serialization
         tags_data = update_data.get('tags')
+        domains_provided = 'domain_ids' in update_data
+        domain_ids = update_data.get('domain_ids') or []
+        primary_domain_id = self._normalize_primary_domain(domain_ids, update_data.get('primary_domain_id'))
         self._serialize_list_fields(update_data)
 
         try:
             updated_db_team = self.team_repo.update(db=db, db_obj=db_team, obj_in=update_data)
             db.flush()
             db.refresh(updated_db_team)
+
+            # Replace domain assignments if the caller supplied domain_ids (empty clears them)
+            if domains_provided:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="team", entity_id=updated_db_team.id,
+                    domain_ids=domain_ids, primary_domain_id=primary_domain_id,
+                    assigned_by=current_user_id,
+                )
 
             # Handle tags if provided
             if tags_data is not None:  # Allow empty list to clear tags
@@ -228,6 +363,8 @@ class TeamsManager:
                 )
 
             logger.info(f"Successfully updated team '{updated_db_team.name}' (id: {team_id})")
+            # Re-index so renames/description edits don't stay stale in global search (#919 review).
+            self._update_search_index(updated_db_team)
             return self._convert_db_to_read_model(updated_db_team, db)
         except IntegrityError as e:
             db.rollback()
@@ -251,8 +388,11 @@ class TeamsManager:
         read_model = self._convert_db_to_read_model(db_team, db)
 
         try:
+            entity_domain_repo.remove_all_for_entity(db, entity_type="team", entity_id=team_id)
             self.team_repo.remove(db=db, id=team_id)
             logger.info(f"Successfully deleted team '{read_model.name}' (id: {team_id})")
+            # Remove from the global search index so a deleted team isn't still findable (#919 review).
+            self._notify_index_remove(f"team::{team_id}")
             return read_model
         except Exception as e:
             db.rollback()
@@ -337,6 +477,120 @@ class TeamsManager:
         """Gets all members of a team."""
         db_members = self.team_member_repo.get_members_by_team(db, team_id)
         return [TeamMemberRead.model_validate(member) for member in db_members]
+
+    @staticmethod
+    def validate_member_set(members_in: List[TeamMemberCreate]) -> List[TeamMemberCreate]:
+        """Trim identifiers and overrides; reject blanks and case-insensitive duplicates."""
+        cleaned: List[TeamMemberCreate] = []
+        seen = set()
+        for member in members_in:
+            identifier = member.member_identifier.strip()
+            if not identifier:
+                raise InvalidMemberSetError("Member identifier must not be empty.")
+            if identifier.lower() in seen:
+                raise InvalidMemberSetError(f"Member '{identifier}' is listed more than once.")
+            seen.add(identifier.lower())
+            cleaned.append(member.model_copy(update={
+                "member_identifier": identifier,
+                "app_role_override": (member.app_role_override or "").strip() or None,
+            }))
+        return cleaned
+
+    def current_member_set(self, db: Session, team_id: str) -> List[TeamMemberCreate]:
+        return [
+            TeamMemberCreate(
+                member_type=m.member_type,
+                member_identifier=m.member_identifier,
+                app_role_override=m.app_role_override,
+            )
+            for m in self.team_member_repo.get_members_by_team(db, team_id)
+        ]
+
+    def replace_team_members(
+        self, db: Session, team_id: str, members_in: List[TeamMemberCreate], current_user_id: str
+    ) -> List[TeamMemberRead]:
+        """Make the team's members exactly ``members_in``, touching only rows that changed.
+
+        Identifiers match case-insensitively, like the membership lookup used for authorization.
+        Flushes but does not commit, so the caller applies the whole set in one transaction.
+        """
+        db_team = self.team_repo.get(db, team_id)
+        if not db_team:
+            raise NotFoundError(f"Team with id '{team_id}' not found.")
+
+        desired = {m.member_identifier.lower(): m for m in self.validate_member_set(members_in)}
+        existing: dict = {}
+        for db_member in self.team_member_repo.get_members_by_team(db, team_id):
+            key = db_member.member_identifier.lower()
+            if key in existing:
+                # No unique constraint on (team_id, member_identifier); collapse duplicates so the
+                # resulting set is exact and a stale override can't linger on a twin row.
+                db.delete(db_member)
+            else:
+                existing[key] = db_member
+
+        for key, db_member in existing.items():
+            if key not in desired:
+                db.delete(db_member)
+
+        for key, member in desired.items():
+            db_member = existing.get(key)
+            if db_member is None:
+                db.add(TeamMemberDb(
+                    team_id=team_id,
+                    member_type=member.member_type.value,
+                    member_identifier=member.member_identifier,
+                    app_role_override=member.app_role_override,
+                    added_by=current_user_id,
+                ))
+                continue
+            db_member.member_identifier = member.member_identifier
+            db_member.member_type = member.member_type.value
+            db_member.app_role_override = member.app_role_override
+
+        db.flush()
+        logger.info(
+            "Replaced members of team '%s': %d added, %d removed, %d kept",
+            db_team.name,
+            len(desired.keys() - existing.keys()),
+            len(existing.keys() - desired.keys()),
+            len(desired.keys() & existing.keys()),
+        )
+        return self.get_team_members(db, team_id)
+
+    def team_role_override_with_members(
+        self,
+        db: Session,
+        team_id: str,
+        members: List[TeamMemberCreate],
+        user_identifier: str,
+        user_groups: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """The team role override the user would resolve to if ``team_id`` had ``members``.
+
+        Mirrors request authorization: only teams the user is a direct member of count, in the
+        repository's team order, with ``team_id``'s members swapped in place.
+        """
+        is_direct_member = any(
+            m.member_identifier.lower() == user_identifier.lower() for m in members
+        )
+        teams = []
+        replaced = False
+        for team in self.team_repo.get_teams_for_user(db, user_identifier):
+            if team.id != team_id:
+                teams.append(team.members)
+                continue
+            replaced = True
+            if is_direct_member:
+                teams.append(members)
+        if is_direct_member and not replaced:
+            # Joining a new team: its position among the user's teams is unknown here, so it goes
+            # last; that only matters when the user holds conflicting overrides in several teams.
+            teams.append(members)
+
+        return pick_team_role_override(
+            [SimpleNamespace(members=m) for m in teams], user_identifier, user_groups or []
+        )
 
 
 

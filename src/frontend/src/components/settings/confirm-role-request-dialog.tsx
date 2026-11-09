@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,6 +35,7 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
   requesterMessage,
   onDecisionMade,
 }) => {
+  const { t } = useTranslation(['settings', 'common']);
   const [decisionMessage, setDecisionMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { post } = useApi();
@@ -63,15 +65,17 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
         }
 
         toast({
-            title: `Request ${approved ? 'Approved' : 'Denied'}`,
-            description: `Decision for ${requesterEmail}'s request for role ${roleName} submitted.`,
+            title: approved
+              ? t('settings:roles.confirmRequest.approvedTitle')
+              : t('settings:roles.confirmRequest.deniedTitle'),
+            description: t('settings:roles.confirmRequest.decisionSubmitted', { email: requesterEmail, role: roleName }),
         });
         onDecisionMade(); // Notify parent component
         onOpenChange(false); // Close the dialog
     } catch (err: any) {
         toast({
-            title: 'Submission Failed',
-            description: err.message || 'Could not submit the decision.',
+            title: t('settings:roles.confirmRequest.submissionFailed'),
+            description: err.message || t('settings:roles.confirmRequest.submissionFailedDescription'),
             variant: 'destructive',
         });
     } finally {
@@ -83,9 +87,13 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Handle Role Access Request</DialogTitle>
+          <DialogTitle>{t('settings:roles.confirmRequest.title')}</DialogTitle>
           <DialogDescription>
-            Review the request from <strong>{requesterEmail}</strong> for the role <strong>{roleName}</strong>.
+            <Trans
+              i18nKey="settings:roles.confirmRequest.reviewPrompt"
+              values={{ email: requesterEmail, role: roleName }}
+              components={{ strong: <strong /> }}
+            />
           </DialogDescription>
         </DialogHeader>
 
@@ -93,7 +101,7 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
           {/* Display requester's message if available */}
           {requesterMessage && (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Requester's Reason</Label>
+              <Label className="text-sm font-medium">{t('settings:roles.confirmRequest.requesterReasonLabel')}</Label>
               <div className="p-3 bg-muted/50 rounded-lg border text-sm">
                 {requesterMessage}
               </div>
@@ -102,12 +110,12 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
 
           {/* Admin's response message */}
           <div className="space-y-2">
-            <Label htmlFor="decision-message">Optional Message to Requester</Label>
+            <Label htmlFor="decision-message">{t('settings:roles.confirmRequest.messageLabel')}</Label>
             <Textarea
                 id="decision-message"
                 value={decisionMessage}
                 onChange={(e) => setDecisionMessage(e.target.value)}
-                placeholder="Provide a reason for approval or denial (optional)"
+                placeholder={t('settings:roles.confirmRequest.messagePlaceholder')}
                 className="resize-none"
                 disabled={isSubmitting}
             />
@@ -120,18 +128,18 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
                 disabled={isSubmitting}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Deny Request
+                {t('settings:roles.confirmRequest.deny')}
             </Button>
            <div className="flex gap-2">
              <DialogClose asChild>
-                <Button variant="outline" disabled={isSubmitting}>Cancel</Button>
+                <Button variant="outline" disabled={isSubmitting}>{t('common:actions.cancel')}</Button>
             </DialogClose>
-            <Button 
+            <Button
                 onClick={() => handleSubmit(true)}
                 disabled={isSubmitting}
             >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Approve Request
+                {t('settings:roles.confirmRequest.approve')}
             </Button>
            </div>
         </DialogFooter>

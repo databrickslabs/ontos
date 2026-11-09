@@ -21,6 +21,42 @@ file_audit_logger = logging.getLogger("audit_file")
 file_audit_logger.propagate = False 
 
 
+def log_system_action(
+    *,
+    username: str,
+    feature: str,
+    action: str,
+    success: bool,
+    details: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Audit an action the app takes outside a request, where no AuditManager is at hand.
+
+    Writes the same entry as ``AuditManager.log_action`` (audit file and
+    database, in its own session), without a client IP.
+    """
+    session_factory = get_session_factory()
+    if not session_factory:
+        get_logger(__name__).error("Cannot log audit action: DB session factory not available.")
+        return
+    log_entry_data = {
+        "username": username,
+        "ip_address": None,
+        "feature": feature,
+        "action": action,
+        "success": success,
+        "details": details or {},
+    }
+    # The entry is written as AuditManager writes it; the instance skips __init__,
+    # which would reconfigure the audit file logger the app set up at startup.
+    writer = AuditManager.__new__(AuditManager)
+    writer.repository = audit_log_repository
+    try:
+        with session_factory() as independent_db:
+            writer._log_action_internal(independent_db, log_entry_data)
+    except Exception as e:
+        get_logger(__name__).error(f"[SYNC] Failed to write audit log: {e}", exc_info=True)
+
+
 class AuditManager:
     """Manages logging of user actions to file and database."""
 

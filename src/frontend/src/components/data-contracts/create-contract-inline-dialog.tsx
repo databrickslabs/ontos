@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useDomains } from '@/hooks/use-domains';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { Loader2 } from 'lucide-react';
+import { internalErrorText } from '@/lib/server-error-text';
 
 type PrefillData = {
   domain?: string;
   domainId?: string;
+  domainIds?: string[];
+  primaryDomainId?: string | null;
   tenant?: string;
   owner_team_id?: string;
 };
@@ -28,15 +32,16 @@ export default function CreateContractInlineDialog({
   onSuccess,
   prefillData
 }: CreateContractInlineDialogProps) {
+  const { t } = useTranslation(['data-contracts', 'common']);
   const { toast } = useToast();
-  const { domains } = useDomains();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [name, setName] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [status, setStatus] = useState('draft');
   const [ownerTeamId, setOwnerTeamId] = useState('');
-  const [domainId, setDomainId] = useState('');
+  const [domainIds, setDomainIds] = useState<string[]>([]);
+  const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
   const [tenant, setTenant] = useState('');
 
   useEffect(() => {
@@ -46,26 +51,27 @@ export default function CreateContractInlineDialog({
       setVersion('1.0.0');
       setStatus('draft');
       setOwnerTeamId(prefillData?.owner_team_id || '');
-      setDomainId(prefillData?.domainId || '');
+      setDomainIds(prefillData?.domainIds || (prefillData?.domainId ? [prefillData.domainId] : []));
+      setPrimaryDomainId(prefillData?.primaryDomainId ?? prefillData?.domainId ?? null);
       setTenant(prefillData?.tenant || '');
     }
   }, [isOpen, prefillData]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      toast({ 
-        title: 'Validation Error', 
-        description: 'Contract name is required', 
-        variant: 'destructive' 
+      toast({
+        title: t('data-contracts:form.validationErrorTitle', 'Validation Error'),
+        description: t('data-contracts:form.nameRequired', 'Contract name is required'),
+        variant: 'destructive'
       });
       return;
     }
 
     if (!version.trim()) {
-      toast({ 
-        title: 'Validation Error', 
-        description: 'Version is required', 
-        variant: 'destructive' 
+      toast({
+        title: t('data-contracts:form.validationErrorTitle', 'Validation Error'),
+        description: t('data-contracts:form.versionRequired', 'Version is required'),
+        variant: 'destructive'
       });
       return;
     }
@@ -82,7 +88,10 @@ export default function CreateContractInlineDialog({
 
       // Add optional fields if provided
       if (ownerTeamId.trim()) payload.owner_team_id = ownerTeamId.trim();
-      if (domainId) payload.domainId = domainId;
+      if (domainIds.length > 0) {
+        payload.domainIds = domainIds;
+        payload.primaryDomainId = primaryDomainId;
+      }
       if (tenant.trim()) payload.tenant = tenant.trim();
 
       const response = await fetch('/api/data-contracts', {
@@ -93,22 +102,24 @@ export default function CreateContractInlineDialog({
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || 'Failed to create contract');
+        throw new Error(
+          internalErrorText(errorText) ?? (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
+        );
       }
 
       const createdContract = await response.json();
       
       toast({
-        title: 'Contract Created',
-        description: `Contract "${name}" (v${version}) created successfully`
+        title: t('data-contracts:createInline.createdTitle', 'Contract Created'),
+        description: t('data-contracts:createInline.createdSuccess', 'Contract "{{name}}" (v{{version}}) created successfully', { name, version })
       });
 
       onSuccess(createdContract.id);
       onOpenChange(false);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to create contract',
+        title: t('data-contracts:messages.error', 'Error'),
+        description: error?.message || t('data-contracts:createInline.createError', 'Failed to create contract'),
         variant: 'destructive'
       });
     } finally {
@@ -120,29 +131,29 @@ export default function CreateContractInlineDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create New Contract</DialogTitle>
+          <DialogTitle>{t('data-contracts:createInline.title', 'Create New Contract')}</DialogTitle>
           <DialogDescription>
-            Create a minimal data contract. You can add schemas and quality rules later.
+            {t('data-contracts:createInline.description', 'Create a minimal data contract. You can add schemas and quality rules later.')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">
-              Contract Name <span className="text-destructive">*</span>
+              {t('data-contracts:createInline.nameLabel', 'Contract Name')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Customer Analytics Contract"
+              placeholder={t('data-contracts:createInline.namePlaceholder', 'e.g., Customer Analytics Contract')}
               autoFocus
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="version">
-              Version <span className="text-destructive">*</span>
+              {t('data-contracts:form.version', 'Version')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="version"
@@ -153,61 +164,54 @@ export default function CreateContractInlineDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
+            <Label htmlFor="status">{t('data-contracts:form.status', 'Status')}</Label>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger id="status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="proposed">Proposed</SelectItem>
-                <SelectItem value="under_review">Under Review</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="certified">Certified</SelectItem>
+                <SelectItem value="draft">{t('data-contracts:status.draft', 'Draft')}</SelectItem>
+                <SelectItem value="proposed">{t('data-contracts:status.proposed', 'Proposed')}</SelectItem>
+                <SelectItem value="under_review">{t('data-contracts:status.under_review', 'Under Review')}</SelectItem>
+                <SelectItem value="active">{t('data-contracts:status.active', 'Active')}</SelectItem>
+                <SelectItem value="approved">{t('data-contracts:status.approved', 'Approved')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {domains && domains.length > 0 && (
-            <div className="space-y-2">
-              <Label htmlFor="domain">Domain</Label>
-              <Select value={domainId || "_none"} onValueChange={(v) => setDomainId(v === "_none" ? "" : v)}>
-                <SelectTrigger id="domain">
-                  <SelectValue placeholder="Select domain (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">None</SelectItem>
-                  {domains.map((domain) => (
-                    <SelectItem key={domain.id} value={domain.id}>
-                      {domain.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
           <div className="space-y-2">
-            <Label htmlFor="tenant">Tenant</Label>
-            <Input
-              id="tenant"
-              value={tenant}
-              onChange={(e) => setTenant(e.target.value)}
-              placeholder="e.g., production"
+            <Label htmlFor="domain">{t('data-contracts:form.domains', 'Domains')}</Label>
+            <DomainMultiSelector
+              value={domainIds}
+              primaryDomainId={primaryDomainId}
+              onChange={(nextIds, nextPrimary) => {
+                setDomainIds(nextIds);
+                setPrimaryDomainId(nextPrimary);
+              }}
+              placeholder={t('data-contracts:form.selectDomainsOptional', 'Select domains (optional)')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="ownerTeamId">Owner Team ID</Label>
+            <Label htmlFor="tenant">{t('data-contracts:form.tenant', 'Tenant')}</Label>
+            <Input
+              id="tenant"
+              value={tenant}
+              onChange={(e) => setTenant(e.target.value)}
+              placeholder={t('data-contracts:createInline.tenantPlaceholder', 'e.g., production')}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ownerTeamId">{t('data-contracts:createInline.ownerTeamIdLabel', 'Owner Team ID')}</Label>
             <Input
               id="ownerTeamId"
               value={ownerTeamId}
               onChange={(e) => setOwnerTeamId(e.target.value)}
-              placeholder="UUID of owning team"
+              placeholder={t('data-contracts:createInline.ownerTeamIdPlaceholder', 'UUID of owning team')}
             />
             <p className="text-xs text-muted-foreground">
-              Optional: Inherited from product if available
+              {t('data-contracts:createInline.ownerTeamIdHint', 'Optional: Inherited from product if available')}
             </p>
           </div>
         </div>
@@ -218,16 +222,16 @@ export default function CreateContractInlineDialog({
             onClick={() => onOpenChange(false)} 
             disabled={isSubmitting}
           >
-            Cancel
+            {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
+                {t('data-contracts:createInline.creating', 'Creating...')}
               </>
             ) : (
-              'Create Contract'
+              t('data-contracts:form.createContract', 'Create Contract')
             )}
           </Button>
         </DialogFooter>

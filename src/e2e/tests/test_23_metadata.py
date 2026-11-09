@@ -26,7 +26,7 @@ class TestMetadataRichTexts:
 
         # CREATE
         resp = api.post(
-            url(f"/api/entities/{self._entity_type}/{self._entity_id}/rich-texts"),
+            url(f"/api/entities/{self._entity_type}/rich-texts?entity_id={self._entity_id}"),
             json=payload,
         )
         assert resp.status_code in (200, 201), f"Create failed: {resp.status_code} {resp.text[:300]}"
@@ -39,7 +39,10 @@ class TestMetadataRichTexts:
         assert created.get("content_markdown") == payload["content_markdown"]
 
         # LIST
-        resp = api.get(url(f"/api/entities/{self._entity_type}/{self._entity_id}/rich-texts"))
+        resp = api.get(
+            url(f"/api/entities/{self._entity_type}/rich-texts"
+                f"?entity_id={self._entity_id}")
+        )
         assert resp.status_code == 200
         texts = resp.json()
         assert any(t.get("id") == rt_id for t in texts), "Rich text not in list"
@@ -79,7 +82,7 @@ class TestMetadataLinks:
 
         # CREATE
         resp = api.post(
-            url(f"/api/entities/{self._entity_type}/{self._entity_id}/links"),
+            url(f"/api/entities/{self._entity_type}/links?entity_id={self._entity_id}"),
             json=payload,
         )
         assert resp.status_code in (200, 201), f"Create failed: {resp.status_code} {resp.text[:300]}"
@@ -92,7 +95,7 @@ class TestMetadataLinks:
         assert created.get("url") == payload["url"]
 
         # LIST
-        resp = api.get(url(f"/api/entities/{self._entity_type}/{self._entity_id}/links"))
+        resp = api.get(url(f"/api/entities/{self._entity_type}/links?entity_id={self._entity_id}"))
         assert resp.status_code == 200
         links = resp.json()
         assert any(l.get("id") == link_id for l in links), "Link not in list"
@@ -124,7 +127,10 @@ class TestMetadataMerged:
 
     @pytest.mark.readonly
     def test_merged_metadata(self, api, url):
-        resp = api.get(url(f"/api/entities/{self._entity_type}/{self._entity_id}/metadata/merged"))
+        resp = api.get(
+            url(f"/api/entities/{self._entity_type}/metadata/merged"
+                f"?entity_id={self._entity_id}")
+        )
         assert resp.status_code == 200
 
 
@@ -149,7 +155,7 @@ class TestMetadataDocuments:
         saved_content_type = api.headers.pop("Content-Type", None)
         try:
             resp = api.post(
-                url(f"/api/entities/data_product/{self._product_id}/documents"),
+                url(f"/api/entities/data_product/documents?entity_id={self._product_id}"),
                 files={"file": ("test.txt", b"E2E test content", "text/plain")},
                 data={"title": "E2E Test Doc"},
             )
@@ -170,7 +176,7 @@ class TestMetadataDocuments:
         self._doc_ids.append(doc_id)
 
         # LIST — verify document appears in entity document list
-        resp = api.get(url(f"/api/entities/data_product/{self._product_id}/documents"))
+        resp = api.get(url(f"/api/entities/data_product/documents?entity_id={self._product_id}"))
         assert resp.status_code == 200, f"List failed: {resp.status_code} {resp.text[:300]}"
         docs = resp.json()
         if isinstance(docs, dict):
@@ -232,7 +238,7 @@ class TestMetadataAttachments:
         # ATTACH to data product
         attach_payload = {"asset_type": "rich_text", "asset_id": str(rich_text_id)}
         resp = api.post(
-            url(f"/api/entities/data_product/{self._product_id}/attachments"),
+            url(f"/api/entities/data_product/attachments?entity_id={self._product_id}"),
             json=attach_payload,
         )
         if resp.status_code in (400, 404):
@@ -240,7 +246,7 @@ class TestMetadataAttachments:
         assert resp.status_code in (200, 201), f"Attach failed: {resp.status_code} {resp.text[:300]}"
 
         # LIST attachments — verify it appears
-        resp = api.get(url(f"/api/entities/data_product/{self._product_id}/attachments"))
+        resp = api.get(url(f"/api/entities/data_product/attachments?entity_id={self._product_id}"))
         if resp.status_code in (400, 404):
             pytest.skip(f"List attachments endpoint not supported: {resp.status_code} {resp.text[:200]}")
         assert resp.status_code == 200, f"List attachments failed: {resp.status_code} {resp.text[:300]}"
@@ -254,7 +260,8 @@ class TestMetadataAttachments:
 
         # DETACH
         resp = api.delete(
-            url(f"/api/entities/data_product/{self._product_id}/attachments/rich_text/{rich_text_id}")
+            url(f"/api/entities/data_product/attachments/rich_text/{rich_text_id}"
+                f"?entity_id={self._product_id}")
         )
         if resp.status_code in (400, 404):
             pytest.skip(f"Detach endpoint not supported: {resp.status_code} {resp.text[:200]}")

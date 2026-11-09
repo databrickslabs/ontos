@@ -5,5 +5,34 @@
     "build": "Costruisci",
     "govern": "Governa",
     "deploy": "Distribuisci"
+  },
+  "dbDown": {
+    "title": "Database non disponibile",
+    "body": "L'applicazione non riesce a raggiungere il suo database dei metadati. La maggior parte delle funzionalità restituirà errori finché la connessione non viene ripristinata.",
+    "retrying": "Nuovo tentativo…",
+    "retryConnection": "Riprova connessione",
+    "retryFailed": "Tentativo non riuscito",
+    "autoRetrying": "Nuovo tentativo automatico ogni {{seconds}} secondi",
+    "pausedTitle": "Applicazione in pausa",
+    "pausedBodyBefore": "Il database dei metadati è irraggiungibile, quindi la navigazione e le viste dati sono disabilitate per evitare di mostrare uno stato incoerente. Usa",
+    "pausedBodyAfter": "sopra (oppure attendi il prossimo tentativo automatico) per riprendere."
+  },
+  "warning": {
+    "title": "Avviso di sistema",
+    "workspaceFailed": "Connessione al workspace Databricks non riuscita. Alcune funzionalità potrebbero non essere disponibili.",
+    "stillUnavailable": "Il workspace non è ancora raggiungibile. Riprova più tardi."
+  },
+  "routeError": {
+    "title": "Si è verificato un problema",
+    "body": "Si è verificato un errore imprevisto durante il rendering di questa pagina. Puoi riprovare oppure tornare alla pagina iniziale.",
+    "goHome": "Vai alla home"
+  },
+  "health": {
+    "issues": {
+      "workspace_client_unavailable": "Impossibile creare il client del workspace Databricks. La causa è nei log del server.",
+      "manager_init_failed": "Alcuni servizi non sono stati inizializzati. La causa è nei log del server.",
+      "seeding_failed": "Impossibile creare ruoli, team o progetti predefiniti. La causa è nei log del server.",
+      "database_unavailable": "Impossibile inizializzare il database dei metadati. La causa è nei log del server."
+    }
   }
 }

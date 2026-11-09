@@ -122,7 +122,7 @@ def _run_delivery(session) -> MagicMock:
     workflow = SimpleNamespace(name="Co-signer Approval", steps=None)
 
     with patch.object(manager, "_get_entity_name", return_value="My Product"), \
-         patch.object(manager, "_resolve_entity_owner", return_value="owner@example.com"):
+         patch.object(manager, "_resolve_entity_owners", return_value=["owner@example.com"]):
         manager._send_delivery_notifications(
             session=session,
             workflow=workflow,

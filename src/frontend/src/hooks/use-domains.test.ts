@@ -51,9 +51,31 @@ describe('useDomains Hook', () => {
       const { result } = renderHook(() => useDomains());
 
       expect(typeof result.current.getDomainName).toBe('function');
+      expect(typeof result.current.getDomainNames).toBe('function');
       expect(typeof result.current.getDomainById).toBe('function');
       expect(typeof result.current.getDomainIdByName).toBe('function');
       expect(typeof result.current.refetch).toBe('function');
+    });
+
+    it('getDomainNames resolves a list of IDs to names, skipping unknowns (#520)', async () => {
+      (global.fetch as any).mockImplementation((url: string) => {
+        if (url === '/api/data-domains') {
+          return Promise.resolve({ ok: true, json: async () => mockDomains });
+        }
+        if (url === '/api/cache-version') {
+          return Promise.resolve({ ok: true, json: async () => ({ version: 1 }) });
+        }
+        return Promise.reject(new Error('Unknown URL'));
+      });
+
+      const { result } = renderHook(() => useDomains());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.getDomainNames(['domain-1', 'domain-3'])).toEqual(['Finance', 'Sales']);
+      // Unknown IDs are skipped; order preserved.
+      expect(result.current.getDomainNames(['domain-2', 'ghost', 'domain-1'])).toEqual(['Marketing', 'Finance']);
+      expect(result.current.getDomainNames([])).toEqual([]);
+      expect(result.current.getDomainNames(null)).toEqual([]);
     });
 
     it('fetches domains on mount', async () => {

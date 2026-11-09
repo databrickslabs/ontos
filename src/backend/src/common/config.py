@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import json
+import re
 
 import yaml
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .api_errors import CodedValueError
+from .instance_identity import resolve_instance_identity
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,13 +56,25 @@ class Settings(BaseSettings):
     DATABRICKS_WAREHOUSE_ID: str
     DATABRICKS_CATALOG: str = Field("app_ontos", env='DATABRICKS_CATALOG')  # Default Unity Catalog
     DATABRICKS_SCHEMA: str = Field("app_ontos", env='DATABRICKS_SCHEMA')  # Default schema
-    DATABRICKS_VOLUME: Optional[str] = Field(None, env='DATABRICKS_VOLUME')  # Full volume path (injected by Databricks Apps)
+    DATABRICKS_VOLUME: Optional[str] = Field(None, env='DATABRICKS_VOLUME')  # Full volume path (injected by Databricks Apps). Also the source of the optional test-persona override at {DATABRICKS_VOLUME}/config/test_personas.yaml
     DATABRICKS_TOKEN: Optional[str] = None  # Optional since handled by SDK
     DATABRICKS_CONFIG_PROFILE: Optional[str] = Field(
         None, env='DATABRICKS_CONFIG_PROFILE'
     )  # Local dev: name of profile in ~/.databrickscfg (OAuth U2M with auto-refresh)
     DATABRICKS_HTTP_PATH: Optional[str] = None # Will be computed by validator
     DATABRICKS_APP_NAME: str = Field("ontos", env='DATABRICKS_APP_NAME')  # Name of the Databricks App
+    # Injected by Databricks Apps; absent in local dev
+    DATABRICKS_WORKSPACE_ID: Optional[str] = Field(None, env='DATABRICKS_WORKSPACE_ID')
+
+    # Instance identity (federation / Estate Manager). When unset, both values are derived
+    # from DATABRICKS_WORKSPACE_ID + DATABRICKS_APP_NAME (see compute_instance_identity).
+    # Admins can override them at runtime via General Settings (persisted in app_settings
+    # as ONTOS_INSTANCE_ID / ONTOS_INSTANCE_NAME), which wins over env and derived values.
+    ONTOS_INSTANCE_ID: Optional[str] = Field(None, env='ONTOS_INSTANCE_ID')
+    ONTOS_INSTANCE_NAME: Optional[str] = Field(None, env='ONTOS_INSTANCE_NAME')
+    # Values in effect before any admin override (env value if set, else derived)
+    _instance_id_default: str = PrivateAttr(default="")
+    _instance_name_default: str = PrivateAttr(default="")
 
     # Environment
     ENV: str = "PROD"  # LOCAL, DEV, PROD
@@ -78,6 +93,10 @@ class Settings(BaseSettings):
     GIT_BRANCH: str = Field('main', env='GIT_BRANCH')
     GIT_USERNAME: Optional[str] = Field(None, env='GIT_USERNAME')
     GIT_PASSWORD: Optional[str] = Field(None, env='GIT_PASSWORD')
+    # Local directory for the Git working copy when DATABRICKS_VOLUME is a Unity
+    # Catalog volume that isn't mounted on this machine (Databricks Apps). The
+    # exported files are also written to {volume}/git-export/ through the Files API.
+    GIT_WORK_DIR: Optional[str] = Field(None, env='GIT_WORK_DIR')
 
     # Job settings
     # Track the Databricks job cluster ID (string). Do not scan clusters.
@@ -99,6 +118,15 @@ class Settings(BaseSettings):
     # Interval in seconds between job run polling cycles
     # Lower values = more responsive updates but higher API load
     JOB_POLLING_INTERVAL_SECONDS: int = Field(300, env='JOB_POLLING_INTERVAL_SECONDS')
+    # Schema Importer: at or above this many previewed items, the UI offers a
+    # background (async) import instead of a blocking synchronous one.
+    # Overridable at runtime via General Settings (SCHEMA_IMPORT_ASYNC_THRESHOLD).
+    SCHEMA_IMPORT_ASYNC_THRESHOLD: int = Field(200, env='SCHEMA_IMPORT_ASYNC_THRESHOLD')
+    # Maximum number of child assets the Schema Importer fetches per path when
+    # browsing or collecting for import. Bounded by the connector contract
+    # (ListAssetsOptions: 1..10000). Overridable at runtime via General Settings
+    # (SCHEMA_IMPORT_CHILD_LIMIT in app_settings). Default preserves historic behavior.
+    SCHEMA_IMPORT_CHILD_LIMIT: int = Field(500, env='SCHEMA_IMPORT_CHILD_LIMIT')
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
     enabled_jobs: List[str] = Field(default_factory=list)
@@ -109,6 +137,11 @@ class Settings(BaseSettings):
 
     # Database Reset Flag
     APP_DB_DROP_ON_START: bool = Field(False, env='APP_DB_DROP_ON_START')
+
+    # Search backend: "memory" (in-process index, default) or "postgres" (DB-backed
+    # full-text search over the search_documents table). Postgres-native search
+    # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
+    SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
@@ -170,6 +203,21 @@ class Settings(BaseSettings):
     DELIVERY_MODE_MANUAL: bool = Field(True, env='DELIVERY_MODE_MANUAL')  # Generate notifications for manual action
     DELIVERY_DIRECT_DRY_RUN: bool = Field(False, env='DELIVERY_DIRECT_DRY_RUN')  # Dry-run mode for direct delivery
 
+    # Manifest Signing settings
+    # Ed25519 private keys for signing data product manifests (ADR Decision 7).
+    # Read through Settings so values from the .env file and from the process
+    # environment (e.g. Databricks Apps injection) both reach the key providers.
+    # PEM-encoded Ed25519 private key (local provider)
+    MANIFEST_SIGNING_KEY_PEM: Optional[str] = Field(None, env='MANIFEST_SIGNING_KEY_PEM')
+    MANIFEST_LOCAL_KEY_PATH: str = Field(
+        '~/.ontos/manifest_signing_ed25519.pem',
+        env='MANIFEST_LOCAL_KEY_PATH'
+    )  # PEM file path (local; used if MANIFEST_SIGNING_KEY_PEM is not set)
+    # Databricks secret scope
+    MANIFEST_SECRET_SCOPE: Optional[str] = Field(None, env='MANIFEST_SECRET_SCOPE')
+    # Databricks secret key name
+    MANIFEST_SECRET_KEY: Optional[str] = Field(None, env='MANIFEST_SECRET_KEY')
+
     # UI Customization settings
     UI_I18N_ENABLED: bool = Field(True, env='UI_I18N_ENABLED')  # Enable/disable internationalization (disable forces English)
     UI_CUSTOM_LOGO_URL: Optional[str] = Field(None, env='UI_CUSTOM_LOGO_URL')  # URL to custom logo image
@@ -192,6 +240,43 @@ class Settings(BaseSettings):
         """Compute the DATABRICKS_HTTP_PATH after validation."""
         if self.DATABRICKS_WAREHOUSE_ID:
             self.DATABRICKS_HTTP_PATH = f"/sql/1.0/warehouses/{self.DATABRICKS_WAREHOUSE_ID}"
+        return self
+
+    @property
+    def instance_id_default(self) -> str:
+        """Instance id in effect before any admin override (env value, else derived)."""
+        return self._instance_id_default
+
+    @property
+    def instance_name_default(self) -> str:
+        """Instance name in effect before any admin override (env value, else derived)."""
+        return self._instance_name_default
+
+    @model_validator(mode='after')
+    def compute_instance_identity(self) -> 'Settings':
+        """Fill ONTOS_INSTANCE_ID / ONTOS_INSTANCE_NAME from env or derived defaults.
+
+        The id is "<workspace_id>-<app_name>" (just "<app_name>" without a workspace id,
+        "ontos" without both) and the name is the app name, so a deployment keeps its
+        identity across restarts. Every candidate, the environment values included, goes
+        through the same validator as the Settings PUT; an invalid one stops the app at
+        startup (like any other invalid setting) instead of becoming the identity.
+
+        Raises:
+            InstanceIdInvalidError: (a ``ValueError``, so pydantic reports it as a
+                ``ValidationError``) If the id from the environment or the derived one is invalid
+            InstanceNameInvalidError: Same, for the name
+        """
+        try:
+            self._instance_id_default, self._instance_name_default = resolve_instance_identity(
+                self.ONTOS_INSTANCE_ID, self.ONTOS_INSTANCE_NAME,
+                self.DATABRICKS_WORKSPACE_ID, self.DATABRICKS_APP_NAME,
+            )
+        except CodedValueError as e:
+            logger.critical(f"Invalid instance identity, refusing to start: {e}")
+            raise
+        self.ONTOS_INSTANCE_ID = self._instance_id_default
+        self.ONTOS_INSTANCE_NAME = self._instance_name_default
         return self
 
     @model_validator(mode='after')
@@ -296,6 +381,57 @@ class ConfigManager:
 # Global configuration instances
 _settings: Optional[Settings] = None
 _config_manager: Optional[ConfigManager] = None
+
+class VolumeInvalidError(CodedValueError):
+    """The volume setting, or the catalog/schema it falls back to, can't name a volume."""
+
+    code = 'volume_invalid'
+
+
+def resolve_volume(settings: Settings) -> Optional[Tuple[str, str, str]]:
+    """(catalog, schema, volume) for ``DATABRICKS_VOLUME``, or None when it isn't set.
+
+    Accepts the path Databricks Apps injects for a volume resource
+    (``/Volumes/<catalog>/<schema>/<volume>``), a three-part name
+    (``<catalog>.<schema>.<volume>``), or a volume name, which lives in
+    ``DATABRICKS_CATALOG`` / ``DATABRICKS_SCHEMA`` (what the bundle passes).
+
+    Raises:
+        VolumeInvalidError: (a ``ValueError``) If the value has none of these forms, or a
+            bare volume name has no usable ``DATABRICKS_CATALOG`` / ``DATABRICKS_SCHEMA``
+    """
+    raw = (settings.DATABRICKS_VOLUME or '').strip()
+    if not raw:
+        return None
+
+    def valid(*names: str) -> bool:
+        # UC names can't contain periods, slashes or whitespace
+        return all(name and not re.search(r'[\s./]', name) for name in names)
+
+    if raw.startswith('/'):
+        parts = [part for part in raw.split('/') if part]
+        if len(parts) == 4 and parts[0] == 'Volumes' and valid(*parts[1:]):
+            return parts[1], parts[2], parts[3]
+    else:
+        parts = raw.split('.')
+        if len(parts) == 3 and valid(*parts):
+            return parts[0], parts[1], parts[2]
+        if len(parts) == 1 and valid(raw):
+            catalog, schema = settings.DATABRICKS_CATALOG, settings.DATABRICKS_SCHEMA
+            if not valid(catalog or '', schema or ''):
+                raise VolumeInvalidError(
+                    f"The volume name {raw!r} needs DATABRICKS_CATALOG and DATABRICKS_SCHEMA "
+                    "to be set to plain Unity Catalog names (no periods, slashes or "
+                    f"whitespace); got catalog {catalog!r} and schema {schema!r}",
+                    value=raw, catalog=catalog or '', schema=schema or '',
+                )
+            return catalog, schema, raw
+    raise VolumeInvalidError(
+        "DATABRICKS_VOLUME must be /Volumes/<catalog>/<schema>/<volume>, "
+        f"<catalog>.<schema>.<volume> or a volume name, got {raw!r}",
+        value=raw, catalog='', schema='',
+    )
+
 
 def init_config() -> None:
     """Initialize the global configuration instances."""

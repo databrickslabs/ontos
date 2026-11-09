@@ -1,6 +1,7 @@
 {
   "title": "Projecten",
   "subtitle": "Maak en beheer projecten om teams te organiseren en werkruimte-isolatie in te richten.",
+  "openMenu": "Menu openen",
   "addNewProject": "Nieuw Project Toevoegen",
   "editProject": "Project Bewerken",
   "deleteProject": "Project Verwijderen",
@@ -87,4 +88,3 @@
     "delete": "Verwijderen"
   }
 }
-

@@ -314,6 +314,8 @@ def test_product_adapter_get_target_returns_none_when_missing():
 
 def test_product_adapter_get_target_builds_entity():
     from src.controller.term_mapping.adapters.product_adapter import ProductAdapter
+    from src.models.domain_associations import AssignedDomain
+    import src.repositories.entity_domain_association_repository as edar
 
     product_id = str(uuid.uuid4())
     product = SimpleNamespace(
@@ -321,12 +323,17 @@ def test_product_adapter_get_target_builds_entity():
         name="Customer 360",
         version="2.1.0",
         status="released",
-        domain="customer",
     )
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = product
 
-    target = ProductAdapter().get_target(db, product_id)
+    # Domain now comes from the entity_domain_associations junction (#520): the
+    # adapter surfaces the primary domain name.
+    with patch.object(
+        edar.entity_domain_repo, "get_domains_for_entities",
+        return_value={product_id: [AssignedDomain(domain_id="dom-1", domain_name="customer", is_primary=True)]},
+    ):
+        target = ProductAdapter().get_target(db, product_id)
     assert target is not None
     assert target.entity_type == "data_product"
     assert target.entity_id == product_id

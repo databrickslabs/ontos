@@ -10,7 +10,9 @@ from sqlalchemy import select, distinct, or_, and_
 from typing import Iterable, List, Optional, Any, Dict, Set, Union
 import json
 
-from src.common.repository import CRUDBase
+from src.common.repository import CRUDBase, coerce_uuid
+from src.db_models.domain_associations import EntityDomainAssociationDb
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_products import (
     DataProduct as DataProductApi,
     DataProductCreate,
@@ -47,6 +49,22 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _serialize_custom_property_value(value: Any) -> Optional[str]:
+    """Serialize an ODPS custom-property value for the TEXT column.
+
+    A null value is persisted as SQL NULL rather than the literal string
+    ``"null"`` — ``json.dumps(None)`` would otherwise yield ``"null"``, which
+    read back as a bogus string (e.g. UNRESOLVED placeholders imported with
+    ``value: null``). Strings are stored verbatim; every other type is
+    JSON-encoded to survive the round-trip.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
     """Repository for ODPS v1.0.0 DataProduct CRUD operations."""
 
@@ -78,7 +96,6 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 status=obj_in.status,
                 name=obj_in.name,
                 version=obj_in.version,
-                domain=obj_in.domain,
                 tenant=obj_in.tenant,
                 owner_team_id=obj_in.owner_team_id,
                 # Preserve project_id from the input schema. Historic
@@ -119,8 +136,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             # 4. Create Custom Properties (One-to-Many)
             if obj_in.customProperties:
                 for custom_prop in obj_in.customProperties:
-                    # Store value as JSON string to support any type
-                    value_str = json.dumps(custom_prop.value) if not isinstance(custom_prop.value, str) else custom_prop.value
+                    # Store value as JSON string to support any type. A null value
+                    # is stored as SQL NULL rather than the literal string "null"
+                    # (json.dumps(None) == "null"), so absent values round-trip as
+                    # null instead of a bogus "null" string.
+                    value_str = _serialize_custom_property_value(custom_prop.value)
                     prop_obj = CustomPropertyDb(
                         property=custom_prop.property,
                         value=value_str,
@@ -154,7 +174,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         description=port.description,
                         port_type=port.type,
                         contract_id=port.contractId,
-                        delivery_method_id=port.deliveryMethodId,
+                        delivery_method_id=coerce_uuid(port.deliveryMethodId),
                         asset_type=port.assetType,
                         asset_identifier=port.assetIdentifier,
                         status=port.status,
@@ -266,8 +286,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.name = update_data['name']
             if 'version' in update_data:
                 db_obj.version = update_data['version']
-            if 'domain' in update_data:
-                db_obj.domain = update_data['domain']
+            # domain assignment handled via entity_domain_associations (see manager)
             if 'tenant' in update_data:
                 db_obj.tenant = update_data['tenant']
             if 'owner_team_id' in update_data:
@@ -320,7 +339,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             if 'customProperties' in update_data:
                 db_obj.custom_properties.clear()
                 for prop_dict in update_data['customProperties'] or []:
-                    value_str = json.dumps(prop_dict['value']) if not isinstance(prop_dict['value'], str) else prop_dict['value']
+                    value_str = _serialize_custom_property_value(prop_dict.get('value'))
                     prop_obj = CustomPropertyDb(
                         property=prop_dict['property'],
                         value=value_str,
@@ -368,7 +387,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         # method field (e.g. a name/description edit) would silently NULL
                         # the FK on every save.
                         if 'delivery_method_id' in port_dict:
-                            port_obj.delivery_method_id = port_dict.get('delivery_method_id')
+                            port_obj.delivery_method_id = coerce_uuid(
+                                port_dict.get('delivery_method_id'))
                         port_obj.asset_type = port_dict.get('asset_type')
                         port_obj.asset_identifier = port_dict.get('asset_identifier')
                         port_obj.status = port_dict.get('status')
@@ -396,7 +416,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                             description=port_dict.get('description'),
                             port_type=port_dict.get('type'),
                             contract_id=port_dict.get('contract_id'),
-                            delivery_method_id=port_dict.get('delivery_method_id'),
+                            delivery_method_id=coerce_uuid(port_dict.get('delivery_method_id')),
                             asset_type=port_dict.get('asset_type'),
                             asset_identifier=port_dict.get('asset_identifier'),
                             status=port_dict.get('status'),
@@ -658,15 +678,17 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             return []
 
     def get_distinct_domains(self, db: Session) -> List[str]:
-        """Get distinct domain values from ODPS Data Products."""
-        logger.debug("Querying distinct ODPS domains...")
+        """Get distinct domain IDs assigned to Data Products (via the junction table)."""
+        logger.debug("Querying distinct data-product domain IDs...")
         try:
             result = db.execute(
-                select(distinct(self.model.domain)).where(self.model.domain.isnot(None))
+                select(distinct(EntityDomainAssociationDb.domain_id)).where(
+                    EntityDomainAssociationDb.entity_type == "data_product"
+                )
             ).scalars().all()
-            return sorted(list(result))
+            return sorted([r for r in result if r])
         except Exception as e:
-            logger.error(f"Error querying distinct ODPS domains: {e}", exc_info=True)
+            logger.error(f"Error querying distinct data-product domains: {e}", exc_info=True)
             return []
 
     def get_distinct_tenants(self, db: Session) -> List[str]:
@@ -743,17 +765,25 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             raise
 
     def get_by_domain(self, db: Session, domain: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
-        """Get ODPS Data Products filtered by domain."""
-        logger.debug(f"Fetching ODPS DataProducts for domain '{domain}' (skip: {skip}, limit: {limit})")
+        """Get Data Products assigned to a domain (primary OR additional; any-of via junction).
+
+        ``domain`` is a domain ID.
+        """
+        logger.debug(f"Fetching DataProducts for domain '{domain}' (skip: {skip}, limit: {limit})")
         try:
+            product_ids = entity_domain_repo.find_entity_ids_by_domain(
+                db, domain_id=domain, entity_type="data_product"
+            )
+            if not product_ids:
+                return []
             return db.query(self.model).options(
                 selectinload(self.model.description),
                 selectinload(self.model.input_ports),
                 selectinload(self.model.output_ports),
                 selectinload(self.model.team).selectinload(DataProductTeamDb.members)
-            ).filter(self.model.domain == domain).offset(skip).limit(limit).all()
+            ).filter(self.model.id.in_(product_ids)).offset(skip).limit(limit).all()
         except Exception as e:
-            logger.error(f"Database error fetching ODPS DataProducts by domain: {e}", exc_info=True)
+            logger.error(f"Database error fetching DataProducts by domain: {e}", exc_info=True)
             db.rollback()
             raise
 

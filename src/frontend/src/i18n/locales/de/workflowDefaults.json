@@ -1,0 +1,133 @@
+{
+  "approvalResponse": {
+    "title": "Begründung angeben",
+    "description": "Begründen Sie Ihre Entscheidung zur Genehmigung oder Ablehnung.",
+    "fields": {
+      "reason": "Begründung der Genehmigung oder Ablehnung"
+    }
+  },
+  "subscription": {
+    "title": "Abonnementdetails",
+    "description": "Beschreiben Sie, wie Sie dieses Datenprodukt nutzen möchten.",
+    "fields": {
+      "reason": "Grund für das Abonnement",
+      "useCase": "Geplanter Anwendungsfall"
+    }
+  },
+  "requestReview": {
+    "title": "Überprüfung anfordern",
+    "description": "Begründen Sie Ihre Anfrage zur Überprüfung.",
+    "fields": {
+      "reason": "Warum fordern Sie eine Überprüfung an?"
+    }
+  },
+  "requestAccess": {
+    "title": "Zugriff anfordern",
+    "description": "Begründen Sie Ihre Zugriffsanfrage und legen Sie optional eine Dauer fest.",
+    "fields": {
+      "reason": "Warum benötigen Sie Zugriff?",
+      "expiryDays": "Gewünschte Dauer (Tage; leer lassen für unbefristet)"
+    }
+  },
+  "requestPublish": {
+    "title": "Veröffentlichung anfordern",
+    "description": "Begründen Sie Ihre Veröffentlichungsanfrage.",
+    "fields": {
+      "reason": "Warum fordern Sie die Veröffentlichung an?"
+    }
+  },
+  "requestStatusChange": {
+    "title": "Statusänderung anfordern",
+    "description": "Begründen Sie Ihre Anfrage zur Statusänderung.",
+    "fields": {
+      "reason": "Warum fordern Sie diese Statusänderung an?"
+    }
+  },
+  "stepNames": {
+    "provideReason": "Begründung angeben"
+  },
+  "failMessages": {
+    "namingConventionCheck": {
+      "naming": "Der Objektname entspricht nicht den Namenskonventionen",
+      "tagging": "Die erforderlichen Tags konnten nicht angewendet werden"
+    },
+    "dataProductApproval": {
+      "noContract": "Das Datenprodukt erfordert einen Datenvertrag",
+      "rejected": "Die Veröffentlichungsanfrage für das Datenprodukt wurde abgelehnt"
+    },
+    "dataContractValidation": {
+      "noSchema": "Der Datenvertrag erfordert eine Schemadefinition"
+    },
+    "preCreationCompliance": {
+      "naming": "Der Asset-Name entspricht nicht der Richtlinie für Namenskonventionen",
+      "tagging": "Das Asset hat nicht die erforderlichen Tags"
+    },
+    "tablePreCreation": {
+      "invalidName": "Der Tabellenname darf nur Kleinbuchstaben und Unterstriche enthalten",
+      "reservedWord": "Der Tabellenname darf kein reserviertes SQL-Wort sein"
+    },
+    "contractReviewRequest": {
+      "rejected": "Die Prüfungsanfrage für den Datenvertrag wurde abgelehnt"
+    },
+    "contractDeployRequest": {
+      "rejected": "Die Bereitstellungsanfrage für den Datenvertrag wurde abgelehnt"
+    },
+    "productReviewRequest": {
+      "rejected": "Die Prüfungsanfrage für das Datenprodukt wurde abgelehnt"
+    },
+    "accessGrantRequest": {
+      "rejected": "Die Zugriffsanfrage wurde abgelehnt"
+    },
+    "statusChangeRequest": {
+      "rejected": "Die Anfrage zur Statusänderung wurde abgelehnt"
+    },
+    "dataAssetReviewRequest": {
+      "rejected": "Die Prüfung des Daten-Assets erfordert Änderungen"
+    },
+    "roleAccessRequest": {
+      "rejected": "Die Anfrage für den Rollenzugriff wurde abgelehnt"
+    },
+    "certificationRequestReview": {
+      "end": "Der Zertifizierungs-Workflow ist fehlgeschlagen"
+    },
+    "publicationRequestReview": {
+      "end": "Der Veröffentlichungs-Workflow ist fehlgeschlagen"
+    },
+    "conceptReviewRequest": {
+      "rejected": "Die Begriffsprüfung wurde nicht genehmigt"
+    }
+  },
+  "workflowNames": {
+    "naming-convention-check": "Validierung der Namenskonventionen",
+    "data-product-approval": "Freigabe der Veröffentlichung von Datenprodukten",
+    "data-contract-validation": "Schemavalidierung von Datenverträgen",
+    "pii-detection": "PII-Erkennung und -Klassifizierung",
+    "pre-creation-compliance": "Compliance-Prüfung vor der Erstellung",
+    "table-pre-creation": "Tabellenvalidierung vor der Erstellung",
+    "contract-review-request": "Prüfanfrage für Datenvertrag",
+    "contract-deploy-request": "Bereitstellungsanfrage für Datenvertrag",
+    "product-review-request": "Prüfanfrage für Datenprodukt",
+    "access-grant-request": "Anfrage zur Zugriffsgewährung",
+    "status-change-request": "Anfrage zur Statusänderung",
+    "data-asset-review-request": "Prüfanfrage für Daten-Asset",
+    "project-access-request": "Anfrage zum Projektzugriff",
+    "role-access-request": "Anfrage zum Rollenzugriff",
+    "job-failure-notification": "Benachrichtigung über fehlgeschlagenen Job",
+    "job-success-notification": "Benachrichtigung über erfolgreichen Job",
+    "access-expiring-warning": "Warnung vor ablaufendem Zugriff",
+    "access-revoked-notification": "Benachrichtigung über entzogenen Zugriff",
+    "approval-response": "Genehmigungsantwort",
+    "subscription": "Abonnementvereinbarung",
+    "request-review": "Prüfung anfordern",
+    "request-access": "Zugriff anfordern",
+    "request-publish": "Veröffentlichung anfordern",
+    "request-status-change": "Statusänderung anfordern",
+    "before-status-change-default": "Gate für Statusänderungen (Standard)",
+    "on-publish-notification": "Benachrichtigung über Veröffentlichung",
+    "on-unpublish-notification": "Benachrichtigung über zurückgezogene Veröffentlichung",
+    "certification-request-review": "Prüfung von Zertifizierungsanfragen",
+    "publication-request-review": "Prüfung von Veröffentlichungsanfragen",
+    "first-access-welcome": "Willkommen: Nutzungsbedingungen",
+    "on-request-access-grant-permissions-reference": "Referenz: UC SELECT an den Anfragenden vergeben (on_request_access)"
+  }
+}

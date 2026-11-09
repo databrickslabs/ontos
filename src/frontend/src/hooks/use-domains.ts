@@ -222,6 +222,19 @@ export const useDomains = () => {
     }
   }, [state.domains])
 
+  // Memoized helper: resolve a list of domain IDs to their names (issue #520).
+  // Unknown IDs are skipped; input order is preserved.
+  const getDomainNames = useMemo(() => {
+    const domainMap = new Map(state.domains.map(domain => [domain.id, domain.name]))
+
+    return (domainIds: (string | null | undefined)[] | undefined | null): string[] => {
+      if (!domainIds) return []
+      return domainIds
+        .map(id => (id ? domainMap.get(id) : undefined))
+        .filter((name): name is string => Boolean(name))
+    }
+  }, [state.domains])
+
   // Memoized domain ID lookup by name function
   const getDomainIdByName = useMemo(() => {
     const domainNameMap = new Map(state.domains.map(domain => [domain.name.toLowerCase(), domain.id]))
@@ -237,6 +250,7 @@ export const useDomains = () => {
     loading: state.loading,
     error: state.error,
     getDomainName,
+    getDomainNames,
     getDomainById,
     getDomainIdByName,
     refetch: loadDomains,

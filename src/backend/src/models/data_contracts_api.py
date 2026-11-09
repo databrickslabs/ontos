@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
@@ -61,8 +61,15 @@ class ColumnProperty(BaseModel):
     maxItems: Optional[int] = None
 
     # Semantic concepts for business glossary integration
-    semanticConcepts: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    semanticConcepts: Optional[List[Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="Accepted for the editors but not stored; concepts are "
+        "stored and exported as authoritativeDefinitions of type semanticAssignment."
+    )
     authoritativeDefinitions: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # ODCS customProperties of the column: the ODCS list form on input, or the
+    # {name: value} form the schema property editor sends; returned as a dict
+    customProperties: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
 
     # ODCS additional property fields
     businessName: Optional[str] = None
@@ -126,7 +133,10 @@ class QualityRule(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     level: Optional[str] = None  # 'object' or 'property'
-    enabled: bool = True
+    enabled: bool = Field(
+        default=True,
+        description="Not stored or used. All quality rules are treated as enabled."
+    )
 
     # ODCS quality framework fields
     dimension: Optional[str] = None  # accuracy, completeness, conformity, consistency, coverage, timeliness, uniqueness
@@ -275,6 +285,8 @@ ODCS_SERVER_TYPES = [
 ]
 
 class ServerConfig(BaseModel):
+    # ODCS StableId of the server (stored as `stable_id`, not the row's primary key)
+    id: Optional[str] = None
     server: Optional[str] = None  # identifier
     type: str  # ODCS server type
     description: Optional[str] = None
@@ -293,6 +305,16 @@ class ServerConfig(BaseModel):
 
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _stable_id_from_orm(cls, data):
+        """Read an ORM server row's ODCS id from ``stable_id``, not its primary key ``id``."""
+        if data is None or isinstance(data, dict) or not hasattr(data, 'stable_id'):
+            return data
+        values = {name: getattr(data, name, None) for name in cls.model_fields if name != 'id'}
+        values['id'] = getattr(data, 'stable_id', None)
+        return values
 
     @field_validator('properties', mode='before')
     @classmethod
@@ -401,7 +423,9 @@ class DataContractBase(BaseModel):
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
-    domainId: Optional[str] = Field(None, alias='domain_id')
+    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain assignment (primary included)
+    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
@@ -473,7 +497,9 @@ class DataContractUpdate(BaseModel):
     project_id: Optional[str] = None  # Project association
     kind: Optional[str] = None
     apiVersion: Optional[str] = Field(None, alias='api_version')
-    domainId: Optional[str] = Field(None, alias='domain_id')
+    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain replace-all
+    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None  # Nested description object (flattened in manager)
@@ -486,7 +512,10 @@ class DataContractUpdate(BaseModel):
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None)
     qualityRules: Optional[List[QualityRule]] = Field(None)
     serverConfigs: Optional[List[ServerConfig]] = Field(None)
+    servers: Optional[List[ServerConfig]] = None  # replace-all, as sent by the contract page
     sla: Optional[SLARequirements] = None
+    slaDefaultElement: Optional[str] = None
+    slaProperties: Optional[List[SLAProperty]] = None  # replace-all
     team: Optional[List[TeamMember]] = None  # ODCS team members
     customProperties: Optional[Dict[str, Any]] = None  # Custom properties for team assignment metadata
 
@@ -516,9 +545,13 @@ class DataContractRead(BaseModel):
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
     apiVersion: str = Field('v3.1.0', alias='apiVersion')  # Required by ODCS
     tenant: Optional[str] = None
-    domain: Optional[str] = None
-    domainId: Optional[str] = None
+    domain: Optional[str] = None  # Primary domain name
+    domainId: Optional[str] = None  # Primary domain ID
+    domainIds: List[str] = Field(default_factory=list)  # All assigned domain IDs (primary first)
+    primaryDomainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
+    dataProductName: Optional[str] = None  # Resolved product name at query time (#854)
+    dataProductId: Optional[str] = None  # Resolved product id at query time, for linking (#854)
     description: Optional[ContractDescription] = None
 
     # ODCS top-level fields
@@ -599,8 +632,10 @@ class DataContractSummary(BaseModel):
     kind: str = Field('DataContract')
     apiVersion: str = Field('v3.1.0', alias='apiVersion')
     tenant: Optional[str] = None
-    domain: Optional[str] = None
-    domainId: Optional[str] = None
+    domain: Optional[str] = None  # Primary domain name
+    domainId: Optional[str] = None  # Primary domain ID
+    domainIds: List[str] = Field(default_factory=list)  # All assigned domain IDs (primary first)
+    primaryDomainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
     tags: Optional[List[AssignedTag]] = Field(default_factory=list)

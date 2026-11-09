@@ -63,6 +63,10 @@
     "requestAccess": "Demander l'Accès",
     "moreRoles": "Et {{count}} autres rôles disponibles..."
   },
+  "myActions": {
+    "title": "Mes actions",
+    "approvals": "Approbations"
+  },
   "quickActions": {
     "title": "Actions rapides",
     "loading": "Chargement...",
@@ -111,7 +115,13 @@
     "unknown": "Inconnu",
     "status": "N/D",
     "untitled": "Sans titre",
-    "info": "Info"
+    "info": "Info",
+    "manage": "Gérer",
+    "mySubscriptions": "Mes abonnements",
+    "subscribe": "S'abonner",
+    "subscribed": "Abonné",
+    "unknownProduct": "Produit inconnu",
+    "viewAllSubscribed": "Voir tous les abonnements"
   },
   "dataCurationSection": {
     "title": "Curation de données",
@@ -151,7 +161,26 @@
     "openButton": "Ouvrir",
     "markReadButton": "Marquer comme lu",
     "readLabel": "Lu",
-    "alertMessage": "Cette liste affiche uniquement les notifications nécessitant une action assignées à votre/vos rôle(s)."
+    "alertMessage": "Cette liste affiche uniquement les notifications nécessitant une action assignées à votre/vos rôle(s).",
+    "loadError": "Échec du chargement des approbations",
+    "unknownUser": "Utilisateur inconnu",
+    "unknownRole": "Rôle inconnu",
+    "approvalRequest": "Demande d'approbation",
+    "badges": {
+      "roleRequest": "Demande de rôle",
+      "contract": "Contrat",
+      "product": "Produit",
+      "approval": "Approbation"
+    },
+    "table": {
+      "type": "Type",
+      "requesterName": "Demandeur / Nom",
+      "roleStatusReason": "Rôle / Statut / Motif",
+      "date": "Date",
+      "actions": "Actions"
+    },
+    "approveDenyRequest": "Approuver/Refuser la demande",
+    "approveDenyWorkflow": "Approuver/Refuser la demande de workflow"
   },
   "marketplace": {
     "welcome": "Bonjour",
@@ -182,7 +211,9 @@
       "browseToSubscribe": "Parcourez l'onglet Explorer pour trouver des produits auxquels vous abonner.",
       "exploreProducts": "Explorer les Produits de Données",
       "owner": "Propriétaire",
-      "unknown": "Inconnu"
+      "unknown": "Inconnu",
+      "unknownProduct": "Produit inconnu",
+      "untitled": "Sans titre"
     },
     "datasets": {
       "available": "{{count}} dataset disponible",
@@ -218,6 +249,47 @@
       "three": "3 par ligne",
       "four": "4 par ligne"
     },
-    "openInDetails": "Ouvrir dans la vue détaillée"
+    "scopeFilter": {
+      "placeholder": "Portée",
+      "all": "Toutes les portées"
+    },
+    "openInDetails": "Ouvrir dans la vue détaillée",
+    "loadError": "Échec du chargement des produits"
+  },
+  "myProducts": {
+    "title": "Mes produits",
+    "description": "Produits de données auxquels vous êtes abonné.",
+    "loading": "Chargement de vos produits...",
+    "empty": "Vous n'êtes encore abonné à aucun produit de données.",
+    "browseMarketplace": "Parcourir le Marketplace"
+  },
+  "myRequests": {
+    "title": "Mes demandes",
+    "description": "Demandes que vous avez créées et qui nécessitent une approbation (y compris accès et abonnements).",
+    "loading": "Chargement de vos demandes...",
+    "empty": "Vous n'avez créé aucune demande.",
+    "entity": "Entité",
+    "type": "Type",
+    "status": "Statut",
+    "requestedAt": "Demandé",
+    "handledAt": "Résolu",
+    "cancel": "Annuler",
+    "cancelSuccess": "Demande annulée",
+    "statusPending": "En attente",
+    "statusApproved": "Approuvé",
+    "statusDenied": "Refusé",
+    "statusCancelled": "Annulé",
+    "statusExpired": "Expiré",
+    "statusInProgress": "En cours",
+    "statusCompleted": "Terminé",
+    "statusAbandoned": "Abandonné",
+    "typeAccess": "Accès",
+    "typeSubscription": "Abonnement",
+    "typeApproval": "Approbation",
+    "entityType": "Type d'entité",
+    "name": "Nom",
+    "entityTypeDataProduct": "Produit de données",
+    "entityTypeDataset": "Jeu de données",
+    "entityTypeDataContract": "Contrat de données"
   }
 }

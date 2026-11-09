@@ -113,7 +113,12 @@
     "selectDescription": "Wählen Sie ein geteiltes Asset zum Anhängen aus",
     "noSharedNotes": "Keine geteilten Notizen verfügbar",
     "noSharedLinks": "Keine geteilten Links verfügbar",
-    "noSharedDocuments": "Keine geteilten Dokumente verfügbar"
+    "noSharedDocuments": "Keine geteilten Dokumente verfügbar",
+    "loading": "Geteilte Assets werden geladen...",
+    "attach": "Anhängen",
+    "levelInfo": "Ebene: {{level}}",
+    "inheritable": "Vererbbar",
+    "notInheritable": "Nicht vererbbar"
   },
   "messages": {
     "loadFailed": "Metadaten-Laden fehlgeschlagen",
@@ -122,16 +127,129 @@
   },
   "tags": {
     "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "description": "Governance-Tags auf dieses Objekt anwenden.",
+    "edit": "Tags bearbeiten",
+    "refresh": "Aktualisieren",
+    "placeholder": "Tags suchen und auswählen...",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "noTags": "Keine Tags angewendet.",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "Tags aktualisiert",
+      "saveFailed": "Tags konnten nicht aktualisiert werden"
     }
+  },
+  "costs": {
+    "title": "Kostenverwaltung",
+    "total": "Gesamt",
+    "breakdown": "Aufschlüsselung",
+    "noItems": "Keine Einträge",
+    "addExpense": "Kosten hinzufügen",
+    "editExpense": "Kosten bearbeiten",
+    "loading": "Wird geladen",
+    "noItemsForMonth": "Keine Kostenpositionen für diesen Monat.",
+    "donutAria": "Kostenaufschlüsselung",
+    "table": {
+      "title": "Titel",
+      "center": "Kostenstelle",
+      "monthRange": "Monatsbereich",
+      "amountMonth": "Betrag/Monat"
+    },
+    "form": {
+      "title": "Titel",
+      "center": "Kostenstelle",
+      "customCenter": "Benutzerdefinierte Kostenstelle",
+      "amountCents": "Betrag (Cent)",
+      "currency": "Währung",
+      "startMonth": "Startmonat (JJJJ-MM)",
+      "endMonth": "Endmonat (JJJJ-MM)",
+      "monthPlaceholder": "JJJJ-MM"
+    },
+    "validation": {
+      "required": "Erforderlich"
+    },
+    "messages": {
+      "loadFailed": "Kosten konnten nicht geladen werden",
+      "missingFields": "Erforderliche Felder fehlen",
+      "missingFieldsDescription": "Bitte füllen Sie alle Pflichtfelder aus.",
+      "added": "Kosten hinzugefügt",
+      "updated": "Kosten aktualisiert",
+      "deleted": "Kosten gelöscht",
+      "deleteFailed": "Löschen fehlgeschlagen",
+      "saveFailed": "Speichern fehlgeschlagen"
+    }
+  },
+  "quality": {
+    "title": "Datenqualität",
+    "overallScore": "Gesamtbewertung",
+    "byDimension": "Nach Dimension",
+    "noMeasurements": "Keine Messungen",
+    "addMeasurement": "Messung hinzufügen",
+    "editMeasurement": "Messung bearbeiten",
+    "lastMeasured": "Zuletzt gemessen {{date}}",
+    "loading": "Wird geladen",
+    "noMeasurementsRecorded": "Keine Qualitätsmessungen erfasst.",
+    "gaugeAria": "Qualitätsbewertung",
+    "table": {
+      "title": "Titel",
+      "dimension": "Dimension",
+      "source": "Quelle",
+      "score": "Bewertung",
+      "measured": "Gemessen"
+    },
+    "form": {
+      "title": "Titel",
+      "dimension": "Dimension",
+      "source": "Quelle",
+      "score": "Bewertung (%)",
+      "checksPassed": "Bestandene Prüfungen",
+      "checksTotal": "Prüfungen gesamt"
+    },
+    "validation": {
+      "required": "Erforderlich",
+      "range": "0-100"
+    },
+    "messages": {
+      "loadFailed": "Qualitätsdaten konnten nicht geladen werden",
+      "missingFields": "Erforderliche Felder fehlen",
+      "added": "Messung hinzugefügt",
+      "updated": "Messung aktualisiert",
+      "deleted": "Messung gelöscht",
+      "deleteFailed": "Löschen fehlgeschlagen",
+      "saveFailed": "Speichern fehlgeschlagen"
+    }
+  },
+  "ratings": {
+    "title": "Bewertungen",
+    "youRated": "Ihre Bewertung: {{rating}}★",
+    "updateYourRating": "Ihre Bewertung aktualisieren",
+    "rateThisItem": "Dieses Element bewerten",
+    "addReviewOptional": "Rezension hinzufügen (optional)",
+    "reviewPlaceholder": "Teilen Sie Ihre Erfahrung...",
+    "submitting": "Wird gesendet...",
+    "submitRating": "Bewertung absenden",
+    "labels": {
+      "poor": "Schlecht",
+      "fair": "Ausreichend",
+      "good": "Gut",
+      "veryGood": "Sehr gut",
+      "excellent": "Ausgezeichnet"
+    }
+  },
+  "info": {
+    "entityInformation": "Entitätsinformationen",
+    "subscribed": "Abonniert",
+    "tableOfContents": "Inhaltsverzeichnis",
+    "noNotesAvailable": "Keine Notizen verfügbar.",
+    "noLinks": "Keine Links.",
+    "inherited": "Vererbt",
+    "shared": "Geteilt",
+    "ratingsAndReviews": "Bewertungen & Rezensionen",
+    "loadingRatings": "Bewertungen werden geladen...",
+    "yourRating": "Ihre Bewertung",
+    "addReviewPlaceholder": "Rezension hinzufügen (optional)...",
+    "goToDetails": "Zu Details wechseln",
+    "alreadySubscribed": "Bereits abonniert",
+    "subscribe": "Abonnieren"
   }
 }

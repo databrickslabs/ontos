@@ -227,7 +227,8 @@ def collect_rich_text_metadata(product_ids: List[str], db: Session) -> Dict[str,
 def format_metadata_for_genie(
     metadata_map: Dict[str, List],
     products: List,
-    max_length: int = 5000
+    max_length: int = 5000,
+    product_domains: Optional[Dict[str, str]] = None,
 ) -> str:
     """
     Format collected metadata as markdown instructions for Genie.
@@ -236,6 +237,9 @@ def format_metadata_for_genie(
         metadata_map: Dict of entity_id -> metadata entries
         products: List of DataProductDb objects
         max_length: Maximum character length (default 5000)
+        product_domains: Optional {product_id: primary domain name}. Domain moved to the
+            entity_domain_associations junction (the legacy DataProductDb.domain column was
+            dropped), so the caller resolves it and passes it in here.
 
     Returns:
         Formatted markdown string
@@ -251,9 +255,10 @@ def format_metadata_for_genie(
         if hasattr(product, 'description') and product.description:
             section_parts.append(f"**Description**: {product.description}\n")
 
-        # Add product domain if available
-        if hasattr(product, 'domain') and product.domain:
-            section_parts.append(f"**Domain**: {product.domain}\n")
+        # Add product domain if available (resolved from the junction by the caller).
+        primary_domain = (product_domains or {}).get(str(product.id))
+        if primary_domain:
+            section_parts.append(f"**Domain**: {primary_domain}\n")
 
         section_parts.append("\n")
 

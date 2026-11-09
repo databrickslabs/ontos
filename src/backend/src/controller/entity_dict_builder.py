@@ -43,6 +43,8 @@ def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, 
     )
     base["contract_count"] = contract_count
     base["has_contract"] = contract_count > 0
+    # Output ports linked to a data contract (OutputPortDb.contract_id)
+    base["output_port_contract_count"] = sum(1 for op in output_ports if op.contract_id)
 
     # Certification
     base["certification_level"] = product.certification_level or 0

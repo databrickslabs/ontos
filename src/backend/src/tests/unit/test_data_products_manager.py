@@ -158,6 +158,70 @@ class TestDataProductsManager:
             manager.create_product(sample_product_data, db=db_session)
 
     # =====================================================================
+    # Domain assignment resolution (#520 multi-domain) Tests
+    # =====================================================================
+
+    def _make_domain(self, db_session, name):
+        from src.models.data_domains import DataDomainCreate
+        from src.repositories.data_domain_repository import data_domain_repo
+        d = data_domain_repo.create(db=db_session, obj_in=DataDomainCreate(name=name))
+        db_session.commit()
+        return d
+
+    def test_resolve_domains_snake_case_ids(self, manager, db_session):
+        """domain_ids + primary_domain_id (app/API form) resolve to (ids, primary)."""
+        a = self._make_domain(db_session, "Sales")
+        b = self._make_domain(db_session, "Finance")
+        ids, primary = manager._resolve_product_domain_assignment(
+            {"domain_ids": [a.id, b.id], "primary_domain_id": b.id}, db=db_session
+        )
+        assert set(ids) == {a.id, b.id}
+        assert primary == b.id
+
+    def test_resolve_domains_legacy_single_id(self, manager, db_session):
+        """Legacy single ``domain`` that is a domain ID must resolve (regression guard).
+
+        parse_odcs resolves a bare ``domain`` only by name, so the manager keeps a
+        direct ID short-circuit — without it a UUID in ``domain`` was silently dropped."""
+        a = self._make_domain(db_session, "Marketing")
+        ids, primary = manager._resolve_product_domain_assignment(
+            {"domain": a.id}, db=db_session
+        )
+        assert ids == [a.id]
+        assert primary == a.id
+
+    def test_resolve_domains_legacy_single_name(self, manager, db_session):
+        """Legacy single ``domain`` that is a domain NAME resolves via the adapter."""
+        a = self._make_domain(db_session, "Operations")
+        ids, primary = manager._resolve_product_domain_assignment(
+            {"domain": "Operations"}, db=db_session
+        )
+        assert ids == [a.id]
+        assert primary == a.id
+
+    def test_resolve_domains_odps_additional_roundtrip(self, manager, db_session):
+        """ODPS re-import: primary name + customProperties.additionalDomains reattach."""
+        a = self._make_domain(db_session, "Risk")
+        b = self._make_domain(db_session, "Compliance")
+        ids, primary = manager._resolve_product_domain_assignment(
+            {
+                "domain": "Risk",
+                "customProperties": [
+                    {"property": "additionalDomains", "value": ["Compliance"]}
+                ],
+            },
+            db=db_session,
+        )
+        assert set(ids) == {a.id, b.id}
+        assert primary == a.id
+
+    def test_resolve_domains_empty(self, manager, db_session):
+        """No domain fields → empty assignment."""
+        ids, primary = manager._resolve_product_domain_assignment({}, db=db_session)
+        assert ids == []
+        assert primary is None
+
+    # =====================================================================
     # Get Product Tests
     # =====================================================================
 

@@ -174,6 +174,11 @@ class ChatMessage(BaseModel):
     tool_calls: Optional[List[ToolCall]] = Field(None, description="Tool calls (for assistant messages)")
     tool_call_id: Optional[str] = Field(None, description="Tool call ID (for tool result messages)")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the message was created")
+    error_code: Optional[str] = Field(
+        None,
+        description="Set on an assistant message that reports a failure, so the UI can show it in the user's language; content keeps the English text",
+    )
+    error_params: Optional[Dict[str, Any]] = Field(None, description="Parameters of error_code")
     
     model_config = {"from_attributes": True}
 

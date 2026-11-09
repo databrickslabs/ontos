@@ -6,7 +6,6 @@
   "basicInformation": "Basisinformationen",
   "commentsAndActivity": "Kommentare & Aktivität",
   "askOntos": "{{shortName}} fragen",
-  
   "actions": {
     "viewData": "Daten anzeigen",
     "move": "Verschieben",
@@ -20,7 +19,6 @@
     "cancel": "Abbrechen",
     "confirm": "Bestätigen"
   },
-  
   "tooltips": {
     "copyToTarget": "Zum Ziel kopieren",
     "moveToTarget": "Zum Ziel verschieben",
@@ -28,7 +26,6 @@
     "refresh": "Aktualisieren (Umschalttaste für erzwungene Aktualisierung)",
     "dragToResize": "Ziehen zum Ändern der Größe"
   },
-  
   "labels": {
     "metastore": "Metastore",
     "filterCatalogs": "Kataloge filtern...",
@@ -38,7 +35,6 @@
     "fullPath": "Vollständiger Pfad:",
     "actions": "Aktionen:"
   },
-  
   "messages": {
     "selectObjectToViewInfo": "Wählen Sie ein Objekt aus, um seine Informationen anzuzeigen",
     "selectObjectToViewComments": "Wählen Sie ein Objekt aus, um Kommentare anzuzeigen",
@@ -47,9 +43,11 @@
     "datasetView": "Dataset-Ansicht: {{name}}",
     "confirmOperation": "Operation bestätigen",
     "selectedItems": "Ausgewählte Elemente: {{items}}",
-    "noItemsSelected": "Keine Elemente ausgewählt"
+    "noItemsSelected": "Keine Elemente ausgewählt",
+    "noResponse": "Keine Antwort",
+    "tableNotFound": "Tabelle \"{{name}}\" nicht in {{schema}} gefunden",
+    "failedToNavigate": "Navigation zu {{path}} fehlgeschlagen"
   },
-  
   "askPanel": {
     "title": "{{shortName}} fragen",
     "askAboutItem": "Fragen Sie zu diesem Katalogelement",
@@ -67,10 +65,9 @@
       "usage": "Wie wird das verwendet?"
     }
   },
-  
   "errors": {
     "error": "Fehler",
-    "failedToSendMessage": "Nachricht konnte nicht gesendet werden"
+    "failedToSendMessage": "Nachricht konnte nicht gesendet werden",
+    "chatRequestFailed": "Chat-Anfrage fehlgeschlagen"
   }
 }
-

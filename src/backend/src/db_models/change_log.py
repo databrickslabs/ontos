@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 from sqlalchemy import Column, String, DateTime, Text
 from sqlalchemy.sql import func
@@ -16,5 +17,14 @@ class ChangeLogDb(Base):
     username = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     details_json = Column(Text, nullable=True)
+
+    @property
+    def details(self) -> dict:
+        """``details_json`` parsed (empty when missing or not a JSON object)."""
+        try:
+            value = json.loads(self.details_json) if self.details_json else {}
+        except ValueError:
+            return {}
+        return value if isinstance(value, dict) else {}
 
 

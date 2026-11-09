@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import type { InputPort } from '@/types/data-product';
 
 type InputPortFormProps = {
@@ -15,6 +16,7 @@ type InputPortFormProps = {
 
 export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, initial }: InputPortFormProps) {
   const { toast } = useToast();
+  const { t } = useTranslation(['data-products', 'common']);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState('');
@@ -90,29 +92,29 @@ export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, in
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Consumable' : 'Add Consumable'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-products:inputPortForm.editTitle') : t('data-products:inputPortForm.addTitle')}</DialogTitle>
           <DialogDescription>
-            Define an input data dependency for this data product (ODPS v1.0.0).
+            {t('data-products:inputPortForm.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">
-              Consumable Name <span className="text-destructive">*</span>
+              {t('data-products:inputPortForm.labels.consumableName')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., customer-data-input"
+              placeholder={t('data-products:inputPortForm.placeholders.name')}
               autoFocus
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="version">
-              Version <span className="text-destructive">*</span>
+              {t('common:labels.version')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="version"
@@ -127,13 +129,13 @@ export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, in
 
           <div className="space-y-2">
             <Label htmlFor="contractId">
-              Contract ID <span className="text-destructive">*</span>
+              {t('data-products:inputPortForm.labels.contractId')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="contractId"
               value={contractId}
               onChange={(e) => setContractId(e.target.value)}
-              placeholder="e.g., customer-data-contract-v1"
+              placeholder={t('data-products:inputPortForm.placeholders.contractId')}
             />
             <p className="text-xs text-muted-foreground">
               Reference to the data contract ID (REQUIRED in ODPS v1.0.0)
@@ -141,16 +143,16 @@ export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, in
           </div>
 
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium mb-3">Databricks Extensions (Optional)</h4>
+            <h4 className="text-sm font-medium mb-3">{t('data-products:inputPortForm.labels.databricksExtensions')}</h4>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="assetType">Asset Type</Label>
+                <Label htmlFor="assetType">{t('data-products:inputPortForm.labels.assetType')}</Label>
                 <Input
                   id="assetType"
                   value={assetType}
                   onChange={(e) => setAssetType(e.target.value)}
-                  placeholder="e.g., table, notebook, job"
+                  placeholder={t('data-products:inputPortForm.placeholders.assetType')}
                 />
                 <p className="text-xs text-muted-foreground">
                   Type of Databricks asset
@@ -158,12 +160,12 @@ export default function InputPortFormDialog({ isOpen, onOpenChange, onSubmit, in
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="assetIdentifier">Asset Identifier</Label>
+                <Label htmlFor="assetIdentifier">{t('data-products:inputPortForm.labels.assetIdentifier')}</Label>
                 <Input
                   id="assetIdentifier"
                   value={assetIdentifier}
                   onChange={(e) => setAssetIdentifier(e.target.value)}
-                  placeholder="e.g., catalog.schema.table, /path/to/notebook"
+                  placeholder={t('data-products:inputPortForm.placeholders.assetIdentifier')}
                 />
                 <p className="text-xs text-muted-foreground">
                   Unique identifier for the Databricks asset

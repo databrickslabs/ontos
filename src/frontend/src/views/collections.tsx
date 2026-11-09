@@ -88,7 +88,7 @@ export default function CollectionsView() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to save collection');
+        throw new Error(error.detail || 'Failed to save scheme');
       }
 
       toast({
@@ -123,7 +123,7 @@ export default function CollectionsView() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to delete collection');
+        throw new Error(error.detail || 'Failed to delete scheme');
       }
 
       toast({

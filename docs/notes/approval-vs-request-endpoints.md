@@ -88,6 +88,7 @@ Process workflows are **triggered by events**. The trigger registry ([workflow_t
 - `on_request_access` → **ON_REQUEST_ACCESS**
 - `on_request_review` → **ON_REQUEST_REVIEW**
 - `on_request_publish` → **ON_REQUEST_PUBLISH**
+- `on_request_deploy` → **ON_REQUEST_DEPLOY**
 - `on_request_status_change` → **ON_REQUEST_STATUS_CHANGE**
 - `on_status_change` → **ON_STATUS_CHANGE**
 - `on_create`, `on_update`, `on_delete`, `before_*`, job lifecycle, subscribe/unsubscribe, expiring, revoke, etc.
@@ -98,7 +99,8 @@ Process workflows are **triggered by events**. The trigger registry ([workflow_t
 |---------|------------|
 | **ON_REQUEST_ACCESS** | AccessGrantsManager (create access request), UserRoutes (role access), ProjectsManager, … |
 | **ON_REQUEST_REVIEW** | DataAssetReviewsManager, … |
-| **ON_REQUEST_PUBLISH** | DataContractsManager (publish/deploy request) |
+| **ON_REQUEST_PUBLISH** | DataContractsManager, data product routes (publish request) |
+| **ON_REQUEST_DEPLOY** | DataContractsManager (deploy request) |
 | **ON_REQUEST_STATUS_CHANGE** | DatasetsManager, DataProductsManager, DataContractsManager (status change requests) |
 | **ON_STATUS_CHANGE** | DatasetsManager, DataProductsManager, DataContractsManager (after status actually changes) |
 | **ON_CREATE / ON_UPDATE / ON_DELETE** | Various (contracts, products, …) |

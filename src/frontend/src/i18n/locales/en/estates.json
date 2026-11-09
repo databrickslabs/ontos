@@ -13,7 +13,10 @@
     "deletingEstate": "Error Deleting Estate",
     "triggeringSync": "Error Triggering Sync",
     "validationError": "Validation Error",
-    "validationMessage": "Please fill in all required fields: Name, Description, Workspace URL, Metastore Name, Cloud Type, and Connection Type."
+    "validationMessage": "Please fill in all required fields: Name, Description, Workspace URL, Metastore Name, Cloud Type, and Connection Type.",
+    "codes": {
+      "estate_name_conflict": "An estate named \"{{name}}\" already exists."
+    }
   },
   "toast": {
     "estateCreated": "Estate created successfully",
@@ -40,7 +43,11 @@
     "syncSchedule": "Sync Schedule",
     "enableSync": "Enable Sync",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "namePlaceholder": "e.g., US Production Workspace",
+    "descriptionPlaceholder": "e.g., Primary production environment for US region",
+    "workspaceUrlPlaceholder": "e.g., https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "e.g., primary_prod_metastore"
   },
   "connectionTypes": {
     "deltaShare": "Delta Share",
@@ -58,7 +65,15 @@
     "type": "Type",
     "status": "Status",
     "assets": "Assets",
-    "actions": "Actions"
+    "actions": "Actions",
+    "neverSynced": "Never Synced",
+    "openMenu": "Open menu",
+    "syncTooltip": {
+      "status": "Status: {{status}}",
+      "time": "Time: {{time}}",
+      "error": "Error: {{error}}",
+      "inProgress": "Sync in progress or queued..."
+    }
   },
   "filters": {
     "allStatus": "All Status"
@@ -86,6 +101,57 @@
     "viewDetails": "View Details",
     "notFound": "Estate not found",
     "loading": "Loading...",
+    "pageTitle": "Estate Details",
+    "backToEstateManager": "Back to Estate Manager",
+    "backToListButton": "Back to List",
+    "configureSyncJob": "Configure Sync Job",
+    "syncEnabled": "Sync Enabled",
+    "syncDisabled": "Sync Disabled",
+    "never": "Never",
+    "notFoundOrLoad": "Estate not found or could not be loaded.",
+    "labels": {
+      "cloudProvider": "Cloud Provider",
+      "lastSyncTime": "Last Sync Time",
+      "lastSyncStatus": "Last Sync Status",
+      "lastSyncError": "Last Sync Error",
+      "lastUpdatedAt": "Last Updated At"
+    },
+    "errors": {
+      "fetchTitle": "Error Fetching Estate",
+      "fetchFailed": "Failed to fetch estate details.",
+      "couldNotLoad": "Could not load estate details.",
+      "noEstateData": "Estate data is not available to add a policy."
+    },
+    "policies": {
+      "add": "Add Policy",
+      "resourceTypeLabel": "Resource Type:",
+      "rulesLabel": "Rules ({{count}}):",
+      "ruleText": {
+        "equals": "Filter by <b>{{filterType}}</b> where the value equals <b>'{{value}}'</b>",
+        "contains": "Filter by <b>{{filterType}}</b> where the value contains <b>'{{value}}'</b>",
+        "starts_with": "Filter by <b>{{filterType}}</b> where the value starts with <b>'{{value}}'</b>",
+        "regex": "Filter by <b>{{filterType}}</b> where the value matches the regular expression <b>'{{value}}'</b>"
+      },
+      "noRules": "No rules defined for this policy.",
+      "emptyHint": "Click \"Add Policy\" to start sharing resources.",
+      "editPolicyAlert": "Edit policy: {{name}}",
+      "deletePolicyAlert": "Delete policy: {{name}}",
+      "addedTitle": "Policy Added",
+      "addedDescription": "Sharing policy \"{{name}}\" has been successfully added.",
+      "addErrorTitle": "Error Adding Policy",
+      "addErrorDescription": "Could not save the new sharing policy. Please try again.",
+      "saveFailedNoData": "Failed to save policy. Server returned no data.",
+      "export": {
+        "title": "Export Policies",
+        "sectionDescription": "What this instance shares with this estate.",
+        "emptyTitle": "No export policies defined for this estate."
+      },
+      "import": {
+        "title": "Import Policies",
+        "sectionDescription": "What this instance accepts from this estate.",
+        "emptyTitle": "No import policies defined for this estate."
+      }
+    },
     "overview": {
       "title": "Estate Overview",
       "type": "Type",
@@ -103,5 +169,54 @@
       "title": "Sync History",
       "noHistory": "No sync history"
     }
+  },
+  "sharingPolicy": {
+    "dialogTitle": "Add New Sharing Policy",
+    "dialogDescription": "Define a new policy to share resources from or with this estate.",
+    "submit": "Add Policy",
+    "addRule": "Add Rule",
+    "rulesHeading": "Rules",
+    "ruleLabel": "Rule {{number}}",
+    "fields": {
+      "name": "Policy Name",
+      "description": "Description (Optional)",
+      "resourceType": "Resource Type",
+      "enablePolicy": "Enable Policy",
+      "filterType": "Filter Type",
+      "operator": "Operator",
+      "value": "Value"
+    },
+    "placeholders": {
+      "name": "e.g., Share Production Data Products",
+      "description": "Detailed description of the policy's purpose...",
+      "resourceType": "Select resource type",
+      "operator": "Select operator",
+      "filterType": "e.g., tag, domain, status",
+      "value": "e.g., finance, Active"
+    },
+    "operators": {
+      "equals": "Equals",
+      "contains": "Contains",
+      "starts_with": "Starts with",
+      "regex": "Matches regex"
+    },
+    "validation": {
+      "nameMin": "Policy name must be at least 3 characters",
+      "filterTypeRequired": "Filter type is required",
+      "filterValueRequired": "Filter value is required",
+      "rulesMin": "At least one rule is required"
+    },
+    "toast": {
+      "submittedTitle": "Policy Submitted",
+      "submittedDescription": "Sharing policy \"{{name}}\" is being processed.",
+      "addErrorDescription": "Failed to add sharing policy. Check console for details."
+    }
+  },
+  "resourceTypes": {
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "business_term": "Business Term",
+    "data_domain": "Data Domain",
+    "concept": "Concept"
   }
 }

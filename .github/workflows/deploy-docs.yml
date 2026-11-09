@@ -1,0 +1,78 @@
+name: Deploy Docs to GitHub Pages
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - 'website/ontos/**'
+      - '.github/workflows/deploy-docs.yml'
+  # Allow manual runs from the Actions tab
+  workflow_dispatch:
+
+# Permissions required for the GitHub Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: website/ontos
+
+jobs:
+  build:
+    name: Build Docusaurus site
+    # Must run on the protected runner group: the databrickslabs org has an IP
+    # allow list, and stock GitHub-hosted runner IPs are not on it, so any
+    # GitHub API call from ubuntu-latest fails with "your IP address is not
+    # permitted to access this resource".
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The protected runners install npm packages through the internal JFrog
+      # registry (authenticated via OIDC), not public npm. Stock actions/setup-node
+      # leaves npm pointed at a registry it can't reach here, so `npm ci` aborts
+      # ("Exit handler never called!") and the docusaurus binary is never installed.
+      # This composite action fetches a JFrog token, writes ~/.npmrc, and sets up Node.
+      - name: Setup Node.js (JFrog npm)
+        uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+          lock-path: website/ontos/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build website
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/ontos/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    # Protected runner group required here too: actions/deploy-pages calls the
+    # GitHub Pages API, which the org IP allow list blocks from ubuntu-latest.
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

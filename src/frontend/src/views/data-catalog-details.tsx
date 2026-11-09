@@ -105,7 +105,7 @@ const DataCatalogDetails: React.FC = () => {
       { label: t('common:home'), path: '/' },
       { label: t('data-catalog:title', 'Data Catalog'), path: '/data-catalog' }
     ]);
-    setDynamicTitle(tableInfo?.name || decodedFqn.split('.').pop() || 'Details');
+    setDynamicTitle(tableInfo?.name || decodedFqn.split('.').pop() || t('data-catalog:details.fallbackTitle'));
   }, [setStaticSegments, setDynamicTitle, t, tableInfo, decodedFqn]);
 
   // Fetch table details
@@ -120,20 +120,20 @@ const DataCatalogDetails: React.FC = () => {
       
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('Table not found');
+          throw new Error(t('data-catalog:errors.tableNotFound'));
         }
-        throw new Error(`Failed to fetch table: ${response.statusText}`);
+        throw new Error(t('data-catalog:errors.fetchTableFailed', { status: response.statusText }));
       }
-      
+
       const data: TableInfo = await response.json();
       setTableInfo(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = err instanceof Error ? err.message : t('common:errors.unknownError');
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, [decodedFqn]);
+  }, [decodedFqn, t]);
 
   // Fetch lineage
   const fetchLineage = useCallback(async () => {
@@ -148,18 +148,18 @@ const DataCatalogDetails: React.FC = () => {
       );
       
       if (!response.ok) {
-        throw new Error('Failed to fetch lineage');
+        throw new Error(t('data-catalog:errors.fetchLineageFailed'));
       }
-      
+
       const data: LineageGraph = await response.json();
       setLineageGraph(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load lineage';
+      const message = err instanceof Error ? err.message : t('data-catalog:errors.loadLineageFailed');
       setLineageError(message);
     } finally {
       setIsLineageLoading(false);
     }
-  }, [decodedFqn, lineageDirection]);
+  }, [decodedFqn, lineageDirection, t]);
 
   // Fetch impact analysis
   const fetchImpact = useCallback(async () => {
@@ -261,7 +261,7 @@ const DataCatalogDetails: React.FC = () => {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate(listPath)} size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to List
+            {t('data-catalog:details.backToList')}
           </Button>
           <Button onClick={fetchTableDetails}>
             {t('common:retry', 'Retry')}
@@ -282,7 +282,7 @@ const DataCatalogDetails: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate(listPath)} size="sm">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('data-catalog:details.backToList')}
         </Button>
       </div>
 
@@ -378,7 +378,7 @@ const DataCatalogDetails: React.FC = () => {
                     </p>
                     <p className="text-sm">{formatDate(tableInfo.created_at)}</p>
                     {tableInfo.created_by && (
-                      <p className="text-xs text-muted-foreground">by {tableInfo.created_by}</p>
+                      <p className="text-xs text-muted-foreground">{t('data-catalog:details.by', { user: tableInfo.created_by })}</p>
                     )}
                   </div>
                   <div>
@@ -388,7 +388,7 @@ const DataCatalogDetails: React.FC = () => {
                     </p>
                     <p className="text-sm">{formatDate(tableInfo.updated_at)}</p>
                     {tableInfo.updated_by && (
-                      <p className="text-xs text-muted-foreground">by {tableInfo.updated_by}</p>
+                      <p className="text-xs text-muted-foreground">{t('data-catalog:details.by', { user: tableInfo.updated_by })}</p>
                     )}
                   </div>
                 </div>
@@ -516,7 +516,7 @@ const DataCatalogDetails: React.FC = () => {
                           <code className="text-sm font-medium">{col.name}</code>
                           {col.partition_index !== null && col.partition_index !== undefined && (
                             <Badge variant="outline" className="ml-2 text-xs">
-                              Partition {col.partition_index}
+                              {t('data-catalog:dataDetails.partition', { index: col.partition_index })}
                             </Badge>
                           )}
                         </TableCell>
@@ -527,9 +527,9 @@ const DataCatalogDetails: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {col.nullable ? (
-                            <Badge variant="outline" className="text-xs">Yes</Badge>
+                            <Badge variant="outline" className="text-xs">{t('data-catalog:dataDetails.yes')}</Badge>
                           ) : (
-                            <Badge variant="destructive" className="text-xs">No</Badge>
+                            <Badge variant="destructive" className="text-xs">{t('data-catalog:dataDetails.no')}</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-md">
@@ -580,13 +580,13 @@ const DataCatalogDetails: React.FC = () => {
                     </p>
                     <div className="flex gap-4">
                       {impact.impacted_tables.length > 0 && (
-                        <Badge variant="outline">{impact.impacted_tables.length} tables</Badge>
+                        <Badge variant="outline">{t('data-catalog:lineage.impactedTables', { count: impact.impacted_tables.length })}</Badge>
                       )}
                       {impact.impacted_views.length > 0 && (
-                        <Badge variant="outline">{impact.impacted_views.length} views</Badge>
+                        <Badge variant="outline">{t('data-catalog:lineage.impactedViews', { count: impact.impacted_views.length })}</Badge>
                       )}
                       {impact.impacted_external.length > 0 && (
-                        <Badge variant="outline">{impact.impacted_external.length} external</Badge>
+                        <Badge variant="outline">{t('data-catalog:lineage.impactedExternal', { count: impact.impacted_external.length })}</Badge>
                       )}
                     </div>
                     {impact.affected_owners.length > 0 && (

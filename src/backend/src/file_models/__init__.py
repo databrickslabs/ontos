@@ -8,7 +8,6 @@ and can be used by external CI/CD processes to apply governance changes.
 from .base import FileModel, FileModelRegistry
 from .data_contracts import DataContractFileModel
 from .data_products import DataProductFileModel
-from .datasets import DatasetFileModel
 from .data_domains import DataDomainFileModel
 from .roles import RoleFileModel
 from .tags import TagFileModel
@@ -18,7 +17,6 @@ __all__ = [
     'FileModelRegistry',
     'DataContractFileModel',
     'DataProductFileModel',
-    'DatasetFileModel',
     'DataDomainFileModel',
     'RoleFileModel',
     'TagFileModel',

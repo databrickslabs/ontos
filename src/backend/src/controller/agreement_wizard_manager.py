@@ -799,8 +799,8 @@ class AgreementWizardManager:
                 if signer_email:
                     notification_recipients.append(signer_email)
             elif token == "entity_owner":
-                owner = self._resolve_entity_owner(session.entity_type, session.entity_id)
-                notification_recipients.append(owner or signer_email or "")
+                owners = self._resolve_entity_owners(session.entity_type, session.entity_id)
+                notification_recipients.extend(owners or [signer_email or ""])
             elif token == "co_signers":
                 # Walk step_results for the co_signers step's payload and extract
                 # user emails. Group / service_principal entries can't receive an
@@ -963,22 +963,21 @@ class AgreementWizardManager:
                 agreement_id, dispatched_channels, skipped_channels,
             )
 
-    def _resolve_entity_owner(self, entity_type: str, entity_id: str) -> Optional[str]:
-        """Best-effort lookup of the entity owner's email."""
-        et = (entity_type or "").strip().lower()
+    def _resolve_entity_owners(self, entity_type: str, entity_id: str) -> List[str]:
+        """Owners of the entity (see ``resolve_owner_emails``); empty if none.
+
+        Best-effort: delivery runs after the agreement is created, so a lookup
+        failure must not fail the wizard.
+        """
+        from src.repositories.entity_owners_repository import resolve_owner_emails
         try:
-            if et == "data_product":
-                row = data_product_repo.get(self._db, entity_id)
-                return getattr(row, 'owner', None) or getattr(row, 'owner_email', None) if row else None
-            if et in ("dataset", "asset"):
-                row = asset_repo.get(self._db, entity_id)
-                return getattr(row, 'owner', None) or getattr(row, 'owner_email', None) if row else None
-            if et == "data_contract":
-                row = data_contract_repo.get(self._db, entity_id)
-                return getattr(row, 'owner', None) or getattr(row, 'owner_email', None) if row else None
+            # Savepoint: a failed query must not leave the session the
+            # delivery notifications use in an aborted transaction.
+            with self._db.begin_nested():
+                return resolve_owner_emails(self._db, entity_type, entity_id)
         except Exception as e:
-            logger.debug("Could not resolve entity owner for %s/%s: %s", entity_type, entity_id, e)
-        return None
+            logger.warning("Could not resolve owners of %s %s: %s", entity_type, entity_id, e)
+            return []
 
     def abort_session(self, session_id: str) -> bool:
         """Mark session as abandoned."""

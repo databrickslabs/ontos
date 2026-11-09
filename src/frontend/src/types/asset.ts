@@ -1,3 +1,5 @@
+import { AssignedDomain } from '@/types/data-domain';
+
 // --- Asset Types ---
 export type AssetTypeCategory = 'data' | 'analytics' | 'integration' | 'system' | 'custom';
 // Must match backend AssetTypeCategory enum: data, analytics, integration, system, custom
@@ -65,7 +67,10 @@ export interface AssetRead {
   asset_type_name?: string | null;
   platform?: string | null;
   location?: string | null;
-  domain_id?: string | null;
+  domain_id?: string | null; // Legacy single-domain (primary); prefer domain_ids
+  domain_ids?: string[]; // Multi-domain assignment (primary included)
+  primary_domain_id?: string | null;
+  domains?: AssignedDomain[]; // Assigned domains with names + primary flag
   properties?: Record<string, any> | null;
   tags?: string[] | null;
   status: AssetStatus;
@@ -89,7 +94,8 @@ export interface AssetCreate {
   asset_type_id: string;
   platform?: string | null;
   location?: string | null;
-  domain_id?: string | null;
+  domain_ids?: string[]; // Multi-domain assignment (primary included)
+  primary_domain_id?: string | null;
   properties?: Record<string, any> | null;
   tags?: string[] | null;
   status?: AssetStatus;
@@ -101,7 +107,8 @@ export interface AssetUpdate {
   asset_type_id?: string | null;
   platform?: string | null;
   location?: string | null;
-  domain_id?: string | null;
+  domain_ids?: string[]; // Replace-all; omit to leave unchanged
+  primary_domain_id?: string | null;
   properties?: Record<string, any> | null;
   tags?: string[] | null;
   status?: AssetStatus | null;

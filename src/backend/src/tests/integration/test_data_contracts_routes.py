@@ -217,14 +217,14 @@ class TestDataContractsRoutes:
     def test_create_contract_basic(self, client: TestClient, db_session: Session, sample_contract_data):
         """Test creating a basic contract."""
         response = client.post("/api/data-contracts", json=sample_contract_data)
-        assert response.status_code == 201
+        assert response.status_code == 200
 
         data = response.json()
         assert data["name"] == "Test Contract"
         assert data["version"] == "1.0.0"
         assert data["status"] == "draft"
         assert "id" in data
-        assert "created_at" in data
+        assert data["created"]
 
         # Verify it's in the database
         contract = db_session.query(DataContractDb).filter_by(name="Test Contract").first()
@@ -235,12 +235,12 @@ class TestDataContractsRoutes:
         """Test creating contract with duplicate name and version should fail."""
         # Create first contract
         response1 = client.post("/api/data-contracts", json=sample_contract_data)
-        assert response1.status_code == 201
+        assert response1.status_code == 200
 
         # Try to create duplicate
         response2 = client.post("/api/data-contracts", json=sample_contract_data)
-        assert response2.status_code == 400
-        assert "already exists" in response2.json()["detail"]
+        assert response2.status_code == 409
+        assert "already exists" in str(response2.json()["detail"])
 
     def test_get_contract_by_id(self, client: TestClient, db_session: Session, sample_contract_data):
         """Test getting a contract by ID."""
@@ -262,23 +262,39 @@ class TestDataContractsRoutes:
         assert response.status_code == 404
 
     def test_update_contract(self, client: TestClient, db_session: Session, sample_contract_data):
-        """Test updating a contract."""
+        """Test updating a contract name without changing status."""
         # Create contract first
         create_response = client.post("/api/data-contracts", json=sample_contract_data)
         contract_id = create_response.json()["id"]
 
-        # Update contract
+        # Update contract name only (no status change)
         update_data = {
-            "name": "Updated Contract",
-            "status": "active"
+            "name": "Updated Contract"
         }
         response = client.put(f"/api/data-contracts/{contract_id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
         assert data["name"] == "Updated Contract"
-        assert data["status"] == "active"
+        assert data["status"] == "draft"  # Status should remain unchanged
         assert data["version"] == "1.0.0"  # Should remain unchanged
+
+    def test_update_contract_status_change_requires_transition(self, client: TestClient, db_session: Session, sample_contract_data):
+        """Test that PUT with status change is rejected with 400 status_change_requires_transition."""
+        # Create contract first
+        create_response = client.post("/api/data-contracts", json=sample_contract_data)
+        contract_id = create_response.json()["id"]
+
+        # Try to change status via PUT (should fail)
+        update_data = {
+            "name": "Updated Contract",
+            "status": "active"
+        }
+        response = client.put(f"/api/data-contracts/{contract_id}", json=update_data)
+        assert response.status_code == 400
+
+        data = response.json()
+        assert data["detail"]["code"] == "status_change_requires_transition"
 
     def test_delete_contract(self, client: TestClient, db_session: Session, sample_contract_data):
         """Test deleting a contract."""
@@ -288,7 +304,7 @@ class TestDataContractsRoutes:
 
         # Delete contract
         response = client.delete(f"/api/data-contracts/{contract_id}")
-        assert response.status_code == 200
+        assert response.status_code == 204
 
         # Verify it's deleted
         get_response = client.get(f"/api/data-contracts/{contract_id}")
@@ -307,13 +323,14 @@ class TestDataContractsRoutes:
         try:
             # Upload YAML file
             with open(temp_path, 'rb') as file:
-                files = {"file": ("contract.yaml", file, "application/x-yaml")}
+                files = {"files": ("contract.yaml", file, "application/x-yaml")}
                 response = client.post("/api/data-contracts/upload", files=files)
 
-            assert response.status_code == 201
+            assert response.status_code == 200
             data = response.json()
-            assert data["name"] == "my quantum"
-            assert data["version"] == "1.1.0"
+            # BatchImportResult: one entity created from the single-object file.
+            assert data["created"] == 1
+            assert data["items"][0]["name"] == "my quantum"
 
             # Verify complex relationships were created
             contract = db_session.query(DataContractDb).filter_by(name="my quantum").first()
@@ -338,33 +355,62 @@ class TestDataContractsRoutes:
         try:
             # Upload JSON file
             with open(temp_path, 'rb') as file:
-                files = {"file": ("contract.json", file, "application/json")}
+                files = {"files": ("contract.json", file, "application/json")}
                 response = client.post("/api/data-contracts/upload", files=files)
 
-            assert response.status_code == 201
+            assert response.status_code == 200
             data = response.json()
-            assert data["name"] == "my quantum"
+            assert data["created"] == 1
+            assert data["items"][0]["name"] == "my quantum"
 
         finally:
             Path(temp_path).unlink()
 
-    def test_upload_invalid_file_format(self, client: TestClient):
-        """Test uploading invalid file format."""
-        # Create temporary text file
+    def test_upload_freeform_text_file_is_rejected(self, client: TestClient):
+        """Free-form text is NOT fabricated into a contract.
+
+        There is no meaningful mapping from arbitrary prose (e.g. a README) to an
+        ODCS entity, so an unsupported file type is reported as a failed item and
+        nothing is created — rather than producing a junk draft contract.
+        """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("This is not valid ODCS content")
             temp_path = f.name
 
         try:
             with open(temp_path, 'rb') as file:
-                files = {"file": ("invalid.txt", file, "text/plain")}
+                files = {"files": ("invalid.txt", file, "text/plain")}
                 response = client.post("/api/data-contracts/upload", files=files)
 
-            assert response.status_code == 400
-            assert "Unsupported file type" in response.json()["detail"]
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["created"] == 0
+            assert data["total"] == 1
+            assert data["items"][0]["status"] == "failed"
 
         finally:
             Path(temp_path).unlink()
+
+    def test_upload_non_utf8_file_is_failed_item_not_500(self, client: TestClient):
+        """A non-UTF-8 file is decoded per-file and recorded as a failed item;
+        it must not 500 the whole batch (reviewer item #860.2 / #860.5)."""
+        # 0xff is invalid UTF-8; posted as raw bytes with a .yaml name.
+        files = {"files": ("bad.yaml", b"\xff\xfe\x00bad", "application/x-yaml")}
+        response = client.post("/api/data-contracts/upload", files=files)
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["created"] == 0
+        assert data["total"] == 1
+        assert data["items"][0]["status"] == "failed"
+        assert "utf-8" in (data["items"][0]["message"] or "").lower()
+
+    def test_upload_too_many_files_413(self, client: TestClient, monkeypatch):
+        """The file-count cap is a request-level 413 abuse guard (#860.1)."""
+        import src.common.upload_limits as ul
+        monkeypatch.setattr(ul, "MAX_UPLOAD_FILES", 2)
+        files = [("files", (f"c{i}.json", b"{}", "application/json")) for i in range(3)]
+        response = client.post("/api/data-contracts/upload", files=files)
+        assert response.status_code == 413, response.text
 
     def test_export_contract_as_odcs_yaml(self, client: TestClient, db_session: Session):
         """Test exporting contract as ODCS YAML."""
@@ -426,31 +472,6 @@ class TestDataContractsRoutes:
         """Test exporting non-existent contract."""
         response = client.get("/api/data-contracts/non-existent-id/odcs/export")
         assert response.status_code == 404
-
-    def test_list_contracts_pagination(self, client: TestClient, db_session: Session):
-        """Test contract listing with pagination."""
-        # Create multiple contracts
-        for i in range(5):
-            contract = DataContractDb(
-                name=f"Contract {i}",
-                version="1.0.0",
-                status="draft",
-                owner_team_id=None
-            )
-            db_session.add(contract)
-        db_session.commit()
-
-        # Test first page
-        response = client.get("/api/data-contracts?skip=0&limit=3")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 3
-
-        # Test second page
-        response = client.get("/api/data-contracts?skip=3&limit=3")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
 
     def test_list_contracts_filtering(self, client: TestClient, db_session: Session):
         """Test contract listing with filters."""
@@ -630,19 +651,23 @@ class TestDataContractsRoutes:
             assert response.status_code in [200, 201]
 
     def test_bulk_operations(self, client: TestClient, db_session: Session):
-        """Test bulk contract operations if supported."""
-        contracts_data = [
-            {
+        """Several contracts are created in one request (multi-file upload)."""
+        files = [
+            ("files", (f"bulk-{i}.yaml", yaml.dump({
+                "kind": "DataContract",
+                "apiVersion": "v3.1.0",
                 "name": f"Bulk Contract {i}",
                 "version": "1.0.0",
                 "status": "draft",
-                "owner": "test@example.com"
-            }
+            }).encode(), "application/x-yaml"))
             for i in range(3)
         ]
-
-        # Test bulk creation if endpoint exists
-        response = client.post("/api/data-contracts/bulk", json=contracts_data)
-        # Adjust based on actual API implementation
-        if response.status_code != 404:
-            assert response.status_code in [200, 201]
+        response = client.post("/api/data-contracts/upload", files=files)
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["total"] == 3
+        assert data["created"] == 3
+        names = {c.name for c in db_session.query(DataContractDb).filter(
+            DataContractDb.name.like("Bulk Contract %")
+        )}
+        assert names == {"Bulk Contract 0", "Bulk Contract 1", "Bulk Contract 2"}

@@ -1,6 +1,7 @@
 {
   "title": "Teams",
   "subtitle": "Beheer teams en hun leden binnen uw organisatie.",
+  "openMenu": "Menu openen",
   "addNewTeam": "Nieuw Team Toevoegen",
   "editTeam": "Team Bewerken",
   "deleteTeam": "Team Verwijderen",
@@ -53,6 +54,7 @@
       "createdDescription": "Team \"{{name}}\" is succesvol aangemaakt.",
       "updatedDescription": "Team \"{{name}}\" is succesvol bijgewerkt.",
       "createFailedTitle": "Kon Team Niet Aanmaken",
+      "membersFailedTitle": "Team aangemaakt, maar leden konden niet worden opgeslagen",
       "updateFailedTitle": "Kon Team Niet Bijwerken",
       "failedDescription": "Er is een onverwachte fout opgetreden."
     }
@@ -87,4 +89,3 @@
     "delete": "Verwijderen"
   }
 }
-

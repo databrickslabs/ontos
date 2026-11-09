@@ -2846,8 +2846,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 }
 
                 # Step 4: Format metadata as instructions
+                contract_ids = sorted({
+                    port.contract_id for p in products for port in p.output_ports
+                    if port.contract_id
+                })
                 instructions = genie_client.format_metadata_for_genie(
-                    metadata_map, products, product_domains=product_domains
+                    metadata_map, products, product_domains=product_domains,
+                    contract_names=genie_client.collect_contract_names(contract_ids, db),
                 )
                 logger.info(f"Formatted {len(instructions)} characters of metadata")
 

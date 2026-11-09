@@ -203,7 +203,7 @@ def build_asset_dict(
     _add_semantic_link_count(db, base, "asset", entity_id)
 
     quick_tags = asset.tags if isinstance(asset.tags, list) else []
-    _add_tag_count(db, base, entity_id, "asset")
+    _add_tags(db, base, entity_id, "asset")
     base["tag_count"] += len(quick_tags)
     base["has_tags"] = base["tag_count"] > 0
     _add_quality_check_count(db, base, "asset", entity_id)

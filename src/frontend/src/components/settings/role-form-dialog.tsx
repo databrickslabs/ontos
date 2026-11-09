@@ -23,6 +23,7 @@ import { PrincipalPicker } from '@/components/common/principal-picker';
 import { normaliseAssignedGroups } from '@/lib/assigned-groups';
 import {
     NAV_COLUMN_CLASS, RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures,
+    roleSaveErrorText,
 } from '@/components/settings/role-nav-visibility';
 
 // Sub-groups within the Settings permission group mirror the Settings
@@ -386,14 +387,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             }
 
             // Check for API errors (already formatted as string by useApi hook)
-            if (response.errorCode === 'role_nav_feature_unknown') {
-                const ids = response.errorParams?.feature_ids;
-                throw new Error(t('roles.permissions.navigation.unknownFeatures', {
-                    features: Array.isArray(ids) ? ids.join(', ') : '',
-                }));
-            }
-            if (response.error) {
-                throw new Error(response.error);
+            const saveError = roleSaveErrorText(response, t);
+            if (saveError) {
+                throw new Error(saveError);
             }
 
             const savedRoleData = response.data as AppRole;

@@ -3,8 +3,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 import { FeatureAccessLevel } from '@/types/settings';
+import i18n from '@/i18n/config';
 import {
-  RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures,
+  RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures, roleSaveErrorText,
 } from './role-nav-visibility';
 
 const renderCell = (props: Partial<Parameters<typeof RoleNavVisibilityCell>[0]> = {}) => {
@@ -20,7 +21,8 @@ const renderCell = (props: Partial<Parameters<typeof RoleNavVisibilityCell>[0]> 
       {...props}
     />,
   );
-  return { onChange, box: screen.getByRole('checkbox', { name: 'Show Data Contracts in navigation' }) };
+  const box = screen.getByRole('checkbox', { name: 'Show Data Contracts in navigation' });
+  return { onChange, box };
 };
 
 describe('RoleNavVisibilityCell', () => {
@@ -81,5 +83,23 @@ describe('cleanHiddenNavFeatures', () => {
   it('treats a missing list or level as nothing hidden', () => {
     expect(cleanHiddenNavFeatures(undefined, undefined, ['assets'])).toEqual([]);
     expect(cleanHiddenNavFeatures(['assets'], {}, ['assets'])).toEqual([]);
+  });
+});
+
+describe('roleSaveErrorText', () => {
+  const t = i18n.getFixedT('en');
+
+  it('translates the unknown-feature refusal with its ids', () => {
+    expect(roleSaveErrorText({
+      error: 'Unknown feature ids in hidden_nav_features: search, x',
+      errorCode: 'role_nav_feature_unknown',
+      errorParams: { feature_ids: ['search', 'x'] },
+    }, t)).toBe("Unknown features can't be hidden from the navigation: search, x");
+  });
+
+  it('falls back to the API text, and is null on success', () => {
+    expect(roleSaveErrorText({ error: 'Invalid role data', errorCode: null }, t))
+      .toBe('Invalid role data');
+    expect(roleSaveErrorText({ error: null }, t)).toBeNull();
   });
 });

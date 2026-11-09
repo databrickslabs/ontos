@@ -16,8 +16,27 @@ export function cleanHiddenNavFeatures(
 ): string[] {
   const known = new Set(knownFeatureIds);
   return Array.from(new Set(hidden || [])).filter(
-    (id) => known.has(id) && (permissions?.[id] ?? FeatureAccessLevel.NONE) !== FeatureAccessLevel.NONE,
+    (id) => known.has(id)
+      && (permissions?.[id] ?? FeatureAccessLevel.NONE) !== FeatureAccessLevel.NONE,
   );
+}
+
+/**
+ * The text of a failed role save: the unknown-feature refusal (#1325) in the user's
+ * language, else the API's error text. Null when the save succeeded.
+ */
+export function roleSaveErrorText(
+  response: { error?: string | null; errorCode?: string | null;
+    errorParams?: Record<string, unknown> | null },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+  if (response.errorCode === 'role_nav_feature_unknown') {
+    const ids = response.errorParams?.feature_ids;
+    return t('settings:roles.permissions.navigation.unknownFeatures', {
+      features: Array.isArray(ids) ? ids.join(', ') : '',
+    });
+  }
+  return response.error || null;
 }
 
 /** Help text and column titles above the role editor's permission rows. */
@@ -29,7 +48,9 @@ export function RoleNavColumnHeader() {
         {t('roles.permissions.navigation.help')}
       </p>
       <div className="flex justify-end gap-4 text-xs font-medium text-muted-foreground">
-        <span className="w-[180px] text-center">{t('roles.permissions.navigation.accessColumn')}</span>
+        <span className="w-[180px] text-center">
+          {t('roles.permissions.navigation.accessColumn')}
+        </span>
         <span className={`${NAV_COLUMN_CLASS} text-center`}>
           {t('roles.permissions.navigation.column')}
         </span>

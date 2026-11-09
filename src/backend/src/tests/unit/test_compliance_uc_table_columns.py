@@ -113,8 +113,8 @@ def test_accepts_any_table_like_object():
 def test_loader_adds_column_fields_to_tables_and_views():
     ws = _ws([
         _table('orders', [_col('id', 'Order id'), _col('note')]),
-        # The loader tells views apart by the string 'VIEW'
-        _table('v_orders', [_col('id', 'Order id')], table_type='VIEW'),
+        _table('v_orders', [_col('id', 'Order id')], table_type=TableType.VIEW),
+        _table('mv_orders', [_col('id')], table_type=TableType.MATERIALIZED_VIEW),
     ])
 
     entities = list(UnityCatalogLoader(ws).load_entities(['table', 'view']))
@@ -125,6 +125,8 @@ def test_loader_adds_column_fields_to_tables_and_views():
     assert by_name['orders']['column_comment_ratio'] == 0.5
     assert by_name['v_orders']['type'] == 'view'
     assert by_name['v_orders']['columns_without_comment_count'] == 0
+    assert by_name['mv_orders']['type'] == 'view'
+    assert by_name['mv_orders']['columns_without_comment_count'] == 1
     assert 'primary_key_columns' not in by_name['orders']
     assert all('tags' not in c for e in entities for c in e['columns'])
 

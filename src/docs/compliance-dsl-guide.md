@@ -228,7 +228,7 @@ You can write rules for these entity types:
 - `catalog` - Unity Catalog catalogs
 - `schema` - Database schemas
 - `table` - Data tables
-- `view` - Database views
+- `view` - Views, including materialized views and metric views
 - `function` - SQL/Python functions
 - `volume` - Volumes for file storage
 

@@ -6,7 +6,7 @@ home quick actions, About). Empty means every feature is shown, as before, so
 existing roles keep their menus. Access levels are not affected (#1325).
 
 Revision ID: r1_role_hidden_nav_features
-Revises: b9_lifecycle_deprecation_fields
+Revises: b10_compliance_run_warning_code
 Create Date: 2026-11-09
 """
 from typing import Sequence, Union
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 revision: str = "r1_role_hidden_nav_features"
-down_revision: Union[str, Sequence[str], None] = "b9_lifecycle_deprecation_fields"
+down_revision: Union[str, Sequence[str], None] = "b10_compliance_run_warning_code"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -247,7 +247,7 @@ def test_migration_upgrade_adds_empty_list_and_downgrade_drops_it(migration):
             with Operations.context(MigrationContext.configure(conn)):
                 fn()
 
-    assert migration.down_revision == 'b9_lifecycle_deprecation_fields'
+    assert migration.down_revision == 'b10_compliance_run_warning_code'
     run(migration.upgrade)
     run(migration.upgrade)  # idempotent
     with engine.connect() as conn:

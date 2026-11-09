@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Collapsible,
   CollapsibleContent,
@@ -42,7 +43,6 @@ import {
   FolderOpen,
   Globe,
   Link2,
-  Loader2,
   Package,
   Plus,
   Shapes,
@@ -600,11 +600,9 @@ export default function LinkedObjectsPanel({
             data-testid="linked-objects-list"
           >
             {isLoading && links.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('semantic-models:linkedObjects.loading', {
-                  defaultValue: 'Loading linked entities...',
-                })}
+              <div className="space-y-2 py-2 px-2" data-testid="linked-objects-loading">
+                <Skeleton className="h-8 w-full rounded-md" />
+                <Skeleton className="h-8 w-4/5 rounded-md" />
               </div>
             ) : links.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2 px-2">

@@ -1,10 +1,125 @@
 {
   "title": "Concepts",
+  "sections": {
+    "label": "Sections des concepts",
+    "define": "Définir",
+    "explore": "Explorer",
+    "enrich": "Enrichir"
+  },
+  "explore": {
+    "viewLabel": "Vues d'exploration",
+    "viewList": "Liste",
+    "viewTree": "Arborescence",
+    "viewGraph": "Graphe",
+    "createConcept": "Nouveau concept",
+    "createScheme": "Nouveau schéma de concepts",
+    "description": "Créez, parcourez et diffusez vos schémas de concepts métier.",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL et recherche dans le graphe de connaissances"
+  },
   "nav": {
     "collections": "Schémas de concepts",
     "browser": "Concepts",
     "search": "Recherche",
+    "searchSparql": "Recherche / SPARQL",
     "graph": "Graphe",
-    "hierarchy": "Hiérarchie"
+    "hierarchy": "Hiérarchie",
+    "generator": "Générateur",
+    "import": "Importer",
+    "mapping": "Mappage"
+  },
+  "define": {
+    "description": "Créez, générez ou importez vos schémas de concepts métier."
+  },
+  "enrich": {
+    "deliver": {
+      "description": "Écrivez des métadonnées gouvernées sur les ressources {{platform}} associées.",
+      "tags": {
+        "name": "Tags",
+        "desc": "Tags de gouvernance clé/valeur sur les tables et les colonnes. Ils alimentent la découverte et les politiques d'accès.",
+        "via": "via uc_tag_sync",
+        "notConfigured": "La diffusion des tags n'est pas configurée. Le job uc_tag_sync doit être installé dans Paramètres > Jobs pour l'activer.",
+        "note": "La diffusion des tags passe par le job partagé uc_tag_sync, qui couvre aussi d'autres aspects que l'affectation sémantique. Configurez sa portée et sa planification dans Paramètres > Jobs."
+      },
+      "desc": {
+        "name": "Descriptions de colonnes",
+        "desc": "Signification des colonnes en langage clair. C'est ce que Genie et la recherche lisent pour répondre avec précision.",
+        "assist": "dbxmetagen peut en rédiger une ébauche"
+      },
+      "glossary": {
+        "name": "UC Glossary",
+        "desc": "Le glossaire métier gouverné, au sein même de la plateforme.",
+        "note": "Synchronise les concepts vers le glossaire métier natif de Unity Catalog, la couche gouvernée lue par Genie Ontology. Disponible à la GA de UC Glossary."
+      },
+      "title": "Diffuser",
+      "tip": "La diffusion écrit vos métadonnées gouvernées sur la plateforme. Les outils en aval (Genie, recherche, agents) les y lisent. Tags = politiques et découverte. Descriptions = ce que lit Genie. Glossaire = la couche métier gouvernée.",
+      "pendingTitle": "Modifications de tags en attente",
+      "pendingSubtitle": "Liens concept-actif créés depuis la dernière synchronisation des tags réussie. Une nouvelle exécution de uc_tag_sync les diffuserait.",
+      "pendingEmpty": "Rien en attente.",
+      "pendingInScheme": "dans",
+      "pendingAppliesTo": "s'applique à",
+      "coverageSynced": "{{synced}} sur {{total}} synchronisés · ",
+      "pendingCount": "{{pending}} en attente",
+      "lastRun": " · dernière exécution {{run}}",
+      "notSynced": "Pas encore synchronisé",
+      "manageInSettings": "Gérer dans les Paramètres",
+      "configure": "Configurer",
+      "comingSoon": "Bientôt disponible : la configuration et l'exécution de cette synchronisation depuis Ontos ne sont pas encore branchées.",
+      "syncNow": "Synchroniser maintenant",
+      "about": "À propos de cette cible de diffusion"
+    },
+    "subtitle": "Associez vos concepts à des actifs, puis diffusez les métadonnées gouvernées sur la plateforme.",
+    "deliverTo": "Diffuser vers",
+    "platformTip": "Les plateformes de diffusion proviennent des connexions configurées dans les Paramètres. Unity Catalog est la plateforme par défaut. Les cibles de diffusion ci-dessous s'adaptent à la plateforme choisie.",
+    "manageConnections": "Gérer les connexions ↗",
+    "map": {
+      "title": "Associer",
+      "suggest": "Suggérer des correspondances",
+      "desc": "Liez un concept directement à un actif {{platform}} (le chemin par défaut, sans produit ni contrat requis), puis ajoutez éventuellement des liens vers des produits de données et des contrats de données. Les trois sont indépendants.",
+      "col": {
+        "scheme": "Schéma de concepts",
+        "lastRun": "Dernière exécution",
+        "concepts": "Concepts",
+        "coverage": "Couverture",
+        "products": "Produits",
+        "contracts": "Contrats",
+        "assets": "Actifs",
+        "suggested": "Suggérés"
+      },
+      "assetNote": "Les liens vers les actifs sont ce que la diffusion enrichit à l'étape 2. Le lien direct vers un actif fonctionne avant même qu'un produit ou un contrat existe, ce qui résout le problème de l'œuf et de la poule.",
+      "review": "Examiner",
+      "allSelected": "Tous sélectionnés",
+      "unmappedNote": "{{unmapped}} concepts n'ont encore aucun lien.",
+      "coverageTip": "Couverture = part des concepts d'un schéma ayant au moins un lien. Les produits et les contrats sont des liens supplémentaires facultatifs, donc les trois nombres ne s'additionnent pas pour donner le total. Seuls les actifs peuvent être enrichis à l'étape 2.",
+      "placeholderNote": "Les chiffres de couverture sont des données d'exemple : le service de couverture en direct est indisponible pour le moment."
+    },
+    "review": {
+      "title": "Examiner les correspondances suggérées",
+      "subtitle": "Acceptez ou rejetez chaque correspondance concept-actif. Rien n'est synchronisé tant que vous ne l'avez pas acceptée.",
+      "loading": "Chargement des correspondances suggérées…",
+      "applied": "{{count}} correspondance(s) appliquée(s). Elles seront synchronisées lors de la prochaine diffusion.",
+      "applyError": "Impossible d'appliquer les correspondances : ",
+      "placeholderNote": "Correspondances d'exemple affichées à titre d'illustration.",
+      "reject": "Rejeter",
+      "accept": "Accepter",
+      "drift": "Dérive de schéma à résoudre",
+      "openFull": "Ouvrir le tableau de revue complet",
+      "applying": "Application…",
+      "acceptApplyAll": "Accepter et appliquer les {{count}}"
+    },
+    "modes": {
+      "direct": "Direct",
+      "directDesc": "Ontos applique immédiatement les modifications à cet espace de travail via le principal de service.",
+      "indirect": "Indirect",
+      "indirectDesc": "Ontos écrit du YAML dans Git pour que votre pipeline CI/CD le promeuve (de dev vers staging puis prod).",
+      "manual": "Manuel",
+      "manualDesc": "Ontos notifie une personne pour qu'elle applique la modification ailleurs.",
+      "active": "actif",
+      "manageLink": "Le mode de diffusion se définit par site dans Paramètres, Diffusion"
+    }
+  },
+  "mode": {
+    "description": "La vue avancée affiche la couche ontologique : RDF/SKOS, IRI, domaine et portée des propriétés, et paramètres techniques de diffusion. La vue simple les masque. Votre choix est mémorisé.",
+    "label": "Mode d'affichage"
   }
 }

@@ -1,10 +1,125 @@
 {
   "title": "コンセプト",
+  "sections": {
+    "label": "コンセプトのセクション",
+    "define": "定義",
+    "explore": "探索",
+    "enrich": "拡充"
+  },
+  "explore": {
+    "viewLabel": "探索ビュー",
+    "viewList": "リスト",
+    "viewTree": "ツリー",
+    "viewGraph": "グラフ",
+    "createConcept": "新規コンセプト",
+    "createScheme": "新規コンセプトスキーム",
+    "description": "ビジネスコンセプトスキームを作成、閲覧、配信します。",
+    "sparql": "SPARQL",
+    "sparqlPanel": "SPARQL とナレッジグラフ検索"
+  },
   "nav": {
     "collections": "コンセプトスキーム",
     "browser": "コンセプト",
     "search": "検索",
+    "searchSparql": "検索 / SPARQL",
     "graph": "グラフ",
-    "hierarchy": "階層"
+    "hierarchy": "階層",
+    "generator": "ジェネレーター",
+    "import": "インポート",
+    "mapping": "マッピング"
+  },
+  "define": {
+    "description": "ビジネスコンセプトスキームを作成、生成、またはインポートします。"
+  },
+  "enrich": {
+    "deliver": {
+      "description": "マッピングされた{{platform}}アセットにガバナンスされたメタデータを書き込みます。",
+      "tags": {
+        "name": "タグ",
+        "desc": "テーブルと列に付与するキー/値形式のガバナンスタグ。検出とアクセスポリシーを制御します。",
+        "via": "uc_tag_sync 経由",
+        "notConfigured": "タグ配信が設定されていません。有効にするには、[設定] > [ジョブ] で uc_tag_sync ジョブをインストールする必要があります。",
+        "note": "タグ配信は共有の uc_tag_sync ジョブで実行されます。このジョブはセマンティック割り当て以外の項目も対象とします。スコープとスケジュールは [設定] > [ジョブ] で設定してください。"
+      },
+      "desc": {
+        "name": "列の説明",
+        "desc": "列の意味をわかりやすい言葉で記述します。Genie と検索が正確に回答するために参照する情報です。",
+        "assist": "dbxmetagen で下書きを作成できます"
+      },
+      "glossary": {
+        "name": "UC 用語集",
+        "desc": "プラットフォーム自体に組み込まれた、ガバナンス対象のビジネス用語集です。",
+        "note": "コンセプトを Unity Catalog のネイティブなビジネス用語集に同期します。これは Genie Ontology が参照するガバナンスレイヤーです。UC Glossary の GA 時に提供予定です。"
+      },
+      "title": "配信",
+      "tip": "配信では、ガバナンス対象のメタデータをプラットフォームに書き込みます。下流のツール（Genie、検索、エージェント）はそこから読み取ります。タグ = ポリシーと検出。説明 = Genie が参照する情報。用語集 = ガバナンス対象のビジネスレイヤー。",
+      "pendingTitle": "保留中のタグ変更",
+      "pendingSubtitle": "前回のタグ同期が成功して以降に作成された、コンセプトとアセットのリンクです。uc_tag_sync を再実行するとこれらが配信されます。",
+      "pendingEmpty": "保留中の項目はありません。",
+      "pendingInScheme": "スキーム:",
+      "pendingAppliesTo": "適用先:",
+      "coverageSynced": "{{total}} 件中 {{synced}} 件を同期済み · ",
+      "pendingCount": "{{pending}} 件保留中",
+      "lastRun": " · 最終実行 {{run}}",
+      "notSynced": "未同期",
+      "manageInSettings": "設定で管理",
+      "configure": "設定",
+      "comingSoon": "近日提供予定: Ontos からこの同期を設定および実行する機能はまだ接続されていません。",
+      "syncNow": "今すぐ同期",
+      "about": "この配信先について"
+    },
+    "subtitle": "コンセプトをアセットにマッピングし、ガバナンス対象のメタデータをプラットフォームに配信します。",
+    "deliverTo": "配信先",
+    "platformTip": "配信プラットフォームは、[設定] で構成した接続から取得されます。既定は Unity Catalog です。以下の配信先は、選択したプラットフォームに応じて切り替わります。",
+    "manageConnections": "接続を管理 ↗",
+    "map": {
+      "title": "マッピング",
+      "suggest": "一致候補を提案",
+      "desc": "コンセプトを {{platform}} アセットに直接リンクします（既定の方法で、データプロダクトやデータコントラクトは不要です）。必要に応じて、データプロダクトやデータコントラクトへのリンクも追加できます。3 種類のリンクはそれぞれ独立しています。",
+      "col": {
+        "scheme": "コンセプトスキーム",
+        "lastRun": "最終実行",
+        "concepts": "コンセプト",
+        "coverage": "カバレッジ",
+        "products": "プロダクト",
+        "contracts": "コントラクト",
+        "assets": "アセット",
+        "suggested": "提案"
+      },
+      "assetNote": "ステップ 2 の配信で拡充されるのはアセットのリンクです。アセットへの直接リンクはプロダクトやコントラクトが存在しなくても機能するため、「鶏が先か卵が先か」の問題を解消できます。",
+      "review": "レビュー",
+      "allSelected": "すべて選択済み",
+      "unmappedNote": "{{unmapped}} 件のコンセプトにまだリンクがありません。",
+      "coverageTip": "カバレッジ = コンセプトスキーム内で 1 つ以上のリンクを持つコンセプトの割合。プロダクトとコントラクトは任意の追加リンクのため、3 つの件数の合計は総数と一致しません。ステップ 2 で拡充できるのはアセットのみです。",
+      "placeholderNote": "カバレッジの数値はサンプルデータです。現在、ライブのカバレッジサービスを利用できません。"
+    },
+    "review": {
+      "title": "一致候補をレビュー",
+      "subtitle": "コンセプトとアセットの一致候補をそれぞれ承認または却下してください。承認するまで何も同期されません。",
+      "loading": "一致候補を読み込み中…",
+      "applied": "{{count}} 件の一致を適用しました。次回の配信時に同期されます。",
+      "applyError": "一致を適用できませんでした: ",
+      "placeholderNote": "説明用のサンプルの一致候補を表示しています。",
+      "reject": "却下",
+      "accept": "承認",
+      "drift": "解決が必要なスキーマドリフト",
+      "openFull": "レビューボード全体を開く",
+      "applying": "適用中…",
+      "acceptApplyAll": "{{count}} 件すべてを承認して適用"
+    },
+    "modes": {
+      "direct": "直接",
+      "directDesc": "Ontos がサービスプリンシパルを介して、このワークスペースに変更を即時適用します。",
+      "indirect": "間接",
+      "indirectDesc": "Ontos が YAML を Git に書き込み、CI/CD パイプラインで昇格させます（dev から staging、prod へ）。",
+      "manual": "手動",
+      "manualDesc": "Ontos が担当者に通知し、別の場所で変更を適用してもらいます。",
+      "active": "有効",
+      "manageLink": "配信モードはサイトごとに [設定] > [配信] で設定します"
+    }
+  },
+  "mode": {
+    "description": "詳細ビューでは、オントロジーレイヤー（RDF/SKOS、IRI、プロパティのドメインと値域、技術的な配信設定）が表示されます。シンプルビューではこれらが非表示になります。選択内容は保存されます。",
+    "label": "表示モード"
   }
 }

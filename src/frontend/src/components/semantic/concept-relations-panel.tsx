@@ -6,9 +6,9 @@ import {
   ChevronDown,
   ChevronRight,
   Link as LinkIcon,
-  Loader2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Collapsible,
   CollapsibleContent,
@@ -273,9 +273,9 @@ export default function ConceptRelationsPanel({
       data-testid="concept-relations-list"
     >
       {isLoading && relations.length === 0 ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {t('semantic-models:relations.loading', { defaultValue: 'Loading relations...' })}
+        <div className="space-y-2 py-2 px-2" data-testid="concept-relations-loading">
+          <Skeleton className="h-8 w-full rounded-md" />
+          <Skeleton className="h-8 w-3/4 rounded-md" />
         </div>
       ) : relations.length === 0 ? (
         <p className="text-sm text-muted-foreground py-2 px-2">

@@ -119,7 +119,7 @@ export default function DeliveryTargets({ targets, advanced = false, canWrite = 
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button type="button" aria-label="about" className="text-muted-foreground">
+                        <button type="button" aria-label={t('enrich.deliver.about')} className="text-muted-foreground">
                           <Info className="h-3.5 w-3.5" />
                         </button>
                       </TooltipTrigger>

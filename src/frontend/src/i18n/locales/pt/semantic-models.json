@@ -11,7 +11,9 @@
   "tabs": {
     "collections": "Esquemas de conceitos",
     "concepts": "Conceitos",
-    "graph": "Grafo"
+    "graph": "Grafo",
+    "define": "Definir",
+    "explore": "Explorar"
   },
   "types": {
     "concept": "Conceito",
@@ -27,21 +29,27 @@
     "empty": "Nenhuma entidade vinculada a este conceito.",
     "removed": "Vínculo com \"{{label}}\" removido.",
     "removeFailed": "Falha ao remover vínculo.",
-    "removeAria": "Remover entidade vinculada"
+    "removeAria": "Remover entidade vinculada",
+    "open": "Abrir",
+    "removeConfirmTitle": "Remover este vínculo?",
+    "removeConfirmBody": "Isso desvincula \"{{label}}\" deste conceito. A entidade em si não é excluída."
   },
   "neighborhood": {
     "title": "Vizinhança do conceito",
     "loading": "Carregando vizinhança...",
     "empty": "Nenhum conceito relacionado.",
     "moreParents": "+{{count}} mais",
-    "moreChildren": "+{{count}} mais"
+    "moreChildren": "+{{count}} mais",
+    "list": "Lista",
+    "graph": "Grafo"
   },
   "relations": {
     "title": "Relações",
     "loading": "Carregando relações...",
     "empty": "Nenhuma relação encontrada.",
     "outgoingTooltip": "Este conceito → destino",
-    "incomingTooltip": "Origem → este conceito"
+    "incomingTooltip": "Origem → este conceito",
+    "viewLabel": "Visualização de relações"
   },
   "filters": {
     "allGlossaries": "Todos os glossários",
@@ -70,7 +78,11 @@
     "groupTypeOntology": "ONTOLOGIAS",
     "groupTypeOther": "OUTROS",
     "importedDisable": "Importado — não pode ser excluído",
-    "labelLanguage": "Idioma do rótulo"
+    "labelLanguage": "Idioma do rótulo",
+    "groupBy": "Agrupar por",
+    "status": "Status",
+    "showStatuses": "Mostrar status",
+    "statusHiddenNote": "{{count}} ocultos"
   },
   "groupBy": {
     "collection": "Por esquema de conceitos",
@@ -148,7 +160,8 @@
     "openIriAria": "Abrir IRI",
     "linkedAssets": "Ativos vinculados",
     "synonyms": "Sinônimos",
-    "relatedTerms": "Termos relacionados"
+    "relatedTerms": "Termos relacionados",
+    "title": "Detalhes"
   },
   "fields": {
     "definition": "Definição",
@@ -163,7 +176,11 @@
     "concepts": "Conceitos",
     "source": "Fonte",
     "sourceFile": "Importado de",
-    "sourceUrl": "URL da fonte"
+    "sourceUrl": "URL da fonte",
+    "scheme": "Esquema de conceitos",
+    "created": "Criado em",
+    "type": "Tipo",
+    "iri": "IRI"
   },
   "form": {
     "createTitle": "Criar termo",
@@ -298,8 +315,19 @@
     "chooseFiles": "Escolher arquivos…",
     "readOnlyHint": "Somente esquemas de conceitos editáveis podem receber importações. Esquemas importados e do sistema são somente leitura.",
     "conflict": {
-      "alreadyIn": "Já existe em {{scheme}}"
-    }
+      "alreadyIn": "Já existe em {{scheme}}",
+      "mustChoose": "Selecione como lidar com os conflitos.",
+      "title": "Conflitos de IRI de conceito detectados",
+      "description": "Os conceitos a seguir já existem neste esquema. Escolha como lidar com eles:",
+      "showLess": "Mostrar menos",
+      "showAll": "Ver lista detalhada ({{count}})",
+      "update": "Atualizar existentes",
+      "updateDesc": "Sobrescrever os conceitos existentes com as novas definições",
+      "skip": "Importar apenas novos",
+      "skipDesc": "Ignorar IRIs em conflito e importar o restante"
+    },
+    "summaryToast": "{{files}} arquivo(s) importado(s).",
+    "perFileNote": "Cada arquivo cria um novo esquema com o nome do arquivo. Não é necessário selecionar um destino."
   },
   "propertyTypes": {
     "object": "Propriedade de objeto",
@@ -365,7 +393,8 @@
     "parentCollection": "Esquema de conceitos pai",
     "noneRootCollection": "Nenhum (esquema de conceitos raiz)",
     "editable": "Editável",
-    "editableHelp": "Permitir criar e editar conceitos neste esquema de conceitos"
+    "editableHelp": "Permitir criar e editar conceitos neste esquema de conceitos",
+    "createTitle": "Criar esquema"
   },
   "promotion": {
     "promoteConcept": "Promover conceito",
@@ -554,7 +583,68 @@
     "emptyCta": "Ir para Definir"
   },
   "define": {
-    "requiresWrite": "Requer acesso de gravação"
+    "requiresWrite": "Requer acesso de gravação",
+    "builds": "Cria",
+    "whatYouCanBuild": "O que você pode criar",
+    "schemeRdfNote": "Todo esquema é um skos:ConceptScheme.",
+    "needsReview": "Requer revisão",
+    "running": "Em execução",
+    "startWith": "Comece com…",
+    "author": {
+      "title": "Criar",
+      "tip": "Cria entradas skos:Concept em um novo esquema de conceitos (skos:ConceptScheme). À medida que o esquema amadurece, as entradas podem ser tipadas como owl:Class ou como uma propriedade OWL.",
+      "desc": "Escreva os termos você mesmo.",
+      "cta": "Novo esquema de conceitos"
+    },
+    "generate": {
+      "title": "Gerar",
+      "tip": "Uma entrevista guiada gera o rascunho de uma ontologia OWL a partir das suas tabelas: classes (owl:Class, hierarquia via rdfs:subClassOf) e propriedades (owl:ObjectProperty / owl:DatatypeProperty). Cada candidato registra sua origem e é salvo como Rascunho para revisão.",
+      "desc": "Responda a algumas perguntas; o Ontos gera o rascunho do esquema.",
+      "cta": "Iniciar criação guiada"
+    },
+    "import": {
+      "title": "Importar",
+      "tip": "Analisa .ttl / .rdf / .owl / .n3 / .jsonld. Vários arquivos podem ser mesclados em um único esquema ou gerar um esquema por arquivo. O grafo de origem é preservado para exportação de ida e volta.",
+      "desc": "Carregue arquivos RDF em um esquema.",
+      "cta": "Carregar arquivos",
+      "buildsNote": "* Tudo o que o arquivo contiver. Os termos importados permanecem somente leitura."
+    },
+    "inProgress": "Em andamento",
+    "noInProgress": "Nenhum trabalho de criação em andamento. Comece por um dos caminhos acima.",
+    "generatorRun": "Execução do gerador",
+    "draftPending": "Rascunho ainda não atribuído a um esquema de conceitos.",
+    "stepCount": "{{count}} etapas",
+    "review": "Revisar",
+    "guided": {
+      "title": "Criação guiada",
+      "subtitle": "Responda a algumas perguntas. Nós as transformamos em um prompt para o gerador, que cria o rascunho de um esquema de conceitos para você revisar antes de mantê-lo. Nada é salvo ainda.",
+      "domainLabel": "Em qual domínio você trabalha?",
+      "domainsLoading": "Carregando domínios de dados...",
+      "domainSelectLabel": "Domínio de dados",
+      "domainSelectPlaceholder": "Escolha um domínio de dados",
+      "noDomain": "Nenhum domínio de dados (digite o seu)",
+      "noDomainsHint": "Ainda não há domínios de dados definidos. Descreva seu domínio com suas próprias palavras abaixo.",
+      "domainPlaceholder": "ex.: Precificação no varejo, Ensaios clínicos, Logística de frota",
+      "questionsLabel": "Quais perguntas ele deve ajudar a responder? (opcional)",
+      "questionAria": "Pergunta {{n}}",
+      "questionPlaceholder": "ex.: Quais clientes cancelaram no último trimestre?",
+      "removeQuestion": "Remover pergunta {{n}}",
+      "addQuestion": "Adicionar pergunta",
+      "objectsLabel": "Com quais objetos você trabalha? (opcional)",
+      "objectsPlaceholder": "ex.: Cliente, Pedido, Remessa, Fatura",
+      "previewLabel": "Prompt para o gerador",
+      "continue": "Continuar para o gerador"
+    }
+  },
+  "summary": {
+    "copyFailed": "Não foi possível copiar o IRI.",
+    "status": "Status",
+    "type": "Tipo",
+    "version": "Versão",
+    "copyIri": "Copiar IRI"
+  },
+  "advanced": {
+    "turtle": "RDF (Turtle)"
   },
   "lifecycle": {
     "changeStatus": "Alterar status",
@@ -565,7 +655,28 @@
     "publish": "Publicar",
     "certify": "Certificar",
     "deprecate": "Descontinuar",
-    "archive": "Arquivar"
+    "archive": "Arquivar",
+    "request": "Solicitar",
+    "requestDialog": {
+      "describe": {
+        "submitReview": "Envie este conceito para revisão. O revisor é escolhido na próxima etapa.",
+        "approve": "Aprove este conceito para que ele possa ser publicado.",
+        "requestChanges": "Devolva este conceito para rascunho. Você pode adicionar um comentário na próxima etapa.",
+        "publish": "Publique este conceito para que outras pessoas possam encontrá-lo e usá-lo.",
+        "certify": "Marque este conceito como certificado, uma referência confiável.",
+        "deprecate": "Descontinue este conceito. Ele continua visível, mas é sinalizado como não mais recomendado.",
+        "archive": "Arquive este conceito. Ele é retirado e ocultado do uso normal.",
+        "generic": "Mova este conceito para o status {{status}}.",
+        "newVersion": "Salve uma nova versão deste conceito. O IRI permanece o mesmo."
+      },
+      "createNewVersion": "Criar nova versão",
+      "title": "Solicitar ação",
+      "descriptionWithLabel": "Escolha o que deseja fazer com o conceito \"{{label}}\".",
+      "description": "Escolha o que deseja fazer com este conceito.",
+      "currentStatus": "Status atual: {{status}}.",
+      "pickerLabel": "O que você deseja solicitar?"
+    },
+    "requestReview": "Solicitar revisão"
   },
   "requestChanges": {
     "title": "Solicitar alterações",
@@ -623,9 +734,35 @@
     "none": "Ainda não há versões anteriores.",
     "unavailable": "O histórico de versões não está disponível.",
     "replacedBy": "Substituído por {{label}}",
-    "saveNewVersionDraftLocked": "Disponível depois que este conceito for aprovado (a v1 precisa ser aprovada antes de uma nova versão)."
+    "saveNewVersionDraftLocked": "Disponível depois que este conceito for aprovado (a v1 precisa ser aprovada antes de uma nova versão).",
+    "readOnlyNote": "O versionamento se aplica a esquemas de conceitos governados (editáveis). Este conceito vem de uma fonte somente leitura, portanto novas versões não podem ser salvas aqui.",
+    "newVersion": "Nova versão"
   },
   "columns": {
-    "fromFile": "de {{file}}"
+    "fromFile": "de {{file}}",
+    "name": "Nome",
+    "kind": "Tipo",
+    "scheme": "Esquema",
+    "mapping": "Mapeamento",
+    "status": "Status"
+  },
+  "mapping": {
+    "assetAndProduct": "Ativo + produto",
+    "asset": "Ativo",
+    "product": "Produto",
+    "none": "Não mapeado"
+  },
+  "bulk": {
+    "partial": "Concluído com alguns erros",
+    "statusResult": "{{label}}: {{ok}} atualizados, {{failed}} ignorados",
+    "selectAll": "Selecionar tudo",
+    "selected": "{{count}} selecionados",
+    "setStatus": "Definir status"
+  },
+  "search": {
+    "matchedLanguage": "correspondência: {{lang}}"
+  },
+  "collection": {
+    "typeTooltip": "Glossário, taxonomia e ontologia são etapas de uma escala de maturidade, e não ferramentas diferentes. Glossário = uma lista simples de termos e definições acordados. Taxonomia = termos organizados em uma hierarquia mais ampla/mais específica. Ontologia = classes e propriedades formais sobre as quais uma máquina pode raciocinar. Escolha onde você está hoje; você pode adicionar estrutura depois."
   }
 }

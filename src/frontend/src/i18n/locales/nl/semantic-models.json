@@ -11,7 +11,9 @@
   "tabs": {
     "collections": "Conceptschema's",
     "concepts": "Concepten",
-    "graph": "Grafiek"
+    "graph": "Grafiek",
+    "define": "Definiëren",
+    "explore": "Verkennen"
   },
   "types": {
     "concept": "Concept",
@@ -27,21 +29,27 @@
     "empty": "Geen entiteiten gekoppeld aan dit concept.",
     "removed": "Koppeling naar \"{{label}}\" verwijderd.",
     "removeFailed": "Kan koppeling niet verwijderen.",
-    "removeAria": "Gekoppelde entiteit verwijderen"
+    "removeAria": "Gekoppelde entiteit verwijderen",
+    "open": "Openen",
+    "removeConfirmTitle": "Deze koppeling verwijderen?",
+    "removeConfirmBody": "Hiermee wordt \"{{label}}\" losgekoppeld van dit concept. De entiteit zelf wordt niet verwijderd."
   },
   "neighborhood": {
     "title": "Concept-omgeving",
     "loading": "Omgeving laden...",
     "empty": "Geen gerelateerde concepten.",
     "moreParents": "+{{count}} meer",
-    "moreChildren": "+{{count}} meer"
+    "moreChildren": "+{{count}} meer",
+    "list": "Lijst",
+    "graph": "Graaf"
   },
   "relations": {
     "title": "Relaties",
     "loading": "Relaties laden...",
     "empty": "Geen relaties gevonden.",
     "outgoingTooltip": "Dit concept → doel",
-    "incomingTooltip": "Bron → dit concept"
+    "incomingTooltip": "Bron → dit concept",
+    "viewLabel": "Relatieweergave"
   },
   "filters": {
     "allGlossaries": "Alle Glossaries",
@@ -70,7 +78,11 @@
     "groupTypeTaxonomy": "TAXONOMIEËN",
     "groupTypeOntology": "ONTOLOGIEËN",
     "groupTypeOther": "OVERIG",
-    "importedDisable": "Geïmporteerd — kan niet worden verwijderd"
+    "importedDisable": "Geïmporteerd — kan niet worden verwijderd",
+    "groupBy": "Groeperen op",
+    "status": "Status",
+    "showStatuses": "Statussen tonen",
+    "statusHiddenNote": "{{count}} verborgen"
   },
   "groupBy": {
     "collection": "Op conceptschema",
@@ -148,7 +160,8 @@
     "openIriAria": "IRI openen",
     "linkedAssets": "Gekoppelde Assets",
     "synonyms": "Synoniemen",
-    "relatedTerms": "Gerelateerde Termen"
+    "relatedTerms": "Gerelateerde Termen",
+    "title": "Details"
   },
   "fields": {
     "definition": "Definitie",
@@ -163,7 +176,11 @@
     "concepts": "Concepten",
     "source": "Bron",
     "sourceUrl": "Bron-URL",
-    "sourceFile": "Geïmporteerd uit"
+    "sourceFile": "Geïmporteerd uit",
+    "scheme": "Conceptschema",
+    "created": "Aangemaakt",
+    "type": "Type",
+    "iri": "IRI"
   },
   "form": {
     "createTitle": "Term Aanmaken",
@@ -298,8 +315,19 @@
     "stillReferenced": "gebruikt door {{count}}",
     "submitMulti": "{{count}} bestand(en) importeren",
     "conflict": {
-      "alreadyIn": "Al aanwezig in {{scheme}}"
-    }
+      "alreadyIn": "Al aanwezig in {{scheme}}",
+      "mustChoose": "Kies hoe conflicten moeten worden afgehandeld.",
+      "title": "Conflicterende concept-IRI's gevonden",
+      "description": "De volgende concepten bestaan al in dit schema. Kies hoe je ze wilt afhandelen:",
+      "showLess": "Minder tonen",
+      "showAll": "Gedetailleerde lijst bekijken ({{count}})",
+      "update": "Bestaande bijwerken",
+      "updateDesc": "Bestaande concepten overschrijven met nieuwe definities",
+      "skip": "Alleen nieuwe importeren",
+      "skipDesc": "Conflicterende IRI's overslaan, de rest importeren"
+    },
+    "summaryToast": "{{files}} bestand(en) geïmporteerd.",
+    "perFileNote": "Elk bestand maakt een nieuw schema aan met de naam van het bestand. Je hoeft geen doel te kiezen."
   },
   "propertyTypes": {
     "object": "Object-eigenschap",
@@ -365,7 +393,8 @@
     "parentCollection": "Bovenliggend conceptschema",
     "noneRootCollection": "Geen (hoofdconceptschema)",
     "editable": "Bewerkbaar",
-    "editableHelp": "Sta het aanmaken en bewerken van concepten in dit conceptschema toe"
+    "editableHelp": "Sta het aanmaken en bewerken van concepten in dit conceptschema toe",
+    "createTitle": "Schema aanmaken"
   },
   "promotion": {
     "promoteConcept": "Concept promoveren",
@@ -554,7 +583,58 @@
     "emptyCta": "Ga naar Definiëren"
   },
   "define": {
-    "requiresWrite": "Schrijftoegang vereist"
+    "requiresWrite": "Schrijftoegang vereist",
+    "builds": "Bouwt",
+    "whatYouCanBuild": "Wat u kunt bouwen",
+    "schemeRdfNote": "Elk schema is een skos:ConceptScheme.",
+    "needsReview": "Beoordeling nodig",
+    "running": "Bezig",
+    "startWith": "Begin met…",
+    "author": {
+      "title": "Opstellen",
+      "tip": "Maakt skos:Concept-items aan in een nieuw conceptschema (skos:ConceptScheme). Items kunnen later worden getypeerd als owl:Class of als OWL-eigenschap naarmate het schema volwassener wordt.",
+      "desc": "Schrijf zelf termen.",
+      "cta": "Nieuw conceptschema"
+    },
+    "generate": {
+      "title": "Genereren",
+      "tip": "Een begeleid interview stelt op basis van uw tabellen een OWL-ontologie op: klassen (owl:Class, hiërarchie via rdfs:subClassOf) en eigenschappen (owl:ObjectProperty / owl:DatatypeProperty). Elke kandidaat bevat de bron en wordt als Concept opgeslagen ter beoordeling.",
+      "desc": "Beantwoord een paar vragen; Ontos stelt het schema op.",
+      "cta": "Begeleide opbouw starten"
+    },
+    "import": {
+      "title": "Importeren",
+      "tip": "Verwerkt .ttl / .rdf / .owl / .n3 / .jsonld. Meerdere bestanden kunnen worden samengevoegd in één schema of elk een eigen schema krijgen. De brongraaf blijft bewaard voor round-trip-export.",
+      "desc": "Upload RDF-bestanden naar een schema.",
+      "cta": "Bestanden uploaden",
+      "buildsNote": "* Wat het bestand ook bevat. Geïmporteerde termen blijven alleen-lezen."
+    },
+    "inProgress": "In uitvoering",
+    "noInProgress": "Er wordt niets aangemaakt. Begin met een van de bovenstaande paden.",
+    "generatorRun": "Generatorrun",
+    "draftPending": "Concept nog niet toegewezen aan een conceptschema.",
+    "stepCount": "{{count}} stappen",
+    "review": "Beoordelen",
+    "guided": {
+      "title": "Begeleide opbouw",
+      "subtitle": "Beantwoord een paar vragen. Wij zetten ze om in een prompt voor de generator, die een conceptschema opstelt dat u beoordeelt voordat u het bewaart. Er is nog niets opgeslagen.",
+      "domainLabel": "In welk domein werkt u?",
+      "domainsLoading": "Datadomeinen laden...",
+      "domainSelectLabel": "Datadomein",
+      "domainSelectPlaceholder": "Kies een datadomein",
+      "noDomain": "Geen datadomein (typ zelf)",
+      "noDomainsHint": "Er zijn nog geen datadomeinen gedefinieerd. Beschrijf hieronder uw domein in uw eigen woorden.",
+      "domainPlaceholder": "bijv. Retailprijzen, Klinische studies, Vlootlogistiek",
+      "questionsLabel": "Welke vragen moet het helpen beantwoorden? (optioneel)",
+      "questionAria": "Vraag {{n}}",
+      "questionPlaceholder": "bijv. Welke klanten zijn afgelopen kwartaal vertrokken?",
+      "removeQuestion": "Vraag {{n}} verwijderen",
+      "addQuestion": "Vraag toevoegen",
+      "objectsLabel": "Met welke objecten werkt u? (optioneel)",
+      "objectsPlaceholder": "bijv. Klant, Order, Zending, Factuur",
+      "previewLabel": "Prompt voor de generator",
+      "continue": "Doorgaan naar generator"
+    }
   },
   "lifecycle": {
     "changeStatus": "Status wijzigen",
@@ -565,7 +645,28 @@
     "publish": "Publiceren",
     "certify": "Certificeren",
     "deprecate": "Als verouderd markeren",
-    "archive": "Archiveren"
+    "archive": "Archiveren",
+    "request": "Aanvragen",
+    "requestDialog": {
+      "describe": {
+        "submitReview": "Dien dit concept in ter beoordeling. De beoordelaar kiest u in de volgende stap.",
+        "approve": "Keur dit concept goed zodat het kan worden gepubliceerd.",
+        "requestChanges": "Zet dit concept terug naar de status Concept. In de volgende stap kunt u een opmerking toevoegen.",
+        "publish": "Publiceer dit concept zodat anderen het kunnen vinden en gebruiken.",
+        "certify": "Markeer dit concept als gecertificeerd, een betrouwbare referentie.",
+        "deprecate": "Markeer dit concept als verouderd. Het blijft zichtbaar, maar wordt gemarkeerd als niet langer aanbevolen.",
+        "archive": "Archiveer dit concept. Het wordt buiten gebruik gesteld en verborgen bij normaal gebruik.",
+        "generic": "Zet dit concept op de status {{status}}.",
+        "newVersion": "Sla een nieuwe versie van dit concept op. De IRI blijft hetzelfde."
+      },
+      "createNewVersion": "Nieuwe versie aanmaken",
+      "title": "Actie aanvragen",
+      "descriptionWithLabel": "Kies wat u wilt doen met het concept \"{{label}}\".",
+      "description": "Kies wat u wilt doen met dit concept.",
+      "currentStatus": "Huidige status: {{status}}.",
+      "pickerLabel": "Wat wilt u aanvragen?"
+    },
+    "requestReview": "Beoordeling aanvragen"
   },
   "requestChanges": {
     "title": "Wijzigingen aanvragen",
@@ -623,9 +724,45 @@
     "none": "Nog geen eerdere versies.",
     "unavailable": "Versiegeschiedenis is niet beschikbaar.",
     "replacedBy": "Vervangen door {{label}}",
-    "saveNewVersionDraftLocked": "Beschikbaar nadat dit concept is goedgekeurd (v1 moet zijn goedgekeurd voordat er een nieuwe versie kan komen)."
+    "saveNewVersionDraftLocked": "Beschikbaar nadat dit concept is goedgekeurd (v1 moet zijn goedgekeurd voordat er een nieuwe versie kan komen).",
+    "readOnlyNote": "Versiebeheer geldt voor beheerde (bewerkbare) conceptschema's. Dit concept komt uit een alleen-lezenbron, dus nieuwe versies kunnen hier niet worden opgeslagen.",
+    "newVersion": "Nieuwe versie"
   },
   "columns": {
-    "fromFile": "uit {{file}}"
+    "fromFile": "uit {{file}}",
+    "name": "Naam",
+    "kind": "Soort",
+    "scheme": "Schema",
+    "mapping": "Koppeling",
+    "status": "Status"
+  },
+  "summary": {
+    "copyFailed": "Kan de IRI niet kopiëren.",
+    "status": "Status",
+    "type": "Type",
+    "version": "Versie",
+    "copyIri": "IRI kopiëren"
+  },
+  "advanced": {
+    "turtle": "RDF (Turtle)"
+  },
+  "mapping": {
+    "assetAndProduct": "Asset + product",
+    "asset": "Asset",
+    "product": "Product",
+    "none": "Niet gekoppeld"
+  },
+  "bulk": {
+    "partial": "Voltooid met enkele fouten",
+    "statusResult": "{{label}}: {{ok}} bijgewerkt, {{failed}} overgeslagen",
+    "selectAll": "Alles selecteren",
+    "selected": "{{count}} geselecteerd",
+    "setStatus": "Status instellen"
+  },
+  "search": {
+    "matchedLanguage": "gevonden: {{lang}}"
+  },
+  "collection": {
+    "typeTooltip": "Glossarium, taxonomie en ontologie zijn stappen op een volwassenheidsladder, geen verschillende tools. Glossarium = een platte lijst met afgesproken termen en definities. Taxonomie = termen geordend in een bredere/smallere hiërarchie. Ontologie = formele klassen en eigenschappen waarmee een machine kan redeneren. Kies waar je nu staat; je kunt later structuur toevoegen."
   }
 }

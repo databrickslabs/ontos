@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -163,11 +164,11 @@ export function GuidedGenerateDialog({ open, onOpenChange }: GuidedGenerateDialo
             </Label>
             {domainsLoading ? (
               <div
-                className="flex items-center gap-2 text-sm text-muted-foreground"
+                className="space-y-2"
                 data-testid="guided-domains-loading"
               >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('semantic-models:define.guided.domainsLoading', 'Loading data domains...')}
+                <Skeleton className="h-9 w-full rounded-md" />
+                <Skeleton className="h-3 w-2/3" />
               </div>
             ) : domains.length > 0 ? (
               <Select value={selectedDomainId} onValueChange={handleDomainSelect}>

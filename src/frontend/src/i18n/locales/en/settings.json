@@ -439,6 +439,15 @@
         "title": "Feature Permissions",
         "description": "Configure access levels for each feature in the application."
       },
+      "navigation": {
+        "help": "Unchecked features are left out of this role's menus (sidebar, home quick actions, About). Hiding changes only what the menus show, not permissions: pages stay reachable by link with the same access level.",
+        "accessColumn": "Access level",
+        "column": "Show in navigation",
+        "showFeature": "Show {{feature}} in navigation",
+        "noAccessHint": "No access: the feature is not in the menus",
+        "adminHint": "The admin role always shows every feature",
+        "unknownFeatures": "Unknown features can't be hidden from the navigation: {{features}}"
+      },
       "groups": {
         "discover": "Discover",
         "build": "Build",

@@ -439,6 +439,15 @@
         "title": "Functie Machtigingen",
         "description": "Configureer toegangsniveaus voor elke functie in de applicatie."
       },
+      "navigation": {
+        "help": "Niet-aangevinkte functies staan niet in de menu's van deze rol (zijbalk, snelle acties op de startpagina, Over). Verbergen verandert alleen wat de menu's tonen, niet de machtigingen: pagina's blijven via een link bereikbaar met hetzelfde toegangsniveau.",
+        "accessColumn": "Toegangsniveau",
+        "column": "Tonen in navigatie",
+        "showFeature": "{{feature}} tonen in de navigatie",
+        "noAccessHint": "Geen toegang: de functie staat niet in de menu's",
+        "adminHint": "De beheerdersrol toont altijd alle functies",
+        "unknownFeatures": "Onbekende functies kunnen niet uit de navigatie worden verborgen: {{features}}"
+      },
       "groups": {
         "discover": "Ontdekken",
         "build": "Bouwen",

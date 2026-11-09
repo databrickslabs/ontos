@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -15,11 +15,15 @@ import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection, ApprovalEntity
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
-import { features as orderedFeatures } from '@/config/features'; // Import the ordered features
+// The ordered features (menu order)
+import { features as orderedFeatures, getNavFeatureId } from '@/config/features';
 import { usePermissions } from '@/stores/permissions-store';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { normaliseAssignedGroups } from '@/lib/assigned-groups';
+import {
+    NAV_COLUMN_CLASS, RoleNavColumnHeader, RoleNavVisibilityCell, cleanHiddenNavFeatures,
+} from '@/components/settings/role-nav-visibility';
 
 // Sub-groups within the Settings permission group mirror the Settings
 // sidebar layout (Reference Data → Configuration → Integrations →
@@ -179,6 +183,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         assigned_users: initialRole?.assigned_users || [],
         feature_permissions: initialRole?.feature_permissions || getDefaultPermissions(featuresConfig),
         home_sections: initialRole?.home_sections || [],
+        hidden_nav_features: initialRole?.hidden_nav_features || [],
         approval_privileges: normalizeApprovalPrivileges(initialRole?.approval_privileges),
         deployment_policy: normalizeDeploymentPolicy(initialRole?.deployment_policy),
         is_admin: initialRole?.is_admin || false,
@@ -192,8 +197,39 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         handleSubmit,
         control,
         reset,
+        watch,
         formState: { errors, isSubmitting, isDirty },
     } = useForm<AppRole>({ defaultValues });
+
+    // "Show in navigation" (#1325): only role features with a menu entry get the checkbox
+    // (Search and My Requests have no role feature id, settings pages no sidebar entry).
+    const navFeatureIds = useMemo(
+        () => new Set(orderedFeatures.map(getNavFeatureId).filter(id => id in featuresConfig)),
+        [featuresConfig],
+    );
+    const watchedPermissions = watch('feature_permissions');
+    const watchedIsAdmin = Boolean(watch('is_admin'));
+    const renderNavCell = (featureId: string, label: string) => {
+        if (!navFeatureIds.has(featureId)) {
+            return <div className={NAV_COLUMN_CLASS} aria-hidden="true" />;
+        }
+        return (
+            <Controller
+                name="hidden_nav_features"
+                control={control}
+                render={({ field }) => (
+                    <RoleNavVisibilityCell
+                        featureId={featureId}
+                        label={label}
+                        level={watchedPermissions?.[featureId]}
+                        isAdminRole={watchedIsAdmin}
+                        hidden={Array.isArray(field.value) ? field.value : []}
+                        onChange={field.onChange}
+                    />
+                )}
+            />
+        );
+    };
 
     // Reset form when initialRole or isOpen changes
     useEffect(() => {
@@ -206,6 +242,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 assigned_users: initialRole.assigned_users || [],
                 feature_permissions: initialRole.feature_permissions || getDefaultPermissions(featuresConfig),
                 home_sections: initialRole.home_sections || [],
+                hidden_nav_features: initialRole.hidden_nav_features || [],
                 approval_privileges: normalizeApprovalPrivileges(initialRole.approval_privileges),
                 deployment_policy: normalizeDeploymentPolicy(initialRole.deployment_policy),
                 is_admin: initialRole.is_admin || false,
@@ -220,6 +257,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 assigned_users: [],
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
+                hidden_nav_features: [],
                 approval_privileges: {},
                 deployment_policy: null,
                 is_admin: false,
@@ -257,6 +295,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 assigned_users: [],
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
+                hidden_nav_features: [],
                 approval_privileges: {},
                 deployment_policy: null,
                 is_admin: false,
@@ -319,8 +358,14 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             };
         }
 
+        // A feature at None has no menu entry anyway: never store it as hidden.
+        const hiddenNavFeatures = cleanHiddenNavFeatures(
+            data.hidden_nav_features, data.feature_permissions, Object.keys(featuresConfig),
+        );
+
         const basePayload: AppRole = {
             ...data,
+            hidden_nav_features: hiddenNavFeatures,
             assigned_groups: assignedGroupsArray,
             assigned_users: Array.isArray(data.assigned_users) ? data.assigned_users : [],
             approval_privileges: cleanedApprovalPrivileges,
@@ -341,6 +386,12 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             }
 
             // Check for API errors (already formatted as string by useApi hook)
+            if (response.errorCode === 'role_nav_feature_unknown') {
+                const ids = response.errorParams?.feature_ids;
+                throw new Error(t('roles.permissions.navigation.unknownFeatures', {
+                    features: Array.isArray(ids) ? ids.join(', ') : '',
+                }));
+            }
             if (response.error) {
                 throw new Error(response.error);
             }
@@ -544,6 +595,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                     <div className="space-y-3">
                                         <h4 className="font-medium">{t('roles.permissions.featurePermissions.title')}</h4>
                                         <p className="text-xs text-muted-foreground">{t('roles.permissions.featurePermissions.description')}</p>
+                                        <RoleNavColumnHeader />
 
                                         {(() => {
                                             const orderedFeatureById = new Map(orderedFeatures.map(f => [f.id, f]));
@@ -667,6 +719,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                                 )}
                                                             />
                                                         </div>
+                                                        {renderNavCell(featureId, label)}
                                                     </div>
                                                 );
                                             };

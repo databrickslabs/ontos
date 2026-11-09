@@ -132,6 +132,8 @@ export interface GateExemptions {
 export interface WorkflowTrigger {
   type: TriggerType;
   entity_types: EntityType[];
+  /** Stored types this version doesn't know (a removed type): they match no event */
+  unknown_entity_types?: string[];
   from_status?: string;
   to_status?: string;
   schedule?: string;
@@ -370,6 +372,12 @@ export interface ProcessWorkflow {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  /**
+   * Read only: stored trigger entity types that match no event, coded
+   * `stored_entity_type_unknown` / `stored_entity_type_unsupported`
+   * (params `triggerType`, `entityType`). The workflow is kept as stored.
+   */
+  trigger_warnings?: { code: string; message: string; params: Record<string, unknown> }[];
 }
 
 export interface ProcessWorkflowCreate {

@@ -1963,14 +1963,14 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 -- Pre-creation compliance validation for catalogs/schemas/tables
 ('02a00001-0000-4000-8000-000000000001', 'Pre-Creation Compliance Validation', 'Validates naming conventions before asset creation. Blocks creation if validation fails.', 
-'{"type": "before_create", "entity_types": ["catalog", "schema", "table", "view"]}',
+'{"type": "before_create", "entity_types": ["catalog", "schema", "table"]}',
 '{"type": "all"}',
 true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
--- Contract purpose validation on updates. Shipped disabled: its trigger never fires and its
--- policy check cannot pass inside a workflow (#1149).
-('02a00002-0000-4000-8000-000000000002', 'Contract Purpose Gate', 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before dataset updates. Disabled until #1149 is fixed.', 
-'{"type": "before_update", "entity_types": ["dataset"]}',
+-- Contract purpose validation on contract updates. Shipped disabled: its policy check
+-- cannot pass inside a workflow (#1149).
+('02a00002-0000-4000-8000-000000000002', 'Contract Purpose Gate', 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before contract updates. Disabled until #1149 is fixed.', 
+'{"type": "before_update", "entity_types": ["data_contract"]}',
 '{"type": "all"}',
 false, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
@@ -1988,7 +1988,7 @@ true, false, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Full governance workflow with multiple checks
 ('02a00005-0000-4000-8000-000000000005', 'Full Governance Pre-Check', 'Comprehensive pre-creation validation including naming, GDPR controls for PII products, and restricted access for confidential contracts.', 
-'{"type": "before_create", "entity_types": ["table", "view"]}',
+'{"type": "before_create", "entity_types": ["table"]}',
 '{"type": "project", "ids": ["00300001-0000-4000-8000-000000000001"]}',
 true, false, 1, 'system@demo', 'system@demo', NOW(), NOW())
 
@@ -2107,7 +2107,8 @@ UPDATE process_workflows SET name = CASE
 WHERE id IN ('02a00002-0000-4000-8000-000000000002', '02a00004-0000-4000-8000-000000000004');
 
 UPDATE process_workflows SET description = CASE
-  WHEN id = '02a00002-0000-4000-8000-000000000002' AND description = 'Ensures data quality thresholds are met before allowing dataset updates.' THEN 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before dataset updates. Disabled until #1149 is fixed.'
+  WHEN id = '02a00002-0000-4000-8000-000000000002' AND description = 'Ensures data quality thresholds are met before allowing dataset updates.' THEN 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before contract updates. Disabled until #1149 is fixed.'
+  WHEN id = '02a00002-0000-4000-8000-000000000002' AND description = 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before dataset updates. Disabled until #1149 is fixed.' THEN 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before contract updates. Disabled until #1149 is fixed.'
   WHEN id = '02a00003-0000-4000-8000-000000000003' AND description = 'Validates PII encryption and access controls for sensitive data products.' THEN 'Validates that PII data products are tagged gdpr and confidential data contracts are tagged restricted.'
   WHEN id = '02a00004-0000-4000-8000-000000000004' AND description = 'Monitors data freshness and notifies stakeholders when data becomes stale.' THEN 'Checks daily that no data contract is deprecated or retired and notifies the owner when one is.'
   WHEN id = '02a00005-0000-4000-8000-000000000005' AND description = 'Comprehensive pre-creation validation including naming, access control, and PII checks.' THEN 'Comprehensive pre-creation validation including naming, GDPR controls for PII products, and restricted access for confidential contracts.'
@@ -2122,6 +2123,27 @@ WHERE id = '02a00002-0000-4000-8000-000000000002'
   AND name IN ('Data Quality Gate', 'Contract Purpose Gate')
   AND trigger_config = '{"type": "before_update", "entity_types": ["dataset"]}'
   AND is_active = true;
+
+-- Earlier installs hold triggers on entity types no code fires a workflow for: "view" (no
+-- before_create site) and the removed "dataset". Only a row whose trigger still has its
+-- shipped value is changed, so a trigger an admin edited is left alone. The Contract
+-- Purpose Gate is deactivated above first, so it moves to data contracts inactive.
+UPDATE process_workflows
+SET trigger_config = '{"type": "before_create", "entity_types": ["catalog", "schema", "table"]}'
+WHERE id = '02a00001-0000-4000-8000-000000000001'
+  AND trigger_config = '{"type": "before_create", "entity_types": ["catalog", "schema", "table", "view"]}';
+
+UPDATE process_workflows
+SET trigger_config = '{"type": "before_update", "entity_types": ["data_contract"]}'
+WHERE id = '02a00002-0000-4000-8000-000000000002'
+  AND name IN ('Data Quality Gate', 'Contract Purpose Gate')
+  AND trigger_config = '{"type": "before_update", "entity_types": ["dataset"]}'
+  AND is_active = false;
+
+UPDATE process_workflows
+SET trigger_config = '{"type": "before_create", "entity_types": ["table"]}'
+WHERE id = '02a00005-0000-4000-8000-000000000005'
+  AND trigger_config = '{"type": "before_create", "entity_types": ["table", "view"]}';
 
 UPDATE workflow_steps SET name = CASE
   WHEN id = '02b00004-0000-4000-8000-000000000004' AND name = 'Check Data Quality' THEN 'Check Contract Purpose'

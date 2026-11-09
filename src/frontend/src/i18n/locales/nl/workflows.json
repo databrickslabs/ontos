@@ -608,6 +608,16 @@
     "matches_other": "{{count}} matches",
     "noMatch": "Geen variabelen komen overeen"
   },
+  "triggerEntityChecks": {
+    "unknownBadge": "Onbekend entiteitstype: {{type}}",
+    "removeUnknown": "{{type}} verwijderen",
+    "unknownNotice_one": "Deze trigger bevat een entiteitstype dat niet meer bestaat. Het komt met niets overeen: verwijder het om de trigger te wijzigen.",
+    "unknownNotice_other": "Deze trigger bevat {{count}} entiteitstypen die niet meer bestaan. Ze komen met niets overeen: verwijder ze om de trigger te wijzigen.",
+    "unknownOnSave": "De trigger bevat het onbekende entiteitstype \"{{type}}\": verwijder het in de triggerconfiguratie om de trigger te wijzigen.",
+    "unsupportedOnSave": "\"{{trigger}}\" wordt nooit geactiveerd voor {{type}}: kies een entiteitstype dat deze trigger ondersteunt.",
+    "pickKnownType": "Kies minstens één entiteitstype. Zonder type wordt deze workflow voor elke entiteit geactiveerd.",
+    "requiredOnSave": "Kies minstens één entiteitstype voor de trigger: geen van zijn typen activeert hem (ze bestaan niet meer, of deze trigger wordt er nooit voor geactiveerd), en een lege lijst zou hem voor elke entiteit activeren."
+  },
   "triggerPicker": {
     "label": "Wordt geactiveerd bij",
     "helper": "Welke actie deze workflow laat uitvoeren",

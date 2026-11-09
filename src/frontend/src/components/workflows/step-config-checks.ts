@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 
-import type { WorkflowStepCreate } from '@/types/process-workflow';
+import type { EntityType, TriggerType, WorkflowStepCreate } from '@/types/process-workflow';
+import { getEntityTypeLabel, getTriggerTypeLabel } from '@/lib/workflow-labels';
 
 // Checks of Conditional and Script step configs the designer runs before it
 // saves (#943, #942). The codes match src/backend/src/common/workflow_step_config.py.
@@ -61,6 +62,20 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
       return t('workflows:designer.validationIssues.stepsRequired', { defaultValue: fallback });
     case 'duplicate_step_ids':
       return t('workflows:designer.validationIssues.duplicateStepIds', { defaultValue: fallback });
+    // Trigger entity types (#1151): one the app doesn't know, or one the trigger never fires for
+    case 'trigger_entity_type_unknown':
+      return t('workflows:triggerEntityChecks.unknownOnSave', {
+        type: params.entityType,
+        defaultValue: fallback,
+      });
+    case 'trigger_entity_type_required':
+      return t('workflows:triggerEntityChecks.requiredOnSave', { defaultValue: fallback });
+    case 'trigger_entity_type_unsupported':
+      return t('workflows:triggerEntityChecks.unsupportedOnSave', {
+        trigger: getTriggerTypeLabel(String(params.triggerType) as TriggerType, t),
+        type: getEntityTypeLabel(String(params.entityType) as EntityType, t),
+        defaultValue: fallback,
+      });
     case 'step_unknown_reference':
       return t('workflows:designer.validationIssues.stepUnknownReference', {
         step: params.step,

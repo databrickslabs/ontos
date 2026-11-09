@@ -198,6 +198,25 @@ class UnityCatalogLoader(EntityLoader):
             logger.exception("Failed to load UC entities")
 
 
+def tag_values(tags: List[Any]) -> Dict[str, Any]:
+    """An entity's assigned tags as rules read them (``HAS_TAG`` / ``TAG``).
+
+    Keyed by fully qualified name (``namespace/name``) and, when no other
+    namespace has a tag of that name on the entity, by name; the value is the
+    assigned value, or True when the tag has none.
+    """
+    namespaces_by_name: Dict[str, set] = {}
+    for tag in tags:
+        namespaces_by_name.setdefault(tag.tag_name, set()).add(tag.fully_qualified_name)
+    values: Dict[str, Any] = {}
+    for tag in tags:
+        value = tag.assigned_value if tag.assigned_value is not None else True
+        values[tag.fully_qualified_name] = value
+        if len(namespaces_by_name[tag.tag_name]) == 1:
+            values[tag.tag_name] = value
+    return values
+
+
 class AppEntityLoader(EntityLoader):
     """Load entities from application database."""
 
@@ -236,19 +255,7 @@ class AppEntityLoader(EntityLoader):
             # A code the UI translates; the message stays the fallback
             error.error_code, error.error_params = 'tags_load_failed', {'entityType': entity_type}
             raise error from e
-        tags_by_entity: Dict[str, Dict[str, Any]] = {}
-        for entity_id, tags in assigned.items():
-            namespaces_by_name: Dict[str, set] = {}
-            for tag in tags:
-                namespaces_by_name.setdefault(tag.tag_name, set()).add(tag.fully_qualified_name)
-            values: Dict[str, Any] = {}
-            for tag in tags:
-                value = tag.assigned_value if tag.assigned_value is not None else True
-                values[tag.fully_qualified_name] = value
-                if len(namespaces_by_name[tag.tag_name]) == 1:
-                    values[tag.tag_name] = value
-            tags_by_entity[str(entity_id)] = values
-        return tags_by_entity
+        return {str(entity_id): tag_values(tags) for entity_id, tags in assigned.items()}
 
     def _load(self, entity_type: str, query):
         """Rows of one entity type, read by ``query()`` in a savepoint.

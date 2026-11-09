@@ -62,8 +62,8 @@ def build_data_product_dict(db: Session, product_id: str) -> Optional[Dict[str, 
 
     # Relationship counts
     _add_relationship_counts(db, base, "DataProduct", product_id)
-    _add_tag_count(db, base, product_id, "DataProduct")
-    _add_quality_check_count(db, base, "DataProduct", product_id)
+    _add_tags(db, base, product_id, _ASSOCIATION_ENTITY_TYPES["DataProduct"])
+    _add_quality_check_count(db, base, _ASSOCIATION_ENTITY_TYPES["DataProduct"], product_id)
 
     return base
 
@@ -106,8 +106,8 @@ def build_data_contract_dict(db: Session, contract_id: str) -> Optional[Dict[str
 
     # Relationship counts
     _add_relationship_counts(db, base, "DataContract", contract_id)
-    _add_tag_count(db, base, contract_id, "DataContract")
-    _add_quality_check_count(db, base, "DataContract", contract_id)
+    _add_tags(db, base, contract_id, _ASSOCIATION_ENTITY_TYPES["DataContract"])
+    _add_quality_check_count(db, base, _ASSOCIATION_ENTITY_TYPES["DataContract"], contract_id)
 
     return base
 
@@ -190,22 +190,29 @@ def _add_relationship_counts(db: Session, d: Dict[str, Any],
     d["has_logical_attribute_mappings"] = logical_attr_count > 0
 
 
-def _add_tag_count(db: Session, d: Dict[str, Any],
-                    entity_id: str, entity_type: str) -> None:
-    """Count tags assigned to entity."""
-    from src.db_models.tags import EntityTagAssociationDb
-    count = (
-        db.query(func.count(EntityTagAssociationDb.id))
-        .filter(
-            and_(
-                EntityTagAssociationDb.entity_id == entity_id,
-                EntityTagAssociationDb.entity_type == entity_type,
-            )
-        )
-        .scalar()
-    ) or 0
-    d["tag_count"] = count
-    d["has_tags"] = count > 0
+# The entity type tag assignments and quality items are stored under (the tags API,
+# ``QualityManager``), by the entity type relationships use
+_ASSOCIATION_ENTITY_TYPES = {
+    "DataProduct": "data_product",
+    "DataContract": "data_contract",
+}
+
+
+def _add_tags(db: Session, d: Dict[str, Any], entity_id: str, entity_type: str) -> None:
+    """The assigned tags: a ``tags`` dict for ``HAS_TAG`` / ``TAG`` in rules, and their count.
+
+    Keyed as compliance rules read app entity tags (``tag_values``); ``tag_count`` is the
+    number of assignments, from the same query, so the two can't disagree.
+    """
+    from src.common.compliance_entities import tag_values
+    from src.repositories.tags_repository import entity_tag_repo
+
+    assigned = entity_tag_repo.get_assigned_tags_for_entities(
+        db, entity_ids=[entity_id], entity_type=entity_type,
+    ).get(entity_id, [])
+    d["tags"] = tag_values(assigned)
+    d["tag_count"] = len(assigned)
+    d["has_tags"] = bool(assigned)
 
 
 def _add_quality_check_count(db: Session, d: Dict[str, Any],

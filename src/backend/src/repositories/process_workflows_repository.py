@@ -169,7 +169,7 @@ class ProcessWorkflowRepository:
         db_workflow = ProcessWorkflowDb(
             name=workflow.name,
             description=workflow.description,
-            trigger_config=workflow.trigger.model_dump_json(),
+            trigger_config=workflow.trigger.stored_config_json(),
             scope_config=workflow.scope.model_dump_json() if workflow.scope else None,
             workflow_type=(getattr(workflow, 'workflow_type', WorkflowType.PROCESS) or WorkflowType.PROCESS).value,
             is_active=workflow.is_active,
@@ -218,7 +218,7 @@ class ProcessWorkflowRepository:
         if workflow.description is not None:
             db_workflow.description = workflow.description
         if workflow.trigger is not None:
-            db_workflow.trigger_config = workflow.trigger.model_dump_json()
+            db_workflow.trigger_config = workflow.trigger.stored_config_json()
         if workflow.scope is not None:
             db_workflow.scope_config = workflow.scope.model_dump_json()
         if workflow.workflow_type is not None:

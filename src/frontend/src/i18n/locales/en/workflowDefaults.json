@@ -123,6 +123,8 @@
     "request-publish": "Request Publish",
     "request-status-change": "Request Status Change",
     "before-status-change-default": "Status Change Gate (Default)",
+    "owner-deprecation-notice": "Owner Deprecation Notice",
+    "owner-retirement-notice": "Owner Retirement Notice",
     "on-publish-notification": "Publish Notification",
     "on-unpublish-notification": "Unpublish Notification",
     "certification-request-review": "Certification Request Review",

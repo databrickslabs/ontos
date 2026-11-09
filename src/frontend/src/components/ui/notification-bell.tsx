@@ -272,7 +272,7 @@ export default function NotificationBell() {
                     </p>
                   )}
                   {(notification.description || notification.message) && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">
                       {notificationDescription(notification, t)}
                     </p>
                   )}

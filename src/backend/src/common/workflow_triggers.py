@@ -1371,6 +1371,7 @@ def run_status_gates(
     entity_name: Optional[str] = None,
     entity_data: Optional[Dict[str, Any]] = None,
     user_email: Optional[str] = None,
+    before_gates: Optional[Callable[[], None]] = None,
 ) -> None:
     """Run the ``before_status_change`` gates of a transition; raise when it must not proceed.
 
@@ -1387,7 +1388,11 @@ def run_status_gates(
     Before the gates, the certified deprecation guard (enforced in code, not a
     workflow) refuses a direct deprecation of a certified product or contract
     (``CertifiedDeprecationRequiresApprovalError``), so a refused change
-    starts no gate approval. When the transition may proceed, the entity's
+    starts no gate approval. ``before_gates`` (the caller's own checks of the
+    transition, e.g. the deprecation fields) runs after the guard and before
+    the gates: a certified entity is told to request the change before it is
+    asked for details, and an invalid change starts no gate approval either.
+    When the transition may proceed, the entity's
     open status change requests are closed (``close_open_requests``), so none
     can be approved after the entity left the status it was made from.
     """
@@ -1405,6 +1410,8 @@ def run_status_gates(
         check_certified_deprecation, close_open_requests,
     )
     check_certified_deprecation(db, event)
+    if before_gates is not None:
+        before_gates()
 
     def proceed() -> None:
         if entity_type in (EntityType.DATA_PRODUCT, EntityType.DATA_CONTRACT):

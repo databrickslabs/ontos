@@ -1,6 +1,8 @@
+import hmac
 from typing import Optional, Dict, List
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader
 
 from src.controller.authorization_manager import AuthorizationManager
 from src.models.users import UserInfo
@@ -408,48 +410,6 @@ async def require_ontos_admin(
     return user_details
 
 
-async def get_user_groups(user_email: str, request: Optional[Request] = None) -> List[str]:
-    """Get user groups for the given user email.
-
-    When ``request`` is provided and a valid test-user override header is
-    present, the override's groups are returned (mirrors
-    :func:`get_user_details_from_sdk`).
-    """
-    # Get settings directly instead of using dependency injection
-    settings = get_settings()
-
-    # Per-request test override (only when caller threaded the request through).
-    if request is not None:
-        try:
-            override = _try_resolve_test_override(
-                request, settings, manager=None, real_ip=request.headers.get("X-Real-Ip")
-            )
-            if override is not None and override.email == user_email:
-                return list(override.groups or [])
-        except HTTPException:
-            # A 400 here means the caller meant to override but did it wrong.
-            # Surface it rather than masking with an empty group list.
-            raise
-
-    if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
-        # Return mock groups for local/mock development honoring overrides
-        if settings.MOCK_USER_GROUPS:
-            try:
-                import json as _json
-                parsed = _json.loads(settings.MOCK_USER_GROUPS)
-                if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
-                    return parsed
-            except Exception:
-                csv = [g.strip() for g in settings.MOCK_USER_GROUPS.split(',') if g.strip()]
-                if csv:
-                    return csv
-        return LOCAL_DEV_USER.groups
-
-    # In production, you would get groups from the user details
-    # For now, returning empty list as fallback
-    return []
-
-
 async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
     """Get the highest team role override for a user."""
     try:
@@ -845,3 +805,51 @@ class ApprovalChecker:
         except Exception as e:
             logger.error("Unexpected error during approval check for '%s'", self.entity.value, exc_info=True)
             raise HTTPException(status_code=500, detail="Error checking approval privileges")
+
+
+# --- Demo-data routes: settings admin OR optional setup token ---
+
+DEMO_SETUP_TOKEN_HEADER = "X-Demo-Setup-Token"
+
+# Declared as a security scheme so Swagger "Authorize" can send the token.
+demo_setup_token_scheme = APIKeyHeader(
+    name=DEMO_SETUP_TOKEN_HEADER,
+    auto_error=False,
+    description=(
+        "Optional setup token (the DEMO_SETUP_TOKEN app setting). Accepted instead of the "
+        "settings-general ADMIN permission on the demo-data load/clear routes."
+    ),
+)
+
+
+def is_valid_demo_setup_token(provided: Optional[str], configured: Optional[str]) -> bool:
+    """Constant-time check of a presented token. Always False when no token is configured."""
+    if not configured or not provided:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), configured.encode("utf-8"))
+
+
+async def require_demo_admin_or_setup_token(
+    request: Request,
+    setup_token: Optional[str] = Depends(demo_setup_token_scheme),
+    settings: Settings = Depends(get_settings),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+) -> None:
+    """Allow the call for a ``settings-general`` ADMIN, or for a valid ``DEMO_SETUP_TOKEN``.
+
+    A presented token that is wrong, or presented while ``DEMO_SETUP_TOKEN`` is unset, does
+    not grant access; the request then falls through to the admin check (403 for non-admins).
+    The token value is never logged.
+    """
+    if is_valid_demo_setup_token(setup_token, settings.DEMO_SETUP_TOKEN):
+        logger.info(
+            "Demo-data access granted by setup token for '%s'",
+            user_details.user or user_details.email,
+        )
+        return
+    if setup_token:
+        logger.warning("Demo-data setup token rejected or not configured")
+    await PermissionChecker("settings-general", FeatureAccessLevel.ADMIN)(
+        request, user_details, auth_manager
+    )

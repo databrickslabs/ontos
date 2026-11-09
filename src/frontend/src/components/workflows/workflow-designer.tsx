@@ -2370,6 +2370,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectItem value="product_approved">{t('workflows:designer.notification.templates.productApproved')}</SelectItem>
                             <SelectItem value="product_rejected">{t('workflows:designer.notification.templates.productRejected')}</SelectItem>
                             <SelectItem value="pii_detected">{t('workflows:designer.notification.templates.piiDetected')}</SelectItem>
+                            <SelectItem value="entity_deprecated">
+                              {t('workflows:designer.notification.templates.entityDeprecated')}
+                            </SelectItem>
+                            <SelectItem value="entity_retired">
+                              {t('workflows:designer.notification.templates.entityRetired')}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

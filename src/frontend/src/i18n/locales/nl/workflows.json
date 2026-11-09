@@ -188,7 +188,9 @@
         "validationPassed": "Validatie Geslaagd",
         "productApproved": "Product Goedgekeurd",
         "productRejected": "Product Afgewezen",
-        "piiDetected": "PII Gedetecteerd"
+        "piiDetected": "PII Gedetecteerd",
+        "entityDeprecated": "Melding: verouderd",
+        "entityRetired": "Melding: buiten gebruik"
       },
       "customMessage": "Aangepast Bericht",
       "customMessagePlaceholder": "Overschrijf sjabloonbericht. Ondersteunt ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

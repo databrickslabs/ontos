@@ -22,8 +22,10 @@ from databricks.sdk.service.jobs import RunLifeCycleState
 from src.common import app_state
 from src.common.workflow_executor import WorkflowExecutor
 from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.change_log_manager import change_log_manager
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.jobs_manager import JobsManager
+from src.controller.lifecycle_fields import DeprecationDetails
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
 from src.db_models.workflow_installations import WorkflowInstallationDb
@@ -32,6 +34,14 @@ from src.repositories.workflow_configurations_repository import workflow_configu
 
 JOB_ID = 4242
 RUN_ID = 777
+
+
+@pytest.fixture(autouse=True)
+def no_audit_session(monkeypatch):
+    # An approved deprecation is audited (#1042) in a session of its own, whose
+    # commit would keep this test's rows in the shared test database.
+    from src.controller import audit_manager
+    monkeypatch.setattr(audit_manager, 'log_system_action', lambda **kw: None)
 
 
 @pytest.fixture
@@ -81,6 +91,20 @@ def _contract(db, status):
     return contract
 
 
+# Deprecating needs a reason (#1042)
+DEPRECATION = DeprecationDetails(reason='Replaced by v2')
+
+
+def _request_deprecation(db, entity_type, entity_id):
+    # The approval of a request takes its justification as the reason (#1042).
+    change_log_manager.log_change_with_details(
+        db, entity_type=entity_type, entity_id=entity_id,
+        action='status_change_requested', username='r@x.com',
+        details={'target_status': 'deprecated', 'justification': 'Replaced by v2',
+                 'requester_email': 'r@x.com'},
+    )
+
+
 def _stored_status(db, model, entity_id):
     db.expire_all()
     return db.get(model, entity_id).status
@@ -101,7 +125,10 @@ def test_a_product_transition_requests_one_run(db_session, jobs_manager, install
                                                from_status, to_status):
     product = _product(db_session, from_status)
 
-    DataProductsManager(db=db_session).transition_status(product.id, to_status, 'u@x.com')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, to_status, 'u@x.com',
+        deprecation=DEPRECATION if to_status == 'deprecated' else None,
+    )
 
     _assert_one_run_requested(jobs_manager, ws)
     assert _stored_status(db_session, DataProductDb, product.id) == to_status
@@ -117,7 +144,8 @@ def test_the_run_gets_the_saved_tag_sync_configuration(db_session, jobs_manager,
                                        configuration={'tag_sync_configs': configs})
     product = _product(db_session, 'active')
 
-    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, 'deprecated', deprecation=DEPRECATION)
 
     params = ws.jobs.run_now.call_args.kwargs['job_parameters']
     assert json.loads(params['tag_sync_configs']) == configs
@@ -132,7 +160,8 @@ def test_a_configuration_saved_without_the_mapping_runs_with_it(db_session, jobs
                                        configuration={'tag_sync_configs': [name_entry]})
     product = _product(db_session, 'active')
 
-    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, 'deprecated', deprecation=DEPRECATION)
 
     params = ws.jobs.run_now.call_args.kwargs['job_parameters']
     configs = json.loads(params['tag_sync_configs'])
@@ -161,7 +190,8 @@ def test_no_run_without_an_installed_job(db_session, jobs_manager, ws, status):
         db_session.flush()
     product = _product(db_session, 'active')
 
-    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, 'deprecated', deprecation=DEPRECATION)
 
     jobs_manager.run_job.assert_not_called()
     ws.jobs.run_now.assert_not_called()
@@ -177,7 +207,8 @@ def test_a_run_waiting_to_start_is_enough(db_session, jobs_manager, installed, w
         SimpleNamespace(run_id=1, state=SimpleNamespace(life_cycle_state=state))]
     product = _product(db_session, 'active')
 
-    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, 'deprecated', deprecation=DEPRECATION)
 
     ws.jobs.list_runs.assert_called_once_with(job_id=JOB_ID, active_only=True)
     jobs_manager.run_job.assert_not_called()
@@ -188,7 +219,8 @@ def test_a_running_run_may_have_read_the_old_status(db_session, jobs_manager, in
         run_id=1, state=SimpleNamespace(life_cycle_state=RunLifeCycleState.RUNNING))]
     product = _product(db_session, 'active')
 
-    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, 'deprecated', deprecation=DEPRECATION)
 
     _assert_one_run_requested(jobs_manager, ws)
 
@@ -200,7 +232,8 @@ def test_a_failed_request_never_fails_the_transition(db_session, jobs_manager, i
     product = _product(db_session, 'active')
 
     with caplog.at_level(logging.WARNING):
-        result = DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+        result = DataProductsManager(db=db_session).transition_status(
+            product.id, 'deprecated', deprecation=DEPRECATION)
 
     assert result.status == 'deprecated'
     assert _stored_status(db_session, DataProductDb, product.id) == 'deprecated'
@@ -210,7 +243,8 @@ def test_a_failed_request_never_fails_the_transition(db_session, jobs_manager, i
 def test_no_jobs_manager_no_run(db_session, installed, ws):
     product = _product(db_session, 'active')
 
-    DataProductsManager(db=db_session).transition_status(product.id, 'deprecated')
+    DataProductsManager(db=db_session).transition_status(
+        product.id, 'deprecated', deprecation=DEPRECATION)
 
     ws.jobs.run_now.assert_not_called()
     assert _stored_status(db_session, DataProductDb, product.id) == 'deprecated'
@@ -249,7 +283,7 @@ def test_a_contract_transition_requests_one_run(db_session, jobs_manager, instal
     contract = _contract(db_session, 'active')
 
     DataContractsManager(data_dir=Path('/tmp')).transition_status(
-        db_session, contract.id, 'deprecated', 'u@x.com')
+        db_session, contract.id, 'deprecated', 'u@x.com', deprecation=DEPRECATION)
 
     _assert_one_run_requested(jobs_manager, ws)
 
@@ -260,7 +294,7 @@ def test_a_failed_request_keeps_the_contract_transition(db_session, jobs_manager
     contract = _contract(db_session, 'active')
 
     updated = DataContractsManager(data_dir=Path('/tmp')).transition_status(
-        db_session, contract.id, 'deprecated', 'u@x.com')
+        db_session, contract.id, 'deprecated', 'u@x.com', deprecation=DEPRECATION)
 
     assert updated.status == 'deprecated'
     assert _stored_status(db_session, DataContractDb, contract.id) == 'deprecated'
@@ -270,6 +304,7 @@ def test_an_approved_contract_status_change_request_requests_one_run(db_session,
                                                                       jobs_manager,
                                                                       installed, ws):
     contract = _contract(db_session, 'active')
+    _request_deprecation(db_session, 'data_contract', contract.id)
 
     DataContractsManager(data_dir=Path('/tmp')).handle_status_change_response(
         db_session, MagicMock(), contract.id, approver_email='a@x.com', decision='approve',
@@ -309,6 +344,7 @@ def test_an_approved_product_status_change_response_requests_one_run(db_session,
                                                                       jobs_manager,
                                                                       installed, ws):
     product = _product(db_session, 'active')
+    _request_deprecation(db_session, 'data_product', product.id)
 
     DataProductsManager(db=db_session).handle_status_change_response(
         db_session, MagicMock(), product.id, approver_email='a@x.com', decision='approve',
@@ -340,12 +376,14 @@ def test_an_approved_request_asks_with_the_stored_and_the_requested_status(
 
     if entity_type == 'data_contract':
         entity = _contract(db_session, 'active')
+        _request_deprecation(db_session, 'data_contract', entity.id)
         DataContractsManager(data_dir=Path('/tmp')).handle_status_change_response(
             db_session, MagicMock(), entity.id, approver_email='a@x.com', decision='approve',
             target_status='Deprecated', requester_email='r@x.com',
         )
     else:
         entity = _product(db_session, 'active')
+        _request_deprecation(db_session, 'data_product', entity.id)
         DataProductsManager(db=db_session).handle_status_change_response(
             db_session, MagicMock(), entity.id, approver_email='a@x.com', decision='approve',
             target_status='Deprecated',

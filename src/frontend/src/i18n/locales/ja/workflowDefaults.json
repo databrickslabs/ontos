@@ -123,6 +123,8 @@
     "request-publish": "公開を依頼",
     "request-status-change": "ステータス変更を依頼",
     "before-status-change-default": "ステータス変更ゲート(デフォルト)",
+    "owner-deprecation-notice": "オーナーへの非推奨のお知らせ",
+    "owner-retirement-notice": "オーナーへの廃止のお知らせ",
     "on-publish-notification": "公開の通知",
     "on-unpublish-notification": "公開取り消しの通知",
     "certification-request-review": "認定依頼のレビュー",

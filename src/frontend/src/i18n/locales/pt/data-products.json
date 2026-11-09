@@ -679,7 +679,8 @@
     },
     "errors": {
       "cannotRequest": "\"{{requestType}}\" não está disponível para um produto com status {{productStatus}}.",
-      "failedToSubmit": "Falha ao enviar solicitação"
+      "failedToSubmit": "Falha ao enviar solicitação",
+      "notProductOwner": "Somente os proprietários do produto ou um administrador podem solicitar a revisão dele."
     },
     "toast": {
       "statusChanged": "Status alterado",

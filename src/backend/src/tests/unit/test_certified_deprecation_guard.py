@@ -8,6 +8,8 @@
   and not by the requester.
 - A stored switch that can't be read leaves the guard on.
 - Only the move to ``deprecated`` is guarded.
+- The guard decides before the deprecation reason is checked; where it lets
+  the change through, the reason is still required.
 - A transition closes the open requests with its own status write.
 """
 import os
@@ -34,13 +36,15 @@ from src.controller.certified_deprecation_guard import (
     pending_request_id,
     workflow_approval_refusal,
     guard_exemptions,
+    save_guard_exemptions,
 )
 from src.controller.change_log_manager import change_log_manager
 from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.data_products_manager import DataProductsManager
+from src.controller.lifecycle_fields import DeprecationDetails, LifecycleFieldError
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
-from src.models.process_workflows import TriggerContext, TriggerType
+from src.models.process_workflows import GateExemptions, TriggerContext, TriggerType
 from src.repositories.app_settings_repository import app_settings_repo
 
 
@@ -63,6 +67,10 @@ def _contract(db, certified=True) -> DataContractDb:
     db.add(contract)
     db.commit()
     return contract
+
+
+# A deprecation needs a reason (#1042): the guard's tests give one
+REASON = DeprecationDetails(reason='Replaced by v2, consumers moved')
 
 
 def _status(db, model, entity_id):
@@ -100,9 +108,13 @@ def test_an_approval_accepts_its_own_product_only(products, db_session):
     approved, other = _product(db_session), _product(db_session)
 
     with approved_status_change('data_product', approved.id):
-        products.transition_status(approved.id, 'deprecated', 'approver@example.com')
+        products.transition_status(
+            approved.id, 'deprecated', 'approver@example.com', deprecation=REASON,
+        )
         with pytest.raises(CertifiedDeprecationRequiresApprovalError) as refused:
-            products.transition_status(other.id, 'deprecated', 'approver@example.com')
+            products.transition_status(
+                other.id, 'deprecated', 'approver@example.com', deprecation=REASON,
+            )
 
     assert _status(db_session, DataProductDb, approved.id) == 'deprecated'
     assert _status(db_session, DataProductDb, other.id) == 'active'
@@ -115,7 +127,7 @@ def test_the_approval_ends_with_its_block(products, db_session):
         pass
 
     with pytest.raises(CertifiedDeprecationRequiresApprovalError):
-        products.transition_status(product.id, 'deprecated')
+        products.transition_status(product.id, 'deprecated', deprecation=REASON)
 
 
 def test_a_decision_that_does_not_count_is_refused_with_its_reason(
@@ -125,10 +137,10 @@ def test_a_decision_that_does_not_count_is_refused_with_its_reason(
 
     with approved_status_change('data_product', product.id, 'not_admin'):
         with pytest.raises(CertifiedDeprecationApprovalRefusedError) as refused_product:
-            products.transition_status(product.id, 'deprecated')
+            products.transition_status(product.id, 'deprecated', deprecation=REASON)
     with approved_status_change('data_contract', contract.id, 'self_approval'):
         with pytest.raises(CertifiedDeprecationApprovalRefusedError) as refused:
-            contracts.transition_status(db_session, contract.id, 'deprecated')
+            contracts.transition_status(db_session, contract.id, 'deprecated', deprecation=REASON)
 
     assert refused_product.value.params['reason'] == 'not_admin'
     assert refused.value.code == 'certified_deprecation_approval_refused'
@@ -142,10 +154,49 @@ def test_an_approved_contract_request_is_accepted(contracts, db_session):
     contract = _contract(db_session)
 
     with approved_status_change('data_contract', contract.id):
-        contracts.transition_status(db_session, contract.id, 'deprecated')
+        contracts.transition_status(db_session, contract.id, 'deprecated', deprecation=REASON)
 
     assert _status(db_session, DataContractDb, contract.id) == 'deprecated'
 
+
+
+# --- The guard before the deprecation fields ----------------------------------
+
+def test_a_certified_entity_is_told_to_request_before_it_is_asked_for_a_reason(
+    products, contracts, db_session,
+):
+    product, contract = _product(db_session), _contract(db_session)
+
+    with pytest.raises(CertifiedDeprecationRequiresApprovalError):
+        products.transition_status(product.id, 'deprecated')
+    with pytest.raises(CertifiedDeprecationRequiresApprovalError):
+        contracts.transition_status(db_session, contract.id, 'deprecated')
+    with approved_status_change('data_product', product.id, 'no_pending_request'):
+        with pytest.raises(CertifiedDeprecationApprovalRefusedError):
+            products.transition_status(product.id, 'deprecated')
+
+
+def test_where_the_guard_lets_it_through_the_reason_is_still_required(
+    products, contracts, db_session,
+):
+    exempt, approved = _product(db_session), _product(db_session)
+    contract = _contract(db_session)
+    save_guard_exemptions(db_session, GateExemptions(data_products=[exempt.id]))
+
+    with pytest.raises(LifecycleFieldError) as switched_off:
+        products.transition_status(exempt.id, 'deprecated')
+    with approved_status_change('data_product', approved.id):
+        with pytest.raises(LifecycleFieldError) as approved_without_reason:
+            products.transition_status(approved.id, 'deprecated')
+    with approved_status_change('data_contract', contract.id):
+        with pytest.raises(LifecycleFieldError) as contract_without_reason:
+            contracts.transition_status(db_session, contract.id, 'deprecated')
+
+    for refused in (switched_off, approved_without_reason, contract_without_reason):
+        assert refused.value.code == 'deprecation_reason_required'
+    for entity in (exempt, approved):
+        assert _status(db_session, DataProductDb, entity.id) == 'active'
+    assert _status(db_session, DataContractDb, contract.id) == 'active'
 
 def _complete(db, product, approved, succeeded=True, approver=None):
     """End a Status Change Request run; ``approver`` decides it through handle-approval."""
@@ -241,7 +292,7 @@ def test_a_switch_that_cannot_be_read_leaves_the_guard_on(products, db_session, 
 
     assert guard_exemptions(db_session).is_empty()
     with pytest.raises(CertifiedDeprecationRequiresApprovalError):
-        products.transition_status(product.id, 'deprecated')
+        products.transition_status(product.id, 'deprecated', deprecation=REASON)
     assert "can't be read" in caplog.text
 
 

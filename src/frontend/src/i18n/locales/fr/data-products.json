@@ -679,7 +679,8 @@
     },
     "errors": {
       "cannotRequest": "« {{requestType}} » n'est pas disponible pour un produit au statut {{productStatus}}.",
-      "failedToSubmit": "Échec de l'envoi de la demande"
+      "failedToSubmit": "Échec de l'envoi de la demande",
+      "notProductOwner": "Seuls les propriétaires du produit ou un administrateur peuvent demander sa revue."
     },
     "toast": {
       "statusChanged": "Statut modifié",

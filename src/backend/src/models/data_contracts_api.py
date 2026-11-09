@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -609,6 +609,19 @@ class DataContractRead(BaseModel):
     publication_scope: str = "none"
     published_at: Optional[str] = None
     published_by: Optional[str] = None
+
+    # Deprecation lifecycle fields (set when the contract moves to `deprecated`)
+    deprecation_reason: Optional[str] = None
+    sunset_date: Optional[str] = None
+    replacement_contract_id: Optional[str] = None
+    deprecated_at: Optional[str] = None
+
+    @field_validator('published_at', 'sunset_date', 'deprecated_at', mode='before')
+    @classmethod
+    def _isoformat_dates(cls, value):
+        # Validating ORM rows (from_attributes, e.g. version history) passes
+        # date / datetime columns, not the strings the builder produces.
+        return value.isoformat() if isinstance(value, (date, datetime)) else value
 
     class Config:
         populate_by_name = True

@@ -312,6 +312,17 @@ Search for "demo":
 
 The two endpoints available are to load and, later, unload the demo data.
 
+Both endpoints require the `ADMIN` permission on the `settings-general`
+feature (the Admin role). When you call them from Swagger, the app identifies
+you the same way as for any other request. If your identity does not carry that
+role (for example on a fresh install where no group is mapped yet), set the
+optional `DEMO_SETUP_TOKEN` app setting to a secret value of your choice,
+redeploy, click **Authorize** at the top of `/docs`, paste the value into the
+`X-Demo-Setup-Token` field, and run the endpoint. A request with a valid token
+is accepted instead of the admin check; a wrong token, or any token while
+`DEMO_SETUP_TOKEN` is unset, does not grant access. Unset the setting once the
+demo data is loaded.
+
 `POST /api/settings/demo-data/load` accepts a single `preset` query parameter
 (`retail` | `hls` | `fsi` | `mfg` | `auto`, default `retail`). The matching
 `demo_data_{preset}.sql` is the only file executed — there is no implicit

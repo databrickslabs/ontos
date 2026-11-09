@@ -84,6 +84,14 @@
         "title": "PII detectada",
         "message": "Posible PII detectada en {{entity_type}} '{{entity_name}}'. Se requiere revisión."
       },
+      "entity_deprecated": {
+        "title": "Aviso de obsolescencia",
+        "message": "{{entity_type}} '{{entity_name}}' se marcó como obsoleto."
+      },
+      "entity_retired": {
+        "title": "Aviso de retirada",
+        "message": "{{entity_type}} '{{entity_name}}' se ha retirado."
+      },
       "default": {
         "title": "Notificación de flujo de trabajo",
         "message": "Notificación de flujo de trabajo para {{entity_name}}"
@@ -233,6 +241,14 @@
     "activation": {
       "title": "Producto activado",
       "description": "El producto de datos '{{productName}}' se activó y ya está disponible para su uso."
+    },
+    "ownerNotice": {
+      "reason": "Motivo: {{reason}}",
+      "sunsetDate": "Fecha de retirada: {{sunsetDate}}",
+      "replacement": "Reemplazo: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (versión {{version}}) se marcó como obsoleto.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (versión {{version}}) se ha retirado.",
+      "replacementVersion": "Reemplazo: {{replacementName}} (versión {{replacementVersion}})"
     }
   }
 }

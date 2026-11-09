@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import DeprecationNotice from '@/components/common/deprecation-notice'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
@@ -1901,6 +1902,13 @@ export default function DataContractDetails() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          <DeprecationNotice
+            entityType="data_contract"
+            status={contract.status}
+            reason={contract.deprecation_reason}
+            sunsetDate={contract.sunset_date}
+            replacementId={contract.replacement_contract_id}
+          />
           <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
             <div className="flex items-center gap-2">
               <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.version', 'Version')}:</Label>

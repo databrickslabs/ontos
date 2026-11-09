@@ -84,6 +84,14 @@
         "title": "Données personnelles détectées",
         "message": "Données personnelles potentielles détectées : {{entity_type}} « {{entity_name}} ». Veuillez les examiner."
       },
+      "entity_deprecated": {
+        "title": "Avis d'obsolescence",
+        "message": "{{entity_type}} « {{entity_name}} » a été marqué comme obsolète."
+      },
+      "entity_retired": {
+        "title": "Avis de retrait",
+        "message": "{{entity_type}} « {{entity_name}} » a été retiré."
+      },
       "default": {
         "title": "Notification de workflow",
         "message": "Notification de workflow pour {{entity_name}}"
@@ -233,6 +241,14 @@
     "activation": {
       "title": "Produit activé",
       "description": "Le produit de données « {{productName}} » a été activé et est maintenant disponible."
+    },
+    "ownerNotice": {
+      "reason": "Motif : {{reason}}",
+      "sunsetDate": "Date de fin : {{sunsetDate}}",
+      "replacement": "Remplacement : {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} « {{entity_name}} » (version {{version}}) a été marqué comme obsolète.",
+      "retiredVersion": "{{entity_type}} « {{entity_name}} » (version {{version}}) a été retiré.",
+      "replacementVersion": "Remplacement : {{replacementName}} (version {{replacementVersion}})"
     }
   }
 }

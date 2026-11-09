@@ -84,6 +84,14 @@
         "title": "PII erkannt",
         "message": "Mögliche PII in {{entity_type}} '{{entity_name}}' erkannt. Bitte prüfen."
       },
+      "entity_deprecated": {
+        "title": "Hinweis: veraltet",
+        "message": "{{entity_type}} '{{entity_name}}' wurde als veraltet markiert."
+      },
+      "entity_retired": {
+        "title": "Hinweis: stillgelegt",
+        "message": "{{entity_type}} '{{entity_name}}' wurde stillgelegt."
+      },
       "default": {
         "title": "Workflow-Benachrichtigung",
         "message": "Workflow-Benachrichtigung für {{entity_name}}"
@@ -233,6 +241,14 @@
     "activation": {
       "title": "Produkt aktiviert",
       "description": "Das Datenprodukt '{{productName}}' wurde aktiviert und steht jetzt zur Verfügung."
+    },
+    "ownerNotice": {
+      "reason": "Grund: {{reason}}",
+      "sunsetDate": "Auslaufdatum: {{sunsetDate}}",
+      "replacement": "Ersatz: {{replacementName}}",
+      "deprecatedVersion": "{{entity_type}} '{{entity_name}}' (Version {{version}}) wurde als veraltet markiert.",
+      "retiredVersion": "{{entity_type}} '{{entity_name}}' (Version {{version}}) wurde stillgelegt.",
+      "replacementVersion": "Ersatz: {{replacementName}} (Version {{replacementVersion}})"
     }
   }
 }

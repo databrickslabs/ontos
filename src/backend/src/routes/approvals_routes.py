@@ -100,14 +100,44 @@ async def list_approval_sessions(
 
 @router.get('/approvals/queue')
 async def get_approvals_queue(
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
     manager: ApprovalsManager = Depends(get_approvals_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Get all items awaiting approval (contracts, products, etc.)."""
+    """Items awaiting approval (contracts, products) that the caller may open (#1117).
+
+    Each entry links to the entity's page, so it is listed only when that page
+    would show it: the queue must not disclose a draft whose page answers 404.
+
+    * A product: the caller has data-products read and may read the product by
+      id (``_caller_can_read_product``: published, data-products admin, owner,
+      or pending reviewer of an open review or approval).
+    * A contract: ``GET /api/data-contracts/{id}`` has no gate beyond
+      data-contracts read, which this route already requires, so every caller
+      who reaches it sees the contracts.
+    """
+    from src.common.authorization import has_feature_permission
+    from src.routes.data_product_routes import _caller_can_read_product
+
     try:
-        return manager.get_approvals_queue(db)
+        reads_products = await has_feature_permission(
+            'data-products', FeatureAccessLevel.READ_ONLY, current_user, request,
+        )
+    except HTTPException:
+        logger.exception("Approvals queue: data-products permission check failed; hiding products")
+        reads_products = False
+
+    def can_see_product(product) -> bool:
+        return reads_products and _caller_can_read_product(
+            request, db, current_user, None, product,
+        )
+
+    try:
+        return manager.get_approvals_queue(
+            db, can_see_contract=lambda contract: True, can_see_product=can_see_product,
+        )
     except Exception as e:
         logger.exception("Failed to build approvals queue")
         raise HTTPException(status_code=500, detail="Failed to build approvals queue")

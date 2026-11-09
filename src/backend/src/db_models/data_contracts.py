@@ -2,6 +2,7 @@ from uuid import uuid4
 from sqlalchemy import (
     Column,
     String,
+    Date,
     DateTime,
     Text,
     Boolean,
@@ -70,6 +71,12 @@ class DataContractDb(Base):
     certified_by = Column(String, nullable=True)
     certification_expires_at = Column(DateTime(timezone=True), nullable=True)
     certification_notes = Column(Text, nullable=True)
+
+    # ==================== Deprecation lifecycle ====================
+    deprecation_reason = Column(Text, nullable=True)
+    sunset_date = Column(Date, nullable=True)
+    replacement_contract_id = Column(String, nullable=True)
+    deprecated_at = Column(DateTime(timezone=True), nullable=True)
 
     # ==================== Maturity ====================
     maturity_level_order = Column(Integer, nullable=True)

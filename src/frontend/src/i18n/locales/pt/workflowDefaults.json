@@ -123,6 +123,8 @@
     "request-publish": "Solicitar publicação",
     "request-status-change": "Solicitar mudança de status",
     "before-status-change-default": "Gate de mudança de status (padrão)",
+    "owner-deprecation-notice": "Aviso de obsolescência aos responsáveis",
+    "owner-retirement-notice": "Aviso de aposentadoria aos responsáveis",
     "on-publish-notification": "Notificação de publicação",
     "on-unpublish-notification": "Notificação de despublicação",
     "certification-request-review": "Revisão de solicitação de certificação",

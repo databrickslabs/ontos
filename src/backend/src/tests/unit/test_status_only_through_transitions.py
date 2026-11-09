@@ -281,6 +281,7 @@ class TestMcpUpdateTools:
         # draft -> active is not a lifecycle transition (draft -> proposed -> ...)
         assert result.success is False
         assert 'Invalid status transition' in result.error
+        assert result.error_code == 'invalid_status_transition'
         db_session.expire_all()
         assert db_session.get(DataProductDb, pid).status == 'draft'
 
@@ -291,6 +292,23 @@ class TestMcpUpdateTools:
         assert result.success is True, result.error
         db_session.expire_all()
         assert db_session.get(DataProductDb, pid).status == 'proposed'
+
+    def test_a_contract_status_change_outside_the_lifecycle_is_refused(
+        self, contract_manager, db_session,
+    ):
+        import asyncio
+        from src.tools.data_contracts import UpdateDataContractTool
+
+        cid = _contract(db_session, status='draft')
+        result = asyncio.run(UpdateDataContractTool().execute(
+            self._ctx(db_session, contract_manager=contract_manager), contract_id=cid,
+            status='active',
+        ))
+        assert result.success is False
+        assert result.error_code == 'invalid_status_transition'
+        assert "from 'draft' to 'active'" in result.error
+        db_session.expire_all()
+        assert db_session.get(DataContractDb, cid).status == 'draft'
 
     def test_a_blocking_gate_stops_a_contract_status_change(self, contract_manager, db_session, monkeypatch):
         import asyncio
@@ -305,6 +323,8 @@ class TestMcpUpdateTools:
             self._ctx(db_session, contract_manager=contract_manager), contract_id=cid, status='proposed',
         ))
         assert result.success is False
-        assert 'StatusChangeBlockedError' in result.error
+        # The workflow's coded refusal, not the exception class (#1143)
+        assert result.error_code == 'status_change_blocked'
+        assert 'blocked by workflow' in result.error
         db_session.expire_all()
         assert db_session.get(DataContractDb, cid).status == 'draft'

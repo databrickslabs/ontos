@@ -188,7 +188,9 @@
         "validationPassed": "Validation Passed",
         "productApproved": "Product Approved",
         "productRejected": "Product Rejected",
-        "piiDetected": "PII Detected"
+        "piiDetected": "PII Detected",
+        "entityDeprecated": "Deprecation Notice",
+        "entityRetired": "Retirement Notice"
       },
       "customMessage": "Custom Message",
       "customMessagePlaceholder": "Override template message. Supports ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

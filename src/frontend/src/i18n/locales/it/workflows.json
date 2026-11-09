@@ -188,7 +188,9 @@
         "validationPassed": "Convalida superata",
         "productApproved": "Prodotto approvato",
         "productRejected": "Prodotto rifiutato",
-        "piiDetected": "PII rilevate"
+        "piiDetected": "PII rilevate",
+        "entityDeprecated": "Avviso di obsolescenza",
+        "entityRetired": "Avviso di ritiro"
       },
       "customMessage": "Messaggio personalizzato",
       "customMessagePlaceholder": "Sostituisci il messaggio del template. Supporta ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",

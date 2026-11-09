@@ -12,6 +12,9 @@ from src.controller.approvals_manager import ApprovalsManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_products import DataProductDb
 
+# The status filter alone: the caller may see every row
+SEE_ALL = {'can_see_contract': lambda contract: True, 'can_see_product': lambda product: True}
+
 
 class TestApprovalsManager:
     """Test suite for ApprovalsManager"""
@@ -28,7 +31,7 @@ class TestApprovalsManager:
     def test_get_approvals_queue_empty(self, manager, db_session):
         """Test getting approvals queue when none exist."""
         # Act
-        result = manager.get_approvals_queue(db=db_session)
+        result = manager.get_approvals_queue(db=db_session, **SEE_ALL)
 
         # Assert
         assert result is not None
@@ -65,7 +68,7 @@ class TestApprovalsManager:
         db_session.commit()
 
         # Act
-        result = manager.get_approvals_queue(db=db_session)
+        result = manager.get_approvals_queue(db=db_session, **SEE_ALL)
 
         # Assert
         assert len(result['contracts']) == 2
@@ -111,7 +114,7 @@ class TestApprovalsManager:
         db_session.commit()
 
         # Act
-        result = manager.get_approvals_queue(db=db_session)
+        result = manager.get_approvals_queue(db=db_session, **SEE_ALL)
 
         # Assert - only the two awaiting-review products surface
         product_ids = {p['id'] for p in result['products']}
@@ -138,7 +141,7 @@ class TestApprovalsManager:
         db_session.commit()
 
         # Act
-        result = manager.get_approvals_queue(db=db_session)
+        result = manager.get_approvals_queue(db=db_session, **SEE_ALL)
 
         # Assert
         assert len(result['products']) == 1
@@ -166,7 +169,7 @@ class TestApprovalsManager:
         db_session.commit()
 
         # Act
-        result = manager.get_approvals_queue(db=db_session)
+        result = manager.get_approvals_queue(db=db_session, **SEE_ALL)
 
         # Assert
         assert len(result['contracts']) == 1
@@ -174,3 +177,44 @@ class TestApprovalsManager:
         assert result['contracts'][0]['name'] == "Proposed Contract"
         assert result['products'][0]['title'] == "Proposed Product"
 
+    def test_the_queue_lists_only_what_the_caller_may_see(self, manager, db_session):
+        """#1117: each entity's predicate (its by-id read rule) filters the queue."""
+        seen_contract, hidden_contract, seen_product, hidden_product = (
+            str(uuid.uuid4()) for _ in range(4)
+        )
+        db_session.add_all([
+            DataContractDb(id=seen_contract, name='Seen', version='1', status='proposed'),
+            DataContractDb(id=hidden_contract, name='Hidden', version='1', status='proposed'),
+            DataProductDb(id=seen_product, name='Seen', version='1', status='under_review'),
+            DataProductDb(id=hidden_product, name='Hidden', version='1', status='proposed'),
+        ])
+        db_session.commit()
+
+        result = manager.get_approvals_queue(
+            db=db_session,
+            can_see_contract=lambda contract: contract.id == seen_contract,
+            can_see_product=lambda product: product.id == seen_product,
+        )
+
+        assert [c['id'] for c in result['contracts']] == [seen_contract]
+        assert [p['id'] for p in result['products']] == [seen_product]
+
+    def test_a_failing_visibility_check_hides_only_that_row(self, manager, db_session):
+        failing, fine = str(uuid.uuid4()), str(uuid.uuid4())
+        db_session.add_all([
+            DataProductDb(id=failing, name='Failing', version='1', status='proposed'),
+            DataProductDb(id=fine, name='Fine', version='1', status='proposed'),
+        ])
+        db_session.commit()
+
+        def can_see_product(product):
+            if product.id == failing:
+                raise RuntimeError('lookup failed')
+            return True
+
+        result = manager.get_approvals_queue(
+            db=db_session, can_see_contract=lambda contract: True,
+            can_see_product=can_see_product,
+        )
+
+        assert [p['id'] for p in result['products']] == [fine]

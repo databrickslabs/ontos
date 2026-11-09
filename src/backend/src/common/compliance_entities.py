@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
+from src.common.uc_table_columns import table_column_fields
 
 logger = get_logger(__name__)
 
@@ -51,6 +52,10 @@ class EntityLoader(ABC):
             Entity dictionaries
         """
         pass
+
+
+# Unity Catalog table types that are views. The exact type stays in `table_type`.
+VIEW_TABLE_TYPES = ('VIEW', 'MATERIALIZED_VIEW', 'METRIC_VIEW')
 
 
 class UnityCatalogLoader(EntityLoader):
@@ -114,8 +119,12 @@ class UnityCatalogLoader(EntityLoader):
                                     catalog_name=catalog.name,
                                     schema_name=schema.name
                                 ):
+                                    # The SDK returns a TableType enum; rules compare strings.
                                     table_type_raw = getattr(table, 'table_type', 'TABLE')
-                                    entity_type = 'view' if table_type_raw == 'VIEW' else 'table'
+                                    table_type_raw = getattr(
+                                        table_type_raw, 'value', table_type_raw)
+                                    is_view = table_type_raw in VIEW_TABLE_TYPES
+                                    entity_type = 'view' if is_view else 'table'
 
                                     if entity_type not in entity_types:
                                         continue
@@ -133,6 +142,7 @@ class UnityCatalogLoader(EntityLoader):
                                         'created_at': getattr(table, 'created_at', None),
                                         'updated_at': getattr(table, 'updated_at', None),
                                         'storage_location': getattr(table, 'storage_location', None),
+                                        **table_column_fields(table),
                                     }
                             except Exception:
                                 logger.exception(f"Failed to list tables for schema {catalog.name}.{schema.name}")

@@ -288,7 +288,32 @@ Entities have different properties based on their type:
 - `created_at` - Creation timestamp
 - `updated_at` - Last update timestamp
 - `storage_location` - Storage path (for tables, volumes)
-- `table_type` - TABLE or VIEW
+- `table_type` - Unity Catalog table type as a string, such as `MANAGED`, `EXTERNAL`, `VIEW`,
+  `MATERIALIZED_VIEW` or `METRIC_VIEW`. Views, materialized views and metric views are `view`
+  entities; every other type is a `table` entity
+
+#### Table and View Columns
+Tables and views also carry fields computed from their columns, as returned by Unity Catalog
+when Ontos lists the tables (no extra call per table):
+
+- `columns` - List of `{name, type, comment, is_partition_key}`
+- `column_count` - Number of columns
+- `columns_without_comment_count` - Columns with no comment; a comment of only spaces counts
+  as missing
+- `column_comment_ratio` - Share of commented columns, from `0` to `1`; null when the table has
+  no columns, so a threshold such as `>= 0.8` fails. Guard with `t.column_count = 0 OR ...` to
+  let column-less objects pass
+- `partition_column_count` - Number of partition columns
+- `partition_columns_without_comment_count` - Partition columns with no comment
+
+```
+MATCH (t:table) ASSERT t.columns_without_comment_count = 0
+MATCH (t:table) ASSERT t.column_comment_ratio >= 0.8
+MATCH (t:table) ASSERT t.partition_columns_without_comment_count = 0
+MATCH (v:view) ASSERT v.columns_without_comment_count = 0
+```
+
+Column tags, table tags, keys and lineage are not available yet.
 
 ### Application Entities
 - `type` - Entity type

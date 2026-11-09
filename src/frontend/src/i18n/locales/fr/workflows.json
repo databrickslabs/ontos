@@ -487,6 +487,7 @@
     "removedSteps": "Étapes supprimées",
     "removedStepsHint": "Ces étapes ont été exécutées dans cette exécution, puis supprimées du workflow.",
     "stepErrors": {
+      "rule_where_evaluation_failed": "La clause WHERE de la politique '{{policyName}}' n'a pas pu être évaluée sur {{entityType}} {{entityId}}",
       "approval_rejected": "Demande refusée",
       "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
       "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée"

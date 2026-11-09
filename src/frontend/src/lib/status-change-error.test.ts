@@ -122,6 +122,25 @@ describe('statusChangeErrorText', () => {
     }, i18n.t, 'data-contracts')).toBe('archived não é um status do ciclo de vida. Use um destes: Rascunho, Ativo.');
   });
 
+  it('translates a policy check whose WHERE clause could not be evaluated', async () => {
+    const reason = {
+      workflow: 'Purpose Gate',
+      text: "The WHERE clause of policy 'Purpose' could not be evaluated on data_contract c-1",
+      code: 'rule_where_evaluation_failed',
+      params: { policyName: 'Purpose', entityType: 'data_contract', entityId: 'c-1' },
+    };
+    const blocked = {
+      ...BLOCKED,
+      errorParams: { fromStatus: 'draft', toStatus: 'active', reasons: [reason] },
+    };
+    await i18n.changeLanguage('pt');
+
+    expect(statusChangeErrorText(blocked, i18n.t, 'data-contracts')).toBe(
+      'A mudança de status de Rascunho para Ativo foi bloqueada por um workflow: Purpose Gate: '
+      + "não foi possível avaliar a cláusula WHERE da política 'Purpose' em data_contract c-1",
+    );
+  });
+
   it('translates a fail_closed gate that could not be evaluated (#1103)', async () => {
     const gateError = {
       error: "Status transition from 'draft' to 'proposed' refused: a workflow gate "

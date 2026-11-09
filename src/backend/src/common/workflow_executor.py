@@ -241,6 +241,26 @@ class RuleEntityNotFoundError(RuntimeError):
         super().__init__(f"{entity_type} {entity_id} was not found, so the rule can't be evaluated")
 
 
+class RuleWhereEvaluationError(RuntimeError):
+    """A policy's WHERE clause could not be evaluated on the step's entity.
+
+    In a compliance run such an entity is only left unchecked; in a workflow
+    "not applicable" would follow ``on_pass``, so a broken WHERE would let a
+    gate pass. The step fails instead. Same shape as ``RuleEntityLoadError``.
+    """
+
+    code = 'rule_where_evaluation_failed'
+
+    def __init__(
+        self, policy_name: Optional[str], entity_type: Optional[str], entity_id: Optional[str],
+    ):
+        self.params = {'policyName': policy_name, 'entityType': entity_type, 'entityId': entity_id}
+        super().__init__(
+            f"The WHERE clause of policy '{policy_name}' could not be evaluated "
+            f"on {entity_type} {entity_id}"
+        )
+
+
 def _rule_step_error(error: Exception, data: Optional[Dict[str, Any]] = None) -> 'StepResult':
     """Failed result of a rule step (validation, conditional, policy check).
 
@@ -1643,7 +1663,8 @@ class PolicyCheckStepHandler(StepHandler):
     As a compliance run does, the policy's MATCH and WHERE select the
     entities it applies to: a policy that doesn't select the step's entity
     passes it with ``not_applicable`` and ``reason`` (``match_type`` /
-    ``where``) in the result data.
+    ``where``) in the result data. Unlike a run, a WHERE that can't be
+    evaluated fails the step (``rule_where_evaluation_failed``).
     """
 
     def execute(self, context: StepContext) -> StepResult:
@@ -1676,7 +1697,7 @@ class PolicyCheckStepHandler(StepHandler):
             if not self._match_selects(parsed, context):
                 return self._not_applicable(policy, context, 'match_type')
             rule_object = _policy_rule_object(self._db, context)
-            if not self._where_selects(parsed, policy, rule_object):
+            if not self._where_selects(parsed, policy, context, rule_object):
                 return self._not_applicable(policy, context, 'where')
 
             # Evaluate the policy's rule against the entity
@@ -1730,9 +1751,15 @@ class PolicyCheckStepHandler(StepHandler):
 
     @staticmethod
     def _where_selects(
-        parsed: Optional[Dict[str, Any]], policy, rule_object: Dict[str, Any]
+        parsed: Optional[Dict[str, Any]], policy, context: StepContext,
+        rule_object: Dict[str, Any],
     ) -> bool:
-        """Whether WHERE selects the entity; one it can't evaluate is excluded, as in a run."""
+        """Whether WHERE selects the entity.
+
+        One it can't evaluate raises ``RuleWhereEvaluationError`` (the step
+        fails): a run only leaves such an entity unchecked, but here "not
+        applicable" would let the workflow follow ``on_pass``.
+        """
         from src.common.compliance_dsl import Evaluator
 
         where = (parsed or {}).get('where_clause')
@@ -1740,9 +1767,11 @@ class PolicyCheckStepHandler(StepHandler):
             return True
         try:
             return bool(Evaluator(rule_object).evaluate(where))
-        except Exception:
-            logger.exception("Failed to evaluate the WHERE clause of policy %s", policy.id)
-            return False
+        except Exception as e:
+            # The cause stays in the server log (execute logs it with the chain)
+            raise RuleWhereEvaluationError(
+                policy.name, context.entity_type, context.entity_id,
+            ) from e
 
     @staticmethod
     def _not_applicable(policy, context: StepContext, reason: str) -> StepResult:

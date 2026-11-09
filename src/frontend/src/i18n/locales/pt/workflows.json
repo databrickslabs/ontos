@@ -487,6 +487,7 @@
     "removedSteps": "Etapas removidas",
     "removedStepsHint": "Estas etapas rodaram nesta execução e depois foram removidas do workflow.",
     "stepErrors": {
+      "rule_where_evaluation_failed": "Não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
       "approval_rejected": "Solicitação negada",
       "rule_entity_load_failed": "Não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
       "rule_entity_not_found": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada"

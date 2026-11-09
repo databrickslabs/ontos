@@ -487,6 +487,7 @@
     "removedSteps": "Pasos eliminados",
     "removedStepsHint": "Estos pasos se ejecutaron en esta ejecución y luego se eliminaron del workflow.",
     "stepErrors": {
+      "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
       "approval_rejected": "Solicitud denegada",
       "rule_entity_load_failed": "No se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
       "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla"

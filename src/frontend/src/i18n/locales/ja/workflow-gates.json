@@ -4,6 +4,7 @@
     "waitingForApproval": "承認待ち ({{step}})",
     "entityLoadFailed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
     "entityNotFound": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません",
+    "whereEvaluationFailed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
     "validationFailed": "ワークフローの検証に失敗しました",
     "status": {
       "failed": "失敗",

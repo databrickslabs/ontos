@@ -6,6 +6,7 @@ trigger payload: MATCH and WHERE were ignored and keys such as ``tags`` and
 that doesn't select the entity doesn't apply to it, and the step passes) and
 evaluates ASSERT on the entity as the compliance loader builds it.
 """
+import json
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -13,8 +14,9 @@ import pytest
 from sqlalchemy.exc import OperationalError
 
 from src.common.compliance_entities import AppEntityLoader
-from src.common.workflow_executor import PolicyCheckStepHandler, StepContext
+from src.common.workflow_executor import PolicyCheckStepHandler, StepContext, WorkflowExecutor
 from src.controller.compliance_manager import ComplianceManager
+from src.controller.workflows_manager import WorkflowsManager
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
 from src.db_models.data_contracts import DataContractDb
@@ -22,7 +24,20 @@ from src.db_models.data_domains import DataDomain
 from src.db_models.data_products import DataProductDb, DescriptionDb
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 from src.models.data_contracts_api import ContractDescription, DataContractUpdate
-from src.models.process_workflows import TriggerContext, TriggerType
+from src.models.process_workflows import (
+    EntityType,
+    ExecutionStatus,
+    ProcessWorkflowCreate,
+    StepType,
+    TriggerContext,
+    TriggerType,
+    WorkflowStepCreate,
+    WorkflowTrigger,
+)
+from src.repositories.process_workflows_repository import (
+    process_workflow_repo,
+    workflow_execution_repo,
+)
 
 # Rules of the retail demo (demo_data_retail.sql)
 PURPOSE_RULE = (
@@ -382,18 +397,66 @@ def test_a_rule_that_does_not_parse_is_decided_by_its_assert(db_session, name, e
     assert 'not_applicable' not in result.data
 
 
-def test_a_where_that_cannot_be_evaluated_excludes_the_entity(db_session):
-    # As in a compliance run (EntityIterator.iterate)
-    policy = _policy(db_session, PURPOSE_RULE)
+# A WHERE comparing a string with a number raises a TypeError in the evaluator
+BROKEN_WHERE_RULE = (
+    "MATCH (c:data_contract) WHERE c.status > 3 ASSERT LENGTH(c.description) >= 70"
+)
+
+
+def test_a_where_that_cannot_be_evaluated_fails_the_step(db_session):
+    # Unlike a run, which only leaves the entity unchecked: "not applicable"
+    # would follow on_pass, so a broken WHERE would let a gate pass
+    policy = _policy(db_session, BROKEN_WHERE_RULE)
     contract = _contract(db_session, 'contract', 'active', LONG)
 
-    with patch('src.common.compliance_dsl.Evaluator.evaluate', side_effect=RuntimeError('boom')):
-        result = _step(
-            db_session, policy, 'data_contract', contract.id, _on_create_payload(contract),
-        )
+    result = _step(
+        db_session, policy, 'data_contract', contract.id, _on_create_payload(contract),
+    )
 
-    assert result.passed is True
-    assert result.data['reason'] == 'where'
+    assert result.passed is False
+    assert result.blocking is False
+    assert result.error == (
+        f"The WHERE clause of policy 'Gate' could not be evaluated on data_contract {contract.id}"
+    )
+    assert result.data == {
+        'policy_id': policy.id,
+        'error_code': 'rule_where_evaluation_failed',
+        'error_params': {
+            'policyName': 'Gate', 'entityType': 'data_contract', 'entityId': contract.id,
+        },
+    }
+
+
+def test_a_where_that_cannot_be_evaluated_does_not_let_a_gate_pass(db_session):
+    # A before_status_change gate passes only when its execution succeeds
+    policy = _policy(db_session, BROKEN_WHERE_RULE)
+    contract = _contract(db_session, 'contract', 'draft', LONG)
+    db_workflow = process_workflow_repo.create(db_session, ProcessWorkflowCreate(
+        name=f'wf-{uuid.uuid4().hex[:6]}',
+        trigger=WorkflowTrigger(
+            type=TriggerType.BEFORE_STATUS_CHANGE, entity_types=[EntityType.DATA_CONTRACT],
+        ),
+        steps=[WorkflowStepCreate(
+            step_id='gate', step_type=StepType.POLICY_CHECK,
+            config={'policy_id': policy.id}, order=0,
+        )],
+    ))
+    workflow = WorkflowsManager(db_session).get_workflow(db_workflow.id)
+    payload = {'name': contract.name, 'status': 'draft', 'target_status': 'active'}
+
+    execution = WorkflowExecutor(db_session).execute_workflow(
+        workflow=workflow, entity=payload, entity_type='data_contract',
+        entity_id=contract.id, entity_name=contract.name, user_email='u@example.com',
+        trigger_context=TriggerContext(
+            entity_type='data_contract', entity_id=contract.id, entity_name=contract.name,
+            trigger_type=TriggerType.BEFORE_STATUS_CHANGE, entity_data=payload,
+            user_email='u@example.com', from_status='draft', to_status='active',
+        ),
+    )
+
+    assert execution.status == ExecutionStatus.FAILED
+    [step] = workflow_execution_repo.get(db_session, execution.id).step_executions
+    assert json.loads(step.result_data)['error_code'] == 'rule_where_evaluation_failed'
 
 
 def test_on_update_sees_the_stored_contract_not_the_request_shapes(db_session):

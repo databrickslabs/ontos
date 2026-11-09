@@ -190,7 +190,8 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
     # `settings-*` permission. The Settings sidebar gates visibility via the
     # corresponding consumption-side permission (e.g. `data-domains`,
     # `business-roles`, `teams`, …). The sub-pages that remain below either
-    # (a) lack a consumption counterpart (asset-types, certification-levels)
+    # (a) lack a consumption counterpart (asset-types, certification-levels,
+    # data-product-types)
     # or (b) need distinct backend semantics from their consumption sibling.
     'settings-asset-types': {
         'name': 'Asset Types',
@@ -204,6 +205,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
     },
     'settings-maturity-levels': {
         'name': 'Maturity Levels',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-data-product-types': {
+        'name': 'Data Product Types',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_SETTINGS,
     },

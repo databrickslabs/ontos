@@ -5,6 +5,7 @@ Manages CRUD operations and loading of default workflows from YAML.
 """
 
 import json
+from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -58,9 +59,33 @@ _DEFAULT_ENTITY_TYPE_ADDITIONS = (
      'Status Change Request', 'data_contract'),
 )
 
-# (workflow, unknown entity types) already warned about by ``_split_entity_types``
-_WARNED_UNKNOWN_ENTITY_TYPES: set = set()
-_ENTITY_TYPE_VALUES = frozenset(et.value for et in EntityType)
+# (workflow, unknown entity types) already warned about by ``_split_entity_types``, oldest
+# first; bounded, so a long-running process doesn't keep every key it ever logged
+_WARNED_UNKNOWN_ENTITY_TYPES: "OrderedDict[tuple, None]" = OrderedDict()
+_WARNED_UNKNOWN_ENTITY_TYPES_MAX = 1024
+
+
+def _first_unknown_entity_type_warning(key: tuple) -> bool:
+    """Record ``key`` as warned about; True the first time (as long as it's remembered)."""
+    if key in _WARNED_UNKNOWN_ENTITY_TYPES:
+        _WARNED_UNKNOWN_ENTITY_TYPES.move_to_end(key)
+        return False
+    _WARNED_UNKNOWN_ENTITY_TYPES[key] = None
+    while len(_WARNED_UNKNOWN_ENTITY_TYPES) > _WARNED_UNKNOWN_ENTITY_TYPES_MAX:
+        _WARNED_UNKNOWN_ENTITY_TYPES.popitem(last=False)
+    return True
+
+
+def _partition_entity_types(values: Any) -> tuple[List[EntityType], List[str]]:
+    """Stored entity types as (known, unknown); any stored value, hashable or not, is kept."""
+    known: List[EntityType] = []
+    unknown: List[str] = []
+    for value in values or []:
+        try:
+            known.append(EntityType(value))
+        except ValueError:
+            unknown.append(str(value))
+    return known, unknown
 
 # Trigger types no event fires: manual runs go by workflow id
 # (POST /api/workflows/{id}/execute) and nothing runs ``scheduled`` triggers yet,
@@ -446,6 +471,10 @@ class WorkflowsManager:
         target_trigger = target_trigger or {}
         if target_trigger.get('type') in _NON_EVENT_TRIGGER_TYPES:
             return []
+        target_entities = self._firing_entity_types(target_trigger)
+        if target_entities == set():
+            return []  # it matches no event, so no other workflow consumes its events
+        target_entities = target_entities or set()
         target_scope = scope.model_dump(mode='json') if isinstance(scope, WorkflowScope) else (scope or {'type': 'all'})
 
         conflicts = []
@@ -461,8 +490,12 @@ class WorkflowsManager:
                 continue
             if trigger.get('type') != target_trigger.get('type'):
                 continue
-            target_entities = set(target_trigger.get('entity_types') or [])
-            entities = set(trigger.get('entity_types') or [])
+            # Only the entity types an event fires for: a stored trigger matching no event
+            # (only unknown types, or pairs no code fires) consumes no event
+            entities = self._firing_entity_types(trigger)
+            if entities == set():
+                continue
+            entities = entities or set()
             if target_entities and entities and not target_entities & entities:
                 continue
             if not self._activation_scopes_overlap(target_scope, scope):
@@ -685,14 +718,26 @@ class WorkflowsManager:
             'trigger_entity_type_required', triggerType=new.type.value,
         )]
 
-    def _matches_no_event(self, trigger: WorkflowTrigger) -> bool:
+    def _matches_no_event(self, trigger: WorkflowTrigger | Dict[str, Any]) -> bool:
         """The trigger lists entity types and none fires (see ``trigger_widening_errors``)."""
-        if not trigger.entity_types and not trigger.unknown_entity_types:
-            return False  # an empty list matches any entity
-        # Without the map, or for a trigger type that fires for any entity, every known
-        # type fires; an unknown value never does
-        allowed = (self._trigger_entity_types or {}).get(trigger.type.value) or []
-        return not any(not allowed or et.value in allowed for et in trigger.entity_types)
+        return self._firing_entity_types(trigger) == set()
+
+    def _firing_entity_types(
+        self, trigger: WorkflowTrigger | Dict[str, Any] | None,
+    ) -> Optional[set]:
+        """The listed entity types an event can fire the trigger for; None = any entity.
+
+        An empty set: the trigger lists entity types and none fires. Without the map,
+        or for a trigger type that fires for any entity, every known type fires; an
+        unknown value never does.
+        """
+        data = _stored_trigger(trigger) or {}
+        values = data.get('entity_types')
+        if not values:
+            return None  # an empty list matches any entity
+        known, _ = _partition_entity_types(values)
+        allowed = (self._trigger_entity_types or {}).get(data.get('type')) or []
+        return {et.value for et in known if not allowed or et.value in allowed}
 
     @staticmethod
     def _trigger_matches(left: WorkflowTrigger, right: WorkflowTrigger) -> bool:
@@ -778,13 +823,18 @@ class WorkflowsManager:
         """
         warned = 0
         for db_workflow in process_workflow_repo.list_all(self._db):
-            # This warning covers the unknown values too: skip the one of reads
-            unknown = [
-                str(v) for v in _json_object(db_workflow.trigger_config).get('entity_types') or []
-                if v not in _ENTITY_TYPE_VALUES
-            ]
-            _WARNED_UNKNOWN_ENTITY_TYPES.add((db_workflow.id, tuple(unknown)))
-            workflow = self._db_to_model(db_workflow)
+            try:
+                # This warning covers the unknown values too: skip the one of reads
+                _, unknown = _partition_entity_types(
+                    _json_object(db_workflow.trigger_config).get('entity_types'),
+                )
+                _first_unknown_entity_type_warning((db_workflow.id, tuple(unknown)))
+                workflow = self._db_to_model(db_workflow)
+            except Exception:
+                # One unreadable row must not stop the check of the others
+                logger.warning("Could not check the trigger of workflow %s", db_workflow.id,
+                               exc_info=True)
+                continue
             if not workflow.trigger_warnings:
                 continue
             warned += 1
@@ -1684,16 +1734,8 @@ class WorkflowsManager:
         types into ``[]``, which matches every entity. Warned about once per workflow
         and set of values, not on every read.
         """
-        known: List[EntityType] = []
-        unknown: List[str] = []
-        for value in values or []:
-            try:
-                known.append(EntityType(value))
-            except ValueError:
-                unknown.append(str(value))
-        warn_key = (workflow, tuple(unknown))
-        if unknown and warn_key not in _WARNED_UNKNOWN_ENTITY_TYPES:
-            _WARNED_UNKNOWN_ENTITY_TYPES.add(warn_key)
+        known, unknown = _partition_entity_types(values)
+        if unknown and _first_unknown_entity_type_warning((workflow, tuple(unknown))):
             logger.warning(
                 "Workflow %s lists unknown entity types %s: they match no event",
                 workflow, unknown,

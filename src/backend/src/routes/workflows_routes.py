@@ -816,6 +816,11 @@ async def create_workflow(
     validation = manager.validate_workflow(workflow)
     if not validation.valid:
         raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
+    # Before the overlap check: a confirmed overlap must not end in a refused trigger
+    trigger_errors = manager.trigger_save_errors(workflow.trigger)
+    if trigger_errors:
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
+            WorkflowValidationResult(valid=False, errors=trigger_errors)))
 
     conflicts = manager.activation_conflicts_for(
         workflow.trigger, workflow.scope or WorkflowScope(type='all'),
@@ -823,10 +828,6 @@ async def create_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
-    trigger_errors = manager.trigger_save_errors(workflow.trigger)
-    if trigger_errors:
-        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
-            WorkflowValidationResult(valid=False, errors=trigger_errors)))
     result = manager.create_workflow(workflow, created_by=user_email)
     
     audit_manager.log_action(
@@ -879,6 +880,12 @@ async def update_workflow(
         validation = manager.validate_workflow(full_workflow)
         if not validation.valid:
             raise HTTPException(status_code=400, detail=_invalid_workflow_detail(validation))
+    # Only a changed trigger is checked: stored workflows keep working and can be edited.
+    # Before the overlap check: a confirmed overlap must not end in a refused trigger.
+    trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
+    if trigger_errors:
+        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
+            WorkflowValidationResult(valid=False, errors=trigger_errors)))
 
     resulting_active = workflow.is_active if workflow.is_active is not None else existing.is_active
     resulting_trigger = workflow.trigger or existing.trigger
@@ -902,11 +909,6 @@ async def update_workflow(
     if conflicts and not confirm_overlap:
         raise HTTPException(status_code=409, detail=_activation_overlap_detail(conflicts))
     
-    # Only a changed trigger is checked: stored workflows keep working and can be edited
-    trigger_errors = manager.trigger_save_errors(workflow.trigger, existing.trigger)
-    if trigger_errors:
-        raise HTTPException(status_code=400, detail=_invalid_workflow_detail(
-            WorkflowValidationResult(valid=False, errors=trigger_errors)))
     result = manager.update_workflow(workflow_id, workflow, updated_by=user_email)
     if not result:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -1101,12 +1103,25 @@ async def execute_workflow(
 async def validate_workflow(
     request: Request,
     workflow: ProcessWorkflowCreate,
+    workflow_id: Optional[str] = Query(
+        None, description="Check as an update of this stored workflow, as PUT would",
+    ),
     manager: WorkflowsManager = Depends(get_workflows_manager),
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowValidationResult:
-    """Validate a workflow definition (as a new one: its trigger/entity pairs too)."""
+    """Validate a workflow definition, its trigger/entity pairs too.
+
+    Checked as a new workflow (POST), or with ``workflow_id`` as an update of that stored
+    workflow (PUT): stored unknown types and pairs a changed trigger keeps are accepted.
+    """
+    stored_trigger = None
+    if workflow_id:
+        existing = manager.get_workflow(workflow_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        stored_trigger = existing.trigger
     validation = manager.validate_workflow(workflow)
-    trigger_errors = manager.trigger_save_errors(workflow.trigger)
+    trigger_errors = manager.trigger_save_errors(workflow.trigger, stored_trigger)
     if not trigger_errors:
         return validation
     # ``errors`` of a result are plain strings: pass ``issues`` too, keeping their codes

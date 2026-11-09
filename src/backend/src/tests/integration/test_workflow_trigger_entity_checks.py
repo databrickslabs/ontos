@@ -246,3 +246,54 @@ def test_emptying_a_trigger_whose_known_type_never_fires_is_refused(client, db_s
         ('trigger_entity_type_required', {'triggerType': 'before_update'}),
     ]
     assert _stored_types(db_session, wf_id) == ['dataset', 'data_product']
+
+
+# A refused trigger is reported before the overlap check: confirming an overlap dialog
+# must not end in a 400 for the trigger
+def test_create_refuses_the_trigger_before_asking_about_an_overlap(client, db_session):
+    _stored(db_session, [], active=True)  # any entity: overlaps every before_update gate
+
+    created = client.post('/api/workflows', json={**_UNSUPPORTED, 'is_active': True})
+
+    assert created.status_code == 400, created.text
+    assert [code for code, _ in _issue_codes(created.json()['detail'])] == [
+        'trigger_entity_type_unsupported',
+    ]
+
+
+def test_update_refuses_the_trigger_before_asking_about_an_overlap(client, db_session):
+    wf_id = _stored(db_session, ['data_contract'], active=True)
+    _stored(db_session, [], active=True)
+
+    saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': _UNSUPPORTED['trigger']})
+
+    assert saved.status_code == 400, saved.text
+    assert [code for code, _ in _issue_codes(saved.json()['detail'])] == [
+        'trigger_entity_type_unsupported',
+    ]
+    assert _stored_types(db_session, wf_id) == ['data_contract']
+
+
+def test_validate_with_a_workflow_id_checks_as_the_update_put_would(client, db_session):
+    wf_id = _stored(db_session, ['data_product'])
+    body = {**_UNSUPPORTED, 'trigger': {
+        'type': 'before_update', 'entity_types': ['data_product', 'data_contract'],
+    }}
+
+    # As a new workflow the stored pair is refused; as this workflow's update it is kept
+    as_new = client.post('/api/workflows/validate', json=body)
+    as_update = client.post(f'/api/workflows/validate?workflow_id={wf_id}', json=body)
+    saved = client.put(f'/api/workflows/{wf_id}', json={'trigger': body['trigger']})
+
+    assert as_new.status_code == 200, as_new.text
+    assert as_new.json()['valid'] is False
+    assert as_update.status_code == 200, as_update.text
+    assert as_update.json()['valid'] is True, as_update.text
+    assert saved.status_code == 200, saved.text
+
+
+def test_validate_with_an_unknown_workflow_id_is_404(client):
+    result = client.post(f'/api/workflows/validate?workflow_id={uuid.uuid4()}',
+                         json=_UNSUPPORTED)
+
+    assert result.status_code == 404, result.text

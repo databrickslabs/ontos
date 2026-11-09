@@ -14,6 +14,7 @@ import pytest
 from databricks.sdk.errors import NotFound, PermissionDenied
 from databricks.sdk.service.catalog import ColumnInfo, TableInfo
 
+from src.common.compliance_dsl import evaluate_rule_on_object
 from src.controller.entity_dict_builder import (
     UC_TABLE_FIELDS,
     UnsupportedMaturityAssetTypeError,
@@ -34,6 +35,7 @@ from src.db_models.entity_relationships import EntityRelationshipDb
 from src.db_models.maturity import MaturitySnapshotDb
 from src.db_models.quality import QualityItemDb
 from src.db_models.semantic_links import EntitySemanticLinkDb
+from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 from src.models.process_workflows import EntityType
 from src.repositories.maturity_repository import maturity_repo
 
@@ -159,6 +161,26 @@ def test_builder_has_the_asset_ontos_fields(db_session):
     assert d['semantic_link_count'] == 1 and d['has_semantic_links']
     assert d['tag_count'] == 1 and d['has_tags']
     assert d['quality_check_count'] == 1 and d['has_quality_checks']
+
+
+def test_builder_reads_assigned_asset_tags(db_session):
+    asset = _asset(db_session, tags=['pii'])
+    ns = TagNamespaceDb(name=f'gov-{uuid.uuid4().hex[:8]}')
+    db_session.add(ns)
+    db_session.flush()
+    tag = TagDb(name='tier', namespace_id=ns.id, status='active')
+    db_session.add(tag)
+    db_session.flush()
+    db_session.add(EntityTagAssociationDb(
+        tag_id=tag.id, entity_id=str(asset.id), entity_type='asset', assigned_value='gold',
+    ))
+    db_session.flush()
+
+    d = build_asset_dict(db_session, str(asset.id))
+
+    assert 'gold' in str(d['tags']) and d['tag_count'] == 2 and d['has_tags']
+    assert evaluate_rule_on_object("ASSERT HAS_TAG('tier')", d)[0] is True
+    assert evaluate_rule_on_object("ASSERT HAS_TAG('missing')", d)[0] is False
 
 
 def test_builder_without_owner_domain_or_certification(db_session):

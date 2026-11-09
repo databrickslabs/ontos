@@ -202,9 +202,14 @@ def build_asset_dict(
     base["has_business_terms"] = base["business_term_count"] > 0
     _add_semantic_link_count(db, base, "asset", entity_id)
 
-    quick_tags = asset.tags if isinstance(asset.tags, list) else []
     _add_tags(db, base, entity_id, "asset")
-    base["tag_count"] += len(quick_tags)
+    # Quick tags (the asset's own list) are tags without a value; an assigned tag
+    # of the same name wins, and only the ones added here are counted on top.
+    quick_tags = asset.tags if isinstance(asset.tags, list) else []
+    for name in quick_tags:
+        if isinstance(name, str) and name not in base["tags"]:
+            base["tags"][name] = True
+            base["tag_count"] += 1
     base["has_tags"] = base["tag_count"] > 0
     _add_quality_check_count(db, base, "asset", entity_id)
 

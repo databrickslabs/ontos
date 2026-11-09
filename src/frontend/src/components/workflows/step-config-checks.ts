@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 
 import type { EntityType, TriggerType, WorkflowStepCreate } from '@/types/process-workflow';
 import { getEntityTypeLabel, getTriggerTypeLabel } from '@/lib/workflow-labels';
+import { isScheduleIssue, scheduleIssueText } from './trigger-schedule-fields';
 
 // Checks of Conditional and Script step configs the designer runs before it
 // saves (#943, #942). The codes match src/backend/src/common/workflow_step_config.py.
@@ -103,6 +104,7 @@ export function workflowValidationIssueText(issue: WorkflowValidationIssue, t: T
         defaultValue: fallback,
       });
     default:
+      if (isScheduleIssue(issue.code)) return scheduleIssueText(issue, t);
       if (!(issue.code.startsWith('condition_') || issue.code.startsWith('script_'))) {
         // An error the designer has no text for: the backend's English text.
         return fallback;

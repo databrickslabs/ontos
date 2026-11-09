@@ -700,6 +700,33 @@
       "suffix": "of hoger nodig om deze workflow te zien en uit te voeren. Stel dit in bij Instellingen → Rollen."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Planning (Quartz-cron)",
+    "cronHint": "6 of 7 velden: seconde minuut uur dag-van-de-maand maand dag-van-de-week [jaar]. Voorbeeld: {{example}} draait elke dag om 06:00. De seconden moeten 0 zijn en runs moeten minstens 5 minuten uit elkaar liggen.",
+    "timezoneLabel": "Tijdzone",
+    "timezoneHint": "Een IANA-naam zoals Europe/Berlin of America/Sao_Paulo. Leeg betekent UTC.",
+    "fields": {
+      "second": "seconde",
+      "minute": "minuut",
+      "hour": "uur",
+      "day_of_month": "dag-van-de-maand",
+      "month": "maand",
+      "day_of_week": "dag-van-de-week",
+      "year": "jaar"
+    },
+    "errors": {
+      "schedule_required": "Een geplande trigger heeft een cron-expressie nodig.",
+      "cron_field_count": "Een Quartz-cron-expressie heeft 6 of 7 velden; deze heeft er {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" is niet geldig in het veld {{field}}.",
+      "cron_day_fields_conflict": "Zet \"?\" in precies één van de velden dag-van-de-maand en dag-van-de-week.",
+      "cron_seconds_not_zero": "Het secondenveld moet 0 zijn: runs starten op de hele minuut.",
+      "cron_unsupported_character": "\"{{character}}\" in het veld {{field}} wordt niet ondersteund in workflowplanningen.",
+      "cron_invalid": "Dit is geen geldige Quartz-cron-expressie.",
+      "cron_no_upcoming_runs": "Deze cron-expressie heeft geen komende run.",
+      "cron_interval_too_short": "Geplande runs moeten minstens {{minutes}} minuten uit elkaar liggen.",
+      "timezone_invalid": "Onbekende tijdzone \"{{timezone}}\": gebruik een IANA-naam zoals Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configureer geautomatiseerde workflows voor validatie, goedkeuring en meldingen.",
     "readOnlyAccess": "(Alleen-lezen toegang)",

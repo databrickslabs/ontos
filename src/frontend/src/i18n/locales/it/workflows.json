@@ -700,6 +700,33 @@
       "suffix": "o superiore per vedere ed eseguire questo workflow. Impostalo in Impostazioni → Ruoli."
     }
   },
+  "triggerSchedule": {
+    "cronLabel": "Pianificazione (cron Quartz)",
+    "cronHint": "6 o 7 campi: secondo minuto ora giorno-del-mese mese giorno-della-settimana [anno]. Esempio: {{example}} viene eseguito ogni giorno alle 06:00. I secondi devono essere 0 e le esecuzioni devono distare almeno 5 minuti.",
+    "timezoneLabel": "Fuso orario",
+    "timezoneHint": "Un nome IANA come Europe/Berlin o America/Sao_Paulo. Vuoto significa UTC.",
+    "fields": {
+      "second": "secondo",
+      "minute": "minuto",
+      "hour": "ora",
+      "day_of_month": "giorno-del-mese",
+      "month": "mese",
+      "day_of_week": "giorno-della-settimana",
+      "year": "anno"
+    },
+    "errors": {
+      "schedule_required": "Un trigger pianificato richiede un'espressione cron.",
+      "cron_field_count": "Un'espressione cron Quartz ha 6 o 7 campi; questa ne ha {{fields}}.",
+      "cron_invalid_field": "\"{{value}}\" non è valido nel campo {{field}}.",
+      "cron_day_fields_conflict": "Inserisci \"?\" in uno solo dei campi giorno-del-mese e giorno-della-settimana.",
+      "cron_seconds_not_zero": "Il campo dei secondi deve essere 0: le esecuzioni iniziano al minuto esatto.",
+      "cron_unsupported_character": "\"{{character}}\" nel campo {{field}} non è supportato nelle pianificazioni dei workflow.",
+      "cron_invalid": "Questa non è un'espressione cron Quartz valida.",
+      "cron_no_upcoming_runs": "Questa espressione cron non ha esecuzioni future.",
+      "cron_interval_too_short": "Le esecuzioni pianificate devono distare almeno {{minutes}} minuti.",
+      "timezone_invalid": "Fuso orario sconosciuto \"{{timezone}}\": usa un nome IANA come Europe/Berlin."
+    }
+  },
   "view": {
     "subtitle": "Configura workflow automatizzati per convalida, approvazione e notifiche.",
     "readOnlyAccess": "(Accesso in sola lettura)",

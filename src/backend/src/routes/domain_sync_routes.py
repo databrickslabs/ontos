@@ -3,14 +3,13 @@ Routes for Sync Domains (#761).
 
 Bidirectional sync of data domains between Ontos and Unity Catalog. UC domains
 are account-scoped, so — unlike the Schema Importer — there is no connection to
-choose: the caller's on-behalf-of workspace client targets the app's home
-Databricks account. Requires the MANAGE DISCOVERY permission on that account.
+choose. The app service principal performs the sync consistently for every
+authorized Ontos user and requires MANAGE DISCOVER on the Databricks account.
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from src.common.authorization import PermissionChecker
-from src.common.config import get_settings
 from src.common.dependencies import (
     AuditCurrentUserDep,
     AuditManagerDep,
@@ -19,7 +18,7 @@ from src.common.dependencies import (
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.uc_domains_client import DomainPermissionError, UcDomainsClient
-from src.common.workspace_client import get_obo_workspace_client
+from src.common.workspace_client import get_workspace_client
 from src.controller.domain_sync_manager import DomainSyncManager
 from src.models.domain_sync import (
     DomainSyncPreview,
@@ -35,10 +34,14 @@ router = APIRouter(prefix="/api/domain-sync", tags=["Domain Sync"])
 FEATURE_ID = "data-domains"
 
 
-def _get_manager(request: Request) -> DomainSyncManager:
-    """Build a DomainSyncManager backed by the caller's OBO workspace client."""
-    settings = get_settings()
-    ws = get_obo_workspace_client(request, settings)
+def _get_manager() -> DomainSyncManager:
+    """Build a manager backed by the app service principal.
+
+    Domain sync is an Ontos administrative integration. Ontos RBAC controls who
+    may invoke it; the stable app identity prevents results from depending on
+    which authorized administrator happened to start the sync.
+    """
+    ws = get_workspace_client()
     if ws is None:
         raise HTTPException(
             status_code=503,

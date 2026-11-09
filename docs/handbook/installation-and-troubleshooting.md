@@ -75,10 +75,18 @@ conceptually:
   Databricks as that user. A deployment without OBO must set
   `OBO_ALLOW_SP_FALLBACK=true`; then the routes that call Databricks as
   the user (Data Catalog, Catalog Commander, schema import, Ask Ontos,
-  the ontology generator, domain sync, asset review content) use the
+  the ontology generator, asset review content) use the
   app's service principal instead. Without it they answer 403
   (`user_token_required`). Most lifecycle actions still fail without
   OBO, because they need the calling user's permissions.
+- **Domain Sync account permission.** Domain Sync is intentionally performed by
+  the Ontos app service principal rather than by each initiating user's OBO
+  token. After the app is created, an account admin must grant its service
+  principal the account role `roles/discovery.manager` (`MANAGE DISCOVER`).
+  Ontos RBAC still controls who can start a sync; the app role makes the result
+  independent of which authorized Ontos administrator starts it. Do not add a
+  `domains` entry to `user_api_scopes`: Databricks Apps does not support that
+  OBO scope.
 - Optionally, a **Marketplace listing** in the workspace's regional
   Marketplace feed.
 

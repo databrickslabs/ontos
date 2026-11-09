@@ -129,7 +129,7 @@
     "linkRemoved": "Collegamento rimosso con successo",
     "saveFailed": "Impossibile salvare il concetto",
     "deleteConceptFailed": "Impossibile eliminare il concetto",
-    "submitReview": "Inviato per la revisione",
+    "submitReview": "Inviato per revisione",
     "submitReviewGoverned": "Inviato per la revisione — in attesa di approvazione.",
     "changesRequested": "Rinviato al proprietario con il tuo commento.",
     "withdrawReview": "Revisione ritirata",
@@ -700,7 +700,7 @@
     "parent": "Padre",
     "children": "Figli",
     "none": "Nessun concetto più ampio o più specifico.",
-    "viewLabel": "Vista gerarchia",
+    "viewLabel": "Vista gerarchica",
     "list": "Elenco",
     "graph": "Grafo"
   },
@@ -763,6 +763,6 @@
     "matchedLanguage": "corrispondenza: {{lang}}"
   },
   "collection": {
-    "typeTooltip": "Glossario, tassonomia e ontologia sono livelli di una scala di maturità, non strumenti diversi. Glossario = un elenco piatto di termini e definizioni condivisi. Tassonomia = termini organizzati in una gerarchia più ampio/più specifico. Ontologia = classi e proprietà formali su cui una macchina può ragionare. Scegli il livello in cui ti trovi oggi; potrai aggiungere struttura in seguito."
+    "typeTooltip": "Glossario, tassonomia e ontologia sono livelli di una scala di maturità, non strumenti diversi. Glossario = un elenco piatto di termini e definizioni condivisi. Tassonomia = termini organizzati in una gerarchia più ampia/più specifica. Ontologia = classi e proprietà formali su cui una macchina può ragionare. Scegli il livello in cui ti trovi oggi; potrai aggiungere struttura in seguito."
   }
 }

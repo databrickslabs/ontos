@@ -33,7 +33,7 @@
   },
   "enrich": {
     "deliver": {
-      "description": "Écrivez des métadonnées gouvernées sur les ressources {{platform}} associées.",
+      "description": "Écrivez des métadonnées gouvernées sur les actifs {{platform}} associés.",
       "tags": {
         "name": "Tags",
         "desc": "Tags de gouvernance clé/valeur sur les tables et les colonnes. Ils alimentent la découverte et les politiques d'accès.",

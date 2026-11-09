@@ -63,8 +63,8 @@
       "lastRun": " · 最終実行 {{run}}",
       "notSynced": "未同期",
       "manageInSettings": "設定で管理",
-      "configure": "設定",
-      "comingSoon": "近日提供予定: Ontos からこの同期を設定および実行する機能はまだ接続されていません。",
+      "configure": "構成",
+      "comingSoon": "近日提供予定: Ontos からのこの同期の構成と実行には、まだ対応していません。",
       "syncNow": "今すぐ同期",
       "about": "この配信先について"
     },

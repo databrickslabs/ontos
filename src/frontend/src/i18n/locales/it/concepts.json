@@ -33,7 +33,7 @@
   },
   "enrich": {
     "deliver": {
-      "description": "Scrivi metadati governati sugli asset {{platform}} associati.",
+      "description": "Scrivi metadati governati sugli asset {{platform}} mappati.",
       "tags": {
         "name": "Tag",
         "desc": "Tag di governance chiave/valore su tabelle e colonne. Guidano la ricerca e le policy di accesso.",

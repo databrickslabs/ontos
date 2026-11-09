@@ -36,14 +36,14 @@
       "description": "Schrijf beheerde metadata naar de gekoppelde {{platform}}-assets.",
       "tags": {
         "name": "Tags",
-        "desc": "Key/value-governancetags op tabellen en kolommen. Sturen vindbaarheid en toegangsbeleid aan.",
+        "desc": "Governance-tags (sleutel/waarde) op tabellen en kolommen. Sturen vindbaarheid en toegangsbeleid aan.",
         "via": "via uc_tag_sync",
         "notConfigured": "Tag-levering is niet geconfigureerd. Installeer de uc_tag_sync-job via Instellingen > Jobs om dit te activeren.",
         "note": "Tag-levering verloopt via de gedeelde uc_tag_sync-job, die ook andere aspecten dan semantische toewijzing afdekt. Configureer de scope en planning ervan via Instellingen > Jobs."
       },
       "desc": {
         "name": "Kolombeschrijvingen",
-        "desc": "Betekenis van kolommen in begrijpelijke taal. Dit lezen Genie en zoeken om nauwkeurig te antwoorden.",
+        "desc": "Betekenis van kolommen in begrijpelijke taal. Dit lezen Genie en de zoekfunctie om nauwkeurig te antwoorden.",
         "assist": "dbxmetagen kan deze opstellen"
       },
       "glossary": {
@@ -100,7 +100,7 @@
       "applied": "{{count}} match(es) toegepast. Ze worden bij de volgende levering gesynchroniseerd.",
       "applyError": "Kan matches niet toepassen: ",
       "placeholderNote": "Voorbeeldmatches ter illustratie.",
-      "reject": "Weigeren",
+      "reject": "Afwijzen",
       "accept": "Accepteren",
       "drift": "Op te lossen schemadrift",
       "openFull": "Volledig Review Board openen",

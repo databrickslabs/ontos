@@ -584,7 +584,7 @@
   },
   "define": {
     "requiresWrite": "Requer acesso de gravação",
-    "builds": "Cria",
+    "builds": "Criações",
     "whatYouCanBuild": "O que você pode criar",
     "schemeRdfNote": "Todo esquema é um skos:ConceptScheme.",
     "needsReview": "Requer revisão",

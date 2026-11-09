@@ -305,7 +305,7 @@
     "reviewerComment": "レビュー担当者のコメント",
     "sparql": "SPARQL",
     "sparqlTitle": "SPARQL クエリ",
-    "sparqlDescription": "ナレッジグラフをクエリします。このコンセプトがあらかじめ設定されています。"
+    "sparqlDescription": "ナレッジグラフをクエリします。このコンセプトが入力済みの状態で開きます。"
   },
   "hierarchy": {
     "title": "階層",
@@ -398,7 +398,7 @@
     "changelogSummary": "{{modified}} 件を変更、{{added}} 件を追加、{{removed}} 件を削除（{{unchanged}} 件は変更なし）。",
     "bucketModified": "変更（新しいバージョン）",
     "bucketNew": "新規",
-    "bucketRemoved": "削除（非推奨化、削除はされません）",
+    "bucketRemoved": "除外（非推奨化のみ。削除はされません）",
     "stillReferenced": "{{count}} 件で使用中",
     "submitMulti": "{{count}} 個のファイルをインポート",
     "chooseFile": "ファイルを選択…",
@@ -411,7 +411,7 @@
       "title": "コンセプト IRI の競合が検出されました",
       "description": "以下のコンセプトはこのスキームに既に存在します。処理方法を選択してください:",
       "showLess": "表示を減らす",
-      "showAll": "詳細リストを確認 ({{count}})",
+      "showAll": "詳細リストを確認（{{count}}）",
       "update": "既存を更新",
       "updateDesc": "既存のコンセプトを新しい定義で上書きします",
       "skip": "新規のみインポート",

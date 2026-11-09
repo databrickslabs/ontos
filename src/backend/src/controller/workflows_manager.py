@@ -788,7 +788,7 @@ class WorkflowsManager:
             errors.extend(step_errors)
 
         errors.extend(self._validate_gate_exemptions(workflow.trigger))
-        errors.extend(self._validate_schedule(workflow.trigger))
+        errors.extend(self.schedule_errors(workflow.trigger))
         
         return WorkflowValidationResult(
             valid=len(errors) == 0,
@@ -991,7 +991,7 @@ class WorkflowsManager:
         return warned
 
     @staticmethod
-    def _validate_schedule(trigger: WorkflowTrigger) -> List[str]:
+    def schedule_errors(trigger: WorkflowTrigger) -> List[str]:
         """A ``scheduled`` trigger needs a Quartz cron (common/quartz_cron.py) and a timezone."""
         if trigger.type != TriggerType.SCHEDULED:
             return []

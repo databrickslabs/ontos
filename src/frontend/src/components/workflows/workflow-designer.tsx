@@ -94,6 +94,7 @@ import {
   ScriptNode,
   EndNode,
   PolicyCheckNode,
+  CompliancePolicyIdsContext,
   CreateAssetReviewNode,
   WebhookNode,
   EntityActionNode,
@@ -845,6 +846,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // Step whose config blocked the last save; its form shows the missing field.
   const [invalidStepId, setInvalidStepId] = useState<string | null>(null);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
+  // False until the policy list loads: Policy Check nodes flag unknown ids only then
+  const [compliancePoliciesLoaded, setCompliancePoliciesLoaded] = useState(false);
+  const compliancePolicyIds = useMemo(
+    () => (compliancePoliciesLoaded ? compliancePolicies.map(p => p.id) : undefined),
+    [compliancePolicies, compliancePoliciesLoaded],
+  );
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
   // approverRoles is the approval-entity-filtered subset of availableRoles used
   // specifically in the Approvers (Role) picker. It is re-computed whenever
@@ -1099,6 +1106,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         const policiesResponse = await get<CompliancePolicyRef[]>('/api/workflows/compliance-policies');
         if (policiesResponse.data && Array.isArray(policiesResponse.data)) {
           setCompliancePolicies(policiesResponse.data);
+          setCompliancePoliciesLoaded(true);
         } else {
           setCompliancePolicies([]);
         }
@@ -1750,6 +1758,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         {/* Flow canvas - shown only when workflow type is selected */}
         {workflowType !== null && (
         <div className="flex-1">
+          <CompliancePolicyIdsContext.Provider value={compliancePolicyIds}>
           <ReactFlow
             nodes={nodes}
             edges={edgesWithDelete}
@@ -1795,6 +1804,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               </div>
             </Panel>
           </ReactFlow>
+          </CompliancePolicyIdsContext.Provider>
         </div>
         )}
 

@@ -533,6 +533,7 @@
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Geen beleid geselecteerd",
     "policyHint": "Suggestie: {{name}}",
+    "policyUnknown": "Onbekend of inactief beleid: {{id}}",
     "reviewerLabel": "Beoordelaar:",
     "notSet": "Niet ingesteld",
     "connectionLabel": "Verbinding: {{name}}",

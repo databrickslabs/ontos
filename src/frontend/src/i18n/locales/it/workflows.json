@@ -533,6 +533,7 @@
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nessun criterio selezionato",
     "policyHint": "Suggerito: {{name}}",
+    "policyUnknown": "Policy sconosciuta o inattiva: {{id}}",
     "reviewerLabel": "Revisore:",
     "notSet": "Non impostato",
     "connectionLabel": "Connessione: {{name}}",

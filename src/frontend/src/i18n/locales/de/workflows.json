@@ -533,6 +533,7 @@
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Keine Richtlinie ausgewählt",
     "policyHint": "Vorschlag: {{name}}",
+    "policyUnknown": "Unbekannte oder inaktive Richtlinie: {{id}}",
     "reviewerLabel": "Prüfer:",
     "notSet": "Nicht festgelegt",
     "connectionLabel": "Verbindung: {{name}}",

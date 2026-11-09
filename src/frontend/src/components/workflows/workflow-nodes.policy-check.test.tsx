@@ -1,11 +1,11 @@
-/** The Policy Check node marks a step whose policy is not selected. */
+/** The Policy Check node marks a step whose policy is not selected or not known. */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from 'reactflow';
 import '@/i18n/config';
-import { PolicyCheckNode } from './workflow-nodes';
+import { CompliancePolicyIdsContext, PolicyCheckNode } from './workflow-nodes';
 
-function renderNode(config: Record<string, unknown>) {
+function renderNode(config: Record<string, unknown>, policyIds?: string[]) {
   const props = {
     id: 'n1',
     selected: false,
@@ -13,7 +13,9 @@ function renderNode(config: Record<string, unknown>) {
   } as unknown as React.ComponentProps<typeof PolicyCheckNode>;
   return render(
     <ReactFlowProvider>
-      <PolicyCheckNode {...props} />
+      <CompliancePolicyIdsContext.Provider value={policyIds}>
+        <PolicyCheckNode {...props} />
+      </CompliancePolicyIdsContext.Provider>
     </ReactFlowProvider>,
   );
 }
@@ -32,5 +34,27 @@ describe('PolicyCheckNode', () => {
     expect(screen.getByText('No policy selected')).toBeInTheDocument();
     expect(screen.getByText('Suggested: Naming Conventions')).toBeInTheDocument();
     expect(screen.queryByText('Policy: Naming Conventions')).not.toBeInTheDocument();
+  });
+
+  it('marks an id no loaded policy has, such as an old placeholder slug', () => {
+    renderNode({ policy_id: 'naming-conventions', policy_name: 'Naming Conventions' }, ['pol-1']);
+
+    expect(screen.getByText('Unknown or inactive policy: naming-conventions')).toBeInTheDocument();
+    expect(screen.getByText('Suggested: Naming Conventions')).toBeInTheDocument();
+    expect(screen.queryByText('Policy: Naming Conventions')).not.toBeInTheDocument();
+  });
+
+  it('shows a known policy as selected, with surrounding spaces ignored', () => {
+    renderNode({ policy_id: ' pol-1 ', policy_name: 'Naming Conventions' }, ['pol-1']);
+
+    expect(screen.getByText('Policy: Naming Conventions')).toBeInTheDocument();
+    expect(screen.queryByText(/Unknown or inactive policy/)).not.toBeInTheDocument();
+  });
+
+  it('flags nothing while the policy list is not loaded', () => {
+    renderNode({ policy_id: 'naming-conventions', policy_name: 'Naming Conventions' });
+
+    expect(screen.getByText('Policy: Naming Conventions')).toBeInTheDocument();
+    expect(screen.queryByText(/Unknown or inactive policy/)).not.toBeInTheDocument();
   });
 });

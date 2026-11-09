@@ -6175,8 +6175,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError("Contract must be APPROVED to publish")
             was_effectively_published = (contract.publication_scope or "none").lower() != "none"
             contract.publication_scope = requested_scope
-            contract.published_at = now
-            contract.published_by = approver_email
+            if not was_effectively_published:
+                # Approving a scope change keeps who published it and when
+                contract.published_at = now
+                contract.published_by = approver_email
             notification_title = "Contract Published to Marketplace"
             notification_desc = f"Your contract '{contract.name}' has been published to the marketplace."
         else:  # deny

@@ -1336,6 +1336,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         ODPS lifecycle (aligned with ODCS): Publishes a product to make it active and available
         in the marketplace. Validates that all output ports have data contracts assigned.
+        An unpublished product is published at organization scope, stamped and fires
+        ``on_publish``; one still published (e.g. deprecated, then re-published) keeps its
+        scope, ``published_at`` / ``published_by``, and fires no ``on_publish``.
 
         Args:
             product_id: ID of the product to publish
@@ -1354,9 +1357,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Data product with ID {product_id} not found")
 
             self._validate_output_port_contracts(product_db)
+            # A product deprecated while published keeps its scope (e.g. domain)
+            was_published = (product_db.publication_scope or 'none').lower() != 'none'
 
             # Use transition_status for validation and update
             result = self.transition_status(product_id, 'active', current_user)
+            if was_published:
+                # Same rule as set_publication_scope: no new scope, stamp or
+                # on_publish unless the product goes from unpublished to published
+                return result
 
             # Set publication scope
             from datetime import datetime, timezone

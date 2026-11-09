@@ -234,3 +234,89 @@ def test_a_trigger_error_keeps_the_publication_and_is_logged_as_an_error(
     errors = [r.getMessage() for r in caplog.records if r.levelname == 'ERROR']
     assert f'Publication trigger failed for data product {product.id}' in errors
     assert f'Publication trigger failed for data contract {contract.id}' in errors
+
+
+def _published_at():
+    from datetime import datetime, timezone
+    return datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+
+
+def test_publish_product_keeps_the_scope_and_stamp_of_a_product_still_published(
+    db_session, registry
+):
+    # A product deprecated while published at domain scope, then re-published
+    product = _product(
+        db_session, contract_id=_contract(db_session).id, status='deprecated', scope='domain',
+    )
+    product.published_at = _published_at()
+    product.published_by = 'alice@example.com'
+    db_session.flush()
+    registry.before_status_change.return_value = (True, [])
+
+    DataProductsManager(db=db_session).publish_product(product.id, 'bob@example.com')
+
+    db_session.refresh(product)
+    assert product.status == 'active'
+    assert product.publication_scope == 'domain'
+    assert product.published_by == 'alice@example.com'
+    assert product.published_at.replace(tzinfo=None) == _published_at().replace(tzinfo=None)
+    registry.on_publish.assert_not_called()
+
+
+def test_publish_product_publishes_an_unpublished_product_at_organization_scope(
+    db_session, registry
+):
+    product = _product(db_session, contract_id=_contract(db_session).id, status='approved')
+    registry.before_status_change.return_value = (True, [])
+
+    DataProductsManager(db=db_session).publish_product(product.id, 'bob@example.com')
+
+    db_session.refresh(product)
+    assert product.status == 'active'
+    assert product.publication_scope == 'organization'
+    assert product.published_by == 'bob@example.com'
+    assert product.published_at is not None
+    registry.on_publish.assert_called_once()
+
+
+def _request_publication(db, contract_id, scope):
+    from src.controller.change_log_manager import change_log_manager
+    change_log_manager.log_change_with_details(
+        db, entity_type='data_contract', entity_id=contract_id, action='publish_requested',
+        username='alice', details={'requester_email': 'alice@example.com',
+                                   'requested_scope': scope},
+    )
+    db.flush()
+
+
+def test_approving_a_contract_scope_change_keeps_who_published_and_when(db_session, registry):
+    contract = _contract(db_session, scope='domain')
+    contract.published_at = _published_at()
+    contract.published_by = 'bob@example.com'
+    db_session.flush()
+    _request_publication(db_session, contract.id, 'organization')
+
+    _contracts_manager().handle_publish_response(
+        db_session, MagicMock(), contract.id, 'carol@example.com', 'approve',
+    )
+
+    db_session.refresh(contract)
+    assert contract.publication_scope == 'organization'
+    assert contract.published_by == 'bob@example.com'
+    assert contract.published_at.replace(tzinfo=None) == _published_at().replace(tzinfo=None)
+    registry.on_publish.assert_not_called()
+
+
+def test_approving_a_first_contract_publication_stamps_the_approver(db_session, registry):
+    contract = _contract(db_session)
+    _request_publication(db_session, contract.id, 'domain')
+
+    _contracts_manager().handle_publish_response(
+        db_session, MagicMock(), contract.id, 'carol@example.com', 'approve',
+    )
+
+    db_session.refresh(contract)
+    assert contract.publication_scope == 'domain'
+    assert contract.published_by == 'carol@example.com'
+    assert contract.published_at is not None
+    registry.on_publish.assert_called_once()

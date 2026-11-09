@@ -496,12 +496,16 @@ async def unpublish_product(
 
         # Same rule as set-publication-scope: unpublish workflows run only on a real change
         if was_published:
-            get_trigger_registry(db).on_unpublish(
-                EntityType.DATA_PRODUCT,
-                product_id,
-                entity_name=product_db.name,
-                user_email=current_user.username,
-            )
+            try:
+                get_trigger_registry(db).on_unpublish(
+                    EntityType.DATA_PRODUCT,
+                    product_id,
+                    entity_name=product_db.name,
+                    user_email=current_user.username,
+                )
+            except Exception:
+                # The unpublish is committed; its on_unpublish workflows didn't run
+                logger.exception("on_unpublish trigger failed for data product %s", product_id)
 
         audit_manager.log_action(
             db=db,

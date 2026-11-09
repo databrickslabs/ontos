@@ -724,3 +724,28 @@ class TestUnpublishRoute:
 
         assert response.status_code == 200, response.text
         registry.on_unpublish.assert_not_called()
+
+    def test_a_failing_on_unpublish_trigger_keeps_the_unpublish_and_answers_200(
+        self, client, db_session, caplog
+    ):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'organization')
+        registry = MagicMock()
+        registry.on_unpublish.side_effect = RuntimeError('workflow engine down')
+        audit = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry), \
+                patch('src.controller.audit_manager.AuditManager.log_action', audit), \
+                caplog.at_level('ERROR'):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        db_session.refresh(product)
+        assert product.publication_scope == 'none'
+        # The unpublish is still audited, and the trigger error is logged
+        assert [c.kwargs.get('action') for c in audit.call_args_list] == ['UNPUBLISH']
+        assert any(
+            f'on_unpublish trigger failed for data product {product.id}' in r.getMessage()
+            for r in caplog.records
+        )

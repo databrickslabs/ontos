@@ -21,7 +21,7 @@ the ``SqlRunner`` passed in, so assets pointing to a UC table can reuse this.
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Set, Tuple
 
 from src.common.compliance_dsl import (
-    BinaryOp, CaseExpression, FunctionCall, ListLiteral, PropertyAccess, UnaryOp,
+    BinaryOp, CaseExpression, FunctionCall, ListLiteral, PropertyAccess, TokenType, UnaryOp,
 )
 from src.common.logging import get_logger
 
@@ -100,6 +100,24 @@ def fields_read(*nodes: Any) -> Set[str]:
             for condition, result in node.when_clauses:
                 stack.extend((condition, result))
     return found
+
+
+def conditions_without(node: Any, fields: Iterable[str]) -> List[Any]:
+    """The AND-ed parts of a WHERE clause that read none of ``fields``.
+
+    Every part must hold for the WHERE to hold, so an entity for which one of
+    them is false is out of scope whatever the other parts give.
+    """
+    excluded = set(fields)
+    parts: List[Any] = []
+    stack = [node] if node is not None else []
+    while stack:
+        current = stack.pop()
+        if isinstance(current, BinaryOp) and current.op == TokenType.AND:
+            stack.extend((current.right, current.left))
+        elif not fields_read(current) & excluded:
+            parts.append(current)
+    return parts
 
 
 def groups_for_fields(fields: Iterable[str]) -> Set[str]:

@@ -177,6 +177,15 @@
     "workspace_client_unavailable": "Databricks ワークスペースを利用できません。このルールは Unity Catalog オブジェクトを確認するため、実行できませんでした。",
     "tags_load_failed": "{{entityType}} エンティティのタグを読み込めなかったため、ルールを評価できませんでした。"
   },
+  "tableSources": {
+    "runWarning": "評価されなかったオブジェクト: {{count}}。ルールは {{sources}} のフィールドを読み取りますが、読み取れませんでした ({{reasons}})。これらの結果は不合格として数えられます。",
+    "notEvaluated": "未評価: {{sources}} から {{fields}} を読み取れませんでした ({{reason}})。",
+    "reasons": {
+      "no_warehouse": "SQL ウェアハウスが設定されていません",
+      "no_access": "システムテーブルへのアクセス権がありません",
+      "query_failed": "クエリが失敗しました"
+    }
+  },
   "saveErrors": {
     "rule_trailing_input": "ルールに無効な入力があります（{{line}} 行 {{column}} 列、'{{text}}' から）。それ以降は無視されるため、ルールは記述より少ない内容しか検査しません。削除するか、構文を修正してください。"
   },

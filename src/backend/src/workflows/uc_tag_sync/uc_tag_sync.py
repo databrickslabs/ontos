@@ -582,6 +582,11 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
 # aggregation (a schema has no maturity of its own).
 
 MATURITY_VARIABLES = ("{ASSET.MATURITY}", "{ASSET.MATURITY_ORDER}")
+# {ASSET.MATURITY_AT_LEAST:<order>} publishes "true" when the asset's level number is at
+# least <order>, and "false" when it has no level. The order is part of the variable, so
+# any threshold works without a code change (e.g. agent_readable = ...AT_LEAST:1).
+MATURITY_AT_LEAST_PREFIX = "{ASSET.MATURITY_AT_LEAST:"
+_MATURITY_AT_LEAST_RE = re.compile(r"\{ASSET\.MATURITY_AT_LEAST:(\d+)\}")
 # Mirrors MATURITY_ASSET_TYPES in src/controller/entity_dict_builder.py (this job runs
 # without the app package).
 MATURITY_ASSET_TYPES = ("Table", "View")
@@ -598,11 +603,11 @@ MATURITY_SKIP_REASONS = (
 def uses_asset_maturity(config: Dict[str, Any]) -> bool:
     """True when a tag_sync_configs entry formats a maturity variable."""
     formats = f"{config.get('tag_key_format') or ''}{config.get('tag_value_format') or ''}"
-    return any(v in formats for v in MATURITY_VARIABLES)
+    return any(v in formats for v in MATURITY_VARIABLES) or MATURITY_AT_LEAST_PREFIX in formats
 
 
 def maturity_configured(tag_sync_configs: List[Dict[str, Any]]) -> bool:
-    """True when an enabled asset entry uses {ASSET.MATURITY} or {ASSET.MATURITY_ORDER}."""
+    """True when an enabled asset entry uses a maturity variable (see uses_asset_maturity)."""
     return any(
         c.get("entity_type") == "asset" and c.get("enabled", True) and uses_asset_maturity(c)
         for c in tag_sync_configs
@@ -1045,7 +1050,25 @@ def format_tag_string(format_str: str, variables: Dict[str, Optional[str]]) -> O
                 # Required variable is missing
                 return None
             result = result.replace(placeholder, var_value)
+    # A {ASSET.MATURITY_AT_LEAST:...} left over is malformed, or used outside an asset
+    # entry (resolve_maturity_at_least runs there only): no tag rather than a literal.
+    if MATURITY_AT_LEAST_PREFIX in result:
+        return None
     return result
+
+
+def resolve_maturity_at_least(format_str: str, level_order: Optional[str]) -> str:
+    """Replace each valid {ASSET.MATURITY_AT_LEAST:<order>} with "true" or "false".
+
+    "true" when the asset's level number (``level_order``, as text) is at least <order>;
+    "false" when the asset has no level. Malformed variables are left for format_tag_string.
+    """
+    def _resolve(match: "re.Match[str]") -> str:
+        if level_order is None:
+            return "false"
+        return "true" if int(level_order) >= int(match.group(1)) else "false"
+
+    return _MATURITY_AT_LEAST_RE.sub(_resolve, format_str)
 
 
 def build_variables_for_dataset(d: DatasetTagInfo, link: Optional[SemanticLink] = None) -> Dict[str, Optional[str]]:
@@ -2032,8 +2055,11 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
         elif entity_type == "asset":
             if d.asset_type_name:
                 variables = build_variables_for_dataset(d)
-                tag_key = format_tag_string(tag_key_format, variables)
-                tag_value = format_tag_string(tag_value_format, variables)
+                order = variables["ASSET.MATURITY_ORDER"]
+                tag_key = format_tag_string(
+                    resolve_maturity_at_least(tag_key_format, order), variables)
+                tag_value = format_tag_string(
+                    resolve_maturity_at_least(tag_value_format, order), variables)
 
                 if tag_key and tag_value:
                     tag_key = sanitize_tag_key(tag_key)

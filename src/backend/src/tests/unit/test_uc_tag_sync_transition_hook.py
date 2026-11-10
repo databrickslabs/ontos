@@ -148,7 +148,10 @@ def test_the_run_gets_the_saved_tag_sync_configuration(db_session, jobs_manager,
         product.id, 'deprecated', deprecation=DEPRECATION)
 
     params = ws.jobs.run_now.call_args.kwargs['job_parameters']
-    assert json.loads(params['tag_sync_configs']) == configs
+    # The saved entries, then the asset maturity default the list lacks (disabled)
+    sent = json.loads(params['tag_sync_configs'])
+    assert sent[:2] == configs
+    assert [(c['mapping'], c['enabled']) for c in sent[2:]] == [('maturity', False)]
 
 
 def test_a_configuration_saved_without_the_mapping_runs_with_it(db_session, jobs_manager,
@@ -169,6 +172,7 @@ def test_a_configuration_saved_without_the_mapping_runs_with_it(db_session, jobs
     assert [(c['entity_type'], c['enabled'], c['tag_value_format']) for c in configs[1:]] == [
         ('data_contract', False, '{CONTRACT.STATUS}'),
         ('data_product', True, '{PRODUCT.STATUS}'),
+        ('asset', False, '{ASSET.MATURITY}'),
     ]
 
 

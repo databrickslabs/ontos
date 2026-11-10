@@ -92,8 +92,9 @@ class TestAssetDefaultLadder:
         db_session.add(MaturityLevelDb(level_order=1, name='Accessible', entity_type='all'))
         db_session.flush()
 
-        client.post('/api/maturity-levels/asset-defaults')
+        response = client.post('/api/maturity-levels/asset-defaults')
 
+        assert response.status_code == 200, response.text
         assert db_session.query(MaturityLevelDb).filter_by(entity_type='all').count() == 1
 
     def test_a_documented_table_reaches_the_level_its_gates_allow(

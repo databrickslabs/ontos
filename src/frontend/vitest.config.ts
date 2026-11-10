@@ -31,7 +31,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
       // Restrict the coverage universe to first-party source. Without an
-      // explicit include, `all: true` lets v8 instrument runtime-imported
+      // explicit include, v8 instruments runtime-imported
       // deps (e.g. @babel/runtime), which polluted lcov.info with ~1.3k
       // node_modules entries and made Codecov unable to resolve the
       // `frontend` flag (badge showed "unknown").
@@ -50,7 +50,6 @@ export default defineConfig({
         'playwright.config.ts',
         'vite.config.ts',
       ],
-      all: true,
       // Gates set to current baseline floors (just under measured coverage)
       // to prevent regressions. Ratchet up as coverage improves toward the
       // 80% goal. Measured at time of writing: lines/statements 10.2%,

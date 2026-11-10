@@ -2227,6 +2227,53 @@ Click on a run to see:
 - Remediation tracking
 - Audit trails
 
+### Maturity Levels for Tables and Views
+
+Table and view assets have their own maturity ladder (levels with entity type **Asset**,
+in **Settings → Maturity Levels**). Each level has gates: compliance policies evaluated
+against the asset. A table reaches a level when it passes the required gates of that
+level and of every level below it. The level shows on the asset's page next to its
+details, with the gates of each level on hover and a button to re-evaluate it.
+
+**Default ladder.** No asset ladder is created at startup. While there is none,
+**Load default asset levels** adds this one, with one example policy per gate (category
+`Maturity`, named `[Asset maturity L<n>] ...`). Edit, replace or delete them like any
+other level and policy:
+
+| Level | Required gates |
+|-------|----------------|
+| 1. Prerequisite | an owner (`obj.has_owner`), a domain (`obj.has_domain`) |
+| 2. 1 star | a description of at least 50 characters (`LENGTH(obj.description)`), half of the columns commented (`obj.column_comment_ratio >= 0.5`) |
+| 3. 2 stars | every column commented (`obj.columns_without_comment_count = 0`), linked business terms (`obj.business_term_count > 0`); tags are advisory |
+| 4. 3 stars | certified (`obj.effective_certification >= 1`), certification not expired; quality checks are advisory |
+
+Column fields come from the Unity Catalog table the asset points to (platform Databricks,
+location `catalog.schema.table`). When the table can't be read they are missing, so the
+gates that use them fail and the page says why.
+
+**Publishing the level to Unity Catalog.** The *Unity Catalog Tag Sync* job (Settings →
+Background Jobs) can write the level as a tag on each table, so tools that read Unity
+Catalog see it. In the job's tag configuration, on the **Asset** tab, turn on the
+**Maturity level tag** card and set the key and value:
+
+| Variable | Value |
+|----------|-------|
+| `{ASSET.MATURITY}` | name of the level, e.g. `2 stars` |
+| `{ASSET.MATURITY_ORDER}` | number of the level, e.g. `3` |
+
+For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The two variables can
+also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
+`{ASSET.FQN}`.
+
+- The job publishes the level of the latest evaluation: when an asset changes, when its
+  page is opened, or with re-evaluate. It doesn't evaluate assets itself.
+- Only tables and views get the tag; schemas and catalogs don't. The run output counts
+  the assets it skipped and why: no `catalog.schema.table` name, an asset type other
+  than table or view, or no level (not evaluated yet, or no level reached).
+- A table that loses its level loses the tag at the next run. Keep the key under the
+  same prefix as the other enabled keys (`ontos_` by default): the job only reads and
+  removes tags with that prefix.
+
 ### Compliance Best Practices
 
 1. **Start Simple**: Begin with 3-5 high-priority policies

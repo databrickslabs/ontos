@@ -295,6 +295,20 @@ describe('Home by role home section', () => {
     expect(within(reviews).queryByText('Review r2')).not.toBeInTheDocument();
   });
 
+  it('a user whose groups match a role with the journey section gets the journey home', () => {
+    state.roles = [{
+      id: 'consumers', name: 'Consumers', home_sections: [HomeSection.JOURNEY],
+      assigned_groups: ['consumers'],
+    }];
+    useUserStore.setState({
+      userInfo: { email: 'me@x.com', username: 'me', user: 'me', ip: null,
+        groups: ['consumers'] } as any,
+    });
+    renderWithProviders(<Home />);
+    expect(screen.getByTestId('essentials-home')).toBeInTheDocument();
+    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
+  });
+
   it('a role without the journey section keeps the Full home', () => {
     applyJourneyRole([HomeSection.DISCOVERY]);
     renderWithProviders(<Home />);

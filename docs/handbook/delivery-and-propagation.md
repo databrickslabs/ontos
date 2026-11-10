@@ -159,7 +159,9 @@ table, and issues `ALTER TABLE … SET TAGS (...)` statements via Spark
 SQL. The job is installable from Settings → Background Jobs, runs on a
 schedule (or on demand), and is the production path for concept-to-UC
 sync on customer deployments today. It is independent of the Delivery
-Service modes.
+Service modes. The same job can also publish the maturity level of table
+and view assets (`{ASSET.MATURITY}`, `{ASSET.MATURITY_ORDER}`) as a table
+tag; see the User Guide, *Maturity Levels for Tables and Views*.
 
 In conversation: yes, semantic links *do* reach UC tags. The mechanism is
 a job (not the Delivery Service direct mode). The Delivery Service path

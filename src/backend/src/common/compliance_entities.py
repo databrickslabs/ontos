@@ -6,12 +6,15 @@ This module provides a framework for loading and filtering entities
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Protocol
+from typing import Any, Dict, Iterator, List, Optional, Protocol, Set
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_columns import table_column_fields
+from src.common.uc_table_enrichment import (
+    SqlRunner, enrich_catalog_tables, fields_read, unavailable_fields_read,
+)
 
 logger = get_logger(__name__)
 
@@ -58,11 +61,37 @@ class EntityLoader(ABC):
 VIEW_TABLE_TYPES = ('VIEW', 'MATERIALIZED_VIEW', 'METRIC_VIEW')
 
 
+@dataclass
+class TableEnrichment:
+    """Fields to add to table and view entities beyond what ``tables.list`` returns.
+
+    ``groups``: field groups of ``uc_table_enrichment`` (tags, lineage) the rule
+    reads. ``runner``: runs their statements, or None when no SQL warehouse is
+    configured (the fields are then marked unavailable). ``scope_ast``: the
+    rule's WHERE clause when it reads none of these fields; only the tables it
+    selects are enriched, so a rule scoped to one catalog or schema reads only
+    that part of the system tables.
+    """
+    groups: Set[str]
+    runner: Optional[SqlRunner]
+    scope_ast: Optional[Any] = None
+
+    def in_scope(self, entity: Dict[str, Any]) -> bool:
+        if self.scope_ast is None:
+            return True
+        try:
+            return bool(Evaluator(entity).evaluate(self.scope_ast))
+        except Exception:
+            # The iterator drops an entity whose WHERE fails to evaluate
+            return False
+
+
 class UnityCatalogLoader(EntityLoader):
     """Load entities from Unity Catalog."""
 
-    def __init__(self, workspace_client):
+    def __init__(self, workspace_client, table_enrichment: Optional[TableEnrichment] = None):
         self.ws = workspace_client
+        self.table_enrichment = table_enrichment
 
     SUPPORTED_TYPES = ('catalog', 'schema', 'table', 'view', 'function', 'volume')
 
@@ -112,6 +141,9 @@ class UnityCatalogLoader(EntityLoader):
             # Load tables and views
             if 'table' in entity_types or 'view' in entity_types:
                 for catalog in self.ws.catalogs.list():
+                    # With enrichment, a catalog's tables are read first and then
+                    # enriched with one statement per field group for the catalog
+                    pending: List[Dict[str, Any]] = []
                     try:
                         for schema in self.ws.schemas.list(catalog_name=catalog.name):
                             try:
@@ -129,7 +161,7 @@ class UnityCatalogLoader(EntityLoader):
                                     if entity_type not in entity_types:
                                         continue
 
-                                    yield {
+                                    entity = {
                                         'type': entity_type,
                                         'name': table.name,
                                         'id': getattr(table, 'full_name', f"{catalog.name}.{schema.name}.{table.name}"),
@@ -144,10 +176,23 @@ class UnityCatalogLoader(EntityLoader):
                                         'storage_location': getattr(table, 'storage_location', None),
                                         **table_column_fields(table),
                                     }
+                                    if self.table_enrichment is None:
+                                        yield entity
+                                    else:
+                                        pending.append(entity)
                             except Exception:
                                 logger.exception(f"Failed to list tables for schema {catalog.name}.{schema.name}")
                     except Exception:
                         logger.exception(f"Failed to list schemas for catalog {catalog.name}")
+                    if pending:
+                        enrichment = self.table_enrichment
+                        enrich_catalog_tables(
+                            catalog.name,
+                            [e for e in pending if enrichment.in_scope(e)],
+                            enrichment.groups,
+                            enrichment.runner,
+                        )
+                        yield from pending
 
             # Load functions
             if 'function' in entity_types:
@@ -441,6 +486,7 @@ class EntityIterator:
         """
         count = 0
         matched = False
+        where_fields = fields_read(entity_filter.where_clause_ast)
 
         for loader in self.loaders:
             # Check if loader supports any of the requested types
@@ -453,8 +499,12 @@ class EntityIterator:
 
             # Load entities
             for entity in loader.load_entities(requested, batch_size):
-                # Apply WHERE filter if present
-                if entity_filter.where_clause_ast:
+                # Apply WHERE filter if present. When a field it reads could not
+                # be loaded, the entity is kept: the run reports it as not
+                # evaluated instead of dropping it as if WHERE were false.
+                if entity_filter.where_clause_ast and not unavailable_fields_read(
+                    entity, where_fields
+                ):
                     try:
                         evaluator = Evaluator(entity)
                         if not evaluator.evaluate(entity_filter.where_clause_ast):
@@ -490,13 +540,15 @@ class EntityIterator:
 
 def create_entity_iterator(
     db: Optional[Session] = None,
-    workspace_client: Optional[Any] = None
+    workspace_client: Optional[Any] = None,
+    table_enrichment: Optional[TableEnrichment] = None,
 ) -> EntityIterator:
     """Create an entity iterator with standard loaders.
 
     Args:
         db: Database session for app entities
         workspace_client: Databricks workspace client for UC entities
+        table_enrichment: Tags / lineage to add to UC tables and views
 
     Returns:
         Configured EntityIterator
@@ -504,7 +556,7 @@ def create_entity_iterator(
     loaders = []
 
     if workspace_client:
-        loaders.append(UnityCatalogLoader(workspace_client))
+        loaders.append(UnityCatalogLoader(workspace_client, table_enrichment))
 
     if db:
         loaders.append(AppEntityLoader(db))

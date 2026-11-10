@@ -21,7 +21,10 @@ import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { formatRuleWarning, type RuleWarning } from '@/lib/compliance-rule-warnings';
 import { complianceRunErrorText } from '@/lib/compliance-run-error';
-import { complianceRunWarningText } from '@/lib/compliance-run-warning';
+import {
+  complianceResultMessageText,
+  complianceRunWarningText,
+} from '@/lib/compliance-run-warning';
 import { complianceSaveErrorText } from '@/lib/compliance-save-error';
 
 type Policy = {
@@ -98,7 +101,9 @@ export default function CompliancePolicyDetails() {
       </Badge>
     ) },
     { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
+      <span className="text-sm text-muted-foreground break-words">
+        {complianceResultMessageText(t, row.original) || t('compliance:results.empty')}
+      </span>
     ) },
   ], [t]);
 
@@ -388,7 +393,9 @@ export default function CompliancePolicyDetails() {
                   {results.filter(r => !r.passed).slice(0, 5).map((r) => (
                     <li key={`fail-prev-${r.id}`} className="text-sm text-muted-foreground break-words">
                       <code className="text-xs bg-muted px-1 py-0.5 rounded">{r.object_name || r.object_id}</code>
-                      {r.message ? <span className="ml-2">— {r.message}</span> : null}
+                      {r.message ? (
+                        <span className="ml-2">— {complianceResultMessageText(t, r)}</span>
+                      ) : null}
                     </li>
                   ))}
                   {results.filter(r => !r.passed).length === 0 && (

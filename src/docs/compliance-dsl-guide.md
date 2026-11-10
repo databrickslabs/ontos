@@ -220,6 +220,30 @@ ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
 
 ---
 
+### Example 8: Classified Tables With Known Sources
+
+**Scenario**: Every production table carries a classification tag and has at least one
+upstream table in lineage.
+
+```
+MATCH (t:table)
+WHERE t.catalog = 'production'
+ASSERT
+  HAS_TAG('data_classification') AND
+  t.upstream_count > 0
+ON_FAIL FAIL 'Tag the table with data_classification and make sure its sources are in lineage'
+```
+
+**What it checks**:
+- `HAS_TAG` reads the table's governed tags from `system.information_schema.table_tags`
+- `upstream_count` counts the distinct tables the table was written from in the last 90 days
+  (`system.access.table_lineage`)
+- Both are read through the app's SQL warehouse, once per catalog and only for the schemas
+  the `WHERE` selects. Without a warehouse or access to these system tables, the tables are
+  reported as *not evaluated* and the run shows a warning, instead of failing them as untagged
+
+---
+
 ## Entity Types
 
 You can write rules for these entity types:

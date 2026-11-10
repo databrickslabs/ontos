@@ -13,13 +13,15 @@ import { TagSyncConfig } from '@/types/workflow-configurations';
 import {
   LIFECYCLE_STATUS_MAPPING,
   MATURITY_MAPPING,
-  MATURITY_VARIABLES,
   defaultLifecycleEntry,
   defaultMaturityEntry,
   findEntryIndex,
+  hasInvalidMaturityThreshold,
+  resolveMaturityThresholds,
   supportsLifecycleMapping,
   supportsMaturityMapping,
   upsertEntry,
+  usesMaturityVariable,
 } from './tag-sync-configs';
 
 interface TagSyncConfigsFieldProps {
@@ -57,6 +59,10 @@ const AVAILABLE_VARIABLES: Record<string, { key: string; description: string }[]
     { key: '{ASSET.FQN}', description: 'Unity Catalog name of the table' },
     { key: '{ASSET.MATURITY}', description: 'Maturity level name' },
     { key: '{ASSET.MATURITY_ORDER}', description: 'Maturity level number' },
+    {
+      key: '{ASSET.MATURITY_AT_LEAST:<order>}',
+      description: 'true or false: level number is at least <order>',
+    },
   ],
 };
 
@@ -86,6 +92,10 @@ function renderExample(format: string, entityType: string): string {
   let example = format;
   for (const variable of AVAILABLE_VARIABLES[entityType] || []) {
     example = example.replace(variable.key, EXAMPLE_VALUES[variable.key] || '?');
+  }
+  if (entityType === 'asset') {
+    // The example asset is at level 3, so {ASSET.MATURITY_AT_LEAST:n} shows true for n <= 3
+    example = resolveMaturityThresholds(example, Number(EXAMPLE_VALUES['{ASSET.MATURITY_ORDER}']));
   }
   return example;
 }
@@ -132,6 +142,7 @@ export default function TagSyncConfigsField({ value, onChange, entityTypes }: Ta
     '{ASSET.FQN}': t('settings:tags.syncConfigs.assetVariables.assetFqn'),
     '{ASSET.MATURITY}': t('settings:tags.syncConfigs.assetVariables.assetMaturity'),
     '{ASSET.MATURITY_ORDER}': t('settings:tags.syncConfigs.assetVariables.assetMaturityOrder'),
+    '{ASSET.MATURITY_AT_LEAST:<order>}': t('settings:tags.syncConfigs.maturityThreshold.variable'),
   };
 
   // Ensure we have a config for each entity type (the first entry without a mapping id)
@@ -418,12 +429,16 @@ function MaturityTagCard({ config, onChange }: MaturityTagCardProps) {
   const keyError = config.enabled
     ? validateTagKey(renderExample(config.tag_key_format, 'asset'), t)
     : null;
-  const usesMaturity = MATURITY_VARIABLES.some(
-    (v) => config.tag_value_format.includes(v) || config.tag_key_format.includes(v),
-  );
-  const valueError = config.enabled && !usesMaturity
-    ? t('settings:tags.syncConfigs.maturity.valueNeedsVariable')
-    : null;
+  const usesMaturity = usesMaturityVariable(config.tag_value_format)
+    || usesMaturityVariable(config.tag_key_format);
+  const badThreshold = hasInvalidMaturityThreshold(config.tag_value_format)
+    || hasInvalidMaturityThreshold(config.tag_key_format);
+  let valueError: string | null = null;
+  if (config.enabled && !usesMaturity) {
+    valueError = t('settings:tags.syncConfigs.maturity.valueNeedsVariable');
+  } else if (config.enabled && badThreshold) {
+    valueError = t('settings:tags.syncConfigs.maturityThreshold.invalid');
+  }
 
   return (
     <Card className="mt-4" data-testid="asset-maturity-card">

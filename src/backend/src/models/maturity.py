@@ -60,6 +60,12 @@ class MaturityLevelRead(MaturityLevelBase):
     model_config = {"from_attributes": True}
 
 
+class AssetDefaultsLoadResult(BaseModel):
+    """Result of loading the default asset ladder: levels created, and the asset levels."""
+    created: int = 0
+    levels: List[MaturityLevelRead] = Field(default_factory=list)
+
+
 class MaturityLevelReorder(BaseModel):
     """Bulk reorder: list of id -> new level_order mappings."""
     levels: list[dict] = Field(

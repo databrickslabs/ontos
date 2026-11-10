@@ -432,6 +432,15 @@
         "title": "Funktionsberechtigungen",
         "description": "Zugriffsebenen für jede Funktion in der Anwendung konfigurieren."
       },
+      "navigation": {
+        "help": "Nicht markierte Funktionen erscheinen nicht in den Menüs dieser Rolle (Seitenleiste, Schnellaktionen der Startseite, Über). Das Ausblenden ändert nur, was die Menüs zeigen, nicht die Berechtigungen: Seiten bleiben per Link mit derselben Zugriffsebene erreichbar.",
+        "accessColumn": "Zugriffsebene",
+        "column": "In Navigation anzeigen",
+        "showFeature": "{{feature}} in der Navigation anzeigen",
+        "noAccessHint": "Kein Zugriff: Die Funktion erscheint nicht in den Menüs",
+        "adminHint": "Die Admin-Rolle zeigt immer alle Funktionen",
+        "unknownFeatures": "Unbekannte Funktionen können nicht aus der Navigation ausgeblendet werden: {{features}}"
+      },
       "groups": {
         "discover": "Entdecken",
         "build": "Erstellen",

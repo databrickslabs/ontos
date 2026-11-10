@@ -432,6 +432,15 @@
         "title": "Autorisations de fonctionnalités",
         "description": "Configurer les niveaux d'accès pour chaque fonctionnalité de l'application."
       },
+      "navigation": {
+        "help": "Les fonctionnalités non cochées n'apparaissent pas dans les menus de ce rôle (barre latérale, actions rapides de l'accueil, À propos). Masquer ne change que ce que les menus affichent, pas les autorisations : les pages restent accessibles par lien avec le même niveau d'accès.",
+        "accessColumn": "Niveau d'accès",
+        "column": "Afficher dans la navigation",
+        "showFeature": "Afficher {{feature}} dans la navigation",
+        "noAccessHint": "Aucun accès : la fonctionnalité n'apparaît pas dans les menus",
+        "adminHint": "Le rôle administrateur affiche toujours toutes les fonctionnalités",
+        "unknownFeatures": "Des fonctionnalités inconnues ne peuvent pas être masquées de la navigation : {{features}}"
+      },
       "groups": {
         "discover": "Découvrir",
         "build": "Construire",

@@ -7,7 +7,7 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 
 from src.models.users import UserInfo
-from src.models.users import UserPermissions
+from src.models.users import UserPermissions, UserNavigation
 from src.models.notifications import Notification, NotificationType
 from src.models.settings import RoleAccessRequest, AppRole
 from src.common.config import get_settings, Settings
@@ -186,6 +186,33 @@ async def get_actual_user_permissions(
             status_code=500,
             detail="Error calculating actual user permissions."
         )
+
+@router.get("/user/navigation", response_model=UserNavigation)
+async def get_current_user_navigation(
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    settings_manager: SettingsManager = Depends(get_settings_manager),
+) -> UserNavigation:
+    """Feature ids hidden from the current user's menus (#1325).
+
+    Follows the same role resolution as ``/api/user/permissions``, including the
+    applied role override (role switcher). Only the menus read it; access checks
+    don't.
+    """
+    try:
+        applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+        hidden = auth_manager.get_user_hidden_nav_features(
+            user_details.groups,
+            applied_role_override_id=applied_role_id,
+            user_email=user_details.email,
+        )
+        return UserNavigation(hidden_features=hidden)
+    except Exception:
+        logger.error(
+            "Unexpected error resolving navigation for user '%s'",
+            user_details.user or user_details.email, exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Error resolving user navigation.")
 
 # --- Role override endpoints ---
 class RoleOverrideRequest(BaseModel):

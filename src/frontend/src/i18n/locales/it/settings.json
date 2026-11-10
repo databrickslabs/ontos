@@ -432,6 +432,15 @@
         "title": "Permessi delle funzionalità",
         "description": "Configurare i livelli di accesso per ogni funzionalità nell'applicazione."
       },
+      "navigation": {
+        "help": "Le funzionalità non selezionate restano fuori dai menu di questo ruolo (barra laterale, azioni rapide della home, Informazioni). Nascondere cambia solo ciò che mostrano i menu, non i permessi: le pagine restano raggiungibili tramite link con lo stesso livello di accesso.",
+        "accessColumn": "Livello di accesso",
+        "column": "Mostra nella navigazione",
+        "showFeature": "Mostra {{feature}} nella navigazione",
+        "noAccessHint": "Nessun accesso: la funzionalità non compare nei menu",
+        "adminHint": "Il ruolo di amministratore mostra sempre tutte le funzionalità",
+        "unknownFeatures": "Le funzionalità sconosciute non possono essere nascoste dalla navigazione: {{features}}"
+      },
       "groups": {
         "discover": "Scopri",
         "build": "Costruisci",

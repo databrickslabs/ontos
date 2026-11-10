@@ -25,6 +25,9 @@ class AppRoleDb(Base):
     assigned_users = Column(Text, nullable=False, default='[]', server_default='[]')
     feature_permissions = Column(Text, nullable=False, default='{}')
     home_sections = Column(Text, nullable=False, default='[]')
+    # Feature ids this role hides from the navigation (sidebar, quick actions, About).
+    # Empty = every feature shown. Visibility only: access levels are unchanged (#1325).
+    hidden_nav_features = Column(Text, nullable=False, default='[]', server_default='[]')
     # Approval privileges JSON (e.g., {"CONTRACTS": true, "PRODUCTS": true})
     approval_privileges = Column(Text, nullable=False, default='{}')
     # Deployment policy JSON (catalog/schema restrictions, nullable for backward compatibility)

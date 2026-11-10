@@ -439,6 +439,15 @@
         "title": "Permissões de recursos",
         "description": "Configure os níveis de acesso para cada recurso do aplicativo."
       },
+      "navigation": {
+        "help": "Os recursos desmarcados ficam fora dos menus deste papel (barra lateral, ações rápidas do início, Sobre). Ocultar muda apenas o que os menus mostram, não as permissões: as páginas continuam acessíveis por link com o mesmo nível de acesso.",
+        "accessColumn": "Nível de acesso",
+        "column": "Mostrar na navegação",
+        "showFeature": "Mostrar {{feature}} na navegação",
+        "noAccessHint": "Sem acesso: o recurso não aparece nos menus",
+        "adminHint": "O papel de administrador sempre mostra todos os recursos",
+        "unknownFeatures": "Recursos desconhecidos não podem ser ocultados da navegação: {{features}}"
+      },
       "groups": {
         "discover": "Descobrir",
         "build": "Criar",

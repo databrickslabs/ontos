@@ -432,6 +432,15 @@
         "title": "Permisos de funciones",
         "description": "Configurar niveles de acceso para cada función en la aplicación."
       },
+      "navigation": {
+        "help": "Las funciones sin marcar quedan fuera de los menús de este rol (barra lateral, acciones rápidas del inicio, Acerca de). Ocultar solo cambia lo que muestran los menús, no los permisos: las páginas siguen accesibles por enlace con el mismo nivel de acceso.",
+        "accessColumn": "Nivel de acceso",
+        "column": "Mostrar en la navegación",
+        "showFeature": "Mostrar {{feature}} en la navegación",
+        "noAccessHint": "Sin acceso: la función no aparece en los menús",
+        "adminHint": "El rol de administrador siempre muestra todas las funciones",
+        "unknownFeatures": "Las funciones desconocidas no se pueden ocultar de la navegación: {{features}}"
+      },
       "groups": {
         "discover": "Descubrir",
         "build": "Construir",

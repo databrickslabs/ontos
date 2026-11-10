@@ -151,3 +151,42 @@ class MaturitySnapshotRead(BaseModel):
     evaluated_by: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Bulk evaluation of table and view assets
+# ---------------------------------------------------------------------------
+
+class MaturityBulkEvaluationRequest(BaseModel):
+    """Scope and tuning of a bulk evaluation. Every field is optional."""
+    catalog: Optional[str] = None
+    schema_name: Optional[str] = None
+    asset_types: Optional[List[str]] = None
+    max_workers: Optional[int] = None
+    batch_size: Optional[int] = None
+
+
+class MaturityBulkEvaluationError(BaseModel):
+    """An asset whose evaluation failed; the message is a code, never exception text."""
+    asset_id: str
+    code: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MaturityBulkEvaluationRun(BaseModel):
+    """Progress and summary of a bulk evaluation run."""
+    id: str
+    state: str  # running | completed | failed
+    scope: Dict[str, Any]
+    started_by: Optional[str] = None
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    max_workers: int
+    batch_size: int
+    total: int = 0
+    processed: int = 0
+    evaluated: int = 0
+    changed: int = 0
+    skipped: Dict[str, int] = Field(default_factory=dict)
+    error_count: int = 0
+    errors: List[MaturityBulkEvaluationError] = Field(default_factory=list)

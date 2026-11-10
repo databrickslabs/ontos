@@ -1237,6 +1237,38 @@
       "reorderFailed": "Failed to reorder"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Evaluate all table and view assets",
+    "description": "Evaluates every table and view asset in the scope with the current Asset levels. An asset evaluated since the run started is skipped, and only one run goes at a time.",
+    "catalog": "Catalog (optional)",
+    "schema": "Schema (optional)",
+    "start": "Evaluate assets",
+    "running": "Evaluating: {{processed}} of {{total}} assets",
+    "noAssetLevels": "Add Asset levels first: without them nothing is evaluated.",
+    "lastRun": "Last run",
+    "none": "No run has finished yet.",
+    "scope": "Scope: {{scope}}",
+    "allCatalogs": "All catalogs",
+    "startedBy": "Started by {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} evaluated, {{changed}} changed level, {{errors}} errors.",
+    "skipped": "Skipped",
+    "errors": "Errors",
+    "state": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Evaluated since the run started",
+      "maturity_bulk_skipped_not_found": "Asset not found",
+      "maturity_bulk_skipped_no_levels": "No Asset levels",
+      "maturity_bulk_skipped_asset_type": "Not a table or view",
+      "maturity_bulk_evaluation_failed": "Evaluation failed (see the server log)",
+      "maturity_bulk_run_failed": "The run stopped (see the server log)",
+      "maturity_bulk_run_in_progress": "A bulk evaluation is already running.",
+      "maturity_bulk_scope_invalid": "The scope is not valid."
+    }
+  },
   "maturityLevels": {
     "title": "Maturity Levels",
     "description": "Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",

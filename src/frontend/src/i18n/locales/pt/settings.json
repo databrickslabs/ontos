@@ -1237,6 +1237,38 @@
       "reorderFailed": "Falha ao reordenar"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Avaliar todos os assets de tabela e view",
+    "description": "Avalia cada asset de tabela e view do escopo com os níveis de Asset atuais. Um asset avaliado desde o início da execução é ignorado, e só há uma execução por vez.",
+    "catalog": "Catálogo (opcional)",
+    "schema": "Schema (opcional)",
+    "start": "Avaliar assets",
+    "running": "Avaliando: {{processed}} de {{total}} assets",
+    "noAssetLevels": "Crie primeiro os níveis de Asset: sem eles nada é avaliado.",
+    "lastRun": "Última execução",
+    "none": "Nenhuma execução terminou ainda.",
+    "scope": "Escopo: {{scope}}",
+    "allCatalogs": "Todos os catálogos",
+    "startedBy": "Iniciada por {{user}}",
+    "summary": "{{total}} assets: {{evaluated}} avaliados, {{changed}} com nível alterado, {{errors}} erros.",
+    "skipped": "Ignorados",
+    "errors": "Erros",
+    "state": {
+      "running": "Em execução",
+      "completed": "Concluída",
+      "failed": "Falhou"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Avaliado desde o início da execução",
+      "maturity_bulk_skipped_not_found": "Asset não encontrado",
+      "maturity_bulk_skipped_no_levels": "Sem níveis de Asset",
+      "maturity_bulk_skipped_asset_type": "Não é tabela nem view",
+      "maturity_bulk_evaluation_failed": "Falha na avaliação (veja o log do servidor)",
+      "maturity_bulk_run_failed": "A execução parou (veja o log do servidor)",
+      "maturity_bulk_run_in_progress": "Já há uma avaliação em massa em andamento.",
+      "maturity_bulk_scope_invalid": "O escopo não é válido."
+    }
+  },
   "maturityLevels": {
     "title": "Níveis de maturidade",
     "description": "Defina a escala de maturidade para produtos e contratos de dados. Cada nível é condicionado por políticas de conformidade.",

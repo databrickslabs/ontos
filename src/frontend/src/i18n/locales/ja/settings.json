@@ -1219,6 +1219,38 @@
       "reorderFailed": "並べ替えに失敗しました"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "テーブルとビューのアセットをすべて評価",
+    "description": "現在のAssetレベルで、対象範囲のすべてのテーブルとビューのアセットを評価します。実行開始後に評価済みのアセットはスキップされ、同時に実行できるのは1つだけです。",
+    "catalog": "カタログ（任意）",
+    "schema": "スキーマ（任意）",
+    "start": "アセットを評価",
+    "running": "評価中: {{total}} 件中 {{processed}} 件",
+    "noAssetLevels": "先にAssetレベルを追加してください。ないと何も評価されません。",
+    "lastRun": "前回の実行",
+    "none": "完了した実行はまだありません。",
+    "scope": "対象: {{scope}}",
+    "allCatalogs": "すべてのカタログ",
+    "startedBy": "開始者: {{user}}",
+    "summary": "{{total}} 件: 評価 {{evaluated}} 件、レベル変更 {{changed}} 件、エラー {{errors}} 件。",
+    "skipped": "スキップ",
+    "errors": "エラー",
+    "state": {
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "実行開始後に評価済み",
+      "maturity_bulk_skipped_not_found": "アセットが見つかりません",
+      "maturity_bulk_skipped_no_levels": "Assetレベルがありません",
+      "maturity_bulk_skipped_asset_type": "テーブルでもビューでもありません",
+      "maturity_bulk_evaluation_failed": "評価に失敗しました（サーバーログを確認）",
+      "maturity_bulk_run_failed": "実行が停止しました（サーバーログを確認）",
+      "maturity_bulk_run_in_progress": "一括評価がすでに実行中です。",
+      "maturity_bulk_scope_invalid": "対象範囲が無効です。"
+    }
+  },
   "maturityLevels": {
     "title": "成熟度レベル",
     "description": "データプロダクトと契約の成熟度の段階を定義します。各レベルはコンプライアンスポリシーによってゲートされます。",

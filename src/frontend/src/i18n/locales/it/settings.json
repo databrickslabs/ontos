@@ -1219,6 +1219,38 @@
       "reorderFailed": "Impossibile riordinare"
     }
   },
+  "maturityBulkEvaluation": {
+    "title": "Valuta tutti gli asset di tabella e vista",
+    "description": "Valuta ogni asset di tabella e vista nell'ambito con i livelli Asset attuali. Un asset valutato dall'inizio dell'esecuzione viene saltato; una sola esecuzione alla volta.",
+    "catalog": "Catalogo (facoltativo)",
+    "schema": "Schema (facoltativo)",
+    "start": "Valuta gli asset",
+    "running": "Valutazione: {{processed}} di {{total}} asset",
+    "noAssetLevels": "Crea prima i livelli Asset: senza di essi non viene valutato nulla.",
+    "lastRun": "Ultima esecuzione",
+    "none": "Nessuna esecuzione completata finora.",
+    "scope": "Ambito: {{scope}}",
+    "allCatalogs": "Tutti i cataloghi",
+    "startedBy": "Avviata da {{user}}",
+    "summary": "{{total}} asset: {{evaluated}} valutati, {{changed}} con livello cambiato, {{errors}} errori.",
+    "skipped": "Saltati",
+    "errors": "Errori",
+    "state": {
+      "running": "In esecuzione",
+      "completed": "Completata",
+      "failed": "Non riuscita"
+    },
+    "codes": {
+      "maturity_bulk_skipped_evaluated_in_run": "Valutato dall'inizio dell'esecuzione",
+      "maturity_bulk_skipped_not_found": "Asset non trovato",
+      "maturity_bulk_skipped_no_levels": "Nessun livello Asset",
+      "maturity_bulk_skipped_asset_type": "Non è né tabella né vista",
+      "maturity_bulk_evaluation_failed": "Valutazione non riuscita (vedi il log del server)",
+      "maturity_bulk_run_failed": "L'esecuzione si è interrotta (vedi il log del server)",
+      "maturity_bulk_run_in_progress": "Una valutazione in blocco è già in corso.",
+      "maturity_bulk_scope_invalid": "L'ambito non è valido."
+    }
+  },
   "maturityLevels": {
     "title": "Livelli di maturità",
     "description": "Definisci la scala di maturità per prodotti dati e contratti. Ogni livello è vincolato da criteri di conformità.",

@@ -1,6 +1,58 @@
 {
   "title": "Welcome to {{appName}}",
   "tagline": "Manage business glossary, data contracts, data products, personas, and more",
+  "essentials": {
+    "tagline": "Find, understand and trust your data, then publish and maintain what you own.",
+    "consumer": {
+      "title": "Use data",
+      "description": "Start from the tables your team already has in Unity Catalog."
+    },
+    "producer": {
+      "title": "Share data",
+      "description": "Document the assets you own and get them reviewed."
+    },
+    "find": {
+      "title": "Find",
+      "description": "Search assets and concepts, or browse the catalog.",
+      "placeholder": "Search tables, assets and glossary terms...",
+      "browseCatalog": "Browse the Data Catalog"
+    },
+    "understand": {
+      "title": "Understand",
+      "description": "See what an asset is and what its terms mean.",
+      "assets": "Assets",
+      "assetsDescription": "Tables, views and other assets with their metadata."
+    },
+    "trust": {
+      "title": "Trust",
+      "description": "Review status of assets and where the data lives today.",
+      "empty": "No asset has been reviewed yet.",
+      "openReviews": "Open Asset Reviews"
+    },
+    "publish": {
+      "title": "Publish",
+      "description": "Your assets that still lack documentation or a review.",
+      "noAssets": "You don't own any asset yet.",
+      "allDone": "All your assets are documented and reviewed.",
+      "noGapsLoaded": "No gaps in the assets loaded so far.",
+      "noDescription": "No description",
+      "noReview": "Not reviewed",
+      "more": "Showing {{shown}} of your {{total}} assets.",
+      "loadMore": "Load more",
+      "pageSize": "Per page",
+      "requestReview": "Request a review"
+    },
+    "maintain": {
+      "title": "Maintain",
+      "description": "Your open requests and reviews.",
+      "myRequests": "My pending requests ({{count}})",
+      "noRequests": "No pending requests.",
+      "openMyRequests": "Open My Requests",
+      "myReviews": "My open asset reviews ({{count}})",
+      "noReviews": "No open asset reviews.",
+      "nothing": "Nothing to follow up."
+    }
+  },
   "search": {
     "placeholder": "Search for data products, glossary terms, contracts..."
   },

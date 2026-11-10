@@ -134,6 +134,23 @@ class TestRolesApi:
         assert detail['params'] == {'feature_ids': ['my-requests']}
 
 
+class TestJourneyHomeSection:
+    """The journey home (#1347) is a role home section: the roles API carries it."""
+
+    def test_journey_home_section_round_trips(self, client: TestClient):
+        created = client.post('/api/settings/roles', json=_role_payload(
+            home_sections=['JOURNEY'],
+        ))
+        assert created.status_code == 201, created.text
+        role = created.json()
+        assert role['home_sections'] == ['JOURNEY']
+
+        role['home_sections'] = ['JOURNEY', 'DISCOVERY']
+        updated = client.put(f"/api/settings/roles/{role['id']}", json=role)
+        assert updated.status_code == 200, updated.text
+        assert updated.json()['home_sections'] == ['JOURNEY', 'DISCOVERY']
+
+
 class TestUserNavigation:
     def test_admin_sees_everything(self, client: TestClient, db_session: Session):
         # The default test user is in test_admins, the seeded is_admin role's group.

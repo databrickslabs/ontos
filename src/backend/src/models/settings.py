@@ -26,6 +26,8 @@ class HomeSection(str, Enum):
     REQUIRED_ACTIONS = "REQUIRED_ACTIONS"
     DATA_CURATION = "DATA_CURATION"
     DISCOVERY = "DISCOVERY"
+    # Journey home (#1347): Find, Understand, Trust, Publish, Maintain. Replaces the overview.
+    JOURNEY = "JOURNEY"
 
 # Approval entities for route-agnostic approval privileges
 class ApprovalEntity(str, Enum):

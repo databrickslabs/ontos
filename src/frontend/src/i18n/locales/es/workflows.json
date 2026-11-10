@@ -312,6 +312,7 @@
       "duplicateStepIds": "Dos pasos tienen el mismo ID.",
       "stepUnknownReference": "El paso \"{{step}}\" dirige su rama de {{branch}} a \"{{target}}\", que no está en el workflow.",
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
+      "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
       "branch": {
         "on_pass": "éxito",
         "on_fail": "fallo"
@@ -489,6 +490,8 @@
     "stepErrors": {
       "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
       "approval_rejected": "Solicitud denegada",
+      "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
+      "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",
       "rule_entity_load_failed": "No se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
       "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla"
     },
@@ -530,6 +533,8 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Ninguna política seleccionada",
+    "policyHint": "Sugerida: {{name}}",
+    "policyUnknown": "Política desconocida o inactiva: {{id}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Sin establecer",
     "connectionLabel": "Conexión: {{name}}",

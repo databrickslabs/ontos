@@ -1257,45 +1257,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         return self.transition_status(product_id, 'draft', current_user)
 
     def _validate_output_port_contracts(self, product_db, db=None) -> None:
-        """Raise ValueError unless every output port has an approved / active contract."""
-        db = db or self._db
-        if not product_db.output_ports:
-            return
-        ports_without_contracts = [
-            port.name for port in product_db.output_ports
-            if not port.contract_id
-        ]
-        if ports_without_contracts:
-            raise ValueError(
-                f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} "
-                f"must have data contracts assigned"
-            )
+        """Raise ``OutputPortContractsError`` unless every port has an approved contract."""
+        from src.common.output_port_contracts import validate_output_port_contracts
 
-        # Validate that all linked contracts are in an approved status
-        from src.repositories.data_contracts_repository import data_contract_repo
-
-        valid_contract_statuses = ['approved', 'active']
-        contracts_not_approved = []
-
-        for port in product_db.output_ports:
-            if port.contract_id:
-                contract = data_contract_repo.get(db=db, id=port.contract_id)
-                if not contract:
-                    contracts_not_approved.append(
-                        f"{port.name} -> {port.contract_id} (contract not found)"
-                    )
-                    continue
-                contract_status = (contract.status or '').lower()
-                if contract_status not in valid_contract_statuses:
-                    contracts_not_approved.append(
-                        f"{port.name} -> {contract.name} (status: {contract.status})"
-                    )
-
-        if contracts_not_approved:
-            raise ValueError(
-                f"Cannot publish product: These output ports have unapproved contracts: "
-                f"{', '.join(contracts_not_approved)}. Contracts must be approved first."
-            )
+        validate_output_port_contracts(product_db, db or self._db)
 
     def set_publication_scope(self, product_id: str, scope: str,
                               current_user: Optional[str] = None, db=None):
@@ -1328,8 +1293,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 )
             self._validate_output_port_contracts(product_db, db)
             product_db.publication_scope = scope
-            product_db.published_at = datetime.now(timezone.utc)
-            product_db.published_by = current_user
+            if not was_published:
+                # A scope change keeps who published it and when
+                product_db.published_at = datetime.now(timezone.utc)
+                product_db.published_by = current_user
         else:
             product_db.publication_scope = 'none'
             product_db.published_at = None
@@ -1373,6 +1340,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         ODPS lifecycle (aligned with ODCS): Publishes a product to make it active and available
         in the marketplace. Validates that all output ports have data contracts assigned.
+        An unpublished product is published at organization scope, stamped and fires
+        ``on_publish``; one still published (e.g. deprecated, then re-published) keeps its
+        scope, ``published_at`` / ``published_by``, and fires no ``on_publish``.
 
         Args:
             product_id: ID of the product to publish
@@ -1391,9 +1361,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError(f"Data product with ID {product_id} not found")
 
             self._validate_output_port_contracts(product_db)
+            # A product deprecated while published keeps its scope (e.g. domain)
+            was_published = (product_db.publication_scope or 'none').lower() != 'none'
 
             # Use transition_status for validation and update
             result = self.transition_status(product_id, 'active', current_user)
+            if was_published:
+                # Same rule as set_publication_scope: no new scope, stamp or
+                # on_publish unless the product goes from unpublished to published
+                return result
 
             # Set publication scope
             from datetime import datetime, timezone
@@ -1418,7 +1394,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             except Exception:
                 logger.exception("on_publish trigger failed for data product %s", product_id)
 
-            return result
+            # ``result`` was read before the scope was set: return the product as published
+            return self.get_product(product_id)
 
         except ValueError as e:
             logger.error(f"Validation error publishing product {product_id}: {e}")

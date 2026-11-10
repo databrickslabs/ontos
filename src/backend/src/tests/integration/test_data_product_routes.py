@@ -678,3 +678,74 @@ class TestDataProductRoutes:
         )
         assert response.status_code == 403, response.text
         assert "data-domains" in response.json().get("detail", "")
+
+
+class TestUnpublishRoute:
+    """POST /api/data-products/{id}/unpublish fires on_unpublish only on a real change."""
+
+    @staticmethod
+    def _product(db_session, scope):
+        from src.db_models.data_products import DataProductDb
+
+        product = DataProductDb(
+            id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
+            status='active', name='unpublish-test', version='1.0.0',
+            publication_scope=scope,
+            published_by='alice@example.com' if scope != 'none' else None,
+        )
+        db_session.add(product)
+        db_session.commit()
+        return product
+
+    def test_unpublishing_a_published_product_fires_on_unpublish(self, client, db_session):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'organization')
+        registry = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        registry.on_unpublish.assert_called_once()
+        assert registry.on_unpublish.call_args.args[1] == product.id
+        db_session.refresh(product)
+        assert product.publication_scope == 'none'
+        assert product.published_by is None
+
+    def test_unpublishing_an_unpublished_product_fires_nothing(self, client, db_session):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'none')
+        registry = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        registry.on_unpublish.assert_not_called()
+
+    def test_a_failing_on_unpublish_trigger_keeps_the_unpublish_and_answers_200(
+        self, client, db_session, caplog
+    ):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'organization')
+        registry = MagicMock()
+        registry.on_unpublish.side_effect = RuntimeError('workflow engine down')
+        audit = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry), \
+                patch('src.controller.audit_manager.AuditManager.log_action', audit), \
+                caplog.at_level('ERROR'):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        db_session.refresh(product)
+        assert product.publication_scope == 'none'
+        # The unpublish is still audited, and the trigger error is logged
+        assert [c.kwargs.get('action') for c in audit.call_args_list] == ['UNPUBLISH']
+        assert any(
+            f'on_unpublish trigger failed for data product {product.id}' in r.getMessage()
+            for r in caplog.records
+        )

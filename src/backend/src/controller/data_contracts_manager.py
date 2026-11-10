@@ -5682,8 +5682,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     f"Current status: {contract_db.status}"
                 )
             contract_db.publication_scope = scope
-            contract_db.published_at = datetime.now(timezone.utc)
-            contract_db.published_by = current_user
+            if not was_published:
+                # A scope change keeps who published it and when
+                contract_db.published_at = datetime.now(timezone.utc)
+                contract_db.published_by = current_user
         else:
             contract_db.publication_scope = "none"
             contract_db.published_at = None
@@ -6173,8 +6175,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 raise ValueError("Contract must be APPROVED to publish")
             was_effectively_published = (contract.publication_scope or "none").lower() != "none"
             contract.publication_scope = requested_scope
-            contract.published_at = now
-            contract.published_by = approver_email
+            if not was_effectively_published:
+                # Approving a scope change keeps who published it and when
+                contract.published_at = now
+                contract.published_by = approver_email
             notification_title = "Contract Published to Marketplace"
             notification_desc = f"Your contract '{contract.name}' has been published to the marketplace."
         else:  # deny
@@ -6311,9 +6315,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 notification_title = "Contract Deployment Started"
                 notification_desc = f"Deployment of contract '{contract.name}' to Unity Catalog has been initiated (Job ID: {job.id})."
             except Exception as e:
-                logger.error(f"Failed to trigger deployment: {e}", exc_info=True)
+                from src.common.api_errors import new_error_id
+
+                # The exception text stays in the log; the requester gets an error id
+                error_id = new_error_id()
+                logger.error(
+                    "Failed to trigger deployment of contract %s (error id %s): %s",
+                    contract_id, error_id, e, exc_info=True,
+                )
                 notification_title = "Contract Deployment Approved"
-                notification_desc = f"Your contract '{contract.name}' deployment was approved, but failed to start: {str(e)}"
+                notification_desc = (
+                    f"Your contract '{contract.name}' deployment was approved, but it could "
+                    f"not be started. The details are in the server log (error id {error_id})."
+                )
         elif decision == 'approve':
             notification_title = "Contract Deployment Approved"
             notification_desc = f"Your contract '{contract.name}' deployment was approved."

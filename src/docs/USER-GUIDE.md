@@ -2237,8 +2237,10 @@ details, with the gates of each level on hover and a button to re-evaluate it.
 
 **Default ladder.** No asset ladder is created at startup. While there is none,
 **Load default asset levels** adds this one, with one example policy per gate (category
-`Maturity`, named `[Asset maturity L<n>] ...`). Edit, replace or delete them like any
-other level and policy:
+`Maturity`, named `[Asset maturity L<n>] ...`). Edit them, or add your own levels and
+gates, like any other level and policy. As for products, a level that an evaluation has
+already reached can't be deleted while its snapshots exist (opening an asset page
+evaluates it):
 
 | Level | Required gates |
 |-------|----------------|

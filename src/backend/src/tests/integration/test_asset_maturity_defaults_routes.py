@@ -88,6 +88,14 @@ class TestAssetDefaultLadder:
         assert response.json()['created'] == 4
         assert db_session.query(CompliancePolicyDb).count() == policy_count
 
+    def test_needs_settings_write_access(self, client, db_session, mock_test_user):
+        mock_test_user.groups = []
+
+        response = client.post('/api/maturity-levels/asset-defaults')
+
+        assert response.status_code == 403
+        assert _asset_levels(db_session) == []
+
     def test_does_not_touch_other_ladders(self, client, db_session):
         db_session.add(MaturityLevelDb(level_order=1, name='Accessible', entity_type='all'))
         db_session.flush()

@@ -4,6 +4,7 @@
     "waitingForApproval": "aguardando aprovação ({{step}})",
     "entityLoadFailed": "não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
     "entityNotFound": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada",
+    "whereEvaluationFailed": "não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
     "validationFailed": "a validação do workflow falhou",
     "status": {
       "failed": "falhou",

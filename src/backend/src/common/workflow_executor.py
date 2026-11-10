@@ -15,7 +15,8 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from functools import partial
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -241,6 +242,26 @@ class RuleEntityNotFoundError(RuntimeError):
         super().__init__(f"{entity_type} {entity_id} was not found, so the rule can't be evaluated")
 
 
+class RuleWhereEvaluationError(RuntimeError):
+    """A policy's WHERE clause could not be evaluated on the step's entity.
+
+    In a compliance run such an entity is only left unchecked; in a workflow
+    "not applicable" would follow ``on_pass``, so a broken WHERE would let a
+    gate pass. The step fails instead. Same shape as ``RuleEntityLoadError``.
+    """
+
+    code = 'rule_where_evaluation_failed'
+
+    def __init__(
+        self, policy_name: Optional[str], entity_type: Optional[str], entity_id: Optional[str],
+    ):
+        self.params = {'policyName': policy_name, 'entityType': entity_type, 'entityId': entity_id}
+        super().__init__(
+            f"The WHERE clause of policy '{policy_name}' could not be evaluated "
+            f"on {entity_type} {entity_id}"
+        )
+
+
 def _rule_step_error(error: Exception, data: Optional[Dict[str, Any]] = None) -> 'StepResult':
     """Failed result of a rule step (validation, conditional, policy check).
 
@@ -307,6 +328,155 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
     # stored tags, so later rules still see the others (``HAS_TAG``, ``TAG``)
     if isinstance(stored.get('tags'), dict) and isinstance(payload.get('tags'), dict):
         merged['tags'] = {**stored['tags'], **payload['tags']}
+    return merged
+
+
+# Workflow entity types under the name compliance rules (MATCH) and
+# AppEntityLoader give them, where the two differ.
+_COMPLIANCE_TYPES = {'data_asset_review': 'review'}
+
+
+def _proposed_tags(db: Session, tags: Any) -> Dict[str, Any]:
+    """Proposed tag assignments (``AssignedTagCreate`` dicts) as AppEntityLoader's tags.
+
+    Keyed by ``namespace/name`` and, when no other proposed tag has the same
+    name, by name; the value is the assigned value, or True when it has none.
+    """
+    from src.db_models.tags import TagDb
+    from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
+
+    assigned = []
+    for tag in tags or []:
+        if not isinstance(tag, dict):
+            continue
+        fqn = tag.get('tag_fqn')
+        if tag.get('tag_id'):
+            # As in AssignedTagCreate, the id wins over the name
+            stored = db.get(TagDb, tag['tag_id'])
+            fqn = f"{stored.namespace_name}{SEP}{stored.name}" if stored else None
+        if not fqn:
+            continue
+        if SEP not in fqn:
+            fqn = f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
+        value = tag.get('assigned_value')
+        assigned.append((fqn, fqn.split(SEP, 1)[1], True if value is None else value))
+    # As in _tags_by_entity: the name is a key when one namespace has it
+    names = [name for _, name in {(fqn, name) for fqn, name, _ in assigned}]
+    values: Dict[str, Any] = {}
+    for fqn, name, value in assigned:
+        values[fqn] = value
+        if names.count(name) == 1:
+            values[name] = value
+    return values
+
+
+def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A before_update payload's values under AppEntityLoader's keys.
+
+    The payload is the data contract update request (ODCS field names). A
+    field the request clears stays cleared (None).
+    """
+    proposed = {}
+    if 'tags' in payload:
+        tags = payload['tags']
+        # An assign-tag step puts {name: value} there; the request has a list
+        proposed['tags'] = tags if isinstance(tags, dict) else _proposed_tags(db, tags)
+    if 'owner_team_id' in payload:
+        proposed['owner'] = payload['owner_team_id']
+    if 'descriptionPurpose' in payload or 'description' in payload:
+        # As DataContractsManager stores it: descriptionPurpose, else description.purpose
+        description = payload.get('description')
+        purpose = description.get('purpose') if isinstance(description, dict) else description
+        proposed['description'] = payload.get('descriptionPurpose') or purpose
+    return proposed
+
+
+def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """What a policy check's rule sees as ``obj``: the entity as a compliance run sees it.
+
+    For the types AppEntityLoader reads, the dict it gives a run
+    (``description``, ``owner``, ``tags``...) over ``_rule_object``: the
+    other triggers fire on the stored entity, and their payload's
+    ``description`` / ``tags`` have the request's shape, not the run's.
+    Payload keys the loader doesn't have stay. ``before_update`` gates still
+    see only the proposed change (see ``_rule_object``), with its values
+    also under the loader's keys; ``before_create`` and ``on_delete`` have
+    no stored entity. As in ``_rule_object``, an entity the loader doesn't
+    find raises ``RuleEntityNotFoundError`` (the step fails) instead of
+    falling back to the payload.
+    """
+    obj = _rule_object(db, context)
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    trigger_type = getattr(trigger_type, 'value', trigger_type)
+    if trigger_type == 'before_update':
+        try:
+            # Savepoint and coded error as in _rule_object (it may read tags)
+            with db.begin_nested():
+                proposed = _proposed_values(db, payload)
+        except Exception as e:
+            raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+        return {**obj, **proposed}
+    if trigger_type in ('before_create', 'on_delete'):
+        return obj
+    loaded = _compliance_entity(db, context)
+    if loaded is None:
+        return obj
+    merged = {**obj, **loaded}
+    # Tags an earlier assign-tag step set only in the context stay over the stored ones
+    if isinstance(payload.get('tags'), dict):
+        merged['tags'] = {**(loaded.get('tags') or {}), **payload['tags']}
+    return merged
+
+
+def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str, Any]]:
+    """The stored entity as AppEntityLoader gives it to a run.
+
+    None for a type the loader doesn't read and a step without an entity id.
+    As in ``_rule_object``, a failed load raises ``RuleEntityLoadError`` and
+    a missing entity ``RuleEntityNotFoundError`` (the step fails): the
+    payload alone could let the rule pass.
+    """
+    from src.common.compliance_entities import AppEntityLoader
+
+    entity_type = (context.entity_type or '').lower()
+    entity_type = _COMPLIANCE_TYPES.get(entity_type, entity_type)
+    if entity_type not in AppEntityLoader.SUPPORTED_TYPES or not context.entity_id:
+        return None
+    try:
+        loaded = AppEntityLoader(db).load_entity(entity_type, str(context.entity_id))
+    except Exception as e:
+        # As in _rule_object: the cause stays in the server log
+        raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+    if not loaded:
+        raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
+    return loaded
+
+
+def _policy_where_object(
+    db: Session, context: 'StepContext', rule_object: Dict[str, Any],
+) -> Dict[str, Any]:
+    """What a policy check's WHERE sees: the entity as it will be.
+
+    The rule object, except for ``before_update`` gates: their rule object is
+    only the proposed change, and a WHERE on a field the update doesn't carry
+    (``c.status = 'active'`` on an update of the description) would leave the
+    entity unselected and let the gate pass. Their WHERE sees the stored
+    entity with the proposed change over it; ASSERT still sees only the
+    change (#1019).
+    """
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    if getattr(trigger_type, 'value', trigger_type) != 'before_update':
+        return rule_object
+    stored = _compliance_entity(db, context)
+    if stored is None:
+        return rule_object
+    merged = {**stored, **rule_object}
+    # A dict is what an assign-tag step adds to the context: it adds to the stored
+    # tags, while the request's list replaces them
+    payload_tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
+    if isinstance(payload_tags, dict) and isinstance(stored.get('tags'), dict):
+        merged['tags'] = {**stored['tags'], **rule_object.get('tags', {})}
     return merged
 
 
@@ -1533,7 +1703,14 @@ class DeliveryStepHandler(StepHandler):
 
 
 class PolicyCheckStepHandler(StepHandler):
-    """Handler for policy check steps - evaluates existing compliance policy by UUID."""
+    """Handler for policy check steps - evaluates existing compliance policy by UUID.
+
+    As a compliance run does, the policy's MATCH and WHERE select the
+    entities it applies to: a policy that doesn't select the step's entity
+    passes it with ``not_applicable`` and ``reason`` (``match_type`` /
+    ``where``) in the result data. Unlike a run, a WHERE that can't be
+    evaluated fails the step (``rule_where_evaluation_failed``).
+    """
 
     def execute(self, context: StepContext) -> StepResult:
         from src.db_models.compliance import CompliancePolicyDb
@@ -1561,10 +1738,16 @@ class PolicyCheckStepHandler(StepHandler):
                     data={'policy_id': policy_id, 'policy_name': policy.name, 'skipped': True}
                 )
             
+            parsed = self._parsed_rule(policy)
+            if not self._match_selects(parsed, context):
+                return self._not_applicable(policy, context, 'match_type')
+            rule_object = _policy_rule_object(self._db, context)
+            where_object = partial(_policy_where_object, self._db, context, rule_object)
+            if not self._where_selects(parsed, policy, context, where_object):
+                return self._not_applicable(policy, context, 'where')
+
             # Evaluate the policy's rule against the entity
-            passed, technical_message = evaluate_rule_on_object(
-                policy.rule, _rule_object(self._db, context)
-            )
+            passed, technical_message = evaluate_rule_on_object(policy.rule, rule_object)
             
             # Combine human-readable failure message with technical details
             if passed:
@@ -1591,6 +1774,66 @@ class PolicyCheckStepHandler(StepHandler):
         except Exception as e:
             logger.exception(f"Policy check step failed: {e}")
             return _rule_step_error(e, {'policy_id': policy_id})
+
+    # MATCH and WHERE select the entities a compliance run checks; a policy
+    # doesn't apply to an entity they don't select. A rule without MATCH
+    # applies to any entity, and so does MATCH (obj:Object).
+
+    @staticmethod
+    def _parsed_rule(policy) -> Optional[Dict[str, Any]]:
+        """The parsed rule, or None if it doesn't parse (ASSERT then fails it, as before)."""
+        from src.common.compliance_dsl import parse_rule
+
+        try:
+            return parse_rule(policy.rule, source=f"policy {policy.id}")
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _match_selects(parsed: Optional[Dict[str, Any]], context: StepContext) -> bool:
+        # Both names of a type select it (MATCH (r:data_asset_review) or (r:review))
+        match_type = ((parsed or {}).get('match_type') or '').lower()
+        match_type = _COMPLIANCE_TYPES.get(match_type, match_type)
+        entity_type = (context.entity_type or '').lower()
+        return match_type in ('', 'object', _COMPLIANCE_TYPES.get(entity_type, entity_type))
+
+    @staticmethod
+    def _where_selects(
+        parsed: Optional[Dict[str, Any]], policy, context: StepContext,
+        where_object: Callable[[], Dict[str, Any]],
+    ) -> bool:
+        """Whether WHERE selects the entity.
+
+        One it can't evaluate raises ``RuleWhereEvaluationError`` (the step
+        fails): a run only leaves such an entity unchecked, but here "not
+        applicable" would let the workflow follow ``on_pass``.
+        """
+        from src.common.compliance_dsl import Evaluator
+
+        where = (parsed or {}).get('where_clause')
+        if where is None:
+            return True
+        obj = where_object()  # Loaded only for a WHERE; its errors fail the step as coded
+        try:
+            return bool(Evaluator(obj).evaluate(where))
+        except Exception as e:
+            # The cause stays in the server log (execute logs it with the chain)
+            raise RuleWhereEvaluationError(
+                policy.name, context.entity_type, context.entity_id,
+            ) from e
+
+    @staticmethod
+    def _not_applicable(policy, context: StepContext, reason: str) -> StepResult:
+        return StepResult(
+            passed=True,
+            message=f"Policy '{policy.name}' does not apply to this {context.entity_type}",
+            data={
+                'policy_id': policy.id,
+                'policy_name': policy.name,
+                'not_applicable': True,
+                'reason': reason,
+            },
+        )
 
 
 class CreateAssetReviewStepHandler(StepHandler):
@@ -3026,7 +3269,7 @@ class WorkflowExecutor:
             try:
                 tc_data = json.loads(db_execution.trigger_context)
                 trigger_context = TriggerContext(**tc_data)
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         
         # Rebuild step context from execution
@@ -4023,7 +4266,7 @@ class WorkflowExecutor:
             try:
                 tc_data = json.loads(db_execution.trigger_context)
                 trigger_context = TriggerContext(**tc_data)
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         
         step_executions = []

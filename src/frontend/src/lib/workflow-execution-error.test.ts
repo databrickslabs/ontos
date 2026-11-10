@@ -35,6 +35,22 @@ describe('workflowExecutionErrorText', () => {
     }
   });
 
+  it('translates a WHERE clause that could not be evaluated', async () => {
+    await i18n.changeLanguage('pt');
+    try {
+      expect(workflowExecutionErrorText(i18n.t, {
+        error_message:
+          "The WHERE clause of policy 'Purpose' could not be evaluated on data_contract c-1",
+        error_code: 'rule_where_evaluation_failed',
+        error_params: { policyName: 'Purpose', entityType: 'data_contract', entityId: 'c-1' },
+      }, asStored)).toBe(
+        "Não foi possível avaliar a cláusula WHERE da política 'Purpose' em data_contract c-1",
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('passes an error without a code to the default texts', () => {
     expect(workflowExecutionErrorText(i18n.t, { error_message: 'Not ready' }, asStored))
       .toBe('Not ready');

@@ -487,6 +487,7 @@
     "removedSteps": "削除されたステップ",
     "removedStepsHint": "これらのステップはこの実行で実行され、その後ワークフローから削除されました。",
     "stepErrors": {
+      "rule_where_evaluation_failed": "ポリシー '{{policyName}}' の WHERE 句を {{entityType}} {{entityId}} で評価できませんでした",
       "approval_rejected": "リクエストが却下されました",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
       "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません"

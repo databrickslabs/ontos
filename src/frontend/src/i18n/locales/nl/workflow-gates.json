@@ -4,6 +4,7 @@
     "waitingForApproval": "wacht op goedkeuring ({{step}})",
     "entityLoadFailed": "{{entityType}} {{entityId}} kon niet worden geladen om de regel te evalueren",
     "entityNotFound": "{{entityType}} {{entityId}} is niet gevonden, dus de regel kan niet worden geëvalueerd",
+    "whereEvaluationFailed": "de WHERE-clausule van beleid '{{policyName}}' kon niet worden geëvalueerd op {{entityType}} {{entityId}}",
     "validationFailed": "de workflowvalidatie is mislukt",
     "status": {
       "failed": "mislukt",

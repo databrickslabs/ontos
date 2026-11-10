@@ -487,6 +487,7 @@
     "removedSteps": "Passaggi rimossi",
     "removedStepsHint": "Questi passaggi sono stati eseguiti in questa esecuzione e poi rimossi dal workflow.",
     "stepErrors": {
+      "rule_where_evaluation_failed": "Non è stato possibile valutare la clausola WHERE della policy '{{policyName}}' su {{entityType}} {{entityId}}",
       "approval_rejected": "Richiesta rifiutata",
       "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola",
       "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata"

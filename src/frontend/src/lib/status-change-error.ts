@@ -13,6 +13,7 @@ const REASON_KEYS: Record<string, string> = {
   waiting_for_approval: 'workflow-gates:reasons.waitingForApproval',
   rule_entity_load_failed: 'workflow-gates:reasons.entityLoadFailed',
   rule_entity_not_found: 'workflow-gates:reasons.entityNotFound',
+  rule_where_evaluation_failed: 'workflow-gates:reasons.whereEvaluationFailed',
 };
 
 /** Codes of the deprecation checks (`common:deprecation.errors.<code>`). */

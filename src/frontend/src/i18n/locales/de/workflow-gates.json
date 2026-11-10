@@ -4,6 +4,7 @@
     "waitingForApproval": "wartet auf Genehmigung ({{step}})",
     "entityLoadFailed": "{{entityType}} {{entityId}} konnte zur Auswertung der Regel nicht geladen werden",
     "entityNotFound": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
+    "whereEvaluationFailed": "die WHERE-Klausel der Richtlinie '{{policyName}}' konnte für {{entityType}} {{entityId}} nicht ausgewertet werden",
     "validationFailed": "die Workflow-Validierung ist fehlgeschlagen",
     "status": {
       "failed": "fehlgeschlagen",

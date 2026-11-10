@@ -35,6 +35,7 @@ import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import AssetMetricViewCard, { mayBeMetricView } from '@/components/assets/asset-metric-view-card';
+import { MaturityInline } from '@/components/common/maturity-inline';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
@@ -147,6 +148,8 @@ export default function AssetDetailView() {
 
   const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
   const isPolicy = ontologyTypeName === 'Policy';
+  // Maturity levels apply to table and view assets (MATURITY_ASSET_TYPES in the backend)
+  const hasMaturity = entityType === 'Table' || entityType === 'View';
   const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
 
   const fetchAsset = useCallback(async () => {
@@ -352,6 +355,16 @@ export default function AssetDetailView() {
                       <Globe className="h-3 w-3" /> {t('assets:table.platform')}
                     </Label>
                     <p className="text-sm mt-1">{asset.platform}</p>
+                  </div>
+                )}
+                {hasMaturity && (
+                  <div data-testid="asset-maturity">
+                    <Label className="text-xs text-muted-foreground">
+                      {t('common:maturity.label')}
+                    </Label>
+                    <div className="mt-1">
+                      <MaturityInline entityType="Asset" entityId={asset.id} />
+                    </div>
                   </div>
                 )}
                 {((asset.domains && asset.domains.length > 0) || asset.domain_id) && (

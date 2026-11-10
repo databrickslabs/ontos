@@ -1002,6 +1002,20 @@
         "descriptionContract": "Geeft elke tabel de levenscyclusstatus van het datacontract dat de tabel gebruikt. Bij een tabel die door meerdere contracten wordt gebruikt, wint de beste status (active eerst, retired laatst).",
         "valueLabel": "Tagwaarde:",
         "sharedKeyHint": "Als de statustags van het product en het contract allebei met dezelfde sleutel zijn ingeschakeld, wordt de status van het product geschreven."
+      },
+      "assetVariables": {
+        "assetId": "Asset-UUID",
+        "assetType": "Naam van het assettype (Table, View, ...)",
+        "assetFqn": "Unity Catalog-naam van de tabel (catalog.schema.table)",
+        "assetMaturity": "Naam van het volwassenheidsniveau van een tabel- of view-asset (laatste evaluatie)",
+        "assetMaturityOrder": "Nummer van het volwassenheidsniveau van een tabel- of view-asset (1 = eerste niveau)"
+      },
+      "maturity": {
+        "title": "Tag voor volwassenheidsniveau",
+        "description": "Geeft elke tabel- of view-asset een tag met zijn volwassenheidsniveau (laatste evaluatie). Tabellen zonder niveau krijgen geen tag.",
+        "valueNeedsVariable": "Gebruik {ASSET.MATURITY} of {ASSET.MATURITY_ORDER} in de sleutel of de waarde.",
+        "tablesOnlyHint": "Alleen tabellen en views met een Unity Catalog-naam krijgen de tag, geen schema's of catalogi. De uitvoer van de run telt de overgeslagen assets en de reden.",
+        "prefixHint": "Begin de sleutel met hetzelfde voorvoegsel als de andere actieve sleutels (standaard ontos_), zodat de job de tag kan verwijderen als een tabel zijn niveau verliest."
       }
     },
     "entityPatterns": {
@@ -1264,6 +1278,15 @@
       "created": "Volwassenheidsniveau \"{{name}}\" aangemaakt.",
       "deleted": "Volwassenheidsniveau \"{{name}}\" verwijderd.",
       "cannotDeleteTitle": "Kan niet verwijderen"
+    },
+    "assetDefaults": {
+      "load": "Standaardniveaus voor assets laden",
+      "hint": "Voegt een standaardladder toe voor tabel- en view-assets (Prerequisite, 1 star, 2 stars, 3 stars) met voorbeeld-gatepolicies",
+      "loadedTitle": "Assetniveaus geladen",
+      "loaded_one": "{{count}} assetniveau aangemaakt",
+      "loaded_other": "{{count}} assetniveaus aangemaakt",
+      "alreadyLoaded": "Er bestaan al assetniveaus: er is niets gewijzigd",
+      "loadFailed": "De standaardniveaus voor assets konden niet worden geladen"
     }
   },
   "directory": {

@@ -1002,6 +1002,20 @@
         "descriptionContract": "Tags each table with the lifecycle status of the data contract that uses it. On a table used by several contracts, the best status wins (active first, retired last).",
         "valueLabel": "Tag value:",
         "sharedKeyHint": "When the product and contract status tags are both enabled with the same key, the product's status is written."
+      },
+      "assetVariables": {
+        "assetId": "Asset UUID",
+        "assetType": "Asset type name (Table, View, ...)",
+        "assetFqn": "Unity Catalog name of the table (catalog.schema.table)",
+        "assetMaturity": "Maturity level name of a table or view asset (latest evaluation)",
+        "assetMaturityOrder": "Maturity level number of a table or view asset (1 = first level)"
+      },
+      "maturity": {
+        "title": "Maturity level tag",
+        "description": "Tags each table or view asset with its maturity level (latest evaluation). Tables without a level get no tag.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} or {ASSET.MATURITY_ORDER} in the key or the value.",
+        "tablesOnlyHint": "Only tables and views with a Unity Catalog name are tagged; schemas and catalogs are not. The run output counts the assets it skipped and why.",
+        "prefixHint": "Start the key with the same prefix as the other enabled keys (ontos_ by default), so the job can remove the tag when a table loses its level."
       }
     },
     "entityPatterns": {
@@ -1264,6 +1278,15 @@
       "created": "Maturity level \"{{name}}\" created.",
       "deleted": "Maturity level \"{{name}}\" deleted.",
       "cannotDeleteTitle": "Cannot delete"
+    },
+    "assetDefaults": {
+      "load": "Load default asset levels",
+      "hint": "Adds a default ladder for table and view assets (Prerequisite, 1 star, 2 stars, 3 stars) with example gate policies",
+      "loadedTitle": "Asset levels loaded",
+      "loaded_one": "{{count}} asset level created",
+      "loaded_other": "{{count}} asset levels created",
+      "alreadyLoaded": "Asset levels exist already: nothing was changed",
+      "loadFailed": "The default asset levels could not be loaded"
     }
   },
   "directory": {

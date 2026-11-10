@@ -984,6 +984,20 @@
         "descriptionContract": "Ajoute à chaque table le statut du cycle de vie du contrat de données qui l'utilise. Sur une table utilisée par plusieurs contrats, le meilleur statut l'emporte (active d'abord, retired en dernier).",
         "valueLabel": "Valeur du tag :",
         "sharedKeyHint": "Lorsque les tags de statut du produit et du contrat sont activés avec la même clé, c'est le statut du produit qui est écrit."
+      },
+      "assetVariables": {
+        "assetId": "UUID de l'actif",
+        "assetType": "Nom du type d'actif (Table, View, ...)",
+        "assetFqn": "Nom de la table dans Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nom du niveau de maturité d'un actif table ou vue (dernière évaluation)",
+        "assetMaturityOrder": "Numéro du niveau de maturité d'un actif table ou vue (1 = premier niveau)"
+      },
+      "maturity": {
+        "title": "Tag du niveau de maturité",
+        "description": "Ajoute à chaque actif table ou vue son niveau de maturité (dernière évaluation). Les tables sans niveau ne reçoivent pas de tag.",
+        "valueNeedsVariable": "Utilisez {ASSET.MATURITY} ou {ASSET.MATURITY_ORDER} dans la clé ou la valeur.",
+        "tablesOnlyHint": "Seules les tables et vues ayant un nom Unity Catalog reçoivent le tag, pas les schémas ni les catalogues. La sortie de l'exécution compte les actifs ignorés et la raison.",
+        "prefixHint": "Commencez la clé par le même préfixe que les autres clés actives (ontos_ par défaut), pour que le job puisse retirer le tag quand une table perd son niveau."
       }
     },
     "entityPatterns": {
@@ -1246,6 +1260,15 @@
       "created": "Niveau de maturité « {{name}} » créé.",
       "deleted": "Niveau de maturité « {{name}} » supprimé.",
       "cannotDeleteTitle": "Suppression impossible"
+    },
+    "assetDefaults": {
+      "load": "Charger les niveaux par défaut des actifs",
+      "hint": "Ajoute une échelle par défaut pour les actifs table et vue (Prerequisite, 1 star, 2 stars, 3 stars) avec des politiques de gate d'exemple",
+      "loadedTitle": "Niveaux des actifs chargés",
+      "loaded_one": "{{count}} niveau d'actif créé",
+      "loaded_other": "{{count}} niveaux d'actif créés",
+      "alreadyLoaded": "Des niveaux d'actifs existent déjà : rien n'a été modifié",
+      "loadFailed": "Les niveaux par défaut des actifs n'ont pas pu être chargés"
     }
   },
   "directory": {

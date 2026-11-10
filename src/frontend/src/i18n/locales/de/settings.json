@@ -984,6 +984,20 @@
         "descriptionContract": "Versieht jede Tabelle mit dem Lebenszyklusstatus des Datenvertrags, der sie verwendet. Bei einer Tabelle, die mehrere Verträge verwenden, gewinnt der beste Status (active zuerst, retired zuletzt).",
         "valueLabel": "Tag-Wert:",
         "sharedKeyHint": "Sind die Status-Tags von Produkt und Vertrag beide mit demselben Schlüssel aktiviert, wird der Status des Produkts geschrieben."
+      },
+      "assetVariables": {
+        "assetId": "Asset-UUID",
+        "assetType": "Name des Asset-Typs (Table, View, ...)",
+        "assetFqn": "Unity-Catalog-Name der Tabelle (catalog.schema.table)",
+        "assetMaturity": "Name der Reifestufe eines Tabellen- oder View-Assets (letzte Bewertung)",
+        "assetMaturityOrder": "Nummer der Reifestufe eines Tabellen- oder View-Assets (1 = erste Stufe)"
+      },
+      "maturity": {
+        "title": "Tag für die Reifestufe",
+        "description": "Versieht jedes Tabellen- oder View-Asset mit seiner Reifestufe (letzte Bewertung). Tabellen ohne Stufe erhalten kein Tag.",
+        "valueNeedsVariable": "Verwenden Sie {ASSET.MATURITY} oder {ASSET.MATURITY_ORDER} im Schlüssel oder im Wert.",
+        "tablesOnlyHint": "Nur Tabellen und Views mit einem Unity-Catalog-Namen werden getaggt, keine Schemas und Kataloge. Die Ausgabe des Laufs zählt die übersprungenen Assets und den Grund.",
+        "prefixHint": "Beginnen Sie den Schlüssel mit demselben Präfix wie die anderen aktiven Schlüssel (standardmäßig ontos_), damit der Job das Tag entfernen kann, wenn eine Tabelle ihre Stufe verliert."
       }
     },
     "entityPatterns": {
@@ -1246,6 +1260,15 @@
       "created": "Reifegradstufe \"{{name}}\" erstellt.",
       "deleted": "Reifegradstufe \"{{name}}\" gelöscht.",
       "cannotDeleteTitle": "Löschen nicht möglich"
+    },
+    "assetDefaults": {
+      "load": "Standardstufen für Assets laden",
+      "hint": "Fügt eine Standardleiter für Tabellen- und View-Assets hinzu (Prerequisite, 1 star, 2 stars, 3 stars) mit Beispiel-Gate-Richtlinien",
+      "loadedTitle": "Asset-Stufen geladen",
+      "loaded_one": "{{count}} Asset-Stufe erstellt",
+      "loaded_other": "{{count}} Asset-Stufen erstellt",
+      "alreadyLoaded": "Asset-Stufen sind bereits vorhanden: nichts wurde geändert",
+      "loadFailed": "Die Standardstufen für Assets konnten nicht geladen werden"
     }
   },
   "directory": {

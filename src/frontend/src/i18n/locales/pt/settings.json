@@ -1002,6 +1002,20 @@
         "descriptionContract": "Marca cada tabela com o status do ciclo de vida do contrato de dados que a usa. Em uma tabela usada por vários contratos, vence o melhor status (active primeiro, retired por último).",
         "valueLabel": "Valor da tag:",
         "sharedKeyHint": "Quando as tags de status do produto e do contrato estão ativadas com a mesma chave, é gravado o status do produto."
+      },
+      "assetVariables": {
+        "assetId": "UUID do ativo",
+        "assetType": "Nome do tipo de ativo (Table, View, ...)",
+        "assetFqn": "Nome da tabela no Unity Catalog (catalog.schema.table)",
+        "assetMaturity": "Nome do nível de maturidade de um ativo tabela ou view (última avaliação)",
+        "assetMaturityOrder": "Número do nível de maturidade de um ativo tabela ou view (1 = primeiro nível)"
+      },
+      "maturity": {
+        "title": "Tag de nível de maturidade",
+        "description": "Marca cada ativo tabela ou view com o seu nível de maturidade (última avaliação). Tabelas sem nível não recebem a tag.",
+        "valueNeedsVariable": "Use {ASSET.MATURITY} ou {ASSET.MATURITY_ORDER} na chave ou no valor.",
+        "tablesOnlyHint": "Só tabelas e views com nome no Unity Catalog recebem a tag; schemas e catálogos não. A saída da execução conta os ativos ignorados e o motivo.",
+        "prefixHint": "Comece a chave com o mesmo prefixo das outras chaves ativas (ontos_ por padrão), para que o job possa remover a tag quando uma tabela perde o nível."
       }
     },
     "entityPatterns": {
@@ -1264,6 +1278,15 @@
       "created": "Nível de maturidade \"{{name}}\" criado.",
       "deleted": "Nível de maturidade \"{{name}}\" excluído.",
       "cannotDeleteTitle": "Não é possível excluir"
+    },
+    "assetDefaults": {
+      "load": "Carregar níveis padrão de ativos",
+      "hint": "Adiciona uma escada padrão para ativos tabela e view (Prerequisite, 1 star, 2 stars, 3 stars) com políticas de gate de exemplo",
+      "loadedTitle": "Níveis de ativos carregados",
+      "loaded_one": "{{count}} nível de ativo criado",
+      "loaded_other": "{{count}} níveis de ativo criados",
+      "alreadyLoaded": "Já existem níveis de ativos: nada foi alterado",
+      "loadFailed": "Não foi possível carregar os níveis padrão de ativos"
     }
   },
   "directory": {

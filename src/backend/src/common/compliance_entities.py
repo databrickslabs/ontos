@@ -5,7 +5,7 @@ This module provides a framework for loading and filtering entities
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Optional, Protocol, Set
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,7 @@ from src.common.logging import get_logger
 from src.common.compliance_dsl import Lexer, Parser, Evaluator
 from src.common.uc_table_columns import table_column_fields
 from src.common.uc_table_enrichment import (
-    SqlRunner, enrich_catalog_tables, fields_read, unavailable_fields_read,
+    SqlRunner, conditions_without, enrich_catalog_tables, fields_read, unavailable_fields_read,
 )
 
 logger = get_logger(__name__)
@@ -67,23 +67,27 @@ class TableEnrichment:
 
     ``groups``: field groups of ``uc_table_enrichment`` (tags, lineage) the rule
     reads. ``runner``: runs their statements, or None when no SQL warehouse is
-    configured (the fields are then marked unavailable). ``scope_ast``: the
-    rule's WHERE clause when it reads none of these fields; only the tables it
-    selects are enriched, so a rule scoped to one catalog or schema reads only
-    that part of the system tables.
+    configured (the fields are then marked unavailable). ``scope``: the AND-ed
+    parts of the rule's WHERE that read none of these fields; only the tables
+    they all select are enriched, so a rule scoped to one catalog or schema
+    reads only that part of the system tables.
     """
     groups: Set[str]
     runner: Optional[SqlRunner]
-    scope_ast: Optional[Any] = None
+    scope: List[Any] = field(default_factory=list)
 
     def in_scope(self, entity: Dict[str, Any]) -> bool:
-        if self.scope_ast is None:
-            return True
-        try:
-            return bool(Evaluator(entity).evaluate(self.scope_ast))
-        except Exception:
-            # The iterator drops an entity whose WHERE fails to evaluate
-            return False
+        return all_hold(self.scope, entity)
+
+
+def all_hold(conditions: List[Any], entity: Dict[str, Any]) -> bool:
+    """Whether every condition is true for the entity (False if one fails to evaluate)."""
+    try:
+        evaluator = Evaluator(entity)
+        return all(bool(evaluator.evaluate(c)) for c in conditions)
+    except Exception:
+        # The iterator drops an entity whose WHERE fails to evaluate
+        return False
 
 
 class UnityCatalogLoader(EntityLoader):
@@ -500,11 +504,16 @@ class EntityIterator:
             # Load entities
             for entity in loader.load_entities(requested, batch_size):
                 # Apply WHERE filter if present. When a field it reads could not
-                # be loaded, the entity is kept: the run reports it as not
-                # evaluated instead of dropping it as if WHERE were false.
-                if entity_filter.where_clause_ast and not unavailable_fields_read(
-                    entity, where_fields
-                ):
+                # be loaded, only the AND-ed parts that don't read it are checked:
+                # if they hold, the entity is kept and the run reports it as not
+                # evaluated, instead of dropping it as if the WHERE were false.
+                missing = unavailable_fields_read(entity, where_fields)
+                if missing:
+                    if not all_hold(
+                        conditions_without(entity_filter.where_clause_ast, missing), entity,
+                    ):
+                        continue
+                elif entity_filter.where_clause_ast:
                     try:
                         evaluator = Evaluator(entity)
                         if not evaluator.evaluate(entity_filter.where_clause_ast):

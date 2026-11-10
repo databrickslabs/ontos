@@ -1,6 +1,58 @@
 {
   "title": "Welkom bij {{appName}}",
   "tagline": "Beheer business glossary, datacontracten, dataproducten, persona's en meer",
+  "essentials": {
+    "tagline": "Vind, begrijp en vertrouw je data, en publiceer en onderhoud daarna wat van jou is.",
+    "consumer": {
+      "title": "Data gebruiken",
+      "description": "Begin bij de tabellen die je team al in Unity Catalog heeft."
+    },
+    "producer": {
+      "title": "Data delen",
+      "description": "Documenteer de assets waarvan je eigenaar bent en laat ze beoordelen."
+    },
+    "find": {
+      "title": "Vinden",
+      "description": "Zoek assets en concepten, of blader door de catalogus.",
+      "placeholder": "Zoek tabellen, assets en glossariumtermen...",
+      "browseCatalog": "Door de Data Catalog bladeren"
+    },
+    "understand": {
+      "title": "Begrijpen",
+      "description": "Zie wat een asset is en wat de termen ervan betekenen.",
+      "assets": "Assets",
+      "assetsDescription": "Tabellen, views en andere assets met hun metadata."
+    },
+    "trust": {
+      "title": "Vertrouwen",
+      "description": "Beoordelingsstatus van assets en waar de data nu staat.",
+      "empty": "Er is nog geen asset beoordeeld.",
+      "openReviews": "Asset-beoordelingen openen"
+    },
+    "publish": {
+      "title": "Publiceren",
+      "description": "Je assets die nog documentatie of een beoordeling missen.",
+      "noAssets": "Je bent nog geen eigenaar van een asset.",
+      "allDone": "Al je assets zijn gedocumenteerd en beoordeeld.",
+      "noGapsLoaded": "Geen hiaten in de tot nu toe geladen assets.",
+      "noDescription": "Geen beschrijving",
+      "noReview": "Niet beoordeeld",
+      "more": "{{shown}} van je {{total}} assets weergegeven.",
+      "loadMore": "Meer laden",
+      "pageSize": "Per pagina",
+      "requestReview": "Beoordeling aanvragen"
+    },
+    "maintain": {
+      "title": "Onderhouden",
+      "description": "Je openstaande aanvragen en beoordelingen.",
+      "myRequests": "Mijn openstaande aanvragen ({{count}})",
+      "noRequests": "Geen openstaande aanvragen.",
+      "openMyRequests": "Mijn aanvragen openen",
+      "myReviews": "Mijn openstaande asset-beoordelingen ({{count}})",
+      "noReviews": "Geen openstaande asset-beoordelingen.",
+      "nothing": "Niets op te volgen."
+    }
+  },
   "search": {
     "placeholder": "Zoek naar dataproducten, glossary termen, contracten..."
   },

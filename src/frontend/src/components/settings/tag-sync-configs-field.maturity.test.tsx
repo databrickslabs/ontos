@@ -80,7 +80,9 @@ describe('TagSyncConfigsField asset maturity tag', () => {
     expect(within(card).queryByText(/Use \{ASSET.MATURITY\}/)).not.toBeInTheDocument();
     fireEvent.click(within(card).getByRole('switch'));
 
-    expect(onChange).toHaveBeenCalledWith([assetType, { ...defaultMaturityEntry(), enabled: true }]);
+    expect(onChange).toHaveBeenCalledWith([
+      assetType, { ...defaultMaturityEntry(), enabled: true },
+    ]);
   });
 
   it('has no maturity card for other entity types', () => {

@@ -28,6 +28,7 @@ from src.common.compliance_entities import (
 from src.common.uc_table_enrichment import (
     FIELD_GROUP,
     WarehouseSqlRunner,
+    conditions_without,
     fields_read,
     groups_for_fields,
     unavailable_fields_read,
@@ -749,7 +750,7 @@ class ComplianceManager:
 
         They come from system tables through the SQL warehouse, so they are read
         only for rules on tables or views that use them, and only for the tables
-        the rule's WHERE selects when that WHERE doesn't read them itself.
+        selected by the parts of the rule's WHERE that don't read them.
         """
         if ws is None or not any(t in ('table', 'view') for t in entity_types):
             return None
@@ -764,9 +765,8 @@ class ComplianceManager:
             logger.warning("Settings unavailable; no SQL warehouse for tags and lineage")
             warehouse_id = ''
         runner = WarehouseSqlRunner(ws, warehouse_id) if warehouse_id else None
-        where_reads_enriched = any(f in FIELD_GROUP for f in fields_read(where))
         return TableEnrichment(
-            groups=groups, runner=runner, scope_ast=None if where_reads_enriched else where,
+            groups=groups, runner=runner, scope=conditions_without(where, FIELD_GROUP),
         )
 
     def run_policy_inline(

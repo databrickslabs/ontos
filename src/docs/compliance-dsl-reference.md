@@ -357,8 +357,8 @@ Primary and foreign keys are not available yet.
 #### Table and View Tags and Lineage
 These fields come from system tables, read through the SQL warehouse the app is configured
 with (`DATABRICKS_WAREHOUSE_ID`). They are loaded only for a rule that reads them, with one
-statement per catalog and field group (never one per table), restricted to the schemas the
-rule's `WHERE` selects when the `WHERE` itself doesn't read them:
+statement per catalog and field group (never one per table), restricted to the catalogs and
+schemas selected by the `AND`-ed parts of the rule's `WHERE` that don't read these fields:
 
 - `tags` - The table's governed tags as `{key: value}`, read with `HAS_TAG` / `TAG`. Source:
   `system.information_schema.table_tags`; the same statement fills `columns[].tags` from
@@ -381,7 +381,8 @@ MATCH (v:view) ASSERT v.downstream_count > 0 OR HAS_TAG('deprecated')
 If a source can't be read (no SQL warehouse configured, no access to the system table, or the
 statement fails), its fields are left out and every entity whose rule reads them gets a failed
 result marked *not evaluated* with the field, the source and the reason; its `ON_PASS` /
-`ON_FAIL` actions don't run. The run ends with the warning `rule_fields_unavailable` and the
+`ON_FAIL` actions don't run. When the `WHERE` reads a missing field, the entity is kept only
+if the `AND`-ed parts of the `WHERE` that don't read it hold. The run ends with the warning `rule_fields_unavailable` and the
 number of such entities. Fields from a source that could be read are still evaluated.
 
 ### Application Entities

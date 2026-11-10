@@ -245,7 +245,7 @@ def test_workflow_config_initialization_supports_inline_policy_workspace_client(
         def iterate(self, entity_filter, limit=None, source=None):
             return iter(())
 
-    def create_entity_iterator(*, db, workspace_client):
+    def create_entity_iterator(*, db, workspace_client, table_enrichment=None):
         captured_clients.append(workspace_client)
         return EmptyEntityIterator()
 

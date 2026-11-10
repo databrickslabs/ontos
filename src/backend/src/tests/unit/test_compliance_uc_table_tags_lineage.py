@@ -195,7 +195,10 @@ def test_where_scope_limits_the_statements_to_the_selected_schemas_and_catalogs(
     rule = "MATCH (t:table) WHERE t.catalog = 'main' AND t.schema = 'sales' ASSERT HAS_TAG('x')"
     parsed = parse_rule(rule)
     loader = UnityCatalogLoader(
-        ws, TableEnrichment(groups={TAGS}, runner=runner, scope_ast=parsed['where_clause']),
+        ws, TableEnrichment(
+            groups={TAGS}, runner=runner,
+            scope=enr.conditions_without(parsed['where_clause'], enr.FIELD_GROUP),
+        ),
     )
 
     entities = {e['name']: e for e in loader.load_entities(['table'])}
@@ -243,6 +246,32 @@ def test_iterator_keeps_an_entity_whose_where_field_is_unavailable():
 
     # Without the tags, HAS_TAG('gold') would be false and the table silently dropped
     assert [e['name'] for e in entities] == ['orders']
+
+
+def test_iterator_drops_an_entity_the_readable_part_of_where_excludes():
+    ws = _ws({
+        ('main', 'sales'): [_table('orders')],
+        ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')],
+    }, catalogs=('main', 'lake'))
+    rule = "MATCH (t:table) WHERE t.catalog = 'main' AND HAS_TAG('gold') ASSERT true"
+    loader = UnityCatalogLoader(ws, TableEnrichment(groups={TAGS}, runner=None))
+
+    entities = list(EntityIterator([loader]).iterate(parse_entity_filter(rule)))
+
+    # lake.bronze.events is out of the WHERE whatever its tags; only orders is kept
+    assert [e['name'] for e in entities] == ['orders']
+
+
+def test_conditions_without_keeps_only_and_parts_free_of_the_fields():
+    where = parse_rule(
+        "MATCH (t:table) WHERE t.catalog = 'main' AND (HAS_TAG('a') OR t.schema = 'x') "
+        "AND t.upstream_count > 0 ASSERT true"
+    )['where_clause']
+
+    parts = enr.conditions_without(where, enr.FIELD_GROUP)
+
+    assert [fields_read(p) for p in parts] == [{'catalog'}]
+    assert enr.conditions_without(None, enr.FIELD_GROUP) == []
 
 
 # --- the warehouse runner -------------------------------------------------------------
@@ -387,3 +416,23 @@ def test_policy_run_with_lineage_denied_still_evaluates_tag_only_rules(db_sessio
     assert json.loads(results['orders'].details_json)['params']['fields'] == (
         'downstream_count'
     )
+
+
+def test_policy_run_with_where_on_tags_enriches_the_catalog_scope(db_session):
+    ws = _ws({
+        ('main', 'sales'): [_table('orders'), _table('raw_orders')],
+        ('lake', 'bronze'): [_table('events', schema='bronze', catalog='lake')],
+    }, catalogs=('main', 'lake'))
+    runner = FakeRunner(tag_rows=[_tag('orders', 'gold')],
+                        lineage_rows=[_lineage('upstream', 'main.sales.orders', 1)])
+    rule = ("MATCH (t:table) WHERE t.catalog = 'main' AND HAS_TAG('gold') "
+            "ASSERT t.upstream_count > 0")
+
+    run, results, _ = _run(db_session, rule, ws, runner)
+
+    # The tag part of WHERE can't scope the statements; the catalog part does
+    assert {(source, params['catalog']) for source, _, params in runner.calls} == {
+        (TAGS, 'main'), (LINEAGE, 'main'),
+    }
+    assert {n: r.passed for n, r in results.items()} == {'orders': True}
+    assert run.warning_code is None

@@ -2,7 +2,33 @@ import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { TagSyncConfig } from '@/types/workflow-configurations';
 import TagSyncConfigsField from './tag-sync-configs-field';
-import { defaultMaturityEntry, supportsMaturityMapping } from './tag-sync-configs';
+import {
+  defaultMaturityEntry,
+  hasInvalidMaturityThreshold,
+  resolveMaturityThresholds,
+  supportsMaturityMapping,
+  usesMaturityVariable,
+} from './tag-sync-configs';
+
+describe('maturity threshold helpers', () => {
+  it('recognises the threshold variable as a maturity variable', () => {
+    expect(usesMaturityVariable('{ASSET.MATURITY_AT_LEAST:2}')).toBe(true);
+    expect(usesMaturityVariable('{ASSET.TYPE}')).toBe(false);
+  });
+
+  it('flags a threshold that is not a level number', () => {
+    expect(hasInvalidMaturityThreshold('{ASSET.MATURITY_AT_LEAST:2}')).toBe(false);
+    expect(hasInvalidMaturityThreshold('{ASSET.MATURITY_AT_LEAST:}')).toBe(true);
+    expect(hasInvalidMaturityThreshold('{ASSET.MATURITY_AT_LEAST:-1}')).toBe(true);
+    expect(hasInvalidMaturityThreshold('{ASSET.MATURITY_AT_LEAST:2')).toBe(true);
+  });
+
+  it('resolves thresholds to true or false, and false without a level', () => {
+    expect(resolveMaturityThresholds('{ASSET.MATURITY_AT_LEAST:2}', 2)).toBe('true');
+    expect(resolveMaturityThresholds('{ASSET.MATURITY_AT_LEAST:3}', 2)).toBe('false');
+    expect(resolveMaturityThresholds('{ASSET.MATURITY_AT_LEAST:1}', null)).toBe('false');
+  });
+});
 
 const assetType: TagSyncConfig = {
   entity_type: 'asset', enabled: true,
@@ -83,6 +109,37 @@ describe('TagSyncConfigsField asset maturity tag', () => {
     expect(onChange).toHaveBeenCalledWith([
       assetType, { ...defaultMaturityEntry(), enabled: true },
     ]);
+  });
+
+  it('lists the threshold variable on the asset tab with its own description', () => {
+    renderField([assetType, maturity]);
+
+    expect(screen.getAllByText('{ASSET.MATURITY_AT_LEAST:<order>}').length).toBeGreaterThan(0);
+    expect(screen.getByText(/is at least <order>/)).toBeInTheDocument();
+  });
+
+  it('accepts a threshold value and previews it as true or false', () => {
+    renderField([assetType, {
+      ...maturity, tag_key_format: 'agent_readable',
+      tag_value_format: '{ASSET.MATURITY_AT_LEAST:1}',
+    }]);
+    const card = screen.getByTestId('asset-maturity-card');
+
+    expect(within(card).queryByText(/Use \{ASSET.MATURITY\}/)).not.toBeInTheDocument();
+    // The example asset is at level 3: 1 is reached
+    expect(within(card).getByText('agent_readable = true')).toBeInTheDocument();
+  });
+
+  it('reports a malformed threshold instead of previewing it', () => {
+    renderField([assetType, {
+      ...maturity, tag_key_format: 'agent_readable',
+      tag_value_format: '{ASSET.MATURITY_AT_LEAST:x}',
+    }]);
+    const card = screen.getByTestId('asset-maturity-card');
+
+    expect(within(card).getByText(/Use \{ASSET.MATURITY_AT_LEAST:<order>\} with a level number/))
+      .toBeInTheDocument();
+    expect(within(card).queryByText(/agent_readable = /)).not.toBeInTheDocument();
   });
 
   it('has no maturity card for other entity types', () => {

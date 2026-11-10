@@ -1003,6 +1003,10 @@
         "valueLabel": "Valor da tag:",
         "sharedKeyHint": "Quando as tags de status do produto e do contrato estão ativadas com a mesma chave, é gravado o status do produto."
       },
+      "maturityThreshold": {
+        "variable": "true ou false: o número do nível é pelo menos <order>",
+        "invalid": "Use {ASSET.MATURITY_AT_LEAST:<ordem>} com o número de um nível, por exemplo {ASSET.MATURITY_AT_LEAST:1}."
+      },
       "assetVariables": {
         "assetId": "UUID do ativo",
         "assetType": "Nome do tipo de ativo (Table, View, ...)",

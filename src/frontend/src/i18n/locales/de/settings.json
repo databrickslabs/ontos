@@ -985,6 +985,10 @@
         "valueLabel": "Tag-Wert:",
         "sharedKeyHint": "Sind die Status-Tags von Produkt und Vertrag beide mit demselben Schlüssel aktiviert, wird der Status des Produkts geschrieben."
       },
+      "maturityThreshold": {
+        "variable": "true oder false: Die Levelnummer ist mindestens <order>",
+        "invalid": "Verwenden Sie {ASSET.MATURITY_AT_LEAST:<order>} mit einer Levelnummer, z. B. {ASSET.MATURITY_AT_LEAST:1}."
+      },
       "assetVariables": {
         "assetId": "Asset-UUID",
         "assetType": "Name des Asset-Typs (Table, View, ...)",

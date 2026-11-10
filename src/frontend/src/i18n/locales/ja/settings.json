@@ -985,6 +985,10 @@
         "valueLabel": "タグの値:",
         "sharedKeyHint": "プロダクトとコントラクトのステータスタグが同じキーで両方とも有効な場合は、プロダクトのステータスが書き込まれます。"
       },
+      "maturityThreshold": {
+        "variable": "true または false: レベル番号が <order> 以上",
+        "invalid": "レベル番号を使って {ASSET.MATURITY_AT_LEAST:<order>} と書いてください。例: {ASSET.MATURITY_AT_LEAST:1}"
+      },
       "assetVariables": {
         "assetId": "アセット UUID",
         "assetType": "アセットタイプ名 (Table、View など)",

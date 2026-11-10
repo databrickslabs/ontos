@@ -2262,10 +2262,16 @@ Catalog see it. In the job's tag configuration, on the **Asset** tab, turn on th
 |----------|-------|
 | `{ASSET.MATURITY}` | name of the level, e.g. `2 stars` |
 | `{ASSET.MATURITY_ORDER}` | number of the level, e.g. `3` |
+| `{ASSET.MATURITY_AT_LEAST:<n>}` | `true` when the level number is at least `<n>` (`1` is the first level), `false` when the asset has no level |
 
-For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The two variables can
+For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The variables can
 also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
 `{ASSET.FQN}`.
+
+For a yes/no flag, use the threshold variable: key `ontos_agent_readable` and value
+`{ASSET.MATURITY_AT_LEAST:1}` publish `true` on the tables at or above the first level and
+`false` on the others. Change `<n>` to set another threshold. A malformed variable such as
+`{ASSET.MATURITY_AT_LEAST:x}` publishes no tag.
 
 - The job publishes the level of the latest evaluation: when an asset changes, when its
   page is opened, or with re-evaluate. It doesn't evaluate assets itself.
@@ -2274,7 +2280,11 @@ also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
   than table or view, or no level (not evaluated yet, or no level reached).
 - A table that loses its level loses the tag at the next run. Keep the key under the
   same prefix as the other enabled keys (`ontos_` by default): the job only reads and
-  removes tags with that prefix.
+  removes tags with that prefix. The prefix is the common prefix of all enabled keys: a key
+  without it (for example `agent_readable` next to `ontos_*` keys) empties that prefix, and
+  the job then falls back to `x_ontos_`, so it stops reading and removing the `ontos_` tags.
+- The threshold variable gives `false` to every asset the job reads without a level,
+  including the assets it skips for their type (for example metric views).
 
 ### Compliance Best Practices
 

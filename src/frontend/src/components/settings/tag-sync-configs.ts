@@ -35,6 +35,31 @@ export const MATURITY_MAPPING = 'maturity';
 /** The variables of the maturity entry; the job reads them only when an entry uses one. */
 export const MATURITY_VARIABLES = ['{ASSET.MATURITY}', '{ASSET.MATURITY_ORDER}'];
 
+/** Prefix of {ASSET.MATURITY_AT_LEAST:<order>}: "true" when the level number is >= order. */
+export const MATURITY_AT_LEAST_PREFIX = '{ASSET.MATURITY_AT_LEAST:';
+
+/** A well-formed threshold variable; the job resolves only these (see uc_tag_sync.py). */
+const MATURITY_AT_LEAST_TOKEN = /\{ASSET\.MATURITY_AT_LEAST:(\d+)\}/g;
+
+/** True when a key or value formats a maturity variable (level name, number or threshold). */
+export function usesMaturityVariable(format: string): boolean {
+  return MATURITY_VARIABLES.some((v) => format.includes(v))
+    || format.includes(MATURITY_AT_LEAST_PREFIX);
+}
+
+/** True when a threshold variable is malformed, e.g. `{ASSET.MATURITY_AT_LEAST:x}`. */
+export function hasInvalidMaturityThreshold(format: string): boolean {
+  const opened = format.split(MATURITY_AT_LEAST_PREFIX).length - 1;
+  const valid = (format.match(MATURITY_AT_LEAST_TOKEN) ?? []).length;
+  return opened !== valid;
+}
+
+/** Replace valid threshold variables with "true" or "false" for a level number. */
+export function resolveMaturityThresholds(format: string, levelOrder: number | null): string {
+  return format.replace(MATURITY_AT_LEAST_TOKEN, (_match, order: string) =>
+    levelOrder !== null && levelOrder >= Number(order) ? 'true' : 'false');
+}
+
 export function supportsMaturityMapping(entityType: string): boolean {
   return entityType === 'asset';
 }

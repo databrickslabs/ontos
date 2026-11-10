@@ -73,3 +73,11 @@ def test_update_without_ports_leaves_port_types_alone():
     _update(product, {"name": "renamed"})
     assert product.output_ports[0].port_type == "table"
     assert product.management_ports[0].port_type == "topic"
+
+
+def test_update_existing_output_port_without_type_key_keeps_stored_type():
+    product, port = _product()
+    _update(product, {"output_ports": [
+        {"id": port.id, "name": "renamed", "version": "1.0.0"}]})
+    assert product.output_ports[0].name == "renamed"
+    assert product.output_ports[0].port_type == "table"

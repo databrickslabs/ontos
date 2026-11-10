@@ -66,6 +66,16 @@ def _serialize_custom_property_value(value: Any) -> Optional[str]:
     return json.dumps(value)
 
 
+def _port_type_of(port: Dict[str, Any], default: Optional[str]) -> Optional[str]:
+    """Port type from an update payload.
+
+    ``model_dump(by_alias=True)`` names the key ``port_type``; plain dict payloads
+    may use ``type``.
+    """
+    value = port.get('port_type', port.get('type'))
+    return default if value is None else value
+
+
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
     """Repository for ODPS v1.0.0 DataProduct CRUD operations."""
 
@@ -379,7 +389,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         port_obj.name = port_dict['name']
                         port_obj.version = port_dict['version']
                         port_obj.description = port_dict.get('description')
-                        port_obj.port_type = port_dict.get('type')
+                        if 'port_type' in port_dict or 'type' in port_dict:
+                            port_obj.port_type = _port_type_of(port_dict, None)
                         port_obj.contract_id = port_dict.get('contract_id')
                         # Preserve existing delivery_method_id on partial updates: only
                         # write if the caller explicitly included the key. Caller can still
@@ -415,7 +426,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                             name=port_dict['name'],
                             version=port_dict['version'],
                             description=port_dict.get('description'),
-                            port_type=port_dict.get('type'),
+                            port_type=_port_type_of(port_dict, None),
                             contract_id=port_dict.get('contract_id'),
                             delivery_method_id=coerce_uuid(port_dict.get('delivery_method_id')),
                             asset_type=port_dict.get('asset_type'),
@@ -448,7 +459,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     mgmt_obj = ManagementPortDb(
                         name=mgmt_dict['name'],
                         content=mgmt_dict['content'],
-                        port_type=mgmt_dict.get('type', 'rest'),
+                        port_type=_port_type_of(mgmt_dict, 'rest'),
                         url=mgmt_dict.get('url'),
                         channel=mgmt_dict.get('channel'),
                         description=mgmt_dict.get('description')

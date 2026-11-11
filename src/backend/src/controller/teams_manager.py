@@ -322,15 +322,26 @@ class TeamsManager(SearchableAsset):
 
     def group_role_override_entries(self, db: Session) -> List[tuple]:
         """``(team name, group, role)`` for every group entry that carries a role override."""
+        return self._role_override_entries(db, "group")
+
+    def user_role_override_entries_without_email(self, db: Session) -> List[tuple]:
+        """``(team name, identifier, role)`` for user entries with an override whose identifier has no ``@``.
+
+        Usually a group saved as a user entry. Since entries match by type (#1245),
+        such an entry applies only to a user with that exact identifier.
+        """
+        return [e for e in self._role_override_entries(db, "user") if "@" not in (e[1] or "")]
+
+    def _role_override_entries(self, db: Session, member_type: str) -> List[tuple]:
         rows = (
             db.query(TeamDb.name, TeamMemberDb.member_identifier, TeamMemberDb.app_role_override)
             .join(TeamMemberDb, TeamMemberDb.team_id == TeamDb.id)
-            .filter(TeamMemberDb.member_type == "group")
+            .filter(TeamMemberDb.member_type == member_type)
             .filter(TeamMemberDb.app_role_override.isnot(None))
             .order_by(TeamDb.name, TeamMemberDb.member_identifier)
             .all()
         )
-        return [(name, group, role.strip()) for name, group, role in rows if (role or "").strip()]
+        return [(name, ident, role.strip()) for name, ident, role in rows if (role or "").strip()]
 
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:
         """Updates an existing team."""

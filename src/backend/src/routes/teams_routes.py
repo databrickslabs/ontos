@@ -358,7 +358,7 @@ def add_team_member(
             raise ConflictError(f"Member '{member_in.member_identifier}' is already in the team.")
         _ensure_override_within_caller_permissions(
             request, db, manager, team_id, current_members + [member_in],
-            current_user, details_for_audit,
+            current_user, details_for_audit, current_members=current_members,
         )
         member = manager.add_team_member(
             db=db,
@@ -437,11 +437,15 @@ def _would_lose_team_write_access(
     settings_manager = getattr(request.app.state, "settings_manager", None)
     if settings_manager is not None:
         try:
-            if settings_manager.get_applied_role_override_for_user(current_user.email):
-                # An applied role override wins over team overrides, so team edits can't remove it.
+            applied_role_id = settings_manager.get_applied_role_override_for_user(current_user.email)
+            if applied_role_id:
+                # An applied role override wins over team overrides, so team edits can't
+                # remove it, unless its role no longer exists: then the user's own roles
+                # apply (effective_permissions_for) and the check below runs.
+                settings_manager.get_feature_permissions_for_role_id(applied_role_id)
                 return False
         except Exception:
-            logger.debug("Could not read applied role override for %s", current_user.email, exc_info=True)
+            logger.debug("Applied role override of %s not in effect", current_user.email, exc_info=True)
 
     groups = current_user.groups or []
     roles_after = manager.team_roles_with_members(
@@ -482,6 +486,7 @@ def _ensure_override_within_caller_permissions(
     members_after: List[TeamMemberCreate],
     current_user: UserInfo,
     details_for_audit: dict,
+    current_members: Optional[List[TeamMemberCreate]] = None,
 ) -> None:
     """Validate role override changes against the caller's permissions.
 
@@ -496,17 +501,25 @@ def _ensure_override_within_caller_permissions(
     - setting, changing or removing a group entry's override needs admin access to
       teams.
 
-    Entries that stay as they are aren't checked.
+    Entries that stay as they are aren't checked. Entries are compared per
+    identifier (ignoring case) as sets of (type, override), so rows that differ only
+    in the identifier's case are each compared, not collapsed into one.
     """
-    current = {_override_key(m): _entry_state(m) for m in manager.current_member_set(db, team_id)}
-    after = {_override_key(m): _entry_state(m) for m in members_after}
+    if current_members is None:
+        current_members = manager.current_member_set(db, team_id)
+    current, after = {}, {}
+    for members, states in ((current_members, current), (members_after, after)):
+        for m in members:
+            states.setdefault(_override_key(m), set()).add(_entry_state(m))
     changes = []
     for key in sorted(set(current) | set(after)):
-        previous, new = current.get(key), after.get(key)
-        if previous == new:
-            continue
-        if (previous and previous[1]) or (new and new[1]):
-            changes.append((previous, new))
+        before_states, after_states = current.get(key, set()), after.get(key, set())
+        for state in sorted(before_states - after_states, key=repr):
+            if state[1]:
+                changes.append((state, None))
+        for state in sorted(after_states - before_states, key=repr):
+            if state[1]:
+                changes.append((None, state))
     if not changes:
         return
 
@@ -592,6 +605,8 @@ def replace_team_members(
     )
     try:
         members_after = manager.validate_member_set(body.members)
+        if manager.team_repo.get(db, team_id) is None:
+            raise NotFoundError(f"Team with id '{team_id}' not found.")
         _ensure_override_within_caller_permissions(
             request, db, manager, team_id, members_after, current_user, details_for_audit
         )
@@ -677,13 +692,15 @@ def update_team_member(
     try:
         target = manager.team_member_repo.get(db, member_id)
         if target is not None and target.team_id == team_id and "app_role_override" in member_in.model_fields_set:
+            current_members = manager.current_member_set(db, team_id)
             members_after = [
                 m.model_copy(update={"app_role_override": member_in.app_role_override})
                 if m.member_identifier == target.member_identifier else m
-                for m in manager.current_member_set(db, team_id)
+                for m in current_members
             ]
             _ensure_override_within_caller_permissions(
-                request, db, manager, team_id, members_after, current_user, details_for_audit
+                request, db, manager, team_id, members_after, current_user, details_for_audit,
+                current_members=current_members,
             )
             _ensure_keeps_team_access(
                 request, db, manager, team_id, members_after, current_user, details_for_audit
@@ -747,12 +764,11 @@ def remove_team_member(
 
     logger.info(f"User '{current_user.email}' removing member {member_identifier} from team {team_id}")
     try:
-        members_after = [
-            m for m in manager.current_member_set(db, team_id)
-            if m.member_identifier != member_identifier
-        ]
+        current_members = manager.current_member_set(db, team_id)
+        members_after = [m for m in current_members if m.member_identifier != member_identifier]
         _ensure_override_within_caller_permissions(
-            request, db, manager, team_id, members_after, current_user, details_for_audit
+            request, db, manager, team_id, members_after, current_user, details_for_audit,
+            current_members=current_members,
         )
         _ensure_keeps_team_access(
             request, db, manager, team_id, members_after, current_user, details_for_audit

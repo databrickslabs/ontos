@@ -137,7 +137,6 @@ def _seed_default_workflows() -> None:
     except Exception as e:
         logger.warning("Failed seeding default workflows: %s", e, exc_info=True)
     _warn_unmatched_trigger_entity_types()
-    _warn_group_role_overrides()
 
 
 def _warn_unmatched_trigger_entity_types() -> None:
@@ -158,28 +157,39 @@ def _warn_unmatched_trigger_entity_types() -> None:
         logger.warning("Failed checking workflow trigger entity types: %s", e, exc_info=True)
 
 
-def _warn_group_role_overrides() -> None:
-    """Log the team group entries that carry a role override.
+def _warn_team_role_overrides_to_review() -> None:
+    """Log the team entries whose role overrides admins should review after #1245.
 
-    Since #1245 a group entry's role override applies to every member of that group,
-    not only to users also listed on the team by name. One line lists them all (team,
-    group, role) with a count, so admins can review them in Settings > Teams. Nothing
+    - Group entries with a role override: they now apply to every member of the
+      group, not only to users also listed on the team by name.
+    - User entries with a role override whose identifier has no ``@``: usually a
+      group saved as a user entry, which now applies only to a user with that
+      exact identifier, not to the group's members.
+
+    One line each lists the entries (team, identifier, role) with a count. Nothing
     is changed.
     """
     try:
         from src.common.database import get_session_factory
         from src.controller.teams_manager import teams_manager as _teams_manager
         with get_session_factory()() as db:
-            entries = _teams_manager.group_role_override_entries(db)
-        if entries:
+            groups = _teams_manager.group_role_override_entries(db)
+            users = _teams_manager.user_role_override_entries_without_email(db)
+        if groups:
             logger.warning(
-                "%d team group entr%s carry a role override that applies to every member of the group: %s. "
-                "Review them in Settings > Teams.",
-                len(entries), "y" if len(entries) == 1 else "ies",
-                "; ".join(f"team '{team}', group '{group}', role '{role}'" for team, group, role in entries),
+                "%d team group entries with a role override apply to every member of the group "
+                "(team, group, role): %s. Review them in Settings > Teams.",
+                len(groups), groups,
+            )
+        if users:
+            logger.warning(
+                "%d team user entries with a role override have no email-like identifier and apply only "
+                "to a user with that identifier (team, identifier, role): %s. If they name a group, "
+                "change their type to group in Settings > Teams.",
+                len(users), users,
             )
     except Exception as e:
-        logger.warning("Failed checking team group role overrides: %s", e, exc_info=True)
+        logger.warning("Failed checking team role overrides: %s", e, exc_info=True)
 
 
 # Application Startup Event
@@ -235,6 +245,7 @@ async def startup_event():
     _seed_default_workflows()
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
+    _warn_team_role_overrides_to_review()  # after the Admin Team is seeded
     
     # Initialize Git service for indirect delivery mode
     try:

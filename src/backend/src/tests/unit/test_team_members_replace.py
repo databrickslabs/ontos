@@ -593,6 +593,13 @@ class TestMemberRoutesValidateOverrides:
 
         assert resp.status_code == 404
 
+    def test_replace_on_a_missing_team_is_404(self, client):
+        resp = client.put("/api/teams/missing/members", json={"members": [
+            {"member_type": "group", "member_identifier": "eng", "app_role_override": "Typo"},
+        ]})
+
+        assert resp.status_code == 404
+
     def test_more_than_the_member_cap_is_422(self, client, db_session):
         team_id = _team(db_session).id
         members = [{"member_type": "user", "member_identifier": f"u{i}@example.com"} for i in range(MAX_TEAM_MEMBERS + 1)]
@@ -610,3 +617,40 @@ class TestGroupOverrideScan:
         _member(db_session, team, "alice@example.com", override="Admin")
 
         assert manager.group_role_override_entries(db_session) == [("Admin Team", "admins", "Admin")]
+
+    def test_lists_user_entries_with_an_override_and_no_email(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "data-stewards", override="Data Steward")
+        _member(db_session, team, "alice@example.com", override="Admin")
+
+        assert manager.user_role_override_entries_without_email(db_session) == [
+            ("Admin Team", "data-stewards", "Data Steward"),
+        ]
+
+
+class TestReviewFollowUps:
+    """Rows that differ only in the identifier's case, a stale applied override, and 404 first."""
+
+    def test_rows_differing_in_case_are_each_compared(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "Bob@example.com")
+        _member(db_session, team, "bob@example.com")
+        guard = TestOverrideChangesWithinCallerPermissions()
+        members_after = [
+            _create("Bob@example.com", override="Admin"),
+            _create("bob@example.com"),
+        ]
+
+        with pytest.raises(HTTPException) as exc:
+            guard._check(manager, db_session, team, members_after, "Data Producer")
+
+        assert exc.value.status_code == 403
+
+    def test_lockout_guard_runs_when_the_applied_role_no_longer_exists(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "alice@example.com", override="Admin")
+        request = TestSelfLockoutGuard()._request(applied_role="gone")
+        request.app.state.settings_manager.get_feature_permissions_for_role_id.side_effect = ValueError("not found")
+        user = UserInfo(email="alice@example.com", username="alice", user="Alice", ip="127.0.0.1", groups=[])
+
+        assert _would_lose_team_write_access(request, db_session, manager, team.id, [], user) is True

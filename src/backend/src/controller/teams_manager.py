@@ -49,11 +49,14 @@ class TeamsManager(SearchableAsset):
             id=f"team::{team.id}",
             type="team",
             feature_id="teams",
-            title=team.name,
+            # Display title first, like projects. A field named "title" always resolves
+            # to item.title in both search backends, so keeping the display title in
+            # extra_data["title"] left it unsearchable; the slug-ish name goes there instead.
+            title=getattr(team, 'title', None) or team.name,
             description=getattr(team, 'description', '') or "",
             link=f"/teams/{team.id}",
             tags=[],
-            extra_data={"title": getattr(team, 'title', '') or ""},
+            extra_data={"name": team.name},
         )
 
     def _update_search_index(self, team: TeamDb) -> None:

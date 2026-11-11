@@ -704,10 +704,11 @@
       "newOnly": "Alleen Nieuwe Laden",
       "reloadAll": "Alle Standaardwaarden Herladen",
       "confirmTitle": "Alle standaardworkflows opnieuw laden?",
-      "confirmDescription": "Elke standaardworkflow wordt teruggezet naar de meegeleverde definitie: stappen, trigger en actieve status. Standaardworkflows die u of een andere beheerder heeft bewerkt, blijven behouden, tenzij u ze hieronder ook terugzet.",
+      "confirmDescription": "Elke standaardworkflow wordt teruggezet naar de meegeleverde definitie: beschrijving, trigger, bereik, stappen en hun indeling. Of een workflow actief is, verandert niet. Standaardworkflows die u of een andere beheerder heeft bewerkt, blijven behouden, tenzij u ze hieronder ook terugzet.",
       "includeEdited": "Ook bewerkte standaardworkflows terugzetten (hun wijzigingen gaan verloren)",
       "confirmAction": "Opnieuw laden",
-      "keptEdited": "Bewerkte behouden: {{names}}"
+      "keptEdited": "Bewerkte behouden: {{names}}.",
+      "result": "Aangemaakt: {{created}}, bijgewerkt: {{updated}}, overgeslagen: {{skipped}}."
     },
     "badges": {
       "default": "Standaard",

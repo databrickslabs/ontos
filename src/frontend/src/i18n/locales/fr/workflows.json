@@ -704,10 +704,11 @@
       "newOnly": "Charger uniquement les nouveaux",
       "reloadAll": "Recharger tous les défauts",
       "confirmTitle": "Recharger tous les workflows par défaut ?",
-      "confirmDescription": "Chaque workflow par défaut est réinitialisé à sa définition d'origine : étapes, déclencheur et état actif. Les workflows par défaut que vous ou un autre administrateur avez modifiés sont conservés, sauf si vous les réinitialisez aussi ci-dessous.",
+      "confirmDescription": "Chaque workflow par défaut est réinitialisé à sa définition d'origine : description, déclencheur, portée, étapes et leur disposition. L'état actif ne change pas. Les workflows par défaut que vous ou un autre administrateur avez modifiés sont conservés, sauf si vous les réinitialisez aussi ci-dessous.",
       "includeEdited": "Réinitialiser aussi les workflows par défaut modifiés (leurs modifications sont perdues)",
       "confirmAction": "Recharger",
-      "keptEdited": "Modifiés conservés : {{names}}"
+      "keptEdited": "Modifiés conservés : {{names}}.",
+      "result": "Créés : {{created}}, mis à jour : {{updated}}, ignorés : {{skipped}}."
     },
     "badges": {
       "default": "Par défaut",

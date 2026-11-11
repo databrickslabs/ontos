@@ -61,15 +61,6 @@ _DEFAULT_ENTITY_TYPE_ADDITIONS = (
      'Status Change Request', 'data_contract'),
 )
 
-def _edited_by_user(db_workflow) -> bool:
-    """Whether a user changed this stored workflow since the default loader wrote it.
-
-    The loader creates defaults as ``system`` and resets them without a user, so
-    any other ``updated_by`` is a save, an API update or an activation toggle.
-    """
-    return db_workflow.updated_by not in (None, '', 'system')
-
-
 # (workflow, unknown entity types) already warned about by ``_split_entity_types``, oldest
 # first; bounded, so a long-running process doesn't keep every key it ever logged
 _WARNED_UNKNOWN_ENTITY_TYPES: "OrderedDict[tuple, None]" = OrderedDict()
@@ -309,24 +300,26 @@ class WorkflowsManager:
                 
                 if existing:
                     if update_existing and existing.is_default and not include_edited \
-                            and _edited_by_user(existing):
-                        # A user changed this default (designer, API, toggle); a
-                        # reset would silently undo that, so keep it unless asked.
+                            and existing.is_customized:
+                        # A user changed this default's definition; a reset would
+                        # silently undo that, so keep it unless asked.
                         result['kept_edited'] += 1
                         result['kept_edited_names'].append(name)
                         logger.info("Kept default workflow edited by a user: %s", name)
                     elif update_existing and existing.is_default:
-                        # Update existing default workflow
+                        # Reset the definition to the YAML. Activation is the admin's
+                        # choice (startup seeds automation inactive), so it's kept.
                         wf_type = wf_data.get('workflow_type', 'process')
                         update_data = ProcessWorkflowUpdate(
                             description=wf_data.get('description'),
                             trigger=trigger,
                             scope=scope,
                             workflow_type=WorkflowType(wf_type) if isinstance(wf_type, str) else wf_type,
-                            is_active=wf_data.get('is_active', True),
                             steps=steps,
                         )
-                        process_workflow_repo.update(self._db, existing.id, update_data)
+                        process_workflow_repo.update(
+                            self._db, existing.id, update_data, updated_by='system', customized=False,
+                        )
                         result['updated'] += 1
                         logger.info(f"Updated default workflow: {name}")
                     else:
@@ -420,12 +413,13 @@ class WorkflowsManager:
         *,
         updated_by: Optional[str] = None,
     ) -> Optional[ProcessWorkflow]:
-        """Update an existing workflow."""
+        """Update an existing workflow (a user's change: marks a default as customized)."""
         db_workflow = process_workflow_repo.update(
             self._db,
             workflow_id,
             workflow,
             updated_by=updated_by,
+            customized=True,
         )
         if not db_workflow:
             return None

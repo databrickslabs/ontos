@@ -4,6 +4,10 @@
 ones an admin had changed in the designer, without asking. Edits then looked
 lost ("saved, but the old version is back"). Edited defaults are now kept unless
 the caller asks for them to be reset too.
+
+"Edited" is the ``is_customized`` flag: set by a user's update, cleared by the
+loader's reset. Activation is not part of the definition: toggling doesn't mark a
+default as edited, and a reload doesn't change it.
 """
 import textwrap
 
@@ -45,9 +49,10 @@ def manager(db_session):
 
 
 def _edit(db, name, description, user="admin@example.com"):
+    """An update as the PUT route makes it."""
     wf = process_workflow_repo.get_by_name(db, name)
-    process_workflow_repo.update(
-        db, wf.id, ProcessWorkflowUpdate(description=description), updated_by=user,
+    WorkflowsManager(db).update_workflow(
+        wf.id, ProcessWorkflowUpdate(description=description), updated_by=user,
     )
 
 
@@ -100,3 +105,42 @@ def test_without_update_existing_nothing_changes(db_session, manager, yaml_path)
     assert _description(db_session, "Default Gate") == "my edit"
     assert result["skipped"] == 2
     assert result["updated"] == 0
+
+
+def test_an_edit_by_a_user_without_email_still_counts(db_session, manager, yaml_path):
+    manager.load_from_yaml(yaml_path)
+    _edit(db_session, "Default Gate", "my edit", user=None)
+
+    result = manager.load_from_yaml(yaml_path, update_existing=True)
+
+    assert _description(db_session, "Default Gate") == "my edit"
+    assert result["kept_edited_names"] == ["Default Gate"]
+
+
+def test_a_system_update_does_not_hide_an_edit(db_session, manager, yaml_path):
+    """A startup routine stamping updated_by='system' must not make an edit resettable."""
+    manager.load_from_yaml(yaml_path)
+    _edit(db_session, "Default Gate", "my edit")
+    wf = process_workflow_repo.get_by_name(db_session, "Default Gate")
+    wf.updated_by = "system"
+    db_session.commit()
+
+    manager.load_from_yaml(yaml_path, update_existing=True)
+
+    assert _description(db_session, "Default Gate") == "my edit"
+
+
+def test_toggling_is_not_an_edit_and_a_reload_keeps_activation(db_session, manager, yaml_path):
+    manager.load_from_yaml(yaml_path, requests_only_active=True)  # created inactive
+    wf = process_workflow_repo.get_by_name(db_session, "Other Default")
+    assert wf.is_active is False
+    WorkflowsManager(db_session).toggle_active(wf.id, True, updated_by="admin@example.com")
+    gate = process_workflow_repo.get_by_name(db_session, "Default Gate")
+
+    result = manager.load_from_yaml(yaml_path, update_existing=True)
+
+    db_session.expire_all()
+    assert result["kept_edited"] == 0 and result["updated"] == 2
+    # The toggled one stays active, the untouched one stays inactive.
+    assert process_workflow_repo.get_by_name(db_session, "Other Default").is_active is True
+    assert process_workflow_repo.get(db_session, gate.id).is_active is False

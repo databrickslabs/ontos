@@ -704,10 +704,11 @@
       "newOnly": "Carregar somente novos",
       "reloadAll": "Recarregar todos os padrões",
       "confirmTitle": "Recarregar todos os fluxos de trabalho padrão?",
-      "confirmDescription": "Cada fluxo de trabalho padrão é redefinido para a definição original: etapas, gatilho e estado ativo. Os padrões que você ou outro administrador editou são mantidos, a menos que você também os redefina abaixo.",
+      "confirmDescription": "Cada fluxo de trabalho padrão é redefinido para a definição original: descrição, gatilho, escopo, etapas e sua disposição. O estado ativo não muda. Os padrões que você ou outro administrador editou são mantidos, a menos que você também os redefina abaixo.",
       "includeEdited": "Redefinir também os fluxos padrão editados (as alterações serão perdidas)",
       "confirmAction": "Recarregar",
-      "keptEdited": "Editados mantidos: {{names}}"
+      "keptEdited": "Editados mantidos: {{names}}.",
+      "result": "Criados: {{created}}, atualizados: {{updated}}, ignorados: {{skipped}}."
     },
     "badges": {
       "default": "Padrão",

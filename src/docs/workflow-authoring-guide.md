@@ -105,7 +105,7 @@ Notes:
 
 - At startup, Ontos creates the default workflows that don't exist yet. Only the request workflows (`on_request_*`) are created active; the other defaults (automation, gates, UI wizards) are created inactive, so an upgrade doesn't turn on new automatic behavior. Workflows that already exist are left as they are.
 - **Load New Only** (`POST /api/workflows/load-defaults`) does the same, keeping each workflow's `is_active` from the shipped definition.
-- **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) rewrites every default workflow from the shipped definition, including `is_active`: defaults you had left inactive, such as "Naming Convention Validation", become active again. It also re-creates their steps, which removes the step history of their past executions (see [Debugging Recent Executions](#debugging-recent-executions)). Duplicates of defaults are not touched.
+- **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) asks first. It then resets every default workflow nobody edited to the shipped definition: description, trigger, scope, steps and their layout. Whether a workflow is active doesn't change. Defaults that a user saved since they were loaded are kept and listed; tick **Also reset default workflows that were edited** (`include_edited=true`) to reset them too, which discards those edits. Duplicates of defaults are not touched.
 - A duplicate (`POST /api/workflows/{id}/duplicate?new_name=...`) starts inactive and is not a default.
 
 ## Step Types and What Makes Them Pass
@@ -477,7 +477,7 @@ As of this version:
 - An approval step's `timeout_days` is not enforced (#1119).
 - Saving a workflow's steps removes the step results of its past executions (fixed by WORKFLOWS_PR).
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
-- Reload All Defaults also resets the defaults' active flag to the shipped value.
+- Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by RELOAD_PR: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
 - The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
 

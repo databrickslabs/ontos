@@ -2408,7 +2408,7 @@ To change the recipients, edit the **Notify Owners** step. To write your own tex
 
 #### After an Upgrade
 
-The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. Defaults that someone edited are kept unless you tick **Also reset default workflows that were edited** in the confirmation, and the active state of a workflow is never changed. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
 
 Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
 

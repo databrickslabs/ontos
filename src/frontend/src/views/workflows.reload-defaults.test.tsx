@@ -35,6 +35,7 @@ vi.mock('@/components/settings/settings-page-wrapper', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+import i18n from '@/i18n/config';
 import Workflows from './workflows';
 
 function mockLists() {
@@ -86,7 +87,7 @@ describe('Workflows view: Reload All Defaults', () => {
     expect(reloadCalls()[0][0]).toBe('/api/workflows/load-defaults?update_existing=true&include_edited=false');
     await waitFor(() => expect(toast).toHaveBeenCalled());
     expect(lastToast().description).toBe(
-      'Workflows: updated 3, kept 1 edited. Kept edited: Contract Purpose Gate',
+      'Created 0, updated 3, skipped 0. Kept edited: Contract Purpose Gate.',
     );
   });
 
@@ -100,6 +101,25 @@ describe('Workflows view: Reload All Defaults', () => {
 
     await waitFor(() => expect(reloadCalls()).toHaveLength(1));
     expect(reloadCalls()[0][0]).toBe('/api/workflows/load-defaults?update_existing=true&include_edited=true');
+  });
+
+  it('builds the summary in the UI language', async () => {
+    mockLists();
+    await i18n.changeLanguage('de');
+    post.mockResolvedValue({
+      data: { message: 'Workflows: updated 2', created: 1, updated: 2, skipped: 0,
+        kept_edited: 1, kept_edited_names: ['Gate'] },
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter><Workflows /></MemoryRouter>);
+    await user.click(await screen.findByRole('menuitem', { name: /alle standard/i }));
+    await user.click(await screen.findByRole('button', { name: /^neu laden$/i }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(lastToast().description).toBe(
+      'Erstellt: 1, aktualisiert: 2, übersprungen: 0. Bearbeitete beibehalten: Gate.',
+    );
+    await i18n.changeLanguage('en');
   });
 
   it('shows a failed reload as an error', async () => {

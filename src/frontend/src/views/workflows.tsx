@@ -458,12 +458,14 @@ export default function Workflows() {
         });
         return;
       }
+      const { created, updated, skipped } = response.data;
       const kept = response.data.kept_edited_names ?? [];
+      const summary = t('workflows:view.loadDefaults.result', { created, updated, skipped });
       toast({
         title: t('common:toast.success'),
         description: kept.length > 0
-          ? `${response.data.message}. ${t('workflows:view.loadDefaults.keptEdited', { names: kept.join(', ') })}`
-          : response.data.message,
+          ? `${summary} ${t('workflows:view.loadDefaults.keptEdited', { names: kept.join(', ') })}`
+          : summary,
       });
       loadWorkflows();
     } catch (error) {
@@ -1796,7 +1798,7 @@ export default function Workflows() {
         />
       )}
 
-      {/* Delete Execution Confirmation Dialog */}
+      {/* Reload Defaults Confirmation Dialog */}
       <Dialog open={reloadDefaultsDialogOpen} onOpenChange={setReloadDefaultsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1832,6 +1834,7 @@ export default function Workflows() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Execution Confirmation Dialog */}
       <Dialog open={deleteExecutionDialogOpen} onOpenChange={setDeleteExecutionDialogOpen}>
         <DialogContent>
           <DialogHeader>

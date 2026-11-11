@@ -218,7 +218,11 @@
       "approversRole": "Approvers (Role)",
       "selectRole": "Select role",
       "additionalApproversAria": "Additional approvers",
-      "timeoutDays": "Timeout (days)"
+      "timeoutDays": "Timeout (days)",
+      "timeoutDaysHelp": "0 means no timeout; leave it empty for the default (7 days).",
+      "requireAll": "Require every approver",
+      "requireAllHelp": "Each approver decides: a user for themselves, any one member for a group or role. Any rejection fails the step.",
+      "timeoutNotEnforced": "Not enforced yet: a pending approval doesn't expire."
     },
     "assetReview": {
       "reviewerRole": "Reviewer Role",
@@ -347,7 +351,10 @@
       "processFailed": "Failed to process approval.",
       "processFailedRetry": "Failed to process approval. Please try again.",
       "entityApproved": "{{name}} has been approved.",
-      "entityRejected": "{{name}} has been rejected."
+      "entityRejected": "{{name}} has been rejected.",
+      "decisionRecorded": "Decision recorded",
+      "waitingForApprovers_one": "Waiting for {{count}} more approver.",
+      "waitingForApprovers_other": "Waiting for {{count}} more approvers."
     },
     "errors": {
       "own_owner_approval": "This approval is for the owners; you can't approve your own request.",
@@ -498,7 +505,8 @@
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",
       "rule_entity_load_failed": "Could not load {{entityType}} {{entityId}} to evaluate the rule",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} was not found, so the rule can't be evaluated",
+      "cancelled_by_admin": "Cancelled by an admin ({{by}})"
     },
     "states": {
       "pending": "Pending",
@@ -780,6 +788,7 @@
       "loadDefaultsFailed": "Failed to load default workflows",
       "cancelSuccess": "Execution cancelled successfully",
       "cancelFailed": "Failed to cancel execution",
+      "approvalCancelled": "Approval cancelled. The workflow followed its rejection path; status: {{status}}.",
       "retryStarted": "Execution retry started",
       "retryFailed": "Failed to retry execution",
       "executionDeleteSuccess": "Execution deleted successfully",
@@ -790,6 +799,7 @@
       "approveFailed": "Failed to approve workflow",
       "rejectResumeSuccess": "Workflow rejected and resumed",
       "rejectFailed": "Failed to reject workflow",
+      "forceDecisionRequireAll": "Only the approvers can decide this step (every approver must decide). You can cancel the execution instead.",
       "noChanges": "No Changes",
       "allAlreadyEnabled": "All selected workflows are already enabled.",
       "allAlreadyDisabled": "All selected workflows are already disabled.",

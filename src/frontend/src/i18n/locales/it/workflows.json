@@ -218,7 +218,11 @@
       "approversRole": "Approvatori (ruolo)",
       "selectRole": "Seleziona ruolo",
       "additionalApproversAria": "Approvatori aggiuntivi",
-      "timeoutDays": "Timeout (giorni)"
+      "timeoutDays": "Timeout (giorni)",
+      "timeoutDaysHelp": "0 significa nessun timeout; lascia vuoto per il valore predefinito (7 giorni).",
+      "requireAll": "Richiedi tutti gli approvatori",
+      "requireAllHelp": "Ogni approvatore decide: un utente per sé, un qualsiasi membro per un gruppo o un ruolo. Qualsiasi rifiuto fa fallire il passaggio.",
+      "timeoutNotEnforced": "Non ancora applicato: un'approvazione in sospeso non scade."
     },
     "assetReview": {
       "reviewerRole": "Ruolo revisore",
@@ -347,7 +351,10 @@
       "processFailed": "Impossibile elaborare l'approvazione.",
       "processFailedRetry": "Impossibile elaborare l'approvazione. Riprova.",
       "entityApproved": "{{name}} è stato approvato.",
-      "entityRejected": "{{name}} è stato rifiutato."
+      "entityRejected": "{{name}} è stato rifiutato.",
+      "decisionRecorded": "Decisione registrata",
+      "waitingForApprovers_one": "In attesa di {{count}} altro approvatore.",
+      "waitingForApprovers_other": "In attesa di altri {{count}} approvatori."
     },
     "errors": {
       "own_owner_approval": "Questa approvazione spetta ai proprietari; non puoi approvare la tua stessa richiesta.",
@@ -498,7 +505,8 @@
       "output_port_contracts_missing": "Impossibile pubblicare: le porte di output {{ports}} devono avere contratti di dati assegnati",
       "output_port_contracts_unapproved": "Impossibile pubblicare: queste porte di output hanno contratti non approvati: {{ports}}. I contratti devono prima essere approvati.",
       "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata",
+      "cancelled_by_admin": "Annullato da un amministratore ({{by}})"
     },
     "states": {
       "pending": "In sospeso",
@@ -780,6 +788,7 @@
       "loadDefaultsFailed": "Impossibile caricare i workflow predefiniti",
       "cancelSuccess": "Esecuzione annullata correttamente",
       "cancelFailed": "Impossibile annullare l'esecuzione",
+      "approvalCancelled": "Approvazione annullata. Il workflow ha seguito il percorso di rifiuto; stato: {{status}}.",
       "retryStarted": "Nuovo tentativo di esecuzione avviato",
       "retryFailed": "Impossibile riprovare l'esecuzione",
       "executionDeleteSuccess": "Esecuzione eliminata correttamente",
@@ -790,6 +799,7 @@
       "approveFailed": "Impossibile approvare il workflow",
       "rejectResumeSuccess": "Workflow rifiutato e ripreso",
       "rejectFailed": "Impossibile rifiutare il workflow",
+      "forceDecisionRequireAll": "Solo gli approvatori possono decidere questo passaggio (tutti devono decidere). Puoi invece annullare l'esecuzione.",
       "noChanges": "Nessuna modifica",
       "allAlreadyEnabled": "Tutti i workflow selezionati sono già abilitati.",
       "allAlreadyDisabled": "Tutti i workflow selezionati sono già disabilitati.",

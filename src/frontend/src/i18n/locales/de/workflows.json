@@ -218,7 +218,11 @@
       "approversRole": "Genehmiger (Rolle)",
       "selectRole": "Rolle auswählen",
       "additionalApproversAria": "Zusätzliche Genehmiger",
-      "timeoutDays": "Zeitlimit (Tage)"
+      "timeoutDays": "Zeitlimit (Tage)",
+      "timeoutDaysHelp": "0 bedeutet kein Zeitlimit; leer lassen für den Standardwert (7 Tage).",
+      "requireAll": "Alle Genehmigenden erforderlich",
+      "requireAllHelp": "Jeder Genehmigende entscheidet: ein Benutzer für sich selbst, ein beliebiges Mitglied für eine Gruppe oder Rolle. Jede Ablehnung lässt den Schritt fehlschlagen.",
+      "timeoutNotEnforced": "Noch nicht durchgesetzt: Eine ausstehende Genehmigung läuft nicht ab."
     },
     "assetReview": {
       "reviewerRole": "Prüferrolle",
@@ -347,7 +351,10 @@
       "processFailed": "Genehmigung konnte nicht verarbeitet werden.",
       "processFailedRetry": "Genehmigung konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut.",
       "entityApproved": "{{name}} wurde genehmigt.",
-      "entityRejected": "{{name}} wurde abgelehnt."
+      "entityRejected": "{{name}} wurde abgelehnt.",
+      "decisionRecorded": "Entscheidung erfasst",
+      "waitingForApprovers_one": "Es fehlt noch {{count}} Genehmigender.",
+      "waitingForApprovers_other": "Es fehlen noch {{count}} Genehmigende."
     },
     "errors": {
       "own_owner_approval": "Diese Genehmigung ist Sache der Eigentümer; Sie können Ihre eigene Anfrage nicht genehmigen.",
@@ -498,7 +505,8 @@
       "output_port_contracts_missing": "Veröffentlichung nicht möglich: Den Ausgabeports {{ports}} müssen Datenverträge zugewiesen sein",
       "output_port_contracts_unapproved": "Veröffentlichung nicht möglich: Diese Ausgabeports haben nicht genehmigte Verträge: {{ports}}. Die Verträge müssen zuerst genehmigt werden.",
       "rule_entity_load_failed": "{{entityType}} {{entityId}} konnte nicht geladen werden, um die Regel auszuwerten",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} wurde nicht gefunden, die Regel kann nicht ausgewertet werden",
+      "cancelled_by_admin": "Von einem Administrator abgebrochen ({{by}})"
     },
     "states": {
       "pending": "Ausstehend",
@@ -780,6 +788,7 @@
       "loadDefaultsFailed": "Standard-Workflows konnten nicht geladen werden",
       "cancelSuccess": "Ausführung erfolgreich abgebrochen",
       "cancelFailed": "Ausführung konnte nicht abgebrochen werden",
+      "approvalCancelled": "Genehmigung abgebrochen. Der Workflow ist seinem Ablehnungspfad gefolgt; Status: {{status}}.",
       "retryStarted": "Wiederholung der Ausführung gestartet",
       "retryFailed": "Ausführung konnte nicht wiederholt werden",
       "executionDeleteSuccess": "Ausführung erfolgreich gelöscht",
@@ -790,6 +799,7 @@
       "approveFailed": "Workflow konnte nicht genehmigt werden",
       "rejectResumeSuccess": "Workflow abgelehnt und fortgesetzt",
       "rejectFailed": "Workflow konnte nicht abgelehnt werden",
+      "forceDecisionRequireAll": "Nur die Genehmigenden können diesen Schritt entscheiden (alle müssen entscheiden). Sie können die Ausführung stattdessen abbrechen.",
       "noChanges": "Keine Änderungen",
       "allAlreadyEnabled": "Alle ausgewählten Workflows sind bereits aktiviert.",
       "allAlreadyDisabled": "Alle ausgewählten Workflows sind bereits deaktiviert.",

@@ -2307,7 +2307,7 @@ Steps are the building blocks of workflows:
 | Step Type | Description | Configuration |
 |-----------|-------------|---------------|
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
-| **Approval** | Request human approval | Approvers; timeout and require all are accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
+| **Approval** | Request human approval | Approvers; require all (every approver decides: a user for themselves, any one member for a group or role, one person for one approver); timeout in days, `0` = no timeout, accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
 | **Notification** | Send a notification | Recipients, template, message |
 | **Assign Tag** | Add or update a tag | Key, value or value source |
 | **Remove Tag** | Remove a tag | Key to remove |
@@ -2457,7 +2457,7 @@ A workflow whose trigger is **Manual** never fires on its own. To start it, open
 
 - **Scope** is saved but not applied yet ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
 - **Scheduled** workflows do not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)).
-- **Approval steps**: `require_all` and `timeout_days` are accepted but not enforced. The first decision resumes the workflow, and a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)).
+- **Approval steps**: `timeout_days` is accepted but not enforced: a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)); an admin can cancel it. With `require_all`, every approver decides and any rejection fails the step.
 
 #### Blocking vs Non-Blocking
 
@@ -2475,7 +2475,7 @@ Approval steps pause workflow execution:
 4. Approver makes decision via notification
 5. Workflow resumes with on_pass or on_fail path
 
-Only the recipients of the step the execution is waiting at can decide it (admins can decide any approval). On an owner approval (`DomainOwner`, `ContractApprover`) the requester can't decide their own request, even when the approval falls back to a role they hold. Approval notifications created before an upgrade to a version with this check don't record their step; any recipient of the execution's approvals can still decide those, as before.
+Only the recipients of the step the execution is waiting at can decide it (admins can decide any approval, except one that requires every approver, where an admin who isn't one of them can only cancel it). An admin who cancels an execution waiting at an approval ends that step as failed (reason `cancelled_by_admin`): the workflow follows its rejection path, so the requester is told when the workflow does so, and the approvers' open requests are closed. On an owner approval (`DomainOwner`, `ContractApprover`) the requester can't decide their own request, even when the approval falls back to a role they hold. Approval notifications created before an upgrade to a version with this check don't record their step; any recipient of the execution's approvals can still decide those, as before.
 
 ### Workflow Best Practices
 

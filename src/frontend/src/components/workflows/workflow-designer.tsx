@@ -2587,15 +2587,56 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           </>
                         );
                       })()}
-                      <div>
-                        <Label>{t('workflows:designer.approval.timeoutDays')}</Label>
-                        <Input
-                          type="number"
-                          value={(selectedStep.config as { timeout_days?: number })?.timeout_days || 7}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
-                            config: { ...selectedStep.config, timeout_days: parseInt(e.target.value) }
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          id="approval-require-all"
+                          className="mt-0.5"
+                          checked={Boolean(
+                            (selectedStep.config as { require_all?: boolean })?.require_all,
+                          )}
+                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, require_all: checked === true },
                           })}
                         />
+                        <div className="flex flex-col">
+                          <Label htmlFor="approval-require-all" className="text-sm">
+                            {t('workflows:designer.approval.requireAll')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('workflows:designer.approval.requireAllHelp')}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="approval-timeout-days">
+                          {t('workflows:designer.approval.timeoutDays')}
+                        </Label>
+                        <Input
+                          id="approval-timeout-days"
+                          type="number"
+                          min={0}
+                          // 0 means no timeout; empty (unset) means the default, 7 days
+                          placeholder="7"
+                          value={
+                            (selectedStep.config as { timeout_days?: number })?.timeout_days ?? ''
+                          }
+                          onChange={(e) => {
+                            const days = parseInt(e.target.value, 10);
+                            const { timeout_days: _unset, ...rest } =
+                              selectedStep.config as { timeout_days?: number };
+                            updateStep(selectedStep.step_id, {
+                              config: Number.isNaN(days)
+                                ? rest
+                                : { ...rest, timeout_days: Math.max(days, 0) },
+                            });
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutDaysHelp')}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('workflows:designer.approval.timeoutNotEnforced')}
+                        </p>
                       </div>
                     </>
                   )}

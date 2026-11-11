@@ -44,6 +44,9 @@ interface DefaultResponseWorkflowStep {
 
 export interface WorkflowApprovalResponseDialogPayload {
   execution_id: string;
+  // The approval step the notification is for: a decision after that step
+  // has ended gets 409 approval_no_longer_pending
+  step_id?: string;
   entity_name?: string;
   // Structured request context populated by the backend approval step
   // (see ApprovalStepHandler in workflow_executor.py). All optional — only
@@ -295,6 +298,7 @@ export default function WorkflowApprovalResponseDialog({
       // coded "Request denied" (approval_rejected) that each user sees in
       // their own language, not the approver's word for it.
       const body: Record<string, unknown> = { execution_id: payload.execution_id, approved };
+      if (payload.step_id) body.step_id = payload.step_id;
       if (reason.trim()) body.message = reason.trim();
       if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
       if (grantedPermission) body.permission_level = grantedPermission;
@@ -307,6 +311,22 @@ export default function WorkflowApprovalResponseDialog({
             : response.error || t('workflows:approvalResponse.messages.processFailed'),
           variant: 'destructive',
         });
+        return;
+      }
+      // require_all: the decision is recorded and other approvers still decide.
+      // Only then is there a count: a step that moves on to another approval
+      // step is 'paused' too, but this decision was the step's.
+      const decision = response.data as { status?: string; pending_approvers?: number } | null;
+      const pendingApprovers = decision?.pending_approvers;
+      if (typeof pendingApprovers === 'number' && pendingApprovers > 0) {
+        toast({
+          title: t('workflows:approvalResponse.messages.decisionRecorded'),
+          description: t('workflows:approvalResponse.messages.waitingForApprovers', {
+            count: pendingApprovers,
+          }),
+        });
+        onOpenChange(false);
+        onDecisionMade?.();
         return;
       }
       toast({

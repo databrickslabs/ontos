@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import func
@@ -17,7 +17,7 @@ from src.models.tags import (
     AssignedTagCreate, AssignedTag,
     DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR
 )
-from src.db_models.tags import TagDb, TagNamespaceDb # For type hints
+from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
 
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
@@ -168,6 +168,12 @@ class TagsManager(DeliveryMixin, SearchableAsset):
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
         return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
 
+    def list_assigned_tags_for_entities(
+        self, db: Session, *, entity_ids: List[str], entity_type: str,
+    ) -> Dict[str, List[AssignedTag]]:
+        """Tags of several entities in one query: ``{entity_id: [AssignedTag, ...]}``."""
+        return self._entity_assoc_repo.get_assigned_tags_for_entities(db, entity_ids=entity_ids, entity_type=entity_type)
+
     def set_tags_for_entity(
         self, db: Session, *, entity_id: str, entity_type: str,
         tags: List[AssignedTagCreate], user_email: Optional[str], commit: bool = True,
@@ -222,6 +228,11 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         return assigned
 
     def add_tag_to_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, assigned_value: Optional[str], user_email: Optional[str]) -> AssignedTag:
+        previous = (
+            db.query(EntityTagAssociationDb.assigned_value)
+            .filter_by(entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
+            .first()
+        )
         assoc = self._entity_assoc_repo.add_tag_to_entity(
             db,
             entity_id=entity_id,
@@ -236,23 +247,26 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         ns = self._namespace_repo.get(db, id=tag_db.namespace_id) if tag_db and tag_db.namespace_id else None
         tag_fqn = f"{(ns.name if ns else DEFAULT_NAMESPACE_NAME)}{TAG_NAMESPACE_SEPARATOR}{tag_db.name}"
         
-        # Log to change log for timeline
-        try:
-            from src.controller.change_log_manager import change_log_manager
-            change_log_manager.log_change_with_details(
-                db,
-                entity_type=entity_type,
-                entity_id=str(entity_id),
-                action="TAG_ASSIGN",
-                username=user_email,
-                details={
-                    "tag": tag_fqn,
-                    "assigned_value": assigned_value,
-                    "summary": f"Tag '{tag_fqn}' assigned" + (f" with value '{assigned_value}'" if assigned_value else "") + (f" by {user_email}" if user_email else ""),
-                },
-            )
-        except Exception as log_err:
-            logger.warning(f"Failed to log change for tag assign: {log_err}")
+        # Log to change log for timeline, with the stored value, and only when the
+        # assignment changed: re-adding a tag without a value keeps it (#1420)
+        stored_value = assoc.assigned_value
+        if previous is None or previous[0] != stored_value:
+            try:
+                from src.controller.change_log_manager import change_log_manager
+                change_log_manager.log_change_with_details(
+                    db,
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    action="TAG_ASSIGN",
+                    username=user_email,
+                    details={
+                        "tag": tag_fqn,
+                        "assigned_value": stored_value,
+                        "summary": f"Tag '{tag_fqn}' assigned" + (f" with value '{stored_value}'" if stored_value else "") + (f" by {user_email}" if user_email else ""),
+                    },
+                )
+            except Exception as log_err:
+                logger.warning(f"Failed to log change for tag assign: {log_err}")
         
         db.commit()
         

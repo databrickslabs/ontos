@@ -36,7 +36,7 @@ export default function RequiredActionsSection() {
       setApprovalsError(null);
       try {
         const res = await fetch('/api/approvals/queue', { cache: 'no-store' });
-        // 403: the role cannot read the queue (data-contracts); that is an empty queue.
+        // 403: the role reads neither data contracts nor data products: an empty queue.
         if (res.status === 403) {
           setApprovals({ contracts: [], products: [] });
           return;

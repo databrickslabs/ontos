@@ -9,6 +9,7 @@ import {
   hexToHslTriplet,
   pickForeground,
   resolveBrandingAssetUrl,
+  isValidImageUrl,
   contrastRatio,
   describeContrast,
   deriveDarkColor,
@@ -84,6 +85,18 @@ describe('branding assets and theme colors', () => {
     expect(resolveBrandingAssetUrl('/branding/acme/mark.svg')).toBe('/branding/acme/mark.svg');
     expect(resolveBrandingAssetUrl('/api/branding/logo')).toBe('/api/branding/logo');
     expect(resolveBrandingAssetUrl('https://cdn.example/x.svg')).toBe('https://cdn.example/x.svg');
+  });
+
+  it('accepts https URLs and app asset paths, rejects traversal and other origins', () => {
+    expect(isValidImageUrl('')).toBe(true);
+    expect(isValidImageUrl('https://cdn.example/x.svg')).toBe(true);
+    expect(isValidImageUrl('/branding/acme/logo..v2.svg')).toBe(true);
+    for (const bad of [
+      'javascript:alert(1)', 'data:image/svg+xml,<svg/>', '//evil.example/x.svg',
+      '/a b.svg', '/a\\b.svg', '/../x.svg', '/branding/%2E%2e/x.svg',
+    ]) {
+      expect(isValidImageUrl(bad)).toBe(false);
+    }
   });
 
   it('converts hex colors to HSL triplets and rejects anything else', () => {

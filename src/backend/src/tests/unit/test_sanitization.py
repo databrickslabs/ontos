@@ -222,10 +222,17 @@ class TestBrandingAssetPath:
         path = "/branding/acme/logo.svg"
         assert validate_branding_url(path) == path
 
-    @pytest.mark.parametrize("value", ["//evil.example/x.svg", "/a b.svg", "/a\\b.svg"])
+    @pytest.mark.parametrize("value", [
+        "//evil.example/x.svg", "/a b.svg", "/a\\b.svg",
+        "/../etc/x.svg", "/branding/../../x.svg", "/branding/%2e%2e/x.svg",
+        "/a\tb.svg",
+    ])
     def test_rejects_other_origin_or_odd_paths(self, value):
         with pytest.raises(ValueError):
             validate_branding_url(value)
+
+    def test_dots_inside_a_file_name_are_fine(self):
+        assert validate_branding_url("/branding/logo..v2.svg") == "/branding/logo..v2.svg"
 
 
 class TestHexColorValidation:

@@ -19,6 +19,9 @@ logger = get_logger(__name__)
 # Define paths
 DOTENV_FILE = Path(__file__).parent.parent.parent / Path(".env")
 
+# Shortest DEMO_SETUP_TOKEN accepted; a shorter one is dropped at startup (token path disabled).
+MIN_DEMO_SETUP_TOKEN_LENGTH = 32
+
 # Security: Secure default for LLM injection detection prompt
 # This constant ensures DRY compliance between Field default and validator
 LLM_INJECTION_CHECK_PROMPT_SECURE_DEFAULT = (
@@ -175,7 +178,8 @@ class Settings(BaseSettings):
     # Optional setup token for the demo-data load/clear routes. When set, a request
     # carrying it in the X-Demo-Setup-Token header is accepted instead of the settings-general
     # ADMIN check (this is what Swagger "Authorize" sends). Unset = token path disabled.
-    # SECURITY: treat as a secret; never logged.
+    # SECURITY: treat as a secret; never logged. Shorter than MIN_DEMO_SETUP_TOKEN_LENGTH =
+    # not configured (see drop_short_demo_setup_token).
     DEMO_SETUP_TOKEN: Optional[str] = Field(None, env='DEMO_SETUP_TOKEN')
 
     # LLM Configuration
@@ -306,6 +310,23 @@ class Settings(BaseSettings):
                 "via X-Test-Token headers is ENABLED. Unset TEST_USER_TOKEN unless this "
                 "is intentional."
             )
+        return self
+
+    @model_validator(mode='after')
+    def drop_short_demo_setup_token(self) -> 'Settings':
+        """Treat a DEMO_SETUP_TOKEN shorter than the minimum as not configured.
+
+        Logs the setting name and the minimum length, never the value.
+        """
+        if self.DEMO_SETUP_TOKEN and len(self.DEMO_SETUP_TOKEN) < MIN_DEMO_SETUP_TOKEN_LENGTH:
+            logger.error(
+                "DEMO_SETUP_TOKEN is shorter than %d characters and is ignored: the setup "
+                "token path of the demo-data routes is disabled. Set a token of at least "
+                "%d characters.",
+                MIN_DEMO_SETUP_TOKEN_LENGTH,
+                MIN_DEMO_SETUP_TOKEN_LENGTH,
+            )
+            self.DEMO_SETUP_TOKEN = None
         return self
 
     @model_validator(mode='after')

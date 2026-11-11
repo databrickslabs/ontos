@@ -2262,7 +2262,7 @@ Catalog see it. In the job's tag configuration, on the **Asset** tab, turn on th
 |----------|-------|
 | `{ASSET.MATURITY}` | name of the level, e.g. `2 stars` |
 | `{ASSET.MATURITY_ORDER}` | number of the level, e.g. `3` |
-| `{ASSET.MATURITY_AT_LEAST:<n>}` | `true` when the level number is at least `<n>` (`1` is the first level), `false` when the asset has no level |
+| `{ASSET.MATURITY_AT_LEAST:<n>}` | `true` when the level number is at least `<n>` (`1` is the first level), `false` on a table or view below that level or with no level; no tag on other asset types |
 
 For example key `ontos_context_tier` and value `{ASSET.MATURITY}`. The variables can
 also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
@@ -2270,7 +2270,9 @@ also be used in the main asset entry, next to `{ASSET.ID}`, `{ASSET.TYPE}` and
 
 For a yes/no flag, use the threshold variable: key `ontos_agent_readable` and value
 `{ASSET.MATURITY_AT_LEAST:1}` publish `true` on the tables at or above the first level and
-`false` on the others. Change `<n>` to set another threshold. A malformed variable such as
+`false` on the others. Asset types without maturity levels, such as metric views, get no
+tag from an entry that uses this variable (not `false`), and a tag written for them by an
+earlier run is removed. Change `<n>` to set another threshold. A malformed variable such as
 `{ASSET.MATURITY_AT_LEAST:x}` publishes no tag.
 
 - The job publishes the level of the latest evaluation: when an asset changes, when its

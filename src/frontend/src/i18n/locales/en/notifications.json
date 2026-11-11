@@ -253,6 +253,9 @@
   },
   "complianceRun": {
     "title": "Compliance: {{policyName}}",
-    "description": "Policy {{policyName}}: {{failedCount}} failed, {{passedCount}} passed. Open the run for details."
+    "summary": "Policy {{policyName}}: {{failedCount}} failed, {{passedCount}} passed.",
+    "failedEntities": "Failed: {{names}}",
+    "passedEntities": "Passed: {{names}}",
+    "namesWithMore": "{{names}} and {{count}} more"
   }
 }

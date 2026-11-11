@@ -253,6 +253,9 @@
   },
   "complianceRun": {
     "title": "Compliance: {{policyName}}",
-    "description": "Beleid {{policyName}}: {{failedCount}} mislukt, {{passedCount}} geslaagd. Open de uitvoering voor details."
+    "summary": "Beleid {{policyName}}: {{failedCount}} mislukt, {{passedCount}} geslaagd.",
+    "failedEntities": "Mislukt: {{names}}",
+    "passedEntities": "Geslaagd: {{names}}",
+    "namesWithMore": "{{names}} en nog {{count}}"
   }
 }

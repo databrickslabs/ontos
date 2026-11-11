@@ -217,16 +217,18 @@ ON_FAIL NOTIFY 'entity_owner'
 - **Recipients** resolve as in workflow notification steps:
   - user emails and group names;
   - app role names or ids;
-  - `entity_owner` / `owner` / `domain_owners` (resolved for each entity);
+  - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity;
   - a comma-separated list of these.
 
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
 - **One notification per recipient per run.** A run can match many entities, so NOTIFY doesn't send one notification each. When the run ends, each recipient gets one notification:
-  - it counts the entities that failed and passed;
-  - it names up to 10 of each;
+  - it gives the run's totals of failed and passed entities;
+  - it names up to 10 of the entities its NOTIFY actions ran for (each once), and counts the rest;
   - it links to the run's results.
 
-  The notification is created even if the run is a scheduled job.
+  The notification is created even if the run is a scheduled job, and also for the entities evaluated before a run that stops with an error.
+- **Done** on a NOTIFY action means the recipient was queued for the run's notification. If the notifications can't be created when the run ends, the run reports the warning *notifications could not be sent*.
+- **Permission.** NOTIFY can reach any user, group or role, so saving or running a policy that uses it needs **admin** access to compliance (Data Governance Officers and Admins by default). Scheduled runs use the rules as saved.
 - Notifications use the in-app channel.
 
 ### Action outcomes in run results

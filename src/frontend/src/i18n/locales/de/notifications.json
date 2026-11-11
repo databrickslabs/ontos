@@ -253,6 +253,9 @@
   },
   "complianceRun": {
     "title": "Compliance: {{policyName}}",
-    "description": "Richtlinie {{policyName}}: {{failedCount}} fehlgeschlagen, {{passedCount}} bestanden. Details im Lauf."
+    "summary": "Richtlinie {{policyName}}: {{failedCount}} fehlgeschlagen, {{passedCount}} bestanden.",
+    "failedEntities": "Fehlgeschlagen: {{names}}",
+    "passedEntities": "Bestanden: {{names}}",
+    "namesWithMore": "{{names}} und {{count}} weitere"
   }
 }

@@ -23,6 +23,15 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+# Compliance entity types -> the entity_type Ontos stores tags, owners and business
+# owners under (one map for the tag and notification actions)
+APP_ENTITY_TYPES = {
+    'data_product': 'data_product',
+    'data_contract': 'data_contract',
+    'domain': 'data_domain',
+}
+
+
 class ActionError(ValueError):
     """An expected action failure, with a code and params the UI can translate."""
 
@@ -85,12 +94,14 @@ class ActionResult:
 
 
 def _failure(action_type: str, error: Exception, target: Optional[str]) -> ActionResult:
-    """A failed ActionResult: coded for ActionError, generic for anything unexpected."""
+    """A failed ActionResult: coded for ActionError, generic for anything unexpected (logged)."""
     if isinstance(error, ActionError):
+        logger.warning("%s %s failed: %s", action_type, target, error)
         return ActionResult(
             success=False, action_type=action_type, error=str(error),
             code=error.code, params=error.params, target=target,
         )
+    logger.error("%s %s failed", action_type, target, exc_info=error)
     return ActionResult(
         success=False, action_type=action_type, error='Action failed',
         code='action_failed', params={}, target=target,
@@ -172,10 +183,6 @@ class AssignTagAction(Action):
                 target=self.key,
             )
         except Exception as e:
-            if isinstance(e, ActionError):
-                logger.warning("ASSIGN_TAG %s failed: %s", self.key, e)
-            else:
-                logger.exception("Failed to assign tag %s", self.key)
             return _failure('ASSIGN_TAG', e, self.key)
 
 
@@ -209,10 +216,6 @@ class RemoveTagAction(Action):
                 target=self.key,
             )
         except Exception as e:
-            if isinstance(e, ActionError):
-                logger.warning("REMOVE_TAG %s failed: %s", self.key, e)
-            else:
-                logger.exception("Failed to remove tag %s", self.key)
             return _failure('REMOVE_TAG', e, self.key)
 
 
@@ -254,10 +257,6 @@ class NotifyAction(Action):
                 target=self.recipients,
             )
         except Exception as e:
-            if isinstance(e, ActionError):
-                logger.warning("NOTIFY %s failed: %s", self.recipients, e)
-            else:
-                logger.exception("Failed to send notification to %s", self.recipients)
             return _failure('NOTIFY', e, self.recipients)
 
 

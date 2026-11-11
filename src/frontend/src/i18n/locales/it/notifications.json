@@ -253,6 +253,9 @@
   },
   "complianceRun": {
     "title": "Conformità: {{policyName}}",
-    "description": "Policy {{policyName}}: {{failedCount}} non superati, {{passedCount}} superati. Apri l'esecuzione per i dettagli."
+    "summary": "Policy {{policyName}}: {{failedCount}} non superati, {{passedCount}} superati.",
+    "failedEntities": "Non superati: {{names}}",
+    "passedEntities": "Superati: {{names}}",
+    "namesWithMore": "{{names}} e altri {{count}}"
   }
 }

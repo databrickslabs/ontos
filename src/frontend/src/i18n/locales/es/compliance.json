@@ -181,7 +181,8 @@
     "rule_trailing_input": "La regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Todo lo que sigue se ignoraría, y la regla comprobaría menos de lo que dice. Elimínelo o corrija la sintaxis."
   },
   "runWarnings": {
-    "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo."
+    "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo.",
+    "notifications_failed": "No se pudieron enviar las notificaciones de la política (NOTIFY) en esta ejecución. Los resultados están completos."
   },
   "actionOutcomes": {
     "status": {

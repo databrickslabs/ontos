@@ -253,6 +253,9 @@
   },
   "complianceRun": {
     "title": "Conformité : {{policyName}}",
-    "description": "Politique {{policyName}} : {{failedCount}} en échec, {{passedCount}} réussies. Ouvrez l'exécution pour les détails."
+    "summary": "Politique {{policyName}} : {{failedCount}} en échec, {{passedCount}} réussies.",
+    "failedEntities": "En échec : {{names}}",
+    "passedEntities": "Réussies : {{names}}",
+    "namesWithMore": "{{names}} et {{count}} de plus"
   }
 }

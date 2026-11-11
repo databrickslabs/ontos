@@ -253,6 +253,9 @@
   },
   "complianceRun": {
     "title": "Conformidade: {{policyName}}",
-    "description": "Política {{policyName}}: {{failedCount}} com falha, {{passedCount}} aprovadas. Abra a execução para ver os detalhes."
+    "summary": "Política {{policyName}}: {{failedCount}} com falha, {{passedCount}} aprovadas.",
+    "failedEntities": "Com falha: {{names}}",
+    "passedEntities": "Aprovadas: {{names}}",
+    "namesWithMore": "{{names}} e mais {{count}}"
   }
 }

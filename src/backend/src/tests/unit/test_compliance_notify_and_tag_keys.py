@@ -19,6 +19,7 @@ from src.controller.compliance_manager import ComplianceManager, TagsManagerTagA
 from src.db_models.compliance import CompliancePolicyDb, ComplianceResultDb
 from src.db_models.notifications import NotificationDb
 from src.db_models.tags import EntityTagAssociationDb, TagDb, TagNamespaceDb
+from src.common.features import FeatureAccessLevel
 from src.repositories.tags_repository import entity_tag_repo, tag_namespace_repo
 
 
@@ -199,27 +200,95 @@ class TestNotifyAction:
         NotifyAction('a@example.com').execute(_context(notification_manager=notifier, entity_id='ok', passed=True))
 
         assert db_session.query(NotificationDb).count() == 0  # nothing until the run ends
-        assert notifier.flush() == 2
+        assert notifier.flush(failed=25, passed=1) == 2
 
         rows = {n.recipient: n for n in db_session.query(NotificationDb).all()}
         assert set(rows) == {'a@example.com', 'b@example.com'}
         a = rows['a@example.com']
         assert a.link == '/compliance/runs/run-1'
-        data = json.loads(a.data)
-        assert data['i18n']['title'] == 'notifications:complianceRun.title'
-        assert data['i18n']['params']['policyName'] == 'Classified products'
-        assert data['i18n']['params']['failedCount'] == '25'
-        assert data['i18n']['params']['passedCount'] == '1'
-        # The description lists a bounded number of entities, then a count of the rest
-        assert 'Product 0' in a.description and 'Product 9' in a.description
-        assert 'Product 10' not in a.description and '15 more' in a.description
+        i18n = json.loads(a.data)['i18n']
+        assert i18n['title'] == 'notifications:complianceRun.title'
+        assert i18n['params'] == {'policyName': 'Classified products', 'failedCount': '25', 'passedCount': '1'}
+        summary, failed_line, passed_line = i18n['descriptionLines']
+        assert summary['key'] == 'notifications:complianceRun.summary'
+        assert summary['params']['failedCount'] == '25'
+        # The failed line names a bounded number of entities, then counts the rest
+        names = failed_line['params']['names']
+        assert names['key'] == 'notifications:complianceRun.namesWithMore'
+        assert names['params']['count'] == '15'
+        assert 'Product 9' in names['params']['names'] and 'Product 10' not in names['params']['names']
+        assert passed_line['params']['names'] == {'text': 'Orders'}
+        # The English text is the fallback for clients that don't translate
+        assert 'Product 9' in a.description and 'Product 10' not in a.description and '15 more' in a.description
 
     def test_flush_twice_does_not_send_again(self, db_session):
         notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
         NotifyAction('a@example.com').execute(_context(notification_manager=notifier))
 
-        assert notifier.flush() == 1
-        assert notifier.flush() == 0
+        assert notifier.flush(failed=1, passed=0) == 1
+        assert notifier.flush(failed=1, passed=0) == 0
+
+    def test_an_entity_reached_by_several_notify_actions_is_listed_once(self, db_session):
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        context = _context(notification_manager=notifier)
+
+        NotifyAction('a@example.com').execute(context)
+        NotifyAction('a@example.com, a@example.com').execute(context)
+        notifier.flush(failed=1, passed=0)
+
+        [row] = db_session.query(NotificationDb).all()
+        failed_line = json.loads(row.data)['i18n']['descriptionLines'][1]
+        assert failed_line['params']['names'] == {'text': 'Orders'}
+
+    def test_counts_are_the_run_totals(self, db_session):
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        NotifyAction('a@example.com').execute(_context(notification_manager=notifier))
+
+        notifier.flush(failed=5, passed=900)
+
+        params = json.loads(db_session.query(NotificationDb).one().data)['i18n']['params']
+        assert (params['failedCount'], params['passedCount']) == ('5', '900')
+
+    def test_entity_owner_of_a_domain_is_notified(self, db_session):
+        from src.db_models.business_owners import BusinessOwnerDb
+        from src.db_models.business_roles import BusinessRoleDb
+
+        role = BusinessRoleDb(id=uuid.uuid4(), name='Data Owner')
+        db_session.add(role)
+        db_session.flush()
+        db_session.add(BusinessOwnerDb(
+            id=uuid.uuid4(), object_type='data_domain', object_id='dom-1',
+            user_email='domain-owner@example.com', role_id=role.id, is_active=True,
+        ))
+        db_session.flush()
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        context = _context(notification_manager=notifier, entity_id='dom-1', name='Sales')
+        context.entity_type = 'domain'
+        # 'owner' is the owner team's id in a compliance entity; it must not become the recipient
+        context.entity = {'type': 'domain', 'id': 'dom-1', 'name': 'Sales', 'owner': 'team-uuid-1'}
+
+        assert NotifyAction('entity_owner').execute(context).success is True
+        assert NotifyAction('owner').execute(context).success is True
+        notifier.flush(failed=1, passed=0)
+
+        assert [n.recipient for n in db_session.query(NotificationDb).all()] == ['domain-owner@example.com']
+
+    def test_requester_is_the_user_who_started_the_run(self, db_session):
+        notifier = ComplianceRunNotifier(
+            db_session, policy_id='pol-1', policy_name='P', run_id='run-1', run_user='steward@example.com',
+        )
+        NotifyAction('requester').execute(_context(notification_manager=notifier))
+        notifier.flush(failed=1, passed=0)
+
+        assert db_session.query(NotificationDb).one().recipient == 'steward@example.com'
+
+    def test_entity_independent_recipients_are_resolved_once(self, db_session):
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        with patch('src.common.workflow_executor._resolve_role_to_users', return_value=[('a@example.com', None)]) as resolve:
+            for i in range(5):
+                NotifyAction('a@example.com').execute(_context(notification_manager=notifier, entity_id=f'p{i}'))
+
+        assert resolve.call_count == 1
 
     def test_recipients_that_resolve_to_nobody_fail_the_action(self, db_session):
         notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
@@ -273,12 +342,35 @@ class TestRuns:
         # A passing entity without actions keeps details_json empty
         assert results['p3'].details_json is None
 
-    def test_notification_failure_does_not_fail_the_run(self, db_session):
+    def test_notification_failure_does_not_fail_the_run_but_warns(self, db_session):
         with patch.object(ComplianceRunNotifier, 'flush', side_effect=RuntimeError('db down')):
             run = _run(db_session, "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'", PRODUCTS)
 
         assert run.status == 'succeeded'
         assert run.failure_count == 2
+        assert run.warning_code == 'notifications_failed'
+
+    def test_a_run_that_errors_still_sends_what_was_queued(self, db_session):
+        def entities():
+            yield PRODUCTS[0]
+            raise RuntimeError('loader broke')
+
+        policy = CompliancePolicyDb(
+            id=str(uuid.uuid4()), name='P', is_active=True,
+            rule="MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'",
+        )
+        db_session.add(policy)
+        db_session.flush()
+        iterator = MagicMock()
+        iterator.iterate.return_value = entities()
+        with (
+            patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator),
+            patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()),
+        ):
+            run = ComplianceManager().run_policy_inline(db_session, policy=policy)
+
+        assert run.status == 'failed'
+        assert db_session.query(NotificationDb).filter_by(recipient='a@example.com').count() == 1
 
     def test_job_path_notifies(self, db_session):
         """The compliance-checks job calls run_policy_inline without a user."""
@@ -286,3 +378,39 @@ class TestRuns:
              PRODUCTS, current_user=None)
 
         assert db_session.query(NotificationDb).filter_by(recipient='a@example.com').count() == 1
+
+
+class TestNotifyPermission:
+    def _user(self):
+        from src.models.users import UserInfo
+        return UserInfo(email='u@example.com', username='u', user='U', ip='127.0.0.1', groups=['g'])
+
+    def test_notify_rules_need_compliance_admin(self):
+        from fastapi import HTTPException
+        from src.routes.compliance_routes import require_compliance_admin_for_notify
+
+        rule = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'"
+        with patch('src.routes.compliance_routes.user_has_feature_level', return_value=False) as check:
+            with pytest.raises(HTTPException) as exc:
+                require_compliance_admin_for_notify(rule, MagicMock(), self._user())
+        assert exc.value.status_code == 403
+        assert check.call_args.args[2:] == ('compliance', FeatureAccessLevel.ADMIN)
+
+    def test_rules_without_notify_are_not_checked(self):
+        from src.routes.compliance_routes import require_compliance_admin_for_notify
+
+        with patch('src.routes.compliance_routes.user_has_feature_level') as check:
+            require_compliance_admin_for_notify(
+                "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL ASSIGN_TAG 'x'", MagicMock(), self._user(),
+            )
+        check.assert_not_called()
+
+
+class TestFailureCodes:
+    def test_unexpected_errors_are_reported_without_their_text(self, db_session, default_tag):
+        adapter = TagsManagerTagAdapter(db_session)
+        with patch.object(adapter, 'assign_tag', side_effect=RuntimeError('secret db detail')):
+            result = AssignTagAction(default_tag.name, 'x').execute(_context(adapter))
+
+        assert (result.code, result.error) == ('action_failed', 'Action failed')
+        assert 'secret db detail' not in json.dumps(result.__dict__)

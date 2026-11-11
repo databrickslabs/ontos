@@ -181,7 +181,8 @@
     "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
   },
   "runWarnings": {
-    "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren."
+    "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren.",
+    "notifications_failed": "Die Benachrichtigungen der Richtlinie (NOTIFY) konnten für diesen Lauf nicht gesendet werden. Die Ergebnisse sind vollständig."
   },
   "actionOutcomes": {
     "status": {

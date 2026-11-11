@@ -15,7 +15,9 @@ from src.repositories.compliance_repository import (
 )
 from ..models.compliance import CompliancePolicy, CompliancePolicyCreate, ComplianceRun, ComplianceResult
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl, parse_rule, Evaluator
-from src.common.compliance_actions import ActionContext, ActionError, ActionExecutor, get_action_registry
+from src.common.compliance_actions import (
+    APP_ENTITY_TYPES, ActionContext, ActionError, ActionExecutor, get_action_registry,
+)
 from src.common.compliance_notifications import ComplianceRunNotifier
 from src.common.compliance_entities import (
     create_entity_iterator,
@@ -28,6 +30,21 @@ logger = get_logger(__name__)
 
 
 TAG_ACTIONS = ('ASSIGN_TAG', 'REMOVE_TAG')
+
+
+def _rule_actions(rule: Optional[str]) -> List[dict]:
+    if not rule:
+        return []
+    try:
+        parsed = parse_rule(rule)
+    except Exception:
+        return []
+    return (parsed.get('on_pass_actions') or []) + (parsed.get('on_fail_actions') or [])
+
+
+def rule_sends_notifications(rule: Optional[str]) -> bool:
+    """Whether a rule has NOTIFY actions (False if it doesn't parse)."""
+    return any(action.get('type') == 'NOTIFY' for action in _rule_actions(rule))
 
 
 def rule_changes_tags(rule: Optional[str]) -> bool:
@@ -66,11 +83,7 @@ class TagsManagerTagAdapter:
     """
 
     # Compliance entity type -> entity_type used by tag associations in the app
-    ENTITY_TYPES = {
-        'data_product': 'data_product',
-        'data_contract': 'data_contract',
-        'domain': 'data_domain',
-    }
+    ENTITY_TYPES = APP_ENTITY_TYPES
 
     def __init__(self, db: Session, user_email: Optional[str] = None):
         self._db = db
@@ -706,15 +719,20 @@ class ComplianceManager:
         return ws
 
     @staticmethod
-    def _flush_notifications(db: Session, notifier: 'ComplianceRunNotifier', policy) -> None:
-        """Send the run's NOTIFY notifications; a failure is logged and doesn't fail the run."""
+    def _flush_notifications(
+        db: Session, notifier: 'ComplianceRunNotifier', policy, *, failed: int, passed: int,
+    ) -> bool:
+        """Send the run's NOTIFY notifications. A failure is logged, doesn't fail the run,
+        and returns False so the run carries the ``notifications_failed`` warning."""
         try:
             with db.begin_nested():
-                notifier.flush()
+                notifier.flush(failed=failed, passed=passed)
+            return True
         except Exception:
             logger.exception(
                 "Could not create the NOTIFY notifications of policy '%s' (%s)", policy.name, policy.id,
             )
+            return False
 
     def run_policy_inline(
         self, 
@@ -813,17 +831,22 @@ class ComplianceManager:
                 else:
                     failure += 1
 
-            self._flush_notifications(db, notifier, policy)
+            notified = self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
 
             total = max(1, success + failure)
             score = round(100.0 * (success / total), 2)
             # A stored rule with trailing input keeps running with its tail ignored;
-            # the run says so, so the policies that need a fix can be found
+            # the run says so, so the policies that need a fix can be found. A failed
+            # notification flush is the other warning (the tail is what to fix first).
             trailing = parsed_rule.get('trailing_input')
+            warning_code, warning_params = None, None
+            if trailing:
+                warning_code, warning_params = 'rule_trailing_input', trailing
+            elif not notified:
+                warning_code, warning_params = 'notifications_failed', {}
             self.complete_run(
                 db, run, success_count=success, failure_count=failure, score=score,
-                warning_code='rule_trailing_input' if trailing else None,
-                warning_params=trailing,
+                warning_code=warning_code, warning_params=warning_params,
             )
             
             # Log to change log for timeline
@@ -844,6 +867,8 @@ class ComplianceManager:
 
         except Exception as e:
             logger.exception("Compliance inline run failed")
+            # The entities evaluated before the error stored NOTIFY as done; send those.
+            self._flush_notifications(db, notifier, policy, failed=failure, passed=success)
             from src.common.compliance_errors import run_error_code
             error_code, error_params = run_error_code(e)
             self.complete_run(

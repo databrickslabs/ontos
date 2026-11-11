@@ -181,7 +181,8 @@
     "rule_trailing_input": "A regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Tudo a partir dali seria ignorado, e a regra verificaria menos do que diz. Remova o trecho ou corrija a sintaxe."
   },
   "runWarnings": {
-    "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir."
+    "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir.",
+    "notifications_failed": "Não foi possível enviar as notificações da política (NOTIFY) nesta execução. Os resultados estão completos."
   },
   "actionOutcomes": {
     "status": {

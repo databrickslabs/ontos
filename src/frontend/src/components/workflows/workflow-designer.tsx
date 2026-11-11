@@ -1120,6 +1120,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // Load workflow
   useEffect(() => {
+    // A newer run (StrictMode, or id change) supersedes this one: its late results are dropped
+    let cancelled = false;
+    // A superseded edit load no longer clears it: a new workflow must not stay "loading"
+    if (isNew) setIsLoading(false);
     const loadData = async () => {
       // Load step types
       try {
@@ -1182,11 +1186,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         setHttpConnections([]);
       }
 
+      if (cancelled) return;
+
       // Load workflow if editing
       if (!isNew) {
         setIsLoading(true);
         try {
           const response = await get<ProcessWorkflow>(`/api/workflows/${id}`);
+          if (cancelled) return;
           if (response.data) {
             setWorkflow(response.data);
             setName(response.data.name);
@@ -1236,7 +1243,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             variant: 'destructive',
           });
         } finally {
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
         }
       } else {
         // Initialize with trigger node for new workflow
@@ -1261,6 +1268,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     };
 
     loadData();
+    return () => { cancelled = true; };
   }, [id, isNew, get, toast, setNodes, setEdges]);
 
   // Create rolesMap from availableRoles

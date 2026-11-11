@@ -61,9 +61,9 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
         const data = await resp.json();
         setEntries(Array.isArray(data) ? data : []);
         setError(null);
-      } catch (e: any) {
+      } catch {
         setEntries([]);
-        setError(e.message || t('recentActivity.error'));
+        setError(t('recentActivity.error'));
       } finally {
         setLoading(false);
       }

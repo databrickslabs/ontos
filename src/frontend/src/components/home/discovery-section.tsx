@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Badge } from '@/components/ui/badge';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 
 interface DiscoverySectionProps {
   maxItems?: number;
@@ -24,6 +26,9 @@ interface DiscoverySectionProps {
 export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProps) {
   const { t } = useTranslation(['home', 'common']);
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
+  const { isLoading: permissionsLoading, hasPermission } = usePermissions();
+  // GET /api/data-products/published requires data-products read.
+  const canReadProducts = hasPermission('data-products', FeatureAccessLevel.READ_ONLY);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [selectedDomainDetails, setSelectedDomainDetails] = useState<DataDomain | null>(null);
   const [domainLoading, setDomainLoading] = useState<boolean>(false);
@@ -52,6 +57,13 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   const { lookupWorkflowId } = useApprovalWizardTrigger();
 
   useEffect(() => {
+    if (permissionsLoading) return;
+    if (!canReadProducts) {
+      setAllProducts([]);
+      setProductsError(null);
+      setProductsLoading(false);
+      return;
+    }
     const loadProducts = async () => {
       try {
         setProductsLoading(true);
@@ -61,15 +73,15 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
         const data = await resp.json();
         setAllProducts(Array.isArray(data) ? data : []);
         setProductsError(null);
-      } catch (e: any) {
-        setProductsError(e.message || t('discoverySection.error'));
+      } catch {
+        setProductsError(t('discoverySection.error'));
         setAllProducts([]);
       } finally {
         setProductsLoading(false);
       }
     };
     loadProducts();
-  }, []);
+  }, [permissionsLoading, canReadProducts, t]);
 
   // Fetch user's subscribed products
   const loadSubscribedProducts = useCallback(async () => {

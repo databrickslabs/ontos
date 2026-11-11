@@ -390,3 +390,74 @@ class TestUserHasFeatureLevel:
         user = UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["admins"])
 
         assert not user_has_feature_level(broken, user, "teams", L.READ_ONLY, request)
+
+
+class TestAdoptEntityIdsStaysGroupBased:
+    """``user_can_adopt_entity_ids_for`` uses the roles matching the user's groups only."""
+
+    def _user(self, groups):
+        return UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=groups)
+
+    def test_group_role_with_feature_admin_allows(self, auth):
+        from src.common.authorization import user_can_adopt_entity_ids_for
+
+        auth.user_can_adopt_entity_ids = MagicMock(return_value=False)
+        assert user_can_adopt_entity_ids_for(auth, self._user(["admins"]), "data-products")
+
+    def test_team_roles_do_not_count(self, auth, monkeypatch):
+        from src.common.authorization import user_can_adopt_entity_ids_for
+
+        monkeypatch.setattr(authorization, "lookup_user_team_roles", lambda *a: ["Admin"])
+        auth.user_can_adopt_entity_ids = MagicMock(return_value=False)
+        assert not user_can_adopt_entity_ids_for(auth, self._user(["data-consumers"]), "data-products")
+
+    def test_fails_closed(self):
+        from src.common.authorization import user_can_adopt_entity_ids_for
+
+        broken = MagicMock()
+        broken.user_can_adopt_entity_ids.return_value = False
+        broken.get_user_effective_permissions.side_effect = RuntimeError("boom")
+        assert not user_can_adopt_entity_ids_for(broken, self._user(["admins"]), "data-products")
+
+
+class TestSearchRouteUsesResolvedPermissions:
+    def _client(self, auth, teams_by_user, applied=None):
+        from src.common.dependencies import get_auth_manager as dep_auth, get_settings_manager as dep_settings
+        from src.routes import search_routes
+
+        request_like = _request(teams_by_user, applied=applied)
+        app = FastAPI()
+        app.state.teams_manager = request_like.app.state.teams_manager
+        app.state.settings_manager = request_like.app.state.settings_manager
+        app.state.authorization_manager = auth
+        search_manager = MagicMock()
+        search_manager.search.return_value = []
+        app.state.search_manager = search_manager
+        app.include_router(search_routes.router)
+
+        async def _user():
+            return UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["data-consumers"])
+
+        app.dependency_overrides[get_user_details_from_sdk] = _user
+        app.dependency_overrides[dep_auth] = lambda: auth
+        app.dependency_overrides[dep_settings] = lambda: app.state.settings_manager
+        app.dependency_overrides[search_routes.get_search_manager] = lambda: search_manager
+        return TestClient(app), search_manager
+
+    def test_team_roles_reach_the_search_filter(self, auth):
+        client, search_manager = self._client(auth, {"u@example.com": [_team(("u@example.com", "Data Steward"))]})
+
+        assert client.get("/api/search?search_term=x").status_code == 200
+        permissions = search_manager.search.call_args.kwargs["effective_permissions"]
+        assert permissions["data-domains"] == L.READ_WRITE
+
+    def test_an_applied_override_replaces_them(self, auth):
+        consumer = next(r for r in ROLES if r.name == "Data Consumer")
+        client, search_manager = self._client(
+            auth, {"u@example.com": [_team(("u@example.com", "Admin"))]}, applied=str(consumer.id),
+        )
+
+        assert client.get("/api/search?search_term=x").status_code == 200
+        permissions = search_manager.search.call_args.kwargs["effective_permissions"]
+        assert permissions.get("settings", L.NONE) == L.NONE
+        assert permissions["data-domains"] == L.READ_ONLY

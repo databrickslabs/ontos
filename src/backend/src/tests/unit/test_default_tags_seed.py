@@ -45,7 +45,8 @@ def test_a_fresh_install_runs_the_naming_convention_assign_step(db_session):
     seed_default_tags(db_session)
     step = _default_step('naming-convention-check', 'auto-fix-owner-tag')
 
-    result = AssignTagStepHandler(db_session, step['config']).execute(_context(f'tbl-{uuid.uuid4().hex[:8]}'))
+    context = _context(f'tbl-{uuid.uuid4().hex[:8]}')
+    result = AssignTagStepHandler(db_session, step['config']).execute(context)
 
     assert result.passed is True, result.error
     assert result.data['persisted'] is True
@@ -55,7 +56,8 @@ def test_a_fresh_install_runs_the_pii_detection_assign_step(db_session):
     seed_default_tags(db_session)
     step = _default_step('pii-detection', 'tag-pii')
 
-    result = AssignTagStepHandler(db_session, step['config']).execute(_context(f'tbl-{uuid.uuid4().hex[:8]}'))
+    context = _context(f'tbl-{uuid.uuid4().hex[:8]}')
+    result = AssignTagStepHandler(db_session, step['config']).execute(context)
 
     assert result.passed is True, result.error
     assert result.data['persisted'] is True

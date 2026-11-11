@@ -1070,7 +1070,7 @@ workflows_manager.load_from_yaml(requests_only_active=True)
 
 - Only workflows that don't exist yet (by name) are created; existing ones, including local edits and their active state, are left untouched.
 - Request workflows (`on_request_*`) are created with the `is_active` value from the YAML. All others (event-driven workflows such as naming validation or publish notifications, and the `for_*` UI wizards) are created **inactive**, so an upgrade doesn't turn on new automatic behavior. Enable them on the Workflows page.
-- **Load Defaults** (`POST /api/workflows/load-defaults`) creates missing workflows with the YAML's `is_active`; with `update_existing=true` it also resets existing default workflows to the YAML.
+- **Load Defaults** (`POST /api/workflows/load-defaults`) creates missing workflows with the YAML's `is_active`; with `update_existing=true` it also resets existing default workflows to the YAML, except those a user edited (`is_customized`; add `include_edited=true` to reset them too). A reset keeps each workflow's `is_active`.
 
 ### Pre-Defined Workflows
 

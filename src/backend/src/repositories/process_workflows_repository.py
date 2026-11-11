@@ -209,8 +209,13 @@ class ProcessWorkflowRepository:
         workflow: ProcessWorkflowUpdate,
         *,
         updated_by: Optional[str] = None,
+        customized: Optional[bool] = None,
     ) -> Optional[ProcessWorkflowDb]:
-        """Update an existing workflow."""
+        """Update an existing workflow.
+
+        ``customized`` sets ``is_customized`` (True for a user's update, False for the
+        default loader's reset); None leaves it as it is.
+        """
         db_workflow = self.get(db, workflow_id)
         if not db_workflow:
             return None
@@ -231,6 +236,8 @@ class ProcessWorkflowRepository:
         
         db_workflow.updated_by = updated_by
         db_workflow.version += 1
+        if customized is not None:
+            db_workflow.is_customized = customized
         
         # Update steps if provided
         if workflow.steps is not None:

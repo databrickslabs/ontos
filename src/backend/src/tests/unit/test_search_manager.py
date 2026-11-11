@@ -64,8 +64,8 @@ class TestSearchManager:
         return UserInfo(
             username="testuser",
             email="test@example.com",
-            display_name="Test User",
-            active=True,
+            user="Test User",
+            ip="127.0.0.1",
             groups=["users", "data_consumers"],
         )
 
@@ -279,8 +279,8 @@ class TestSearchManager:
         user_no_groups = UserInfo(
             username="nogroups",
             email="nogroups@example.com",
-            display_name="No Groups User",
-            active=True,
+            user="No Groups User",
+            ip="127.0.0.1",
             groups=[],
         )
 
@@ -297,6 +297,21 @@ class TestSearchManager:
         results = manager.search("Alpha", mock_auth_manager, sample_user)
 
         assert results == []
+
+    def test_search_uses_resolved_permissions(self, mock_searchable_manager, mock_auth_manager, sample_user):
+        """The route passes the resolved permissions (#1245); they're used as they are."""
+        manager = SearchManager(searchable_managers=[mock_searchable_manager])
+        mock_auth_manager.has_permission.side_effect = (
+            lambda perms, feature_id, level: perms.get(feature_id) == FeatureAccessLevel.READ_ONLY
+        )
+
+        results = manager.search(
+            "product", mock_auth_manager, sample_user,
+            effective_permissions={"data-products": FeatureAccessLevel.READ_ONLY},
+        )
+
+        assert results and all(r.feature_id == "data-products" for r in results)
+        mock_auth_manager.get_user_effective_permissions.assert_not_called()
 
     def test_search_with_team_role_override(self, mock_searchable_manager, mock_auth_manager, sample_user):
         """Test search with team role override."""

@@ -478,3 +478,12 @@ class TestMemberRoutesRefuseEscalation:
         })
 
         assert resp.status_code == 201
+
+    def test_producer_raising_an_existing_members_override_to_admin_gets_403(self, client, db_session):
+        team = _team(db_session)
+        member_id = _member(db_session, team, "pat@example.com").id
+        team_id = team.id
+
+        resp = client.put(f"/api/teams/{team_id}/members/{member_id}", json={"app_role_override": "Admin"})
+
+        assert resp.status_code == 403

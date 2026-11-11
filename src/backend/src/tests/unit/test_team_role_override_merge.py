@@ -253,3 +253,31 @@ class TestPermissionsEndpointMatchesEnforcement:
 
         if setup.startswith("admin only"):
             assert reported["settings"] == L.ADMIN.value
+
+
+class TestNavigation:
+    """Menus follow the same role set, so a team role can show what a group role hides."""
+
+    def test_team_role_shows_a_feature_the_group_role_hides(self):
+        consumer = _role("Data Consumer", groups=["data-consumers"], data_products=L.READ_ONLY)
+        consumer.hidden_nav_features = ["data-products"]
+        steward = _role("Data Steward", data_products=L.READ_WRITE)
+        settings = MagicMock()
+        settings.list_app_roles.return_value = [consumer, steward]
+        auth = AuthorizationManager(settings_manager=settings)
+
+        assert "data-products" in auth.get_user_hidden_nav_features(["data-consumers"])
+        assert "data-products" not in auth.get_user_hidden_nav_features(
+            ["data-consumers"], team_role_names=["Data Steward"],
+        )
+
+    def test_team_admin_role_hides_nothing(self):
+        consumer = _role("Data Consumer", groups=["data-consumers"], data_products=L.READ_ONLY)
+        consumer.hidden_nav_features = ["data-products"]
+        admin = _role("Admin", settings=L.ADMIN)
+        admin.is_admin = True
+        settings = MagicMock()
+        settings.list_app_roles.return_value = [consumer, admin]
+        auth = AuthorizationManager(settings_manager=settings)
+
+        assert auth.get_user_hidden_nav_features(["data-consumers"], team_role_names=["Admin"]) == []

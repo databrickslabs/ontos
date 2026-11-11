@@ -8,6 +8,7 @@ os.environ['SKIP_STARTUP_TASKS'] = 'true'
 
 import json
 import uuid
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -414,3 +415,128 @@ class TestFailureCodes:
 
         assert (result.code, result.error) == ('action_failed', 'Action failed')
         assert 'secret db detail' not in json.dumps(result.__dict__)
+
+
+# --- Review follow-ups --------------------------------------------------------
+
+NOTIFY_RULE = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIFY 'a@example.com'"
+
+
+class TestNotifyGateOnRoutes:
+    """Create, update (only when the rule changes) and run all apply the NOTIFY gate."""
+
+    @pytest.fixture
+    def client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from src.common.authorization import get_user_details_from_sdk
+        from src.common.dependencies import get_current_user_details_for_audit, get_db
+        from src.common.manager_dependencies import get_audit_manager, get_auth_manager
+        from src.models.users import UserInfo
+        from src.routes import compliance_routes
+
+        app = FastAPI()
+        app.include_router(compliance_routes.router)
+        app.state.teams_manager = None
+        app.state.settings_manager = None
+        user = UserInfo(email='w@example.com', username='w', user='W', ip='127.0.0.1', groups=['g'])
+        auth = MagicMock()
+        auth.get_user_effective_permissions.return_value = {'compliance': FeatureAccessLevel.READ_WRITE}
+        auth.has_permission.return_value = True  # route-level READ_WRITE check passes
+
+        async def _user():
+            return user
+
+        def _db():
+            yield MagicMock()
+
+        app.dependency_overrides[get_user_details_from_sdk] = _user
+        app.dependency_overrides[get_current_user_details_for_audit] = _user
+        app.dependency_overrides[get_auth_manager] = lambda: auth
+        app.dependency_overrides[get_db] = _db
+        app.dependency_overrides[get_audit_manager] = lambda: MagicMock()
+        # Write access, but not admin: the NOTIFY gate refuses
+        level = lambda auth_manager, u, feature, required: required != FeatureAccessLevel.ADMIN  # noqa: E731
+        with patch.object(compliance_routes, 'user_has_feature_level', side_effect=level), \
+             patch.object(compliance_routes, 'manager') as manager:
+            yield TestClient(app), manager
+
+    def _payload(self, rule=NOTIFY_RULE, name='P'):
+        return {'name': name, 'description': 'd', 'category': 'Governance', 'severity': 'low', 'rule': rule, 'is_active': True}
+
+    def test_create_with_notify_needs_admin(self, client):
+        http, manager = client
+        assert http.post('/api/compliance/policies', json=self._payload()).status_code == 403
+        manager.create_policy.assert_not_called()
+
+    def test_run_of_a_notify_policy_needs_admin(self, client):
+        http, manager = client
+        manager.get_policy.return_value = SimpleNamespace(id='p1', name='P', rule=NOTIFY_RULE)
+        assert http.post('/api/compliance/policies/p1/runs', json={}).status_code == 403
+        manager.run_policy_inline.assert_not_called()
+
+    def test_update_that_keeps_the_rule_is_not_gated(self, client):
+        http, manager = client
+        pid = str(uuid.uuid4())
+        manager.get_policy.return_value = SimpleNamespace(id=pid, name='P', rule=NOTIFY_RULE)
+        from datetime import datetime as _dt
+        manager.update_policy.return_value = CompliancePolicyDb(
+            id=pid, name='Renamed', description='d', rule=NOTIFY_RULE, category='Governance',
+            severity='low', is_active=True, created_at=_dt.utcnow(), updated_at=_dt.utcnow(),
+        )
+
+        changed = http.put(f'/api/compliance/policies/{pid}', json={**self._payload(rule=NOTIFY_RULE + " FAIL 'x'"), 'id': pid})
+        assert changed.status_code == 403
+
+        renamed = http.put(f'/api/compliance/policies/{pid}', json={**self._payload(name='Renamed'), 'id': pid})
+        assert renamed.status_code == 200
+        manager.update_policy.assert_called_once()
+
+
+class TestNotifyResolution:
+    def test_each_owner_hears_only_about_their_own_entity(self, db_session):
+        from src.db_models.business_owners import BusinessOwnerDb
+        from src.db_models.business_roles import BusinessRoleDb
+
+        role = BusinessRoleDb(id=uuid.uuid4(), name='Data Owner')
+        db_session.add(role)
+        db_session.flush()
+        for domain_id, email in (('dom-a', 'a-owner@example.com'), ('dom-b', 'b-owner@example.com')):
+            db_session.add(BusinessOwnerDb(
+                id=uuid.uuid4(), object_type='data_domain', object_id=domain_id,
+                user_email=email, role_id=role.id, is_active=True,
+            ))
+        db_session.flush()
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        for domain_id, name in (('dom-a', 'Sales'), ('dom-b', 'Finance')):
+            context = _context(notification_manager=notifier, entity_id=domain_id, name=name)
+            context.entity_type = 'domain'
+            assert NotifyAction('entity_owner').execute(context).success is True
+        notifier.flush(failed=2, passed=0)
+
+        listed = {
+            n.recipient: json.loads(n.data)['i18n']['descriptionLines'][1]['params']['names']['text']
+            for n in db_session.query(NotificationDb).all()
+        }
+        assert listed == {'a-owner@example.com': 'Sales', 'b-owner@example.com': 'Finance'}
+
+    def test_a_failed_lookup_fails_that_action_only(self, db_session, default_tag):
+        notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
+        calls = {'n': 0}
+
+        def resolve(db, token, context):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise RuntimeError('lookup broke')
+            return [('a@example.com', None)]
+
+        with patch('src.common.workflow_executor._resolve_role_to_users', side_effect=resolve):
+            first = NotifyAction('entity_owner').execute(_context(notification_manager=notifier, entity_id='p1'))
+            second = NotifyAction('entity_owner').execute(_context(notification_manager=notifier, entity_id='p2'))
+
+        assert (first.success, first.code) == (False, 'action_failed')
+        assert second.success is True
+        # The session is still usable after the failed lookup
+        assert AssignTagAction(default_tag.name, None).execute(_context(TagsManagerTagAdapter(db_session))).success
+        assert notifier.flush(failed=2, passed=0) == 1

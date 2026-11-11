@@ -93,6 +93,13 @@
       "generate_pdf": "Genera PDF",
       "deliver": "Consegna"
     },
+    "layout": {
+      "rearrange": "Riorganizza",
+      "rearrangeHint": "Disponi automaticamente tutti i passaggi",
+      "confirmTitle": "Riorganizzare tutti i passaggi?",
+      "confirmDescription": "I passaggi vengono disposti automaticamente. Il layout attuale viene sostituito al salvataggio.",
+      "confirmAction": "Riorganizza"
+    },
     "discard": {
       "description": "Hai modifiche non salvate in questo workflow. Se esci ora, le tue modifiche andranno perse.",
       "stay": "Rimani",
@@ -327,13 +334,6 @@
         "on_pass": "successo",
         "on_fail": "errore"
       }
-    },
-    "layout": {
-      "rearrange": "Riorganizza",
-      "rearrangeHint": "Disponi automaticamente tutti i passaggi",
-      "confirmTitle": "Riorganizzare tutti i passaggi?",
-      "confirmDescription": "I passaggi vengono disposti automaticamente. Il layout attuale viene sostituito al salvataggio.",
-      "confirmAction": "Riorganizza"
     }
   },
   "approvalResponse": {

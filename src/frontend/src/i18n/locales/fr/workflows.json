@@ -93,6 +93,13 @@
       "generate_pdf": "Générer un PDF",
       "deliver": "Livrer"
     },
+    "layout": {
+      "rearrange": "Réorganiser",
+      "rearrangeHint": "Disposer automatiquement toutes les étapes",
+      "confirmTitle": "Réorganiser toutes les étapes ?",
+      "confirmDescription": "Les étapes sont disposées automatiquement. Votre disposition actuelle est remplacée à l’enregistrement.",
+      "confirmAction": "Réorganiser"
+    },
     "discard": {
       "description": "Vous avez des modifications non enregistrées sur ce workflow. Si vous quittez maintenant, vos modifications seront perdues.",
       "stay": "Rester",
@@ -327,13 +334,6 @@
         "on_pass": "de réussite",
         "on_fail": "d'échec"
       }
-    },
-    "layout": {
-      "rearrange": "Réorganiser",
-      "rearrangeHint": "Disposer automatiquement toutes les étapes",
-      "confirmTitle": "Réorganiser toutes les étapes ?",
-      "confirmDescription": "Les étapes sont disposées automatiquement. Votre disposition actuelle est remplacée à l’enregistrement.",
-      "confirmAction": "Réorganiser"
     }
   },
   "approvalResponse": {

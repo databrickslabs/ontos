@@ -93,6 +93,13 @@
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver"
     },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
+    },
     "discard": {
       "description": "You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
       "stay": "Stay",
@@ -327,13 +334,6 @@
         "on_pass": "pass",
         "on_fail": "fail"
       }
-    },
-    "layout": {
-      "rearrange": "Rearrange",
-      "rearrangeHint": "Arrange all steps automatically",
-      "confirmTitle": "Rearrange all steps?",
-      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
-      "confirmAction": "Rearrange"
     }
   },
   "approvalResponse": {

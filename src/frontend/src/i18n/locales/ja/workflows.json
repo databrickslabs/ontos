@@ -93,6 +93,13 @@
       "generate_pdf": "PDF を生成",
       "deliver": "配信"
     },
+    "layout": {
+      "rearrange": "再配置",
+      "rearrangeHint": "すべてのステップを自動で配置",
+      "confirmTitle": "すべてのステップを再配置しますか？",
+      "confirmDescription": "ステップは自動で配置されます。保存すると現在のレイアウトは置き換えられます。",
+      "confirmAction": "再配置"
+    },
     "discard": {
       "description": "このワークフローに未保存の変更があります。今すぐ離れると、変更内容は失われます。",
       "stay": "とどまる",
@@ -327,13 +334,6 @@
         "on_pass": "成功時",
         "on_fail": "失敗時"
       }
-    },
-    "layout": {
-      "rearrange": "再配置",
-      "rearrangeHint": "すべてのステップを自動で配置",
-      "confirmTitle": "すべてのステップを再配置しますか？",
-      "confirmDescription": "ステップは自動で配置されます。保存すると現在のレイアウトは置き換えられます。",
-      "confirmAction": "再配置"
     }
   },
   "approvalResponse": {

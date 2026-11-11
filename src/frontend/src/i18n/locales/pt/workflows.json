@@ -93,6 +93,13 @@
       "generate_pdf": "Gerar PDF",
       "deliver": "Entregar"
     },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todas as etapas automaticamente",
+      "confirmTitle": "Reorganizar todas as etapas?",
+      "confirmDescription": "As etapas são organizadas automaticamente. Seu layout atual é substituído ao salvar.",
+      "confirmAction": "Reorganizar"
+    },
     "discard": {
       "description": "Você tem alterações não salvas neste fluxo de trabalho. Se sair agora, suas alterações serão perdidas.",
       "stay": "Permanecer",
@@ -327,13 +334,6 @@
         "on_pass": "sucesso",
         "on_fail": "falha"
       }
-    },
-    "layout": {
-      "rearrange": "Reorganizar",
-      "rearrangeHint": "Organizar todas as etapas automaticamente",
-      "confirmTitle": "Reorganizar todas as etapas?",
-      "confirmDescription": "As etapas são organizadas automaticamente. Seu layout atual é substituído ao salvar.",
-      "confirmAction": "Reorganizar"
     }
   },
   "approvalResponse": {

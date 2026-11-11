@@ -93,6 +93,13 @@
       "generate_pdf": "PDF generieren",
       "deliver": "Zustellen"
     },
+    "layout": {
+      "rearrange": "Neu anordnen",
+      "rearrangeHint": "Alle Schritte automatisch anordnen",
+      "confirmTitle": "Alle Schritte neu anordnen?",
+      "confirmDescription": "Die Schritte werden automatisch angeordnet. Ihr aktuelles Layout wird beim Speichern ersetzt.",
+      "confirmAction": "Neu anordnen"
+    },
     "discard": {
       "description": "Sie haben nicht gespeicherte Änderungen an diesem Workflow. Wenn Sie jetzt verlassen, gehen Ihre Änderungen verloren.",
       "stay": "Bleiben",
@@ -327,13 +334,6 @@
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
       }
-    },
-    "layout": {
-      "rearrange": "Neu anordnen",
-      "rearrangeHint": "Alle Schritte automatisch anordnen",
-      "confirmTitle": "Alle Schritte neu anordnen?",
-      "confirmDescription": "Die Schritte werden automatisch angeordnet. Ihr aktuelles Layout wird beim Speichern ersetzt.",
-      "confirmAction": "Neu anordnen"
     }
   },
   "approvalResponse": {

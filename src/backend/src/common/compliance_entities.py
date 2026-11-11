@@ -307,8 +307,8 @@ class AppEntityLoader(EntityLoader):
         """Load app entities from database.
 
         NOTE: repositories expose get_multi() (CRUDBase), not list(); the Db
-        models carry owner_team_id/domain_id rather than owner/domain/tags
-        attributes. Only the types a rule matches are loaded; a type that
+        models carry owner_team_id rather than owner, and their domains and
+        tags are in association tables. Only the types a rule matches are loaded; a type that
         can't be loaded raises EntityLoadError (see _load). With ``entity_id``
         only that entity is read (a workflow policy check, see load_entity).
         """
@@ -353,11 +353,23 @@ class AppEntityLoader(EntityLoader):
         # Data Contracts
         if 'data_contract' in entity_types:
             from src.repositories.data_contracts_repository import data_contract_repo
-            contracts = self._load(
-                'data_contract', lambda: self._rows(data_contract_repo, entity_id)
-            )
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+            def contracts_and_domains():
+                contracts = self._rows(data_contract_repo, entity_id)
+                # As for products: the legacy domain_id column was dropped, the
+                # domains are in the entity_domain_associations junction
+                domains = entity_domain_repo.get_domains_for_entities(
+                    self.db, entity_type="data_contract", entity_ids=[str(c.id) for c in contracts]
+                ) if contracts else {}
+                return contracts, domains
+
+            contracts, domains_map = self._load('data_contract', contracts_and_domains)
             tags_map = self._tags_by_entity('data_contract', [str(c.id) for c in contracts])
             for contract in contracts:
+                assigned = domains_map.get(str(contract.id), [])
+                # The primary domain's id, as the dropped column held it
+                primary_domain = next((a.domain_id for a in assigned if a.is_primary), None)
                 yield {
                     'type': 'data_contract',
                     'id': contract.id,
@@ -366,7 +378,7 @@ class AppEntityLoader(EntityLoader):
                     'status': contract.status,
                     'version': getattr(contract, 'version', None),
                     'owner': getattr(contract, 'owner_team_id', None),
-                    'domain': getattr(contract, 'domain_id', None),
+                    'domain': primary_domain,
                     'tags': tags_map.get(str(contract.id), {}),
                     'created_at': getattr(contract, 'created_at', None),
                     'updated_at': getattr(contract, 'updated_at', None),

@@ -357,7 +357,7 @@ Column tags, table tags, keys and lineage are not available yet.
 - `status` - Status (draft, active, etc.)
 - `version` - Version number
 - `owner` - Owner email
-- `domain` - Domain assignment
+- `domain` - Primary domain: its name for data products, its id for data contracts
 - `tags` - Tag dictionary
 - `created_at` - Creation timestamp
 - `updated_at` - Last update timestamp

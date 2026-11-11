@@ -43,9 +43,10 @@ _PHASE1_VERDICT_RE = re.compile(r"^\s*(UNSAFE|SAFE)\b", re.IGNORECASE)
 
 @dataclass
 class _LLMReply:
-    """Answer text (text blocks only) and refusal text of one completion."""
+    """Answer text (text blocks only), refusal text and finish_reason of one completion."""
     text: str
     refusal: str
+    finish_reason: Optional[str] = None
 
 
 @dataclass
@@ -153,7 +154,9 @@ class LLMService:
                         block_types(raw_content),
                     )
                 if content or refusal:
-                    return _LLMReply(text=content, refusal=refusal)
+                    return _LLMReply(
+                        text=content, refusal=refusal, finish_reason=finish_reason
+                    )
 
             logger.warning(
                 "LLM returned no content in response (finish_reason=%s, block types: %s)",
@@ -193,6 +196,13 @@ class LLMService:
 
         if reply is None or not reply.text:
             logger.error("Phase 1 security check failed: No response from LLM")
+            return False, "Security check failed: Unable to verify content safety"
+        if reply.finish_reason != "stop":
+            # Cut off (length, content filter, unknown): the verdict may be partial.
+            logger.error(
+                "Phase 1 security check failed: reply did not finish (finish_reason=%s)",
+                reply.finish_reason,
+            )
             return False, "Security check failed: Unable to verify content safety"
         response = reply.text
 

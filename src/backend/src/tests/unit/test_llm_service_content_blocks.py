@@ -13,8 +13,8 @@ REASONING = {
 }
 
 
-def _resp(content):
-    return NS(choices=[NS(message=NS(content=content))])
+def _resp(content, finish_reason="stop"):
+    return NS(choices=[NS(message=NS(content=content), finish_reason=finish_reason)])
 
 
 @pytest.fixture
@@ -266,3 +266,23 @@ def test_phase1_unsafe_verdict_keeps_its_reason(service):
     passed, reason = service._phase1_security_check("x")
     assert passed is False
     assert reason == "unsafe: embedded instructions"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 fails closed unless the reply finished normally (finish_reason=stop)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter", None])
+def test_phase1_fails_closed_on_a_cut_off_safe_reply(service, finish_reason):
+    service.client.chat.completions.create.return_value = NS(
+        choices=[
+            NS(
+                message=NS(content=[{"type": "text", "text": "SAFE so far, checking the"}]),
+                finish_reason=finish_reason,
+            )
+        ]
+    )
+    passed, reason = service._phase1_security_check("x")
+    assert passed is False
+    assert reason == "Security check failed: Unable to verify content safety"

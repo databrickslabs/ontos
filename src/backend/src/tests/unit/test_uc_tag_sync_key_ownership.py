@@ -82,7 +82,13 @@ def job(tag_sync, monkeypatch):
         env.store.get((object_type, name), {}).pop(key, None)
 
     def save(_engine, state, _prefix, replace=True):
-        env.state = json.loads(json.dumps(state))
+        copied = json.loads(json.dumps(state))
+        if replace:
+            env.state = copied
+        else:
+            # Like the real save: the objects of this run replace theirs, the rest stay.
+            for object_type, objects in copied.items():
+                env.state.setdefault(object_type, {}).update(objects)
         return None
 
     monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", existing)
@@ -100,7 +106,7 @@ def job(tag_sync, monkeypatch):
                  "read_assets_and_links", "read_direct_uc_links"):
         monkeypatch.setattr(tag_sync, name, lambda *_a, **_k: [])
 
-    def run(configs, datasets=()):
+    def run(configs, datasets=(), extra_args=()):
         monkeypatch.setattr(tag_sync, "build_dataset_tag_infos",
                             lambda _rows, _cat, _schema: list(datasets))
         monkeypatch.setattr(sys, "argv", [
@@ -109,6 +115,7 @@ def job(tag_sync, monkeypatch):
             "--lakebase_instance_name", "instance",
             "--postgres_host", "host",
             "--postgres_db", "db",
+            *extra_args,
         ])
         tag_sync.main()
 
@@ -370,3 +377,110 @@ def test_legacy_cleanup_is_gated_on_the_prefix_it_always_was(tag_sync, job, monk
 
     # Mixed keys share no prefix (default x_ontos_); a lone key is its own prefix.
     assert seen == ["x_ontos_", "ontos_domain", "ontos_semantic_"]
+
+
+COLUMN = f"{ORDERS}.amount"
+SCHEMA = "main.finance"
+
+
+def test_a_column_or_schema_keeps_a_user_tag_that_shares_an_exact_key(
+    tag_sync, job, monkeypatch
+):
+    """ontos_domain and agent_readable are table keys here: a column (semantic links only)
+    and a schema (aggregated from its tables) never get them from the job, so the user's
+    copies stay. Only the placeholder key is the job's there."""
+    link = tag_sync.SemanticLink(iri="http://x/pii", label="PII", slug="pii")
+    direct = tag_sync.DirectLinkInfos(
+        columns=[tag_sync.ColumnTagInfo(table_fqn=ORDERS, column="amount",
+                                        semantic_links=[link])],
+        schemas={SCHEMA: [link]},
+    )
+    monkeypatch.setattr(tag_sync, "build_direct_link_infos", lambda *_a, **_k: direct)
+    _seed(job, COLUMN, {DOMAIN_KEY: "user", STATUS_KEY: "mine"}, object_type="COLUMN")
+    _seed(job, SCHEMA, {DOMAIN_KEY: "user", STATUS_KEY: "mine"}, object_type="SCHEMA")
+
+    job.run([DOMAIN_CFG, STATUS_CFG, SEMANTIC_CFG], [])
+
+    assert job.store[("COLUMN", COLUMN)] == {
+        DOMAIN_KEY: "user", STATUS_KEY: "mine", "ontos_semantic_pii": "http://x/pii",
+    }
+    assert job.store[("SCHEMA", SCHEMA)] == {
+        DOMAIN_KEY: "user", STATUS_KEY: "mine", "ontos_semantic_pii": "http://x/pii",
+    }
+
+
+def test_a_partial_run_keeps_the_placeholder_records_it_cannot_clean_up(tag_sync, job):
+    """--limit: nothing is removed on the partial read, and the placeholder tag the state
+    recorded stays recorded, so the next full run removes it."""
+    _seed(job, ORDERS, {"ontos_semantic_old": "stale", DOMAIN_KEY: "Finance"})
+    job.state = _previous(ORDERS, {"ontos_semantic_old": "stale"})
+
+    job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")],
+            extra_args=("--limit", "5"))
+
+    assert job.state["TABLE"][ORDERS]["ontos_semantic_old"] == "stale"
+
+    job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance"}
+
+
+def _sqlite_engine(sqlalchemy, stored_value):
+    from sqlalchemy.pool import StaticPool
+
+    engine = sqlalchemy.create_engine(
+        "sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text(
+            "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT, "
+            "updated_at TEXT)"))
+        if stored_value is not None:
+            conn.execute(sqlalchemy.text(
+                "INSERT INTO app_settings (key, value) VALUES "
+                "('uc_tag_sync_delivery_state', :v)"), {"v": stored_value})
+    return engine
+
+
+def _stored_objects(engine):
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        value = conn.execute(text(
+            "SELECT value FROM app_settings WHERE key = 'uc_tag_sync_delivery_state'"
+        )).scalar()
+    return json.loads(value)["objects"]
+
+
+def test_a_save_that_does_not_replace_keeps_the_stored_objects(tag_sync):
+    """save_delivery_state(replace=False) merges this run's objects into the stored state."""
+    import sqlalchemy
+
+    stored = {"version": 1, "prefix": "p", "objects": {
+        "TABLE": {OTHER: {"ontos_semantic_keep": "x"}, ORDERS: {"ontos_semantic_old": "s"}},
+    }}
+    engine = _sqlite_engine(sqlalchemy, json.dumps(stored))
+
+    error = tag_sync.save_delivery_state(
+        engine, {"TABLE": {ORDERS: {DOMAIN_KEY: "Finance"}}}, "p", replace=False)
+
+    assert error is None
+    assert _stored_objects(engine)["TABLE"] == {
+        OTHER: {"ontos_semantic_keep": "x"}, ORDERS: {DOMAIN_KEY: "Finance"},
+    }
+
+
+def test_a_save_that_does_not_replace_leaves_an_unreadable_state_alone(tag_sync):
+    """If the stored state can't be read, a partial save must not overwrite it."""
+    import sqlalchemy
+
+    engine = _sqlite_engine(sqlalchemy, "not json")
+
+    error = tag_sync.save_delivery_state(
+        engine, {"TABLE": {ORDERS: {DOMAIN_KEY: "Finance"}}}, "p", replace=False)
+
+    assert error is not None
+    with engine.connect() as conn:
+        value = conn.execute(sqlalchemy.text(
+            "SELECT value FROM app_settings WHERE key = 'uc_tag_sync_delivery_state'"
+        )).scalar()
+    assert value == "not json"

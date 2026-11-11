@@ -1271,13 +1271,31 @@ def save_delivery_state(
 ) -> Optional[str]:
     """Store what this run delivered in app_settings, for the next run.
 
+    replace=True stores ``state`` as the whole record (a full run that read the previous
+    state: the objects it no longer tags were cleaned up). replace=False (a partial run,
+    or a state that couldn't be read) merges ``state`` into the stored objects: the
+    objects of this run get their new record, every other object keeps its stored one.
+    If the stored state can't be read, nothing is written.
+
     Returns an error message on failure.
 
     prefix is informational (a description of the managed keys); ownership is per key.
     """
-    payload = {"version": 1, "prefix": prefix, "objects": state}
     try:
         with engine.begin() as conn:
+            objects: DeliveryState = state
+            if not replace:
+                row = conn.execute(
+                    text(
+                        "SELECT value FROM app_settings WHERE key = "
+                        "'uc_tag_sync_delivery_state'"
+                    )
+                ).first()
+                stored = json.loads(row[0]).get("objects", {}) if row and row[0] else {}
+                objects = {object_type: dict(entries) for object_type, entries in stored.items()}
+                for object_type, entries in state.items():
+                    objects.setdefault(object_type, {}).update(entries)
+            payload = {"version": 1, "prefix": prefix, "objects": objects}
             # Use CURRENT_TIMESTAMP for better database compatibility
             conn.execute(
                 text(
@@ -1756,22 +1774,30 @@ def sync_tags(
     previous: Optional[DeliveryState],
     dry_run: bool = False,
     verbose: bool = False,
+    partial: bool = False,
 ) -> SyncResult:
     """Reconcile UC tags for every linked object, then clean up lost links.
 
-    ownership says which tag keys the job manages (see TagOwnership). previous is what
-    the last run delivered. Objects in it that have no desired tags this run get the
-    delivered keys removed. Pass None to skip that cleanup (state unknown, or a partial
-    --limit read where a missing object doesn't mean unlinked).
+    ownership says which tag keys the job manages by pattern (see TagOwnership); it
+    applies to tables only: a column or a schema gets its tags from semantic links, and
+    the aggregate it is built from is not the whole truth on a partial read. previous is
+    what the last run delivered (None when it can't be read).
+
+    A full run removes what previous says was delivered to an object, and cleans up the
+    objects that lost their links. A partial run (``partial``, a --limit read) removes
+    nothing and skips that cleanup, but keeps every record previous holds so the state
+    is not lost.
     """
     result = SyncResult()
 
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
     ) -> Tuple[int, int]:
-        delivered_before = (previous or {}).get(object_type, {}).get(fqn, {})
+        recorded = (previous or {}).get(object_type, {}).get(fqn, {})
+        delivered_before = {} if partial else recorded
+        object_ownership = ownership if object_type == "TABLE" else TagOwnership()
         still_present: Dict[str, Optional[str]] = {}
-        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
+        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, object_ownership,
                                     dry_run=dry_run,
                                     previously_delivered=delivered_before,
                                     still_present=still_present)
@@ -1781,6 +1807,11 @@ def sync_tags(
         # Keys whose removal failed stay delivered, so the next run retries them.
         result.delivered[object_type].setdefault(fqn, {}).update(desired)
         result.delivered[object_type][fqn].update(still_present)
+        if partial:
+            # Nothing was removed on this partial read: the records the state holds for
+            # this object stay as they are.
+            for key, value in recorded.items():
+                result.delivered[object_type][fqn].setdefault(key, value)
         return u, r
 
     # Dataset-level
@@ -1838,7 +1869,7 @@ def sync_tags(
 
     # Objects that had tags delivered last run but have no link now: nothing
     # above reconciles them, so remove what this job delivered there.
-    if previous is None:
+    if previous is None or partial:
         return result
     for object_type in DELIVERY_OBJECT_TYPES:
         for fqn, tags in previous.get(object_type, {}).items():
@@ -2138,9 +2169,10 @@ def main() -> None:
         direct,
         tag_sync_configs,
         ownership,
-        previous=None if is_partial_read else previous,
+        previous=previous,
         dry_run=dry_run,
         verbose=verbose,
+        partial=is_partial_read,
     )
     updated_total, removed_total = result.updated, result.removed
     all_errors: List[str] = list(result.errors)

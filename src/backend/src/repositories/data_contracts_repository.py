@@ -260,7 +260,7 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False
     ) -> List[DataContractDb]:
@@ -269,7 +269,7 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
         Args:
             db: Database session
             skip: Number of records to skip
-            limit: Maximum number of records to return
+            limit: Maximum number of records to return (``None`` = no limit)
             project_id: Optional project ID to filter by (ignored if is_admin=True)
             is_admin: If True, return all contracts regardless of project_id
 

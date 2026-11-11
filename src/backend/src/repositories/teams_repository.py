@@ -57,7 +57,7 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         domain_id: Optional[str] = None,
         domain_ids: Optional[List[str]] = None,
     ) -> List[TeamDb]:

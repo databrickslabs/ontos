@@ -98,7 +98,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         db_namespace = self._namespace_repo.get_by_name(db, name=name)
         return TagNamespace.from_orm(db_namespace) if db_namespace else None
 
-    def list_namespaces(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[TagNamespace]:
+    def list_namespaces(self, db: Session, *, skip: int = 0, limit: Optional[int] = None) -> List[TagNamespace]:
         db_namespaces = self._namespace_repo.get_multi(db, skip=skip, limit=limit)
         return [TagNamespace.from_orm(ns) for ns in db_namespaces]
 
@@ -366,7 +366,7 @@ class TagsManager(DeliveryMixin, SearchableAsset):
 
     def list_tags(
         self, db: Session, *, 
-        skip: int = 0, limit: int = 100, 
+        skip: int = 0, limit: Optional[int] = None, 
         namespace_id: Optional[UUID] = None,
         namespace_name: Optional[str] = None, 
         name_contains: Optional[str] = None,
@@ -452,11 +452,11 @@ class TagsManager(DeliveryMixin, SearchableAsset):
         db_perm = self._permission_repo.get(db, id=perm_id)
         return TagNamespacePermission.from_orm(db_perm) if db_perm else None
 
-    def list_permissions_for_namespace(self, db: Session, *, namespace_id: UUID, skip: int = 0, limit: int = 100) -> List[TagNamespacePermission]:
+    def list_permissions_for_namespace(self, db: Session, *, namespace_id: UUID, skip: int = 0, limit: Optional[int] = None) -> List[TagNamespacePermission]:
         # Add skip/limit to repository method if needed, for now fetching all for a namespace.
         db_perms = self._permission_repo.get_permissions_for_namespace(db, namespace_id=namespace_id)
         # Apply skip/limit here if repo doesn't support it directly for this specific query
-        return [TagNamespacePermission.from_orm(p) for p in db_perms[skip : skip + limit]]
+        return [TagNamespacePermission.from_orm(p) for p in db_perms[skip : skip + limit if limit is not None else None]]
 
     def update_namespace_permission(self, db: Session, *, perm_id: UUID, perm_in: TagNamespacePermissionUpdate, user_email: Optional[str]) -> Optional[TagNamespacePermission]:
         db_perm = self._permission_repo.get(db, id=perm_id)

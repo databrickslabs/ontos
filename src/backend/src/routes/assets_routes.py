@@ -163,7 +163,7 @@ def get_all_asset_types(
     db: DBSessionDep,
     manager=Depends(get_assets_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     category: Optional[str] = Query(None),
     type_status: Optional[str] = Query(None, alias="status"),
 ):

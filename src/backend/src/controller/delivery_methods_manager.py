@@ -49,7 +49,7 @@ class DeliveryMethodsManager:
         return self._to_read(db_obj)
 
     def get_all(
-        self, db: Session, *, skip: int = 0, limit: int = 100,
+        self, db: Session, *, skip: int = 0, limit: Optional[int] = None,
         category: Optional[str] = None, status: Optional[str] = None
     ) -> List[DeliveryMethodRead]:
         db_objs = self._repo.get_multi_filtered(db, skip=skip, limit=limit, category=category, status=status)

@@ -1325,8 +1325,6 @@ async def get_product_linked_assets(
 
         try:
             accessible = dpm.list_products(
-                skip=0,
-                limit=10_000,
                 is_admin=False,
                 caller_email=caller_email,
                 caller_team_ids=caller_team_ids,
@@ -1575,7 +1573,7 @@ async def get_published_products(
     Optional ``scope`` narrows results to a single publication scope (case-insensitive).
     """
     try:
-        published_products = manager.get_published_products(limit=10000, scope=scope)
+        published_products = manager.get_published_products(scope=scope)
         logger.info(
             f"Retrieved {len(published_products)} published data products (scope={scope or 'all'})"
         )
@@ -1593,7 +1591,7 @@ async def get_my_subscriptions(
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
     skip: int = 0,
-    limit: int = 100
+    limit: Optional[int] = None
 ):
     """Get all data products the current user is subscribed to."""
     if not current_user or not current_user.username:
@@ -1785,9 +1783,8 @@ async def get_data_products(
             wanted_domains.add(domain_id)
 
         # The domain filter is applied in-process (domain_ids are attached per product
-        # by the manager), so a domain-filtered request must load the full candidate set
-        # rather than the default page — otherwise products assigned to the domain past
-        # the first page would be silently dropped.
+        # by the manager), so the manager must return the full candidate set — it
+        # does by default (no limit, #1295).
         list_kwargs = dict(
             project_id=project_id,
             is_admin=is_admin,
@@ -1796,8 +1793,6 @@ async def get_data_products(
             caller_project_ids=caller_project_ids,
             include_history=include_history,
         )
-        if wanted_domains:
-            list_kwargs["limit"] = 10000
         products = manager.list_products(**list_kwargs)
 
         if wanted_domains:
@@ -2692,7 +2687,7 @@ async def get_product_subscribers(
     current_user: CurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """Get all subscribers for a data product.

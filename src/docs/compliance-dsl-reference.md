@@ -231,7 +231,7 @@ ON_FAIL NOTIFY 'entity_owner'
 
   The notification is created even if the run is a scheduled job, and also for the entities evaluated before a run that stops with an error.
 - **Done** on a NOTIFY action means the recipient was queued for the run's notification. If the notifications can't be created when the run ends, the run reports the warning *notifications could not be sent*.
-- **Permission.** NOTIFY can reach any user, group or role, so saving or running a policy that uses it needs **admin** access to compliance (Data Governance Officers and Admins by default). Scheduled runs use the rules as saved.
+- **Permission.** NOTIFY can reach any user, group or role, so saving, renaming (the name is the notifications' title) or running a policy that uses it needs **admin** access to compliance (Data Governance Officers and Admins by default). Scheduled runs use the rules as saved.
 - Notifications use the in-app channel.
 
 ### Action outcomes in run results

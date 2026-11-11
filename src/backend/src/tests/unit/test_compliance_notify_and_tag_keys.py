@@ -433,7 +433,7 @@ NOTIFY_RULE = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL NOTIF
 
 
 class TestNotifyGateOnRoutes:
-    """Create, update (only when the rule changes) and run all apply the NOTIFY gate."""
+    """Create, update (when the rule or the name changes) and run apply the NOTIFY gate."""
 
     @pytest.fixture
     def client(self):
@@ -486,22 +486,51 @@ class TestNotifyGateOnRoutes:
         assert http.post('/api/compliance/policies/p1/runs', json={}).status_code == 403
         manager.run_policy_inline.assert_not_called()
 
-    def test_update_that_keeps_the_rule_is_not_gated(self, client):
-        http, manager = client
-        pid = str(uuid.uuid4())
-        manager.get_policy.return_value = SimpleNamespace(id=pid, name='P', rule=NOTIFY_RULE)
+    def _existing(self, manager, pid, name='P', rule=NOTIFY_RULE):
         from datetime import datetime as _dt
+
+        manager.get_policy.return_value = SimpleNamespace(id=pid, name=name, rule=rule)
         manager.update_policy.return_value = CompliancePolicyDb(
-            id=pid, name='Renamed', description='d', rule=NOTIFY_RULE, category='Governance',
+            id=pid, name='Renamed', description='d2', rule=rule, category='Governance',
             severity='low', is_active=True, created_at=_dt.utcnow(), updated_at=_dt.utcnow(),
         )
 
-        changed = http.put(f'/api/compliance/policies/{pid}', json={**self._payload(rule=NOTIFY_RULE + " FAIL 'x'"), 'id': pid})
-        assert changed.status_code == 403
+    def test_update_that_changes_the_rule_is_gated(self, client):
+        http, manager = client
+        pid = str(uuid.uuid4())
+        self._existing(manager, pid)
 
-        renamed = http.put(f'/api/compliance/policies/{pid}', json={**self._payload(name='Renamed'), 'id': pid})
-        assert renamed.status_code == 200
+        changed = {**self._payload(rule=NOTIFY_RULE + " FAIL 'x'"), 'id': pid}
+        assert http.put(f'/api/compliance/policies/{pid}', json=changed).status_code == 403
+        manager.update_policy.assert_not_called()
+
+    def test_renaming_a_notify_policy_is_gated(self, client):
+        """The name is the title the next scheduled run sends."""
+        http, manager = client
+        pid = str(uuid.uuid4())
+        self._existing(manager, pid)
+
+        renamed = {**self._payload(name='Renamed'), 'id': pid}
+        assert http.put(f'/api/compliance/policies/{pid}', json=renamed).status_code == 403
+        manager.update_policy.assert_not_called()
+
+    def test_other_edits_that_keep_rule_and_name_are_not_gated(self, client):
+        http, manager = client
+        pid = str(uuid.uuid4())
+        self._existing(manager, pid)
+
+        edited = {**self._payload(), 'description': 'd2', 'is_active': False, 'id': pid}
+        assert http.put(f'/api/compliance/policies/{pid}', json=edited).status_code == 200
         manager.update_policy.assert_called_once()
+
+    def test_renaming_a_policy_without_notify_is_not_gated(self, client):
+        http, manager = client
+        pid = str(uuid.uuid4())
+        rule = "MATCH (p:data_product)\nASSERT p.status = 'active'\nON_FAIL FAIL 'x'"
+        self._existing(manager, pid, rule=rule)
+
+        renamed = {**self._payload(rule=rule, name='Renamed'), 'id': pid}
+        assert http.put(f'/api/compliance/policies/{pid}', json=renamed).status_code == 200
 
 
 class TestNotifyResolution:

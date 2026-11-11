@@ -945,6 +945,35 @@ class TagOwnership:
         return cls(frozenset(exact), frozenset(numbered), tuple(sorted(prefixes)))
 
 
+def legacy_cleanup_gate_prefix(tag_sync_configs: List[Dict[str, Any]], default: str) -> str:
+    """The prefix handle_legacy_tag_cleanup has always been gated on.
+
+    It is the common prefix of the enabled keys, or ``default`` when they share none.
+    Kept exactly as it was: the legacy cleanup removes tags, so its gate does not change
+    in this fix.
+    """
+    tag_prefixes = set()
+    for config in tag_sync_configs:
+        if config.get("enabled", True):
+            key_format = config.get("tag_key_format", "")
+            if "{" in key_format:
+                tag_prefixes.add(key_format.split("{")[0])
+            else:
+                tag_prefixes.add(key_format)
+    if not tag_prefixes:
+        return default
+    common_prefix = ""
+    sorted_prefixes = sorted(tag_prefixes)
+    first = sorted_prefixes[0]
+    last = sorted_prefixes[-1]
+    for i, char in enumerate(first):
+        if i < len(last) and char == last[i]:
+            common_prefix += char
+        else:
+            break
+    return common_prefix if common_prefix else default
+
+
 def as_ownership(owned: Union[str, TagOwnership]) -> TagOwnership:
     """Accept a TagOwnership, or a plain prefix string (every key starting with it)."""
     if isinstance(owned, TagOwnership):
@@ -2125,7 +2154,7 @@ def main() -> None:
         engine,
         datasets,
         direct,
-        args.prefix,
+        legacy_cleanup_gate_prefix(tag_sync_configs, args.prefix),
         previous=None if is_partial_read else previous,
         cleanup_enabled=cleanup_legacy,
         is_partial_read=is_partial_read,

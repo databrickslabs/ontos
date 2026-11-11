@@ -237,3 +237,59 @@ def test_unchanged_tags_are_not_rewritten_on_the_next_run(tag_sync, job):
 
     assert job.assigned == []
     assert job.unassigned == []
+
+
+SEMANTIC_CFG = {
+    "entity_type": "semantic_assignment", "enabled": True,
+    "tag_key_format": "ontos_semantic_{LINK.SLUG}", "tag_value_format": "{LINK.IRI}",
+}
+
+
+def test_ownership_of_a_placeholder_key_is_its_literal_prefix(tag_sync):
+    """A placeholder key owns its literal prefix; a key starting with one owns nothing."""
+    owned = tag_sync.TagOwnership.from_configs([SEMANTIC_CFG])
+    assert owned.prefixes == ("ontos_semantic_",)
+    assert owned.owns("ontos_semantic_pii")
+    assert not owned.owns("owner")
+
+    nothing = tag_sync.TagOwnership.from_configs(
+        [dict(SEMANTIC_CFG, tag_key_format="{LINK.SLUG}_x")])
+    assert nothing.prefixes == ()
+    assert not nothing.owns("owner")
+    assert not nothing.owns("anything_x")
+
+
+def test_a_placeholder_key_with_an_exact_key_manages_both(tag_sync):
+    owned = tag_sync.TagOwnership.from_configs([DOMAIN_CFG, SEMANTIC_CFG])
+    assert owned.owns(DOMAIN_KEY)
+    assert owned.owns("ontos_semantic_pii")
+    assert not owned.owns("owner")
+
+
+def test_an_unrecorded_placeholder_tag_is_removed_and_user_tags_kept(tag_sync, job):
+    """A tag under a placeholder-owned prefix that the state never recorded is removed."""
+    _seed(job, ORDERS, {"ontos_semantic_old": "stale", "owner": "finance"})
+    job.state = {}
+
+    job.run([DOMAIN_CFG, SEMANTIC_CFG],
+            [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {"owner": "finance", DOMAIN_KEY: "Finance"}
+
+
+def test_legacy_cleanup_is_gated_on_the_prefix_it_always_was(tag_sync, job, monkeypatch):
+    """The legacy cleanup gate keeps the value the job computed before this fix."""
+    seen = []
+
+    def record(_spark, _engine, _datasets, _direct, prefix, **_kwargs):
+        seen.append(prefix)
+        return (0, [])
+
+    monkeypatch.setattr(tag_sync, "handle_legacy_tag_cleanup", record)
+
+    job.run([DOMAIN_CFG, STATUS_CFG])
+    job.run([DOMAIN_CFG])
+    job.run([SEMANTIC_CFG])
+
+    # Mixed keys share no prefix (default x_ontos_); a lone key is its own prefix.
+    assert seen == ["x_ontos_", "ontos_domain", "ontos_semantic_"]

@@ -2229,6 +2229,10 @@ async def update_data_product(
 
     Validates that users can only update products belonging to projects
     they are members of (if the product has a project_id).
+
+    publication_scope, published_at and published_by are read-only: they are
+    accepted in the body (so a GET body can be sent back as is) but ignored.
+    Use POST /data-products/{id}/publish, /set-publication-scope or /unpublish.
     """
     # Parse and validate JSON body
     try:

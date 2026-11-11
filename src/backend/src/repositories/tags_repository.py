@@ -508,16 +508,20 @@ entity_tag_repo = EntityTagAssociationRepository(EntityTagAssociationDb)
 DEFAULT_WORKFLOW_TAGS = (
     {
         'name': 'owner',
-        'description': 'Accountable owner of the asset; the default naming and contract workflows assign it',
+        'description': 'Accountable owner of the asset; the default naming and contract '
+                       'workflows assign it',
     },
     {
         'name': 'contains_pii',
-        'description': 'Contains personally identifiable information; set by the PII detection workflow',
+        'description': 'Contains personally identifiable information; set by the PII '
+                       'detection workflow',
     },
 )
 
 
-def seed_default_tags(db: Session, *, user_email: Optional[str] = 'system@startup.ucapp') -> List[TagDb]:
+def seed_default_tags(
+    db: Session, *, user_email: Optional[str] = 'system@startup.ucapp',
+) -> List[TagDb]:
     """Create the default workflow tags in the default namespace if they are missing.
 
     Idempotent: a tag that exists is left as it is, whatever its values, so a user's

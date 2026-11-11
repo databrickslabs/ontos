@@ -217,7 +217,7 @@ ON_FAIL NOTIFY 'entity_owner'
 - **Recipients** resolve as in workflow notification steps:
   - user emails and group names;
   - app role names or ids;
-  - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity;
+  - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity; on Unity Catalog objects `owner` is the object's UC owner;
     `domain_owners` (or `DomainOwner`) and `ContractApprover` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
   - a comma-separated list of these.
 

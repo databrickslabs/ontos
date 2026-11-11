@@ -197,3 +197,33 @@ class TestListedNamesAreReadable:
 
         _, names = _failed_names(db_session, 'consumer@example.com')
         assert names['params'] == {'names': 'Orders contract', 'count': '1'}
+
+
+# --- 3. 'owner' of a Unity Catalog object is its UC owner -------------------------
+
+class TestUnityCatalogOwner:
+    def test_owner_of_a_table_is_its_uc_owner(self, db_session):
+        notifier = _notifier(db_session)
+        context = _context(
+            notifier, entity_type='table', entity_id='main.sales.orders', name='orders',
+            owner='uc-owner@example.com',
+        )
+
+        result = NotifyAction('owner').execute(context)
+        notifier.flush(failed=1, passed=0)
+
+        assert result.success is True
+        _, names = _failed_names(db_session, 'uc-owner@example.com')
+        assert names == {'text': 'orders'}  # the owner can read the table
+
+    def test_another_user_is_not_told_the_table_name(self, db_session):
+        notifier = _notifier(db_session)
+        context = _context(
+            notifier, entity_type='table', entity_id='main.sales.orders', name='orders',
+            owner='uc-owner@example.com',
+        )
+
+        assert NotifyAction('consumer@example.com').execute(context).success is True
+        notifier.flush(failed=1, passed=0)
+
+        assert _failed_names(db_session, 'consumer@example.com')[1]['params'] == {'count': '1'}

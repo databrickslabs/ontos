@@ -15,8 +15,9 @@ emails, groups (stored as the recipient, as for workflows), app role names or id
 lists of these. ``domain_owners`` / ``DomainOwner`` and ``ContractApprover`` are the
 owners of the entity's domain / of the entity, without the approval rules of workflow
 steps: the run user is kept, and nobody is put in place of missing owners.
-``owner`` means the entity's owners, as ``entity_owner``: the compliance ``owner``
-field holds a team id, which is no recipient. Recipients
+``owner`` means the entity's owners, as ``entity_owner``, for app entities (their
+compliance ``owner`` field holds a team id, which is no recipient), and the UC owner
+for Unity Catalog objects. Recipients
 that don't depend on the entity are resolved once per run. ``requester`` /
 ``trigger_user`` is the user who started the run, so it resolves to nobody for
 scheduled runs of the compliance-checks job.
@@ -175,9 +176,11 @@ class ComplianceRunNotifier:
         from src.common.workflow_executor import StepContext
 
         entity = dict(context.entity or {})
-        # The compliance 'owner' is the owner team's id; drop it so 'owner' resolves
-        # to the entity's owners (as 'entity_owner') instead of to a team id.
-        entity.pop('owner', None)
+        if context.entity_type in APP_ENTITY_TYPES:
+            # The 'owner' of an app entity is the owner team's id; drop it so 'owner'
+            # resolves to the entity's owners (as 'entity_owner'), not to a team id.
+            # A Unity Catalog object's 'owner' is its UC owner, the recipient.
+            entity.pop('owner', None)
         return StepContext(
             entity=entity,
             entity_type=APP_ENTITY_TYPES.get(context.entity_type, context.entity_type),

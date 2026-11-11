@@ -233,3 +233,25 @@ def test_ui_customization_show_powered_by(client: TestClient, test_settings):
         assert client.get("/api/settings/ui-customization").json()["show_powered_by"] is False
     finally:
         test_settings.UI_SHOW_POWERED_BY = True
+
+
+def test_branding_traversal_path_returns_a_coded_error(client: TestClient):
+    """A `..` path says so (code + params) instead of "no scheme"."""
+    response = client.put("/api/settings", json={"ui_custom_logo_url": "/../x.svg"})
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["code"] == "branding_path_traversal"
+    assert detail["params"] == {"field": "custom logo URL"}
+    assert "no scheme" not in detail["message"]
+
+
+def test_rejected_branding_save_leaves_earlier_keys_unchanged(client: TestClient):
+    """One bad value makes the whole save a no-op."""
+    before = client.get("/api/settings/ui-customization").json()
+    bad = client.put("/api/settings", json={
+        "ui_app_tagline": "Half saved",
+        "ui_theme_primary": "#2563eb",
+        "ui_favicon_url": "javascript:alert(1)",
+    })
+    assert bad.status_code == 400
+    assert client.get("/api/settings/ui-customization").json() == before

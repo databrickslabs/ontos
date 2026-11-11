@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 
 import bleach
 
+from src.common.api_errors import CodedValueError
+
 # Branding constraints (issue #240)
 APP_DISPLAY_NAME_MAX_LEN = 64
 APP_SHORT_NAME_MAX_LEN = 16
@@ -76,6 +78,12 @@ def sanitize_app_display_name(
     return cleaned
 
 
+class BrandingPathTraversalError(CodedValueError):
+    """A branding image path with a ``..`` segment."""
+
+    code = 'branding_path_traversal'
+
+
 def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Optional[str]:
     """Validate a branding image URL (custom logo, favicon).
 
@@ -91,7 +99,15 @@ def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Option
     cleaned = value.strip()
     if not cleaned:
         return None
-    if _is_app_asset_path(cleaned):
+    if any(not ch.isprintable() or ch.isspace() or ch == '\\' for ch in cleaned):
+        raise ValueError(
+            f"{field} must not contain spaces, backslashes or control characters"
+        )
+    if cleaned.startswith('/') and not cleaned.startswith('//'):
+        if _climbs_out_of_folder(cleaned):
+            raise BrandingPathTraversalError(
+                f"{field} must not contain '..' path segments", field=field
+            )
         return cleaned
     try:
         parsed = urlparse(cleaned)
@@ -106,19 +122,22 @@ def validate_branding_url(value: Optional[str], *, field: str = 'URL') -> Option
     return cleaned
 
 
-def _is_app_asset_path(value: str) -> bool:
-    """True for a same-origin, root-relative path such as ``/branding/x.svg``.
-
-    Protocol-relative URLs (``//host``), backslashes, whitespace and control
-    characters are rejected so the value can't point at another origin, and
-    ``..`` segments (also percent-encoded) so it can't climb out of its folder.
-    """
-    if not value.startswith('/') or value.startswith('//'):
-        return False
+def _climbs_out_of_folder(value: str) -> bool:
+    """True when a root-relative path has a ``..`` segment (also percent-encoded)."""
     path = value.split('?', 1)[0].split('#', 1)[0]
-    if any(seg.lower() in ('..', '%2e%2e', '.%2e', '%2e.') for seg in path.split('/')):
-        return False
-    return all(ch.isprintable() and not ch.isspace() and ch != '\\' for ch in value)
+    return any(seg.lower() in ('..', '%2e%2e', '.%2e', '%2e.') for seg in path.split('/'))
+
+
+def coerce_branding_url(value: Optional[str]) -> Optional[str]:
+    """Like ``validate_branding_url`` but returns ``None`` for invalid input.
+
+    Used for values that come straight from the environment (never validated on
+    the way in), so an unsafe one is dropped instead of reaching ``<img src>``.
+    """
+    try:
+        return validate_branding_url(value)
+    except ValueError:
+        return None
 
 
 def validate_hex_color(value: Optional[str], *, field: str = 'color') -> Optional[str]:

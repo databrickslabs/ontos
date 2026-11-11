@@ -4,7 +4,7 @@ import re
 import sys
 import time
 import argparse
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -893,6 +893,65 @@ def sanitize_tag_key(key: str) -> str:
     return sanitized
 
 
+# Tag ownership --------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TagOwnership:
+    """The tag keys this job manages: the keys its enabled configs produce.
+
+    A config without a placeholder owns its exact key (a data_domain key also owns its
+    numbered additional keys, ``<key>_1``, ``<key>_2``...). A config whose key has a
+    placeholder owns its literal prefix (``ontos_{CONTRACT.ID}`` owns ``ontos_*``). A key
+    that starts with a placeholder owns nothing by pattern. Tags the job delivered
+    before are matched through the delivery state instead, so a key can stop being
+    managed when its config is disabled and still be cleaned up.
+    """
+    exact: FrozenSet[str] = frozenset()
+    numbered: FrozenSet[str] = frozenset()
+    prefixes: Tuple[str, ...] = ()
+
+    def owns(self, key: str) -> bool:
+        if key in self.exact or any(key.startswith(p) for p in self.prefixes):
+            return True
+        match = re.fullmatch(r"(.+)_(\d+)", key)
+        return match is not None and match.group(1) in self.numbered
+
+    def describe(self) -> str:
+        names = sorted(self.exact)
+        names += [f"{key}_<N>" for key in sorted(self.numbered)]
+        names += [f"{prefix}*" for prefix in self.prefixes]
+        return ", ".join(names) or "(none)"
+
+    @classmethod
+    def from_configs(cls, tag_sync_configs: List[Dict[str, Any]]) -> "TagOwnership":
+        exact = set()
+        numbered = set()
+        prefixes = set()
+        for config in tag_sync_configs:
+            if not config.get("enabled", True):
+                continue
+            key_format = config.get("tag_key_format", "") or ""
+            if "{" in key_format:
+                literal = sanitize_tag_key(key_format.split("{")[0])
+                if literal:
+                    prefixes.add(literal)
+                continue
+            key = sanitize_tag_key(key_format)
+            if not key:
+                continue
+            exact.add(key)
+            if config.get("entity_type") == "data_domain":
+                numbered.add(key)
+        return cls(frozenset(exact), frozenset(numbered), tuple(sorted(prefixes)))
+
+
+def as_ownership(owned: Union[str, TagOwnership]) -> TagOwnership:
+    """Accept a TagOwnership, or a plain prefix string (every key starting with it)."""
+    if isinstance(owned, TagOwnership):
+        return owned
+    return TagOwnership(prefixes=(owned,)) if owned else TagOwnership()
+
+
 def format_tag_string(format_str: str, variables: Dict[str, Optional[str]]) -> Optional[str]:
     """Format a tag key or value string by replacing {VARIABLE} placeholders.
 
@@ -1089,9 +1148,29 @@ def unassign_tag(spark: SparkSession, object_type: str, object_name: str, key: s
     )
 
 
-def reconcile_tags(ws: WorkspaceClient, spark: SparkSession, object_type: str, object_name: str, desired: Dict[str, Optional[str]], prefix: str, dry_run: bool = False) -> Tuple[int, int, List[str]]:
-    existing = get_existing_prefixed_tags(spark, object_type, object_name, prefix)
-    to_remove = [k for k in existing.keys() if k not in desired]
+def reconcile_tags(
+    ws: WorkspaceClient,
+    spark: SparkSession,
+    object_type: str,
+    object_name: str,
+    desired: Dict[str, Optional[str]],
+    owned: Union[str, TagOwnership],
+    dry_run: bool = False,
+    previously_delivered: Iterable[str] = (),
+) -> Tuple[int, int, List[str]]:
+    """Make the job's tags on one object match ``desired``.
+
+    Removes the tags this job manages that aren't desired: those ``owned`` matches, plus
+    the keys delivered to this object last run. Other tags on the object are left alone.
+    """
+    ownership = as_ownership(owned)
+    delivered_before = set(previously_delivered)
+    # All tags are read (empty prefix) so the upsert check sees every key the job wrote.
+    existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
+    to_remove = [
+        k for k in existing
+        if k not in desired and (ownership.owns(k) or k in delivered_before)
+    ]
     to_upsert = {k: v for k, v in desired.items() if existing.get(k) != v}
 
     updated = 0
@@ -1164,7 +1243,7 @@ def save_delivery_state(
 
     Returns an error message on failure.
 
-    prefix is stored to detect prefix changes between runs.
+    prefix is informational (a description of the managed keys); ownership is per key.
     """
     payload = {"version": 1, "prefix": prefix, "objects": state}
     try:
@@ -1192,17 +1271,17 @@ def remove_delivered_tags(
     object_type: str,
     object_name: str,
     delivered: Dict[str, Optional[str]],
-    prefix: str,
     dry_run: bool = False,
 ) -> Tuple[int, List[str], Dict[str, Optional[str]]]:
     """Remove tags this job delivered from an object that no longer has a link.
 
-    Only the delivered keys are removed; other tags on the object stay. Returns
+    Only the delivered keys are removed; other tags on the object stay. The delivery
+    state is the ownership here, so no prefix is needed. Returns
     (removed, errors, still_delivered): still_delivered holds the keys that
     couldn't be checked or removed, so the next run tries again.
     """
     try:
-        existing = get_existing_prefixed_tags(spark, object_type, object_name, prefix)
+        existing = get_existing_prefixed_tags(spark, object_type, object_name, "")
     except Exception as e:
         msg = f"[WARN] Failed to read tags of {object_type} {object_name}: {e}"
         print(msg)
@@ -1643,25 +1722,27 @@ def sync_tags(
     datasets: List[DatasetTagInfo],
     direct: "DirectLinkInfos",
     tag_sync_configs: List[Dict[str, Any]],
-    prefix: str,
+    ownership: Union[str, TagOwnership],
     previous: Optional[DeliveryState],
     dry_run: bool = False,
     verbose: bool = False,
 ) -> SyncResult:
     """Reconcile UC tags for every linked object, then clean up lost links.
 
-    previous is what the last run delivered. Objects in it that have no desired
-    tags this run get the delivered keys removed. Pass None to skip that cleanup
-    (state unknown, or a partial --limit read where a missing object doesn't
-    mean unlinked).
+    ownership says which tag keys the job manages (see TagOwnership). previous is what
+    the last run delivered. Objects in it that have no desired tags this run get the
+    delivered keys removed. Pass None to skip that cleanup (state unknown, or a partial
+    --limit read where a missing object doesn't mean unlinked).
     """
     result = SyncResult()
 
     def apply(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
     ) -> Tuple[int, int]:
-        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, prefix,
-                                    dry_run=dry_run)
+        delivered_before = (previous or {}).get(object_type, {}).get(fqn, {})
+        u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
+                                    dry_run=dry_run,
+                                    previously_delivered=delivered_before)
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
@@ -1730,7 +1811,7 @@ def sync_tags(
             if fqn in result.delivered[object_type]:
                 continue
             r, errs, still_delivered = remove_delivered_tags(
-                spark, object_type, fqn, tags, prefix, dry_run=dry_run
+                spark, object_type, fqn, tags, dry_run=dry_run
             )
             result.removed += r
             result.errors.extend(errs)
@@ -1925,30 +2006,9 @@ def main() -> None:
     # Parse tag sync configs
     tag_sync_configs = json.loads(args.tag_sync_configs) if args.tag_sync_configs else []
 
-    # Compute tag prefix for filtering existing tags
-    tag_prefixes = set()
-    for config in tag_sync_configs:
-        if config.get("enabled", True):
-            key_format = config.get("tag_key_format", "")
-            if "{" in key_format:
-                tag_prefixes.add(key_format.split("{")[0])
-            else:
-                tag_prefixes.add(key_format)
-
-    if tag_prefixes:
-        common_prefix = ""
-        sorted_prefixes = sorted(tag_prefixes)
-        if len(sorted_prefixes) > 0:
-            first = sorted_prefixes[0]
-            last = sorted_prefixes[-1]
-            for i, char in enumerate(first):
-                if i < len(last) and char == last[i]:
-                    common_prefix += char
-                else:
-                    break
-        prefix = common_prefix if common_prefix else args.prefix
-    else:
-        prefix = args.prefix
+    # The tags this job manages: the keys its enabled configs produce. Each config owns
+    # its own key, so keys with different spellings (ontos_domain, agent_readable) work.
+    ownership = TagOwnership.from_configs(tag_sync_configs)
 
     dry_run: bool = args.dry_run.lower() in ("true", "1", "yes")
     default_catalog = args.default_catalog if args.default_catalog else None
@@ -1962,7 +2022,7 @@ def main() -> None:
     print("=" * 80)
     print(f"\nJob Parameters:")
     print(f"  Tag sync configs: {len(tag_sync_configs)} entity types")
-    print(f"  Computed prefix: {prefix}")
+    print(f"  Managed tag keys: {ownership.describe()}")
     print(f"  Dry run: {dry_run}")
     print(f"  Default catalog: {default_catalog}")
     print(f"  Default schema: {default_schema}")
@@ -2043,7 +2103,7 @@ def main() -> None:
         datasets,
         direct,
         tag_sync_configs,
-        prefix,
+        ownership,
         previous=None if is_partial_read else previous,
         dry_run=dry_run,
         verbose=verbose,
@@ -2052,7 +2112,7 @@ def main() -> None:
     all_errors: List[str] = list(result.errors)
 
     if not dry_run:
-        save_error = save_delivery_state(engine, result.delivered, prefix,
+        save_error = save_delivery_state(engine, result.delivered, ownership.describe(),
                                          replace=previous is not None and
                                          not is_partial_read)
         if save_error:
@@ -2065,7 +2125,7 @@ def main() -> None:
         engine,
         datasets,
         direct,
-        prefix,
+        args.prefix,
         previous=None if is_partial_read else previous,
         cleanup_enabled=cleanup_legacy,
         is_partial_read=is_partial_read,

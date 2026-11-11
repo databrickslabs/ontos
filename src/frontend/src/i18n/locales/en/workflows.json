@@ -542,6 +542,7 @@
     "removedStepsHint": "These steps ran in this execution and were removed from the workflow later.",
     "stepErrors": {
       "rule_where_evaluation_failed": "The WHERE clause of policy '{{policyName}}' could not be evaluated on {{entityType}} {{entityId}}",
+      "tag_not_found": "Tag '{{tag}}' was not found in the tag catalog, so it was not assigned",
       "approval_rejected": "Request denied",
       "output_port_contracts_missing": "Cannot publish: output ports {{ports}} must have data contracts assigned",
       "output_port_contracts_unapproved": "Cannot publish: these output ports have unapproved contracts: {{ports}}. Contracts must be approved first.",

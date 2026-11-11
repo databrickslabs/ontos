@@ -61,19 +61,37 @@ class TestAssignTagPersistence:
         assert result.data['value'] == 'true'
         mock_mgr.add_tag_to_entity.assert_called_once()
 
-    def test_assign_tag_falls_back_when_fqn_not_found(self, db_session):
-        """When tag FQN doesn't exist, should still pass but persisted=False."""
+    def test_assign_tag_fails_when_tag_not_found(self, db_session):
+        """A tag that doesn't exist is an error, not a success with the context updated."""
         with patch('src.controller.tags_manager.TagsManager') as MockTM:
             mock_mgr = MagicMock()
             MockTM.return_value = mock_mgr
             mock_mgr.get_tag_by_fqn.return_value = None
 
-            handler = AssignTagStepHandler(db=db_session, config={'key': 'ns.nonexistent', 'value': 'x'})
+            handler = AssignTagStepHandler(
+                db=db_session, config={'key': 'ns.nonexistent', 'value': 'x'},
+            )
             result = handler.execute(_make_context())
 
-        assert result.passed is True
-        assert result.data['persisted'] is False
+        assert result.passed is False
+        assert result.data['error_code'] == 'tag_not_found'
+        assert result.data['error_params'] == {'tag': 'ns.nonexistent'}
+        assert "'ns.nonexistent' not found" in result.error
         mock_mgr.add_tag_to_entity.assert_not_called()
+
+    def test_assign_tag_not_found_leaves_entity_context_unchanged(self, db_session):
+        with patch('src.controller.tags_manager.TagsManager') as MockTM:
+            mock_mgr = MagicMock()
+            MockTM.return_value = mock_mgr
+            mock_mgr.get_tag_by_fqn.return_value = None
+
+            ctx = _make_context(entity={'name': 'tbl'})
+            handler = AssignTagStepHandler(
+                db=db_session, config={'key': 'ns.missing', 'value': 'x'},
+            )
+            handler.execute(ctx)
+
+        assert 'tags' not in ctx.entity
 
     def test_assign_tag_falls_back_on_tags_manager_error(self, db_session):
         """When TagsManager throws, should still pass with persisted=False."""
@@ -91,7 +109,7 @@ class TestAssignTagPersistence:
         with patch('src.controller.tags_manager.TagsManager') as MockTM:
             mock_mgr = MagicMock()
             MockTM.return_value = mock_mgr
-            mock_mgr.get_tag_by_fqn.return_value = None  # FQN not found
+            mock_mgr.get_tag_by_fqn.return_value = MagicMock(id=uuid4())
 
             ctx = _make_context(entity={'name': 'tbl'})
             handler = AssignTagStepHandler(db=db_session, config={'key': 'owner', 'value': 'alice'})
@@ -104,7 +122,7 @@ class TestAssignTagPersistence:
         with patch('src.controller.tags_manager.TagsManager') as MockTM:
             mock_mgr = MagicMock()
             MockTM.return_value = mock_mgr
-            mock_mgr.get_tag_by_fqn.return_value = None
+            mock_mgr.get_tag_by_fqn.return_value = MagicMock(id=uuid4())
 
             handler = AssignTagStepHandler(
                 db=db_session,

@@ -106,13 +106,14 @@ describe('WorkflowDesigner layout', () => {
     expect(saved.done).toEqual({ x: 400, y: 190 });
   });
 
-  it('auto-arranges a workflow whose stored positions overlap', async () => {
+  it('moves a step that overlaps another sideways and keeps the rest of the layout', async () => {
     renderDesigner({ notify: { x: 400, y: 300 }, done: { x: 350, y: 340 } });
 
     const saved = await save();
 
-    expect(saved.done!.x).toBe(saved.notify!.x);
-    expect(saved.done!.y).toBeGreaterThan(saved.notify!.y + 90);
+    expect(saved.notify).toEqual({ x: 400, y: 300 });
+    expect(saved.done!.y).toBe(340);
+    expect(Math.abs(saved.done!.x - 400)).toBeGreaterThanOrEqual(180);
   });
 
   it('keeps the layout when Rearrange is cancelled', async () => {

@@ -4,10 +4,11 @@
  * Step positions are stored on the steps (`workflow_steps.position`). A
  * workflow opens as the user arranged it. Steps without a position (added
  * through the API or YAML after the layout was saved) are placed below the step
- * that leads to them, without moving the others. A workflow is auto-arranged
- * only when no step has a position (older workflows) or the stored positions
- * overlap (hand-written seed data, never shown before). The trigger node has
- * no stored position: it is placed above the first step.
+ * that leads to them, and a step that overlaps an earlier one (hand-written seed
+ * data that was never shown before) is moved sideways; the other steps keep
+ * their place. A workflow is auto-arranged only when no step has a position
+ * (older workflows). The trigger node has no stored position: it is placed
+ * above the first step.
  */
 import type { StepPosition } from '@/types/process-workflow';
 
@@ -56,15 +57,39 @@ export function withNodePositions<T extends { step_id: string; position?: StepPo
 const overlaps = (a: StepPosition, b: StepPosition) =>
   Math.abs(a.x - b.x) < NODE_BOX.width && Math.abs(a.y - b.y) < NODE_BOX.height;
 
-/** Whether two of the stored step positions overlap, so the stored layout isn't usable. */
-export function storedLayoutOverlaps(steps: { position?: unknown }[]): boolean {
+/** Whether two of the step positions overlap. */
+export function stepsOverlap(steps: { position?: unknown }[]): boolean {
   const placed = steps.map(s => s.position).filter(isPosition);
   return placed.some((p, i) => placed.slice(i + 1).some(q => overlaps(p, q)));
 }
 
-/** Whether the stored positions can be shown: at least one step has one, and none overlap. */
+/** Whether the stored layout can be used: at least one step has a position. */
 export function hasUsableLayout(steps: { position?: unknown }[]): boolean {
-  return steps.some(s => isPosition(s.position)) && !storedLayoutOverlaps(steps);
+  return steps.some(s => isPosition(s.position));
+}
+
+/** The first spot at or to the right of `start` that overlaps none of `taken`. */
+export function freePosition(start: StepPosition, taken: StepPosition[]): StepPosition {
+  const pos = { ...start };
+  while (taken.some(p => overlaps(p, pos))) pos.x += SIDE_GAP;
+  return pos;
+}
+
+/** Where a new step goes: below the lowest node, at the left edge, on a free spot. */
+export function newStepPosition(taken: StepPosition[]): StepPosition {
+  if (taken.length === 0) return { x: 100, y: 120 };
+  const lowest = Math.max(...taken.map(p => p.y));
+  const left = Math.min(...taken.map(p => p.x));
+  return freePosition({ x: left, y: lowest + TRIGGER_GAP }, taken);
+}
+
+/** Node moves that aren't drags (arrow keys on selected nodes), as node positions. */
+export function nonDragMoves(
+  changes: { type: string; id?: string; position?: StepPosition; dragging?: boolean }[],
+): { id: string; position: StepPosition }[] {
+  return changes.flatMap(c => (
+    c.type === 'position' && c.id && c.position && !c.dragging ? [{ id: c.id, position: c.position }] : []
+  ));
 }
 
 interface LinkedStep {
@@ -75,18 +100,21 @@ interface LinkedStep {
 }
 
 /**
- * The steps, with a position for every step that has none: below the step that
- * links to it (or below the lowest step), moved sideways until it overlaps no
- * other step. Steps that have a position keep it.
+ * The steps, each on a spot of its own. A stored position is kept unless it
+ * overlaps an earlier step, which moves it sideways. A step without a position
+ * goes below the step that links to it (or below the lowest step), on a free spot.
  */
 export function placeMissingSteps<T extends LinkedStep>(steps: T[]): T[] {
   const result = steps.map(s => ({ ...s }));
   const placed = () => result.map(s => s.position).filter(isPosition);
-  const free = (start: StepPosition): StepPosition => {
-    const pos = { ...start };
-    while (placed().some(p => overlaps(p, pos))) pos.x += SIDE_GAP;
-    return pos;
-  };
+  const free = (start: StepPosition): StepPosition => freePosition(start, placed());
+  // Overlapping stored positions: the earlier step keeps its place.
+  const kept: StepPosition[] = [];
+  for (const step of result) {
+    if (!isPosition(step.position)) continue;
+    step.position = freePosition(step.position, kept);
+    kept.push(step.position);
+  }
   let pending = result.filter(s => !isPosition(s.position));
   // Steps whose predecessor gets placed first are placed in later rounds.
   while (pending.length > 0) {

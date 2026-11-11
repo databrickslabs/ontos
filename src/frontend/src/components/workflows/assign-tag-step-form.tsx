@@ -32,7 +32,8 @@ const SOURCE_LABEL_KEYS: Record<(typeof VALUE_SOURCES)[number], string> = {
 /** The value mode a stored config stands for. */
 export function valueModeOf(config: Partial<AssignTagStepConfig>): AssignTagValueMode {
   if (config.value_source) return 'source';
-  if (config.value) return 'fixed';
+  // An empty fixed value is still a fixed value (an unfinished step), not "no value".
+  if (config.value !== undefined && config.value !== null) return 'fixed';
   return 'none';
 }
 

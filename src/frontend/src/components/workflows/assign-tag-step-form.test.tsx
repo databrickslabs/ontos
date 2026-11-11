@@ -42,7 +42,8 @@ describe('valueModeOf / configForMode', () => {
     expect(valueModeOf({ key: 'k', value_source: 'current_user' })).toBe('source');
     expect(valueModeOf({ key: 'k', value: 'x' })).toBe('fixed');
     expect(valueModeOf({ key: 'k' })).toBe('none');
-    expect(valueModeOf({ key: 'k', value: '' })).toBe('none');
+    // An empty fixed value is an unfinished fixed value, which validation refuses.
+    expect(valueModeOf({ key: 'k', value: '' })).toBe('fixed');
   });
 
   it('keeps only the fields of the chosen mode', () => {

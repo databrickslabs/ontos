@@ -152,7 +152,9 @@ import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
-import { hasUsableLayout, placeMissingSteps, triggerPositionFor, withNodePositions } from './workflow-layout';
+import {
+  hasUsableLayout, newStepPosition, nonDragMoves, placeMissingSteps, triggerPositionFor, withNodePositions,
+} from './workflow-layout';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
@@ -998,9 +1000,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // copied onto the steps too; drags are handled by onNodeDragStop.
   const handleNodesChange = useCallback((changes: import('reactflow').NodeChange[]) => {
     onNodesChange(changes);
-    const moved = changes.flatMap(c => (
-      c.type === 'position' && c.position && !c.dragging ? [{ id: c.id, position: c.position }] : []
-    ));
+    const moved = nonDragMoves(changes);
     if (moved.length > 0) setSteps(prev => withNodePositions(prev, moved));
   }, [onNodesChange]);
 
@@ -1445,7 +1445,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       step_type: type,
       config: type === 'entity_action' ? { action: 'certify' } : {},
       order: steps.length,
-      position: { x: 100, y: (nodes.length + 1) * 120 },
+      // Below the lowest node, on a spot no other node takes.
+      position: newStepPosition(nodes.map(n => n.position)),
     };
     
     setSteps(prev => [...prev, newStep]);

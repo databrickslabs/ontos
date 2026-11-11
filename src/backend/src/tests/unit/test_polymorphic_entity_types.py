@@ -1,8 +1,8 @@
 """Polymorphic metadata/cost models accept every entity kind the UI renders panels for.
 
 Regression: the metadata models only accepted domain/product/contract/dataset, so
-saving a note, link or document on an asset, compliance policy, concept,
-collection or authority relation failed with 422 even though the panel rendered.
+saving a note, link or document on an asset, compliance policy, concept or
+collection failed with 422 even though the panel rendered.
 """
 import pytest
 from pydantic import ValidationError

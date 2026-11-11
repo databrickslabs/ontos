@@ -209,6 +209,16 @@ class MetadataManager:
             return None
         return Document.from_orm(db_obj)
 
+    def get_record_entity_type(self, db: Session, *, kind: str, id: str) -> Optional[str]:
+        """Entity kind a rich text, link or document belongs to, or None if it doesn't exist."""
+        repos = {
+            "rich_text": self._rich_text_repo,
+            "link": self._link_repo,
+            "document": self._document_repo,
+        }
+        db_obj = repos[kind].get(db, id=id)
+        return db_obj.entity_type if db_obj else None
+
     # =========================================================================
     # Shared Assets Management
     # =========================================================================

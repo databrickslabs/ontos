@@ -6,21 +6,47 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker
+from src.common.authorization import (
+    EntityTypePermissionChecker,
+    check_entity_permission,
+    get_user_details_from_sdk,
+)
 from src.common.logging import get_logger
 from src.controller.costs_manager import CostsManager
-from src.common.manager_dependencies import get_metadata_manager  # reuse style; provide a getter here
-from src.models.costs import CostItem, CostItemCreate, CostItemUpdate, CostSummary
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.users import UserInfo
+from src.models.costs import COST_ENTITY_FEATURES, CostItem, CostItemCreate, CostItemUpdate, CostSummary
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Costs"])
 
-FEATURE_ID = "data-domains"  # align with metadata until dedicated feature is added
+# Cost items are authorized by the feature that owns their entity's kind
+# (COST_ENTITY_FEATURES), so domain write access doesn't grant cost edits on products.
 
 
 def get_costs_manager() -> CostsManager:
     return CostsManager()
+
+
+def _cost_item_permission(required_level: FeatureAccessLevel):
+    """Dependency for /cost-items/{id}: check the feature of the item's entity kind."""
+    async def dependency(
+        id: str,
+        request: Request,
+        db: DBSessionDep,
+        user_details: UserInfo = Depends(get_user_details_from_sdk),
+        auth_manager: AuthorizationManager = Depends(get_auth_manager),
+        manager: CostsManager = Depends(get_costs_manager),
+    ) -> None:
+        entity_type = manager.get_entity_type(db, id=id)
+        if entity_type is None:
+            raise HTTPException(status_code=404, detail="Cost item not found")
+        await check_entity_permission(
+            request, user_details, auth_manager, COST_ENTITY_FEATURES, entity_type, required_level,
+        )
+    return dependency
 
 
 @router.post("/entities/{entity_type}/{entity_id}/cost-items", response_model=CostItem, status_code=status.HTTP_201_CREATED)
@@ -34,7 +60,7 @@ async def create_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(EntityTypePermissionChecker(COST_ENTITY_FEATURES, FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {
@@ -80,7 +106,7 @@ async def list_cost_items(
     month: Optional[str] = Query(None, description="YYYY-MM to filter active recurring items"),
     db: DBSessionDep = None,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityTypePermissionChecker(COST_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     month_date = None
     if month:
@@ -98,7 +124,7 @@ async def summarize_cost_items(
     month: str = Query(..., description="YYYY-MM month to summarize"),
     db: DBSessionDep = None,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(EntityTypePermissionChecker(COST_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     try:
         month_date = datetime.strptime(month + "-01", "%Y-%m-%d").date()
@@ -117,7 +143,7 @@ async def update_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_cost_item_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {
@@ -162,7 +188,7 @@ async def delete_cost_item(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
-    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+    _: None = Depends(_cost_item_permission(FeatureAccessLevel.READ_WRITE)),
 ):
     success = False
     details = {"params": {"cost_item_id": id}}

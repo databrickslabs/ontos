@@ -689,6 +689,86 @@ def user_has_feature_level(auth_manager, user, feature_id: str, required_level: 
         return False
 
 
+async def check_feature_permission(
+    request: Request,
+    user_details: UserInfo,
+    auth_manager: AuthorizationManager,
+    feature_id: str,
+    required_level: FeatureAccessLevel,
+) -> None:
+    """Raise 403 unless the user holds ``required_level`` on ``feature_id``.
+
+    The check behind ``PermissionChecker``, for routes that only know the feature
+    after reading the request (e.g. from the entity type a record belongs to).
+    """
+    logger.debug("Checking permission for feature '%s' (level: '%s') for user '%s'", feature_id, required_level.value, user_details.user or user_details.email)
+
+    # A user with no groups may still hold a role via direct email assignment
+    # (assigned_users, #196/#760), so only deny early when there is neither.
+    if not user_details.groups and not user_details.email:
+        logger.warning("User '%s' has no groups and no email. Denying access for '%s'", user_details.user or user_details.email, feature_id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User has no assigned groups or email, cannot determine permissions."
+        )
+
+    try:
+        # Check for team role overrides
+        team_role_override = await get_user_team_role_overrides(
+            user_details.email,
+            user_details.groups or [],
+            request
+        )
+
+        # Check if an explicit role override is applied for this user
+        applied_role_id = None
+        try:
+            settings_manager = getattr(request.app.state, 'settings_manager', None)
+            if settings_manager:
+                applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+        except Exception:
+            applied_role_id = None
+
+        if applied_role_id and settings_manager:
+            # Build effective permissions directly from the selected role
+            effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+        else:
+            effective_permissions = auth_manager.get_user_effective_permissions(
+                user_details.groups,
+                team_role_override,
+                user_email=user_details.email,
+            )
+        has_required_permission = auth_manager.has_permission(
+            effective_permissions,
+            feature_id,
+            required_level
+        )
+
+        if not has_required_permission:
+            user_level = effective_permissions.get(feature_id, FeatureAccessLevel.NONE)
+            logger.warning(
+                f"Permission denied for user '{user_details.user or user_details.email}' "
+                f"on feature '{feature_id}'. Required: '{required_level.value}', Found: '{user_level.value}'"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions for feature '{feature_id}'. Required level: {required_level.value}."
+            )
+
+        logger.debug("Permission granted for user '%s' on feature '%s'", user_details.user or user_details.email, feature_id)
+        # If permission is granted, the dependency resolves successfully (returns None implicitly)
+        return
+
+    except HTTPException:
+        raise # Re-raise exceptions from dependencies (like 503 from get_auth_manager)
+    except Exception as e:
+        logger.error("Unexpected error during permission check for feature '%s'", feature_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error checking user permissions."
+        )
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):
@@ -703,72 +783,51 @@ class PermissionChecker:
         auth_manager: AuthorizationManager = Depends(get_auth_manager)
     ):
         """Performs the permission check when the dependency is called."""
-        logger.debug("Checking permission for feature '%s' (level: '%s') for user '%s'", self.feature_id, self.required_level.value, user_details.user or user_details.email)
+        await check_feature_permission(
+            request, user_details, auth_manager, self.feature_id, self.required_level
+        )
 
-        # A user with no groups may still hold a role via direct email assignment
-        # (assigned_users, #196/#760), so only deny early when there is neither.
-        if not user_details.groups and not user_details.email:
-            logger.warning("User '%s' has no groups and no email. Denying access for '%s'", user_details.user or user_details.email, self.feature_id)
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User has no assigned groups or email, cannot determine permissions."
-            )
 
-        try:
-            # Check for team role overrides
-            team_role_override = await get_user_team_role_overrides(
-                user_details.email,
-                user_details.groups or [],
-                request
-            )
+class EntityTypePermissionChecker:
+    """FastAPI dependency: checks the feature that owns the ``entity_type`` path parameter.
 
-            # Check if an explicit role override is applied for this user
-            applied_role_id = None
-            try:
-                settings_manager = getattr(request.app.state, 'settings_manager', None)
-                if settings_manager:
-                    applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-            except Exception:
-                applied_role_id = None
+    Polymorphic routes (``/entities/{entity_type}/...``) serve several entity kinds;
+    each kind is authorized with its own feature, so write access to one feature
+    doesn't grant writes on the others' records.
+    """
+    def __init__(self, features_by_entity_type: Dict[str, str], required_level: FeatureAccessLevel):
+        self.features_by_entity_type = features_by_entity_type
+        self.required_level = required_level
 
-            if applied_role_id and settings_manager:
-                # Build effective permissions directly from the selected role
-                effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                effective_permissions = auth_manager.get_user_effective_permissions(
-                    user_details.groups,
-                    team_role_override,
-                    user_email=user_details.email,
-                )
-            has_required_permission = auth_manager.has_permission(
-                effective_permissions,
-                self.feature_id,
-                self.required_level
-            )
+    async def __call__(
+        self,
+        request: Request,
+        user_details: UserInfo = Depends(get_user_details_from_sdk),
+        auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    ):
+        entity_type = request.path_params.get("entity_type")
+        await check_entity_permission(
+            request, user_details, auth_manager,
+            self.features_by_entity_type, entity_type, self.required_level,
+        )
 
-            if not has_required_permission:
-                user_level = effective_permissions.get(self.feature_id, FeatureAccessLevel.NONE)
-                logger.warning(
-                    f"Permission denied for user '{user_details.user or user_details.email}' "
-                    f"on feature '{self.feature_id}'. Required: '{self.required_level.value}', Found: '{user_level.value}'"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Insufficient permissions for feature '{self.feature_id}'. Required level: {self.required_level.value}."
-                )
 
-            logger.debug("Permission granted for user '%s' on feature '%s'", user_details.user or user_details.email, self.feature_id)
-            # If permission is granted, the dependency resolves successfully (returns None implicitly)
-            return
-
-        except HTTPException:
-            raise # Re-raise exceptions from dependencies (like 503 from get_auth_manager)
-        except Exception as e:
-            logger.error("Unexpected error during permission check for feature '%s'", self.feature_id, exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error checking user permissions."
-            )
+async def check_entity_permission(
+    request: Request,
+    user_details: UserInfo,
+    auth_manager: AuthorizationManager,
+    features_by_entity_type: Dict[str, str],
+    entity_type: Optional[str],
+    required_level: FeatureAccessLevel,
+) -> None:
+    """Check ``required_level`` on the feature that owns ``entity_type``; 400 for unknown types."""
+    feature_id = features_by_entity_type.get(entity_type or "")
+    if not feature_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported entity type.",
+        )
+    await check_feature_permission(request, user_details, auth_manager, feature_id, required_level)
 
 # --- Pre-configured Dependency Instances (Optional but convenient) ---
 # You can create instances here for common permission levels

@@ -201,8 +201,14 @@ class StepResult:
 
 
 def _next_step_id(step: 'WorkflowStep', result: StepResult) -> Optional[str]:
-    """The step to run after ``step``: none after a Pass or Fail step, else its branch."""
+    """The step to run after ``step``: none after a Pass or Fail step, else its branch.
+
+    A conditional's branches are its true and false results, so a condition that
+    couldn't be evaluated has no branch: the run ends there, failed.
+    """
     if is_terminal_step_type(step.step_type):
+        return None
+    if getattr(step.step_type, 'value', step.step_type) == StepType.CONDITIONAL.value and result.branch is None:
         return None
     return step.on_pass if result.takes_pass_branch() else step.on_fail
 
@@ -1493,7 +1499,7 @@ class ConditionalStepHandler(StepHandler):
                 passed=True,
                 branch=branch,
                 message=f"Condition evaluated to: {result}",
-                data={'condition': condition, 'result': branch, 'branch': 'true' if branch else 'false'},
+                data={'condition': condition, 'result': result, 'branch': 'true' if branch else 'false'},
             )
         except Exception as e:
             logger.exception(f"Conditional step failed: {e}")

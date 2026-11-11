@@ -150,8 +150,11 @@ export function getStepExecutionState(
     if (stepExecution.status === 'running') return 'running';
   }
 
-  // A finished execution never reached this step (e.g. the branch not taken)
-  if (FINISHED_EXECUTION_STATES.has(execution.status)) return 'skipped';
+  // A finished execution never reached this step (e.g. the branch not taken).
+  // The step a cancelled execution stopped at was reached, it just never ran.
+  if (FINISHED_EXECUTION_STATES.has(execution.status) && execution.current_step_id !== stepId) {
+    return 'skipped';
+  }
 
   return 'pending';
 }

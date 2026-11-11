@@ -115,7 +115,7 @@ Each step ends with a pass or a fail, which picks the next step. A step that rai
 | Step | Passes when | Fails when |
 |--|--|--|
 | `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated. A failed assertion is a step failure even when `on_fail` leads to another step |
-| `conditional` | The `condition` expression could be evaluated, true or false. True follows `on_pass`, false follows `on_fail`; the step shows the branch it took and a false condition doesn't count as a failure | It can't be evaluated (then it follows `on_fail`) |
+| `conditional` | The `condition` expression could be evaluated, true or false. True follows `on_pass`, false follows `on_fail`; the step shows the branch it took and a false condition doesn't count as a failure. A branch with no step ends the run as succeeded, so end the false branch of a gate with a Fail step | It can't be evaluated; the run then ends there as failed |
 | `policy_check` | The referenced compliance policy's rule holds, or the policy is inactive | The rule fails, or the policy doesn't exist |
 | `approval` | The approver approves (the step pauses first) | The approver rejects, or no approver could be resolved |
 | `notification` | At least one notification was created | None could be created |
@@ -285,7 +285,7 @@ Each reason is the Fail step's `message` (or the failing step's message), so wri
 
 | What happens | Result |
 |--|--|
-| A step raises an error (SQL error, connection refused, ...) | The step fails with the error text; the executor follows its `on_fail` |
+| A step raises an error (SQL error, connection refused, ...) | The step fails with the error text; the executor follows its `on_fail` (a conditional step has no failure branch: the run ends as failed) |
 | `on_pass` / `on_fail` names a step that doesn't exist | Saving the workflow is refused (HTTP 400, `Step '<id>' references unknown step '<name>'`) |
 | An `on_*` workflow fails | The action that fired it is already done and stays done |
 | A gate fails or pauses | The action is refused |

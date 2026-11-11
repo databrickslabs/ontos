@@ -24,6 +24,7 @@ from src.models.process_workflows import (
     TriggerType,
     WorkflowStepCreate,
     WorkflowTrigger,
+    WorkflowType,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
 
@@ -51,7 +52,7 @@ def _store_link(db, workflow_id, step_id, on_pass=None, on_fail=None):
     db.commit()
 
 
-def _run(db, workflow_id, step_type_before_approval=None):
+def _run(db, workflow_id):
     workflow = WorkflowsManager(db).get_workflow(workflow_id)
     return WorkflowExecutor(db).execute_workflow(
         workflow=workflow,
@@ -127,6 +128,34 @@ def test_a_pass_step_after_an_approval_ends_the_resumed_run(db_session):
     assert resumed.status.value == 'succeeded'
 
 
+def test_approval_workflows_keep_links_out_of_pass_steps(db_session):
+    """The wizard runtime passes through a Pass step that has a next step."""
+    db_workflow = process_workflow_repo.create(db_session, ProcessWorkflowCreate(
+        name=f'wf-{uuid.uuid4().hex[:6]}', workflow_type=WorkflowType.APPROVAL,
+        trigger=WorkflowTrigger(type=TriggerType.MANUAL, entity_types=[EntityType.TABLE]),
+        steps=[_step('mid', StepType.PASS, on_pass='end'), _step('end', StepType.PASS)],
+    ))
+    row = db_session.query(WorkflowStepDb).filter_by(workflow_id=db_workflow.id, step_id='mid').one()
+    assert row.on_pass == 'end'
+
+    result = WorkflowsManager(db_session).validate_workflow(ProcessWorkflowCreate(
+        name='wf', workflow_type=WorkflowType.APPROVAL,
+        trigger=WorkflowTrigger(type=TriggerType.MANUAL, entity_types=[EntityType.TABLE]),
+        steps=[_step('mid', StepType.PASS, on_pass='end'), _step('end', StepType.PASS)],
+    ))
+    assert [w.code for w in result.warning_issues] == []
+
+
+def test_a_terminal_step_with_two_links_reports_both(db_session):
+    result = WorkflowsManager(db_session).validate_workflow(ProcessWorkflowCreate(
+        name='wf',
+        trigger=WorkflowTrigger(type=TriggerType.MANUAL, entity_types=[EntityType.TABLE]),
+        steps=[_step('stop', StepType.FAIL, on_pass='a', on_fail='b'), _step('a', StepType.PASS), _step('b', StepType.PASS)],
+    ))
+    targets = [w.params['target'] for w in result.warning_issues if w.code == 'terminal_step_has_next']
+    assert targets == ['a', 'b']
+
+
 def test_saving_drops_links_out_of_terminal_steps(db_session):
     db_workflow = _create(db_session, [
         _step('done', StepType.PASS, on_pass='stop'),
@@ -157,7 +186,7 @@ def test_validation_warns_about_links_out_of_terminal_steps(db_session):
     by_code = {w.code: w for w in result.warning_issues}
     assert by_code['terminal_step_has_next'].params == {'step': 'done', 'target': 'stop'}
     # The Fail step is reachable only through the ignored link
-    assert 'stop' in by_code['workflow_validation_warning'].message
+    assert by_code['unreachable_steps'].params == {'steps': ['stop']}
 
 
 # --- #1418: a Conditional picks a branch, it doesn't fail --------------------
@@ -222,7 +251,7 @@ def test_a_false_condition_with_nothing_on_its_branch_ends_the_run_succeeded(db_
 
 def test_a_condition_that_cannot_be_evaluated_fails_the_step(db_session):
     db_workflow = _create(db_session, [
-        _conditional('1 = = 1'),
+        _conditional('1 = = 1', on_fail='done'),
         _step('done', StepType.PASS),
         _step('stop', StepType.FAIL),
     ])
@@ -233,8 +262,21 @@ def test_a_condition_that_cannot_be_evaluated_fails_the_step(db_session):
     assert check.status.value == 'failed'
     assert check.passed is False
     assert 'branch' not in (check.result_data or {})
-    # An error still follows the failure branch, as before
-    assert [key for key, _ in _ran(execution)] == ['check', 'stop']
+    # An error is not a false condition: the run ends at the conditional, failed
+    assert [key for key, _ in _ran(execution)] == ['check']
+    assert execution.status.value == 'failed'
+    assert execution.error_message
+
+
+def test_validation_warns_about_a_conditional_without_a_false_branch(db_session):
+    result = WorkflowsManager(db_session).validate_workflow(ProcessWorkflowCreate(
+        name='wf',
+        trigger=WorkflowTrigger(type=TriggerType.MANUAL, entity_types=[EntityType.TABLE]),
+        steps=[_conditional('1 = 1', on_pass='done', on_fail=None), _step('done', StepType.PASS)],
+    ))
+
+    missing = [w.params for w in result.warning_issues if w.code == 'conditional_branch_missing']
+    assert missing == [{'step': 'check', 'branch': 'false'}]
 
 
 def test_later_steps_see_the_branch_of_a_conditional(db_session):

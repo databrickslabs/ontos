@@ -137,15 +137,23 @@ class StepType(str, Enum):
     ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start ()
 
 
-# Steps that end a run with their own outcome. They have no next step: a stored
-# on_pass / on_fail (older designers saved one, the canvas never drew it) is
-# ignored when the workflow runs and dropped when it is saved.
+# Steps that end a process workflow run with their own outcome. They have no next
+# step: a stored on_pass / on_fail (older designers saved one, the canvas never
+# drew it) is ignored when the workflow runs and dropped when it is saved.
+# Approval (wizard) workflows are not covered: their runtime treats a Pass step
+# with a link as a step it passes through.
 TERMINAL_STEP_TYPES = frozenset({StepType.PASS.value, StepType.FAIL.value})
 
 
 def is_terminal_step_type(step_type: Any) -> bool:
     """Whether a step of this type (enum or stored string) ends the run."""
     return getattr(step_type, 'value', step_type) in TERMINAL_STEP_TYPES
+
+
+def ends_process_run(workflow_type: Any, step_type: Any) -> bool:
+    """Whether a step of a workflow of this type ends the run, so its links are dropped."""
+    return (getattr(workflow_type, 'value', workflow_type) or WorkflowType.PROCESS.value) \
+        == WorkflowType.PROCESS.value and is_terminal_step_type(step_type)
 
 
 class ExecutionStatus(str, Enum):

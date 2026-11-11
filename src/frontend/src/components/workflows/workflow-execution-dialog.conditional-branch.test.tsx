@@ -10,7 +10,7 @@ const get = vi.fn();
 vi.mock('@/hooks/use-api', () => ({ useApi: () => ({ get }) }));
 
 import i18n from '@/i18n/config';
-import { WorkflowExecutionDialog, getConditionalBranch } from './workflow-execution-dialog';
+import { WorkflowExecutionDialog, getConditionalBranch, getStepExecutionState } from './workflow-execution-dialog';
 
 const STEPS = [
   { id: 'row-1', step_id: 'check', name: 'Check Condition', step_type: 'conditional' },
@@ -82,5 +82,24 @@ describe('WorkflowExecutionDialog conditional branch', () => {
     open(finished('false'));
 
     expect(await screen.findByText('Bedingung war falsch: Falsch-Zweig ausgeführt')).toBeInTheDocument();
+  });
+});
+
+describe('getStepExecutionState of steps that never ran', () => {
+  const step = { id: 'row-2', step_id: 'approve' };
+
+  it('is skipped in a finished execution', () => {
+    const ex = { status: 'succeeded', current_step_id: null, step_executions: [] } as unknown as WorkflowExecution;
+    expect(getStepExecutionState(step, ex)).toBe('skipped');
+  });
+
+  it('is pending for the step a cancelled execution stopped at', () => {
+    const ex = { status: 'cancelled', current_step_id: 'approve', step_executions: [] } as unknown as WorkflowExecution;
+    expect(getStepExecutionState(step, ex)).toBe('pending');
+  });
+
+  it('is pending while the execution is paused', () => {
+    const ex = { status: 'paused', current_step_id: 'other', step_executions: [] } as unknown as WorkflowExecution;
+    expect(getStepExecutionState(step, ex)).toBe('pending');
   });
 });

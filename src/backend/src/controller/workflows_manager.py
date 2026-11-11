@@ -37,7 +37,7 @@ from src.models.process_workflows import (
     TemplateVarDescriptor,
     TemplateVarGroup,
     TemplateVarsResponse,
-    is_terminal_step_type,
+    ends_process_run,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
@@ -695,15 +695,30 @@ class WorkflowsManager:
                         'step_unknown_reference', step=step.step_id, target=target, field=field,
                     ))
         
-        # A Pass or Fail step ends the run: a link out of it is never followed and
-        # is dropped on save (older designers stored one the canvas never drew)
+        # A Pass or Fail step ends a process run: a link out of it is never followed
+        # and is dropped on save (older designers stored one the canvas never drew)
         for step in workflow.steps:
-            if is_terminal_step_type(step.step_type) and (step.on_pass or step.on_fail):
+            if not ends_process_run(workflow.workflow_type, step.step_type):
+                continue
+            for target in dict.fromkeys(t for t in (step.on_pass, step.on_fail) if t):
                 warnings.append(CodedMessage(
-                    f"Step '{step.step_id}' ends the workflow; its link to the next step is ignored and removed on save",
-                    'terminal_step_has_next', step=step.step_id,
-                    target=step.on_pass or step.on_fail,
+                    f"Step '{step.step_id}' ends the workflow; its link to '{target}' is ignored and removed on save",
+                    'terminal_step_has_next', step=step.step_id, target=target,
                 ))
+
+        # A conditional whose branch has no step ends the run succeeded when it takes
+        # that branch, so a gate lets the change through (a false condition is not
+        # a failure). Warn, so a missing Fail step on a branch isn't overlooked.
+        for step in workflow.steps:
+            if getattr(step.step_type, 'value', step.step_type) != StepType.CONDITIONAL.value:
+                continue
+            for branch, target in (('true', step.on_pass), ('false', step.on_fail)):
+                if not target:
+                    warnings.append(CodedMessage(
+                        f"Conditional step '{step.step_id}' has no step on its {branch} branch; "
+                        f"a {branch} condition ends the workflow as succeeded",
+                        'conditional_branch_missing', step=step.step_id, branch=branch,
+                    ))
 
         # Check for unreachable steps (warning only)
         reachable = set()
@@ -717,15 +732,18 @@ class WorkflowsManager:
                 reachable.add(current)
                 
                 step = next((s for s in workflow.steps if s.step_id == current), None)
-                if step and not is_terminal_step_type(step.step_type):
+                if step and not ends_process_run(workflow.workflow_type, step.step_type):
                     if step.on_pass:
                         to_visit.append(step.on_pass)
                     if step.on_fail:
                         to_visit.append(step.on_fail)
             
-            unreachable = step_id_set - reachable
+            unreachable = sorted(step_id_set - reachable)
             if unreachable:
-                warnings.append(f"Unreachable steps: {', '.join(unreachable)}")
+                warnings.append(CodedMessage(
+                    f"Unreachable steps: {', '.join(unreachable)}",
+                    'unreachable_steps', steps=unreachable,
+                ))
         
         # Validate step configs based on type
         for step in workflow.steps:

@@ -718,6 +718,15 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
 ];
 
 // Layout helper
+// Label and colour of a step's outgoing edge. A conditional's edges are its true and
+// false branches: a false condition is a branch, not a failure (#1418).
+export function branchEdgeLook(sourceType: string | undefined, handle: 'pass' | 'fail') {
+  const isPass = handle === 'pass';
+  const color = isPass ? '#22c55e' : '#ef4444';
+  const label = sourceType === 'conditional' ? (isPass ? 'True' : 'False') : (isPass ? 'Pass' : 'Fail');
+  return { label, labelStyle: { fill: color, fontWeight: 500 }, style: { stroke: color } };
+}
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -795,10 +804,8 @@ const workflowToElements = (
         sourceHandle: 'pass',
         target: step.on_pass,
         type: 'deletable',
-        label: 'Pass',
-        labelStyle: { fill: '#22c55e', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'pass'),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#22c55e' },
       });
     }
     if (step.on_fail) {
@@ -808,10 +815,8 @@ const workflowToElements = (
         sourceHandle: 'fail',
         target: step.on_fail,
         type: 'deletable',
-        label: 'Fail',
-        labelStyle: { fill: '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'fail'),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#ef4444' },
       });
     }
   });
@@ -1340,10 +1345,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         sourceHandle: handleType,
         target: newConnection.target!,
         type: 'deletable',
-        label: isPass ? 'Pass' : 'Fail',
-        labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(nodes.find(n => n.id === newConnection.source)?.type, isPass ? 'pass' : 'fail'),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: isPass ? '#22c55e' : '#ef4444' },
       };
       return [...filtered, reconnectedEdge];
     });
@@ -1355,7 +1358,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       }
       return s;
     }));
-  }, [setEdges]);
+  }, [setEdges, nodes]);
 
   // Handle manual edge creation (drag from handle to handle)
   const onConnect = useCallback((connection: Connection) => {
@@ -1381,10 +1384,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       sourceHandle: handleType,
       target: connection.target,
       type: 'deletable',
-      label: isPass ? 'Pass' : 'Fail',
-      labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+      ...branchEdgeLook(nodes.find(n => n.id === connection.source)?.type, isPass ? 'pass' : 'fail'),
       markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: isPass ? '#22c55e' : '#ef4444' },
     };
     setEdges(prev => [...prev, newEdge]);
 
@@ -1394,7 +1395,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         ? { ...s, [isPass ? 'on_pass' : 'on_fail']: connection.target }
         : s
     ));
-  }, [setEdges]);
+  }, [setEdges, nodes]);
 
   // Add new step
   const addStep = (type: StepType) => {

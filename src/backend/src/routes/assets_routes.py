@@ -17,6 +17,12 @@ from src.controller.metric_views_manager import (
 from src.common.workspace_client import get_obo_workspace_client
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.metric_views import MetricViewRead
+from src.controller.metric_view_change_requests_manager import (
+    ChangeRequestError, MetricViewChangeRequestsManager,
+)
+from src.models.metric_view_change_requests import (
+    MetricViewChangeRequestCreate, MetricViewChangeRequestDetail, MetricViewChangeRequestRead,
+)
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
@@ -640,6 +646,174 @@ def get_asset_metric_view(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to read the metric view",
         )
+
+
+# ===================== Metric View Change Requests (#1124) =====================
+
+def _change_requests(request: Request, db) -> MetricViewChangeRequestsManager:
+    links_manager = SemanticLinksManager(
+        db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+    )
+    return MetricViewChangeRequestsManager(db, links_manager)
+
+
+def _change_request_call(action: str, asset_id: UUID, call):
+    """Run a change request action, answering its coded errors with their status.
+
+    Unity Catalog is read as the user: 403 ``user_token_required`` without the
+    user's token (401 when Unity Catalog refuses it), 503
+    ``user_client_unavailable``, 404 ``metric_view_not_found`` when the user
+    can't read the metric view.
+    """
+    try:
+        return call()
+    except ChangeRequestError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    except MetricViewNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to %s a change request of the metric view of asset %s",
+                         action, asset_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The change request action failed",
+        )
+
+
+def _user_client_or_raise(request: Request):
+    try:
+        return _user_workspace_client(request)
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except UserClientUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view/change-requests",
+    response_model=List[MetricViewChangeRequestRead],
+)
+def list_metric_view_change_requests(
+    asset_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """The definition change requests of the metric view behind an asset, newest first.
+
+    Only for users who can read the asset and, in Unity Catalog, the metric view
+    (read as the user, as ``GET /{asset_id}/metric-view``).
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    requests = _change_requests(request, db)
+
+    def call():
+        requests.read_metric_view(asset_id, ws_client)
+        return requests.list_for_asset(asset_id)
+    return _change_request_call('list', asset_id, call)
+
+
+@assets_router.post(
+    "/{asset_id}/metric-view/change-requests",
+    response_model=MetricViewChangeRequestDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def create_metric_view_change_request(
+    asset_id: UUID,
+    body: MetricViewChangeRequestCreate,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """A draft change of the metric view's definition, against the one Unity Catalog has now.
+
+    422 with a coded error when the proposed YAML doesn't parse
+    (``metric_view_definition_invalid_yaml`` with ``line`` and ``column``), has
+    no source, contains ``$$``, repeats a field name or equals the current
+    definition; 409 ``metric_view_base_unreadable`` when the current one can't
+    be parsed.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    return _change_request_call('create', asset_id, lambda: _change_requests(request, db)
+                                .create_draft(asset_id, ws_client, body, current_user.email))
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view/change-requests/{request_id}",
+    response_model=MetricViewChangeRequestDetail,
+)
+def get_metric_view_change_request(
+    asset_id: UUID,
+    request_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """One change request with its base and proposed definitions, parsed, for the review."""
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    requests = _change_requests(request, db)
+
+    def call():
+        requests.read_metric_view(asset_id, ws_client)
+        return requests.get(asset_id, request_id)
+    return _change_request_call('read', asset_id, call)
+
+
+@assets_router.post(
+    "/{asset_id}/metric-view/change-requests/{request_id}/submit",
+    response_model=MetricViewChangeRequestRead,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def submit_metric_view_change_request(
+    asset_id: UUID,
+    request_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """Run the pre-checks as the requester and start the review workflow.
+
+    409 ``metric_view_base_stale`` when the view changed in Unity Catalog since
+    the draft, 409 or 422 for a materialization constraint, 409
+    ``metric_view_change_no_approval`` when no workflow asks for an approval.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    ws_client = _user_client_or_raise(request)
+    return _change_request_call('submit', asset_id, lambda: _change_requests(request, db)
+                                .submit(asset_id, request_id, ws_client, current_user.email))
+
+
+@assets_router.post(
+    "/{asset_id}/metric-view/change-requests/{request_id}/cancel",
+    response_model=MetricViewChangeRequestRead,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def cancel_metric_view_change_request(
+    asset_id: UUID,
+    request_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """Cancel a draft or a request in review (the requester, or an assets admin)."""
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    is_admin = _user_has_assets_feature(request, current_user, FeatureAccessLevel.ADMIN)
+    return _change_request_call('cancel', asset_id, lambda: _change_requests(request, db)
+                                .cancel(asset_id, request_id, current_user.email,
+                                        is_admin=is_admin))
 
 
 # ===================== Asset Relationships =====================

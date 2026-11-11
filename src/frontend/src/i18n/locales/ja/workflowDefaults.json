@@ -95,6 +95,9 @@
     },
     "conceptReviewRequest": {
       "rejected": "概念のレビューは承認されませんでした"
+    },
+    "metricViewChangeRequest": {
+      "rejected": "メトリックビューの変更リクエストが却下されました"
     }
   },
   "workflowNames": {
@@ -130,6 +133,7 @@
     "certification-request-review": "認定依頼のレビュー",
     "publication-request-review": "公開依頼のレビュー",
     "first-access-welcome": "ようこそ: 利用規約",
-    "on-request-access-grant-permissions-reference": "リファレンス: 依頼者に UC の SELECT を付与 (on_request_access)"
+    "on-request-access-grant-permissions-reference": "リファレンス: 依頼者に UC の SELECT を付与 (on_request_access)",
+    "metric-view-change-request": "メトリックビュー変更リクエスト"
   }
 }

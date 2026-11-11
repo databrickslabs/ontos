@@ -2,7 +2,7 @@
  * UnityCatalogLogo follows the OS color scheme live while the theme is "system".
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { UnityCatalogLogo } from './unity-catalog-logo';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
@@ -62,5 +62,21 @@ describe('UnityCatalogLogo', () => {
     expect(screen.getByRole('img').getAttribute('src')).toBe('/branding/acme/dark.svg');
     act(() => setSystemDark(false));
     expect(screen.getByRole('img').getAttribute('src')).toBe('/branding/acme/light.svg');
+  });
+
+  it('falls back to the default logo when the configured one fails to load', () => {
+    mockSystemScheme(false);
+    render(
+      <ThemeProvider>
+        <UnityCatalogLogo />
+      </ThemeProvider>,
+    );
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByRole('img').getAttribute('src')).toMatch(/\/ontos-logo\.svg$/);
+    // A different configured URL is tried again
+    act(() => useUICustomizationStore.getState().setSettings({
+      customLogoUrl: '/branding/acme/other.svg',
+    }));
+    expect(screen.getByRole('img').getAttribute('src')).toBe('/branding/acme/other.svg');
   });
 });

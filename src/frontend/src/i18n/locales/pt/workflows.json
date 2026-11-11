@@ -330,12 +330,12 @@
       "duplicateStepIds": "Duas etapas têm o mesmo ID.",
       "stepUnknownReference": "A etapa \"{{step}}\" aponta o ramo de {{branch}} para \"{{target}}\", que não está no workflow.",
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
+      "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
-      },
-      "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\"."
+      }
     }
   },
   "approvalResponse": {

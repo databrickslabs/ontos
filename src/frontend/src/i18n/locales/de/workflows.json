@@ -330,12 +330,12 @@
       "duplicateStepIds": "Zwei Schritte haben dieselbe ID.",
       "stepUnknownReference": "Schritt \"{{step}}\" verweist mit seinem {{branch}}-Zweig auf \"{{target}}\", der nicht im Workflow ist.",
       "stepConfigMissing": "Bei Schritt \"{{step}}\" fehlen Pflichteinstellungen: {{fields}}.",
+      "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“.",
       "policyCheckPolicyMissing": "Der Schritt \"{{step}}\" benötigt eine vorhandene Compliance-Richtlinie. Wählen Sie in den Schritteinstellungen eine aus.",
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
-      },
-      "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“."
+      }
     }
   },
   "approvalResponse": {

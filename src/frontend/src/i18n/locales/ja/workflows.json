@@ -330,12 +330,12 @@
       "duplicateStepIds": "2つのステップのIDが同じです。",
       "stepUnknownReference": "ステップ「{{step}}」の{{branch}}の分岐先「{{target}}」はワークフロー内にありません。",
       "stepConfigMissing": "ステップ「{{step}}」に必須の設定がありません: {{fields}}。",
+      "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。",
       "policyCheckPolicyMissing": "ステップ「{{step}}」には既存のコンプライアンスポリシーが必要です。ステップの設定で選択してください。",
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
-      },
-      "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。"
+      }
     }
   },
   "approvalResponse": {

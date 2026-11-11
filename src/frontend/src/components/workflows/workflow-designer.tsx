@@ -991,18 +991,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [originalState, setOriginalState] = useState<OriginalState | null>(null);
 
   // React Flow state
-  const [nodes, setNodes, onNodesChangeBase] = useNodesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
 
   // Wrap onNodesChange so moves without a drag (arrow keys on selected nodes) are
   // copied onto the steps too; drags are handled by onNodeDragStop.
-  const onNodesChange = useCallback((changes: import('reactflow').NodeChange[]) => {
-    onNodesChangeBase(changes);
+  const handleNodesChange = useCallback((changes: import('reactflow').NodeChange[]) => {
+    onNodesChange(changes);
     const moved = changes.flatMap(c => (
       c.type === 'position' && c.position && !c.dragging ? [{ id: c.id, position: c.position }] : []
     ));
     if (moved.length > 0) setSteps(prev => withNodePositions(prev, moved));
-  }, [onNodesChangeBase]);
+  }, [onNodesChange]);
 
   // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
   const onEdgesChange = useCallback((changes: import('reactflow').EdgeChange[]) => {
@@ -1804,7 +1804,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           <ReactFlow
             nodes={nodes}
             edges={edgesWithDelete}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onNodeDragStop={onNodeDragStop}
             onNodesDelete={deleted => removeSteps(deleted.map(n => n.id))}
             onEdgesChange={onEdgesChange}

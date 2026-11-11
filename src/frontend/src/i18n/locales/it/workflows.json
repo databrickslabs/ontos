@@ -330,12 +330,12 @@
       "duplicateStepIds": "Due passaggi hanno lo stesso ID.",
       "stepUnknownReference": "Il passaggio \"{{step}}\" indirizza il ramo di {{branch}} a \"{{target}}\", che non è nel workflow.",
       "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
+      "assignTagValueSourceUnknown": "Il passaggio «{{step}}» usa la sorgente di valore sconosciuta «{{source}}».",
       "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
       "branch": {
         "on_pass": "successo",
         "on_fail": "errore"
-      },
-      "assignTagValueSourceUnknown": "Il passaggio «{{step}}» usa la sorgente di valore sconosciuta «{{source}}»."
+      }
     }
   },
   "approvalResponse": {

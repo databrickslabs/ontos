@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import json
@@ -197,9 +197,11 @@ class ComplianceManager:
                                 if not val:
                                     return None
                                 try:
-                                    return datetime.fromisoformat(val.replace('Z', '+00:00'))
+                                    parsed = datetime.fromisoformat(val.replace('Z', '+00:00'))
                                 except Exception:
-                                    return datetime.utcnow()
+                                    return utc_now()
+                                # Seeded times without an offset are UTC
+                                return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
                             results_defs = rdef.get('results') or []
                             success_count = rdef.get('success_count')
                             failure_count = rdef.get('failure_count')
@@ -217,7 +219,7 @@ class ComplianceManager:
                                 id=run_id,
                                 policy_id=policy_db.id,
                                 status=str(rdef.get('status') or 'succeeded'),
-                                started_at=_parse_dt(rdef.get('started_at')) or datetime.utcnow(),
+                                started_at=_parse_dt(rdef.get('started_at')) or utc_now(),
                                 finished_at=_parse_dt(rdef.get('finished_at')),
                                 success_count=int(success_count or 0),
                                 failure_count=int(failure_count or 0),

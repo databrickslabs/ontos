@@ -1501,7 +1501,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If product not found or invalid transition
         """
-        from datetime import datetime
         from uuid import uuid4
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
@@ -1533,7 +1532,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             requested_deprecation = requested_deprecation_data(db, 'data_product', details)
 
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
         
         # Fire the ON_REQUEST_STATUS_CHANGE trigger

@@ -247,6 +247,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             normalized_title = raw_title if raw_title else None
 
             # Prepare the full API model for the repository
+            now = utc_now()
             full_request = DataAssetReviewRequestApi(
                 id=request_id,
                 requester_email=request_data.requester_email,
@@ -254,8 +255,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 title=normalized_title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=request_data.notes,
-                created_at=utc_now(),
-                updated_at=utc_now(),
+                created_at=now,
+                updated_at=now,
                 assets=assets_to_review
             )
 

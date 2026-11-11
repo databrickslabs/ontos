@@ -237,14 +237,15 @@ class JobsManager:
                 # Use host as workspace identifier since DATABRICKS_WORKSPACE_ID doesn't exist
                 workspace_id = self._settings.DATABRICKS_HOST
 
+            now = utc_now()
             installation = WorkflowInstallation(
                 workflow_id=workflow_id,
                 name=wf_def.get('name', workflow_id),
                 job_id=job_id,
                 workspace_id=workspace_id,
                 status='installed',
-                installed_at=utc_now(),
-                updated_at=utc_now()
+                installed_at=now,
+                updated_at=now
             )
             workflow_installation_repo.create(self._db, obj_in=installation)
             self._db.commit()

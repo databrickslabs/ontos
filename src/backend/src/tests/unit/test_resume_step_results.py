@@ -190,3 +190,21 @@ def test_results_recorded_before_messages_were_stored_still_restore(db_session):
 
     assert spy.seen['done']['validate']['passed'] is False
     assert spy.seen['done']['validate']['message'] is None
+
+
+def test_the_execution_details_return_each_step_message(db_session):
+    import asyncio
+
+    from src.routes.workflows_routes import get_execution
+
+    db_workflow = _create(db_session, [
+        _step('validate', StepType.VALIDATION, {'rule': FAILING_RULE}, on_fail='done'),
+        _step('done', StepType.PASS),
+    ])
+    execution = _run(db_session, db_workflow.id, WorkflowExecutor(db_session))
+
+    details = asyncio.run(get_execution(execution.id, db_session, None))
+
+    by_key = {s['step_key']: s for s in details['step_executions']}
+    assert by_key['validate']['message'].startswith('Assertion failed')
+    assert by_key['done']['message'] == 'Workflow completed successfully'

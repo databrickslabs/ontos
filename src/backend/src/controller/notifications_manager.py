@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 from typing import Any, Callable, List, Optional, Dict
 import json
 
@@ -594,7 +593,7 @@ class NotificationsManager:
             
             existing_payload['completed'] = True
             existing_payload['completed_by'] = completed_by
-            existing_payload['completed_at'] = datetime.utcnow().isoformat()
+            existing_payload['completed_at'] = utc_now().isoformat()
             if notes:
                 existing_payload['completion_notes'] = notes
             

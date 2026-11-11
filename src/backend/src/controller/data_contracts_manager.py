@@ -5558,7 +5558,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status
         """
-        from datetime import datetime
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
         )
@@ -5597,7 +5596,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         self._update_search_index(contract, db)
         
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
 
         # NOTE: a proposed contract surfaces to stewards through two real paths,
@@ -5761,7 +5760,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found, invalid status, or already published
         """
-        from datetime import datetime
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
         )
@@ -5779,7 +5777,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if pub_scope != "none":
             raise ValueError("Contract is already published to marketplace.")
         
-        now = datetime.utcnow()
+        now = utc_now()
         request_id = str(uuid4())
         
         # Fire the ON_REQUEST_PUBLISH trigger
@@ -6436,7 +6434,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid status transition
         """
-        from datetime import datetime
         from src.common.workflow_triggers import (
             get_trigger_registry, request_submitted_message, request_workflow_outcome,
         )
@@ -6466,7 +6463,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
             requested = requested_deprecation_data(db, 'data_contract', details)
 
-        now = datetime.utcnow()
+        now = utc_now()
         # Ties the decision to this request (certified deprecation guard)
         request_id = str(uuid4())
 

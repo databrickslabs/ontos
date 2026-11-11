@@ -2054,6 +2054,7 @@ class CreateAssetReviewStepHandler(StepHandler):
                 ))
             
             # Create full request model
+            now = utc_now()
             full_request = DataAssetReviewRequest(
                 id=review_id,
                 requester_email=requester_email,
@@ -2061,8 +2062,8 @@ class CreateAssetReviewStepHandler(StepHandler):
                 title=title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=full_notes,
-                created_at=utc_now(),
-                updated_at=utc_now(),
+                created_at=now,
+                updated_at=now,
                 assets=assets_to_review,
             )
             
@@ -3168,7 +3169,7 @@ class WorkflowExecutor:
                 raise ValueError(f"Execution {execution_id} not found")
             # Reset execution state for retry
             db_execution.status = ExecutionStatus.RUNNING.value
-            db_execution.started_at = datetime.now()
+            db_execution.started_at = utc_now()
             db_execution.finished_at = None
             db_execution.error_message = None
             db_execution.current_step_id = None
@@ -3569,8 +3570,15 @@ class WorkflowExecutor:
         """
         from src.db_models.process_workflows import WorkflowStepExecutionDb
 
+        # Only the columns the entries need: result_data can be large, and this
+        # runs while the execution's row is locked
         rows = (
-            self._db.query(WorkflowStepExecutionDb)
+            self._db.query(
+                WorkflowStepExecutionDb.step_key,
+                WorkflowStepExecutionDb.passed,
+                WorkflowStepExecutionDb.message,
+                WorkflowStepExecutionDb.result_data,
+            )
             .filter(WorkflowStepExecutionDb.execution_id == execution_id)
             .order_by(WorkflowStepExecutionDb.started_at.asc())
             .all()

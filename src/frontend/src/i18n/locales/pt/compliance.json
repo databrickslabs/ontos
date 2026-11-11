@@ -58,7 +58,8 @@
     "failed": "Reprovados",
     "showFailed": "Mostrar reprovados",
     "showAll": "Mostrar todos",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Ações"
   },
   "policyDetails": {
     "backToList": "Voltar para a lista",
@@ -181,5 +182,26 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regra tem um trecho inválido, a partir da linha {{line}}, coluna {{column}} ('{{text}}'). Ele é ignorado quando a regra é executada, então a regra pode verificar menos do que diz. Edite a regra para corrigir."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Concluída",
+      "failed": "Falhou"
+    },
+    "types": {
+      "ASSIGN_TAG": "Atribuir tag {{target}}",
+      "REMOVE_TAG": "Remover tag {{target}}",
+      "NOTIFY": "Notificar {{target}}"
+    },
+    "errors": {
+      "tag_manager_unavailable": "Não é possível alterar tags nesta execução",
+      "tag_not_found": "Tag {{tag}} não encontrada",
+      "tag_value_not_allowed": "O valor {{value}} não é permitido para {{tag}} (permitidos: {{allowed}})",
+      "tag_entity_type_unsupported": "Não é possível definir tags em entidades {{entityType}}",
+      "tag_entity_without_id": "A entidade não tem id",
+      "notification_manager_unavailable": "As notificações não estão disponíveis nesta execução",
+      "notify_no_recipients": "{{recipients}} não corresponde a nenhum destinatário",
+      "action_failed": "A ação falhou"
+    }
   }
 }

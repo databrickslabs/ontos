@@ -58,7 +58,8 @@
     "failed": "Non superato",
     "showFailed": "Mostra non superati",
     "showAll": "Mostra tutti",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Azioni"
   },
   "policyDetails": {
     "backToList": "Torna all'elenco",
@@ -181,5 +182,26 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Questa regola contiene una parte non valida, a partire dalla riga {{line}}, colonna {{column}} ('{{text}}'). Viene ignorata durante l'esecuzione, quindi la regola potrebbe verificare meno di quanto dichiara. Modifica la regola per correggerla."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Fatto",
+      "failed": "Non riuscita"
+    },
+    "types": {
+      "ASSIGN_TAG": "Assegna tag {{target}}",
+      "REMOVE_TAG": "Rimuovi tag {{target}}",
+      "NOTIFY": "Notifica {{target}}"
+    },
+    "errors": {
+      "tag_manager_unavailable": "I tag non possono essere modificati in questa esecuzione",
+      "tag_not_found": "Tag {{tag}} non trovato",
+      "tag_value_not_allowed": "Il valore {{value}} non è consentito per {{tag}} (consentiti: {{allowed}})",
+      "tag_entity_type_unsupported": "Non è possibile impostare tag su entità {{entityType}}",
+      "tag_entity_without_id": "L'entità non ha un id",
+      "notification_manager_unavailable": "Le notifiche non sono disponibili in questa esecuzione",
+      "notify_no_recipients": "{{recipients}} non corrisponde a nessun destinatario",
+      "action_failed": "L'azione non è riuscita"
+    }
   }
 }

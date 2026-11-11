@@ -250,5 +250,9 @@
       "retiredVersion": "{{entity_type}}「{{entity_name}}」(バージョン {{version}}) は廃止されました。",
       "replacementVersion": "後継: {{replacementName}} (バージョン {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "コンプライアンス: {{policyName}}",
+    "description": "ポリシー {{policyName}}: 失敗 {{failedCount}} 件、合格 {{passedCount}} 件。詳細は実行結果を開いてください。"
   }
 }

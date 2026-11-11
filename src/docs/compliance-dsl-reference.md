@@ -183,23 +183,55 @@ Add or update a tag on the entity:
 
 ```
 ON_FAIL ASSIGN_TAG compliance_status: 'violation'
-ON_PASS ASSIGN_TAG last_checked: '2025-01-15'
+ON_FAIL ASSIGN_TAG 'governance/classification': 'confidential'
+ON_FAIL ASSIGN_TAG 'pii'
+ON_PASS ASSIGN_TAG 'governance/classification': ''
 ```
+
+- **Key.** A bare name (`compliance_status`) is a tag in the default namespace. Quote the key to name a tag in another namespace by its fully qualified name, `'namespace/name'`. The tag must already exist.
+- **Value.**
+  - `key: 'value'` sets the value. If the tag defines possible values, the value must be one of them; otherwise the action fails with *value not allowed*.
+  - `key` without a value assigns the tag only. When the entity already has the tag, its value (and who assigned it) is kept.
+  - `key: ''` clears the value.
+- **Entities.** Tag actions work on data products, data contracts and domains. On other entities (Unity Catalog objects) the action fails and the run carries on.
 
 ### REMOVE_TAG
 Remove a tag from the entity:
 
 ```
 ON_PASS REMOVE_TAG compliance_issue
+ON_PASS REMOVE_TAG 'governance/classification'
 ```
 
+The key is written as for `ASSIGN_TAG`. Removing a tag the entity doesn't have succeeds and changes nothing.
+
 ### NOTIFY
-Trigger notification to recipients:
+Send an in-app notification:
 
 ```
 ON_FAIL NOTIFY 'security-team@example.com'
 ON_FAIL NOTIFY 'compliance-alerts@example.com,data-governance@example.com'
+ON_FAIL NOTIFY 'entity_owner'
 ```
+
+- **Recipients** resolve as in workflow notification steps:
+  - user emails and group names;
+  - app role names or ids;
+  - `entity_owner` / `owner` / `domain_owners` (resolved for each entity);
+  - a comma-separated list of these.
+
+  `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
+- **One notification per recipient per run.** A run can match many entities, so NOTIFY doesn't send one notification each. When the run ends, each recipient gets one notification:
+  - it counts the entities that failed and passed;
+  - it names up to 10 of each;
+  - it links to the run's results.
+
+  The notification is created even if the run is a scheduled job.
+- Notifications use the in-app channel.
+
+### Action outcomes in run results
+
+The run details page shows, for each entity, what its tag and notification actions did. A failed action shows its reason in the user's language (for example *tag not found*, *value not allowed*, *no recipient*). A failed action doesn't change whether the entity passed. `PASS` and `FAIL` aren't listed there, because they decide the result itself.
 
 ## Complete Examples
 

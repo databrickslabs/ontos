@@ -250,5 +250,9 @@
       "retiredVersion": "{{entity_type}} '{{entity_name}}' (version {{version}}) has been retired.",
       "replacementVersion": "Replacement: {{replacementName}} (version {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "Compliance: {{policyName}}",
+    "description": "Policy {{policyName}}: {{failedCount}} failed, {{passedCount}} passed. Open the run for details."
   }
 }

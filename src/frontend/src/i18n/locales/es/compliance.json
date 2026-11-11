@@ -58,7 +58,8 @@
     "failed": "Fallido",
     "showFailed": "Mostrar fallidos",
     "showAll": "Mostrar todo",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Acciones"
   },
   "policyDetails": {
     "backToList": "Volver a la lista",
@@ -181,5 +182,26 @@
   },
   "runWarnings": {
     "rule_trailing_input": "Esta regla tiene un fragmento no válido, desde la línea {{line}}, columna {{column}} ('{{text}}'). Se ignora al ejecutar la regla, por lo que esta puede comprobar menos de lo que dice. Edite la regla para corregirlo."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Hecho",
+      "failed": "Falló"
+    },
+    "types": {
+      "ASSIGN_TAG": "Asignar etiqueta {{target}}",
+      "REMOVE_TAG": "Quitar etiqueta {{target}}",
+      "NOTIFY": "Notificar a {{target}}"
+    },
+    "errors": {
+      "tag_manager_unavailable": "No se pueden cambiar etiquetas en esta ejecución",
+      "tag_not_found": "Etiqueta {{tag}} no encontrada",
+      "tag_value_not_allowed": "El valor {{value}} no está permitido para {{tag}} (permitidos: {{allowed}})",
+      "tag_entity_type_unsupported": "No se pueden asignar etiquetas a entidades {{entityType}}",
+      "tag_entity_without_id": "La entidad no tiene id",
+      "notification_manager_unavailable": "Las notificaciones no están disponibles en esta ejecución",
+      "notify_no_recipients": "{{recipients}} no corresponde a ningún destinatario",
+      "action_failed": "La acción falló"
+    }
   }
 }

@@ -58,7 +58,8 @@
     "failed": "Failed",
     "showFailed": "Show Failed",
     "showAll": "Show All",
-    "empty": "-"
+    "empty": "-",
+    "actions": "Actions"
   },
   "policyDetails": {
     "backToList": "Back to List",
@@ -181,5 +182,26 @@
   },
   "runWarnings": {
     "rule_trailing_input": "This rule has input that is not valid, starting at line {{line}}, column {{column}} ('{{text}}'). It is ignored when the rule runs, so the rule may check less than it says. Edit the rule to fix it."
+  },
+  "actionOutcomes": {
+    "status": {
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "types": {
+      "ASSIGN_TAG": "Assign tag {{target}}",
+      "REMOVE_TAG": "Remove tag {{target}}",
+      "NOTIFY": "Notify {{target}}"
+    },
+    "errors": {
+      "tag_manager_unavailable": "Tags can't be changed in this run",
+      "tag_not_found": "Tag {{tag}} not found",
+      "tag_value_not_allowed": "Value {{value}} is not allowed for {{tag}} (allowed: {{allowed}})",
+      "tag_entity_type_unsupported": "Tags can't be set on {{entityType}} entities",
+      "tag_entity_without_id": "The entity has no id",
+      "notification_manager_unavailable": "Notifications are not available in this run",
+      "notify_no_recipients": "{{recipients}} resolved to no recipient",
+      "action_failed": "The action failed"
+    }
   }
 }

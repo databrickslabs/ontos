@@ -250,5 +250,9 @@
       "retiredVersion": "{{entity_type}} '{{entity_name}}' (versie {{version}}) is buiten gebruik gesteld.",
       "replacementVersion": "Vervanging: {{replacementName}} (versie {{replacementVersion}})"
     }
+  },
+  "complianceRun": {
+    "title": "Compliance: {{policyName}}",
+    "description": "Beleid {{policyName}}: {{failedCount}} mislukt, {{passedCount}} geslaagd. Open de uitvoering voor details."
   }
 }

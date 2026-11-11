@@ -115,7 +115,8 @@ class TestAssetMaturityRoutes:
 
         assert response.status_code == 200, response.text
         report = response.json()
-        assert report['achieved_level_order'] == 1
+        # Nothing was stored before, so no level is kept and none is reported
+        assert report['achieved_level_order'] is None
         gate = report['levels'][1]['gates'][0]
         assert gate['passed'] is False
         assert gate['message_code'] == 'maturity_uc_table_not_found'
@@ -123,9 +124,8 @@ class TestAssetMaturityRoutes:
         assert 'gone' not in response.text
         assert [n['code'] for n in report['notices']] == ['maturity_uc_table_not_found']
 
-        snapshot = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).one()
-        stored = json.loads(snapshot.gate_results_json)
-        assert stored[1]['message_code'] == 'maturity_uc_table_not_found'
+        assert db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).count() == 0
+        assert fired == []
 
     def test_other_asset_types_answer_a_coded_400(self, client, db_session):
         asset = _asset(db_session, 'Dashboard')

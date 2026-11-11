@@ -477,7 +477,7 @@ As of this version:
 - An approval step's `timeout_days` is not enforced (#1119).
 - Saving a workflow's steps removes the step results of its past executions (fixed by WORKFLOWS_PR).
 - A validation step's failure message is not stored with the step (fixed by WORKFLOWS_PR).
-- Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by RELOAD_PR: activation is kept, and edited defaults are kept unless you opt in).
+- Reload All Defaults also reset the defaults' active flag to the shipped value, and reset defaults a user had edited (fixed by #1456: activation is kept, and edited defaults are kept unless you opt in).
 - After an approval, a field of the entity's latest completed request wizard replaces an approval field with the same name (`${step_results.<approval_step_id>.reason}` can be the requester's reason) (fixed by WORKFLOWS_PR).
 - The `config` example of the script step in the API schema uses `return`, which fails; set `result` instead (fixed by WORKFLOWS_PR).
 

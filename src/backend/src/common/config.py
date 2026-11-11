@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .api_errors import CodedValueError
 from .instance_identity import resolve_instance_identity
+from .sanitization import coerce_branding_url, coerce_hex_color
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -261,6 +262,26 @@ class Settings(BaseSettings):
         case_sensitive=True, 
         extra='ignore' # Explicitly ignore extra env vars
     )
+
+    @field_validator(
+        'UI_CUSTOM_LOGO_URL', 'UI_CUSTOM_LOGO_DARK_URL', 'UI_FAVICON_URL',
+        'UI_THEME_PRIMARY', 'UI_THEME_PRIMARY_DARK', 'UI_THEME_ACCENT', 'UI_THEME_ACCENT_DARK',
+        mode='after',
+    )
+    @classmethod
+    def drop_invalid_branding_value(cls, value: Optional[str], info) -> Optional[str]:
+        """Branding images and colors from the environment get the same checks as a
+        Settings save. An invalid one is dropped (with a warning) so it never reaches
+        ``<img src>`` or injected CSS, and the form never re-sends it.
+        """
+        if value is None:
+            return None
+        checked = (
+            coerce_hex_color(value) if 'THEME' in info.field_name else coerce_branding_url(value)
+        )
+        if checked is None and value.strip():
+            logger.warning("Ignoring invalid %s from the environment", info.field_name)
+        return checked
 
     @model_validator(mode='after')
     def compute_databricks_http_path(self) -> 'Settings':

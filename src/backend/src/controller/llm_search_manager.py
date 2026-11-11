@@ -837,20 +837,25 @@ class LLMSearchManager:
                         content=json.dumps(result_dict), tool_call_id=tc.id
                     )
             else:
+                reply_content = assistant_message.content or ""
+                is_refusal = not coerce_message_text(reply_content).strip()
+                if is_refusal:
+                    # A refusal (OpenAI ``refusal`` block or field) is the
+                    # model's reply: show it rather than an empty-answer error.
+                    reply_content = refusal_text(assistant_message)
+                # The refusal goes through the same strippers as an answer.
                 cleaned_content, citations, confidence_labels = _strip_internal_citations(
-                    assistant_message.content or ""
+                    reply_content
                 )
                 # Sanitize orphan asterisk runs. The system prompt forbids
                 # ``****``/``*****`` as visual markers, but the LLM still
                 # emits them occasionally. ``****`` (4+) is never valid
                 # CommonMark, so stripping it is safe.
                 cleaned_content = _strip_asterisk_runs(cleaned_content)
-                if not cleaned_content.strip():
-                    # A refusal (OpenAI ``refusal`` block or field) is the
-                    # model's reply: show it rather than an empty-answer error.
+                if is_refusal:
                     # Capped: it is stored and kept in the session history.
                     cleaned_content = truncate_text(
-                        refusal_text(assistant_message), REFUSAL_DISPLAY_MAX_CHARS
+                        cleaned_content.strip(), REFUSAL_DISPLAY_MAX_CHARS
                     )
                 if not cleaned_content.strip():
                     # Reasoning-only or blank content: fail the turn with a code

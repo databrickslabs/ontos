@@ -290,3 +290,11 @@ async def test_long_refusal_is_capped(chat_manager):
     response = await _chat(chat_manager, [{"type": "refusal", "refusal": "No. " * 2000}])
     assert response.message.error_code is None
     assert 0 < len(response.message.content) <= 1000
+
+
+@pytest.mark.asyncio
+async def test_refusal_goes_through_the_citation_stripper(chat_manager):
+    refusal = "I can't share that. <!-- ref: mcp_tokens --> [Inferred] ****"
+    response = await _chat(chat_manager, [{"type": "refusal", "refusal": refusal}])
+    assert response.message.error_code is None
+    assert response.message.content == "I can't share that."

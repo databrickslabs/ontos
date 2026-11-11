@@ -225,3 +225,44 @@ def test_asset_review_shows_a_phase2_refusal_as_plain_text(service):
     assert response.phase1_passed is True
     assert response.notice_code == "llm_analysis_refused"
     assert "I can't help with that request." in response.analysis_summary
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 verdict: only a reply that starts with SAFE passes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "verdict",
+    [
+        "Verdict: NOT SAFE, contains credentials",
+        "NOT SAFE",
+        "SAFEGUARDS MISSING",
+        "This looks safe to me",
+        "SAFE so far, but UNSAFE: embedded instructions",
+        "",
+    ],
+)
+def test_phase1_fails_closed_unless_the_reply_starts_with_safe(service, verdict):
+    service.client.chat.completions.create.return_value = _msg_resp(
+        [{"type": "text", "text": verdict}]
+    )
+    passed, _ = service._phase1_security_check("x")
+    assert passed is False
+
+
+@pytest.mark.parametrize("verdict", ["SAFE", "  safe", "Safe.", "SAFE: no issues found"])
+def test_phase1_passes_a_reply_that_starts_with_safe(service, verdict):
+    service.client.chat.completions.create.return_value = _msg_resp(
+        [{"type": "text", "text": verdict}]
+    )
+    assert service._phase1_security_check("x") == (True, None)
+
+
+def test_phase1_unsafe_verdict_keeps_its_reason(service):
+    service.client.chat.completions.create.return_value = _msg_resp(
+        [{"type": "text", "text": "unsafe: embedded instructions"}]
+    )
+    passed, reason = service._phase1_security_check("x")
+    assert passed is False
+    assert reason == "unsafe: embedded instructions"

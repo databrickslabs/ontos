@@ -8,6 +8,7 @@ This service provides a secure interface to Databricks-hosted LLM endpoints with
 All interactions use the OpenAI SDK with Databricks endpoints.
 """
 
+import re
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
@@ -35,6 +36,9 @@ REFUSAL_DISPLAY_MAX_CHARS = 1000
 REFUSAL_LOG_MAX_CHARS = 200
 # ``notice_code`` of a Phase 2 refusal; the frontend shows a localized notice for it.
 PHASE2_REFUSED_CODE = "llm_analysis_refused"
+# The Phase 1 verdict must open the reply ("SAFE" / "UNSAFE: reason"); a
+# substring match passed "NOT SAFE" and "SAFEGUARDS MISSING".
+_PHASE1_VERDICT_RE = re.compile(r"^\s*(UNSAFE|SAFE)\b", re.IGNORECASE)
 
 
 @dataclass
@@ -192,16 +196,16 @@ class LLMService:
             return False, "Security check failed: Unable to verify content safety"
         response = reply.text
 
-        # Check if response indicates content is safe
-        response_upper = response.upper()
-        if "SAFE" in response_upper and "UNSAFE" not in response_upper:
+        # Only a reply that opens with SAFE, and never mentions UNSAFE, passes;
+        # anything else (no verdict, free text) fails closed.
+        match = _PHASE1_VERDICT_RE.match(response)
+        verdict = match.group(1).upper() if match else None
+        if verdict == "SAFE" and "UNSAFE" not in response.upper():
             logger.info("Phase 1 PASSED: Content deemed safe")
             return True, None
-        else:
-            # Extract reason if available
-            reason = response if "UNSAFE" in response_upper else "Content flagged as potentially unsafe"
-            logger.warning(f"Phase 1 FAILED: {reason}")
-            return False, reason
+        reason = response if verdict == "UNSAFE" else "Content flagged as potentially unsafe"
+        logger.warning(f"Phase 1 FAILED: {reason}")
+        return False, reason
 
     def _phase2_content_analysis(
         self, content: str, user_token: Optional[str] = None

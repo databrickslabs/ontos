@@ -162,3 +162,42 @@ class TestAddTagKeepsValues:
 
         assert result.assigned_value == 'restricted'
         assert _stored(db_session, classification).assigned_by == 'admin@example.com'
+
+
+class TestProjectReadsCarryTags:
+    """Project reads must return the tags, or the edit dialog saves ``tags: []`` and clears them."""
+
+    @pytest.fixture
+    def project(self, db_session):
+        from src.db_models.projects import ProjectDb
+        db_project = ProjectDb(
+            id=str(uuid.uuid4()), name=f'p-{uuid.uuid4().hex[:6]}', created_by='t', updated_by='t',
+            extra_metadata='{}',
+        )
+        db_session.add(db_project)
+        db_session.commit()
+        return db_project
+
+    def _tag_project(self, db_session, project, tag):
+        entity_tag_repo.add_tag_to_entity(
+            db_session, entity_id=project.id, entity_type='project', tag_id=tag.id,
+            assigned_value='confidential', assigned_by='workflow@system',
+        )
+        db_session.commit()
+
+    def test_get_by_id_returns_tags_with_values(self, db_session, tags, project):
+        from src.controller.projects_manager import ProjectsManager
+        self._tag_project(db_session, project, tags[0])
+
+        read = ProjectsManager().get_project_by_id(db_session, project.id)
+
+        assert [(t.tag_id, t.assigned_value) for t in read.tags] == [(tags[0].id, 'confidential')]
+
+    def test_list_returns_tags_with_values(self, db_session, tags, project):
+        from src.controller.projects_manager import ProjectsManager
+        self._tag_project(db_session, project, tags[0])
+
+        listed = ProjectsManager().get_all_projects(db_session, is_admin=True)
+
+        by_id = {p.id: p for p in listed}
+        assert [(t.tag_id, t.assigned_value) for t in by_id[project.id].tags] == [(tags[0].id, 'confidential')]

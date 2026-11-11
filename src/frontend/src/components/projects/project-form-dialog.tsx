@@ -99,7 +99,9 @@ export function ProjectFormDialog({
           name: project.name,
           title: project.title || '',
           description: project.description || '',
-          tags: (project.tags || []).map((tag: any) => typeof tag === 'string' ? tag : (tag?.name ?? tag?.value ?? tag?.tag ?? '')),
+          // Keep the assigned tags as objects: the selector shows them by FQN and the
+          // save sends them with their value (#1420).
+          tags: project.tags || [],
           team_ids: project.teams?.map(team => team.id) || [],
           project_type: (project.project_type as any) || 'TEAM',
         });

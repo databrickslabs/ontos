@@ -385,17 +385,23 @@ def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
 _COMPLIANCE_TYPES = {'data_asset_review': 'review'}
 
 
-def _tag_assignments(db: Session, tags: Any) -> Dict[str, Any]:
+def _tag_assignments(
+    db: Session, tags: Any, current: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Tag assignments as ``{namespace/name: value}``.
 
     ``tags`` is a request's list (``AssignedTagCreate`` dicts, or FQN strings as
     the managers also accept) or what assign-tag steps leave in the context
     (``{key: value}``). A name without a namespace is in the default one, and an
     assignment without a value has True; a later assignment of a tag wins.
+    In a list, as ``add_tag_to_entity`` stores it, a tag without a value keeps
+    its value in ``current`` (the entity's tags by ``namespace/name``) and an
+    empty string clears it.
     """
     from src.db_models.tags import TagDb
     from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
 
+    current = current or {}
     if isinstance(tags, dict):
         items = list(tags.items())
     else:
@@ -408,9 +414,13 @@ def _tag_assignments(db: Session, tags: Any) -> Dict[str, Any]:
             fqn = tag.get('tag_fqn')
             if tag.get('tag_id'):
                 # As in AssignedTagCreate, the id wins over the name
-                stored = db.get(TagDb, tag['tag_id'])
-                fqn = f"{stored.namespace_name}{SEP}{stored.name}" if stored else None
-            items.append((fqn, tag.get('assigned_value')))
+                tag_row = db.get(TagDb, tag['tag_id'])
+                fqn = f"{tag_row.namespace_name}{SEP}{tag_row.name}" if tag_row else None
+            value = tag.get('assigned_value')
+            if value is None and fqn:
+                key = fqn if SEP in fqn else f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
+                value = current.get(key)
+            items.append((fqn, None if value == '' else value))
     assigned: Dict[str, Any] = {}
     for fqn, value in items:
         if not fqn:
@@ -443,19 +453,23 @@ def _future_tags(
     """The tags an entity will have after a before_update gate's update, as assignments.
 
     A list in the update replaces the stored tags (``[]`` clears them), as
-    ``set_tags_for_entity`` does; without one (no ``tags``, or None) the stored tags
+    ``set_tags_for_entity`` does (a listed tag without a value keeps its stored
+    value); without one (no ``tags``, or None) the stored tags
     stay, and tags earlier assign-tag steps set (a dict) go on top. None when the
     update sends no list and there is no stored entity to read the tags from.
     """
     from src.models.tags import TAG_NAMESPACE_SEPARATOR as SEP
 
     tags = payload.get('tags')
+    # Every stored tag is under its namespace/name; names alone are aliases
+    current = {
+        key: value for key, value in ((stored or {}).get('tags') or {}).items() if SEP in key
+    }
     if isinstance(tags, list):
-        return _tag_assignments(db, tags)
+        return _tag_assignments(db, tags, current)
     if stored is None:
         return None
-    # Every stored tag is under its namespace/name; names alone are aliases
-    future = {key: value for key, value in (stored.get('tags') or {}).items() if SEP in key}
+    future = current
     if isinstance(tags, dict):
         future.update(_tag_assignments(db, tags))
     return future

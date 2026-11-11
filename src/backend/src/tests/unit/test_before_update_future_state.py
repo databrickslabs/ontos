@@ -48,7 +48,7 @@ def _contract(db, purpose=LONG, owner=None):
     return contract
 
 
-def _tag(db, contract, names, namespace=None):
+def _tag(db, contract, names, namespace=None, value=None):
     """Assign tags of one namespace (a new one unless given) to the contract."""
     namespace = namespace or f'ns-{uuid.uuid4().hex[:6]}'
     ns = db.query(TagNamespaceDb).filter_by(name=namespace).first()
@@ -62,6 +62,7 @@ def _tag(db, contract, names, namespace=None):
         db.flush()
         db.add(EntityTagAssociationDb(
             tag_id=tag.id, entity_id=contract.id, entity_type='data_contract',
+            assigned_value=value,
         ))
     db.flush()
 
@@ -161,6 +162,93 @@ def test_tags_sent_as_names_are_read_like_assignments(db_session):
     )
 
     assert result.passed is True
+
+
+def _resent(namespace, value=None):
+    # The update resends the stored tag; model_dump gives every tag an assigned_value
+    tag = {'tag_fqn': f'{namespace}/classification'}
+    if value is not None:
+        tag['assigned_value'] = value
+    return _payload(tags=[tag])
+
+
+def test_a_tag_resent_without_a_value_keeps_its_stored_value(db_session):
+    # add_tag_to_entity keeps the stored value for None (#1420), so the gate must too
+    contract = _contract(db_session)
+    _tag(db_session, contract, ['classification'], namespace='levels', value='high')
+
+    result = _gate(
+        db_session, "MATCH (c:data_contract) ASSERT TAG('classification') = 'high'",
+        contract, _resent('levels'),
+    )
+
+    assert result.passed is True
+
+
+def test_a_tag_resent_by_id_without_a_value_keeps_its_stored_value(db_session):
+    contract = _contract(db_session)
+    _tag(db_session, contract, ['classification'], namespace='levels', value='high')
+    tag = db_session.query(TagDb).filter_by(name='classification').one()
+
+    result = _gate(
+        db_session, "MATCH (c:data_contract) ASSERT TAG('classification') = 'high'",
+        contract, _payload(tags=[{'tag_id': tag.id}]),
+    )
+
+    assert result.passed is True
+
+
+def test_a_tag_resent_with_an_empty_or_new_value_does_not_keep_the_stored_one(db_session):
+    contract = _contract(db_session)
+    _tag(db_session, contract, ['classification'], namespace='levels', value='high')
+    rule = "MATCH (c:data_contract) ASSERT TAG('classification') = 'high'"
+
+    # An empty string clears the value; the tag stays assigned
+    cleared = _gate(db_session, rule, contract, _resent('levels', ''))
+    changed = _gate(db_session, rule, contract, _resent('levels', 'low'))
+    still_tagged = _gate(
+        db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('classification')",
+        contract, _resent('levels', ''),
+    )
+
+    assert cleared.passed is False
+    assert changed.passed is False
+    assert still_tagged.passed is True
+
+
+def _context_without_id(payload):
+    # A step without an entity id: nothing stored to load, the payload alone counts
+    trigger = TriggerContext(
+        entity_type='data_contract', entity_id='',
+        trigger_type=TriggerType.BEFORE_UPDATE, entity_data=payload,
+        user_email='u@example.com',
+    )
+    return StepContext(
+        entity=payload, entity_type='data_contract', entity_id=None,
+        entity_name='contract', user_email='u@example.com', trigger_context=trigger,
+        execution_id='e', workflow_id='w', workflow_name='W', step_results={},
+    )
+
+
+def test_without_a_stored_entity_the_gate_sees_the_update_alone(db_session):
+    null_tags = {'status': 'active', 'tags': None}
+    listed = {'tags': ['security/pii']}
+
+    status_policy = _policy(db_session, "MATCH (c:data_contract) ASSERT c.status = 'active'")
+    tags_policy = _policy(
+        db_session, "MATCH (c:data_contract) ASSERT HAS_TAG('pii') AND c.tag_count = 1",
+    )
+    status = PolicyCheckStepHandler(db_session, {'policy_id': status_policy.id}).execute(
+        _context_without_id(null_tags),
+    )
+    tags = PolicyCheckStepHandler(db_session, {'policy_id': tags_policy.id}).execute(
+        _context_without_id(listed),
+    )
+
+    assert status.passed is True
+    # A null with no stored tags to keep: no tags are known, not a null
+    assert 'tags' not in _policy_rule_object(db_session, _context_without_id(null_tags))
+    assert tags.passed is True
 
 
 # 2. tag_count / has_tags

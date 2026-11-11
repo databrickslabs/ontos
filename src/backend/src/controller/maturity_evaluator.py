@@ -125,6 +125,8 @@ class MaturityEvaluator:
         achieved_name = None
         total_gates_passed = 0
         total_gates = 0
+        # A gate on UC table fields ran while the table couldn't be read
+        uc_gate_ran = False
 
         for level in levels:
             gates = level.gates or []
@@ -150,6 +152,10 @@ class MaturityEvaluator:
                 passed, message, errored = self._evaluate_gate(
                     policy.rule, entity_dict, policy_name=policy.name,
                 )
+                uses_uc_fields = bool(uc_notice) and bool(
+                    _UC_FIELD_IN_RULE.search(policy.rule or "")
+                )
+                uc_gate_ran = uc_gate_ran or uses_uc_fields
                 if passed:
                     total_gates_passed += 1
                 elif gate.required:
@@ -157,9 +163,7 @@ class MaturityEvaluator:
 
                 # A gate that failed on UC fields the table couldn't provide
                 # says so with a code, instead of a plain "value is null".
-                notice = uc_notice if (
-                    uc_notice and not passed and _UC_FIELD_IN_RULE.search(policy.rule or "")
-                ) else None
+                notice = uc_notice if (uses_uc_fields and not passed) else None
                 if notice is None and errored:
                     # The error itself stays in the server log
                     notice = MaturityNotice(
@@ -209,6 +213,21 @@ class MaturityEvaluator:
             evaluated_by=evaluated_by,
             notices=[uc_notice] if uc_notice else [],
         )
+
+        if persist and uc_gate_ran:
+            # The result depends on table fields that couldn't be read, so it is not a
+            # maturity outcome: keep the stored level, and store nothing, change nothing,
+            # fire nothing. The gate messages still say why the fields are missing.
+            previous = maturity_repo.get_latest_snapshot(
+                db, entity_type=entity_type, entity_id=entity_id
+            )
+            report.achieved_level_order = previous.achieved_level_order if previous else None
+            report.achieved_level_name = previous.achieved_level_name if previous else None
+            logger.warning(
+                "Maturity of %s %s not updated: its UC table could not be read (%s)",
+                entity_type, entity_id, uc_notice.code,
+            )
+            return report
 
         if persist:
             # Detect level change for trigger / change log

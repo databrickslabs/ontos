@@ -211,7 +211,17 @@
       "selectSource": "Quelle auswählen",
       "sourceCurrentUser": "Aktueller Benutzer",
       "sourceProjectName": "Projektname",
-      "sourceTimestamp": "Zeitstempel"
+      "sourceTimestamp": "Zeitstempel",
+      "valueMode": "Wert",
+      "modeFixed": "Fester Wert",
+      "modeSource": "Wert aus dem Lauf",
+      "modeNone": "Kein Wert",
+      "fixedValue": "Tag-Wert",
+      "fixedValuePlaceholder": "z. B. vertraulich",
+      "selectValue": "Wert auswählen",
+      "noValueHelp": "Das Tag wird ohne Wert zugewiesen. Ein Wert, den die Entität für dieses Tag bereits hat, bleibt erhalten.",
+      "sourceEntityName": "Entitätsname",
+      "tagNotFound": "Kein Tag hat diesen Namen. Der Schritt setzt es dann nur für die folgenden Schritte des Laufs."
     },
     "approval": {
       "approversRole": "Genehmiger (Rolle)",
@@ -317,6 +327,13 @@
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
       }
+    },
+    "layout": {
+      "rearrange": "Neu anordnen",
+      "rearrangeHint": "Alle Schritte automatisch anordnen",
+      "confirmTitle": "Alle Schritte neu anordnen?",
+      "confirmDescription": "Die Schritte werden automatisch angeordnet. Ihr aktuelles Layout wird beim Speichern ersetzt.",
+      "confirmAction": "Neu anordnen"
     }
   },
   "approvalResponse": {

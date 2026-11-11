@@ -1345,13 +1345,18 @@ class AssignTagStepHandler(StepHandler):
         try:
             if value_source:
                 resolved_value = self._resolve_value_source(value_source, context)
+                if not resolved_value:
+                    return StepResult(passed=False, error="Could not resolve tag value")
             else:
-                resolved_value = value
-            
-            if not resolved_value:
-                return StepResult(passed=False, error="Could not resolve tag value")
-            
-            logger.info(f"Assigning tag {key}={resolved_value} to {context.entity_type} {context.entity_id}")
+                # No fixed value assigns the tag key-only. None (not ''): the tag
+                # store keeps a value the entity already has for this tag.
+                resolved_value = value if value not in (None, '') else None
+
+            logger.info(
+                "Assigning tag %s%s to %s %s", key,
+                f"={resolved_value}" if resolved_value is not None else " (no value)",
+                context.entity_type, context.entity_id,
+            )
 
             # Persist via TagsManager
             persisted = False
@@ -1376,11 +1381,16 @@ class AssignTagStepHandler(StepHandler):
             
             if 'tags' not in context.entity:
                 context.entity['tags'] = {}
-            context.entity['tags'][key] = resolved_value
-            
+            if resolved_value is not None:
+                context.entity['tags'][key] = resolved_value
+            else:
+                # Key-only: rules see true, or the value the entity already had.
+                context.entity['tags'].setdefault(key, True)
+
+            label = f"{key}={resolved_value}" if resolved_value is not None else key
             return StepResult(
                 passed=True,
-                message=f"Assigned tag {key}={resolved_value}" + (" (persisted)" if persisted else " (context only)"),
+                message=f"Assigned tag {label}" + (" (persisted)" if persisted else " (context only)"),
                 data={'key': key, 'value': resolved_value, 'persisted': persisted}
             )
         except Exception as e:

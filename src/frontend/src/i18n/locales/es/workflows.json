@@ -211,7 +211,17 @@
       "selectSource": "Selecciona el origen",
       "sourceCurrentUser": "Usuario actual",
       "sourceProjectName": "Nombre del proyecto",
-      "sourceTimestamp": "Marca de tiempo"
+      "sourceTimestamp": "Marca de tiempo",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fijo",
+      "modeSource": "Valor de la ejecución",
+      "modeNone": "Sin valor",
+      "fixedValue": "Valor de la etiqueta",
+      "fixedValuePlaceholder": "p. ej., confidencial",
+      "selectValue": "Seleccione un valor",
+      "noValueHelp": "La etiqueta se asigna sin valor. Se conserva el valor que la entidad ya tenga para esta etiqueta.",
+      "sourceEntityName": "Nombre de la entidad",
+      "tagNotFound": "Ninguna etiqueta tiene este nombre. El paso solo la establece para los pasos siguientes de la ejecución."
     },
     "approval": {
       "approversRole": "Aprobadores (rol)",
@@ -317,6 +327,13 @@
         "on_pass": "éxito",
         "on_fail": "fallo"
       }
+    },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todos los pasos automáticamente",
+      "confirmTitle": "¿Reorganizar todos los pasos?",
+      "confirmDescription": "Los pasos se organizan automáticamente. Su diseño actual se reemplaza al guardar.",
+      "confirmAction": "Reorganizar"
     }
   },
   "approvalResponse": {

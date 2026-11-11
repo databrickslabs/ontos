@@ -211,7 +211,17 @@
       "selectSource": "Select source",
       "sourceCurrentUser": "Current User",
       "sourceProjectName": "Project Name",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Value",
+      "modeFixed": "Fixed value",
+      "modeSource": "Value from the run",
+      "modeNone": "No value",
+      "fixedValue": "Tag value",
+      "fixedValuePlaceholder": "e.g., confidential",
+      "selectValue": "Select a value",
+      "noValueHelp": "The tag is assigned without a value. A value the entity already has for this tag is kept.",
+      "sourceEntityName": "Entity Name",
+      "tagNotFound": "No tag has this name. The step then only sets it for the following steps of the run."
     },
     "approval": {
       "approversRole": "Approvers (Role)",
@@ -317,6 +327,13 @@
         "on_pass": "pass",
         "on_fail": "fail"
       }
+    },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
     }
   },
   "approvalResponse": {

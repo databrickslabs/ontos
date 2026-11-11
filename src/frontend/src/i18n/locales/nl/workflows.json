@@ -211,7 +211,17 @@
       "selectSource": "Selecteer bron",
       "sourceCurrentUser": "Huidige Gebruiker",
       "sourceProjectName": "Projectnaam",
-      "sourceTimestamp": "Tijdstempel"
+      "sourceTimestamp": "Tijdstempel",
+      "valueMode": "Waarde",
+      "modeFixed": "Vaste waarde",
+      "modeSource": "Waarde uit de uitvoering",
+      "modeNone": "Geen waarde",
+      "fixedValue": "Tagwaarde",
+      "fixedValuePlaceholder": "bijv. vertrouwelijk",
+      "selectValue": "Selecteer een waarde",
+      "noValueHelp": "De tag wordt zonder waarde toegewezen. Een waarde die de entiteit al voor deze tag heeft, blijft behouden.",
+      "sourceEntityName": "Entiteitsnaam",
+      "tagNotFound": "Geen tag heeft deze naam. De stap zet hem dan alleen voor de volgende stappen van de uitvoering."
     },
     "approval": {
       "approversRole": "Goedkeurders (Rol)",
@@ -317,6 +327,13 @@
         "on_pass": "succes",
         "on_fail": "fout"
       }
+    },
+    "layout": {
+      "rearrange": "Herschikken",
+      "rearrangeHint": "Alle stappen automatisch schikken",
+      "confirmTitle": "Alle stappen herschikken?",
+      "confirmDescription": "De stappen worden automatisch geschikt. Je huidige indeling wordt bij het opslaan vervangen.",
+      "confirmAction": "Herschikken"
     }
   },
   "approvalResponse": {

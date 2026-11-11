@@ -75,8 +75,10 @@ import {
   Edit2,
   Check,
   X,
+  LayoutGrid,
 } from 'lucide-react';
 import ApprovalWizardDialog from './approval-wizard-dialog';
+import AssignTagStepForm from './assign-tag-step-form';
 
 import RequiredFieldsEditor, {
   type RequiredField,
@@ -134,6 +136,7 @@ import type {
   CompliancePolicyRef,
   HttpConnectionRef,
   WorkflowTypeValue,
+  AssignTagStepConfig,
 } from '@/types/process-workflow';
 import {
   ALL_ENTITY_TYPES,
@@ -149,6 +152,7 @@ import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
+import { hasStoredLayout, triggerPositionFor, withNodePositions } from './workflow-layout';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
@@ -816,6 +820,11 @@ const workflowToElements = (
     }
   });
 
+  // Open as the user arranged it; auto-arrange only workflows without a full stored layout.
+  if (hasStoredLayout(workflow.steps)) {
+    nodes[0] = { ...nodes[0], position: triggerPositionFor(workflow.steps[0].position!) };
+    return { nodes, edges };
+  }
   return getLayoutedElements(nodes, edges);
 };
 
@@ -860,6 +869,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  const [showRearrangeDialog, setShowRearrangeDialog] = useState(false);
   const [activationConflicts, setActivationConflicts] = useState<WorkflowActivationConflict[]>([]);
   const [showOverlapDialog, setShowOverlapDialog] = useState(false);
   // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
@@ -1317,6 +1327,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setSelectedNodeId(node.id);
   }, []);
 
+  // Keep the layout the user arranges: dragged steps take their new positions
+  // (the trigger has no stored position, see workflow-layout.ts).
+  const onNodeDragStop = useCallback((_: React.MouseEvent, _node: Node, dragged: Node[]) => {
+    setSteps(prev => withNodePositions(prev, dragged));
+  }, []);
+
+  // Rearrange: auto-arrange every node, after the user confirmed (the layout is lost on save).
+  const rearrangeNodes = useCallback(() => {
+    const { nodes: arranged } = getLayoutedElements(nodes, edges);
+    setNodes(arranged);
+    setSteps(prev => withNodePositions(prev, arranged));
+    setShowRearrangeDialog(false);
+  }, [nodes, edges, setNodes]);
+
   // Handle edge reconnection (drag an existing edge endpoint to a different node)
   const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     if (!newConnection.source || !newConnection.target) return;
@@ -1405,6 +1429,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       step_type: type,
       config: type === 'entity_action' ? { action: 'certify' } : {},
       order: steps.length,
+      position: { x: 100, y: (nodes.length + 1) * 120 },
     };
     
     setSteps(prev => [...prev, newStep]);
@@ -1414,7 +1439,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       id: stepId,
       type: type,
       data: { step: newStep, rolesMap },
-      position: { x: 100, y: (nodes.length + 1) * 120 },
+      position: newStep.position!,
     };
     setNodes(prev => [...prev, newNode]);
     
@@ -1573,7 +1598,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         },
         workflow_type: workflowType || 'process',
         is_active: isActive,
-        steps: steps.map((s, i) => ({ ...s, order: i })),
+        // The canvas is the source of truth for positions (also after an auto-arrange on load).
+        steps: withNodePositions(steps, nodes).map((s, i) => ({ ...s, order: i })),
       };
 
       let response;
@@ -1763,6 +1789,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             nodes={nodes}
             edges={edgesWithDelete}
             onNodesChange={onNodesChange}
+            onNodeDragStop={onNodeDragStop}
             onNodesDelete={deleted => removeSteps(deleted.map(n => n.id))}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -1803,6 +1830,19 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                 </Button>
               </div>
             </Panel>
+
+            {/* Layout tools */}
+            <Panel position="top-right" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-1 dark:bg-slate-800/95">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRearrangeDialog(true)}
+                disabled={steps.length === 0}
+                title={t('workflows:designer.layout.rearrangeHint')}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" /> {t('workflows:designer.layout.rearrange')}
+              </Button>
+            </Panel>
           </ReactFlow>
           </CompliancePolicyIdsContext.Provider>
         </div>
@@ -1823,6 +1863,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             previewMode
           />
         )}
+
+        {/* Rearrange confirmation dialog */}
+        <AlertDialog open={showRearrangeDialog} onOpenChange={setShowRearrangeDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('workflows:designer.layout.confirmTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('workflows:designer.layout.confirmDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={rearrangeNodes}>{t('workflows:designer.layout.confirmAction')}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Discard changes confirmation dialog */}
         <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
@@ -2478,36 +2532,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   )}
                   
                   {selectedStep.step_type === 'assign_tag' && (
-                    <>
-                      <div>
-                        <Label>{t('workflows:designer.assignTag.tagKey')}</Label>
-                        <Input
-                          value={(selectedStep.config as { key?: string })?.key || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, key: e.target.value }
-                          })}
-                          placeholder={t('workflows:designer.assignTag.tagKeyPlaceholder')}
-                        />
-                      </div>
-                      <div>
-                        <Label>{t('workflows:designer.assignTag.valueSource')}</Label>
-                        <Select
-                          value={(selectedStep.config as { value_source?: string })?.value_source || ''}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, value_source: v }
-                          })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('workflows:designer.assignTag.selectSource')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="current_user">{t('workflows:designer.assignTag.sourceCurrentUser')}</SelectItem>
-                            <SelectItem value="project_name">{t('workflows:designer.assignTag.sourceProjectName')}</SelectItem>
-                            <SelectItem value="timestamp">{t('workflows:designer.assignTag.sourceTimestamp')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
+                    <AssignTagStepForm
+                      key={selectedStep.step_id}
+                      config={(selectedStep.config || {}) as Partial<AssignTagStepConfig>}
+                      onChange={(config) => updateStep(selectedStep.step_id, { config })}
+                    />
                   )}
                   
                   {selectedStep.step_type === 'approval' && (

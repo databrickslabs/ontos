@@ -211,7 +211,17 @@
       "selectSource": "Seleziona origine",
       "sourceCurrentUser": "Utente corrente",
       "sourceProjectName": "Nome progetto",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Valore",
+      "modeFixed": "Valore fisso",
+      "modeSource": "Valore dall’esecuzione",
+      "modeNone": "Nessun valore",
+      "fixedValue": "Valore del tag",
+      "fixedValuePlaceholder": "ad es. riservato",
+      "selectValue": "Seleziona un valore",
+      "noValueHelp": "Il tag viene assegnato senza valore. Un valore che l’entità ha già per questo tag viene mantenuto.",
+      "sourceEntityName": "Nome dell’entità",
+      "tagNotFound": "Nessun tag ha questo nome. Il passaggio lo imposta solo per i passaggi successivi dell’esecuzione."
     },
     "approval": {
       "approversRole": "Approvatori (ruolo)",
@@ -317,6 +327,13 @@
         "on_pass": "successo",
         "on_fail": "errore"
       }
+    },
+    "layout": {
+      "rearrange": "Riorganizza",
+      "rearrangeHint": "Disponi automaticamente tutti i passaggi",
+      "confirmTitle": "Riorganizzare tutti i passaggi?",
+      "confirmDescription": "I passaggi vengono disposti automaticamente. Il layout attuale viene sostituito al salvataggio.",
+      "confirmAction": "Riorganizza"
     }
   },
   "approvalResponse": {

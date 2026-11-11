@@ -211,7 +211,17 @@
       "selectSource": "ソースを選択",
       "sourceCurrentUser": "現在のユーザー",
       "sourceProjectName": "プロジェクト名",
-      "sourceTimestamp": "タイムスタンプ"
+      "sourceTimestamp": "タイムスタンプ",
+      "valueMode": "値",
+      "modeFixed": "固定値",
+      "modeSource": "実行時の値",
+      "modeNone": "値なし",
+      "fixedValue": "タグの値",
+      "fixedValuePlaceholder": "例: confidential",
+      "selectValue": "値を選択",
+      "noValueHelp": "タグは値なしで割り当てられます。エンティティがこのタグに既に持つ値は保持されます。",
+      "sourceEntityName": "エンティティ名",
+      "tagNotFound": "この名前のタグはありません。このステップは実行の後続ステップに対してのみ設定します。"
     },
     "approval": {
       "approversRole": "承認者（ロール）",
@@ -317,6 +327,13 @@
         "on_pass": "成功時",
         "on_fail": "失敗時"
       }
+    },
+    "layout": {
+      "rearrange": "再配置",
+      "rearrangeHint": "すべてのステップを自動で配置",
+      "confirmTitle": "すべてのステップを再配置しますか？",
+      "confirmDescription": "ステップは自動で配置されます。保存すると現在のレイアウトは置き換えられます。",
+      "confirmAction": "再配置"
     }
   },
   "approvalResponse": {

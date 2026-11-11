@@ -462,8 +462,8 @@ class NotificationStepConfig(BaseModel):
 class AssignTagStepConfig(BaseModel):
     """Configuration for tag assignment steps."""
     key: str = Field(..., description="Tag key to assign")
-    value: Optional[str] = Field(None, description="Static tag value")
-    value_source: Optional[str] = Field(None, description="Dynamic value source: 'current_user', 'project_name', etc.")
+    value: Optional[str] = Field(None, description="Static tag value. Without value and value_source the tag is assigned without a value, and a value the entity already has is kept.")
+    value_source: Optional[str] = Field(None, description="Dynamic value source: 'current_user', 'project_name', 'entity_name', 'timestamp'. Wins over value.")
     
     class Config:
         json_schema_extra = {

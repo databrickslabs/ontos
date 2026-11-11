@@ -211,7 +211,17 @@
       "selectSource": "Selecionar origem",
       "sourceCurrentUser": "Usuário atual",
       "sourceProjectName": "Nome do projeto",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fixo",
+      "modeSource": "Valor da execução",
+      "modeNone": "Sem valor",
+      "fixedValue": "Valor da tag",
+      "fixedValuePlaceholder": "ex.: confidencial",
+      "selectValue": "Selecione um valor",
+      "noValueHelp": "A tag é atribuída sem valor. Um valor que a entidade já tenha para esta tag é mantido.",
+      "sourceEntityName": "Nome da entidade",
+      "tagNotFound": "Nenhuma tag tem este nome. A etapa então só a define para as etapas seguintes da execução."
     },
     "approval": {
       "approversRole": "Aprovadores (papel)",
@@ -317,6 +327,13 @@
         "on_pass": "sucesso",
         "on_fail": "falha"
       }
+    },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todas as etapas automaticamente",
+      "confirmTitle": "Reorganizar todas as etapas?",
+      "confirmDescription": "As etapas são organizadas automaticamente. Seu layout atual é substituído ao salvar.",
+      "confirmAction": "Reorganizar"
     }
   },
   "approvalResponse": {

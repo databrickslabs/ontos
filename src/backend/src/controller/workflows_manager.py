@@ -931,8 +931,7 @@ class WorkflowsManager:
         elif step.step_type == StepType.ASSIGN_TAG:
             if not config.get('key'):
                 errors.append(_missing(step, "Assign tag step requires 'key' in config", ['key']))
-            if not config.get('value') and not config.get('value_source'):
-                errors.append(_missing(step, "Assign tag step requires 'value' or 'value_source' in config", ['value', 'value_source']))
+            # Neither 'value' nor 'value_source' assigns the tag key-only.
 
         elif step.step_type == StepType.REMOVE_TAG:
             if not config.get('key'):
@@ -1014,8 +1013,8 @@ class WorkflowsManager:
                     "type": "object",
                     "properties": {
                         "key": {"type": "string", "description": "Tag key"},
-                        "value": {"type": "string", "description": "Static tag value"},
-                        "value_source": {"type": "string", "description": "Dynamic value source: current_user, project_name"}
+                        "value": {"type": "string", "description": "Static tag value; leave out (and value_source) to assign the tag without a value"},
+                        "value_source": {"type": "string", "description": "Dynamic value source: current_user, project_name, entity_name, timestamp (wins over value)"}
                     },
                     "required": ["key"]
                 },

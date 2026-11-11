@@ -110,9 +110,13 @@ def _is_app_asset_path(value: str) -> bool:
     """True for a same-origin, root-relative path such as ``/branding/x.svg``.
 
     Protocol-relative URLs (``//host``), backslashes, whitespace and control
-    characters are rejected so the value can't point at another origin.
+    characters are rejected so the value can't point at another origin, and
+    ``..`` segments (also percent-encoded) so it can't climb out of its folder.
     """
     if not value.startswith('/') or value.startswith('//'):
+        return False
+    path = value.split('?', 1)[0].split('#', 1)[0]
+    if any(seg.lower() in ('..', '%2e%2e', '.%2e', '%2e.') for seg in path.split('/')):
         return False
     return all(ch.isprintable() and not ch.isspace() and ch != '\\' for ch in value)
 

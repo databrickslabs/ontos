@@ -108,12 +108,16 @@ export function resolveBrandingAssetUrl(url?: string | null): string | null {
 
 /**
  * Image URL the backend accepts for branding images: an http(s) URL or a
- * root-relative app asset path (no `//host`, whitespace or backslashes).
+ * root-relative app asset path (no `//host`, whitespace, backslashes or `..` segments).
  * Empty input is valid (unset).
  */
 export function isValidImageUrl(url: string): boolean {
   if (!url) return true;
-  if (url.startsWith('/') && !url.startsWith('//')) return !/[\s\\]/.test(url);
+  if (url.startsWith('/') && !url.startsWith('//')) {
+    const path = url.split(/[?#]/, 1)[0];
+    const climbs = path.split('/').some((seg) => /^(\.\.|%2e%2e|\.%2e|%2e\.)$/i.test(seg));
+    return !/[\s\\]/.test(url) && !climbs;
+  }
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';

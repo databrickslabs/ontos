@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 
+from src.common.timestamps import utc_now
 from src.db_models.process_workflows import (
     ProcessWorkflowDb,
     WorkflowStepDb,
@@ -492,7 +493,6 @@ class WorkflowExecutionRepository:
         cancelled_by: Optional[str] = None,
     ) -> Optional[WorkflowExecutionDb]:
         """Cancel a running or paused execution."""
-        from datetime import datetime
         
         db_execution = db.get(WorkflowExecutionDb, execution_id)
         if not db_execution:
@@ -505,7 +505,7 @@ class WorkflowExecutionRepository:
         
         db_execution.status = 'cancelled'
         db_execution.error_message = f"Cancelled by {cancelled_by or 'admin'}"
-        db_execution.finished_at = datetime.utcnow()
+        db_execution.finished_at = utc_now()
         
         db.commit()
         db.refresh(db_execution)
@@ -535,12 +535,12 @@ class WorkflowExecutionRepository:
         workflow_id: Optional[str] = None,
     ) -> int:
         """Delete multiple executions matching criteria. Returns count deleted."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         
         query = db.query(WorkflowExecutionDb)
         
         if older_than_days is not None:
-            cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+            cutoff = utc_now() - timedelta(days=older_than_days)
             query = query.filter(WorkflowExecutionDb.started_at < cutoff)
         
         if status:

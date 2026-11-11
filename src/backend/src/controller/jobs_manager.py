@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
@@ -14,6 +14,7 @@ from databricks.sdk.service import jobs, compute
 from databricks.sdk.service.jobs import RunLifeCycleState, RunResultState
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src import __version__
 from src.repositories.workflow_installations_repository import workflow_installation_repo
@@ -242,8 +243,8 @@ class JobsManager:
                 job_id=job_id,
                 workspace_id=workspace_id,
                 status='installed',
-                installed_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                installed_at=utc_now(),
+                updated_at=utc_now()
             )
             workflow_installation_repo.create(self._db, obj_in=installation)
             self._db.commit()
@@ -814,7 +815,7 @@ class JobsManager:
                 "status": "RUNNING"
             },
             target_roles=["Admin"],  # Only notify admins
-            created_at=datetime.utcnow()
+            created_at=utc_now()
         )
         
         # Create notification via notifications manager
@@ -894,7 +895,7 @@ class JobsManager:
                 title=title,
                 message=message,
                 data=data,
-                updated_at=datetime.utcnow()
+                updated_at=utc_now()
             )
             
             self._notifications_manager.update_notification(notification_id, update, db=self._db)
@@ -1217,7 +1218,7 @@ class JobsManager:
                         # every cycle), and combined with the change-gated upserts
                         # a quiet cycle results in zero Lakebase writes.
                         backfill_days = self._settings.JOB_POLLING_BACKFILL_DAYS if self._settings else 7
-                        backfill_floor_ms = int((datetime.utcnow() - timedelta(days=backfill_days)).timestamp() * 1000)
+                        backfill_floor_ms = int((utc_now() - timedelta(days=backfill_days)).timestamp() * 1000)
                         start_time_from = backfill_floor_ms
                         if installation.last_polled_at:
                             # 2x the poll interval of overlap comfortably covers
@@ -1399,7 +1400,7 @@ class JobsManager:
                     "error_type": "job_failure"
                 },
                 target_roles=["Admin"],
-                created_at=datetime.utcnow()
+                created_at=utc_now()
             )
 
             self._notifications_manager.create_notification(notification, db=db)

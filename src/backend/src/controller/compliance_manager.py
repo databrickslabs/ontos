@@ -6,6 +6,7 @@ import uuid
 import yaml
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.common.logging import get_logger
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.repositories.compliance_repository import (
@@ -167,7 +168,7 @@ class ComplianceManager:
                     existing.category = model.category
                     existing.severity = model.severity
                     existing.is_active = model.is_active
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = utc_now()
                     policy_db = existing
                 else:
                     policy_db = CompliancePolicyDb(
@@ -341,7 +342,7 @@ class ComplianceManager:
         existing.category = policy.category
         existing.severity = policy.severity
         existing.is_active = policy.is_active
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utc_now()
         
         # Log to change log for timeline
         try:
@@ -541,7 +542,7 @@ class ComplianceManager:
             id=str(uuid.uuid4()),
             policy_id=policy_id,
             status='running',
-            started_at=datetime.utcnow(),
+            started_at=utc_now(),
         )
         db.add(run)
         db.commit()
@@ -557,7 +558,7 @@ class ComplianceManager:
         run.success_count = success_count
         run.failure_count = failure_count
         run.score = score
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utc_now()
         run.status = 'succeeded' if error_message is None else 'failed'
         run.error_message = error_message
         # A code the UI translates (see common/compliance_errors.py); the message is the fallback

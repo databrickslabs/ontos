@@ -62,6 +62,7 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.common.timestamps import utc_now
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
@@ -261,7 +262,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if status is not None:
             contract.status = status
 
-        contract.updated_at = datetime.utcnow()
+        contract.updated_at = utc_now()
         return contract
 
     def delete_contract(self, contract_id: str) -> bool:
@@ -4415,7 +4416,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.db_models.data_contracts import DataProfilingRunDb
         from src.repositories.workflow_installations_repository import workflow_installation_repo
         from src.common.config import get_settings
-        from datetime import datetime
         from uuid import uuid4
         import json
         
@@ -4449,7 +4449,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             source='dqx',
             schema_names=json.dumps(schema_names),
             status='pending',
-            started_at=datetime.utcnow(),
+            started_at=utc_now(),
             triggered_by=triggered_by
         )
         db.add(run)
@@ -5862,7 +5862,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or deployment policy violated
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -5891,7 +5890,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 f"{catalog}{('.' + database_schema) if database_schema else ''}"
             )
         
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Change log entry
         from src.controller.change_log_manager import change_log_manager
@@ -6011,7 +6010,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found, invalid decision, or invalid status
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -6023,7 +6021,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Decision must be 'approve', 'reject', or 'clarify'")
         
         from_status = (contract.status or '').lower()
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Update contract status based on decision, through transition_status
         # so the lifecycle check and the before_status_change gates run
@@ -6299,7 +6297,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid decision
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -6310,7 +6307,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if decision not in ('approve', 'deny'):
             raise ValueError("Decision must be 'approve' or 'deny'")
         
-        now = datetime.utcnow()
+        now = utc_now()
         response_message = f"Deploy decision '{decision}' recorded successfully"
         result = {"message": response_message}
         
@@ -6554,7 +6551,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         Raises:
             ValueError: If contract not found or invalid decision
         """
-        from datetime import datetime
         from src.models.notifications import NotificationType, Notification
         
         contract = data_contract_repo.get(db, id=contract_id)
@@ -6566,7 +6562,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError("Decision must be 'approve', 'deny', or 'clarify'")
         
         from_status = (contract.status or 'draft').lower()
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Apply status change if approved
         if decision == 'approve':

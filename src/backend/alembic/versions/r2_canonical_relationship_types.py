@@ -7,15 +7,18 @@ compare the strings exactly, so links written with labels (API clients, the sche
 importer and asset retyping) didn't show on the asset pages, which ask for local
 names. New rows are normalized by the model (#956/#957/#959); this rewrites the
 stored ones the same way (whitespace removed, the Ontos namespace stripped from
-IRIs; other IRIs unchanged). A row that becomes a duplicate of a row already
-stored with the local name is dropped, keeping the oldest.
+IRIs; other IRIs unchanged). Rows that become the same link (the unique key covers
+the type columns) are merged: the oldest is kept, the others are deleted.
 
 Revision ID: r2_canonical_relationship_types
 Revises: r1_role_hidden_nav_features
 Create Date: 2026-11-11
 """
-from typing import Sequence, Union
+import re
+from collections import defaultdict
+from typing import Optional, Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -25,42 +28,46 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 ONTOS_NS = "http://ontos.app/ontology#"
+_WHITESPACE = re.compile(r"\s+")
 
 
-def _canonical(column: str) -> str:
-    """SQL for canonical_type_name() (src/common/ontology_type_names.py)."""
-    return (
-        f"CASE WHEN {column} LIKE '{ONTOS_NS}%' THEN substr({column}, {len(ONTOS_NS) + 1}) "
-        f"WHEN {column} LIKE 'http://%' OR {column} LIKE 'https://%' THEN {column} "
-        f"ELSE regexp_replace({column}, '\\s+', '', 'g') END"
-    )
+def _canonical(value: Optional[str]) -> Optional[str]:
+    """Copy of src.common.ontology_type_names.canonical_type_name, frozen for this revision."""
+    if value is None:
+        return None
+    value = value.strip()
+    if value.startswith(ONTOS_NS):
+        return value[len(ONTOS_NS):]
+    if value.startswith(("http://", "https://")):
+        return value
+    return _WHITESPACE.sub("", value)
 
 
 def upgrade() -> None:
-    src = _canonical("source_type")
-    tgt = _canonical("target_type")
-    needs_rewrite = f"(source_type <> {src} OR target_type <> {tgt})"
-    # Drop rows that would collide with another row once both are normalized
-    # (the unique constraint covers the type columns); keep the oldest.
-    op.execute(f"""
-        DELETE FROM entity_relationships
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id,
-                       row_number() OVER (
-                           PARTITION BY {src}, source_id, {tgt}, target_id, relationship_type
-                           ORDER BY created_at, id
-                       ) AS rn
-                FROM entity_relationships
-            ) ranked
-            WHERE rn > 1
-        )
-    """)
-    op.execute(f"""
-        UPDATE entity_relationships
-        SET source_type = {src}, target_type = {tgt}
-        WHERE {needs_rewrite}
-    """)
+    conn = op.get_bind()
+    rows = conn.execute(sa.text(
+        "SELECT id, source_type, source_id, target_type, target_id, relationship_type, created_at "
+        "FROM entity_relationships"
+    )).fetchall()
+
+    groups = defaultdict(list)
+    for row in rows:
+        key = (_canonical(row.source_type), row.source_id, _canonical(row.target_type),
+               row.target_id, row.relationship_type)
+        groups[key].append(row)
+
+    for (source_type, _sid, target_type, _tid, _rel), members in groups.items():
+        if len(members) == 1 and (members[0].source_type, members[0].target_type) == (source_type, target_type):
+            continue  # already canonical, no duplicate
+        members.sort(key=lambda r: (r.created_at is None, r.created_at, str(r.id)))
+        keep, *drop = members
+        for row in drop:
+            conn.execute(sa.text("DELETE FROM entity_relationships WHERE id = :id"), {"id": row.id})
+        if (keep.source_type, keep.target_type) != (source_type, target_type):
+            conn.execute(
+                sa.text("UPDATE entity_relationships SET source_type = :s, target_type = :t WHERE id = :id"),
+                {"s": source_type, "t": target_type, "id": keep.id},
+            )
 
 
 def downgrade() -> None:

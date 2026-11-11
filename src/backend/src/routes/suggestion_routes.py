@@ -53,8 +53,23 @@ class LinkCandidatesResponse(BaseModel):
     total: int = 0
 
 
-@router.get("/link-candidates", response_model=LinkCandidatesResponse)
-async def get_link_candidates(
+async def _require_target_read_access(
+    request: Request,
+    target_type: str = Query(..., description="Target entity type to search for candidates"),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+) -> None:
+    """Read access to the feature that owns ``target_type`` (assets for asset types)."""
+    feature_id = DEDICATED_TARGET_FEATURES.get(target_type, FEATURE_ID)
+    await enforce_feature_permission(feature_id, FeatureAccessLevel.READ_ONLY, user_details, request)
+
+
+# A plain ``def``: the queries are synchronous, so FastAPI runs it in its threadpool.
+@router.get(
+    "/link-candidates",
+    response_model=LinkCandidatesResponse,
+    dependencies=[Depends(_require_target_read_access)],
+)
+def get_link_candidates(
     db: DBSessionDep,
     request: Request,
     source_type: Optional[str] = Query(None, description="Source entity type for context"),
@@ -62,7 +77,6 @@ async def get_link_candidates(
     target_type: str = Query(..., description="Target entity type to search for candidates"),
     query: Optional[str] = Query(None, description="Additional search query"),
     limit: int = Query(20, ge=1, le=100),
-    user_details: UserInfo = Depends(get_user_details_from_sdk),
 ):
     """Find candidate entities for linking, ranked by name/tag similarity.
 
@@ -73,9 +87,6 @@ async def get_link_candidates(
     type needs read access to the feature that owns it. Types that have no list
     here (e.g. ``Ownership``) return no candidates.
     """
-    feature_id = DEDICATED_TARGET_FEATURES.get(target_type, FEATURE_ID)
-    await enforce_feature_permission(feature_id, FeatureAccessLevel.READ_ONLY, user_details, request)
-
     search_term = query or source_name or ""
     try:
         if target_type == "OntologyConcept":

@@ -302,8 +302,9 @@ class EntityRelationshipsManager:
             )
 
             for ar in asset_rels:
-                src_type = ar.source_asset.asset_type.name if ar.source_asset and ar.source_asset.asset_type else "Asset"
-                tgt_type = ar.target_asset.asset_type.name if ar.target_asset and ar.target_asset.asset_type else "Asset"
+                # Same spelling as stored rows, so the dedup key matches them.
+                src_type = canonical_type_name(ar.source_asset.asset_type.name) if ar.source_asset and ar.source_asset.asset_type else "Asset"
+                tgt_type = canonical_type_name(ar.target_asset.asset_type.name) if ar.target_asset and ar.target_asset.asset_type else "Asset"
                 key = (src_type, str(ar.source_asset_id), tgt_type, str(ar.target_asset_id), ar.relationship_type)
                 if key in seen_keys:
                     continue

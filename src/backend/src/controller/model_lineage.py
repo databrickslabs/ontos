@@ -25,6 +25,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
+from src.common.ontology_type_names import canonical_type_name
 from src.models.assets import PHYSICAL_TABLE_ASSET_TYPES
 
 logger = get_logger(__name__)
@@ -373,7 +374,7 @@ class ModelLineageResolver:
             return None  # raw UC objects are not lineage nodes
         asset = self._asset(db, link_id, req)
         if asset is not None and asset.asset_type is not None:
-            return asset.asset_type.name, str(asset.id)
+            return canonical_type_name(asset.asset_type.name), str(asset.id)
         return None
 
     # --- delivery --------------------------------------------------------
@@ -394,7 +395,7 @@ class ModelLineageResolver:
             links.append(DerivedLink("OutputPort", port.id, "DataContract", contract.id, REL_PORT_CONTRACT))
         if port.asset_identifier:
             for asset in self._physical_assets_at(db, port.asset_identifier, req, exact=True):
-                links.append(DerivedLink("OutputPort", port.id, asset.asset_type.name, str(asset.id), REL_PORT_ASSET))
+                links.append(DerivedLink("OutputPort", port.id, canonical_type_name(asset.asset_type.name), str(asset.id), REL_PORT_ASSET))
         return links
 
     @staticmethod
@@ -451,7 +452,7 @@ class ModelLineageResolver:
         links.extend(DerivedLink(SCHEMA_OBJECT, obj.id, SCHEMA_PROPERTY, p.id, REL_HAS_PROPERTY) for p in top_props)
         if obj.physical_name:
             for asset in self._physical_assets_at(db, obj.physical_name, req):
-                links.append(DerivedLink(SCHEMA_OBJECT, obj.id, asset.asset_type.name, str(asset.id), REL_IMPLEMENTED_BY))
+                links.append(DerivedLink(SCHEMA_OBJECT, obj.id, canonical_type_name(asset.asset_type.name), str(asset.id), REL_IMPLEMENTED_BY))
         return links
 
     def _schema_property_links(self, db: Session, prop_id: str, req: LineageRequest) -> List[DerivedLink]:

@@ -102,3 +102,31 @@ def test_repository_filters_accept_either_spelling(db_session):
     ) is not None
     assert len(entity_relationship_repo.query_filtered(db_session, source_type="Delivery Channel")) == 1
     assert len(entity_relationship_repo.get_by_source(db_session, source_type="Delivery Channel", source_id="d1")) == 1
+
+
+def test_a_concept_link_reads_back_with_its_label(db_session, osm):
+    manager = EntityRelationshipsManager(osm)
+    iri = "urn:glossary:retail/customer"
+    manager.create_relationship(db_session, EntityRelationshipCreate(
+        source_type="LogicalEntity", source_id="le1", target_type="OntologyConcept",
+        target_id=iri, relationship_type="hasSemanticConcept", properties={"target_label": "Customer"},
+    ), current_user_id="u@example.com")
+
+    [link] = manager.get_all_for_entity(db_session, "LogicalEntity", "le1").outgoing
+
+    assert (link.target_type, link.target_name) == ("OntologyConcept", "Customer")
+
+
+def test_a_concept_link_without_a_label_falls_back_to_the_concept_name(db_session, osm):
+    manager = EntityRelationshipsManager(osm)
+    iri = "urn:glossary:retail/customer-address"
+    manager.create_relationship(db_session, EntityRelationshipCreate(
+        source_type="LogicalEntity", source_id="le1", target_type="OntologyConcept",
+        target_id=iri, relationship_type="hasSemanticConcept",
+    ), current_user_id="u@example.com")
+
+    [link] = manager.get_all_for_entity(db_session, "LogicalEntity", "le1").outgoing
+
+    # Resolved like a lineage concept node: semantic-link label, else the IRI's last segment.
+    assert link.target_name == "customer-address"
+    assert manager._resolve_entity(db_session, "OntologyConcept", iri)["name"] == "customer-address"

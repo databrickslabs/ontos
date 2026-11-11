@@ -359,7 +359,9 @@ Column tags, table tags, keys and lineage are not available yet.
 - `description` - Description
 - `status` - Status (draft, active, etc.)
 - `version` - Version number
-- `owner` - Owner email
+- `owner` - Owner: the owner team's id for data products and data contracts; for domains, the
+  list of the emails of their active Business Owners (`[]` when none), so test it with
+  `LENGTH(d.owner) > 0` or `d.owner CONTAINS 'user@example.com'`
 - `domain` - Name of the primary domain (data products and data contracts); null when there is none, so `x.domain != ''` is also true for an entity without a domain
 - `domain_id` - Id of the primary domain (data products and data contracts); null when there is none
 - `tags` - Tag dictionary

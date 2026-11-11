@@ -287,3 +287,51 @@ class TestNavigation:
         auth = AuthorizationManager(settings_manager=settings)
 
         assert auth.get_user_hidden_nav_features(["data-consumers"], team_role_names=["Admin"]) == []
+
+
+class TestInHandlerAdminChecks:
+    """The asset and data-product admin checks resolve like PermissionChecker, team roles included."""
+
+    def _req(self, auth, teams_by_user, applied=None):
+        request = _request(teams_by_user, applied=applied)
+        request.app.state.authorization_manager = auth
+        return request
+
+    def _user(self, groups):
+        return UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=groups)
+
+    def test_assets_gate_counts_team_roles(self, auth):
+        from src.routes.assets_routes import _user_has_assets_feature
+
+        settings = MagicMock()
+        settings.list_app_roles.return_value = ROLES + [_role("Asset Editor", assets=L.READ_WRITE)]
+        auth_with_assets = AuthorizationManager(settings_manager=settings)
+        team = _team(("u@example.com", "Asset Editor"))
+
+        assert not _user_has_assets_feature(self._req(auth_with_assets, {}), self._user(["data-consumers"]), L.READ_WRITE)
+        assert _user_has_assets_feature(
+            self._req(auth_with_assets, {"u@example.com": [team]}), self._user(["data-consumers"]), L.READ_WRITE,
+        )
+
+    def test_assets_gate_follows_an_applied_override(self, auth):
+        from src.routes.assets_routes import _user_has_assets_feature
+
+        settings = MagicMock()
+        editor = _role("Asset Editor", assets=L.READ_WRITE)
+        settings.list_app_roles.return_value = ROLES + [editor]
+        auth_with_assets = AuthorizationManager(settings_manager=settings)
+        consumer = next(r for r in ROLES if r.name == "Data Consumer")
+        request = self._req(auth_with_assets, {"u@example.com": [_team(("u@example.com", "Asset Editor"))]},
+                            applied=str(consumer.id))
+
+        assert not _user_has_assets_feature(request, self._user([]), L.READ_WRITE)
+
+    def test_data_product_admin_bypass_counts_team_roles(self, auth):
+        from src.routes.data_product_routes import _caller_owns_product
+
+        team = _team(("u@example.com", "Admin"))
+        product = SimpleNamespace(id="p1", draft_owner_id=None, owner_team_id=None, project_id=None)
+
+        assert _caller_owns_product(
+            self._req(auth, {"u@example.com": [team]}), MagicMock(), self._user(["data-consumers"]), product,
+        ) is True

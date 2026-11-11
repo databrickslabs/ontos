@@ -6,6 +6,7 @@
     "loading": "Caricamento...",
     "cancel": "Annulla",
     "close": "Chiudi",
+    "openMenu": "Apri menu",
     "delete": "Elimina",
     "deleteSelected": "Elimina selezionati ({{count}})",
     "edit": "Modifica",

@@ -596,7 +596,7 @@ export default function DataProducts() {
   // --- Column Definitions (Keep as they are for the DataTable) ---
   const columns = useMemo<ColumnDef<DataProduct>[]>(() => [
     {
-      accessorKey: "info.title",
+      accessorKey: "name",
       header: ({ column }: { column: Column<DataProduct, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           {t('table.title')} <ChevronDown className="ml-2 h-4 w-4" />
@@ -834,7 +834,7 @@ export default function DataProducts() {
             <DataTable
               columns={columns}
               data={displayedProducts}
-              searchColumn="info.title"
+              searchColumn="name"
               storageKey="data-products-sort"
               toolbarActions={
                 <>

@@ -6,6 +6,7 @@
     "loading": "Chargement...",
     "cancel": "Annuler",
     "close": "Fermer",
+    "openMenu": "Ouvrir le menu",
     "delete": "Supprimer",
     "deleteSelected": "Supprimer sélectionnés ({{count}})",
     "edit": "Modifier",

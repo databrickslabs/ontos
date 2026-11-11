@@ -311,6 +311,25 @@ def test_a_description_without_a_purpose_keeps_the_stored_purpose(db_session):
     assert result.passed is True
 
 
+def test_a_domain_change_is_the_future_domain(db_session):
+    # update_contract_with_relations: domainIds with primaryDomainId (else the first),
+    # else domainId; a domain field without an id unassigns the contract
+    contract = _contract(db_session)
+
+    def domain(payload):
+        return _policy_rule_object(db_session, _context(contract, payload)).get('domain')
+
+    assert domain(_payload(domainIds=['d-1', 'd-2'], primaryDomainId='d-2')) == 'd-2'
+    assert domain(_payload(domainIds=['d-1', 'd-2'])) == 'd-1'
+    assert domain(_payload(domainId='d-3')) == 'd-3'
+    assert domain(_payload(domainIds=[])) is None
+    gate = _gate(
+        db_session, "MATCH (c:data_contract) ASSERT c.domain = 'd-2'",
+        contract, _payload(domainIds=['d-2']),
+    )
+    assert gate.passed is True
+
+
 def test_fields_derived_from_the_stored_row_stay_out(db_session):
     contract = _contract(db_session, owner='team-1')
 

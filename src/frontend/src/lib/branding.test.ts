@@ -132,7 +132,11 @@ describe('branding assets and theme colors', () => {
     expect(contrastRatio('#fff', '#fff')).toBeCloseTo(1, 5);
     expect(contrastRatio('red', '#fff')).toBeNull();
     const darkBlue = describeContrast('#1d4ed8');
-    expect(darkBlue).toMatchObject({ foreground: 'light', foregroundHex: '#fafafa', meetsAA: true });
+    expect(darkBlue).toMatchObject({
+      foreground: 'light',
+      foregroundHex: '#fafafa',
+      meetsAA: true,
+    });
     // Light text still reads best on this blue, but it falls just short of AA
     const blue = describeContrast('#2f6fed');
     expect(blue).toMatchObject({ foreground: 'light', meetsAA: false });

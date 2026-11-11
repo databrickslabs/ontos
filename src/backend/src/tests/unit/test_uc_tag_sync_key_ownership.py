@@ -334,6 +334,26 @@ def test_an_unrecorded_sanitized_key_is_removed_from_a_linked_table(tag_sync, jo
     assert job.store[("TABLE", ORDERS)] == {STATUS_KEY: "active"}
 
 
+def test_a_failed_removal_of_a_placeholder_tag_is_retried_next_run(tag_sync, job, monkeypatch):
+    """A failed UNSET of a placeholder-key tag stays in the state, so the next run removes it."""
+    _seed(job, ORDERS, {"ontos_semantic_old": "stale", "owner": "finance"})
+    job.state = _previous(ORDERS, {"ontos_semantic_old": "stale"})
+    real_unassign = tag_sync.unassign_tag
+
+    def failing(_spark, _object_type, _name, _key):
+        raise RuntimeError("transient")
+
+    monkeypatch.setattr(tag_sync, "unassign_tag", failing)
+    with pytest.raises(SystemExit):
+        job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")])
+    assert job.state["TABLE"][ORDERS] == {"ontos_semantic_old": "stale", DOMAIN_KEY: "Finance"}
+
+    monkeypatch.setattr(tag_sync, "unassign_tag", real_unassign)
+    job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {"owner": "finance", DOMAIN_KEY: "Finance"}
+
+
 def test_legacy_cleanup_is_gated_on_the_prefix_it_always_was(tag_sync, job, monkeypatch):
     """The legacy cleanup gate keeps the value the job computed before this fix."""
     seen = []

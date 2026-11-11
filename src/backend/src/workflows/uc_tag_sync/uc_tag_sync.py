@@ -1182,11 +1182,14 @@ def reconcile_tags(
     owned: Union[str, TagOwnership],
     dry_run: bool = False,
     previously_delivered: Iterable[str] = (),
+    still_present: Optional[Dict[str, Optional[str]]] = None,
 ) -> Tuple[int, int, List[str]]:
     """Make the job's tags on one object match ``desired``.
 
     Removes the tags this job manages that aren't desired: those ``owned`` matches, plus
     the keys delivered to this object last run. Other tags on the object are left alone.
+    A tag whose removal failed is stored in ``still_present`` (key -> value) when given,
+    so the caller keeps it in the delivery state and the next run retries it.
     """
     ownership = as_ownership(owned)
     delivered_before = set(previously_delivered)
@@ -1214,6 +1217,8 @@ def reconcile_tags(
             msg = f"Failed to remove tag {k} from {object_type} {object_name}: {e}"
             print(f"[WARN] {msg}")
             errors.append(msg)
+            if still_present is not None:
+                still_present[k] = existing.get(k)
 
     for k, v in to_upsert.items():
         try:
@@ -1765,13 +1770,17 @@ def sync_tags(
         object_type: str, fqn: str, desired: Dict[str, Optional[str]]
     ) -> Tuple[int, int]:
         delivered_before = (previous or {}).get(object_type, {}).get(fqn, {})
+        still_present: Dict[str, Optional[str]] = {}
         u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, ownership,
                                     dry_run=dry_run,
-                                    previously_delivered=delivered_before)
+                                    previously_delivered=delivered_before,
+                                    still_present=still_present)
         result.updated += u
         result.removed += r
         result.errors.extend(errs)
+        # Keys whose removal failed stay delivered, so the next run retries them.
         result.delivered[object_type].setdefault(fqn, {}).update(desired)
+        result.delivered[object_type][fqn].update(still_present)
         return u, r
 
     # Dataset-level

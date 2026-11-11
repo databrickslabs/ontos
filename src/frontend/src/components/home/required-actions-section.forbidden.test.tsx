@@ -1,7 +1,8 @@
 /** A 403 from the approvals queue is an empty queue; other failures show the translated error. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
+import i18n from '@/i18n/config';
 
 vi.mock('@/stores/notifications-store', () => ({
   useNotificationsStore: () => ({
@@ -53,5 +54,18 @@ describe('RequiredActionsSection approvals queue', () => {
     renderWithProviders(<RequiredActionsSection />);
     expect(await screen.findByText('Failed to load approvals')).toBeTruthy();
     expect(screen.queryByText(/HTTP/)).toBeNull();
+  });
+
+  it('shows the error in the new language after a language switch', async () => {
+    globalThis.fetch = respond(500) as any;
+    renderWithProviders(<RequiredActionsSection />);
+    expect(await screen.findByText('Failed to load approvals')).toBeTruthy();
+    try {
+      await act(async () => { await i18n.changeLanguage('pt'); });
+      expect(await screen.findByText('Falha ao carregar aprovações')).toBeTruthy();
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => { await i18n.changeLanguage('en'); });
+    }
   });
 });

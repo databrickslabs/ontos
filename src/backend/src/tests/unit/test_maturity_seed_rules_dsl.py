@@ -13,6 +13,8 @@ from src.repositories.maturity_repository import maturity_repo
 
 def _seeded_rules() -> dict:
     db = MagicMock()
+    # No policy exists yet, so the seed creates (db.add) one per gate
+    db.query.return_value.filter.return_value.first.return_value = None
     with patch.object(maturity_repo, "is_empty", return_value=True), \
             patch.object(maturity_repo, "create", return_value=MagicMock()), \
             patch.object(maturity_repo, "add_gate"):

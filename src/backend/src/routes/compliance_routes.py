@@ -64,7 +64,7 @@ async def get_policy(
     return policy
 
 
-def require_tag_write_for_tag_actions(rule: Optional[str], auth_manager, current_user) -> None:
+def require_tag_write_for_tag_actions(rule: Optional[str], auth_manager, current_user, request: Request) -> None:
     """ASSIGN_TAG / REMOVE_TAG change tag associations, so saving or running a
     rule that uses them needs write access to tags, as the tag routes do.
 
@@ -72,7 +72,7 @@ def require_tag_write_for_tag_actions(rule: Optional[str], auth_manager, current
     that access.
     """
     if rule_changes_tags(rule) and not user_has_feature_level(
-        auth_manager, current_user, 'tags', FeatureAccessLevel.READ_WRITE
+        auth_manager, current_user, 'tags', FeatureAccessLevel.READ_WRITE, request
     ):
         raise HTTPException(
             status_code=403,
@@ -92,7 +92,7 @@ async def create_policy(
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     warnings = _check_rule(policy.rule)
-    require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
+    require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     created = manager.create_policy(
         db, 
         policy, 
@@ -142,7 +142,7 @@ async def update_policy(
     rule_changed = existing is None or existing.rule != policy.rule
     warnings = _check_rule(policy.rule) if rule_changed else []
     if rule_changed:
-        require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
+        require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
     updated = manager.update_policy(
         db, 
         policy_id, 
@@ -247,7 +247,7 @@ async def run_policy(
     policy = manager.get_policy(db, policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
-    require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user)
+    require_tag_write_for_tag_actions(policy.rule, auth_manager, current_user, request)
 
     # For now, implement inline only; async can be backed by Databricks job later
     run = manager.run_policy_inline(

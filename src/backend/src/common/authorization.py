@@ -196,7 +196,9 @@ def _try_resolve_test_override(
     if not settings.TEST_USER_TOKEN:
         return None
     presented = request.headers.get(TEST_TOKEN_HEADER)
-    if not presented or presented != settings.TEST_USER_TOKEN:
+    if not presented or not hmac.compare_digest(
+        presented.encode("utf-8"), settings.TEST_USER_TOKEN.encode("utf-8"),
+    ):
         return None
 
     email = request.headers.get(TEST_USER_EMAIL_HEADER)
@@ -494,7 +496,15 @@ def effective_permissions_for(
         except Exception:
             applied_role_id = None
         if applied_role_id:
-            return settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+            try:
+                return settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+            except ValueError:
+                # The role was deleted after it was applied: use the user's own roles
+                # instead of failing every request.
+                logger.warning(
+                    "Applied role override %s for %s no longer exists; using the user's roles",
+                    applied_role_id, user_email,
+                )
     return auth_manager.get_user_effective_permissions(
         user_groups or [], team_roles, user_email=user_email,
     )
@@ -702,6 +712,10 @@ def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
     Allowed when the caller holds any role flagged ``can_adopt_entity_ids=True``
     OR when they hold ADMIN on the target feature (#853 review). The toggle itself
     defaults to off; this check only matters when the client explicitly opts in.
+
+    Both parts are group-based: the ``can_adopt_entity_ids`` flag and the feature
+    level come from the roles matching the user's groups only, not from team role
+    overrides, email assignment or an applied role override.
     """
     groups = getattr(user, "groups", None) or []
     try:
@@ -709,27 +723,33 @@ def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
             return True
     except Exception:
         logger.warning("user_can_adopt_entity_ids check failed; falling back to feature-admin.", exc_info=True)
-    return user_has_feature_level(auth_manager, user, feature_id, FeatureAccessLevel.ADMIN)
+    try:
+        effective = auth_manager.get_user_effective_permissions(groups, None)
+        return auth_manager.has_permission(effective, feature_id, FeatureAccessLevel.ADMIN)
+    except Exception:
+        logger.warning("Feature-admin check for adopting ids failed for '%s'; denying.", feature_id, exc_info=True)
+        return False
 
 
-def user_has_feature_level(auth_manager, user, feature_id: str, required_level: FeatureAccessLevel) -> bool:
-    """Imperative, group-based permission check for conditional in-handler gates.
+def user_has_feature_level(
+    auth_manager, user, feature_id: str, required_level: FeatureAccessLevel, request: Request,
+) -> bool:
+    """Imperative permission check for conditional in-handler gates.
 
-    Mirrors the group-based path of :class:`PermissionChecker` (without the team/applied
-    role overrides) for secondary checks such as the import "create missing domains"
-    toggle, which must require ``data-domains`` write on top of the entity's own
-    write permission.
+    For secondary checks such as the import "create missing domains" toggle, which
+    must require ``data-domains`` write on top of the entity's own write permission.
+    The level is resolved as :class:`PermissionChecker` resolves it
+    (``effective_permissions_for_request``: an applied role override, else group,
+    email and team roles combined), so a gate and the route it guards agree.
 
-    Caveats (callers rely on both):
-    - **Group-based only.** It does NOT consult team role overrides or an explicit
-      applied-role override. Use it for cross-feature secondary gates where the
-      user's group memberships are the source of truth.
-    - **Fails closed.** Any exception during resolution is caught and ``False``
-      is returned (with a warning log), so a transient error denies the extra
-      capability rather than silently granting it.
+    **Fails closed.** Any exception during resolution is caught and ``False`` is
+    returned (with a warning log), so a transient error denies the extra capability
+    rather than silently granting it.
     """
     try:
-        effective = auth_manager.get_user_effective_permissions(getattr(user, "groups", None) or [], None)
+        effective = effective_permissions_for_request(
+            request, getattr(user, "email", None), getattr(user, "groups", None) or [], auth_manager,
+        )
         return auth_manager.has_permission(effective, feature_id, required_level)
     except Exception:
         logger.warning("user_has_feature_level check failed for feature '%s'; denying.", feature_id, exc_info=True)

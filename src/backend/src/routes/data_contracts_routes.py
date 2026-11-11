@@ -1734,7 +1734,7 @@ async def upload_contract(
         # requires data-domains write on top of the contract-write permission —
         # otherwise a contract-writer could create domains they cannot manage (#851 review).
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1758,7 +1758,7 @@ async def upload_contract(
         # Feature-admins may see the existing row's id/name on a skipped duplicate;
         # others get a generic skip so the response isn't an existence oracle.
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN, request
         )
 
         capped = await read_uploads_capped(
@@ -1857,7 +1857,7 @@ async def import_odcs_json(
 
     try:
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1874,7 +1874,7 @@ async def import_odcs_json(
         )
         details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN
+            auth_manager, current_user, 'data-contracts', FeatureAccessLevel.ADMIN, request
         )
         contract_text = json.dumps(body)
         result = manager.create_contracts_from_files(

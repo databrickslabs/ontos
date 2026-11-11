@@ -14,7 +14,11 @@ from src.models.teams import TeamMemberCreate
 from src.models.users import UserInfo
 from fastapi import HTTPException
 
-from src.routes.teams_routes import _ensure_no_override_escalation, _would_lose_team_write_access
+from src.models.teams import MAX_TEAM_MEMBERS
+from src.routes.teams_routes import (
+    _ensure_override_within_caller_permissions,
+    _would_lose_team_write_access,
+)
 
 
 def _team(db_session, name="Admin Team") -> TeamDb:
@@ -156,7 +160,8 @@ class TestReplaceTeamMembers:
 class TestTeamRoleOverrides:
     def _teams(self, *members):
         return [SimpleNamespace(members=[
-            SimpleNamespace(member_identifier=i, app_role_override=o) for i, o in members
+            SimpleNamespace(member_identifier=i, app_role_override=o, member_type="user" if "@" in i else "group")
+            for i, o in members
         ])]
 
     def test_group_entry_in_users_team_grants_override(self):
@@ -313,15 +318,21 @@ class TestSelfLockoutGuardMerged:
         ) is False
 
 
-class TestOverrideEscalationGuard:
-    """Assigning a team role override can't grant more than the caller holds (#1245)."""
+class TestOverrideChangesWithinCallerPermissions:
+    """Role override changes are validated against the caller's permissions.
 
+    - A new override may grant at most the caller's levels.
+    - Changing or removing an override whose role grants more than the caller holds
+      needs the caller to hold all of that role's levels, or admin access to teams.
+    - Group entries need admin access to teams to set, change or remove an override.
+    """
+
+    L = FeatureAccessLevel
     ROLE_PERMS = {
-        "Admin": {"teams": FeatureAccessLevel.ADMIN, "settings": FeatureAccessLevel.ADMIN,
-                  "data-products": FeatureAccessLevel.ADMIN},
-        "Data Producer": {"teams": FeatureAccessLevel.READ_WRITE, "settings": FeatureAccessLevel.NONE},
-        "Data Consumer": {"teams": FeatureAccessLevel.READ_ONLY, "settings": FeatureAccessLevel.NONE,
-                          "data-products": FeatureAccessLevel.READ_ONLY},
+        "Admin": {"teams": L.ADMIN, "settings": L.ADMIN, "data-products": L.ADMIN},
+        "Team Admin": {"teams": L.ADMIN, "settings": L.NONE, "data-products": L.READ_ONLY},
+        "Data Producer": {"teams": L.READ_WRITE, "settings": L.NONE, "data-products": L.READ_WRITE},
+        "Data Consumer": {"teams": L.READ_ONLY, "settings": L.NONE, "data-products": L.READ_ONLY},
     }
 
     def _request(self, caller_role):
@@ -341,77 +352,95 @@ class TestOverrideEscalationGuard:
         return UserInfo(email="pat@example.com", username="pat", user="Pat", ip="127.0.0.1", groups=["data-producers"])
 
     def _check(self, manager, db_session, team, members, caller_role):
-        details = {}
-        _ensure_no_override_escalation(
-            self._request(caller_role), db_session, manager, team.id, members, self._user(), details,
+        _ensure_override_within_caller_permissions(
+            self._request(caller_role), db_session, manager, team.id, members, self._user(), {},
         )
-        return details
 
-    def test_producer_cannot_grant_admin(self, manager, db_session):
-        team = _team(db_session)
-
+    def _refused(self, manager, db_session, team, members, caller_role, status=403):
         with pytest.raises(HTTPException) as exc:
-            self._check(manager, db_session, team, [_create("pat@example.com", override="Admin")], "Data Producer")
+            self._check(manager, db_session, team, members, caller_role)
+        assert exc.value.status_code == status
 
-        assert exc.value.status_code == 403
+    # New overrides
+    def test_a_role_above_the_callers_levels_is_refused(self, manager, db_session):
+        self._refused(manager, db_session, _team(db_session), [_create("pat@example.com", override="Admin")], "Data Producer")
 
-    def test_producer_cannot_grant_admin_to_a_group(self, manager, db_session):
-        team = _team(db_session)
+    def test_a_role_within_the_callers_levels_is_allowed(self, manager, db_session):
+        self._check(manager, db_session, _team(db_session), [
+            _create("bob@example.com", override="Data Consumer"),
+            _create("carol@example.com", override="Data Producer"),
+        ], "Data Producer")
 
-        with pytest.raises(HTTPException) as exc:
-            self._check(manager, db_session, team,
-                        [_create("data-consumers", member_type="group", override="Admin")], "Data Producer")
+    def test_unknown_role_is_refused(self, manager, db_session):
+        self._refused(manager, db_session, _team(db_session), [_create("x@example.com", override="Super")], "Admin", 422)
 
-        assert exc.value.status_code == 403
-
-    def test_producer_can_grant_roles_within_their_own(self, manager, db_session):
-        team = _team(db_session)
-
-        self._check(manager, db_session, team, [_create("carol@example.com", override="Data Producer")], "Data Producer")
-
-    def test_a_role_with_a_level_the_caller_lacks_is_refused(self, manager, db_session):
-        # Data Consumer grants data-products Read-only, which the producer here doesn't hold.
-        team = _team(db_session)
-
-        with pytest.raises(HTTPException) as exc:
-            self._check(manager, db_session, team, [_create("bob@example.com", override="Data Consumer")], "Data Producer")
-
-        assert exc.value.status_code == 403
-
-    def test_lowering_is_allowed_even_to_a_level_the_caller_lacks(self, manager, db_session):
-        # Admin -> Data Consumer keeps data-products Read-only, which the previous role covered.
+    # Changing or removing an existing override
+    def test_lowering_a_higher_override_needs_its_levels(self, manager, db_session):
         team = _team(db_session)
         _member(db_session, team, "boss@example.com", override="Admin")
 
-        self._check(manager, db_session, team, [_create("boss@example.com", override="Data Consumer")], "Data Producer")
+        self._refused(manager, db_session, team, [_create("boss@example.com", override="Data Consumer")], "Data Producer")
 
-    def test_unchanged_and_lowered_overrides_are_allowed(self, manager, db_session):
+    def test_removing_a_higher_override_needs_its_levels(self, manager, db_session):
         team = _team(db_session)
-        _member(db_session, team, "admins", member_type="group", override="Admin")
+        _member(db_session, team, "boss@example.com", override="Admin")
+
+        self._refused(manager, db_session, team, [], "Data Producer")
+
+    def test_teams_admin_may_lower_or_remove_a_higher_override(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "boss@example.com", override="Admin")
+        _member(db_session, team, "kim@example.com", override="Admin")
+
+        self._check(manager, db_session, team, [_create("boss@example.com", override="Data Consumer")], "Team Admin")
+
+    def test_changing_an_override_within_the_callers_levels_is_allowed(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "bob@example.com", override="Data Consumer")
+
+        self._check(manager, db_session, team, [_create("bob@example.com", override="Data Producer")], "Data Producer")
+        self._check(manager, db_session, team, [], "Data Producer")
+
+    def test_unchanged_entries_are_not_checked(self, manager, db_session):
+        team = _team(db_session)
         _member(db_session, team, "boss@example.com", override="Admin")
 
         self._check(manager, db_session, team, [
-            _create("admins", member_type="group", override="Admin"),
-            _create("boss@example.com", override="Data Consumer"),
-            _create("pat@example.com"),
+            _create("boss@example.com", override="Admin"), _create("new@example.com"),
         ], "Data Producer")
 
-    def test_admin_can_grant_admin(self, manager, db_session):
+    # Group entries
+    def test_group_override_needs_teams_admin(self, manager, db_session):
         team = _team(db_session)
 
-        self._check(manager, db_session, team, [_create("x@example.com", override="Admin")], "Admin")
+        self._refused(manager, db_session, team,
+                      [_create("data-consumers", member_type="group", override="Data Consumer")], "Data Producer")
+        self._check(manager, db_session, team,
+                    [_create("data-consumers", member_type="group", override="Data Consumer")], "Team Admin")
 
-    def test_unknown_role_is_refused(self, manager, db_session):
+    def test_removing_the_admin_teams_group_override_needs_teams_admin(self, manager, db_session):
         team = _team(db_session)
+        _member(db_session, team, "admins", member_type="group", override="Admin")
 
-        with pytest.raises(HTTPException) as exc:
-            self._check(manager, db_session, team, [_create("x@example.com", override="Super")], "Admin")
+        self._refused(manager, db_session, team, [], "Data Producer")
+        self._refused(manager, db_session, team,
+                      [_create("admins", member_type="group", override="Data Consumer")], "Data Producer")
+        self._check(manager, db_session, team, [], "Admin")
 
-        assert exc.value.status_code == 422
+    def test_group_entry_without_override_needs_no_admin(self, manager, db_session):
+        self._check(manager, db_session, _team(db_session),
+                    [_create("data-consumers", member_type="group")], "Data Producer")
+
+    def test_changing_the_entry_type_counts_as_a_change(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "eng", member_type="user", override="Data Consumer")
+
+        self._refused(manager, db_session, team,
+                      [_create("eng", member_type="group", override="Data Consumer")], "Data Producer")
 
 
-class TestMemberRoutesRefuseEscalation:
-    """The guard is wired into the member routes and answers 403 (not 500)."""
+class TestMemberRoutesValidateOverrides:
+    """The member routes validate override changes and answer 403/404/409/422, not 500."""
 
     @pytest.fixture
     def client(self, db_session, monkeypatch):
@@ -437,17 +466,16 @@ class TestMemberRoutesRefuseEscalation:
         settings.list_app_roles.return_value = roles
         settings.get_applied_role_override_for_user.return_value = None
         auth = AuthorizationManager(settings_manager=settings)
-        team_manager = TeamsManager()
 
         app = FastAPI()
         app.state.authorization_manager = auth
         app.state.settings_manager = settings
-        app.state.teams_manager = team_manager
+        app.state.teams_manager = TeamsManager()
         app.include_router(teams_routes.router)
-        user = UserInfo(email="pat@example.com", username="pat", user="Pat", ip="127.0.0.1", groups=["data-producers"])
+        self.user = UserInfo(email="pat@example.com", username="pat", user="Pat", ip="127.0.0.1", groups=["data-producers"])
 
         async def _user():
-            return user
+            return self.user
 
         def _db():
             yield db_session
@@ -460,19 +488,27 @@ class TestMemberRoutesRefuseEscalation:
         app.dependency_overrides[get_audit_manager] = lambda: MagicMock()
         return TestClient(app)
 
-    # The route rolls back on refusal, which in the test session also undoes the
+    # The routes roll back on refusal, which in the test session also undoes the
     # fixture's rows, so these tests check the response only.
-    def test_producer_adding_an_admin_override_gets_403(self, client, db_session):
+    def test_adding_a_role_above_the_callers_levels_gets_403(self, client, db_session):
         team_id = _team(db_session).id
 
         resp = client.post(f"/api/teams/{team_id}/members", json={
-            "member_type": "group", "member_identifier": "data-consumers", "app_role_override": "Admin",
+            "member_type": "user", "member_identifier": "pat@example.com", "app_role_override": "Admin",
         })
 
         assert resp.status_code == 403
-        assert "more access than you have" in resp.json()["detail"]
 
-    def test_producer_replacing_members_with_an_admin_override_gets_403(self, client, db_session):
+    def test_adding_a_group_override_without_teams_admin_gets_403(self, client, db_session):
+        team_id = _team(db_session).id
+
+        resp = client.post(f"/api/teams/{team_id}/members", json={
+            "member_type": "group", "member_identifier": "data-consumers", "app_role_override": "Data Producer",
+        })
+
+        assert resp.status_code == 403
+
+    def test_replacing_with_a_role_above_the_callers_levels_gets_403(self, client, db_session):
         team = _team(db_session)
         _member(db_session, team, "pat@example.com")
         team_id = team.id
@@ -483,16 +519,16 @@ class TestMemberRoutesRefuseEscalation:
 
         assert resp.status_code == 403
 
-    def test_producer_can_add_a_member_with_their_own_role(self, client, db_session):
-        team = _team(db_session)
+    def test_a_member_within_the_callers_levels_can_be_added(self, client, db_session):
+        team_id = _team(db_session).id
 
-        resp = client.post(f"/api/teams/{team.id}/members", json={
+        resp = client.post(f"/api/teams/{team_id}/members", json={
             "member_type": "user", "member_identifier": "bob@example.com", "app_role_override": "Data Producer",
         })
 
         assert resp.status_code == 201
 
-    def test_producer_raising_an_existing_members_override_to_admin_gets_403(self, client, db_session):
+    def test_updating_an_override_to_a_role_above_the_callers_levels_gets_403(self, client, db_session):
         team = _team(db_session)
         member_id = _member(db_session, team, "pat@example.com").id
         team_id = team.id
@@ -501,20 +537,76 @@ class TestMemberRoutesRefuseEscalation:
 
         assert resp.status_code == 403
 
-    def test_duplicate_member_is_409_not_403(self, client, db_session):
+    def test_removing_the_admin_teams_group_entry_without_teams_admin_gets_403(self, client, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "admins", member_type="group", override="Admin")
+        _member(db_session, team, "pat@example.com")
+        team_id = team.id
+
+        resp = client.delete(f"/api/teams/{team_id}/members/admins")
+
+        assert resp.status_code == 403
+
+    def test_removing_a_higher_user_override_without_its_levels_gets_403(self, client, db_session):
         team = _team(db_session)
         _member(db_session, team, "boss@example.com", override="Admin")
         team_id = team.id
 
+        resp = client.delete(f"/api/teams/{team_id}/members/boss@example.com")
+
+        assert resp.status_code == 403
+
+    def test_an_admin_can_remove_the_admin_teams_group_entry(self, client, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "admins", member_type="group", override="Admin")
+        team_id = team.id
+        self.user = UserInfo(email="root@example.com", username="root", user="Root", ip="127.0.0.1", groups=["admins"])
+
+        resp = client.delete(f"/api/teams/{team_id}/members/admins")
+
+        assert resp.status_code == 204
+
+    def test_duplicate_member_ignoring_case_is_409(self, client, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "bob@example.com")
+        team_id = team.id
+
         resp = client.post(f"/api/teams/{team_id}/members", json={
-            "member_type": "user", "member_identifier": "boss@example.com", "app_role_override": "Admin",
+            "member_type": "user", "member_identifier": " Bob@Example.com ",
         })
 
         assert resp.status_code == 409
 
-    def test_missing_team_is_404_not_422(self, client):
+    def test_blank_identifier_is_422(self, client, db_session):
+        team_id = _team(db_session).id
+
+        resp = client.post(f"/api/teams/{team_id}/members", json={
+            "member_type": "user", "member_identifier": "   ",
+        })
+
+        assert resp.status_code == 422
+
+    def test_missing_team_is_404(self, client):
         resp = client.post("/api/teams/missing/members", json={
             "member_type": "user", "member_identifier": "x@example.com", "app_role_override": "Typo",
         })
 
         assert resp.status_code == 404
+
+    def test_more_than_the_member_cap_is_422(self, client, db_session):
+        team_id = _team(db_session).id
+        members = [{"member_type": "user", "member_identifier": f"u{i}@example.com"} for i in range(MAX_TEAM_MEMBERS + 1)]
+
+        resp = client.put(f"/api/teams/{team_id}/members", json={"members": members})
+
+        assert resp.status_code == 422
+
+
+class TestGroupOverrideScan:
+    def test_lists_group_entries_with_an_override(self, manager, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "admins", member_type="group", override="Admin")
+        _member(db_session, team, "eng", member_type="group")
+        _member(db_session, team, "alice@example.com", override="Admin")
+
+        assert manager.group_role_override_entries(db_session) == [("Admin Team", "admins", "Admin")]

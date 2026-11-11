@@ -320,6 +320,18 @@ class TeamsManager(SearchableAsset):
         """
         return self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
 
+    def group_role_override_entries(self, db: Session) -> List[tuple]:
+        """``(team name, group, role)`` for every group entry that carries a role override."""
+        rows = (
+            db.query(TeamDb.name, TeamMemberDb.member_identifier, TeamMemberDb.app_role_override)
+            .join(TeamMemberDb, TeamMemberDb.team_id == TeamDb.id)
+            .filter(TeamMemberDb.member_type == "group")
+            .filter(TeamMemberDb.app_role_override.isnot(None))
+            .order_by(TeamDb.name, TeamMemberDb.member_identifier)
+            .all()
+        )
+        return [(name, group, role.strip()) for name, group, role in rows if (role or "").strip()]
+
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:
         """Updates an existing team."""
         logger.debug(f"Attempting to update team with id: {team_id}")
@@ -419,11 +431,13 @@ class TeamsManager(SearchableAsset):
         if not db_team:
             raise NotFoundError(f"Team with id '{team_id}' not found.")
 
-        # Check if member already exists
-        existing_member = self.team_member_repo.get_by_team_and_member(
-            db, team_id=team_id, member_identifier=member_in.member_identifier
-        )
-        if existing_member:
+        # Check if member already exists (identifiers match ignoring case, like the
+        # member set replace and the team lookup)
+        key = (member_in.member_identifier or "").strip().lower()
+        if any(
+            (m.member_identifier or "").strip().lower() == key
+            for m in self.team_member_repo.get_members_by_team(db, team_id)
+        ):
             raise ConflictError(f"Member '{member_in.member_identifier}' is already in team '{db_team.name}'.")
 
         db_obj_data = member_in.model_dump()

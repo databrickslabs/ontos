@@ -63,8 +63,10 @@ def auth():
 
 
 def _team(*members):
+    """A team whose entries are users when the identifier has an ``@``, else groups."""
     return SimpleNamespace(members=[
-        SimpleNamespace(member_identifier=i, app_role_override=o) for i, o in members
+        SimpleNamespace(member_identifier=i, app_role_override=o, member_type="user" if "@" in i else "group")
+        for i, o in members
     ])
 
 
@@ -128,6 +130,29 @@ class TestTeamRoleOverrides:
         teams = [_team(("eng", "Data Consumer")), _team(("alice@example.com", "Data Steward"))]
 
         assert team_role_overrides(teams, "alice@example.com", ["eng"]) == ["Data Steward", "Data Consumer"]
+
+    def test_a_user_entry_named_like_a_group_does_not_apply_to_the_group(self):
+        team = SimpleNamespace(members=[
+            SimpleNamespace(member_identifier="data-consumers", app_role_override="Admin", member_type="user"),
+        ])
+
+        assert team_role_overrides([team], "alice@example.com", ["data-consumers"]) == []
+
+    def test_a_group_entry_named_like_the_user_does_not_apply_as_the_users_own(self):
+        team = SimpleNamespace(members=[
+            SimpleNamespace(member_identifier="alice@example.com", app_role_override="Admin", member_type="group"),
+        ])
+
+        assert team_role_overrides([team], "alice@example.com", []) == []
+
+    def test_member_type_enum_values_are_understood(self):
+        from src.models.teams import MemberType
+
+        team = SimpleNamespace(members=[
+            SimpleNamespace(member_identifier="data-consumers", app_role_override="Data Steward", member_type=MemberType.GROUP),
+        ])
+
+        assert team_role_overrides([team], "alice@example.com", ["data-consumers"]) == ["Data Steward"]
 
     def test_entries_without_override_or_for_others_are_ignored(self):
         teams = [_team(("alice@example.com", None), ("other-group", "Admin"), ("bob@example.com", "Admin"))]
@@ -203,6 +228,14 @@ class TestResolver:
 
         assert first is second
         assert request.app.state.teams_manager.get_team_rows_for_user.call_count == 1
+
+    def test_a_dangling_applied_override_falls_back_to_the_merged_roles(self, auth):
+        request = _request({"alice@example.com": [_team(("alice@example.com", "Data Steward"))]}, applied="gone")
+        request.app.state.settings_manager.get_feature_permissions_for_role_id.side_effect = ValueError("not found")
+
+        perms = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
+
+        assert perms["data-domains"] == L.READ_WRITE
 
     def test_team_lookup_failure_grants_nothing_extra(self, auth):
         request = _request({})
@@ -335,3 +368,25 @@ class TestInHandlerAdminChecks:
         assert _caller_owns_product(
             self._req(auth, {"u@example.com": [team]}), MagicMock(), self._user(["data-consumers"]), product,
         ) is True
+
+
+class TestUserHasFeatureLevel:
+    def test_sees_team_roles(self, auth):
+        from src.common.authorization import user_has_feature_level
+
+        request = _request({"u@example.com": [_team(("u@example.com", "Data Steward"))]})
+        request.app.state.authorization_manager = auth
+        user = UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["data-consumers"])
+
+        assert user_has_feature_level(auth, user, "data-domains", L.READ_WRITE, request)
+        assert not user_has_feature_level(auth, user, "settings", L.ADMIN, request)
+
+    def test_fails_closed(self, auth):
+        from src.common.authorization import user_has_feature_level
+
+        request = _request({})
+        broken = MagicMock()
+        broken.get_user_effective_permissions.side_effect = RuntimeError("boom")
+        user = UserInfo(email="u@example.com", username="u", user="U", ip="127.0.0.1", groups=["admins"])
+
+        assert not user_has_feature_level(broken, user, "teams", L.READ_ONLY, request)

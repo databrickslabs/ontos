@@ -2,13 +2,20 @@
 from typing import Iterable, List
 
 
-def team_role_overrides(teams: Iterable, user_identifier: str, user_groups: List[str]) -> List[str]:
-    """Every app role override from team entries that apply to the user, in team order, once each.
+def member_type_of(member) -> str:
+    """``"user"`` or ``"group"`` for a team entry (DB row, request model or enum value)."""
+    value = getattr(member, "member_type", None)
+    value = getattr(value, "value", value)
+    return "group" if str(value or "").strip().lower() == "group" else "user"
 
-    An entry applies when its identifier is the user's (case-insensitive) or one of the
-    user's groups, in any of the given teams. The user's own entries come first. For
-    permissions the roles are combined by highest level per feature, so the order
-    doesn't change the result.
+
+def team_role_overrides(teams: Iterable, user_identifier: str, user_groups: List[str]) -> List[str]:
+    """Every app role override from team entries that apply to the user, once each.
+
+    A user entry applies when its identifier is the user's (case-insensitive); a
+    group entry applies when it names one of the user's groups. The user's own
+    entries come first. For permissions the roles are combined by highest level per
+    feature, so the order doesn't change the result.
     """
     identifier = (user_identifier or "").strip().lower()
     groups = {g.strip().lower() for g in user_groups or [] if g}
@@ -20,10 +27,11 @@ def team_role_overrides(teams: Iterable, user_identifier: str, user_groups: List
             if not role:
                 continue
             member_identifier = (member.member_identifier or "").strip().lower()
-            if identifier and member_identifier == identifier:
+            if member_type_of(member) == "group":
+                if member_identifier in groups:
+                    via_group.append(role)
+            elif identifier and member_identifier == identifier:
                 direct.append(role)
-            elif member_identifier in groups:
-                via_group.append(role)
     # The user's own entries first, as before #1245: callers that need one role name
     # (comment audiences) keep getting the user's own override.
     roles: List[str] = []

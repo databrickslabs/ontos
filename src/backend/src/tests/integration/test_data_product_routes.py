@@ -655,10 +655,10 @@ class TestDataProductRoutes:
         import src.routes.data_product_routes as route_mod
         original = route_mod.user_has_feature_level
 
-        def deny_data_domains_write(auth_manager, user, feature_id, required_level):
+        def deny_data_domains_write(auth_manager, user, feature_id, required_level, request):
             if feature_id == "data-domains":
                 return False
-            return original(auth_manager, user, feature_id, required_level)
+            return original(auth_manager, user, feature_id, required_level, request)
 
         monkeypatch.setattr(route_mod, "user_has_feature_level", deny_data_domains_write)
 

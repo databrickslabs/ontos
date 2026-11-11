@@ -137,6 +137,7 @@ def _seed_default_workflows() -> None:
     except Exception as e:
         logger.warning("Failed seeding default workflows: %s", e, exc_info=True)
     _warn_unmatched_trigger_entity_types()
+    _warn_group_role_overrides()
 
 
 def _warn_unmatched_trigger_entity_types() -> None:
@@ -155,6 +156,30 @@ def _warn_unmatched_trigger_entity_types() -> None:
             logger.warning("%d workflow(s) list trigger entity types that match no event", warned)
     except Exception as e:
         logger.warning("Failed checking workflow trigger entity types: %s", e, exc_info=True)
+
+
+def _warn_group_role_overrides() -> None:
+    """Log the team group entries that carry a role override.
+
+    Since #1245 a group entry's role override applies to every member of that group,
+    not only to users also listed on the team by name. One line lists them all (team,
+    group, role) with a count, so admins can review them in Settings > Teams. Nothing
+    is changed.
+    """
+    try:
+        from src.common.database import get_session_factory
+        from src.controller.teams_manager import teams_manager as _teams_manager
+        with get_session_factory()() as db:
+            entries = _teams_manager.group_role_override_entries(db)
+        if entries:
+            logger.warning(
+                "%d team group entr%s carry a role override that applies to every member of the group: %s. "
+                "Review them in Settings > Teams.",
+                len(entries), "y" if len(entries) == 1 else "ies",
+                "; ".join(f"team '{team}', group '{group}', role '{role}'" for team, group, role in entries),
+            )
+    except Exception as e:
+        logger.warning("Failed checking team group role overrides: %s", e, exc_info=True)
 
 
 # Application Startup Event

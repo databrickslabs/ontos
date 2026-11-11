@@ -17,6 +17,7 @@ from src.common.database import get_db
 from sqlalchemy.orm import Session
 from src.common.authorization import PermissionChecker, effective_permissions_for_request
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
+from src.common.team_role_override import member_type_of
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
@@ -348,21 +349,17 @@ def add_team_member(
 
     logger.info(f"User '{current_user.email}' adding member {member_in.member_identifier} to team {team_id}")
     try:
-        if (
-            (member_in.app_role_override or "").strip()
-            and manager.team_repo.get(db, team_id) is not None
-            # The same duplicate check the manager makes: it then answers 409
-            and manager.team_member_repo.get_by_team_and_member(
-                db, team_id=team_id, member_identifier=member_in.member_identifier
-            ) is None
-        ):
-            # A missing team (404) and a duplicate member (409) are reported by the
-            # manager below, so only a member that will be added is checked.
-            _ensure_no_override_escalation(
-                request, db, manager, team_id,
-                manager.current_member_set(db, team_id) + [member_in],
-                current_user, details_for_audit,
-            )
+        # Trimmed identifier, blank override as none; a blank identifier is a 422
+        member_in = manager.validate_member_set([member_in])[0]
+        if manager.team_repo.get(db, team_id) is None:
+            raise NotFoundError(f"Team with id '{team_id}' not found.")
+        current_members = manager.current_member_set(db, team_id)
+        if _override_key(member_in) in {_override_key(m) for m in current_members}:
+            raise ConflictError(f"Member '{member_in.member_identifier}' is already in the team.")
+        _ensure_override_within_caller_permissions(
+            request, db, manager, team_id, current_members + [member_in],
+            current_user, details_for_audit,
+        )
         member = manager.add_team_member(
             db=db,
             team_id=team_id,
@@ -376,6 +373,10 @@ def add_team_member(
     except HTTPException:
         db.rollback()
         raise
+    except InvalidMemberSetError as e:
+        db.rollback()
+        details_for_audit["exception"] = {"type": "InvalidMemberSetError", "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=INVALID_MEMBER_SET_DETAIL)
     except NotFoundError as e:
         db.rollback()
         logger.error("Team not found for adding member %s: %s", team_id, e)
@@ -410,9 +411,12 @@ SELF_LOCKOUT_DETAIL = (
     "Keep your own membership or role, or ask another administrator."
 )
 INVALID_MEMBER_SET_DETAIL = "Each member needs an identifier and may be listed only once."
-OVERRIDE_ESCALATION_DETAIL = (
-    "You can't assign a role that grants more access than you have. "
-    "Ask an administrator to assign it."
+OVERRIDE_NOT_PERMITTED_DETAIL = (
+    "Your permissions don't allow this role override change. "
+    "Ask an administrator to make it."
+)
+GROUP_OVERRIDE_DETAIL = (
+    "Setting, changing or removing a group's role override needs admin access to teams."
 )
 UNKNOWN_ROLE_DETAIL = "The role override must name an existing app role."
 
@@ -458,7 +462,19 @@ def _override_key(member) -> str:
     return (member.member_identifier or "").strip().lower()
 
 
-def _ensure_no_override_escalation(
+def _entry_state(member) -> tuple:
+    return (member_type_of(member), (member.app_role_override or "").strip() or None)
+
+
+def _exceeds(permissions, caller) -> List[str]:
+    """Features where ``permissions`` grant more than the caller holds."""
+    return sorted(
+        feature for feature, level in (permissions or {}).items()
+        if ACCESS_LEVEL_ORDER[level] > ACCESS_LEVEL_ORDER[caller.get(feature, FeatureAccessLevel.NONE)]
+    )
+
+
+def _ensure_override_within_caller_permissions(
     request: Request,
     db: Session,
     manager: TeamsManager,
@@ -467,24 +483,30 @@ def _ensure_no_override_escalation(
     current_user: UserInfo,
     details_for_audit: dict,
 ) -> None:
-    """Refuse assigning a role override that grants more than the caller holds.
+    """Validate role override changes against the caller's permissions.
 
     Team role overrides add to their members' roles, and a group entry applies to
-    every member of that group (#1245). So assigning one is granting that role: per
-    feature, the new role may grant at most what the caller holds, or what the
-    entry's previous role already granted. Overrides that stay as they are, removing
-    one, and lowering one are always allowed.
+    every member of that group (#1245). For every entry whose type or override
+    changes (added, changed or removed):
+
+    - a new override may grant at most the caller's levels, per feature (403), and
+      must name an existing role (422);
+    - changing or removing an override whose role grants more than the caller holds
+      needs the caller to hold all of that role's levels, or admin access to teams;
+    - setting, changing or removing a group entry's override needs admin access to
+      teams.
+
+    Entries that stay as they are aren't checked.
     """
-    current = {
-        _override_key(m): (m.app_role_override or "").strip() or None
-        for m in manager.current_member_set(db, team_id)
-    }
-    changes = {}
-    for m in members_after:
-        role = (m.app_role_override or "").strip()
-        previous = current.get(_override_key(m))
-        if role and role != previous:
-            changes.setdefault(role, []).append(previous)
+    current = {_override_key(m): _entry_state(m) for m in manager.current_member_set(db, team_id)}
+    after = {_override_key(m): _entry_state(m) for m in members_after}
+    changes = []
+    for key in sorted(set(current) | set(after)):
+        previous, new = current.get(key), after.get(key)
+        if previous == new:
+            continue
+        if (previous and previous[1]) or (new and new[1]):
+            changes.append((previous, new))
     if not changes:
         return
 
@@ -494,29 +516,35 @@ def _ensure_no_override_escalation(
     caller = effective_permissions_for_request(
         request, current_user.email, current_user.groups or [], auth_manager,
     )
-    names = sorted(set(changes) | {p for prevs in changes.values() for p in prevs if p})
+    teams_admin = ACCESS_LEVEL_ORDER[caller.get(TEAMS_FEATURE_ID, FeatureAccessLevel.NONE)] >= (
+        ACCESS_LEVEL_ORDER[FeatureAccessLevel.ADMIN]
+    )
+    names = sorted({state[1] for change in changes for state in change if state and state[1]})
     permissions_by_role = auth_manager.get_role_permissions_by_name(names)
-    for role_name in sorted(changes):
-        role_permissions = permissions_by_role.get(role_name)
-        if role_permissions is None:
-            details_for_audit["exception"] = {"type": "UnknownRoleOverride", "role": role_name}
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=UNKNOWN_ROLE_DETAIL)
-        exceeding = set()
-        for previous in changes[role_name]:
-            previous_permissions = permissions_by_role.get(previous) or {}
-            exceeding |= {
-                feature for feature, level in role_permissions.items()
-                if ACCESS_LEVEL_ORDER[level] > max(
-                    ACCESS_LEVEL_ORDER[caller.get(feature, FeatureAccessLevel.NONE)],
-                    ACCESS_LEVEL_ORDER[previous_permissions.get(feature, FeatureAccessLevel.NONE)],
-                )
-            }
-        exceeding = sorted(exceeding)
-        if exceeding:
-            details_for_audit["exception"] = {
-                "type": "RoleOverrideEscalation", "role": role_name, "features": exceeding,
-            }
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=OVERRIDE_ESCALATION_DETAIL)
+
+    def refuse(kind: str, role: Optional[str], detail: str, features=()):
+        details_for_audit["exception"] = {"type": kind, "role": role, "features": list(features)}
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+    for previous, new in changes:
+        group_override = (previous and previous[0] == "group" and previous[1]) or (
+            new and new[0] == "group" and new[1]
+        )
+        if group_override and not teams_admin:
+            refuse("GroupRoleOverrideNotPermitted", (new or previous)[1], GROUP_OVERRIDE_DETAIL)
+        if new and new[1]:
+            new_permissions = permissions_by_role.get(new[1])
+            if new_permissions is None:
+                details_for_audit["exception"] = {"type": "UnknownRoleOverride", "role": new[1]}
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=UNKNOWN_ROLE_DETAIL)
+            exceeding = _exceeds(new_permissions, caller)
+            if exceeding:
+                refuse("RoleOverrideNotPermitted", new[1], OVERRIDE_NOT_PERMITTED_DETAIL, exceeding)
+        if previous and previous[1] and not teams_admin:
+            # An unknown previous role grants nothing, so changing it needs nothing extra.
+            exceeding = _exceeds(permissions_by_role.get(previous[1]), caller)
+            if exceeding:
+                refuse("RoleOverrideNotPermitted", previous[1], OVERRIDE_NOT_PERMITTED_DETAIL, exceeding)
 
 
 def _ensure_keeps_team_access(
@@ -564,7 +592,7 @@ def replace_team_members(
     )
     try:
         members_after = manager.validate_member_set(body.members)
-        _ensure_no_override_escalation(
+        _ensure_override_within_caller_permissions(
             request, db, manager, team_id, members_after, current_user, details_for_audit
         )
         _ensure_keeps_team_access(
@@ -654,7 +682,7 @@ def update_team_member(
                 if m.member_identifier == target.member_identifier else m
                 for m in manager.current_member_set(db, team_id)
             ]
-            _ensure_no_override_escalation(
+            _ensure_override_within_caller_permissions(
                 request, db, manager, team_id, members_after, current_user, details_for_audit
             )
             _ensure_keeps_team_access(
@@ -723,6 +751,9 @@ def remove_team_member(
             m for m in manager.current_member_set(db, team_id)
             if m.member_identifier != member_identifier
         ]
+        _ensure_override_within_caller_permissions(
+            request, db, manager, team_id, members_after, current_user, details_for_audit
+        )
         _ensure_keeps_team_access(
             request, db, manager, team_id, members_after, current_user, details_for_audit
         )

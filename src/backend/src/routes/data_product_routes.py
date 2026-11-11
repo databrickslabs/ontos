@@ -1698,7 +1698,7 @@ async def upload_data_products(
 
     try:
         if create_missing_domains and not user_has_feature_level(
-            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE, request
         ):
             raise HTTPException(
                 status_code=403,
@@ -1717,7 +1717,7 @@ async def upload_data_products(
         # Feature-admins may see the existing row's id/name on a skipped duplicate;
         # others get a generic skip so the response isn't an existence oracle.
         reveal_dup_detail = user_has_feature_level(
-            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, request
         )
         capped = await read_uploads_capped(
             files,

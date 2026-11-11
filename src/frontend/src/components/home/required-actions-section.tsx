@@ -8,8 +8,6 @@ import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 import WorkflowApprovalResponseDialog, { type WorkflowApprovalResponseDialogPayload } from '@/components/workflows/workflow-approval-response-dialog';
 import { approvalActionPayload, notificationTitle } from '@/lib/notification-text';
-import { usePermissions } from '@/stores/permissions-store';
-import { FeatureAccessLevel } from '@/types/settings';
 
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
@@ -19,9 +17,6 @@ interface ApprovalsQueue {
 export default function RequiredActionsSection() {
   const { t, i18n } = useTranslation(['home', 'common']);
   const { notifications, isLoading, fetchNotifications, markAsRead } = useNotificationsStore();
-  const { isLoading: permissionsLoading, hasPermission } = usePermissions();
-  // GET /api/approvals/queue requires data-contracts read; without it the queue is empty by design.
-  const canReadQueue = hasPermission('data-contracts', FeatureAccessLevel.READ_ONLY);
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
   const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
   const [approvalsError, setApprovalsError] = useState<string | null>(null);
@@ -36,18 +31,16 @@ export default function RequiredActionsSection() {
   }, [fetchNotifications]);
 
   useEffect(() => {
-    if (permissionsLoading) return;
-    if (!canReadQueue) {
-      setApprovals({ contracts: [], products: [] });
-      setApprovalsError(null);
-      setLoadingApprovals(false);
-      return;
-    }
     const fetchApprovals = async () => {
       setLoadingApprovals(true);
       setApprovalsError(null);
       try {
         const res = await fetch('/api/approvals/queue', { cache: 'no-store' });
+        // 403: the role cannot read the queue (data-contracts); that is an empty queue.
+        if (res.status === 403) {
+          setApprovals({ contracts: [], products: [] });
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         setApprovals({
@@ -62,7 +55,7 @@ export default function RequiredActionsSection() {
       }
     };
     fetchApprovals();
-  }, [permissionsLoading, canReadQueue]);
+  }, []);
 
   // Filter role access requests separately
   const roleRequests = notifications.filter(

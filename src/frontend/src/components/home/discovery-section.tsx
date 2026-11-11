@@ -16,8 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Badge } from '@/components/ui/badge';
-import { usePermissions } from '@/stores/permissions-store';
-import { FeatureAccessLevel } from '@/types/settings';
 
 interface DiscoverySectionProps {
   maxItems?: number;
@@ -26,9 +24,6 @@ interface DiscoverySectionProps {
 export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProps) {
   const { t } = useTranslation(['home', 'common']);
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
-  const { isLoading: permissionsLoading, hasPermission } = usePermissions();
-  // GET /api/data-products/published requires data-products read.
-  const canReadProducts = hasPermission('data-products', FeatureAccessLevel.READ_ONLY);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [selectedDomainDetails, setSelectedDomainDetails] = useState<DataDomain | null>(null);
   const [domainLoading, setDomainLoading] = useState<boolean>(false);
@@ -37,7 +32,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   const [matchSets, setMatchSets] = useState<{ ids: Set<string>; namesLower: Set<string> } | null>(null);
   const [graphFadeIn, setGraphFadeIn] = useState<boolean>(false);
   const [allProducts, setAllProducts] = useState<DataProduct[]>([]);
-  const [productsLoading, setProductsLoading] = useState<boolean>(false);
+  const [productsLoading, setProductsLoading] = useState<boolean>(true);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [infoProductId, setInfoProductId] = useState<string | null>(null);
   const [infoProductTitle, setInfoProductTitle] = useState<string | undefined>(undefined);
@@ -57,18 +52,17 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   const { lookupWorkflowId } = useApprovalWizardTrigger();
 
   useEffect(() => {
-    if (permissionsLoading) return;
-    if (!canReadProducts) {
-      setAllProducts([]);
-      setProductsError(null);
-      setProductsLoading(false);
-      return;
-    }
     const loadProducts = async () => {
       try {
         setProductsLoading(true);
         // Fetch only published (ACTIVE) products for marketplace discovery
         const resp = await fetch('/api/data-products/published');
+        // 403: the role cannot read data products; show the empty state, not an error.
+        if (resp.status === 403) {
+          setAllProducts([]);
+          setProductsError(null);
+          return;
+        }
         if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
         const data = await resp.json();
         setAllProducts(Array.isArray(data) ? data : []);
@@ -81,7 +75,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
       }
     };
     loadProducts();
-  }, [permissionsLoading, canReadProducts, t]);
+  }, [t]);
 
   // Fetch user's subscribed products
   const loadSubscribedProducts = useCallback(async () => {

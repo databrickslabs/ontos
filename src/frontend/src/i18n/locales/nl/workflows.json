@@ -702,7 +702,12 @@
     "loadDefaults": {
       "menuLabel": "Standaardworkflows",
       "newOnly": "Alleen Nieuwe Laden",
-      "reloadAll": "Alle Standaardwaarden Herladen"
+      "reloadAll": "Alle Standaardwaarden Herladen",
+      "confirmTitle": "Alle standaardworkflows opnieuw laden?",
+      "confirmDescription": "Elke standaardworkflow wordt teruggezet naar de meegeleverde definitie: stappen, trigger en actieve status. Standaardworkflows die u of een andere beheerder heeft bewerkt, blijven behouden, tenzij u ze hieronder ook terugzet.",
+      "includeEdited": "Ook bewerkte standaardworkflows terugzetten (hun wijzigingen gaan verloren)",
+      "confirmAction": "Opnieuw laden",
+      "keptEdited": "Bewerkte behouden: {{names}}"
     },
     "badges": {
       "default": "Standaard",

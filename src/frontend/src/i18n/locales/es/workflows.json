@@ -702,7 +702,12 @@
     "loadDefaults": {
       "menuLabel": "Flujos de trabajo predeterminados",
       "newOnly": "Cargar solo los nuevos",
-      "reloadAll": "Recargar todos los predeterminados"
+      "reloadAll": "Recargar todos los predeterminados",
+      "confirmTitle": "¿Recargar todos los flujos de trabajo predeterminados?",
+      "confirmDescription": "Cada flujo de trabajo predeterminado se restablece a su definición original: pasos, disparador y estado activo. Los predeterminados que usted u otro administrador editaron se conservan, salvo que también los restablezca abajo.",
+      "includeEdited": "Restablecer también los flujos predeterminados editados (se pierden sus cambios)",
+      "confirmAction": "Recargar",
+      "keptEdited": "Editados conservados: {{names}}"
     },
     "badges": {
       "default": "Predeterminado",

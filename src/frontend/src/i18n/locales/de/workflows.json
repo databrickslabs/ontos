@@ -702,7 +702,12 @@
     "loadDefaults": {
       "menuLabel": "Standard-Workflows",
       "newOnly": "Nur neue laden",
-      "reloadAll": "Alle Standardwerte neu laden"
+      "reloadAll": "Alle Standardwerte neu laden",
+      "confirmTitle": "Alle Standard-Workflows neu laden?",
+      "confirmDescription": "Jeder Standard-Workflow wird auf seine ausgelieferte Definition zurückgesetzt: Schritte, Auslöser und Aktiv-Status. Standard-Workflows, die Sie oder ein anderer Admin bearbeitet haben, bleiben erhalten, außer Sie setzen sie unten ebenfalls zurück.",
+      "includeEdited": "Auch bearbeitete Standard-Workflows zurücksetzen (ihre Änderungen gehen verloren)",
+      "confirmAction": "Neu laden",
+      "keptEdited": "Bearbeitete beibehalten: {{names}}"
     },
     "badges": {
       "default": "Standard",

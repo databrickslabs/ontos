@@ -702,7 +702,12 @@
     "loadDefaults": {
       "menuLabel": "Workflow predefiniti",
       "newOnly": "Carica solo i nuovi",
-      "reloadAll": "Ricarica tutti i predefiniti"
+      "reloadAll": "Ricarica tutti i predefiniti",
+      "confirmTitle": "Ricaricare tutti i workflow predefiniti?",
+      "confirmDescription": "Ogni workflow predefinito viene ripristinato alla definizione originale: passaggi, trigger e stato attivo. I predefiniti modificati da te o da un altro amministratore vengono mantenuti, a meno che tu non li ripristini qui sotto.",
+      "includeEdited": "Ripristina anche i workflow predefiniti modificati (le modifiche vanno perse)",
+      "confirmAction": "Ricarica",
+      "keptEdited": "Modificati mantenuti: {{names}}"
     },
     "badges": {
       "default": "Predefinito",

@@ -61,6 +61,15 @@ _DEFAULT_ENTITY_TYPE_ADDITIONS = (
      'Status Change Request', 'data_contract'),
 )
 
+def _edited_by_user(db_workflow) -> bool:
+    """Whether a user changed this stored workflow since the default loader wrote it.
+
+    The loader creates defaults as ``system`` and resets them without a user, so
+    any other ``updated_by`` is a save, an API update or an activation toggle.
+    """
+    return db_workflow.updated_by not in (None, '', 'system')
+
+
 # (workflow, unknown entity types) already warned about by ``_split_entity_types``, oldest
 # first; bounded, so a long-running process doesn't keep every key it ever logged
 _WARNED_UNKNOWN_ENTITY_TYPES: "OrderedDict[tuple, None]" = OrderedDict()
@@ -150,12 +159,16 @@ class WorkflowsManager:
         yaml_path: Optional[str] = None,
         update_existing: bool = False,
         requests_only_active: bool = False,
+        include_edited: bool = False,
     ) -> dict:
         """Load default workflows from YAML file.
         
         Args:
             yaml_path: Path to YAML file, or None to use default
-            update_existing: If True, updates existing default workflows instead of skipping
+            update_existing: If True, updates existing default workflows instead of skipping.
+                Defaults a user edited are kept (counted in ``kept_edited``) unless
+                ``include_edited`` is also True.
+            include_edited: With ``update_existing``, also reset defaults a user edited.
             requests_only_active: If True, workflows created now keep the YAML's
                 ``is_active`` only when a request starts them (``on_request_*``);
                 all others (event-driven automation, ``for_*`` UI wizards) are
@@ -163,11 +176,12 @@ class WorkflowsManager:
                 on new automatic behavior. Existing workflows are not changed.
             
         Returns:
-            Dict with counts: {'created': int, 'updated': int, 'skipped': int}
+            Dict with counts: {'created', 'updated', 'skipped', 'kept_edited'} and the
+            names of the kept edited defaults in ``kept_edited_names``.
         """
         path = Path(yaml_path) if yaml_path else self._default_workflows_path
         
-        result = {'created': 0, 'updated': 0, 'skipped': 0}
+        result = {'created': 0, 'updated': 0, 'skipped': 0, 'kept_edited': 0, 'kept_edited_names': []}
         
         if not path.exists():
             logger.warning(f"Workflows YAML not found: {path}")
@@ -187,7 +201,7 @@ class WorkflowsManager:
         # rows another process created.
         with self._defaults_lock():
             return self._load_workflows(
-                workflows_data, result, update_existing, requests_only_active
+                workflows_data, result, update_existing, requests_only_active, include_edited
             )
 
     def add_default_entity_types(self) -> int:
@@ -245,6 +259,7 @@ class WorkflowsManager:
         result: dict,
         update_existing: bool,
         requests_only_active: bool,
+        include_edited: bool = False,
     ) -> dict:
         for wf_data in workflows_data:
             try:
@@ -293,7 +308,14 @@ class WorkflowsManager:
                 existing = process_workflow_repo.get_by_name(self._db, name)
                 
                 if existing:
-                    if update_existing and existing.is_default:
+                    if update_existing and existing.is_default and not include_edited \
+                            and _edited_by_user(existing):
+                        # A user changed this default (designer, API, toggle); a
+                        # reset would silently undo that, so keep it unless asked.
+                        result['kept_edited'] += 1
+                        result['kept_edited_names'].append(name)
+                        logger.info("Kept default workflow edited by a user: %s", name)
+                    elif update_existing and existing.is_default:
                         # Update existing default workflow
                         wf_type = wf_data.get('workflow_type', 'process')
                         update_data = ProcessWorkflowUpdate(

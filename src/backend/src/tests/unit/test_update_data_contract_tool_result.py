@@ -17,11 +17,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.common.features import FeatureAccessLevel
 from src.controller.data_contracts_manager import DataContractsManager
 from src.db_models.data_contracts import DataContractDb
 from src.db_models.data_domains import DataDomain
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.tools.base import ToolContext
+from src.tools.base import ToolCaller, ToolContext
 from src.tools.registry import ToolRegistry
 from src.tools.data_contracts import UpdateDataContractTool
 
@@ -50,10 +51,16 @@ def _domain(db_session, name) -> str:
     return did
 
 
+# The level PUT /api/data-contracts/{id} needs, which the tool checks too.
+EDITOR = ToolCaller(email='editor@example.com', auth_path='test',
+                    permissions={'data-contracts': FeatureAccessLevel.READ_WRITE})
+
+
 def _run(db_session, manager, args):
     registry = ToolRegistry()
     registry.register(UpdateDataContractTool())
-    ctx = ToolContext(db=db_session, settings=MagicMock(), data_contracts_manager=manager)
+    ctx = ToolContext(db=db_session, settings=MagicMock(), caller=EDITOR,
+                      data_contracts_manager=manager)
     return asyncio.run(registry.execute('update_data_contract', ctx, args))
 
 

@@ -53,6 +53,10 @@ export default function LineageLegend({ onClose }: LineageLegendProps) {
             <span className="text-[10px] text-muted-foreground">{t('data-catalog:lineage.legendPanel.dataFlow')}</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="w-8 h-0 border-t-2 border-rose-500/70" />
+            <span className="text-[10px] text-muted-foreground">{t('data-catalog:lineage.legendPanel.implementation')}</span>
+          </div>
+          <div className="flex items-center gap-2">
             <div className="w-8 h-0 border-t-[1.5px] border-muted-foreground/40" />
             <span className="text-[10px] text-muted-foreground">{t('data-catalog:lineage.legendPanel.containment')}</span>
           </div>

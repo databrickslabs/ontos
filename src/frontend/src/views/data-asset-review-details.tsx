@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { reviewStatusLabel } from '@/lib/status-labels';
 import { ColumnDef } from "@tanstack/react-table";
 import { Loader2, AlertCircle, ArrowLeft, X, ArrowUpDown, Pencil, Check, Copy } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
@@ -12,6 +13,7 @@ import {
     DataAssetReviewRequestUpdate,
     DataAssetReviewRequestUpdateStatus
 } from '@/types/data-asset-review';
+import { appEntityAssetLink } from '@/lib/app-entity-asset';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +34,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 // Import Asset Review Editor Component
 import AssetReviewEditor from '@/components/data-asset-reviews/asset-review-editor';
+
+// Concept diff panel for knowledge-concept reviews
+interface ConceptDiffPanelProps {
+  request: DataAssetReviewRequest;
+  asset: ReviewedAsset;
+}
+
+function ConceptDiffPanel({ request, asset }: ConceptDiffPanelProps) {
+  const iri = asset.asset_fqn?.replace('knowledge-concept://', '') || '';
+  const diffData = (request as any)?.details?.diff || (request as any)?.notes;
+
+  return (
+    <div className="mt-2 rounded border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-2 text-xs space-y-1">
+      <div className="font-mono text-blue-900 dark:text-blue-100 break-all">{iri}</div>
+      {diffData && typeof diffData === 'object' && (
+        <div className="text-blue-800 dark:text-blue-200">
+          {diffData.definition && (
+            <div className="mt-1">
+              <span className="font-semibold">Definition:</span>
+              <div className="mt-0.5 whitespace-pre-wrap">{diffData.definition}</div>
+            </div>
+          )}
+          {diffData.prefLabel && (
+            <div className="mt-1">
+              <span className="font-semibold">Label:</span> {diffData.prefLabel}
+            </div>
+          )}
+          {diffData.reference_count != null && (
+            <div className="mt-1">
+              <span className="font-semibold">Used by:</span> {diffData.reference_count} places
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Helper function to check API response (reuse if available globally)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -224,7 +263,12 @@ export default function DataAssetReviewDetails() {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
-            cell: ({ row }) => <span className="font-mono text-xs">{row.original.asset_fqn}</span>,
+            cell: ({ row }) => {
+                const entityLink = appEntityAssetLink(row.original);
+                return entityLink
+                    ? <Link to={entityLink} className="font-mono text-xs underline">{row.original.asset_fqn}</Link>
+                    : <span className="font-mono text-xs">{row.original.asset_fqn}</span>;
+            },
         },
         {
             accessorKey: "asset_type",
@@ -245,7 +289,7 @@ export default function DataAssetReviewDetails() {
                 </Button>
             ),
             cell: ({ row }) => (
-                <Badge variant={getAssetStatusColor(row.original.status)}>{row.original.status}</Badge>
+                <Badge variant={getAssetStatusColor(row.original.status)}>{reviewStatusLabel(row.original.status, t)}</Badge>
             ),
         },
         {
@@ -382,7 +426,7 @@ export default function DataAssetReviewDetails() {
                             </SelectTrigger>
                             <SelectContent>
                                 {Object.values(ReviewRequestStatus).map((status) => (
-                                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                                    <SelectItem key={status} value={status}>{reviewStatusLabel(status, t)}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -398,7 +442,7 @@ export default function DataAssetReviewDetails() {
                     <CardContent className="grid md:grid-cols-3 gap-4 text-sm">
                         <div><Label>{t('common:labels.requester')}:</Label> {request.requester_email}</div>
                         <div><Label>{t('common:labels.reviewer')}:</Label> {request.reviewer_email}</div>
-                        <div><Label>{t('data-asset-reviews:details.currentStatus')}:</Label> <Badge variant={getRequestStatusColor(request.status)}>{request.status}</Badge></div>
+                        <div><Label>{t('data-asset-reviews:details.currentStatus')}:</Label> <Badge variant={getRequestStatusColor(request.status)}>{reviewStatusLabel(request.status, t)}</Badge></div>
                         <div><Label>{t('common:labels.created')}:</Label> <RelativeDate date={request.created_at} /></div>
                         <div><Label>{t('common:labels.lastUpdated')}:</Label> <RelativeDate date={request.updated_at} /></div>
                         <div className="md:col-span-3"><Label>{t('common:labels.notes')}:</Label> <p className="text-xs mt-1 whitespace-pre-wrap">{request.notes || t('common:states.none')}</p></div>
@@ -425,7 +469,13 @@ export default function DataAssetReviewDetails() {
                 <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                     <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-background">
                         <CardHeader className="flex flex-row justify-between items-center">
-                            <CardTitle>{t('data-asset-reviews:details.reviewing', { fqn: selectedAsset.asset_fqn })}</CardTitle>
+                            <div className="flex-1 min-w-0">
+                                <CardTitle className="truncate">Reviewing: {selectedAsset.asset_fqn}</CardTitle>
+                                {/* Concept diff panel for knowledge concepts */}
+                                {selectedAsset.asset_fqn?.startsWith('knowledge-concept://') && request && (
+                                    <ConceptDiffPanel request={request} asset={selectedAsset} />
+                                )}
+                            </div>
                             <Button variant="ghost" size="icon" onClick={() => setIsEditorOpen(false)}><X className="h-4 w-4" /></Button>
                         </CardHeader>
                         <CardContent className="flex-1 overflow-auto space-y-4">

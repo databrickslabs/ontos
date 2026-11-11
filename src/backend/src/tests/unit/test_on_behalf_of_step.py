@@ -208,7 +208,13 @@ class TestSubmitStepWritesOnBehalfOf:
         step = _make_step({"allow_self": True, "allow_user_groups": True, "allow_free_text": True})
         snapshot_steps = [step]
 
+        # Skip SCIM by making workspace_client unavailable: without it the
+        # group lookup retried a client for the unreachable test host for
+        # about five minutes before the validation skipped it.
         with patch(
+            'src.common.workspace_client.get_workspace_client',
+            side_effect=Exception("no creds"),
+        ), patch(
             'src.controller.agreement_wizard_manager.agreement_wizard_sessions_repo'
         ) as repo_mock, patch.object(
             manager, '_get_steps_from_snapshot', return_value=snapshot_steps,

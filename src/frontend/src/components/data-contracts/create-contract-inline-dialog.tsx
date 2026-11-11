@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { Loader2 } from 'lucide-react';
+import { internalErrorText } from '@/lib/server-error-text';
 
 type PrefillData = {
   domain?: string;
@@ -101,7 +102,9 @@ export default function CreateContractInlineDialog({
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || t('data-contracts:createInline.createError', 'Failed to create contract'));
+        throw new Error(
+          internalErrorText(errorText) ?? (errorText || t('data-contracts:createInline.createError', 'Failed to create contract'))
+        );
       }
 
       const createdContract = await response.json();
@@ -172,7 +175,6 @@ export default function CreateContractInlineDialog({
                 <SelectItem value="under_review">{t('data-contracts:status.under_review', 'Under Review')}</SelectItem>
                 <SelectItem value="active">{t('data-contracts:status.active', 'Active')}</SelectItem>
                 <SelectItem value="approved">{t('data-contracts:status.approved', 'Approved')}</SelectItem>
-                <SelectItem value="certified">{t('data-contracts:status.certified', 'Certified')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

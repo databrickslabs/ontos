@@ -1,3 +1,4 @@
+import { buildKgSearchParams, DEFAULT_KG_SPARQL } from '@/lib/kg-search-url';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -164,24 +165,16 @@ export default function KGSearch({
     directionFilter: DirectionFilter;
     showConceptsOnly: boolean;
   }>) => {
-    const params = new URLSearchParams();
-
     // Get current values from URL for params we're not updating
     const currentParams = new URLSearchParams(location.search);
 
-    const newPrefix = updates.prefix !== undefined ? updates.prefix : currentParams.get('prefix') || '';
-    const newPath = updates.path !== undefined ? updates.path : (currentParams.get('path')?.split('|').filter(Boolean) || []);
-    const newSparql = updates.sparql !== undefined ? updates.sparql : currentParams.get('sparql') || 'SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10';
-    const newDirection = updates.directionFilter !== undefined ? updates.directionFilter : (currentParams.get('direction') as DirectionFilter || 'all');
-    const newConceptsOnly = updates.showConceptsOnly !== undefined ? updates.showConceptsOnly : currentParams.get('concepts_only') === 'true';
-
-    if (newPrefix) params.set('prefix', newPrefix);
-    if (newPath.length > 0) params.set('path', newPath.join('|'));
-    if (newSparql && newSparql !== 'SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10') params.set('sparql', newSparql);
-    if (newDirection && newDirection !== 'all') params.set('direction', newDirection);
-    if (newConceptsOnly) params.set('concepts_only', 'true');
-
-    params.set('tab', 'kg');
+    const params = buildKgSearchParams(location.search, {
+      prefix: updates.prefix !== undefined ? updates.prefix : currentParams.get('prefix') || '',
+      path: updates.path !== undefined ? updates.path : (currentParams.get('path')?.split('|').filter(Boolean) || []),
+      sparql: updates.sparql !== undefined ? updates.sparql : currentParams.get('sparql') || DEFAULT_KG_SPARQL,
+      directionFilter: updates.directionFilter !== undefined ? updates.directionFilter : (currentParams.get('direction') as DirectionFilter || 'all'),
+      showConceptsOnly: updates.showConceptsOnly !== undefined ? updates.showConceptsOnly : currentParams.get('concepts_only') === 'true',
+    });
     const queryString = params.toString();
     navigate(`${location.pathname}?${queryString}`, { replace: true });
   };

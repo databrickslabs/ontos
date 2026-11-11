@@ -39,6 +39,9 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
         # Home sections stored as list of strings
         home_sections_list = getattr(obj_in, 'home_sections', [])
         db_obj_data['home_sections'] = json.dumps(home_sections_list)
+        db_obj_data['hidden_nav_features'] = json.dumps(
+            list(getattr(obj_in, 'hidden_nav_features', None) or [])
+        )
         # Approval privileges stored as dict of booleans
         approval_privs = getattr(obj_in, 'approval_privileges', {}) or {}
         # Keys are enums or strings; normalize to strings
@@ -84,6 +87,14 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
             )
         if 'home_sections' in update_data and update_data['home_sections'] is not None:
             update_data['home_sections'] = json.dumps(update_data['home_sections'])
+        if 'hidden_nav_features' in update_data:
+            # None on a partial update means "unchanged"; the column is NOT NULL.
+            if update_data['hidden_nav_features'] is None:
+                update_data.pop('hidden_nav_features')
+            else:
+                update_data['hidden_nav_features'] = json.dumps(
+                    list(update_data['hidden_nav_features'])
+                )
         if 'approval_privileges' in update_data and update_data['approval_privileges'] is not None:
             ap = update_data['approval_privileges'] or {}
             ap_norm = { (k.value if hasattr(k, 'value') else str(k)): bool(v) for k, v in ap.items() }

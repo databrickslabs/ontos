@@ -4,6 +4,8 @@
  * Implements the data contract lifecycle transitions.
  */
 
+import type { TFunction } from 'i18next';
+
 /**
  * Data Contract Status values
  */
@@ -152,6 +154,19 @@ export function getStatusConfig(status: string): StatusConfig {
 }
 
 /**
+ * A status's label and description in the UI language; STATUS_CONFIG holds the
+ * English defaults (data-contracts:status.* / data-contracts:statusDescriptions.*).
+ */
+export function getStatusText(status: string, t: TFunction): { label: string; description: string } {
+  const config = getStatusConfig(status);
+  const key = status.toLowerCase();
+  return {
+    label: t(`data-contracts:status.${key}`, { defaultValue: config.label }),
+    description: t(`data-contracts:statusDescriptions.${key}`, { defaultValue: config.description }),
+  };
+}
+
+/**
  * Validates a status transition and returns error message if invalid
  */
 export function validateTransition(
@@ -222,3 +237,14 @@ export function getRecommendedAction(currentStatus: string): string | null {
   }
 }
 
+/**
+ * The recommended next action in the UI language
+ * (data-contracts:requests.statusChange.recommended.*), or null for a terminal status.
+ */
+export function getRecommendedActionText(currentStatus: string, t: TFunction): string | null {
+  const text = getRecommendedAction(currentStatus);
+  if (!text) return null;
+  return t(`data-contracts:requests.statusChange.recommended.${currentStatus.toLowerCase()}`, {
+    defaultValue: text,
+  });
+}

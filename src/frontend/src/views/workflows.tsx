@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { executionStatusLabel } from '@/lib/status-labels';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -57,15 +59,37 @@ import type {
   WorkflowListResponse,
   WorkflowExecution,
   ExecutionStatus,
+  EntityType,
+  TriggerType,
 } from '@/types/process-workflow';
-import { getTriggerDisplay } from '@/lib/workflow-labels';
+import { getTriggerDisplay, getTriggerTypeLabel, getEntityTypeLabel, getStepTypeLabel } from '@/lib/workflow-labels';
+import {
+  workflowValidationIssueText,
+  type WorkflowValidationIssue,
+} from '@/components/workflows/step-config-checks';
 import { WorkflowExecutionDialog } from '@/components/workflows/workflow-execution-dialog';
+import { useDefaultWorkflowText } from '@/lib/workflow-default-texts';
+import { workflowExecutionErrorText } from '@/lib/workflow-execution-error';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { RelativeDate } from '@/components/common/relative-date';
+import { WorkflowRunDialog } from '@/components/workflows/workflow-run-dialog';
 
 interface WorkflowExecutionsResponse {
   executions: WorkflowExecution[];
   total: number;
+}
+
+interface WorkflowActivationConflict {
+  id: string;
+  name: string;
+  trigger_type: string;
+  entity_types: string[];
+  scope_type: string;
+}
+
+interface PendingOverlapActivation {
+  workflow: ProcessWorkflow;
+  conflicts: WorkflowActivationConflict[];
 }
 
 // Helper to get step type icon
@@ -83,7 +107,7 @@ const getStepTypeIcon = (stepType: string) => {
 };
 
 // Helper to get execution status badge
-const getStatusBadge = (status: ExecutionStatus) => {
+const getStatusBadge = (status: ExecutionStatus, t: TFunction) => {
   const variants: Record<ExecutionStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
     pending: { variant: 'secondary', icon: <Clock className="h-3 w-3 mr-1" /> },
     running: { variant: 'default', icon: <Play className="h-3 w-3 mr-1 animate-pulse" /> },
@@ -96,7 +120,7 @@ const getStatusBadge = (status: ExecutionStatus) => {
   return (
     <Badge variant={config.variant} className="flex items-center">
       {config.icon}
-      {status}
+      {executionStatusLabel(status, t)}
     </Badge>
   );
 };
@@ -108,9 +132,12 @@ export default function Workflows() {
   const { pathname } = useLocation();
   const { get: apiGet, post: apiPost, delete: apiDeleteApi } = useApi();
   const { hasPermission } = usePermissions();
+  const defaultWorkflowText = useDefaultWorkflowText();
   
   // Check if user has admin access
   const canEdit = hasPermission('process-workflows', FeatureAccessLevel.ADMIN);
+  // POST /api/workflows/{id}/execute requires settings-workflows READ_WRITE
+  const canRun = hasPermission('settings-workflows', FeatureAccessLevel.READ_WRITE);
   
   // Workflow type filter: process (event-driven) | approval (wizard-driven)
   const [workflowTypeFilter, setWorkflowTypeFilter] = useState<'all' | 'process' | 'approval'>('all');
@@ -123,6 +150,8 @@ export default function Workflows() {
   const [duplicatingWorkflow, setDuplicatingWorkflow] = useState<ProcessWorkflow | null>(null);
   const [duplicateName, setDuplicateName] = useState('');
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [pendingOverlapActivations, setPendingOverlapActivations] = useState<PendingOverlapActivation[]>([]);
+  const [isConfirmingOverlap, setIsConfirmingOverlap] = useState(false);
   
   // Executions state
   const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
@@ -143,6 +172,8 @@ export default function Workflows() {
   // Preview wizard (issue #405): launched from the row-action menu on any
   // approval workflow. Pure FE dry-run — no API session, no audit.
   const [previewingWorkflow, setPreviewingWorkflow] = useState<ProcessWorkflow | null>(null);
+  // Manual run dialog: launched from the row-action menu on manual workflows.
+  const [runningWorkflow, setRunningWorkflow] = useState<ProcessWorkflow | null>(null);
 
   const loadWorkflows = useCallback(async () => {
     setIsLoadingWorkflows(true);
@@ -199,6 +230,47 @@ export default function Workflows() {
   }, [loadWorkflows, loadExecutions, loadApprovalSessions]);
 
   // Workflow handlers
+  const toggleWorkflowActive = async (workflow: ProcessWorkflow, confirmOverlap = false): Promise<{
+    updated: ProcessWorkflow | null;
+    conflicts: WorkflowActivationConflict[];
+    /** Translated reason of a refused activation (`workflow_invalid`, e.g. a missing policy). */
+    refusal: string | null;
+  }> => {
+    const activating = !workflow.is_active;
+    const url = `/api/workflows/${workflow.id}/toggle-active?is_active=${activating}`
+      + (confirmOverlap ? '&confirm_overlap=true' : '');
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (response.status === 409) {
+      const body = await response.json();
+      if (body?.detail?.code === 'workflow_activation_overlap') {
+        return {
+          updated: null,
+          conflicts: body.detail.params?.conflicts || body.detail.conflicts || [],
+          refusal: null,
+        };
+      }
+    }
+    if (response.status === 400) {
+      // The backend refuses a workflow that can't run before it looks for overlaps
+      const body = await response.json().catch(() => null);
+      const issues = body?.detail?.code === 'workflow_invalid'
+        && Array.isArray(body.detail.params?.issues)
+        ? (body.detail.params.issues as WorkflowValidationIssue[])
+        : null;
+      if (issues && issues.length > 0) {
+        const refusal = issues.map(issue => workflowValidationIssueText(issue, t)).join(' ');
+        return { updated: null, conflicts: [], refusal };
+      }
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return { updated: await response.json() as ProcessWorkflow, conflicts: [], refusal: null };
+  };
+
+  // "N workflows failed to update." followed by the reason of each refusal
+  const failedUpdateText = (failures: number, refusals: string[]) =>
+    [t('workflows:view.messages.workflowsFailedUpdate', { count: failures }), ...refusals]
+      .join(' ');
+
   const handleToggleWorkflowActive = async (workflow: ProcessWorkflow) => {
     if (!canEdit) {
       toast({
@@ -210,17 +282,22 @@ export default function Workflows() {
     }
     
     try {
-      const response = await apiPost<ProcessWorkflow>(
-        `/api/workflows/${workflow.id}/toggle-active?is_active=${!workflow.is_active}`,
-        {}
-      );
-      if (response.data) {
+      const { updated, conflicts, refusal } = await toggleWorkflowActive(workflow);
+      if (refusal) {
+        toast({ title: t('common:toast.error'), description: refusal, variant: 'destructive' });
+        return;
+      }
+      if (conflicts.length > 0) {
+        setPendingOverlapActivations([{ workflow, conflicts }]);
+        return;
+      }
+      if (updated) {
         setWorkflows(prev => 
-          prev.map(w => w.id === workflow.id ? response.data! : w)
+          prev.map(w => w.id === workflow.id ? updated : w)
         );
         toast({
           title: t('common:toast.success'),
-          description: response.data.is_active
+          description: updated.is_active
             ? t('workflows:view.messages.workflowEnabled')
             : t('workflows:view.messages.workflowDisabled'),
         });
@@ -231,6 +308,46 @@ export default function Workflows() {
         description: t('workflows:view.messages.updateStatusFailed'),
         variant: 'destructive',
       });
+    }
+  };
+
+  const confirmOverlappingActivation = async () => {
+    if (pendingOverlapActivations.length === 0) return;
+    setIsConfirmingOverlap(true);
+    let successes = 0;
+    let failures = 0;
+    const refusals: string[] = [];
+    try {
+      for (const pending of pendingOverlapActivations) {
+        try {
+          const { updated, refusal } = await toggleWorkflowActive(pending.workflow, true);
+          if (updated) {
+            successes += 1;
+            setWorkflows(prev => prev.map(w => w.id === updated.id ? updated : w));
+          } else {
+            failures += 1;
+            if (refusal) refusals.push(`${pending.workflow.name}: ${refusal}`);
+          }
+        } catch {
+          failures += 1;
+        }
+      }
+      setPendingOverlapActivations([]);
+      if (successes > 0) {
+        toast({
+          title: t('common:toast.success'),
+          description: t('workflows:view.messages.workflowsEnabled', { count: successes }),
+        });
+      }
+      if (failures > 0) {
+        toast({
+          title: t('common:toast.error'),
+          description: failedUpdateText(failures, refusals),
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsConfirmingOverlap(false);
     }
   };
 
@@ -518,13 +635,28 @@ export default function Workflows() {
     }
 
     try {
-      const results = await Promise.allSettled(
-        toUpdate.map(w => 
-          apiPost<ProcessWorkflow>(`/api/workflows/${w.id}/toggle-active?is_active=${enable}`, {})
-        )
-      );
-      const successes = results.filter(r => r.status === 'fulfilled').length;
-      const failures = results.filter(r => r.status === 'rejected').length;
+      let successes = 0;
+      let failures = 0;
+      const overlaps: PendingOverlapActivation[] = [];
+      const refusals: string[] = [];
+      // Run activation sequentially: an overlap requires an explicit decision
+      // and must not be hidden inside Promise.allSettled as a "successful" call.
+      // A refusal (e.g. a policy_check step without an existing policy) is a failure.
+      for (const workflow of toUpdate) {
+        try {
+          const { updated, conflicts, refusal } = await toggleWorkflowActive(workflow);
+          if (updated) successes += 1;
+          else if (conflicts.length > 0) overlaps.push({ workflow, conflicts });
+          else {
+            failures += 1;
+            if (refusal) refusals.push(`${workflow.name}: ${refusal}`);
+          }
+        } catch {
+          failures += 1;
+        }
+      }
+
+      if (overlaps.length > 0) setPendingOverlapActivations(overlaps);
 
       if (successes > 0) {
         toast({
@@ -538,7 +670,7 @@ export default function Workflows() {
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: t('workflows:view.messages.workflowsFailedUpdate', { count: failures }),
+          description: failedUpdateText(failures, refusals),
           variant: 'destructive',
         });
       }
@@ -778,7 +910,7 @@ export default function Workflows() {
             onClick={() => navigate(`${pathname}/${row.original.id}`)}
             className="font-medium hover:underline hover:text-primary text-left"
           >
-            {row.original.name}
+            {defaultWorkflowText(row.original.name)}
           </button>
           {row.original.is_default && (
             <Badge variant="secondary" className="text-xs">{t('workflows:view.badges.default')}</Badge>
@@ -812,7 +944,7 @@ export default function Workflows() {
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           {row.original.steps.slice(0, 4).map((step, i) => (
-            <span key={i} className="text-muted-foreground" title={step.step_type}>
+            <span key={i} className="text-muted-foreground" title={getStepTypeLabel(step.step_type, t)}>
               {getStepTypeIcon(step.step_type)}
             </span>
           ))}
@@ -867,6 +999,12 @@ export default function Workflows() {
                 {t('workflows:view.actions.previewWizard')}
               </DropdownMenuItem>
             )}
+            {canRun && row.original.trigger.type === 'manual' && (
+              <DropdownMenuItem onClick={() => setRunningWorkflow(row.original)}>
+                <Play className="h-4 w-4 mr-2" />
+                {t('workflows:runDialog.menuLabel')}
+              </DropdownMenuItem>
+            )}
             {canEdit && (
               <>
                 <DropdownMenuItem onClick={() => {
@@ -909,7 +1047,7 @@ export default function Workflows() {
         return (
           <div className="flex items-center gap-2">
             <GitBranch className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{row.original.workflow_name}</span>
+            <span className="font-medium">{defaultWorkflowText(row.original.workflow_name)}</span>
             {wfType === 'approval' ? (
               <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{t('workflows:view.badges.approval')}</Badge>
             ) : (
@@ -930,7 +1068,7 @@ export default function Workflows() {
           <div className="flex flex-col">
             <span className="text-sm font-medium">{entity_name || entity_id || '-'}</span>
             {entity_type && (
-              <span className="text-xs text-muted-foreground capitalize">{entity_type}</span>
+              <span className="text-xs text-muted-foreground">{getEntityTypeLabel(entity_type as EntityType, t)}</span>
             )}
           </div>
         );
@@ -944,7 +1082,7 @@ export default function Workflows() {
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => getStatusBadge(row.original.status),
+      cell: ({ row }) => getStatusBadge(row.original.status, t),
     },
     {
       accessorKey: 'current_step_name',
@@ -996,7 +1134,9 @@ export default function Workflows() {
       header: t('workflows:view.columns.error'),
       enableSorting: false,
       cell: ({ row }) => {
-        const errorMessage = row.original.error_message;
+        // A coded step error or a shipped fail step's message is shown in the
+        // user's language
+        const errorMessage = workflowExecutionErrorText(t, row.original, defaultWorkflowText);
         if (!errorMessage) return null;
         // `truncate` is a no-op on inline spans, so a multi-line stack trace
         // used to expand the row vertically; clamp to 2 lines on a block button
@@ -1496,7 +1636,7 @@ export default function Workflows() {
           <DialogHeader>
             <DialogTitle>{t('workflows:view.dialogs.duplicateTitle')}</DialogTitle>
             <DialogDescription>
-              {t('workflows:view.dialogs.duplicateDescription', { name: duplicatingWorkflow?.name })}
+              {t('workflows:view.dialogs.duplicateDescription', { name: defaultWorkflowText(duplicatingWorkflow?.name) })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -1517,12 +1657,63 @@ export default function Workflows() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={pendingOverlapActivations.length > 0} onOpenChange={(open) => {
+        if (!open) setPendingOverlapActivations([]);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('workflows:view.dialogs.activationOverlapTitle')}</DialogTitle>
+            <DialogDescription>{t('workflows:view.dialogs.activationOverlapDescription')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {pendingOverlapActivations.map(({ workflow, conflicts }) => (
+              <div key={workflow.id} className="rounded-md border p-3 space-y-2">
+                <div className="font-medium">{workflow.name}</div>
+                {conflicts.map(conflict => (
+                  <div key={conflict.id} className="border-l-2 pl-3">
+                    <div className="text-sm font-medium">{conflict.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {t('workflows:view.dialogs.activationOverlapDetails', {
+                        trigger: getTriggerTypeLabel(conflict.trigger_type as TriggerType, t),
+                        entities: conflict.entity_types.map(entity =>
+                          getEntityTypeLabel(entity as EntityType, t)
+                        ).join(', ') || t('workflows:view.dialogs.allEntities'),
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingOverlapActivations([])}>{t('common:actions.cancel')}</Button>
+            <Button onClick={confirmOverlappingActivation} disabled={isConfirmingOverlap}>
+              {isConfirmingOverlap && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {t('workflows:view.dialogs.activateAnyway')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {/* Workflow Execution Detail Dialog */}
       <WorkflowExecutionDialog
         execution={selectedExecution}
         open={executionDialogOpen}
         onOpenChange={setExecutionDialogOpen}
+      />
+
+      {/* Run a manual workflow against an entity */}
+      <WorkflowRunDialog
+        workflow={runningWorkflow}
+        open={!!runningWorkflow}
+        onOpenChange={(open) => { if (!open) setRunningWorkflow(null); }}
+        onExecuted={() => loadExecutions()}
+        onViewExecution={(execution) => {
+          setRunningWorkflow(null);
+          setSelectedExecution(execution);
+          setExecutionDialogOpen(true);
+        }}
       />
 
       {/* Approval Wizard Preview (issue #405) — synthetic dry-run, no API
@@ -1553,11 +1744,11 @@ export default function Workflows() {
             <div className="py-4 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{t('workflows:view.detail.workflow')}</span>
-                <span className="text-sm text-muted-foreground">{executionToDelete.workflow_name}</span>
+                <span className="text-sm text-muted-foreground">{defaultWorkflowText(executionToDelete.workflow_name)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{t('workflows:view.detail.status')}</span>
-                {getStatusBadge(executionToDelete.status)}
+                {getStatusBadge(executionToDelete.status, t)}
               </div>
               {executionToDelete.entity_name && (
                 <div className="flex items-center gap-2">

@@ -1,10 +1,28 @@
 {
   "title": "Concepten",
   "nav": {
-    "collections": "Collecties",
+    "collections": "Conceptschema's",
     "browser": "Concepten",
     "search": "Zoeken",
     "graph": "Grafiek",
-    "hierarchy": "Hiërarchie"
+    "hierarchy": "Hiërarchie",
+    "searchSparql": "Zoeken / SPARQL",
+    "generator": "Generator",
+    "import": "Importeren",
+    "mapping": "Mapping"
+  },
+  "sections": {
+    "label": "Conceptsecties",
+    "define": "Definiëren",
+    "explore": "Verkennen",
+    "enrich": "Verrijken"
+  },
+  "explore": {
+    "viewLabel": "Verkenweergaven",
+    "viewList": "Lijst",
+    "viewTree": "Boom",
+    "viewGraph": "Graaf",
+    "createConcept": "Nieuw concept",
+    "createScheme": "Nieuw conceptschema"
   }
 }

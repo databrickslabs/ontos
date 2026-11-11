@@ -6,6 +6,7 @@ settings = get_settings()
 setup_logging(level=settings.LOG_LEVEL, log_file=settings.LOG_FILE)
 logger = get_logger(__name__)
 
+import asyncio
 import mimetypes
 import os
 import time
@@ -18,6 +19,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 from fastapi import HTTPException, status
 
@@ -88,6 +90,7 @@ from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.common.workspace_client import get_workspace_client
+from src.common.health_status import add_health_warning, health_issue, set_db_error
 from src.controller.settings_manager import SettingsManager
 from src.controller.users_manager import UsersManager
 from src.controller.authorization_manager import AuthorizationManager
@@ -116,8 +119,9 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 
 def _seed_default_workflows() -> None:
     """Create the default workflows that don't exist yet; existing ones are left
-    untouched. Without them, publish / review / access / certification /
-    status change requests start no workflow. Only request workflows are
+    untouched, except for entity types a default gained since
+    (``add_default_entity_types``). Without them, publish / review / access /
+    certification / status change requests start no workflow. Only request workflows are
     created active, so an upgrade doesn't turn on automatic workflows or UI
     wizards; admins enable those in the Workflows page.
     """
@@ -125,10 +129,32 @@ def _seed_default_workflows() -> None:
         from src.common.database import get_session_factory
         from src.controller.workflows_manager import WorkflowsManager
         with get_session_factory()() as db:
-            counts = WorkflowsManager(db).load_from_yaml(requests_only_active=True)
+            manager = WorkflowsManager(db)
+            counts = manager.load_from_yaml(requests_only_active=True)
+            # Entity types a stored default gained since (e.g. data_contract)
+            counts['entity_types_added'] = manager.add_default_entity_types()
         logger.info("Default workflows seeded: %s", counts)
     except Exception as e:
         logger.warning("Failed seeding default workflows: %s", e, exc_info=True)
+    _warn_unmatched_trigger_entity_types()
+
+
+def _warn_unmatched_trigger_entity_types() -> None:
+    """Log each stored workflow whose trigger lists entity types that match no event.
+
+    The manager of the workflow routes has their trigger/entity map, so pairs no code
+    fires are found next to unknown types. Nothing is changed or deactivated; the API
+    returns the same findings in each workflow's ``trigger_warnings``.
+    """
+    try:
+        from src.common.database import get_session_factory
+        with get_session_factory()() as db:
+            warned = workflows_routes.get_workflows_manager(db) \
+                .log_unmatched_trigger_entity_types()
+        if warned:
+            logger.warning("%d workflow(s) list trigger entity types that match no event", warned)
+    except Exception as e:
+        logger.warning("Failed checking workflow trigger entity types: %s", e, exc_info=True)
 
 
 # Application Startup Event
@@ -141,8 +167,11 @@ async def startup_event():
         "ws_ok": False,
         "seed_ok": True,
         "warnings": [],
+        "warning_details": [],
         "db_error": None,
+        "db_error_code": None,
         "seed_error": None,
+        "seed_error_code": None,
     }
     
     # Skip startup tasks if running tests
@@ -159,7 +188,7 @@ async def startup_event():
         initialize_database()
         app.state.health["db_ok"] = True
     except Exception as e:
-        app.state.health["db_error"] = str(e)
+        set_db_error(app.state.health)
         logger.critical(f"Database init failed — entering maintenance mode: {e}", exc_info=True)
         return  # Skip manager init; MaintenanceMiddleware will serve the maintenance page
 
@@ -244,6 +273,8 @@ async def startup_event():
             except Exception:
                 continue
         app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+        from src.common.app_state import set_app_state_manager
+        set_app_state_manager('search_manager', app.state.search_manager)
         app.state.search_manager.build_index()
         for mgr in searchable_managers_instances:
             mgr.set_search_manager(app.state.search_manager)
@@ -346,6 +377,12 @@ app = FastAPI(
     openapi_tags=openapi_tags
 )
 
+# Errors with a code (CodedValueError) are answered as {code, message, params};
+# server errors that repeat an exception's text get a generic message instead
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from src.common.api_errors import coded_http_exception_handler
+app.add_exception_handler(StarletteHTTPException, coded_http_exception_handler)
+
 # Configure CORS
 origins = [
     "http://localhost:3000",
@@ -371,9 +408,36 @@ app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(MaintenanceMiddleware)
 
+def _mount_frontend_static(target: FastAPI, static_dir: Path, env: str) -> bool:
+    """Mount the built frontend at ``/static`` if it exists.
+
+    Without a frontend build (e.g. a fresh checkout or worktree used for
+    backend work, where Vite serves the UI) ``StaticFiles`` would raise at
+    import and the backend could not start. The mount is skipped instead; the
+    SPA routes then answer 404 "Frontend not built". A deployed app needs the
+    build, so outside LOCAL the warning says so.
+    """
+    if not static_dir.is_dir():
+        if env.upper().startswith("LOCAL"):
+            logger.warning(
+                "Frontend build not found at %s; not serving /static "
+                "(run the frontend with Vite, or build it with `npm run build` in src/)",
+                static_dir,
+            )
+        else:
+            logger.error(
+                "Frontend build not found at %s (ENV=%s); the UI won't be served. "
+                "Build it with `npm run build` in src/ before deploying.",
+                static_dir, env,
+            )
+        return False
+    target.mount("/static", StaticFiles(directory=static_dir, html=True), name="static")
+    return True
+
+
 # Mount static files for the React application (skip in test mode)
 if not settings.TESTING:
-    app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")
+    _mount_frontend_static(app, STATIC_ASSETS_PATH, settings.ENV)
 
 # Data Products - Core data lifecycle
 data_domains_routes.register_routes(app)
@@ -389,6 +453,8 @@ approvals_routes.register_routes(app)
 
 # Reference Data - Assets, Business Roles & Owners
 assets_routes.register_routes(app)
+from src.routes import metric_views_routes
+metric_views_routes.register_routes(app)
 asset_bulk_routes.register_routes(app)
 business_roles_routes.register_routes(app)
 business_owners_routes.register_routes(app)
@@ -471,9 +537,14 @@ async def health_check():
     """Return application health state."""
     return app.state.health
 
+# Serializes retries: a second click waits for the running one instead of
+# initializing the managers a second time in parallel.
+_retry_lock = asyncio.Lock()
+
+
 @app.post("/api/health/retry", tags=["System"])
 async def retry_startup():
-    """Re-attempt database init + manager init after a maintenance-mode failure.
+    """Re-attempt what failed at startup: the database, the managers, or only the workspace.
 
     NOTE: intentionally NOT gated by ``PermissionChecker``:
       1. Any authenticated user hitting the UI during a DB outage gets
@@ -485,32 +556,102 @@ async def retry_startup():
          broken — so gating would create a chicken-and-egg failure mode.
 
     Edge authentication by the Databricks Apps platform still blocks
-    anonymous callers in prod. The operation is idempotent.
+    anonymous callers in prod.
+
+    When the managers are already running (only the workspace was unavailable),
+    a retry first checks the workspace alone and re-initializes the managers
+    only once it is reachable, stopping the old job poller first. Retries are
+    serialized and run off the event loop, so a click never blocks other
+    requests or starts a second poller.
     """
-    settings = get_settings()
+    async with _retry_lock:
+        return await run_in_threadpool(_retry_startup_blocking)
+
+
+def _managers_running() -> bool:
+    """True when startup got past the database and the managers without a failure."""
+    health = app.state.health
+    if not health.get("db_ok") or getattr(app.state, "settings_manager", None) is None:
+        return False
+    codes = {d.get("code") for d in health.get("warning_details", [])}
+    return "manager_init_failed" not in codes and health.get("seed_ok", True)
+
+
+def _stop_job_polling() -> None:
+    """Stop the running managers' job poller before they are replaced."""
+    jobs_manager = getattr(app.state, "jobs_manager", None)
+    if jobs_manager is not None:
+        try:
+            jobs_manager.stop_background_polling()
+        except Exception as e:
+            logger.warning(f"Could not stop the job poller before re-initializing: {e}")
+
+
+def _close_replaced_manager_session(old_session) -> None:
+    """Close the DB session of managers a re-initialization just replaced.
+
+    ``initialize_managers`` opens a long-lived session for the manager
+    singletons. When the retry rebuilds them, the previous session would stay
+    open (``idle in transaction``, holding its locks) until the process exits.
+    """
+    if old_session is None or old_session is getattr(app.state, "manager_db_session", None):
+        return
     try:
-        initialize_database()
-        app.state.health["db_ok"] = True
-        app.state.health["db_error"] = None
+        old_session.rollback()
     except Exception as e:
-        app.state.health["db_error"] = str(e)
-        logger.critical(f"Database retry failed: {e}", exc_info=True)
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=503)
+        logger.warning(f"Could not roll back the replaced managers' DB session: {e}")
+    try:
+        old_session.close()
+    except Exception as e:
+        logger.warning(f"Could not close the replaced managers' DB session: {e}")
+
+
+def _retry_startup_blocking():
+    if _managers_running():
+        if app.state.health.get("ws_ok"):
+            return {"status": "ok", "health": app.state.health}
+        try:
+            if not get_workspace_client(settings=get_settings()):
+                raise RuntimeError("WorkspaceClient returned None.")
+        except Exception as e:
+            logger.warning(f"Workspace client still unavailable on retry: {e}", exc_info=True)
+            return {"status": "ok", "health": app.state.health}
+        logger.info("Workspace client reachable again; re-initializing the managers with it.")
+    elif not app.state.health.get("db_ok"):
+        try:
+            initialize_database()
+            app.state.health["db_ok"] = True
+            app.state.health["db_error"] = None
+            app.state.health["db_error_code"] = None
+        except Exception as e:
+            set_db_error(app.state.health)
+            logger.critical(f"Database retry failed: {e}", exc_info=True)
+            return JSONResponse(
+                {"status": "error", "detail": health_issue("database_unavailable")},
+                status_code=503,
+            )
 
     try:
         app.state.health["warnings"] = []  # Reset warnings before retry
+        app.state.health["warning_details"] = []
         app.state.health["seed_ok"] = True  # Reset seed health; initialize_managers will flip if it fails
         app.state.health["seed_error"] = None
+        app.state.health["seed_error_code"] = None
+        old_manager_session = getattr(app.state, "manager_db_session", None)
+        _stop_job_polling()
         initialize_managers(app)  # Sets health["ws_ok"] / health["seed_ok"] internally
+        if _managers_running():
+            # Only when every manager was rebuilt: after a partial failure some
+            # of the old managers may still be using the old session.
+            _close_replaced_manager_session(old_manager_session)
         _seed_default_workflows()
     except Exception as e:
-        app.state.health["warnings"].append(f"Manager init failed on retry: {e}")
+        add_health_warning(app.state.health, "manager_init_failed")
         logger.error(f"Manager init failed on retry: {e}", exc_info=True)
 
     if not app.state.health.get("seed_ok", True):
         return JSONResponse(
-            {"status": "error", "detail": app.state.health.get("seed_error") or "seeding failed"},
-            status_code=503,
+            {"status": "error", "detail": health_issue("seeding_failed")}, status_code=503
         )
 
     return {"status": "ok", "health": app.state.health}
@@ -533,22 +674,31 @@ def _is_spa_fallback_path(full_path: str) -> bool:
     return True
 
 
+def _spa_response(full_path: str, static_dir: Path):
+    """Response of the SPA catch-all for ``full_path``.
+
+    Frontend routes get ``index.html`` (404 "Frontend not built" without a
+    build). Paths the SPA must not answer (``api/``, ``static/``, ``mcp``,
+    docs) that no router or mount handled are a plain 404: this route matched
+    them, so FastAPI's own 404 doesn't apply (returning nothing was a 200).
+    """
+    if not _is_spa_fallback_path(full_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    spa_index = static_dir / "index.html"
+    if spa_index.is_file():
+        return FileResponse(spa_index, media_type="text/html")
+    logger.error(f"SPA index.html not found at {spa_index}")
+    return HTMLResponse(
+        content="<html><body>Frontend not built or index.html missing.</body></html>",
+        status_code=404,
+    )
+
+
 # Define the SPA catch-all route LAST (skip in test mode)
 if not settings.TESTING:
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        if _is_spa_fallback_path(full_path):
-            # Ensure the path exists before serving
-            spa_index = STATIC_ASSETS_PATH / "index.html"
-            if spa_index.is_file():
-               return FileResponse(spa_index, media_type="text/html")
-            else:
-               # Optional: Return a 404 or a simple HTML message if index.html is missing
-               logger.error(f"SPA index.html not found at {spa_index}")
-               return HTMLResponse(content="<html><body>Frontend not built or index.html missing.</body></html>", status_code=404)
-        # If it starts with api/ or static/ but wasn't handled by a router/StaticFiles,
-        # FastAPI will return its default 404 Not Found, which is correct.
-        # No explicit return needed here for that case.
+        return _spa_response(full_path, STATIC_ASSETS_PATH)
 
 logger.info("All routes registered.")
 

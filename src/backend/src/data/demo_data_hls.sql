@@ -342,23 +342,76 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0001-4000-8000-000000000001', 'HIPAA PHI De-identification', 'Verify all patient data is de-identified per HIPAA Safe Harbor method',
-'Protected Health Information (PHI) detected in dataset. All 18 HIPAA identifiers must be removed or generalized per the Safe Harbor method before analytical use.',
-'MATCH (d:Dataset) WHERE d.domain IN [''Clinical'', ''Research''] AND d.contains_phi = true ASSERT d.deidentification_method = ''safe_harbor''', 'Security', 'critical', true, NOW(), NOW()),
+('01100001-0001-4000-8000-000000000001', 'HIPAA De-identification Tagging', 'Verify HIPAA-scoped data products are tagged as de-identified (HIPAA Safe Harbor method)',
+'Data product is in HIPAA scope but not marked as de-identified. All 18 HIPAA identifiers must be removed or generalized per the Safe Harbor method before analytical use.',
+'MATCH (p:data_product) WHERE HAS_TAG(''hipaa'') ASSERT HAS_TAG(''phi-deidentified'')', 'Security', 'critical', true, NOW(), NOW()),
 
-('01100002-0001-4000-8000-000000000002', '21 CFR Part 11 Audit Trail', 'Ensure electronic records have complete audit trails per FDA regulations',
-'Dataset lacks required audit trail for 21 CFR Part 11 compliance. All clinical trial electronic records must have timestamped, user-attributed audit trails that cannot be modified.',
-'MATCH (d:Dataset) WHERE d.domain = ''Research'' ASSERT d.has_audit_trail = true AND d.audit_trail_immutable = true', 'Governance', 'critical', true, NOW(), NOW()),
+('01100002-0001-4000-8000-000000000002', '21 CFR Part 11 Scope Tagging', 'Ensure research and regulatory data products are tagged as under 21 CFR Part 11 audit trail controls',
+'Research or regulatory data product is not under 21 CFR Part 11 controls. Electronic records used for clinical research must have timestamped, user-attributed audit trails.',
+'MATCH (p:data_product) WHERE p.domain IN [''Research'', ''Regulatory''] ASSERT HAS_TAG(''21cfr-part-11'')', 'Governance', 'critical', true, NOW(), NOW()),
 
-('01100003-0001-4000-8000-000000000003', 'CDISC Standards Compliance', 'Verify clinical trial data conforms to CDISC SDTM/ADaM standards',
-'Clinical trial dataset does not conform to CDISC standards. All submission-ready datasets must follow SDTM or ADaM data models.',
-'MATCH (d:Dataset) WHERE d.domain = ''Research'' AND d.is_submission_ready = true ASSERT d.cdisc_standard IN [''SDTM'', ''ADaM'']', 'Data Quality', 'high', true, NOW(), NOW()),
+('01100003-0001-4000-8000-000000000003', 'Submission-Ready Products GCP-Validated', 'Verify submission-ready clinical data products are tagged GCP-validated',
+'Submission-ready data product is not GCP-validated. Datasets submitted to regulators must follow CDISC standards and be validated under Good Clinical Practice.',
+'MATCH (p:data_product) WHERE HAS_TAG(''submission-ready'') ASSERT HAS_TAG(''gcp-validated'')', 'Data Quality', 'high', true, NOW(), NOW()),
 
-('01100004-0001-4000-8000-000000000004', 'Adverse Event Reporting Timeliness', 'Ensure serious adverse events are reported within regulatory timelines',
-'Serious adverse event reporting exceeds 15-day regulatory deadline. Expedited ICSRs must be submitted within 15 calendar days of initial receipt.',
-'MATCH (ae:AdverseEvent) WHERE ae.seriousness = ''serious'' ASSERT ae.days_to_report <= 15', 'Governance', 'critical', true, NOW(), NOW())
+('01100004-0001-4000-8000-000000000004', 'Safety Reporting Contracts Active', 'Ensure contracts feeding adverse event and clinical trial reporting are active',
+'Adverse event or clinical trial data contract is not active. Contracts feeding expedited safety reporting must be active so ICSRs can be submitted within 15 calendar days.',
+'MATCH (c:data_contract) WHERE c.name CONTAINS ''Adverse Event'' OR c.name CONTAINS ''Clinical Trial'' ASSERT c.status = ''active''', 'Governance', 'critical', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'HIPAA PHI De-identification'
+    THEN 'HIPAA De-identification Tagging' ELSE name END,
+  description = CASE WHEN description = 'Verify all patient data is de-identified per HIPAA Safe Harbor method'
+    THEN 'Verify HIPAA-scoped data products are tagged as de-identified (HIPAA Safe Harbor method)' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Protected Health Information (PHI) detected in dataset. All 18 HIPAA identifiers must be removed or generalized per the Safe Harbor method before analytical use.'
+    THEN 'Data product is in HIPAA scope but not marked as de-identified. All 18 HIPAA identifiers must be removed or generalized per the Safe Harbor method before analytical use.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''hipaa'') ASSERT HAS_TAG(''phi-deidentified'')',
+  updated_at = NOW()
+WHERE id = '01100001-0001-4000-8000-000000000001'
+  AND rule = 'MATCH (d:Dataset) WHERE d.domain IN [''Clinical'', ''Research''] AND d.contains_phi = true ASSERT d.deidentification_method = ''safe_harbor''';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = '21 CFR Part 11 Audit Trail'
+    THEN '21 CFR Part 11 Scope Tagging' ELSE name END,
+  description = CASE WHEN description = 'Ensure electronic records have complete audit trails per FDA regulations'
+    THEN 'Ensure research and regulatory data products are tagged as under 21 CFR Part 11 audit trail controls' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Dataset lacks required audit trail for 21 CFR Part 11 compliance. All clinical trial electronic records must have timestamped, user-attributed audit trails that cannot be modified.'
+    THEN 'Research or regulatory data product is not under 21 CFR Part 11 controls. Electronic records used for clinical research must have timestamped, user-attributed audit trails.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain IN [''Research'', ''Regulatory''] ASSERT HAS_TAG(''21cfr-part-11'')',
+  updated_at = NOW()
+WHERE id = '01100002-0001-4000-8000-000000000002'
+  AND rule = 'MATCH (d:Dataset) WHERE d.domain = ''Research'' ASSERT d.has_audit_trail = true AND d.audit_trail_immutable = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'CDISC Standards Compliance'
+    THEN 'Submission-Ready Products GCP-Validated' ELSE name END,
+  description = CASE WHEN description = 'Verify clinical trial data conforms to CDISC SDTM/ADaM standards'
+    THEN 'Verify submission-ready clinical data products are tagged GCP-validated' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Clinical trial dataset does not conform to CDISC standards. All submission-ready datasets must follow SDTM or ADaM data models.'
+    THEN 'Submission-ready data product is not GCP-validated. Datasets submitted to regulators must follow CDISC standards and be validated under Good Clinical Practice.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''submission-ready'') ASSERT HAS_TAG(''gcp-validated'')',
+  updated_at = NOW()
+WHERE id = '01100003-0001-4000-8000-000000000003'
+  AND rule = 'MATCH (d:Dataset) WHERE d.domain = ''Research'' AND d.is_submission_ready = true ASSERT d.cdisc_standard IN [''SDTM'', ''ADaM'']';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Adverse Event Reporting Timeliness'
+    THEN 'Safety Reporting Contracts Active' ELSE name END,
+  description = CASE WHEN description = 'Ensure serious adverse events are reported within regulatory timelines'
+    THEN 'Ensure contracts feeding adverse event and clinical trial reporting are active' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Serious adverse event reporting exceeds 15-day regulatory deadline. Expedited ICSRs must be submitted within 15 calendar days of initial receipt.'
+    THEN 'Adverse event or clinical trial data contract is not active. Contracts feeding expedited safety reporting must be active so ICSRs can be submitted within 15 calendar days.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE c.name CONTAINS ''Adverse Event'' OR c.name CONTAINS ''Clinical Trial'' ASSERT c.status = ''active''',
+  updated_at = NOW()
+WHERE id = '01100004-0001-4000-8000-000000000004'
+  AND rule = 'MATCH (ae:AdverseEvent) WHERE ae.seriousness = ''serious'' ASSERT ae.days_to_report <= 15';
+
 
 
 -- ============================================================================
@@ -688,19 +741,19 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 ('02a00101-0001-4000-8000-000000000001', 'IRB Approval Gate',
- 'Block publishing of clinical research data products until IRB approval is on file.',
+ 'Block publishing of clinical research data products until IRB approval is on file. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product"]}',
  '{"type": "domain", "ids": ["00000002-0001-4000-8000-000000000002"]}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 ('02a00102-0001-4000-8000-000000000002', 'HIPAA PHI Pre-Publish Check',
- 'Validates that PHI is de-identified or covered by a signed BAA before any HLS data product is exposed to consumers.',
+ 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product", "data_contract"]}',
  '{"type": "all"}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
-('02b00101-0001-4000-8000-000000000001', '02a00101-0001-4000-8000-000000000001', 'irb_doc_check', 'IRB Document Present',
+('02b00101-0001-4000-8000-000000000001', '02a00101-0001-4000-8000-000000000001', 'irb_doc_check', '21 CFR Part 11 Scope Tagged',
  'policy_check',
  '{"policy_id": "01100002-0001-4000-8000-000000000002"}',
  'irb_active', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
@@ -708,7 +761,7 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  'approval',
  '{"approvers": "business:0f000003-0001-4000-8000-000000000003"}',
  'approve', 'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW()),
-('02b00103-0001-4000-8000-000000000003', '02a00102-0001-4000-8000-000000000002', 'phi_classification', 'PHI Classification',
+('02b00103-0001-4000-8000-000000000003', '02a00102-0001-4000-8000-000000000002', 'phi_classification', 'HIPAA De-identification Tagged',
  'policy_check',
  '{"policy_id": "01100001-0001-4000-8000-000000000001"}',
  'phi_review', 'block', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
@@ -718,23 +771,73 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  'approve', 'block', 2, '{"x": 300, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- The pre-publish gates ship inactive (#996): their before_publish trigger does not
+-- exist yet, so they never run. In installs that still hold a shipped gate (its shipped
+-- name, trigger and description, still active), deactivate it, then add the note to the
+-- description of a shipped gate that is inactive. A gate an admin renamed, re-triggered,
+-- re-described, or re-activated after this change is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00101-0001-4000-8000-000000000001'
+  AND name = 'IRB Approval Gate'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product"]}'
+  AND description = 'Block publishing of clinical research data products until IRB approval is on file.'
+  AND is_active = true;
+
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00102-0001-4000-8000-000000000002'
+  AND name = 'HIPAA PHI Pre-Publish Check'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product", "data_contract"]}'
+  AND description IN ('Validates that PHI is de-identified or covered by a signed BAA before any HLS data product is exposed to consumers.', 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers.')
+  AND is_active = true;
+
+UPDATE process_workflows SET description = 'Block publishing of clinical research data products until IRB approval is on file. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00101-0001-4000-8000-000000000001'
+  AND description = 'Block publishing of clinical research data products until IRB approval is on file.'
+  AND is_active = false;
+
+UPDATE process_workflows SET description = 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00102-0001-4000-8000-000000000002'
+  AND description = 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers.'
+  AND is_active = false;
+
+-- Installs that loaded an earlier version of this preset keep their workflow rows
+-- (ON CONFLICT DO NOTHING above). Rename those in place, but only the texts that
+-- still have their shipped value, so a step an admin renamed is left alone.
+UPDATE process_workflows SET description = CASE
+  WHEN id = '02a00102-0001-4000-8000-000000000002' AND description = 'Validates that PHI is de-identified or covered by a signed BAA before any HLS data product is exposed to consumers.' THEN 'Checks that HIPAA-scoped data products are tagged as de-identified, then requires Privacy Officer review, before any HLS data product is exposed to consumers. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+  ELSE description END
+WHERE id IN ('02a00102-0001-4000-8000-000000000002');
+
+UPDATE workflow_steps SET name = CASE
+  WHEN id = '02b00101-0001-4000-8000-000000000001' AND name = 'IRB Document Present' THEN '21 CFR Part 11 Scope Tagged'
+  WHEN id = '02b00103-0001-4000-8000-000000000003' AND name = 'PHI Classification' THEN 'HIPAA De-identification Tagged'
+  ELSE name END
+WHERE id IN ('02b00101-0001-4000-8000-000000000001', '02b00103-0001-4000-8000-000000000003');
+
 
 -- ============================================================================
 -- 19. COMPLIANCE RUNS + RESULTS (HLS, types 012 / 013)
 -- ============================================================================
 
 INSERT INTO compliance_runs (id, policy_id, status, started_at, finished_at, success_count, failure_count, score) VALUES
-('01200101-0001-4000-8000-000000000001', '01100001-0001-4000-8000-000000000001', 'completed', NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days' + INTERVAL '12 minutes', 6, 1, 0.857),
-('01200102-0001-4000-8000-000000000002', '01100002-0001-4000-8000-000000000002', 'completed', NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days' + INTERVAL '8 minutes',  4, 0, 1.000),
-('01200103-0001-4000-8000-000000000003', '01100004-0001-4000-8000-000000000004', 'completed', NOW() - INTERVAL '1 days', NOW() - INTERVAL '1 days' + INTERVAL '4 minutes',  2, 1, 0.667)
-ON CONFLICT (id) DO NOTHING;
+('01200101-0001-4000-8000-000000000001', '01100001-0001-4000-8000-000000000001', 'succeeded', NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days' + INTERVAL '12 minutes', 1, 1, 50),
+('01200102-0001-4000-8000-000000000002', '01100002-0001-4000-8000-000000000002', 'succeeded', NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days' + INTERVAL '8 minutes', 2, 1, 66.67),
+('01200103-0001-4000-8000-000000000003', '01100004-0001-4000-8000-000000000004', 'succeeded', NOW() - INTERVAL '1 days', NOW() - INTERVAL '1 days' + INTERVAL '4 minutes', 2, 0, 100)
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, success_count = EXCLUDED.success_count,
+  failure_count = EXCLUDED.failure_count, score = EXCLUDED.score;
+
+-- Sample results of a real run of each policy above. A load replaces the ones an earlier
+-- version of this preset inserted for the same sample runs.
+DELETE FROM compliance_results WHERE run_id IN ('01200101-0001-4000-8000-000000000001', '01200102-0001-4000-8000-000000000002', '01200103-0001-4000-8000-000000000003');
 
 INSERT INTO compliance_results (id, run_id, object_type, object_id, object_name, passed, message, created_at) VALUES
-('01300101-0001-4000-8000-000000000001', '01200101-0001-4000-8000-000000000001', 'data_product', '00700001-0001-4000-8000-000000000001', 'Patient 360 View v1',                 true,  'PHI de-identification verified.', NOW() - INTERVAL '7 days'),
-('01300102-0001-4000-8000-000000000002', '01200101-0001-4000-8000-000000000001', 'data_product', '00700004-0001-4000-8000-000000000004', 'Real-World Evidence Platform v1',     true,  'Limited Data Set certification on file.', NOW() - INTERVAL '7 days'),
-('01300103-0001-4000-8000-000000000003', '01200101-0001-4000-8000-000000000001', 'data_contract','00400003-0001-4000-8000-000000000003', 'Adverse Event Reports Contract',      false, 'Free-text narrative may contain residual PHI; manual review queued.', NOW() - INTERVAL '7 days'),
-('01300104-0001-4000-8000-000000000004', '01200102-0001-4000-8000-000000000002', 'data_product', '00700002-0001-4000-8000-000000000002', 'Clinical Trial Analytics v1',         true,  'Audit trail validated against 21 CFR Part 11.', NOW() - INTERVAL '5 days'),
-('01300105-0001-4000-8000-000000000005', '01200103-0001-4000-8000-000000000003', 'data_product', '00700003-0001-4000-8000-000000000003', 'Drug Safety Signal Detection v1',     false, 'One ICSR exceeded the 15-day reporting window (case ICSR-2025-4521).', NOW() - INTERVAL '1 days')
+('01300101-0001-4000-8000-000000000001', '01200101-0001-4000-8000-000000000001', 'data_product', '00700003-0001-4000-8000-000000000003', 'Drug Safety Signal Detection v1', false, 'Assertion failed for data_product Drug Safety Signal Detection v1', NOW() - INTERVAL '7 days'),
+('01300102-0001-4000-8000-000000000002', '01200101-0001-4000-8000-000000000001', 'data_product', '00700001-0001-4000-8000-000000000001', 'Patient 360 View v1', true, NULL, NOW() - INTERVAL '7 days'),
+('01300103-0001-4000-8000-000000000003', '01200102-0001-4000-8000-000000000002', 'data_product', '00700002-0001-4000-8000-000000000002', 'Clinical Trial Analytics v1', true, NULL, NOW() - INTERVAL '5 days'),
+('01300104-0001-4000-8000-000000000004', '01200102-0001-4000-8000-000000000002', 'data_product', '00700003-0001-4000-8000-000000000003', 'Drug Safety Signal Detection v1', true, NULL, NOW() - INTERVAL '5 days'),
+('01300105-0001-4000-8000-000000000005', '01200102-0001-4000-8000-000000000002', 'data_product', '00700004-0001-4000-8000-000000000004', 'Real-World Evidence Platform v1', false, 'Assertion failed for data_product Real-World Evidence Platform v1', NOW() - INTERVAL '5 days'),
+('01300106-0001-4000-8000-000000000006', '01200103-0001-4000-8000-000000000003', 'data_contract', '00400003-0001-4000-8000-000000000003', 'Adverse Event Reporting Contract', true, NULL, NOW() - INTERVAL '1 days'),
+('01300107-0001-4000-8000-000000000007', '01200103-0001-4000-8000-000000000003', 'data_contract', '00400002-0001-4000-8000-000000000002', 'Clinical Trial Data Contract', true, NULL, NOW() - INTERVAL '1 days')
 ON CONFLICT (id) DO NOTHING;
 
 

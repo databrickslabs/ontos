@@ -32,6 +32,8 @@ import {
   AlertTriangle,
   Info,
 } from 'lucide-react';
+import { buildSchemeOptionGroups, flattenSchemeTree } from '@/lib/scheme-select-options';
+import { SchemeSelectItems } from './scheme-select-items';
 
 type PromotionAction = 'promote' | 'demote' | 'migrate';
 
@@ -71,33 +73,21 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
   const [deprecateSource, setDeprecateSource] = useState(true);
   const [deleteSource, setDeleteSource] = useState(false);
 
-  // Flatten collections for dropdown
-  const flattenCollections = (
-    colls: KnowledgeCollection[],
-    level = 0
-  ): Array<KnowledgeCollection & { level: number }> => {
-    let result: Array<KnowledgeCollection & { level: number }> = [];
-    for (const c of colls) {
-      result.push({ ...c, level });
-      if (c.child_collections && c.child_collections.length > 0) {
-        result = result.concat(flattenCollections(c.child_collections, level + 1));
-      }
-    }
-    return result;
-  };
+  // Target options: any editable scheme other than the concept's own, judged
+  // on its own wherever it sits in the tree.
+  const targetOptionGroups = useMemo(
+    () =>
+      buildSchemeOptionGroups(collections, {
+        include: (c) => c.iri !== concept.source_context && c.is_editable,
+      }),
+    [collections, concept.source_context]
+  );
 
-  const flatCollections = useMemo(() => flattenCollections(collections), [collections]);
-
-  // Filter collections based on action
-  const eligibleCollections = useMemo(() => {
-    return flatCollections.filter((c) => {
-      // Can't move to same collection
-      if (c.iri === concept.source_context) return false;
-      // Must be editable
-      if (!c.is_editable) return false;
-      return true;
-    });
-  }, [flatCollections, concept, action]);
+  // Scope level per scheme, shown as a badge next to each target option.
+  const scopeByIri = useMemo(
+    () => new Map(flattenSchemeTree(collections).map((c) => [c.iri, c.scope_level] as const)),
+    [collections]
+  );
 
   const handleSubmit = async () => {
     if (!targetCollectionIri) return;
@@ -200,17 +190,17 @@ export const PromotionDialog: React.FC<PromotionDialogProps> = ({
                 <SelectValue placeholder={t('semantic-models:promotion.selectTargetPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {eligibleCollections.map((c) => (
-                  <SelectItem key={c.iri} value={c.iri}>
-                    <div className="flex items-center gap-2">
-                      <span>{'—'.repeat(c.level)}</span>
-                      <span>{c.label}</span>
-                      <Badge variant="outline" className="text-xs ml-auto">
-                        {c.scope_level}
+                <SchemeSelectItems
+                  groups={targetOptionGroups}
+                  renderSuffix={(opt) => {
+                    const scope = scopeByIri.get(opt.iri);
+                    return scope ? (
+                      <Badge variant="outline" className="text-xs">
+                        {scope}
                       </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
+                    ) : null;
+                  }}
+                />
               </SelectContent>
             </Select>
           </div>

@@ -4,6 +4,10 @@ import remarkGfm from 'remark-gfm';
 
 interface MarkdownViewerProps {
   markdown: string;
+  /** In-app path for a link (e.g. to another doc); such links open in the same tab. */
+  resolveLink?: (href: string | undefined) => string | undefined;
+  /** Navigates to a resolved in-app path (client-side). */
+  onNavigate?: (to: string) => void;
 }
 
 function slugify(text: string): string {
@@ -29,7 +33,7 @@ function extractText(children: React.ReactNode): string {
   return parts.join(' ');
 }
 
-const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ markdown }) => {
+const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ markdown, resolveLink, onNavigate }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -124,6 +128,18 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ markdown }) => {
           <hr className="my-8 border-t border-border" />
         ),
         a: ({ children, href }) => {
+          const appPath = resolveLink?.(href);
+          if (appPath) {
+            return (
+              <a
+                href={appPath}
+                onClick={onNavigate ? (e: React.MouseEvent) => { e.preventDefault(); onNavigate(appPath); } : undefined}
+                className="text-primary font-medium underline underline-offset-4 decoration-primary/30 hover:decoration-primary transition-colors"
+              >
+                {children}
+              </a>
+            );
+          }
           const isInternalAnchor = href?.startsWith('#');
           const handleClick = isInternalAnchor
             ? (e: React.MouseEvent) => {

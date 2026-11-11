@@ -81,6 +81,8 @@ export interface AppRole {
     assigned_users?: string[];
     feature_permissions: Record<string, FeatureAccessLevel>;
     home_sections?: HomeSection[];
+    /** Feature ids hidden from this role's menus (#1325). Visibility only, not access. */
+    hidden_nav_features?: string[];
     approval_privileges?: ApprovalPrivileges;
     deployment_policy?: DeploymentPolicy | null;
     is_admin?: boolean;

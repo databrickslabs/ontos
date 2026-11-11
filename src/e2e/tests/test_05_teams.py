@@ -171,7 +171,7 @@ class TestTeamsCRUD:
 
         try:
             # Create a team linked to the domain
-            team_payload = make_team(domain_id=domain_id)
+            team_payload = make_team(domain_ids=[domain_id])
             resp = api.post(url("/api/teams"), json=team_payload)
             assert resp.status_code in (200, 201), f"Create team failed: {resp.status_code} {resp.text[:300]}"
             team_id = resp.json()["id"]

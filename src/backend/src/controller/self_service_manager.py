@@ -4,8 +4,27 @@ from sqlalchemy.orm import Session
 from src.db_models.projects import ProjectDb
 from src.db_models.compliance import CompliancePolicyDb
 from src.common.logging import get_logger
+from src.common.api_errors import CodedValueError
 
 logger = get_logger(__name__)
+
+
+class SandboxLocationNotAllowedError(CodedValueError):
+    """A catalog/schema outside the self-service sandbox allowlist.
+
+    ``str()`` is the English message; ``code`` and ``params`` (the refused
+    catalog and schema) let the UI show it in the user's language.
+    """
+
+    code = 'sandbox_location_not_allowed'
+
+    def __init__(self, catalog: str, schema: str):
+        super().__init__(
+            f"Location '{catalog}.{schema}' is not allowed by the self-service "
+            "sandbox policy",
+            catalog=catalog,
+            schema=schema,
+        )
 
 
 class SelfServiceManager:

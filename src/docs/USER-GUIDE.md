@@ -1448,7 +1448,8 @@ When making breaking changes:
 
 **What's Preserved**:
 - Schema structure
-- Semantic links (authoritative definitions)
+- Semantic links: `authoritativeDefinitions` with type `http://databricks.com/ontology/uc/semanticAssignment` become semantic links on import and are written back the same way on export. The IRI is kept; the label is rebuilt from the IRI's trailing segment on import.
+- Quality rules: All rules are treated as enabled; the ODCS document does not store or support rule enablement states.
 - SLOs and terms
 - Metadata and descriptions
 
@@ -2230,6 +2231,8 @@ Click on a run to see:
 
 Process Workflows enable automated, configurable multi-step processes that trigger on entity lifecycle events. They replace hardcoded business logic with flexible, user-editable flows that can be customized per organization.
 
+To build your own workflows, read the [Workflow Authoring Guide](/user-docs/workflow-authoring-guide): it explains how an execution moves between steps, which triggers fire where, the variables you can use, how approvals pause and resume a workflow, and how to read Recent Executions.
+
 ### What are Process Workflows?
 
 Process Workflows are:
@@ -2261,8 +2264,8 @@ Triggers determine when a workflow fires. Available trigger types:
 | **On Update** | Fires when an entity is updated | Notify subscribers of changes |
 | **On Delete** | Fires when an entity is deleted | Archive audit trail |
 | **On Status Change** | Fires when status transitions | Approve publish to production |
-| **Scheduled** | Fires on a cron schedule | Daily compliance scans |
-| **Manual** | Triggered by user action | On-demand data quality check |
+| **Scheduled** | Fires on a cron schedule (does not run yet, see [#941](https://github.com/databrickslabs/ontos/issues/941)) | Daily compliance scans |
+| **Manual** | Triggered by user action: use **Run** on the Workflows list (see [Running a Manual Workflow](#running-a-manual-workflow)) | On-demand data quality check |
 | **Before Create** | Fires before entity creation (blocking) | Enforce naming policies |
 | **Before Update** | Fires before entity update (blocking) | Validate schema changes |
 | **Review Request** | Fires when review is requested | Route to Data Steward |
@@ -2304,7 +2307,7 @@ Steps are the building blocks of workflows:
 | Step Type | Description | Configuration |
 |-----------|-------------|---------------|
 | **Validation** | Evaluate a compliance rule | Rule DSL expression |
-| **Approval** | Request human approval | Approvers, timeout, require all |
+| **Approval** | Request human approval | Approvers; timeout and require all are accepted but not enforced yet (see [#1119](https://github.com/databrickslabs/ontos/issues/1119)) |
 | **Notification** | Send a notification | Recipients, template, message |
 | **Assign Tag** | Add or update a tag | Key, value or value source |
 | **Remove Tag** | Remove a tag | Key to remove |
@@ -2382,7 +2385,7 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Data Product Review Request** | Review Request (data_product) | Domain owner approval for products |
 | **Data Contract Deploy Request** | Deploy Request (data_contract) | Contract approver authorization for deploying to Unity Catalog |
 | **Access Grant Request** | Access Request (access_grant) | Admin approval for access |
-| **Status Change Request** | Status Change Request (dataset, data_product) | Admin approval for status changes |
+| **Status Change Request** | Status Change Request (data_product, data_contract) | Admin approval for status changes |
 | **Role Access Request** | Access Request (role) | Admin approval for role assignments |
 
 #### Notification Workflows
@@ -2396,6 +2399,24 @@ Ontos includes pre-configured default workflows that cover common governance pat
 | **Subscription Welcome** | Subscription (dataset) | Welcome message to subscribers (disabled by default) |
 | **Access Expiring Warning** | Expiring (access_grant) | Warns users before access expires |
 | **Access Revoked Notification** | Access Revoked (access_grant) | Notifies users of revocation |
+| **Owner Deprecation Notice** | On Status Change to `deprecated` (data_product, data_contract) | Tells the owners, with the reason, sunset date and replacement (disabled by default) |
+| **Owner Retirement Notice** | On Status Change to `retired` (data_product, data_contract) | Tells the owners, with the reason, sunset date and replacement of the deprecation (disabled by default) |
+
+**Owner lifecycle notices.** The subscribers of a data product are told about its deprecation and retirement in every installation, without a workflow. The owners are told only once an admin enables **Owner Deprecation Notice** and **Owner Retirement Notice** in **Compliance → Workflows**. The recipients are the entity's owners (`entity_owner`: the user members of its owner team, the current members of its ODPS or ODCS team whose role is owner, and its active Business Owners with the Data Owner role). The notice uses the `entity_deprecated` / `entity_retired` notification templates: one line for the change, with the entity's version, then one line each for the reason, the sunset date and the replacement (with its version), left out when not set, shown in each owner's language. New versions keep the name, so the versions tell them apart. The notice links to the replacement's page, or to the entity's page when there is no replacement. The subscribers of a data product get the built-in subscriber notice whether or not these workflows are enabled; data contracts have no subscriber notice.
+
+To change the recipients, edit the **Notify Owners** step. To write your own text, set a custom message, which can use `${entity.version}`, `${entity.deprecation_reason}`, `${entity.sunset_date}`, `${entity.replacement_id}`, `${entity.replacement_name}` and `${entity.replacement_version}`. A custom message is shown as written, not translated, and a field that is not set is shown as the placeholder text itself (for example `${entity.sunset_date}` when no sunset date was given), so use only the fields you always fill in, or keep the template, which leaves unset fields out.
+
+#### After an Upgrade
+
+The default workflows are created at startup when they are missing. An existing installation keeps the default workflows it already has, so fixes to them in a new version don't apply on their own: in **Compliance → Workflows**, open **Default Workflows** and choose **Reload All Defaults** (`POST /api/workflows/load-defaults?update_existing=true`) to update them to the shipped definitions. **Load New Only** adds the missing defaults and leaves the existing ones as they are.
+
+Reloading replaces changes made to the default workflows themselves; duplicate a default before editing it to keep your version.
+
+Other changes to plan for when upgrading:
+
+- **Approvals pending at upgrade time.** Approval notifications now record the step they are for, and only the approvers of the step an execution is waiting at can answer it. Notifications created before the upgrade have no step and are still accepted for their execution, as before, so approvals pending at upgrade time can be answered. Once those are answered, every approval is tied to its step.
+- **Owner approvals without another owner.** A `DomainOwner` or `ContractApprover` approval leaves out the requester. When no other owner exists, it goes to the Data Stewards and the admins, who can decide it in the owners' place; the requester can never decide their own request (`403` with `detail.code` `own_owner_approval`), even when they are a steward or an admin.
+- **Errors with a code.** Some API errors now return `detail` as an object, `{"code": ..., "message": ..., "params": {...}}`, instead of a string, so the UI can show them in the user's language: a status change of a data product or data contract blocked by a workflow gate (`status_change_blocked`, with the status code the route already used, `400` or `409`), and an owner approval answered by its requester (`403`, `own_owner_approval`). `detail.message` holds the English text the string used to carry. API and MCP clients that read `detail` as text should read `detail.message` when `detail` is an object.
 
 ### Editing a Default Workflow
 
@@ -2424,9 +2445,19 @@ Create a copy of any workflow:
 #### How Workflows Run
 
 1. **Trigger Event**: An entity event matches a workflow's trigger
-2. **Scope Check**: Workflow scope is evaluated (all, project, catalog, domain)
+2. **Scope Check**: Not applied yet. A workflow's scope (all, project, catalog, domain) is saved, but a workflow fires for every entity that matches its trigger (see [#1118](https://github.com/databrickslabs/ontos/issues/1118))
 3. **Step Execution**: Steps run in sequence following on_pass/on_fail paths
 4. **Result**: Workflow ends at a Pass or Fail terminal step
+
+#### Running a Manual Workflow
+
+A workflow whose trigger is **Manual** never fires on its own. To start it, open **Settings > Workflows**, open the row actions (**...**) of the workflow and choose **Run**. Pick the entity type and the entity the run is about, then **Run**. The dialog shows the status of the execution and a link to its details; the run also appears under Recent Executions. You need read/write access to the Workflows settings.
+
+#### Known Limits
+
+- **Scope** is saved but not applied yet ([#1118](https://github.com/databrickslabs/ontos/issues/1118)).
+- **Scheduled** workflows do not run yet ([#941](https://github.com/databrickslabs/ontos/issues/941)).
+- **Approval steps**: `require_all` and `timeout_days` are accepted but not enforced. The first decision resumes the workflow, and a pending approval never expires ([#1119](https://github.com/databrickslabs/ontos/issues/1119)).
 
 #### Blocking vs Non-Blocking
 
@@ -2443,6 +2474,8 @@ Approval steps pause workflow execution:
 3. Workflow status becomes "Paused"
 4. Approver makes decision via notification
 5. Workflow resumes with on_pass or on_fail path
+
+Only the recipients of the step the execution is waiting at can decide it (admins can decide any approval). On an owner approval (`DomainOwner`, `ContractApprover`) the requester can't decide their own request, even when the approval falls back to a role they hold. Approval notifications created before an upgrade to a version with this check don't record their step; any recipient of the execution's approvals can still decide those, as before.
 
 ### Workflow Best Practices
 
@@ -2497,7 +2530,7 @@ Steps:
 #### Performance Considerations
 
 - Avoid complex workflows on high-frequency triggers (on_update)
-- Use scopes to limit workflow execution to relevant entities
+- Use the entity types of the trigger to limit workflow execution to relevant entities (scopes are not applied yet)
 - Disable unnecessary default workflows
 - Monitor workflow execution times in logs
 
@@ -2508,7 +2541,7 @@ Steps:
 1. Check workflow is **Active**
 2. Verify trigger type matches the event
 3. Check entity types include the affected entity
-4. Verify scope includes the entity (project, catalog, domain)
+4. A workflow's scope (project, catalog, domain) is not applied yet, so it cannot be the reason a workflow does not fire
 
 #### Step Failing Unexpectedly
 
@@ -3419,6 +3452,18 @@ Before using Indirect mode, configure the Git repository:
 
 3. Click **Save Settings**
 4. Click **Clone Repository** to clone the repo to the configured volume
+
+The volume comes from **Settings → General → Unity Catalog**. The **Volume** field
+accepts `/Volumes/<catalog>/<schema>/<volume>`, `<catalog>.<schema>.<volume>`, or a
+volume name with the catalog and schema set. Exports go to
+`/Volumes/<catalog>/<schema>/<volume>/git-export/`.
+
+Inside Databricks Apps, a volume isn't mounted on the app's filesystem, so the Git
+working copy is kept on the app's local disk (`GIT_WORK_DIR`, or a directory under
+the system temp directory), and each exported file is also written to the volume
+through the Files API. The app's service principal needs `WRITE VOLUME` on it. After
+the app restarts, click **Clone Repository** again: pushed commits are kept in the
+remote, and exports already written to the volume stay there.
 
 **Creating a GitHub PAT**:
 1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)

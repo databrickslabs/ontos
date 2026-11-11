@@ -158,5 +158,71 @@
     "metadataLoadFailed": "Laden van metadata mislukt",
     "couldNotLoadMetadata": "Kon metadata niet laden.",
     "editTeamLoadError": "Laden van teamdetails voor bewerking mislukt."
+  },
+  "sync": {
+    "title": "Domeinen synchroniseren",
+    "description": "Importeer Unity Catalog-domeinen in Ontos, of exporteer uw domeinen naar Unity Catalog. UC ondersteunt twee niveaus (domeinen en subdomeinen); diepere domeinen worden overgeslagen.",
+    "direction": {
+      "title": "Richting",
+      "description": "In welke richting synchroniseren",
+      "importLabel": "Importeren uit Unity Catalog",
+      "importHint": "Ontos-domeinen maken/koppelen vanuit UC",
+      "exportLabel": "Exporteren naar Unity Catalog",
+      "exportHint": "Ontos-domeinen publiceren in UC"
+    },
+    "target": {
+      "importTitle": "Plaatsen onder",
+      "exportTitle": "Anker",
+      "importHint": "Ontos-domein waaronder de geïmporteerde UC-roots worden geplaatst.",
+      "exportHint": "De kinderen worden UC-roots; de kleinkinderen worden subdomeinen.",
+      "importTopLevel": "Hoogste niveau (geen ouder)",
+      "exportTopLevel": "Domeinen op het hoogste niveau"
+    },
+    "actions": {
+      "preview": "Voorbeeld bekijken",
+      "apply": "Toepassen"
+    },
+    "panel": {
+      "resultTitle": "Synchronisatieresultaat",
+      "previewTitle": "Voorbeeld",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "Kies een richting en klik op <b>Voorbeeld bekijken</b> om te zien wat er zou veranderen.",
+    "warnings": "Waarschuwingen",
+    "errorsTitle": "Fouten",
+    "nothingToSync": "Niets te synchroniseren.",
+    "level": "N{{level}}",
+    "actionLabels": {
+      "create": "Aanmaken",
+      "match": "Koppelen",
+      "skip": "Overslaan",
+      "error": "Fout"
+    },
+    "toasts": {
+      "previewFailed": "Voorbeeld mislukt",
+      "syncFailed": "Synchronisatie mislukt",
+      "syncComplete": "Synchronisatie voltooid"
+    },
+    "summary": "Aangemaakt: {{created}}, gekoppeld: {{matched}}, overgeslagen: {{skipped}}.",
+    "summaryWithErrors": "Aangemaakt: {{created}}, gekoppeld: {{matched}}, overgeslagen: {{skipped}}, fouten: {{errors}}.",
+    "plan": {
+      "toCreate_one": "{{count}} aan te maken",
+      "toCreate_other": "{{count}} aan te maken",
+      "toMatch_one": "{{count}} te koppelen",
+      "toMatch_other": "{{count}} te koppelen",
+      "toSkip_one": "{{count}} over te slaan",
+      "toSkip_other": "{{count}} over te slaan"
+    },
+    "result": {
+      "created_one": "{{count}} aangemaakt",
+      "created_other": "{{count}} aangemaakt",
+      "matched_one": "{{count}} gekoppeld",
+      "matched_other": "{{count}} gekoppeld",
+      "skipped_one": "{{count}} overgeslagen",
+      "skipped_other": "{{count}} overgeslagen",
+      "errors_one": "{{count}} fout",
+      "errors_other": "{{count}} fouten"
+    }
   }
 }

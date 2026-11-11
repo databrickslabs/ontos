@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -39,34 +41,52 @@ import type {
 
 const TOP_LEVEL = '__top__';
 
-const actionMeta: Record<SyncAction, { label: string; className: string; icon: JSX.Element }> = {
-  create: { label: 'Create', className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: <Plus className="h-3 w-3" /> },
-  match: { label: 'Match', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300', icon: <Link2 className="h-3 w-3" /> },
-  skip: { label: 'Skip', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300', icon: <Ban className="h-3 w-3" /> },
-  error: { label: 'Error', className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: <AlertTriangle className="h-3 w-3" /> },
+const actionMeta: Record<SyncAction, { className: string; icon: JSX.Element }> = {
+  create: { className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: <Plus className="h-3 w-3" /> },
+  match: { className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300', icon: <Link2 className="h-3 w-3" /> },
+  skip: { className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300', icon: <Ban className="h-3 w-3" /> },
+  error: { className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: <AlertTriangle className="h-3 w-3" /> },
 };
 
+/**
+ * The toast text after a sync: one whole sentence with every count, errors
+ * only when there were any. Pure.
+ */
+export function syncSummaryText(
+  result: Pick<DomainSyncResult, 'created' | 'matched' | 'skipped' | 'errors'>,
+  t: TFunction,
+): string {
+  const counts = {
+    created: result.created, matched: result.matched, skipped: result.skipped, errors: result.errors,
+  };
+  return result.errors
+    ? t('data-domains:sync.summaryWithErrors', counts)
+    : t('data-domains:sync.summary', counts);
+}
+
 function NodeRow({ node }: { node: DomainSyncNode }) {
+  const { t } = useTranslation('data-domains');
   const meta = actionMeta[node.action];
   const indent = Math.max(0, node.level - 1) * 20;
   return (
     <div className="flex items-center gap-2 py-1.5 border-b last:border-0 text-sm">
       <div style={{ paddingLeft: indent }} className="flex-1 flex items-center gap-2 min-w-0">
         <span className="truncate font-medium">{node.name}</span>
-        <span className="text-xs text-muted-foreground shrink-0">L{node.level}</span>
+        <span className="text-xs text-muted-foreground shrink-0">{t('sync.level', { level: node.level })}</span>
         {node.reason && (
           <span className="text-xs text-muted-foreground truncate">— {node.reason}</span>
         )}
       </div>
       <Badge variant="outline" className={`gap-1 border-0 ${meta.className}`}>
         {meta.icon}
-        {meta.label}
+        {t(`sync.actionLabels.${node.action}`)}
       </Badge>
     </div>
   );
 }
 
 export default function SyncDomainsView() {
+  const { t } = useTranslation(['data-domains', 'common']);
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
@@ -82,12 +102,12 @@ export default function SyncDomainsView() {
 
   useEffect(() => {
     setStaticSegments([]);
-    setDynamicTitle('Sync Domains');
+    setDynamicTitle(t('data-domains:sync.title'));
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [setStaticSegments, setDynamicTitle]);
+  }, [setStaticSegments, setDynamicTitle, t]);
 
   const fetchDomains = useCallback(async () => {
     try {
@@ -119,12 +139,12 @@ export default function SyncDomainsView() {
       const body = isImport ? { target_root_id: selectedId } : { anchor_domain_id: selectedId };
       const resp = await apiPost<DomainSyncPreview>(url, body);
       if (resp.error) {
-        toast({ title: 'Preview failed', description: resp.error, variant: 'destructive' });
+        toast({ title: t('data-domains:sync.toasts.previewFailed'), description: resp.error, variant: 'destructive' });
       } else if (resp.data) {
         setPreview(resp.data);
       }
     } catch (err) {
-      toast({ title: 'Preview failed', description: String(err), variant: 'destructive' });
+      toast({ title: t('data-domains:sync.toasts.previewFailed'), description: String(err), variant: 'destructive' });
     } finally {
       setIsPreviewing(false);
     }
@@ -137,18 +157,18 @@ export default function SyncDomainsView() {
       const body = isImport ? { target_root_id: selectedId } : { anchor_domain_id: selectedId };
       const resp = await apiPost<DomainSyncResult>(url, body);
       if (resp.error) {
-        toast({ title: 'Sync failed', description: resp.error, variant: 'destructive' });
+        toast({ title: t('data-domains:sync.toasts.syncFailed'), description: resp.error, variant: 'destructive' });
       } else if (resp.data) {
         setResult(resp.data);
         setPreview(null);
         toast({
-          title: 'Sync complete',
-          description: `${resp.data.created} created, ${resp.data.matched} matched, ${resp.data.skipped} skipped${resp.data.errors ? `, ${resp.data.errors} error(s)` : ''}.`,
+          title: t('data-domains:sync.toasts.syncComplete'),
+          description: syncSummaryText(resp.data, t),
         });
         fetchDomains();
       }
     } catch (err) {
-      toast({ title: 'Sync failed', description: String(err), variant: 'destructive' });
+      toast({ title: t('data-domains:sync.toasts.syncFailed'), description: String(err), variant: 'destructive' });
     } finally {
       setIsApplying(false);
     }
@@ -161,12 +181,9 @@ export default function SyncDomainsView() {
       <div>
         <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <RefreshCw className="h-6 w-6" />
-          Sync Domains
+          {t('data-domains:sync.title')}
         </h2>
-        <p className="text-muted-foreground">
-          Import Unity Catalog domains into Ontos, or export your domains to Unity Catalog. UC
-          supports two levels (domains and subdomains); deeper domains are skipped.
-        </p>
+        <p className="text-muted-foreground">{t('data-domains:sync.description')}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -174,8 +191,8 @@ export default function SyncDomainsView() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Direction</CardTitle>
-              <CardDescription className="text-xs">Which way to sync</CardDescription>
+              <CardTitle className="text-sm font-medium">{t('data-domains:sync.direction.title')}</CardTitle>
+              <CardDescription className="text-xs">{t('data-domains:sync.direction.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <RadioGroup
@@ -191,18 +208,18 @@ export default function SyncDomainsView() {
                   <RadioGroupItem value="import_from_uc" id="dir-import" />
                   <Label htmlFor="dir-import" className="text-sm font-normal leading-tight cursor-pointer">
                     <span className="font-medium flex items-center gap-1">
-                      <ArrowDownToLine className="h-3.5 w-3.5" /> Import from Unity Catalog
+                      <ArrowDownToLine className="h-3.5 w-3.5" /> {t('data-domains:sync.direction.importLabel')}
                     </span>
-                    <span className="text-xs text-muted-foreground">Create/link Ontos domains from UC</span>
+                    <span className="text-xs text-muted-foreground">{t('data-domains:sync.direction.importHint')}</span>
                   </Label>
                 </div>
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="export_to_uc" id="dir-export" />
                   <Label htmlFor="dir-export" className="text-sm font-normal leading-tight cursor-pointer">
                     <span className="font-medium flex items-center gap-1">
-                      <ArrowUpFromLine className="h-3.5 w-3.5" /> Export to Unity Catalog
+                      <ArrowUpFromLine className="h-3.5 w-3.5" /> {t('data-domains:sync.direction.exportLabel')}
                     </span>
-                    <span className="text-xs text-muted-foreground">Publish Ontos domains to UC</span>
+                    <span className="text-xs text-muted-foreground">{t('data-domains:sync.direction.exportHint')}</span>
                   </Label>
                 </div>
               </RadioGroup>
@@ -212,12 +229,12 @@ export default function SyncDomainsView() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                {isImport ? 'Place under' : 'Anchor'}
+                {isImport ? t('data-domains:sync.target.importTitle') : t('data-domains:sync.target.exportTitle')}
               </CardTitle>
               <CardDescription className="text-xs">
                 {isImport
-                  ? 'Ontos domain to place imported UC roots under.'
-                  : "Its children become UC roots; grandchildren become subdomains."}
+                  ? t('data-domains:sync.target.importHint')
+                  : t('data-domains:sync.target.exportHint')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -233,7 +250,7 @@ export default function SyncDomainsView() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={TOP_LEVEL}>
-                    {isImport ? 'Top level (no parent)' : 'Top-level domains'}
+                    {isImport ? t('data-domains:sync.target.importTopLevel') : t('data-domains:sync.target.exportTopLevel')}
                   </SelectItem>
                   {domains.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
@@ -248,7 +265,7 @@ export default function SyncDomainsView() {
           <div className="flex flex-col gap-2">
             <Button onClick={runPreview} disabled={isPreviewing || isApplying} variant="outline" className="w-full">
               {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
-              Preview
+              {t('data-domains:sync.actions.preview')}
             </Button>
             <Button
               onClick={runApply}
@@ -256,7 +273,7 @@ export default function SyncDomainsView() {
               className="w-full"
             >
               {isApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-              Apply
+              {t('data-domains:sync.actions.apply')}
             </Button>
           </div>
         </div>
@@ -265,30 +282,36 @@ export default function SyncDomainsView() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">
-              {result ? 'Sync Result' : 'Preview'}
+              {result ? t('data-domains:sync.panel.resultTitle') : t('data-domains:sync.panel.previewTitle')}
             </CardTitle>
             <CardDescription className="text-xs">
-              {isImport ? 'Unity Catalog → Ontos' : 'Ontos → Unity Catalog'}
+              {isImport ? t('data-domains:sync.panel.importFlow') : t('data-domains:sync.panel.exportFlow')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!preview && !result && (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                Choose a direction and click <span className="font-medium">Preview</span> to see what would change.
+                <Trans
+                  t={t}
+                  i18nKey="data-domains:sync.emptyHint"
+                  components={{ b: <span className="font-medium" /> }}
+                />
               </p>
             )}
 
             {preview && (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{preview.to_create} to create</Badge>
-                  <Badge variant="secondary">{preview.to_match} to match</Badge>
-                  {preview.to_skip > 0 && <Badge variant="secondary">{preview.to_skip} to skip</Badge>}
+                  <Badge variant="secondary">{t('data-domains:sync.plan.toCreate', { count: preview.to_create })}</Badge>
+                  <Badge variant="secondary">{t('data-domains:sync.plan.toMatch', { count: preview.to_match })}</Badge>
+                  {preview.to_skip > 0 && (
+                    <Badge variant="secondary">{t('data-domains:sync.plan.toSkip', { count: preview.to_skip })}</Badge>
+                  )}
                 </div>
                 {preview.warnings.length > 0 && (
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle className="text-sm">Warnings</AlertTitle>
+                    <AlertTitle className="text-sm">{t('data-domains:sync.warnings')}</AlertTitle>
                     <AlertDescription className="text-xs">
                       <ul className="list-disc pl-4">
                         {preview.warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -297,7 +320,7 @@ export default function SyncDomainsView() {
                   </Alert>
                 )}
                 {nothingToDo ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">Nothing to sync.</p>
+                  <p className="text-sm text-muted-foreground py-4 text-center">{t('data-domains:sync.nothingToSync')}</p>
                 ) : (
                   <div className="rounded-md border px-3">
                     {preview.nodes.map((n, i) => <NodeRow key={`${n.name}-${i}`} node={n} />)}
@@ -310,26 +333,26 @@ export default function SyncDomainsView() {
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline" className="gap-1 border-0 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                    <CheckCircle2 className="h-3 w-3" /> {result.created} created
+                    <CheckCircle2 className="h-3 w-3" /> {t('data-domains:sync.result.created', { count: result.created })}
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-0 bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                    <Link2 className="h-3 w-3" /> {result.matched} matched
+                    <Link2 className="h-3 w-3" /> {t('data-domains:sync.result.matched', { count: result.matched })}
                   </Badge>
                   {result.skipped > 0 && (
                     <Badge variant="outline" className="gap-1 border-0 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      <Ban className="h-3 w-3" /> {result.skipped} skipped
+                      <Ban className="h-3 w-3" /> {t('data-domains:sync.result.skipped', { count: result.skipped })}
                     </Badge>
                   )}
                   {result.errors > 0 && (
                     <Badge variant="outline" className="gap-1 border-0 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
-                      <AlertTriangle className="h-3 w-3" /> {result.errors} error(s)
+                      <AlertTriangle className="h-3 w-3" /> {t('data-domains:sync.result.errors', { count: result.errors })}
                     </Badge>
                   )}
                 </div>
                 {result.error_messages.length > 0 && (
                   <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle className="text-sm">Errors</AlertTitle>
+                    <AlertTitle className="text-sm">{t('data-domains:sync.errorsTitle')}</AlertTitle>
                     <AlertDescription className="text-xs">
                       <ul className="list-disc pl-4">
                         {result.error_messages.map((m, i) => <li key={i}>{m}</li>)}

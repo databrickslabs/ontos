@@ -14,7 +14,7 @@ class ChangeLogRepository(CRUDBase[ChangeLogDb, ChangeLogDb, ChangeLogDb]):
     def __init__(self):
         super().__init__(ChangeLogDb)
 
-    def list_by_entity(self, db: Session, *, entity_type: Optional[str] = None, entity_id: Optional[str] = None, username: Optional[str] = None, limit: int = 200) -> List[ChangeLogDb]:
+    def list_by_entity(self, db: Session, *, entity_type: Optional[str] = None, entity_id: Optional[str] = None, username: Optional[str] = None, action: Optional[str] = None, limit: int = 200) -> List[ChangeLogDb]:
         stmt = select(ChangeLogDb)
         if entity_type:
             stmt = stmt.where(ChangeLogDb.entity_type == entity_type)
@@ -22,6 +22,8 @@ class ChangeLogRepository(CRUDBase[ChangeLogDb, ChangeLogDb, ChangeLogDb]):
             stmt = stmt.where(ChangeLogDb.entity_id == entity_id)
         if username:
             stmt = stmt.where(ChangeLogDb.username == username)
+        if action:
+            stmt = stmt.where(ChangeLogDb.action == action)
         stmt = stmt.order_by(ChangeLogDb.timestamp.desc()).limit(limit)
         return list(db.execute(stmt).scalars().all())
 

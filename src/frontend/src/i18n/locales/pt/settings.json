@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Identidade da instância",
+      "id": {
+        "label": "ID da instância",
+        "help": "Identificador estável desta instância do Ontos, gravado nas entidades exportadas. Padrão: {{default}}. Limpe o campo para restaurar o padrão.",
+        "invalid": "Use de 1 a 128 letras, dígitos, \".\", \"_\", \":\" ou \"-\", começando por letra ou dígito."
+      },
+      "name": {
+        "label": "Nome da instância",
+        "help": "Nome legível desta instância. Padrão: {{default}}. Limpe o campo para restaurar o padrão.",
+        "invalid": "Use no máximo 128 caracteres, sem caracteres de controle."
+      }
+    },
     "auditLog": {
       "label": "Diretório de logs de auditoria",
       "placeholder": "audit_logs",
@@ -217,7 +230,8 @@
       "repoUrl": "https://github.com/your-org/your-repo.git",
       "branch": "main",
       "token": "ghp_... ou similar",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "Salvo. Deixe vazio para mantê-lo."
     },
     "cloneButton": "Clonar repositório",
     "currentCommit": "Commit",
@@ -242,7 +256,8 @@
       "pushError": "Falha ao enviar as alterações",
       "pushSuccess": "Alterações enviadas com sucesso",
       "saveError": "Falha ao salvar as configurações do Git",
-      "saveSuccess": "Configurações do Git salvas"
+      "saveSuccess": "Configurações do Git salvas",
+      "tokenRemoved": "Token salvo removido"
     },
     "pendingChanges": "Alterações pendentes",
     "pullButton": "Pull",
@@ -257,7 +272,15 @@
       "notConfigured": "Não configurado"
     },
     "viewChangesButton": "Ver alterações",
-    "volumePath": "Caminho do volume"
+    "volumePath": "Caminho do volume",
+    "workingCopy": "Cópia de trabalho",
+    "workingCopyNote": "O volume não está montado aqui, então a cópia de trabalho fica no disco local do app e cada arquivo exportado também é gravado no volume. Depois que o app reiniciar, clone o repositório de novo: os commits enviados ficam no remoto.",
+    "volumeSyncWarningTitle": "Exportação não gravada no volume",
+    "errors": {
+      "git_volume_invalid": "A configuração de volume \"{{value}}\" não indica um volume do Unity Catalog. Use /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou o nome de um volume com o catálogo e o schema definidos nas configurações gerais.",
+      "git_volume_sync_failed": "Não foi possível gravar {{path}} no volume. A mudança está no repositório e é enviada normalmente; verifique se o app pode gravar no volume (WRITE VOLUME)."
+    },
+    "removeTokenButton": "Remover token salvo"
   },
   "nav": {
     "groups": {
@@ -416,6 +439,15 @@
         "title": "Permissões de recursos",
         "description": "Configure os níveis de acesso para cada recurso do aplicativo."
       },
+      "navigation": {
+        "help": "Os recursos desmarcados ficam fora dos menus deste papel (barra lateral, ações rápidas do início, Sobre). Ocultar muda apenas o que os menus mostram, não as permissões: as páginas continuam acessíveis por link com o mesmo nível de acesso.",
+        "accessColumn": "Nível de acesso",
+        "column": "Mostrar na navegação",
+        "showFeature": "Mostrar {{feature}} na navegação",
+        "noAccessHint": "Sem acesso: o recurso não aparece nos menus",
+        "adminHint": "O papel de administrador sempre mostra todos os recursos",
+        "unknownFeatures": "Recursos desconhecidos não podem ser ocultados da navegação: {{features}}"
+      },
       "groups": {
         "discover": "Descobrir",
         "build": "Criar",
@@ -572,6 +604,7 @@
       "title": "Usando tokens MCP",
       "description": "Tokens MCP permitem que assistentes de IA interajam com sua plataforma de governança de dados. Cada token tem escopos específicos que controlam quais ferramentas podem ser acessadas.",
       "endpoint": "Endpoint:",
+      "endpointAlias": "(alias legado: /api/mcp)",
       "header": "Cabeçalho:"
     },
     "createDialog": {
@@ -962,6 +995,13 @@
         "productName": "Nome do produto",
         "productVersion": "Versão do produto",
         "productStatus": "Status do produto"
+      },
+      "lifecycle": {
+        "title": "Tag de status do ciclo de vida",
+        "descriptionProduct": "Marca cada tabela com o status do ciclo de vida do produto de dados que a usa. Em uma tabela usada por vários produtos, vence o melhor status (active primeiro, retired por último).",
+        "descriptionContract": "Marca cada tabela com o status do ciclo de vida do contrato de dados que a usa. Em uma tabela usada por vários contratos, vence o melhor status (active primeiro, retired por último).",
+        "valueLabel": "Valor da tag:",
+        "sharedKeyHint": "Quando as tags de status do produto e do contrato estão ativadas com a mesma chave, é gravado o status do produto."
       }
     },
     "entityPatterns": {

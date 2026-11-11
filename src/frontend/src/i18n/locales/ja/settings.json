@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "インスタンスの識別情報",
+      "id": {
+        "label": "インスタンスID",
+        "help": "このOntosインスタンスの安定した識別子で、エクスポートされるエンティティに記録されます。デフォルト: {{default}}。デフォルトに戻すにはフィールドを空にしてください。",
+        "invalid": "1〜128文字の英数字、「.」「_」「:」「-」を使用し、先頭は英数字にしてください。"
+      },
+      "name": {
+        "label": "インスタンス名",
+        "help": "このインスタンスの表示名です。デフォルト: {{default}}。デフォルトに戻すにはフィールドを空にしてください。",
+        "invalid": "制御文字を含めず、128文字以内で入力してください。"
+      }
+    },
     "auditLog": {
       "label": "監査ログディレクトリ",
       "placeholder": "audit_logs",
@@ -210,7 +223,8 @@
       "repoUrl": "https://github.com/your-org/your-repo.git",
       "branch": "main",
       "token": "ghp_... または類似",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "保存済みです。変更しない場合は空欄のままにしてください。"
     },
     "cloneButton": "リポジトリをクローン",
     "currentCommit": "コミット",
@@ -235,7 +249,8 @@
       "pushError": "変更のプッシュに失敗しました",
       "pushSuccess": "変更を正常にプッシュしました",
       "saveError": "Git 設定の保存に失敗しました",
-      "saveSuccess": "Git 設定を保存しました"
+      "saveSuccess": "Git 設定を保存しました",
+      "tokenRemoved": "保存済みのトークンを削除しました"
     },
     "pendingChanges": "保留中の変更",
     "pullButton": "プル",
@@ -250,7 +265,15 @@
       "notConfigured": "未設定"
     },
     "viewChangesButton": "変更を表示",
-    "volumePath": "ボリュームパス"
+    "volumePath": "ボリュームパス",
+    "workingCopy": "作業コピー",
+    "workingCopyNote": "このボリュームはここにマウントされていないため、作業コピーはアプリのローカルディスクに置かれ、エクスポートされた各ファイルはボリュームにも書き込まれます。アプリの再起動後はリポジトリをもう一度クローンしてください。プッシュ済みのコミットはリモートに残ります。",
+    "volumeSyncWarningTitle": "ボリュームに書き込まれなかったエクスポート",
+    "errors": {
+      "git_volume_invalid": "ボリューム設定「{{value}}」は Unity Catalog のボリュームを指していません。/Volumes/<catalog>/<schema>/<volume>、<catalog>.<schema>.<volume>、または一般設定でカタログとスキーマを指定したうえでボリューム名を使用してください。",
+      "git_volume_sync_failed": "{{path}} をボリュームに書き込めませんでした。変更はリポジトリにあり、通常どおりプッシュされます。アプリがボリュームに書き込めること（WRITE VOLUME）を確認してください。"
+    },
+    "removeTokenButton": "保存済みのトークンを削除"
   },
   "nav": {
     "groups": {
@@ -408,6 +431,15 @@
       "featurePermissions": {
         "title": "機能の権限",
         "description": "アプリケーション内の各機能のアクセスレベルを設定します。"
+      },
+      "navigation": {
+        "help": "チェックを外した機能は、このロールのメニュー（サイドバー、ホームのクイックアクション、概要）に表示されません。非表示にしても変わるのはメニューの表示だけで、権限は変わりません。ページは同じアクセスレベルでリンクから開けます。",
+        "accessColumn": "アクセスレベル",
+        "column": "ナビゲーションに表示",
+        "showFeature": "{{feature}} をナビゲーションに表示",
+        "noAccessHint": "アクセス権なし: この機能はメニューに表示されません",
+        "adminHint": "管理者ロールには常にすべての機能が表示されます",
+        "unknownFeatures": "不明な機能はナビゲーションから非表示にできません: {{features}}"
       },
       "groups": {
         "discover": "発見",
@@ -945,6 +977,13 @@
         "productName": "プロダクト名",
         "productVersion": "プロダクトバージョン",
         "productStatus": "プロダクトステータス"
+      },
+      "lifecycle": {
+        "title": "ライフサイクルステータスタグ",
+        "descriptionProduct": "各テーブルに、そのテーブルを使用するデータプロダクトのライフサイクルステータスをタグ付けします。複数のプロダクトが使用するテーブルでは、最も良いステータスが優先されます(active が最優先、retired が最後)。",
+        "descriptionContract": "各テーブルに、そのテーブルを使用するデータコントラクトのライフサイクルステータスをタグ付けします。複数のコントラクトが使用するテーブルでは、最も良いステータスが優先されます(active が最優先、retired が最後)。",
+        "valueLabel": "タグの値:",
+        "sharedKeyHint": "プロダクトとコントラクトのステータスタグが同じキーで両方とも有効な場合は、プロダクトのステータスが書き込まれます。"
       }
     },
     "entityPatterns": {

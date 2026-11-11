@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Instance Identity",
+      "id": {
+        "label": "Instance ID",
+        "help": "Stable identifier of this Ontos instance, stamped on exported entities. Default: {{default}}. Clear the field to restore the default.",
+        "invalid": "Use 1-128 letters, digits, \".\", \"_\", \":\" or \"-\", starting with a letter or digit."
+      },
+      "name": {
+        "label": "Instance Name",
+        "help": "Human-readable name of this instance. Default: {{default}}. Clear the field to restore the default.",
+        "invalid": "Use at most 128 characters, without control characters."
+      }
+    },
     "auditLog": {
       "label": "Audit Log Directory",
       "placeholder": "audit_logs",
@@ -217,7 +230,8 @@
       "repoUrl": "https://github.com/your-org/your-repo.git",
       "branch": "main",
       "token": "ghp_... or similar",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "Saved. Leave empty to keep it."
     },
     "cloneButton": "Clone Repository",
     "currentCommit": "Commit",
@@ -242,7 +256,8 @@
       "pushError": "Failed to push changes",
       "pushSuccess": "Changes pushed successfully",
       "saveError": "Failed to save Git settings",
-      "saveSuccess": "Git settings saved"
+      "saveSuccess": "Git settings saved",
+      "tokenRemoved": "Saved token removed"
     },
     "pendingChanges": "Pending Changes",
     "pullButton": "Pull",
@@ -257,7 +272,15 @@
       "notConfigured": "Not Configured"
     },
     "viewChangesButton": "View Changes",
-    "volumePath": "Volume Path"
+    "volumePath": "Volume Path",
+    "workingCopy": "Working copy",
+    "workingCopyNote": "The volume isn't mounted here, so the working copy is on the app's local disk and each exported file is also written to the volume. After the app restarts, clone the repository again: pushed commits are kept in the remote.",
+    "volumeSyncWarningTitle": "Export not written to the volume",
+    "errors": {
+      "git_volume_invalid": "The volume setting \"{{value}}\" doesn't name a Unity Catalog volume. Use /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume>, or a volume name with the catalog and schema set in the general settings.",
+      "git_volume_sync_failed": "{{path}} couldn't be written to the volume. The change is in the repository and is pushed as usual; check that the app can write to the volume (WRITE VOLUME)."
+    },
+    "removeTokenButton": "Remove saved token"
   },
   "nav": {
     "groups": {
@@ -415,6 +438,15 @@
       "featurePermissions": {
         "title": "Feature Permissions",
         "description": "Configure access levels for each feature in the application."
+      },
+      "navigation": {
+        "help": "Unchecked features are left out of this role's menus (sidebar, home quick actions, About). Hiding changes only what the menus show, not permissions: pages stay reachable by link with the same access level.",
+        "accessColumn": "Access level",
+        "column": "Show in navigation",
+        "showFeature": "Show {{feature}} in navigation",
+        "noAccessHint": "No access: the feature is not in the menus",
+        "adminHint": "The admin role always shows every feature",
+        "unknownFeatures": "Unknown features can't be hidden from the navigation: {{features}}"
       },
       "groups": {
         "discover": "Discover",
@@ -963,6 +995,13 @@
         "productName": "Product name",
         "productVersion": "Product version",
         "productStatus": "Product status"
+      },
+      "lifecycle": {
+        "title": "Lifecycle status tag",
+        "descriptionProduct": "Tags each table with the lifecycle status of the data product that uses it. On a table used by several products, the best status wins (active first, retired last).",
+        "descriptionContract": "Tags each table with the lifecycle status of the data contract that uses it. On a table used by several contracts, the best status wins (active first, retired last).",
+        "valueLabel": "Tag value:",
+        "sharedKeyHint": "When the product and contract status tags are both enabled with the same key, the product's status is written."
       }
     },
     "entityPatterns": {

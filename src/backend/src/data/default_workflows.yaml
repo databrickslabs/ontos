@@ -106,7 +106,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.contract_id != '' OR obj.contracts != []
+            ASSERT obj.output_port_contract_count > 0
             ON_FAIL FAIL 'Data product must have at least one data contract'
         on_pass: "request-approval"
         on_fail: "notify-no-contract"
@@ -183,7 +183,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.schema != '' AND obj.schema != '{}' AND obj.schema != '[]'
+            ASSERT obj.schema_object_count > 0
             ON_FAIL FAIL 'Data contract must have a schema defined'
         on_pass: "check-owner"
         on_fail: "notify-no-schema"
@@ -194,7 +194,7 @@ workflows:
         config:
           rule: |
             MATCH (obj:Object)
-            ASSERT obj.owner != '' OR HAS_TAG('owner')
+            ASSERT obj.has_owner = true OR HAS_TAG('owner')
             ON_FAIL FAIL 'Data contract must have an owner'
         on_pass: "success"
         on_fail: "auto-fix-owner"
@@ -287,16 +287,17 @@ workflows:
         - "table"
     scope:
       type: "all"
-    is_active: false  # Disabled by default - enable after configuring policies
+    is_active: false  # Disabled by default - select the policies, then enable
     is_default: true
     steps:
       - id: "naming-policy-check"
         name: "Check Naming Convention Policy"
         type: "policy_check"
         config:
-          # This policy_id should be replaced with an actual UUID from your compliance policies
-          # The UI allows selecting policies from a dropdown
-          policy_id: "naming-conventions"
+          # Select the compliance policy in the designer before enabling this workflow
+          # (it can't be enabled while a policy_check step has no existing policy).
+          # policy_name is only a hint for which policy to pick.
+          policy_id: ""
           policy_name: "Naming Conventions"
         on_pass: "tagging-policy-check"
         on_fail: "fail-naming"
@@ -305,7 +306,7 @@ workflows:
         name: "Check Required Tags Policy"
         type: "policy_check"
         config:
-          policy_id: "required-tags"
+          policy_id: ""  # Select a policy in the designer (hint: Required Tags)
           policy_name: "Required Tags"
         on_pass: "success"
         on_fail: "fail-tagging"
@@ -645,11 +646,12 @@ workflows:
   # Status Change Request (Generic)
   - id: "status-change-request"
     name: "Status Change Request"
-    description: "Handles status change requests for data products that require approval."
+    description: "Handles status change requests for data products and data contracts that require approval."
     trigger:
       type: "on_request_status_change"
       entity_types:
         - "data_product"
+        - "data_contract"
     scope:
       type: "all"
     is_active: true
@@ -765,6 +767,69 @@ workflows:
         type: "fail"
         config:
           message: "Data asset review requires changes"
+
+  # =========================================================================
+  # Concept Review Workflow
+  # =========================================================================
+
+  # Concept Reviewer Approval (default)
+  # Fired by submit_concept_for_review (draft -> under_review). The approval
+  # decision is reflected onto the concept by the executor (approve ->
+  # approved; reject -> draft with the reason as the reviewer comment).
+  - id: "concept-review-approval"
+    name: "Concept Reviewer Approval (Default)"
+    description: "Routes concepts submitted for review to the chosen reviewer for approval and notifies the submitter of the decision."
+    trigger:
+      type: "on_request_status_change"
+      entity_types:
+        - "ontology_concept"
+      from_status: "draft"
+      to_status: "under_review"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "request-approval"
+        name: "Request Reviewer Approval"
+        type: "approval"
+        config:
+          # 'reviewer' resolves to the reviewer picked at submit time
+          # (entity.reviewer_email); falls back to the Admin role when no
+          # reviewer was chosen.
+          approvers: "reviewer"
+          timeout_days: 7
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Concept Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your concept '${entity_name}' has been approved."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Concept Changes Requested"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your concept '${entity_name}' was sent back for changes. Please review the reviewer comment and resubmit."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Concept Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Concept Changes Requested"
+        type: "fail"
+        config:
+          message: "Concept review was not approved"
 
   # =========================================================================
   # Project Access Request Workflow
@@ -1283,6 +1348,69 @@ workflows:
     steps:
       - id: "success"
         name: "Transition Allowed"
+        type: "pass"
+
+  # =========================================================================
+  # Lifecycle Notices (deprecation lifecycle, #998)
+  # =========================================================================
+  # Disabled by default; an admin enables them. The on_status_change payload
+  # carries version, deprecation_reason, sunset_date, replacement_id,
+  # replacement_name and replacement_version, which the entity_deprecated /
+  # entity_retired templates show on their own lines when set (a
+  # custom_message can use ${entity.<field>}). The subscribers of a data
+  # product get the built-in subscriber notice either way; data contracts
+  # have no subscriber notice.
+
+  - id: "owner-deprecation-notice"
+    name: "Owner Deprecation Notice"
+    description: "Tells the owners of a data product or data contract that it was deprecated, with the reason, the sunset date and the replacement."
+    trigger:
+      type: "on_status_change"
+      to_status: "deprecated"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "notify-owners"
+        name: "Notify Owners"
+        type: "notification"
+        config:
+          recipients: "entity_owner"
+          template: "entity_deprecated"
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  - id: "owner-retirement-notice"
+    name: "Owner Retirement Notice"
+    description: "Tells the owners of a data product or data contract that it was retired, with the reason, the sunset date and the replacement of its deprecation."
+    trigger:
+      type: "on_status_change"
+      to_status: "retired"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "notify-owners"
+        name: "Notify Owners"
+        type: "notification"
+        config:
+          recipients: "entity_owner"
+          template: "entity_retired"
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
         type: "pass"
 
   # =========================================================================

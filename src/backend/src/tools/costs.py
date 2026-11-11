@@ -7,7 +7,7 @@ Tools for getting cost information for data products.
 from typing import Any, Dict, Optional
 
 from src.common.logging import get_logger
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -119,6 +119,5 @@ class GetDataProductCostsTool(BaseTool):
                 )
                 
         except Exception as e:
-            logger.error(f"[get_data_product_costs] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_data_product_costs", e))
 

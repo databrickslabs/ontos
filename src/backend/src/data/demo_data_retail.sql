@@ -541,7 +541,7 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO notifications (id, type, title, subtitle, description, created_at, read, can_delete, recipient) VALUES
 ('01000001-0000-4000-8000-000000000001', 'success', 'Data Contract Approved', 'Contract: Customer360', 'The data contract for Customer360 has been approved by all stakeholders', NOW() - INTERVAL '1 day', false, true, NULL),
-('01000002-0000-4000-8000-000000000002', 'warning', 'Compliance Policy Alert', 'PII Data Encryption', 'Some datasets containing PII are not properly encrypted. Check Compliance dashboard for details.', NOW() - INTERVAL '1 day 1 hour', false, true, NULL),
+('01000002-0000-4000-8000-000000000002', 'warning', 'Compliance Policy Alert', 'PII Products Under GDPR Controls', 'Some data products tagged pii are not tagged gdpr. Check Compliance dashboard for details.', NOW() - INTERVAL '1 day 1 hour', false, true, NULL),
 ('01000003-0000-4000-8000-000000000003', 'info', 'New Business Term Added', 'Customer Lifetime Value', 'A new business term has been added to the Finance glossary', NOW() - INTERVAL '2 days', true, true, NULL),
 ('01000004-0000-4000-8000-000000000004', 'error', 'Security Feature Disabled', 'Column Encryption', 'Column encryption for customer_data.pii_table has been disabled unexpectedly', NOW() - INTERVAL '2 days 2 hours', false, false, NULL),
 ('01000005-0000-4000-8000-000000000005', 'info', 'System Maintenance', 'Scheduled Downtime', 'System maintenance scheduled for Saturday 20:00 UTC', NOW() - INTERVAL '2 days 4 hours', true, true, NULL)
@@ -557,20 +557,73 @@ INSERT INTO compliance_policies (id, name, description, failure_message, rule, c
 ('01100001-0000-4000-8000-000000000001', 'Naming Conventions', 'Verify that all objects follow corporate naming conventions', 
 'Names must use snake_case format (lowercase letters with underscores). For example: "customer_orders" is valid, but "CustomerOrders" or "customer-orders" are not. Views must be prefixed with "v_".', 
 E'MATCH (obj:Object)\nWHERE obj.type IN [''catalog'', ''schema'', ''table'', ''view'']\nASSERT \n  CASE obj.type\n    WHEN ''catalog'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''schema'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''table'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''view'' THEN obj.name MATCHES ''^v_[a-z][a-z0-9_]*$''\n  END', 'Governance', 'high', true, NOW(), NOW()),
-('01100002-0000-4000-8000-000000000002', 'PII Data Encryption', 'Ensure all PII data is encrypted at rest', 
-'All datasets containing Personally Identifiable Information (PII) must be encrypted using AES-256 encryption. Please enable encryption on the table or contact your security team for assistance.',
-'MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = ''AES256''', 'Security', 'critical', true, NOW(), NOW()),
-('01100003-0000-4000-8000-000000000003', 'Data Quality Thresholds', 'Maintain data quality metrics above defined thresholds', 
-'Data quality must meet minimum standards: completeness > 95% and accuracy > 98%. Review the data pipeline for missing or incorrect values before publishing.',
-'MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98', 'Data Quality', 'high', true, NOW(), NOW()),
-('01100004-0000-4000-8000-000000000004', 'Access Control', 'Verify proper access controls on sensitive data', 
-'High-sensitivity datasets must have restricted access controls configured. Please set access_level to "restricted" and ensure only authorized groups have access.',
-'MATCH (d:Dataset) WHERE d.sensitivity = ''high'' ASSERT d.access_level = ''restricted''', 'Security', 'critical', true, NOW(), NOW()),
-('01100005-0000-4000-8000-000000000005', 'Data Freshness', 'Ensure data is updated within defined timeframes', 
-'Data appears to be stale (not updated within the last 24 hours). Check the data pipeline status and ensure scheduled jobs are running correctly.',
-'MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration(''P1D'')', 'Data Quality', 'medium', true, NOW(), NOW())
+('01100002-0000-4000-8000-000000000002', 'PII Products Under GDPR Controls', 'Ensure data products tagged pii are also tagged gdpr',
+'Data product contains PII but is not tagged gdpr. All products with Personally Identifiable Information must follow GDPR controls, including encryption at rest.',
+'MATCH (p:data_product) WHERE HAS_TAG(''pii'') ASSERT HAS_TAG(''gdpr'')', 'Security', 'critical', true, NOW(), NOW()),
+('01100003-0000-4000-8000-000000000003', 'Contract Purpose Described', 'Ensure active data contracts describe their purpose in at least 70 characters',
+'Active data contract has a short purpose description (under 70 characters). Describe what the data is for and its quality expectations before consumers rely on it.',
+'MATCH (c:data_contract) WHERE c.status = ''active'' ASSERT LENGTH(c.description) >= 70', 'Data Quality', 'high', true, NOW(), NOW()),
+('01100004-0000-4000-8000-000000000004', 'Confidential Contracts Restricted', 'Verify data contracts tagged confidential are also tagged restricted',
+'Confidential data contract is not tagged restricted. Confidential data must have restricted access so only authorized groups can read it.',
+'MATCH (c:data_contract) WHERE HAS_TAG(''confidential'') ASSERT HAS_TAG(''restricted'')', 'Security', 'critical', true, NOW(), NOW()),
+('01100005-0000-4000-8000-000000000005', 'No Deprecated or Retired Contracts', 'Ensure data contracts in use are not deprecated or retired',
+'Data contract is deprecated or retired. Move consumers to the replacement contract and stop publishing data under it.',
+'MATCH (c:data_contract) ASSERT c.status != ''deprecated'' AND c.status != ''retired''', 'Data Quality', 'medium', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'PII Data Encryption'
+    THEN 'PII Products Under GDPR Controls' ELSE name END,
+  description = CASE WHEN description = 'Ensure all PII data is encrypted at rest'
+    THEN 'Ensure data products tagged pii are also tagged gdpr' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'All datasets containing Personally Identifiable Information (PII) must be encrypted using AES-256 encryption. Please enable encryption on the table or contact your security team for assistance.'
+    THEN 'Data product contains PII but is not tagged gdpr. All products with Personally Identifiable Information must follow GDPR controls, including encryption at rest.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''pii'') ASSERT HAS_TAG(''gdpr'')',
+  updated_at = NOW()
+WHERE id = '01100002-0000-4000-8000-000000000002'
+  AND rule = 'MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = ''AES256''';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Data Quality Thresholds'
+    THEN 'Contract Purpose Described' ELSE name END,
+  description = CASE WHEN description = 'Maintain data quality metrics above defined thresholds'
+    THEN 'Ensure active data contracts describe their purpose in at least 70 characters' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Data quality must meet minimum standards: completeness > 95% and accuracy > 98%. Review the data pipeline for missing or incorrect values before publishing.'
+    THEN 'Active data contract has a short purpose description (under 70 characters). Describe what the data is for and its quality expectations before consumers rely on it.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE c.status = ''active'' ASSERT LENGTH(c.description) >= 70',
+  updated_at = NOW()
+WHERE id = '01100003-0000-4000-8000-000000000003'
+  AND rule = 'MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Access Control'
+    THEN 'Confidential Contracts Restricted' ELSE name END,
+  description = CASE WHEN description = 'Verify proper access controls on sensitive data'
+    THEN 'Verify data contracts tagged confidential are also tagged restricted' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'High-sensitivity datasets must have restricted access controls configured. Please set access_level to "restricted" and ensure only authorized groups have access.'
+    THEN 'Confidential data contract is not tagged restricted. Confidential data must have restricted access so only authorized groups can read it.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE HAS_TAG(''confidential'') ASSERT HAS_TAG(''restricted'')',
+  updated_at = NOW()
+WHERE id = '01100004-0000-4000-8000-000000000004'
+  AND rule = 'MATCH (d:Dataset) WHERE d.sensitivity = ''high'' ASSERT d.access_level = ''restricted''';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Data Freshness'
+    THEN 'No Deprecated or Retired Contracts' ELSE name END,
+  description = CASE WHEN description = 'Ensure data is updated within defined timeframes'
+    THEN 'Ensure data contracts in use are not deprecated or retired' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Data appears to be stale (not updated within the last 24 hours). Check the data pipeline status and ensure scheduled jobs are running correctly.'
+    THEN 'Data contract is deprecated or retired. Move consumers to the replacement contract and stop publishing data under it.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) ASSERT c.status != ''deprecated'' AND c.status != ''retired''',
+  updated_at = NOW()
+WHERE id = '01100005-0000-4000-8000-000000000005'
+  AND rule = 'MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration(''P1D'')';
+
 
 
 -- ============================================================================
@@ -580,33 +633,41 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO compliance_runs (id, policy_id, status, started_at, finished_at, success_count, failure_count, score) VALUES
 ('01200001-0000-4000-8000-000000000001', '01100001-0000-4000-8000-000000000001', 'succeeded', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day' + INTERVAL '1 minute', 4, 2, 66.7),
 ('01200002-0000-4000-8000-000000000002', '01100001-0000-4000-8000-000000000001', 'succeeded', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '2 minutes', 5, 1, 83.3),
-('01200003-0000-4000-8000-000000000003', '01100002-0000-4000-8000-000000000002', 'succeeded', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day' + INTERVAL '40 seconds', 4, 1, 80.0),
-('01200004-0000-4000-8000-000000000004', '01100003-0000-4000-8000-000000000003', 'succeeded', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days' + INTERVAL '1 minute 10 seconds', 9, 1, 90.0),
-('01200005-0000-4000-8000-000000000005', '01100004-0000-4000-8000-000000000004', 'succeeded', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days' + INTERVAL '35 seconds', 3, 1, 75.0),
-('01200006-0000-4000-8000-000000000006', '01100005-0000-4000-8000-000000000005', 'succeeded', NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days' + INTERVAL '28 seconds', 8, 1, 88.9)
-
-ON CONFLICT (id) DO NOTHING;
+('01200003-0000-4000-8000-000000000003', '01100002-0000-4000-8000-000000000002', 'succeeded', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day' + INTERVAL '40 seconds', 1, 1, 50),
+('01200004-0000-4000-8000-000000000004', '01100003-0000-4000-8000-000000000003', 'succeeded', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days' + INTERVAL '1 minute 10 seconds', 2, 1, 66.67),
+('01200005-0000-4000-8000-000000000005', '01100004-0000-4000-8000-000000000004', 'succeeded', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days' + INTERVAL '35 seconds', 1, 1, 50),
+('01200006-0000-4000-8000-000000000006', '01100005-0000-4000-8000-000000000005', 'succeeded', NOW() - INTERVAL '5 days', NOW() - INTERVAL '5 days' + INTERVAL '28 seconds', 4, 3, 57.14)
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, success_count = EXCLUDED.success_count,
+  failure_count = EXCLUDED.failure_count, score = EXCLUDED.score;
 
 
 -- ============================================================================
 -- 8c. COMPLIANCE RESULTS (type=013)
 -- ============================================================================
 
+-- Sample results of a real run of each policy above. A load replaces the ones an earlier
+-- version of this preset inserted for the same sample runs.
+DELETE FROM compliance_results WHERE run_id IN ('01200003-0000-4000-8000-000000000003', '01200004-0000-4000-8000-000000000004', '01200005-0000-4000-8000-000000000005', '01200006-0000-4000-8000-000000000006');
+
 INSERT INTO compliance_results (id, run_id, object_type, object_id, object_name, passed, message, created_at) VALUES
 ('01300001-0000-4000-8000-000000000001', '01200001-0000-4000-8000-000000000001', 'catalog', 'analytics', 'analytics', true, NULL, NOW()),
 ('01300002-0000-4000-8000-000000000002', '01200001-0000-4000-8000-000000000001', 'schema', 'customer_360', 'customer_360', true, NULL, NOW()),
 ('01300003-0000-4000-8000-000000000003', '01200001-0000-4000-8000-000000000001', 'table', 'Orders', 'Orders', false, 'Expected name to match ^[a-z][a-z0-9_]*$', NOW()),
 ('01300004-0000-4000-8000-000000000004', '01200001-0000-4000-8000-000000000001', 'view', 'orders_view', 'orders_view', false, 'Views must start with v_', NOW()),
-('01300005-0000-4000-8000-000000000005', '01200003-0000-4000-8000-000000000003', 'dataset', 'customer.emails', 'customer.emails', true, NULL, NOW()),
-('01300006-0000-4000-8000-000000000006', '01200003-0000-4000-8000-000000000003', 'dataset', 'customer.addresses', 'customer.addresses', true, NULL, NOW()),
-('01300007-0000-4000-8000-000000000007', '01200003-0000-4000-8000-000000000003', 'dataset', 'customer.cards', 'customer.cards', false, 'Encryption required: AES256', NOW()),
-('01300008-0000-4000-8000-000000000008', '01200004-0000-4000-8000-000000000004', 'dataset', 'sales.orders_daily', 'sales.orders_daily', true, NULL, NOW()),
-('01300009-0000-4000-8000-000000000009', '01200004-0000-4000-8000-000000000004', 'dataset', 'sales.orders_raw', 'sales.orders_raw', false, 'completeness=0.91 < 0.95', NOW()),
-('0130000a-0000-4000-8000-000000000010', '01200005-0000-4000-8000-000000000005', 'dataset', 'hr.salaries', 'hr.salaries', true, NULL, NOW()),
-('0130000b-0000-4000-8000-000000000011', '01200005-0000-4000-8000-000000000005', 'dataset', 'finance.payments', 'finance.payments', false, 'access_level must be restricted', NOW()),
-('0130000c-0000-4000-8000-000000000012', '01200006-0000-4000-8000-000000000006', 'dataset', 'bi.product_dim', 'bi.product_dim', true, NULL, NOW()),
-('0130000d-0000-4000-8000-000000000013', '01200006-0000-4000-8000-000000000006', 'dataset', 'bi.inventory_fact', 'bi.inventory_fact', false, 'last_updated older than 1 day', NOW())
-
+('01300005-0000-4000-8000-000000000005', '01200003-0000-4000-8000-000000000003', 'data_product', '00700006-0000-4000-8000-000000000006', 'Customer Marketing Recommendations v1', true, NULL, NOW()),
+('01300006-0000-4000-8000-000000000006', '01200003-0000-4000-8000-000000000003', 'data_product', '00700002-0000-4000-8000-000000000002', 'Prepared Sales Transactions v1', false, 'Assertion failed for data_product Prepared Sales Transactions v1', NOW()),
+('01300007-0000-4000-8000-000000000007', '01200004-0000-4000-8000-000000000004', 'data_contract', '00400001-0000-4000-8000-000000000001', 'Customer Data Contract', true, NULL, NOW()),
+('01300008-0000-4000-8000-000000000008', '01200004-0000-4000-8000-000000000004', 'data_contract', '00400003-0000-4000-8000-000000000003', 'Data Sharing Agreement', false, 'Assertion failed for data_contract Data Sharing Agreement', NOW()),
+('01300009-0000-4000-8000-000000000009', '01200004-0000-4000-8000-000000000004', 'data_contract', '00400004-0000-4000-8000-000000000004', 'IoT Device Data Contract', true, NULL, NOW()),
+('0130000a-0000-4000-8000-000000000010', '01200005-0000-4000-8000-000000000005', 'data_contract', '00400001-0000-4000-8000-000000000001', 'Customer Data Contract', false, 'Assertion failed for data_contract Customer Data Contract', NOW()),
+('0130000b-0000-4000-8000-000000000011', '01200005-0000-4000-8000-000000000005', 'data_contract', '00400006-0000-4000-8000-000000000006', 'Financial Transactions Contract', true, NULL, NOW()),
+('0130000c-0000-4000-8000-000000000012', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400001-0000-4000-8000-000000000001', 'Customer Data Contract', true, NULL, NOW()),
+('0130000d-0000-4000-8000-000000000013', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400003-0000-4000-8000-000000000003', 'Data Sharing Agreement', true, NULL, NOW()),
+('0130000e-0000-4000-8000-000000000014', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400006-0000-4000-8000-000000000006', 'Financial Transactions Contract', true, NULL, NOW()),
+('0130000f-0000-4000-8000-000000000015', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400007-0000-4000-8000-000000000007', 'Inventory Management Contract', false, 'Assertion failed for data_contract Inventory Management Contract', NOW()),
+('01300010-0000-4000-8000-000000000016', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400004-0000-4000-8000-000000000004', 'IoT Device Data Contract', true, NULL, NOW()),
+('01300011-0000-4000-8000-000000000017', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400005-0000-4000-8000-000000000005', 'IoT Sensor Data Contract', false, 'Assertion failed for data_contract IoT Sensor Data Contract', NOW()),
+('01300012-0000-4000-8000-000000000018', '01200006-0000-4000-8000-000000000006', 'data_contract', '00400002-0000-4000-8000-000000000002', 'Product Catalog Contract', false, 'Assertion failed for data_contract Product Catalog Contract', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -1902,31 +1963,32 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 -- Pre-creation compliance validation for catalogs/schemas/tables
 ('02a00001-0000-4000-8000-000000000001', 'Pre-Creation Compliance Validation', 'Validates naming conventions before asset creation. Blocks creation if validation fails.', 
-'{"type": "before_create", "entity_types": ["catalog", "schema", "table", "view"]}',
+'{"type": "before_create", "entity_types": ["catalog", "schema", "table"]}',
 '{"type": "all"}',
 true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
--- Data quality validation on updates
-('02a00002-0000-4000-8000-000000000002', 'Data Quality Gate', 'Ensures data quality thresholds are met before allowing dataset updates.', 
-'{"type": "before_update", "entity_types": ["dataset"]}',
+-- Contract purpose validation on contract updates. Shipped disabled: its policy check
+-- cannot pass inside a workflow (#1149).
+('02a00002-0000-4000-8000-000000000002', 'Contract Purpose Gate', 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before contract updates. Disabled until #1149 is fixed.', 
+'{"type": "before_update", "entity_types": ["data_contract"]}',
 '{"type": "all"}',
-true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+false, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Security compliance workflow for sensitive data
-('02a00003-0000-4000-8000-000000000003', 'PII Data Security Check', 'Validates PII encryption and access controls for sensitive data products.', 
+('02a00003-0000-4000-8000-000000000003', 'PII Data Security Check', 'Validates that PII data products are tagged gdpr and confidential data contracts are tagged restricted.', 
 '{"type": "on_create", "entity_types": ["data_product", "data_contract"]}',
 '{"type": "all"}',
 true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
--- Freshness monitoring workflow
-('02a00004-0000-4000-8000-000000000004', 'Data Freshness Monitor', 'Monitors data freshness and notifies stakeholders when data becomes stale.', 
+-- Contract lifecycle monitoring workflow
+('02a00004-0000-4000-8000-000000000004', 'Contract Lifecycle Monitor', 'Checks daily that no data contract is deprecated or retired and notifies the owner when one is.', 
 '{"type": "scheduled", "schedule": "0 6 * * *"}',
 '{"type": "all"}',
 true, false, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 
 -- Full governance workflow with multiple checks
-('02a00005-0000-4000-8000-000000000005', 'Full Governance Pre-Check', 'Comprehensive pre-creation validation including naming, access control, and PII checks.', 
-'{"type": "before_create", "entity_types": ["table", "view"]}',
+('02a00005-0000-4000-8000-000000000005', 'Full Governance Pre-Check', 'Comprehensive pre-creation validation including naming, GDPR controls for PII products, and restricted access for confidential contracts.', 
+'{"type": "before_create", "entity_types": ["table"]}',
 '{"type": "project", "ids": ["00300001-0000-4000-8000-000000000001"]}',
 true, false, 1, 'system@demo', 'system@demo', NOW(), NOW())
 
@@ -1953,27 +2015,27 @@ NULL, NULL, 2, '{"x": 150, "y": 300}', NOW(), NOW()),
 '{"message": "Asset name does not follow naming conventions"}',
 NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 
--- Data Quality Gate workflow steps (02a00002)
--- Uses policy 01100003 (Data Quality Thresholds)
-('02b00004-0000-4000-8000-000000000004', '02a00002-0000-4000-8000-000000000002', 'check-quality', 'Check Data Quality', 'policy_check', 
+-- Contract Purpose Gate workflow steps (02a00002)
+-- Uses policy 01100003 (Contract Purpose Described)
+('02b00004-0000-4000-8000-000000000004', '02a00002-0000-4000-8000-000000000002', 'check-quality', 'Check Contract Purpose', 'policy_check', 
 '{"policy_id": "01100003-0000-4000-8000-000000000003"}',
 'quality-pass', 'quality-fail', 1, '{"x": 250, "y": 150}', NOW(), NOW()),
 
-('02b00005-0000-4000-8000-000000000005', '02a00002-0000-4000-8000-000000000002', 'quality-pass', 'Quality Check Passed', 'pass', 
+('02b00005-0000-4000-8000-000000000005', '02a00002-0000-4000-8000-000000000002', 'quality-pass', 'Purpose Check Passed', 'pass', 
 '{}',
 NULL, NULL, 2, '{"x": 150, "y": 300}', NOW(), NOW()),
 
-('02b00006-0000-4000-8000-000000000006', '02a00002-0000-4000-8000-000000000002', 'quality-fail', 'Quality Check Failed', 'notification', 
+('02b00006-0000-4000-8000-000000000006', '02a00002-0000-4000-8000-000000000002', 'quality-fail', 'Purpose Check Failed', 'notification', 
 '{"recipients": "owner", "template": "validation_failed"}',
 NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 
 -- PII Data Security Check workflow steps (02a00003)
--- Uses policies 01100002 (PII Encryption) and 01100004 (Access Control)
-('02b00007-0000-4000-8000-000000000007', '02a00003-0000-4000-8000-000000000003', 'check-pii', 'Check PII Encryption', 'policy_check', 
+-- Uses policies 01100002 (PII Products Under GDPR Controls) and 01100004 (Confidential Contracts Restricted)
+('02b00007-0000-4000-8000-000000000007', '02a00003-0000-4000-8000-000000000003', 'check-pii', 'Check PII Products Under GDPR', 'policy_check', 
 '{"policy_id": "01100002-0000-4000-8000-000000000002"}',
 'check-access', 'notify-pii-fail', 1, '{"x": 250, "y": 100}', NOW(), NOW()),
 
-('02b00008-0000-4000-8000-000000000008', '02a00003-0000-4000-8000-000000000003', 'check-access', 'Check Access Control', 'policy_check', 
+('02b00008-0000-4000-8000-000000000008', '02a00003-0000-4000-8000-000000000003', 'check-access', 'Check Confidential Contracts Restricted', 'policy_check', 
 '{"policy_id": "01100004-0000-4000-8000-000000000004"}',
 'security-pass', 'notify-access-fail', 2, '{"x": 250, "y": 220}', NOW(), NOW()),
 
@@ -1981,25 +2043,25 @@ NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 '{}',
 NULL, NULL, 3, '{"x": 150, "y": 340}', NOW(), NOW()),
 
-('02b0000a-0000-4000-8000-000000000010', '02a00003-0000-4000-8000-000000000003', 'notify-pii-fail', 'Notify PII Failure', 'notification', 
+('02b0000a-0000-4000-8000-000000000010', '02a00003-0000-4000-8000-000000000003', 'notify-pii-fail', 'Notify PII Product Without GDPR', 'notification', 
 '{"recipients": "domain_owners", "template": "validation_failed"}',
 NULL, NULL, 4, '{"x": 350, "y": 340}', NOW(), NOW()),
 
-('02b0000b-0000-4000-8000-000000000011', '02a00003-0000-4000-8000-000000000003', 'notify-access-fail', 'Notify Access Failure', 'notification', 
+('02b0000b-0000-4000-8000-000000000011', '02a00003-0000-4000-8000-000000000003', 'notify-access-fail', 'Notify Unrestricted Confidential Contract', 'notification', 
 '{"recipients": "domain_owners", "template": "validation_failed"}',
 NULL, NULL, 5, '{"x": 450, "y": 340}', NOW(), NOW()),
 
--- Data Freshness Monitor workflow steps (02a00004)
--- Uses policy 01100005 (Data Freshness)
-('02b0000c-0000-4000-8000-000000000012', '02a00004-0000-4000-8000-000000000004', 'check-freshness', 'Check Data Freshness', 'policy_check', 
+-- Contract Lifecycle Monitor workflow steps (02a00004)
+-- Uses policy 01100005 (No Deprecated or Retired Contracts)
+('02b0000c-0000-4000-8000-000000000012', '02a00004-0000-4000-8000-000000000004', 'check-freshness', 'Check Contract Lifecycle', 'policy_check', 
 '{"policy_id": "01100005-0000-4000-8000-000000000005"}',
 'freshness-ok', 'freshness-stale', 1, '{"x": 250, "y": 150}', NOW(), NOW()),
 
-('02b0000d-0000-4000-8000-000000000013', '02a00004-0000-4000-8000-000000000004', 'freshness-ok', 'Data is Fresh', 'pass', 
+('02b0000d-0000-4000-8000-000000000013', '02a00004-0000-4000-8000-000000000004', 'freshness-ok', 'No Deprecated or Retired Contracts', 'pass', 
 '{}',
 NULL, NULL, 2, '{"x": 150, "y": 300}', NOW(), NOW()),
 
-('02b0000e-0000-4000-8000-000000000014', '02a00004-0000-4000-8000-000000000004', 'freshness-stale', 'Notify Stale Data', 'notification', 
+('02b0000e-0000-4000-8000-000000000014', '02a00004-0000-4000-8000-000000000004', 'freshness-stale', 'Notify Deprecated or Retired Contract', 'notification', 
 '{"recipients": "owner", "template": "validation_failed"}',
 NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 
@@ -2009,11 +2071,11 @@ NULL, NULL, 3, '{"x": 350, "y": 300}', NOW(), NOW()),
 '{"policy_id": "01100001-0000-4000-8000-000000000001"}',
 'step-pii', 'fail-naming', 1, '{"x": 250, "y": 80}', NOW(), NOW()),
 
-('02b00010-0000-4000-8000-000000000016', '02a00005-0000-4000-8000-000000000005', 'step-pii', 'Check PII Encryption', 'policy_check', 
+('02b00010-0000-4000-8000-000000000016', '02a00005-0000-4000-8000-000000000005', 'step-pii', 'Check PII Products Under GDPR', 'policy_check', 
 '{"policy_id": "01100002-0000-4000-8000-000000000002"}',
 'step-access', 'fail-pii', 2, '{"x": 250, "y": 180}', NOW(), NOW()),
 
-('02b00011-0000-4000-8000-000000000017', '02a00005-0000-4000-8000-000000000005', 'step-access', 'Check Access Control', 'policy_check', 
+('02b00011-0000-4000-8000-000000000017', '02a00005-0000-4000-8000-000000000005', 'step-access', 'Check Confidential Contracts Restricted', 'policy_check', 
 '{"policy_id": "01100004-0000-4000-8000-000000000004"}',
 'all-passed', 'fail-access', 3, '{"x": 250, "y": 280}', NOW(), NOW()),
 
@@ -2025,15 +2087,87 @@ NULL, NULL, 4, '{"x": 150, "y": 400}', NOW(), NOW()),
 '{"message": "Asset does not follow naming conventions"}',
 NULL, NULL, 5, '{"x": 400, "y": 130}', NOW(), NOW()),
 
-('02b00014-0000-4000-8000-000000000020', '02a00005-0000-4000-8000-000000000005', 'fail-pii', 'PII Check Failed', 'fail', 
-'{"message": "PII data must be encrypted"}',
+('02b00014-0000-4000-8000-000000000020', '02a00005-0000-4000-8000-000000000005', 'fail-pii', 'GDPR Check Failed', 'fail', 
+'{"message": "PII data products must be tagged gdpr"}',
 NULL, NULL, 6, '{"x": 400, "y": 230}', NOW(), NOW()),
 
-('02b00015-0000-4000-8000-000000000021', '02a00005-0000-4000-8000-000000000005', 'fail-access', 'Access Check Failed', 'fail', 
-'{"message": "Access controls must be properly configured"}',
+('02b00015-0000-4000-8000-000000000021', '02a00005-0000-4000-8000-000000000005', 'fail-access', 'Restricted Access Check Failed', 'fail', 
+'{"message": "Confidential data contracts must be tagged restricted"}',
 NULL, NULL, 7, '{"x": 400, "y": 330}', NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their workflow rows
+-- (ON CONFLICT DO NOTHING above). Rename those in place, but only the texts that
+-- still have their shipped value, so a workflow or step an admin renamed is left alone.
+UPDATE process_workflows SET name = CASE
+  WHEN id = '02a00002-0000-4000-8000-000000000002' AND name = 'Data Quality Gate' THEN 'Contract Purpose Gate'
+  WHEN id = '02a00004-0000-4000-8000-000000000004' AND name = 'Data Freshness Monitor' THEN 'Contract Lifecycle Monitor'
+  ELSE name END
+WHERE id IN ('02a00002-0000-4000-8000-000000000002', '02a00004-0000-4000-8000-000000000004');
+
+UPDATE process_workflows SET description = CASE
+  WHEN id = '02a00002-0000-4000-8000-000000000002' AND description = 'Ensures data quality thresholds are met before allowing dataset updates.' THEN 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before contract updates. Disabled until #1149 is fixed.'
+  WHEN id = '02a00002-0000-4000-8000-000000000002' AND description = 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before dataset updates. Disabled until #1149 is fixed.' THEN 'Checks that active data contracts describe their purpose (policy Contract Purpose Described) before contract updates. Disabled until #1149 is fixed.'
+  WHEN id = '02a00003-0000-4000-8000-000000000003' AND description = 'Validates PII encryption and access controls for sensitive data products.' THEN 'Validates that PII data products are tagged gdpr and confidential data contracts are tagged restricted.'
+  WHEN id = '02a00004-0000-4000-8000-000000000004' AND description = 'Monitors data freshness and notifies stakeholders when data becomes stale.' THEN 'Checks daily that no data contract is deprecated or retired and notifies the owner when one is.'
+  WHEN id = '02a00005-0000-4000-8000-000000000005' AND description = 'Comprehensive pre-creation validation including naming, access control, and PII checks.' THEN 'Comprehensive pre-creation validation including naming, GDPR controls for PII products, and restricted access for confidential contracts.'
+  ELSE description END
+WHERE id IN ('02a00002-0000-4000-8000-000000000002', '02a00003-0000-4000-8000-000000000003', '02a00004-0000-4000-8000-000000000004', '02a00005-0000-4000-8000-000000000005');
+
+-- Disable the Contract Purpose Gate in installs that still hold the shipped gate: its
+-- trigger (before_update on dataset) never fires. A row an admin renamed, re-triggered or
+-- already deactivated is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00002-0000-4000-8000-000000000002'
+  AND name IN ('Data Quality Gate', 'Contract Purpose Gate')
+  AND trigger_config = '{"type": "before_update", "entity_types": ["dataset"]}'
+  AND is_active = true;
+
+-- Earlier installs hold triggers on entity types no code fires a workflow for: "view" (no
+-- before_create site) and the removed "dataset". Only a row whose trigger still has its
+-- shipped value is changed, so a trigger an admin edited is left alone. The Contract
+-- Purpose Gate is deactivated above first, so it moves to data contracts inactive.
+UPDATE process_workflows
+SET trigger_config = '{"type": "before_create", "entity_types": ["catalog", "schema", "table"]}'
+WHERE id = '02a00001-0000-4000-8000-000000000001'
+  AND trigger_config = '{"type": "before_create", "entity_types": ["catalog", "schema", "table", "view"]}';
+
+UPDATE process_workflows
+SET trigger_config = '{"type": "before_update", "entity_types": ["data_contract"]}'
+WHERE id = '02a00002-0000-4000-8000-000000000002'
+  AND name IN ('Data Quality Gate', 'Contract Purpose Gate')
+  AND trigger_config = '{"type": "before_update", "entity_types": ["dataset"]}'
+  AND is_active = false;
+
+UPDATE process_workflows
+SET trigger_config = '{"type": "before_create", "entity_types": ["table"]}'
+WHERE id = '02a00005-0000-4000-8000-000000000005'
+  AND trigger_config = '{"type": "before_create", "entity_types": ["table", "view"]}';
+
+UPDATE workflow_steps SET name = CASE
+  WHEN id = '02b00004-0000-4000-8000-000000000004' AND name = 'Check Data Quality' THEN 'Check Contract Purpose'
+  WHEN id = '02b00005-0000-4000-8000-000000000005' AND name = 'Quality Check Passed' THEN 'Purpose Check Passed'
+  WHEN id = '02b00006-0000-4000-8000-000000000006' AND name = 'Quality Check Failed' THEN 'Purpose Check Failed'
+  WHEN id = '02b00007-0000-4000-8000-000000000007' AND name = 'Check PII Encryption' THEN 'Check PII Products Under GDPR'
+  WHEN id = '02b00008-0000-4000-8000-000000000008' AND name = 'Check Access Control' THEN 'Check Confidential Contracts Restricted'
+  WHEN id = '02b0000a-0000-4000-8000-000000000010' AND name = 'Notify PII Failure' THEN 'Notify PII Product Without GDPR'
+  WHEN id = '02b0000b-0000-4000-8000-000000000011' AND name = 'Notify Access Failure' THEN 'Notify Unrestricted Confidential Contract'
+  WHEN id = '02b0000c-0000-4000-8000-000000000012' AND name = 'Check Data Freshness' THEN 'Check Contract Lifecycle'
+  WHEN id = '02b0000d-0000-4000-8000-000000000013' AND name = 'Data is Fresh' THEN 'No Deprecated or Retired Contracts'
+  WHEN id = '02b0000e-0000-4000-8000-000000000014' AND name = 'Notify Stale Data' THEN 'Notify Deprecated or Retired Contract'
+  WHEN id = '02b00010-0000-4000-8000-000000000016' AND name = 'Check PII Encryption' THEN 'Check PII Products Under GDPR'
+  WHEN id = '02b00011-0000-4000-8000-000000000017' AND name = 'Check Access Control' THEN 'Check Confidential Contracts Restricted'
+  WHEN id = '02b00014-0000-4000-8000-000000000020' AND name = 'PII Check Failed' THEN 'GDPR Check Failed'
+  WHEN id = '02b00015-0000-4000-8000-000000000021' AND name = 'Access Check Failed' THEN 'Restricted Access Check Failed'
+  ELSE name END
+WHERE id IN ('02b00004-0000-4000-8000-000000000004', '02b00005-0000-4000-8000-000000000005', '02b00006-0000-4000-8000-000000000006', '02b00007-0000-4000-8000-000000000007', '02b00008-0000-4000-8000-000000000008', '02b0000a-0000-4000-8000-000000000010', '02b0000b-0000-4000-8000-000000000011', '02b0000c-0000-4000-8000-000000000012', '02b0000d-0000-4000-8000-000000000013', '02b0000e-0000-4000-8000-000000000014', '02b00010-0000-4000-8000-000000000016', '02b00011-0000-4000-8000-000000000017', '02b00014-0000-4000-8000-000000000020', '02b00015-0000-4000-8000-000000000021');
+
+UPDATE workflow_steps SET config = CASE
+  WHEN id = '02b00014-0000-4000-8000-000000000020' AND config = '{"message": "PII data must be encrypted"}' THEN '{"message": "PII data products must be tagged gdpr"}'
+  WHEN id = '02b00015-0000-4000-8000-000000000021' AND config = '{"message": "Access controls must be properly configured"}' THEN '{"message": "Confidential data contracts must be tagged restricted"}'
+  ELSE config END
+WHERE id IN ('02b00014-0000-4000-8000-000000000020', '02b00015-0000-4000-8000-000000000021');
 
 
 -- ============================================================================

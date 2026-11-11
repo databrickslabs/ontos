@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from pydantic import ValidationError, parse_obj_as
@@ -23,7 +24,7 @@ from src.models.data_asset_reviews import (
     DataAssetReviewRequestUpdateStatus,
     ReviewedAsset as ReviewedAssetApi,
     ReviewedAssetUpdate,
-    ReviewRequestStatus, ReviewedAssetStatus, AssetType,
+    ReviewRequestStatus, ReviewedAssetStatus, AssetType, app_entity_asset_type,
     AssetAnalysisRequest, AssetAnalysisResponse # Added LLM models
 )
 # Import Repository
@@ -109,15 +110,39 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         if not self._ws_client:
              logger.warning("WorkspaceClient was not provided to DataAssetReviewManager. SDK operations will fail.")
 
-    def _determine_asset_type(self, fqn: str) -> AssetType:
-        """Tries to determine the asset type using the Databricks SDK."""
-        # Handle special protocol-based FQNs
+    @staticmethod
+    def _app_asset_type(fqn: str) -> Optional[AssetType]:
+        """The type of an FQN that names no Unity Catalog object (a protocol or an app entity)."""
         if fqn.startswith('mdm://'):
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
             return AssetType.CONCEPT_MAPPING_SUGGESTION
+        if fqn.startswith('knowledge-concept://'):
+            return AssetType.KNOWLEDGE_CONCEPT
+        if fqn.startswith('concept-changeset://'):
+            return AssetType.CONCEPT_CHANGESET
+        return app_entity_asset_type(fqn)
 
-        if not self._ws_client:
+    def reads_catalog(self, fqns: List[str]) -> bool:
+        """Whether typing these FQNs reads Unity Catalog (some is ``catalog.schema.name``)."""
+        return any(
+            self._app_asset_type(fqn) is None and len(fqn.split('.')) == 3 for fqn in fqns
+        )
+
+    def _determine_asset_type(
+        self, fqn: str, ws_client: Optional[WorkspaceClient] = None
+    ) -> AssetType:
+        """Tries to determine the asset type using the Databricks SDK.
+
+        ``ws_client`` is the requesting user's client: an object they can't see is
+        typed TABLE, like one that doesn't exist. Without it the manager's own is used.
+        """
+        app_type = self._app_asset_type(fqn)
+        if app_type:
+            return app_type
+
+        client = self._ws_client if ws_client is None else ws_client
+        if not client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")
             # Default or raise error? For now, default to TABLE as a fallback.
             return AssetType.TABLE
@@ -132,7 +157,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             # Try fetching as Table first (most common)
             try:
-                table_info = self._ws_client.tables.get(full_name=fqn)
+                table_info = client.tables.get(full_name=fqn)
+                if table_info.table_type == TableType.METRIC_VIEW:
+                    return AssetType.METRIC
                 if table_info.table_type == TableType.VIEW or table_info.table_type == TableType.MATERIALIZED_VIEW:
                     return AssetType.VIEW
                 else:
@@ -144,7 +171,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             
             # Try fetching as Function
             try:
-                self._ws_client.functions.get(name=fqn)
+                client.functions.get(name=fqn)
                 return AssetType.FUNCTION
             except DatabricksError as e:
                 if "NOT_FOUND" not in str(e) and "PERMISSION_DENIED" not in str(e):
@@ -173,12 +200,19 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected SDK error determining asset type for {fqn}: {e}. Defaulting to TABLE.", exc_info=True)
             return AssetType.TABLE
 
-    def create_review_request(self, request_data: DataAssetReviewRequestCreate, db: Optional[Session] = None) -> DataAssetReviewRequestApi:
+    def create_review_request(
+        self,
+        request_data: DataAssetReviewRequestCreate,
+        db: Optional[Session] = None,
+        ws_client: Optional[WorkspaceClient] = None,
+    ) -> DataAssetReviewRequestApi:
         """Creates a new data asset review request.
         
         Args:
             request_data: The review request data
             db: Optional database session. If not provided, uses the manager's internal session.
+            ws_client: The requesting user's client, to type Unity Catalog assets as
+                them (the route passes it). If not provided, the manager's own is used.
         """
         # Use provided db session or fall back to instance session
         db_session = db if db is not None else self._db
@@ -193,7 +227,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     logger.warning(f"Duplicate FQN '{fqn}' in request, skipping.")
                     continue
                 
-                asset_type = self._determine_asset_type(fqn)
+                asset_type = self._determine_asset_type(fqn, ws_client)
                 assets_to_review.append(
                     ReviewedAssetApi(
                         id=str(uuid.uuid4()),
@@ -346,7 +380,14 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             from_status = db_obj.status.value if hasattr(db_obj.status, 'value') else str(db_obj.status)
             updated_db_obj = self._repo.update_request_status(db=self._db, db_obj=db_obj, status=update_data.status, notes=update_data.notes)
             to_status = updated_db_obj.status.value if hasattr(updated_db_obj.status, 'value') else str(updated_db_obj.status)
-            
+
+            # --- Reflect the reviewer decision onto a KNOWLEDGE_CONCEPT --- #
+            # When the reviewed asset is a concept, drive the concept lifecycle
+            # (the send-back ping-pong loop) via the SemanticModelsManager. This
+            # is best-effort: a missing SMM or a failed reflection must never sink
+            # the review-status update itself.
+            self._reflect_concept_review_decision(updated_db_obj, update_data)
+
             # --- Trigger workflow for status change --- #
             final_statuses = [ReviewRequestStatus.APPROVED, ReviewRequestStatus.NEEDS_REVIEW, ReviewRequestStatus.DENIED]
             if updated_db_obj.status in final_statuses:
@@ -410,6 +451,127 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         except Exception as e:
             logger.error(f"Unexpected error updating status for request {request_id}: {e}")
             raise
+
+    def _reflect_concept_review_decision(self, updated_db_obj, update_data) -> None:
+        """Drive the concept lifecycle from a KNOWLEDGE_CONCEPT review decision.
+
+        Resolves the concept IRI from the reviewed asset's FQN (stored as
+        ``knowledge-concept://<iri>`` at review-create time) and calls the
+        SemanticModelsManager send-back hook:
+
+          APPROVED     -> apply_review_decision('approved')
+          NEEDS_REVIEW -> apply_review_decision('changes_requested', comments=...)
+          DENIED       -> apply_review_decision('denied')
+
+        A CONCEPT_CHANGESET reviewed asset (FQN ``concept-changeset://<token>``,
+        P3) is handled ahead of the single-concept branch: the whole held bulk
+        upload is applied on APPROVED and dropped on DENIED. NEEDS_REVIEW /
+        CANCELLED also drop the held upload — a changeset is re-uploaded, not
+        edited in place.
+
+        CANCELLED / non-terminal statuses do not touch the concept. Reaches the
+        SMM via the global app_state registry; if it is unavailable the decision
+        is logged and skipped rather than crashing the review update.
+        """
+        try:
+            status = updated_db_obj.status
+            status_val = status.value if hasattr(status, 'value') else str(status)
+
+            from src.controller.semantic_models_manager import SemanticModelsManager
+            from src.common.app_state import get_app_state_manager
+
+            # --- P3: CONCEPT_CHANGESET (bulk RDF upload held behind approval) --- #
+            changeset_token = None
+            for asset in (updated_db_obj.assets or []):
+                tok = SemanticModelsManager.preview_token_from_changeset_fqn(asset.asset_fqn)
+                if tok:
+                    changeset_token = tok
+                    break
+            if changeset_token is not None:
+                # Only terminal decisions act on a held changeset.
+                changeset_terminal = {
+                    ReviewRequestStatus.APPROVED.value,
+                    ReviewRequestStatus.DENIED.value,
+                    ReviewRequestStatus.NEEDS_REVIEW.value,
+                    ReviewRequestStatus.CANCELLED.value,
+                }
+                if status_val not in changeset_terminal:
+                    return  # QUEUED / IN_REVIEW: leave the held changeset alone.
+                smm = get_app_state_manager("semantic_models_manager")
+                if smm is None:
+                    logger.warning(
+                        "CONCEPT_CHANGESET review %s reached %s but no "
+                        "semantic_models_manager is registered; skipping "
+                        "changeset reflection.", updated_db_obj.id, status_val,
+                    )
+                    return
+                if status_val == ReviewRequestStatus.APPROVED.value:
+                    smm.apply_changeset_by_token(
+                        changeset_token, actor=updated_db_obj.reviewer_email
+                    )
+                else:
+                    # DENIED, NEEDS_REVIEW and CANCELLED all discard the held
+                    # upload: the uploader re-uploads a corrected file rather than
+                    # editing an in-flight changeset in place.
+                    logger.info(
+                        "CONCEPT_CHANGESET review %s reached %s; dropping the "
+                        "held upload (token %s). Re-upload a corrected file to "
+                        "propose again.", updated_db_obj.id, status_val,
+                        changeset_token,
+                    )
+                    smm.reject_changeset_by_token(
+                        changeset_token, actor=updated_db_obj.reviewer_email
+                    )
+                return
+
+            decision_map = {
+                ReviewRequestStatus.APPROVED.value: "approved",
+                ReviewRequestStatus.NEEDS_REVIEW.value: "changes_requested",
+                ReviewRequestStatus.DENIED.value: "denied",
+            }
+            decision = decision_map.get(status_val)
+            if decision is None:
+                return  # QUEUED / IN_REVIEW / CANCELLED: nothing to reflect.
+
+            # Find the concept IRI among the reviewed assets.
+            concept_iri = None
+            for asset in (updated_db_obj.assets or []):
+                iri = SemanticModelsManager.concept_iri_from_review_fqn(asset.asset_fqn)
+                if iri:
+                    concept_iri = iri
+                    break
+            if concept_iri is None:
+                return  # Not a concept review.
+
+            smm = get_app_state_manager("semantic_models_manager")
+            if smm is None:
+                logger.warning(
+                    "KNOWLEDGE_CONCEPT review %s reached %s but no "
+                    "semantic_models_manager is registered; skipping concept "
+                    "reflection.", updated_db_obj.id, status_val,
+                )
+                return
+
+            # Prefer per-asset comments; fall back to the request notes.
+            comments = None
+            for asset in (updated_db_obj.assets or []):
+                if getattr(asset, 'comments', None):
+                    comments = asset.comments
+                    break
+            if not comments:
+                comments = update_data.notes
+
+            smm.apply_review_decision(
+                concept_iri=concept_iri,
+                decision=decision,
+                decided_by=updated_db_obj.reviewer_email,
+                comments=comments,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to reflect review decision onto concept for review "
+                f"{getattr(updated_db_obj, 'id', '?')}: {e}", exc_info=True,
+            )
 
     def update_review_request(
         self, request_id: str, update_data: DataAssetReviewRequestUpdate
@@ -603,8 +765,31 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return None
 
     # Add methods for getting asset content (text/data preview) using ws_client
-    async def get_asset_definition(self, asset_fqn: str, asset_type: AssetType) -> Optional[str]:
-        """Fetches the definition (e.g., SQL) for a view or function."""
+    async def get_metric_view_definition(
+        self, asset_fqn: str, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[Dict[str, Any]]:
+        """A metric view's definition: its YAML (``definition``) and the parsed
+        spec (``metric_view``: source, filter, joins, dimensions, measures).
+
+        None when the definition can't be fetched; ``metric_view`` is None when
+        the YAML can't be parsed, so the raw text can still be shown.
+        """
+        from src.common.metric_views import parse_metric_view_definition
+
+        definition = await self.get_asset_definition(asset_fqn, AssetType.METRIC, ws_client)
+        if definition is None:
+            return None
+        return {'definition': definition, 'metric_view': parse_metric_view_definition(definition)}
+
+    async def get_asset_definition(
+        self, asset_fqn: str, asset_type: AssetType, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[str]:
+        """Fetches the definition (e.g., SQL) for a view or function.
+
+        ``ws_client`` is the requesting user's client (routes pass it, so Unity
+        Catalog decides what they may read); without it the manager's own is used.
+        """
+        client = self._ws_client if ws_client is None else ws_client
         settings: Settings = get_settings()
         is_demo_mode = settings.APP_DEMO_MODE
 
@@ -646,27 +831,28 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 logger.info(f"{reason_for_fallback} for asset {current_asset_fqn} (type: {current_asset_type.value}). Not in demo mode, so no sample will be loaded.")
             return None
 
-        if not self._ws_client:
+        if not client:
             logger.warning(f"Cannot fetch definition for {asset_fqn}: WorkspaceClient not available.")
             return _try_load_sample_for_demo(asset_type, asset_fqn, "WorkspaceClient not available")
             
-        if asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
-            logger.info(f"Definition fetch only supported for VIEW/FUNCTION/NOTEBOOK, not {asset_type} ({asset_fqn})")
+        if asset_type not in [AssetType.VIEW, AssetType.METRIC, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+            logger.info(f"Definition fetch only supported for VIEW/METRIC/FUNCTION/NOTEBOOK, not {asset_type} ({asset_fqn})")
             return None # No sample data for unsupported types in this context
             
         try:
             definition = None
-            if asset_type == AssetType.VIEW:
-                 table_info = self._ws_client.tables.get(full_name=asset_fqn)
+            if asset_type in (AssetType.VIEW, AssetType.METRIC):
+                 # A metric view's view_definition is its YAML spec
+                 table_info = client.tables.get(full_name=asset_fqn)
                  definition = table_info.view_definition
             elif asset_type == AssetType.FUNCTION:
-                 func_info = self._ws_client.functions.get(name=asset_fqn)
+                 func_info = client.functions.get(name=asset_fqn)
                  definition = func_info.definition
             elif asset_type == AssetType.NOTEBOOK:
                 try:
                     notebook_path = asset_fqn # This might need adjustment
                     logger.info(f"Attempting to export notebook from workspace path: {notebook_path}")
-                    exported_content = self._ws_client.workspace.export_notebook(notebook_path)
+                    exported_content = client.workspace.export_notebook(notebook_path)
                     definition = exported_content
                     logger.info(f"Successfully exported notebook {asset_fqn}.")
                 except Exception as nb_export_error:
@@ -697,9 +883,12 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error fetching definition for {asset_fqn} (type: {asset_type.value}): {e}", exc_info=True)
             return _try_load_sample_for_demo(asset_type, asset_fqn, f"Unexpected error: {e}")
         
-    async def get_table_preview(self, table_fqn: str, limit: int = 25) -> Optional[Dict[str, Any]]:
-        """Fetches a preview of data from a table."""
-        if not self._ws_client:
+    async def get_table_preview(
+        self, table_fqn: str, limit: int = 25, ws_client: Optional[WorkspaceClient] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Fetches a preview of data from a table (with ``ws_client``, the user's, if given)."""
+        client = self._ws_client if ws_client is None else ws_client
+        if not client:
             logger.warning(f"Cannot fetch preview for {table_fqn}: WorkspaceClient not available.")
             return None
             
@@ -714,7 +903,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
              
              # --- Attempting preview via sql.execute --- #
             try:
-                table_info = self._ws_client.tables.get(full_name=table_fqn)
+                table_info = client.tables.get(full_name=table_fqn)
                 schema = table_info.columns
                 formatted_schema = [{"name": col.name, "type": col.type_text, "nullable": col.nullable} for col in schema]
                 
@@ -722,7 +911,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 # Note: This requires ws_client to be configured with appropriate
                 # credentials and potentially a host/warehouse for SQL execution.
                 # It might fail if only configured for workspace APIs.
-                result = self._ws_client.sql.execute(
+                result = client.sql.execute(
                     statement=f"SELECT * FROM {table_fqn} LIMIT {limit}",
                     # warehouse_id="YOUR_WAREHOUSE_ID" # Usually required
                 )

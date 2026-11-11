@@ -31,6 +31,8 @@
       "special": "Speciale",
       "requesterOriginalUser": "Richiedente (utente originale)",
       "ownerEntityOwner": "Proprietario (proprietario dell'entità)",
+      "domainOwners": "Responsabili del dominio",
+      "contractApprovers": "Approvatori del contratto",
       "appRoles": "Ruoli dell'app",
       "businessRoles": "Ruoli aziendali",
       "noGroups": "Nessun gruppo"
@@ -43,7 +45,8 @@
       "createdSuccess": "Workflow creato correttamente",
       "updatedSuccess": "Workflow aggiornato correttamente",
       "createFailed": "Impossibile creare il workflow: {{error}}",
-      "updateFailed": "Impossibile aggiornare il workflow: {{error}}"
+      "updateFailed": "Impossibile aggiornare il workflow: {{error}}",
+      "stepConfigInvalid": "Passaggio \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "Predefinito",
@@ -101,7 +104,25 @@
       "fromStatusPlaceholder": "es. bozza",
       "toStatus": "A stato",
       "toStatusPlaceholder": "es. attivo",
-      "descriptionPlaceholder": "Descrizione del workflow"
+      "descriptionPlaceholder": "Descrizione del workflow",
+      "failClosed": "Rifiuta la transizione se questo gate non può essere valutato",
+      "failClosedHint": "Fail closed: se la valutazione di questo gate genera un errore (non un normale fallimento), il cambio di stato viene rifiutato. Disattivato (fail open), il cambio avviene e l'errore viene registrato e sottoposto ad audit.",
+      "disabledFor": {
+        "title": "Disattivato per",
+        "hint": "Questo gate non viene eseguito per i domini, i prodotti dati e i contratti dati elencati qui (un dominio copre i suoi prodotti e contratti). Ogni salto viene registrato e sottoposto ad audit.",
+        "domains": "Domini",
+        "dataProducts": "Prodotti dati",
+        "dataContracts": "Contratti dati",
+        "none": "Nessuno",
+        "selectedCount_one": "{{count}} selezionato",
+        "selectedCount_other": "{{count}} selezionati",
+        "search": "Cerca...",
+        "noResults": "Nessun risultato.",
+        "remove": "Rimuovi {{name}}",
+        "notFound": "{{id}} (non esiste più)",
+        "missingOnSave_one": "Il gate è disattivato per {{count}} elemento che non esiste più. Rimuovilo e salva di nuovo.",
+        "missingOnSave_other": "Il gate è disattivato per {{count}} elementi che non esistono più. Rimuovili e salva di nuovo."
+      }
     },
     "stepConfig": {
       "title": "Configurazione passaggio",
@@ -167,7 +188,9 @@
         "validationPassed": "Convalida superata",
         "productApproved": "Prodotto approvato",
         "productRejected": "Prodotto rifiutato",
-        "piiDetected": "PII rilevate"
+        "piiDetected": "PII rilevate",
+        "entityDeprecated": "Avviso di obsolescenza",
+        "entityRetired": "Avviso di ritiro"
       },
       "customMessage": "Messaggio personalizzato",
       "customMessagePlaceholder": "Sostituisci il messaggio del template. Supporta ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -241,6 +264,59 @@
       "timeoutSeconds": "Timeout (secondi)",
       "retryCount": "Numero di tentativi",
       "retryHelp": "Numero di nuovi tentativi in caso di errore (0-5)."
+    },
+    "conditional": {
+      "condition": "Condizione",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "Quando la condizione è vera, il workflow segue il ramo Pass; quando è falsa, il ramo Fail.",
+      "fieldsHelp": "Scrivi un'espressione della Compliance DSL senza MATCH né ASSERT. I campi dell'entità si leggono come obj.<campo>; confronta con =, non ==.",
+      "examplesTitle": "Esempi",
+      "errors": {
+        "condition_required": "Inserisci una condizione.",
+        "condition_syntax_error": "La condizione non può essere interpretata (riga {{line}}, colonna {{column}}).",
+        "condition_trailing_input": "\"{{token}}\" inatteso dopo la condizione (riga {{line}}, colonna {{column}}). Unisci le condizioni con AND o OR.",
+        "condition_too_long": "La condizione supera i {{maximum}} caratteri. Accorciala o dividila in più passaggi.",
+        "condition_too_complex": "La condizione è troppo annidata per essere verificata. Rimuovi alcune parentesi o dividila in più passaggi."
+      }
+    },
+    "script": {
+      "language": "Linguaggio",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "Codice",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "Timeout (secondi)",
+      "timeoutHelp": "Il passaggio fallisce quando lo script dura più a lungo.",
+      "variablesTitle": "Variabili disponibili",
+      "pythonVariables": {
+        "entity": "I dati dell'entità (un dizionario)",
+        "entity_type": "Il tipo dell'entità",
+        "entity_id": "L'ID dell'entità",
+        "entity_name": "Il nome dell'entità",
+        "user_email": "Email dell'utente che ha avviato il workflow",
+        "step_results": "Risultati dei passaggi già eseguiti, per ID del passaggio"
+      },
+      "pythonResultHelp": "Imposta result per scegliere il ramo: result = {'passed': False, 'message': '...'} segue il ramo Fail; senza result il passaggio riesce. Sono disponibili solo i built-in di base: niente import, file o rete.",
+      "sqlHelp": "Viene eseguito sul SQL warehouse impostato nelle Impostazioni. I segnaposto ${variable} vengono sostituiti prima dell'esecuzione; il passaggio riesce quando l'istruzione riesce. L'istruzione attende fino a 50 secondi.",
+      "errors": {
+        "script_code_required": "Inserisci il codice dello script.",
+        "script_timeout_invalid": "Inserisci un numero intero di secondi, almeno {{minimum}}.",
+        "script_language_unsupported": "Il linguaggio \"{{language}}\" non è supportato. Supportati: {{supported}}."
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "Un workflow richiede almeno un passaggio.",
+      "duplicateStepIds": "Due passaggi hanno lo stesso ID.",
+      "stepUnknownReference": "Il passaggio \"{{step}}\" indirizza il ramo di {{branch}} a \"{{target}}\", che non è nel workflow.",
+      "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
+      "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
+      "branch": {
+        "on_pass": "successo",
+        "on_fail": "errore"
+      }
     }
   },
   "approvalResponse": {
@@ -271,6 +347,50 @@
       "processFailedRetry": "Impossibile elaborare l'approvazione. Riprova.",
       "entityApproved": "{{name}} è stato approvato.",
       "entityRejected": "{{name}} è stato rifiutato."
+    },
+    "errors": {
+      "own_owner_approval": "Questa approvazione spetta ai proprietari; non puoi approvare la tua stessa richiesta."
+    },
+    "entityTypes": {
+      "entity": "Entità",
+      "data_product": "Prodotto dati",
+      "data_contract": "Contratto dati",
+      "data_domain": "Dominio dati",
+      "data_asset_review": "Revisione degli asset di dati",
+      "access_grant": "Concessione di accesso",
+      "asset": "Asset",
+      "ontology_concept": "Concetto",
+      "concept": "Concetto"
+    },
+    "fields": {
+      "product_id": "ID del prodotto",
+      "product_name": "Nome del prodotto",
+      "contract_id": "ID del contratto",
+      "contract_name": "Nome del contratto",
+      "status": "Stato",
+      "from_status": "Stato di partenza",
+      "to_status": "Stato di destinazione",
+      "target_status": "Stato richiesto",
+      "current_status": "Stato attuale",
+      "justification": "Giustificazione",
+      "sunset_date": "Data di dismissione",
+      "replacement_id": "ID del sostituto",
+      "replacement_name": "Sostituto",
+      "requested_scope": "Ambito richiesto",
+      "publication_scope": "Ambito di pubblicazione",
+      "requester": "Richiedente",
+      "requester_message": "Messaggio del richiedente",
+      "reviewer_email": "Revisore",
+      "requested_certification_level": "Livello di certificazione richiesto",
+      "certification_level": "Livello di certificazione",
+      "certification_notes": "Note di certificazione",
+      "asset_count": "Numero di asset",
+      "asset_fqns": "Asset",
+      "domain_id": "ID del dominio",
+      "project_id": "ID del progetto",
+      "project_name": "Progetto",
+      "name": "Nome",
+      "notes": "Note"
     }
   },
   "approvalWizard": {
@@ -360,9 +480,21 @@
     "titleFallback": "Esecuzione del workflow",
     "executionId": "ID esecuzione: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} passaggi",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} passaggi (+{{count}} rimosso)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} passaggi (+{{count}} rimossi)",
     "triggeredBy": "Attivato da: {{user}}",
     "workflowSteps": "Passaggi del workflow",
     "loadDefinitionFailed": "Impossibile caricare la definizione del workflow",
+    "removedSteps": "Passaggi rimossi",
+    "removedStepsHint": "Questi passaggi sono stati eseguiti in questa esecuzione e poi rimossi dal workflow.",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "Non è stato possibile valutare la clausola WHERE della policy '{{policyName}}' su {{entityType}} {{entityId}}",
+      "approval_rejected": "Richiesta rifiutata",
+      "output_port_contracts_missing": "Impossibile pubblicare: le porte di output {{ports}} devono avere contratti di dati assegnati",
+      "output_port_contracts_unapproved": "Impossibile pubblicare: queste porte di output hanno contratti non approvati: {{ports}}. I contratti devono prima essere approvati.",
+      "rule_entity_load_failed": "Impossibile caricare {{entityType}} {{entityId}} per valutare la regola",
+      "rule_entity_not_found": "{{entityType}} {{entityId}} non è stato trovato, quindi la regola non può essere valutata"
+    },
     "states": {
       "pending": "In sospeso",
       "running": "In esecuzione",
@@ -370,6 +502,14 @@
       "failed": "Non riuscito",
       "skipped": "Saltato",
       "waiting": "In attesa"
+    },
+    "executionStates": {
+      "pending": "In attesa",
+      "running": "In esecuzione",
+      "paused": "In pausa",
+      "succeeded": "Riuscita",
+      "failed": "Non riuscita",
+      "cancelled": "Annullata"
     },
     "summary": {
       "entity": "Entità",
@@ -393,6 +533,8 @@
     "policyLabel": "Criterio: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Nessun criterio selezionato",
+    "policyHint": "Suggerito: {{name}}",
+    "policyUnknown": "Policy sconosciuta o inattiva: {{id}}",
     "reviewerLabel": "Revisore:",
     "notSet": "Non impostato",
     "connectionLabel": "Connessione: {{name}}",
@@ -431,6 +573,25 @@
     "endpointHint": "Endpoint backend che restituisce JSON",
     "addField": "Aggiungi campo"
   },
+  "runDialog": {
+    "menuLabel": "Esegui",
+    "title": "Esegui \"{{name}}\"",
+    "description": "Avvia questo workflow manuale per un'entità. Viene eseguito ora, a tuo nome.",
+    "entityType": "Tipo di entità",
+    "entity": "Entità",
+    "selectEntity": "Seleziona un'entità",
+    "loading": "Caricamento...",
+    "noEntities": "Niente da selezionare.",
+    "listFailed": "Impossibile caricare l'elenco; inserisci l'ID.",
+    "entityId": "ID entità",
+    "entityIdPlaceholder": "es. main.sales.orders",
+    "entityIdHelp": "L'ID o il nome completo dell'entità per cui eseguire il workflow.",
+    "run": "Esegui",
+    "failed": "Non è stato possibile avviare il workflow.",
+    "resultStatus": "Risultato",
+    "viewExecution": "Visualizza esecuzione",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} copiato negli appunti.",
     "copyFailed": "Copia non riuscita",
@@ -452,6 +613,16 @@
     "matches_one": "{{count}} corrispondenza",
     "matches_other": "{{count}} corrispondenze",
     "noMatch": "Nessuna variabile corrisponde"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "Tipo di entità sconosciuto: {{type}}",
+    "removeUnknown": "Rimuovi {{type}}",
+    "unknownNotice_one": "Questo trigger contiene un tipo di entità che non esiste più. Non corrisponde a nulla: rimuovilo per modificare il trigger.",
+    "unknownNotice_other": "Questo trigger contiene {{count}} tipi di entità che non esistono più. Non corrispondono a nulla: rimuovili per modificare il trigger.",
+    "unknownOnSave": "Il trigger contiene il tipo di entità sconosciuto \"{{type}}\": rimuovilo nella configurazione del trigger per modificarlo.",
+    "unsupportedOnSave": "\"{{trigger}}\" non si attiva mai per {{type}}: scegli un tipo di entità supportato da questo trigger.",
+    "pickKnownType": "Scegli almeno un tipo di entità. Senza, questo workflow si attiverebbe per tutte le entità.",
+    "requiredOnSave": "Scegli almeno un tipo di entità per il trigger: nessuno dei suoi tipi lo attiva (non esistono più, o questo trigger non si attiva mai per loro), e una lista vuota lo farebbe attivare per tutte le entità."
   },
   "triggerPicker": {
     "label": "Si attiva su",
@@ -552,7 +723,12 @@
       "duplicateTitle": "Duplica workflow",
       "duplicateDescription": "Crea una copia di \"{{name}}\" con un nuovo nome.",
       "deleteExecutionTitle": "Elimina esecuzione",
-      "deleteExecutionDescription": "Vuoi davvero eliminare questa esecuzione del workflow? Questa azione non può essere annullata."
+      "deleteExecutionDescription": "Vuoi davvero eliminare questa esecuzione del workflow? Questa azione non può essere annullata.",
+      "activationOverlapTitle": "Un altro workflow corrisponde allo stesso evento",
+      "activationOverlapDescription": "Anche i workflow qui sotto verrebbero eseguiti per lo stesso evento. Controllali, quindi annulla o attiva comunque.",
+      "activationOverlapDetails": "Trigger: {{trigger}} · Entità: {{entities}}",
+      "allEntities": "tutte le entità",
+      "activateAnyway": "Attiva comunque"
     },
     "placeholders": {
       "newWorkflowName": "Nome del nuovo workflow"

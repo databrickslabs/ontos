@@ -6,6 +6,7 @@
     "loading": "Laden...",
     "cancel": "Annuleren",
     "close": "Sluiten",
+    "openMenu": "Menu openen",
     "delete": "Verwijderen",
     "deleteSelected": "Geselecteerde Verwijderen ({{count}})",
     "edit": "Bewerken",
@@ -44,7 +45,8 @@
     "remove": "Verwijderen",
     "link": "Koppelen",
     "unlink": "Ontkoppelen",
-    "assign": "Toewijzen"
+    "assign": "Toewijzen",
+    "rename": "Hernoemen"
   },
   "labels": {
     "name": "Naam",
@@ -355,7 +357,10 @@
       "data_asset_review": "Asset Beoordeling",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Gebruiker"
+      "user": "Gebruiker",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collectie",
+      "concept_changeset": "Concept-wijzigingsset"
     },
     "stepTypes": {
       "validation": "Validatie",
@@ -528,7 +533,14 @@
     "countBadge": "{{entities}} entiteiten, {{relationships}} relaties",
     "failedLoadRelationships": "Laden van relaties mislukt: {{status}}",
     "failedLoadLineage": "Laden van lineage mislukt: {{status}}",
-    "failedLoadGraph": "Laden van grafiek mislukt"
+    "failedLoadGraph": "Laden van grafiek mislukt",
+    "layers": {
+      "business": "Business",
+      "delivery": "Levering",
+      "logical": "Logisch",
+      "physical": "Fysiek",
+      "other": "Overig"
+    }
   },
   "lifecycleDialogs": {
     "certifyTitle": "Certificeren",
@@ -749,5 +761,45 @@
     "tabMemberships": "Lidmaatschappen",
     "detailsFailed": "Ophalen van gebruikersdetails mislukt",
     "loadFailed": "Laden van profielgegevens mislukt"
+  },
+  "importSummary": {
+    "created": "Aangemaakt: {{created}}.",
+    "createdSkipped": "Aangemaakt: {{created}}, overgeslagen: {{skipped}}.",
+    "createdFailed": "Aangemaakt: {{created}}, mislukt: {{failed}}.",
+    "createdSkippedFailed": "Aangemaakt: {{created}}, overgeslagen: {{skipped}}, mislukt: {{failed}}."
+  },
+  "deprecation": {
+    "reason": "Reden voor uitfasering",
+    "reasonPlaceholder": "Waarom wordt het uitgefaseerd? Afnemers zien deze tekst.",
+    "sunsetDate": "Einddatum",
+    "replacement": "Vervanging",
+    "noReplacement": "Geen vervanging",
+    "reasonRequired": "Een reden is verplicht om uit te faseren.",
+    "requestHint": "De motivatie wordt de reden voor de uitfasering.",
+    "errors": {
+      "deprecation_reason_required": "Een reden is verplicht om uit te faseren.",
+      "sunset_date_in_past": "De einddatum {{sunsetDate}} ligt in het verleden.",
+      "replacement_is_self": "Een entiteit kan niet haar eigen vervanging zijn.",
+      "replacement_not_found": "De vervanging {{replacementId}} is niet gevonden.",
+      "replacement_retired": "De vervanging {{replacementId}} is buiten gebruik.",
+      "replacement_deprecated": "De vervanging {{replacementId}} is verouderd.",
+      "replacement_deprecated_replaced": "De vervanging {{replacementId}} is verouderd; ze wordt vervangen door {{replacedBy}}.",
+      "replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit: {{chain}}."
+    },
+    "import": {
+      "imported_date_invalid": "Ongeldige {{property}} \"{{value}}\": ISO-datum verwacht.",
+      "replacement_is_self": "De vervanging (ontosReplacedBy) kan niet de entiteit zelf zijn.",
+      "replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit: {{chain}}.",
+      "imported_replacement_dropped": "De vervanging {{replacementId}} is hier niet aanwezig en is daarom niet gekoppeld.",
+      "imported_replacement_leads_back": "De vervanging {{replacementId}} leidt terug naar deze entiteit ({{chain}}) en is daarom niet gekoppeld.",
+      "imported_status_mapped": "'{{status}}' is geen levenscyclusstatus en is daarom geïmporteerd als '{{mappedTo}}'.",
+      "imported_legacy_status": "'{{status}}' is een oudere statusnaam en is daarom geïmporteerd als '{{mappedTo}}'.",
+      "imported_certified_as_active": "'{{status}}' is geen status meer en is daarom geïmporteerd als '{{mappedTo}}'. Certificering wordt niet geïmporteerd: certificeer de entiteit in Ontos."
+    },
+    "notice": {
+      "deprecated": "Verouderd",
+      "retired": "Buiten Gebruik",
+      "noReason": "Geen reden vastgelegd"
+    }
   }
 }

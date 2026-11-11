@@ -25,6 +25,40 @@ from src.models.workflow_configurations import WorkflowParameterDefinition, Work
 logger = get_logger(__name__)
 
 
+def add_missing_mapped_entries(
+    configuration: Dict[str, Any], definitions: List[WorkflowParameterDefinition]
+) -> Dict[str, Any]:
+    """Add the YAML default entries with a ``mapping`` id that a saved list lacks.
+
+    A ``tag_sync_configs`` default entry with a ``mapping`` id (for example the
+    ``lifecycle_status`` entries of ``uc_tag_sync``) is a named mapping: a saved list
+    that has no entry with the same ``entity_type`` and ``mapping`` gets a copy of the
+    default appended. So a configuration saved before the mapping existed gets it
+    without a manual edit; an entry kept but disabled stays disabled. Entries without
+    a ``mapping`` id are never added. Returns a new dict; the input isn't changed.
+    """
+    result = dict(configuration)
+    for definition in definitions:
+        if definition.type != 'tag_sync_configs' or not isinstance(definition.default, list):
+            continue
+        saved = result.get(definition.name)
+        if not isinstance(saved, list):
+            continue
+        present = {
+            (entry.get('entity_type'), entry.get('mapping'))
+            for entry in saved
+            if isinstance(entry, dict) and entry.get('mapping')
+        }
+        missing = [
+            dict(entry) for entry in definition.default
+            if isinstance(entry, dict) and entry.get('mapping')
+            and (entry.get('entity_type'), entry.get('mapping')) not in present
+        ]
+        if missing:
+            result[definition.name] = [*saved, *missing]
+    return result
+
+
 class JobsManager:
     def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
@@ -167,15 +201,9 @@ class JobsManager:
             job_settings_kwargs['continuous'] = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
 
         if 'parameters' in wf_def:
-            params = wf_def['parameters']
-            if isinstance(params, dict):
-                # Convert dict to list of JobParameter objects with default values
-                job_settings_kwargs['parameters'] = [
-                    jobs.JobParameter(name=key, default=str(value))
-                    for key, value in params.items()
-                ]
-            else:
-                job_settings_kwargs['parameters'] = params
+            job_settings_kwargs['parameters'] = self._build_persisted_job_parameters(
+                workflow_id, wf_def
+            )
 
         if 'tags' in wf_def:
             job_settings_kwargs['tags'] = wf_def['tags']
@@ -285,15 +313,9 @@ class JobsManager:
             job_settings.continuous = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
         
         if 'parameters' in wf_def:
-            params = wf_def['parameters']
-            if isinstance(params, dict):
-                # Convert dict to list of JobParameter objects with default values
-                job_settings.parameters = [
-                    jobs.JobParameter(name=key, default=str(value))
-                    for key, value in params.items()
-                ]
-            else:
-                job_settings.parameters = params
+            job_settings.parameters = self._build_persisted_job_parameters(
+                workflow_id, wf_def
+            )
         
         if 'tags' in wf_def:
             job_settings.tags = wf_def['tags']
@@ -432,9 +454,17 @@ class JobsManager:
             workflow_id: Workflow identifier
             
         Returns:
-            Configuration dict or None if not found
+            Configuration dict or None if not found. Named mappings of the YAML defaults
+            that the saved configuration lacks are added (see add_missing_mapped_entries).
         """
-        return workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
+        saved = workflow_configuration_repo.get_configuration_dict(
+            self._db, workflow_id=workflow_id
+        )
+        if saved is None:
+            return None
+        return add_missing_mapped_entries(
+            saved, self.get_workflow_parameter_definitions(workflow_id)
+        )
     
     def update_workflow_configuration(self, workflow_id: str, configuration: Dict[str, Any]) -> WorkflowConfiguration:
         """Update workflow configuration in database.
@@ -452,10 +482,51 @@ class JobsManager:
             configuration=configuration
         )
         self._db.commit()
+
+        # A Databricks schedule starts the job directly and therefore does not pass
+        # through run_job(), where Ontos normally injects saved configuration and
+        # app database parameters. Keep the installed job defaults in sync so
+        # scheduled runs receive the same effective parameters as manual runs.
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is not None:
+            wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
+            if 'parameters' in wf_def:
+                self._client.jobs.update(
+                    job_id=int(installation.job_id),
+                    new_settings=jobs.JobSettings(
+                        parameters=self._build_persisted_job_parameters(
+                            workflow_id, wf_def
+                        )
+                    ),
+                )
         
         # Return as Pydantic model
         config_dict = workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
         return WorkflowConfiguration(workflow_id=workflow_id, configuration=config_dict or {})
+
+    def _build_persisted_job_parameters(
+        self, workflow_id: str, wf_def: Dict[str, Any]
+    ) -> Any:
+        """Build job defaults that also work when Databricks starts a schedule.
+
+        YAML defaults define the parameter set. Saved user configuration and
+        auto-detected app database values replace those defaults, matching the
+        parameters supplied by :meth:`run_job` for an Ontos-initiated run.
+        """
+        params = wf_def.get('parameters')
+        if not isinstance(params, dict):
+            return params
+
+        effective = self.get_merged_job_parameters(workflow_id)
+        return [
+            jobs.JobParameter(
+                name=name,
+                default=effective.get(name, str(yaml_default)),
+            )
+            for name, yaml_default in params.items()
+        ]
     
     def get_merged_job_parameters(self, workflow_id: str, ad_hoc_params: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """Merge saved configuration with ad-hoc parameters for job execution.
@@ -884,6 +955,43 @@ class JobsManager:
         except Exception as e:
             logger.error(f"Failed to list active runs for job {job_id}: {e}")
             return None
+
+    # Run states before the tasks start: such a run reads the app database after anything
+    # committed now. A RUNNING run may have read it already, so it isn't in this list.
+    _NOT_STARTED_RUN_STATES = (
+        RunLifeCycleState.QUEUED,
+        RunLifeCycleState.PENDING,
+        RunLifeCycleState.BLOCKED,
+        RunLifeCycleState.WAITING_FOR_RETRY,
+    )
+
+    def get_not_started_run_id(self, job_id: int) -> Optional[int]:
+        """Return the id of a run of the job that hasn't started its tasks yet, if any.
+
+        Asks the Jobs API: ``workflow_job_runs`` is only refreshed by the background
+        poll, so it can miss a run just requested or show a started run as PENDING.
+        """
+        for run in self._client.jobs.list_runs(job_id=job_id, active_only=True):
+            if run.state and run.state.life_cycle_state in self._NOT_STARTED_RUN_STATES:
+                return int(run.run_id)
+        return None
+
+    def run_workflow_unless_pending(self, workflow_id: str) -> Optional[int]:
+        """Run an installed workflow's job, unless one of its runs hasn't started yet.
+
+        Returns the new run id, or None when the workflow isn't installed or a run
+        that will see the current data is already waiting. Saved configuration and
+        database parameters are injected as for a manual run.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None or installation.status != 'installed':
+            return None
+        job_id = int(installation.job_id)
+        if self.get_not_started_run_id(job_id) is not None:
+            return None
+        return self.run_job(job_id=job_id, job_name=workflow_id, workflow_id=workflow_id)
 
     def pause_job(self, job_id: int) -> None:
         """Pause a scheduled/continuous job by setting pause_status to PAUSED."""

@@ -49,14 +49,32 @@
   },
   "upload": {
     "success": "Carga Exitosa",
-    "successMessage": "{{filename}} procesado exitosamente. {{count}} producto(s) procesado(s).",
+    "successMessage_one": "{{filename}} procesado exitosamente. {{count}} producto procesado.",
+    "successMessage_other": "{{filename}} procesado exitosamente. {{count}} productos procesados.",
+    "successMessage_files_one": "{{files}} archivos procesados exitosamente. {{count}} producto procesado.",
+    "successMessage_files_other": "{{files}} archivos procesados exitosamente. {{count}} productos procesados.",
+    "partialSuccess": "Importado con incidencias",
     "failed": "Carga Fallida",
     "unexpectedError": "Ocurrió un error inesperado durante la carga.",
     "uploading": "Cargando...",
     "tooltipTitle": "Subir Producto de Datos (formato ODPS)",
     "tooltipDescription": "Acepta archivos YAML o JSON siguiendo el esquema ODPS (Open Data Product Standard).",
     "tooltipHint": "Para Contratos de Datos (ODCS), usa la página de Contratos de Datos.",
-    "odcsHint": "Sugerencia: Esta página es para productos de datos (formato ODPS). Si intenta cargar un contrato de datos (formato ODCS), use la página de contratos de datos en su lugar."
+    "odcsHint": "Sugerencia: Esta página es para productos de datos (formato ODPS). Si intenta cargar un contrato de datos (formato ODCS), use la página de contratos de datos en su lugar.",
+    "dialogTitle": "Subir productos de datos",
+    "dialogDescription": "Selecciona uno o más archivos ODPS (YAML/JSON). Cada archivo puede contener un único producto o un array.",
+    "createMissingDomains": "Crear dominios que faltan",
+    "createMissingDomainsHint": "Crea automáticamente los dominios que no existen. Desactivado: los dominios sin coincidencia quedan sin asignar (se conserva el original).",
+    "adoptIds": "Adoptar los ID del archivo",
+    "adoptIdsHint": "Reutiliza un UUID válido y sin colisiones del archivo como clave primaria para que los vínculos entre entidades se conserven al importar.",
+    "duplicatesAsNew": "Importar ID duplicados como copias nuevas",
+    "duplicatesAsNewHint": "Desactivado (predeterminado): se omite un producto cuyo ID ya existe. Activado: se importa como copia nueva con un ID nuevo.",
+    "dropActive": "Suelta el/los archivo(s) aquí",
+    "dropInactive": "Arrastra y suelta aquí archivo(s) de producto, o haz clic para seleccionar",
+    "supportedFormats": "Formatos admitidos: JSON o YAML (ODPS)",
+    "orPasteOdps": "O pega JSON de ODPS",
+    "pasteOdpsPlaceholder": "Pega aquí el JSON del producto ODPS",
+    "importJsonButton": "Importar JSON"
   },
   "genie": {
     "noSelection": "Sin Selección",
@@ -354,7 +372,8 @@
       "deleteSupportChannel": "¿Eliminar este canal de soporte?",
       "unlinkContract": "¿Desvincular el contrato de este entregable?",
       "createGenieSpace": "¿Crear un Genie Space para \"{{name}}\"?"
-    }
+    },
+    "contractDangling": "El contrato ya no existe"
   },
   "form": {
     "createTitle": "Crear Producto de Datos",
@@ -522,7 +541,8 @@
       "failedToSerialize": "No se pudo serializar el estado de la interfaz a JSON.",
       "unexpectedError": "Se produjo un error inesperado."
     },
-    "syntaxErrorLabel": "Error de sintaxis:"
+    "syntaxErrorLabel": "Error de sintaxis:",
+    "statusChangeHint": "El estado cambia con Cambiar estado en la página, que comprueba la transición y ejecuta los workflows de cambio de estado."
   },
   "import": {
     "title": "Importar Producto de Datos",
@@ -658,14 +678,26 @@
       "certLevelRequired": "Seleccione un nivel de certificación"
     },
     "errors": {
-      "cannotRequest": "No se puede solicitar {{requestType}} para un producto con el estado '{{productStatus}}'",
-      "failedToSubmit": "No se pudo enviar la solicitud"
+      "cannotRequest": "\"{{requestType}}\" no está disponible para un producto con estado {{productStatus}}.",
+      "failedToSubmit": "No se pudo enviar la solicitud",
+      "notProductOwner": "Solo los propietarios del producto o un administrador pueden solicitar su revisión."
     },
     "toast": {
       "statusChanged": "Estado cambiado",
       "statusChangedDesc": "El estado del producto cambió de \"{{fromStatus}}\" a \"{{toStatus}}\".",
       "requestSubmitted": "Solicitud enviada",
-      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión."
+      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión.",
+      "workflowFailed": "Solicitud enviada, pero su flujo de trabajo falló",
+      "workflowFailedDesc": "No se pidió a nadie que decidiera sobre su solicitud de {{type}}: el flujo de trabajo \"{{workflow}}\" no pudo iniciarse. Contacte con un administrador.",
+      "requestTypes": {
+        "access": "acceso",
+        "review": "revisión",
+        "publish": "publicación",
+        "certify": "certificación",
+        "status_change": "cambio de estado"
+      },
+      "workflowPartiallyFailed": "Algunos flujos de trabajo de solicitud fallaron",
+      "workflowPartiallyFailedDesc": "Uno de los flujos de trabajo de solicitud de {{type}} falló: {{workflows}}. Otras aprobaciones pueden estar pendientes."
     },
     "labels": {
       "requestType": "Tipo de solicitud",
@@ -899,7 +931,8 @@
       "createNewContract": "Crear nuevo contrato",
       "linkContract": "Vincular contrato",
       "linking": "Vinculando..."
-    }
+    },
+    "statusFilterNote": "Solo se muestran contratos con estado 'activo' o 'aprobado'. Elige una versión concreta: los contratos con el mismo nombre muestran su versión al lado."
   },
   "hierarchy": {
     "title": "Jerarquía de datos",
@@ -1056,8 +1089,10 @@
     "versionPlaceholder": "p. ej., v1.1, v2.0-beta",
     "createButton": "Crear versión",
     "errors": {
-      "versionEmpty": "La cadena de versión no puede estar vacía."
-    }
+      "versionEmpty": "La cadena de versión no puede estar vacía.",
+      "versionFormat": "\"{{version}}\" no tiene la forma X.Y.Z (por ejemplo 2.0.0)."
+    },
+    "versionPlaceholderSemver": "p. ej., 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Producto sin nombre",

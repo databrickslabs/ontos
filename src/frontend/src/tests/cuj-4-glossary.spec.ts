@@ -12,8 +12,8 @@ test.afterAll(async ({ request }) => {
 // ---------------------------------------------------------------------------
 // CUJ-4  Business Glossary — Collections
 // ---------------------------------------------------------------------------
-test.describe('CUJ-4 — Collections', () => {
-  test('collections list loads with items', async ({ page }) => {
+test.describe('CUJ-4: Schemes', () => {
+  test('schemes list loads with items', async ({ page }) => {
     await page.goto('/concepts/collections')
     // Wait for any list/table/card content to appear
     await expect(
@@ -21,12 +21,12 @@ test.describe('CUJ-4 — Collections', () => {
     ).toBeVisible({ timeout: 10_000 })
   })
 
-  test.describe.serial('create and delete collection', () => {
+  test.describe.serial('create and delete scheme', () => {
     const collectionName = `PW Glossary ${Date.now()}`
 
-    test('creates a new collection', async ({ page }) => {
+    test('creates a new scheme', async ({ page }) => {
       await page.goto('/concepts/collections')
-      await page.getByRole('button', { name: /create collection/i }).first().click()
+      await page.getByRole('button', { name: /create scheme/i }).first().click()
 
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
@@ -38,7 +38,7 @@ test.describe('CUJ-4 — Collections', () => {
       await expect(page.getByText(collectionName)).toBeVisible()
     })
 
-    test('deletes the created collection', async ({ page }) => {
+    test('deletes the created scheme', async ({ page }) => {
       await page.goto('/concepts/collections')
       await page.waitForLoadState('networkidle')
       const row = page.locator('table >> tbody >> tr', { hasText: collectionName })
@@ -48,7 +48,7 @@ test.describe('CUJ-4 — Collections', () => {
       page.on('dialog', (d) => d.accept())
       await page.getByRole('menuitem', { name: /delete/i }).click()
 
-      await expect(page.getByText(collectionName)).toHaveCount(0)
+      await expect(row).toHaveCount(0)
     })
   })
 })
@@ -66,6 +66,24 @@ test.describe('CUJ-4 — Business Terms Browser', () => {
 
   test.describe.serial('create and delete concept', () => {
     const conceptLabel = `PW Concept ${Date.now()}`
+    const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000'
+    let taxonomyIri: string | undefined
+
+    // Concepts need an editable Taxonomy scheme, which demo data doesn't guarantee
+    // (its taxonomies are imported/read-only), so bring our own.
+    test.beforeAll(async ({ request }) => {
+      const resp = await request.post(`${BACKEND_URL}/api/knowledge/collections`, {
+        data: { label: `PW Taxonomy ${Date.now()}`, collection_type: 'taxonomy', is_editable: true },
+      })
+      expect(resp.ok()).toBeTruthy()
+      taxonomyIri = (await resp.json()).iri
+    })
+
+    test.afterAll(async ({ request }) => {
+      if (taxonomyIri) {
+        await request.delete(`${BACKEND_URL}/api/knowledge/collections/${encodeURIComponent(taxonomyIri)}`)
+      }
+    })
 
     test('creates a new concept', async ({ page }) => {
       await page.goto('/concepts/browser')
@@ -75,8 +93,8 @@ test.describe('CUJ-4 — Business Terms Browser', () => {
       const createBtn = page.getByRole('button', { name: /^create$/i }).first()
       await createBtn.click()
 
-      // Pick "Create Concept" from the dropdown menu
-      const menuItem = page.getByRole('menuitem', { name: /create concept/i })
+      // Pick "New Concept" from the dropdown menu
+      const menuItem = page.getByRole('menuitem', { name: /^new concept$/i })
       await expect(menuItem).toBeVisible()
       await menuItem.click()
 
@@ -91,11 +109,14 @@ test.describe('CUJ-4 — Business Terms Browser', () => {
       await dialog.getByRole('button', { name: /^create$/i }).click()
       await expect(dialog).toHaveCount(0)
 
-      await expect(page.getByText(conceptLabel)).toBeVisible()
+      // The concept list is long; search so the new entry is on screen.
+      await page.getByPlaceholder(/search concepts/i).fill(conceptLabel)
+      await expect(page.getByText(conceptLabel).first()).toBeVisible()
     })
 
     test('deletes the created concept', async ({ page }) => {
       await page.goto('/concepts/browser')
+      await page.getByPlaceholder(/search concepts/i).fill(conceptLabel)
 
       // Find and click on the concept to select it
       await page.getByText(conceptLabel).first().click()

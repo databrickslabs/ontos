@@ -158,5 +158,71 @@
     "metadataLoadFailed": "Falha ao carregar metadados",
     "couldNotLoadMetadata": "Não foi possível carregar os metadados.",
     "editTeamLoadError": "Falha ao carregar os detalhes da equipe para edição."
+  },
+  "sync": {
+    "title": "Sincronizar domínios",
+    "description": "Importe domínios do Unity Catalog para o Ontos ou exporte seus domínios para o Unity Catalog. O UC suporta dois níveis (domínios e subdomínios); domínios mais profundos são ignorados.",
+    "direction": {
+      "title": "Direção",
+      "description": "Em que sentido sincronizar",
+      "importLabel": "Importar do Unity Catalog",
+      "importHint": "Criar/vincular domínios do Ontos a partir do UC",
+      "exportLabel": "Exportar para o Unity Catalog",
+      "exportHint": "Publicar domínios do Ontos no UC"
+    },
+    "target": {
+      "importTitle": "Colocar em",
+      "exportTitle": "Âncora",
+      "importHint": "Domínio do Ontos sob o qual colocar as raízes importadas do UC.",
+      "exportHint": "Seus filhos viram raízes no UC; os netos viram subdomínios.",
+      "importTopLevel": "Nível superior (sem pai)",
+      "exportTopLevel": "Domínios de nível superior"
+    },
+    "actions": {
+      "preview": "Pré-visualizar",
+      "apply": "Aplicar"
+    },
+    "panel": {
+      "resultTitle": "Resultado da sincronização",
+      "previewTitle": "Pré-visualização",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "Escolha uma direção e clique em <b>Pré-visualizar</b> para ver o que mudaria.",
+    "warnings": "Avisos",
+    "errorsTitle": "Erros",
+    "nothingToSync": "Nada para sincronizar.",
+    "level": "N{{level}}",
+    "actionLabels": {
+      "create": "Criar",
+      "match": "Vincular",
+      "skip": "Ignorar",
+      "error": "Erro"
+    },
+    "toasts": {
+      "previewFailed": "Falha na pré-visualização",
+      "syncFailed": "Falha na sincronização",
+      "syncComplete": "Sincronização concluída"
+    },
+    "summary": "Criados: {{created}}, vinculados: {{matched}}, ignorados: {{skipped}}.",
+    "summaryWithErrors": "Criados: {{created}}, vinculados: {{matched}}, ignorados: {{skipped}}, erros: {{errors}}.",
+    "plan": {
+      "toCreate_one": "{{count}} a criar",
+      "toCreate_other": "{{count}} a criar",
+      "toMatch_one": "{{count}} a vincular",
+      "toMatch_other": "{{count}} a vincular",
+      "toSkip_one": "{{count}} a ignorar",
+      "toSkip_other": "{{count}} a ignorar"
+    },
+    "result": {
+      "created_one": "{{count}} criado",
+      "created_other": "{{count}} criados",
+      "matched_one": "{{count}} vinculado",
+      "matched_other": "{{count}} vinculados",
+      "skipped_one": "{{count}} ignorado",
+      "skipped_other": "{{count}} ignorados",
+      "errors_one": "{{count}} erro",
+      "errors_other": "{{count}} erros"
+    }
   }
 }

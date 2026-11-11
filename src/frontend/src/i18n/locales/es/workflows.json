@@ -31,6 +31,8 @@
       "special": "Especial",
       "requesterOriginalUser": "Solicitante (usuario original)",
       "ownerEntityOwner": "Propietario (propietario de la entidad)",
+      "domainOwners": "Responsables del dominio",
+      "contractApprovers": "Aprobadores del contrato",
       "appRoles": "Roles de la aplicación",
       "businessRoles": "Roles de negocio",
       "noGroups": "Sin grupos"
@@ -43,7 +45,8 @@
       "createdSuccess": "Flujo de trabajo creado correctamente",
       "updatedSuccess": "Flujo de trabajo actualizado correctamente",
       "createFailed": "No se pudo crear el flujo de trabajo: {{error}}",
-      "updateFailed": "No se pudo actualizar el flujo de trabajo: {{error}}"
+      "updateFailed": "No se pudo actualizar el flujo de trabajo: {{error}}",
+      "stepConfigInvalid": "Paso \"{{step}}\": {{issue}}"
     },
     "badges": {
       "default": "Predeterminado",
@@ -101,7 +104,25 @@
       "fromStatusPlaceholder": "p. ej., borrador",
       "toStatus": "Al estado",
       "toStatusPlaceholder": "p. ej., activo",
-      "descriptionPlaceholder": "Descripción del flujo de trabajo"
+      "descriptionPlaceholder": "Descripción del flujo de trabajo",
+      "failClosed": "Rechazar la transición si esta compuerta no se puede evaluar",
+      "failClosedHint": "Fail closed: cuando evaluar esta compuerta produce un error (no un fallo normal), el cambio de estado se rechaza. Desactivado (fail open), el cambio se aplica y el error se registra y se audita.",
+      "disabledFor": {
+        "title": "Desactivado para",
+        "hint": "Esta compuerta no se ejecuta para los dominios, productos de datos y contratos de datos indicados aquí (un dominio cubre sus productos y contratos). Cada omisión se registra y se audita.",
+        "domains": "Dominios",
+        "dataProducts": "Productos de datos",
+        "dataContracts": "Contratos de datos",
+        "none": "Ninguno",
+        "selectedCount_one": "{{count}} seleccionado",
+        "selectedCount_other": "{{count}} seleccionados",
+        "search": "Buscar...",
+        "noResults": "No se encontró nada.",
+        "remove": "Quitar {{name}}",
+        "notFound": "{{id}} (ya no existe)",
+        "missingOnSave_one": "El gate está desactivado para {{count}} elemento que ya no existe. Quítelo y guarde de nuevo.",
+        "missingOnSave_other": "El gate está desactivado para {{count}} elementos que ya no existen. Quítelos y guarde de nuevo."
+      }
     },
     "stepConfig": {
       "title": "Configuración del paso",
@@ -167,7 +188,9 @@
         "validationPassed": "Validación superada",
         "productApproved": "Producto aprobado",
         "productRejected": "Producto rechazado",
-        "piiDetected": "PII detectada"
+        "piiDetected": "PII detectada",
+        "entityDeprecated": "Aviso de obsolescencia",
+        "entityRetired": "Aviso de retirada"
       },
       "customMessage": "Mensaje personalizado",
       "customMessagePlaceholder": "Anula el mensaje de la plantilla. Admite ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
@@ -241,6 +264,59 @@
       "timeoutSeconds": "Tiempo de espera (segundos)",
       "retryCount": "Número de reintentos",
       "retryHelp": "Número de reintentos en caso de fallo (0-5)."
+    },
+    "conditional": {
+      "condition": "Condición",
+      "placeholder": "obj.status = 'active' AND NOT HAS_TAG('pii')",
+      "branchHelp": "Cuando la condición es verdadera, el workflow sigue la rama Pass; cuando es falsa, la rama Fail.",
+      "fieldsHelp": "Escriba una expresión de la Compliance DSL sin MATCH ni ASSERT. Los campos de la entidad se leen como obj.<campo>; compare con =, no ==.",
+      "examplesTitle": "Ejemplos",
+      "errors": {
+        "condition_required": "Introduzca una condición.",
+        "condition_syntax_error": "No se puede interpretar la condición (línea {{line}}, columna {{column}}).",
+        "condition_trailing_input": "\"{{token}}\" inesperado después de la condición (línea {{line}}, columna {{column}}). Una las condiciones con AND u OR.",
+        "condition_too_long": "La condición supera los {{maximum}} caracteres. Acórtala o divídela en varios pasos.",
+        "condition_too_complex": "La condición está demasiado anidada para comprobarla. Quita algunos paréntesis o divídela en varios pasos."
+      }
+    },
+    "script": {
+      "language": "Lenguaje",
+      "languages": {
+        "python": "Python",
+        "sql": "SQL"
+      },
+      "code": "Código",
+      "pythonPlaceholder": "if not entity.get('description'):\n    result = {'passed': False, 'message': 'Missing description'}",
+      "sqlPlaceholder": "SELECT COUNT(*) FROM ${entity_id}",
+      "timeout": "Tiempo límite (segundos)",
+      "timeoutHelp": "El paso falla cuando el script se ejecuta durante más tiempo.",
+      "variablesTitle": "Variables disponibles",
+      "pythonVariables": {
+        "entity": "Los datos de la entidad (un diccionario)",
+        "entity_type": "El tipo de la entidad",
+        "entity_id": "El ID de la entidad",
+        "entity_name": "El nombre de la entidad",
+        "user_email": "Correo del usuario que activó el workflow",
+        "step_results": "Resultados de los pasos que ya se ejecutaron, por ID de paso"
+      },
+      "pythonResultHelp": "Asigne result para elegir la rama: result = {'passed': False, 'message': '...'} sigue la rama Fail; sin result el paso se aprueba. Solo hay built-ins básicos: sin imports, archivos ni red.",
+      "sqlHelp": "Se ejecuta en el SQL warehouse definido en Configuración. Los marcadores ${variable} se sustituyen antes de ejecutar la instrucción; el paso se aprueba cuando la instrucción termina correctamente. La instrucción espera hasta 50 segundos.",
+      "errors": {
+        "script_code_required": "Introduzca el código del script.",
+        "script_timeout_invalid": "Introduzca un número entero de segundos, al menos {{minimum}}.",
+        "script_language_unsupported": "El lenguaje \"{{language}}\" no es compatible. Compatibles: {{supported}}."
+      }
+    },
+    "validationIssues": {
+      "stepsRequired": "Un workflow necesita al menos un paso.",
+      "duplicateStepIds": "Dos pasos tienen el mismo ID.",
+      "stepUnknownReference": "El paso \"{{step}}\" dirige su rama de {{branch}} a \"{{target}}\", que no está en el workflow.",
+      "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
+      "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
+      "branch": {
+        "on_pass": "éxito",
+        "on_fail": "fallo"
+      }
     }
   },
   "approvalResponse": {
@@ -271,6 +347,50 @@
       "processFailedRetry": "No se pudo procesar la aprobación. Inténtalo de nuevo.",
       "entityApproved": "{{name}} se ha aprobado.",
       "entityRejected": "{{name}} se ha rechazado."
+    },
+    "errors": {
+      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud."
+    },
+    "entityTypes": {
+      "entity": "Entidad",
+      "data_product": "Producto de datos",
+      "data_contract": "Contrato de datos",
+      "data_domain": "Dominio de datos",
+      "data_asset_review": "Revisión de activos de datos",
+      "access_grant": "Concesión de acceso",
+      "asset": "Activo",
+      "ontology_concept": "Concepto",
+      "concept": "Concepto"
+    },
+    "fields": {
+      "product_id": "ID del producto",
+      "product_name": "Nombre del producto",
+      "contract_id": "ID del contrato",
+      "contract_name": "Nombre del contrato",
+      "status": "Estado",
+      "from_status": "Estado de origen",
+      "to_status": "Estado de destino",
+      "target_status": "Estado solicitado",
+      "current_status": "Estado actual",
+      "justification": "Justificación",
+      "sunset_date": "Fecha de retirada",
+      "replacement_id": "ID del reemplazo",
+      "replacement_name": "Reemplazo",
+      "requested_scope": "Alcance solicitado",
+      "publication_scope": "Alcance de publicación",
+      "requester": "Solicitante",
+      "requester_message": "Mensaje del solicitante",
+      "reviewer_email": "Revisor",
+      "requested_certification_level": "Nivel de certificación solicitado",
+      "certification_level": "Nivel de certificación",
+      "certification_notes": "Notas de certificación",
+      "asset_count": "Número de activos",
+      "asset_fqns": "Activos",
+      "domain_id": "ID del dominio",
+      "project_id": "ID del proyecto",
+      "project_name": "Proyecto",
+      "name": "Nombre",
+      "notes": "Notas"
     }
   },
   "approvalWizard": {
@@ -360,9 +480,21 @@
     "titleFallback": "Ejecución del flujo de trabajo",
     "executionId": "ID de ejecución: {{id}}...",
     "stepsProgress": "{{done}}/{{total}} pasos",
+    "stepsProgressWithRemoved_one": "{{done}}/{{total}} pasos (+{{count}} eliminado)",
+    "stepsProgressWithRemoved_other": "{{done}}/{{total}} pasos (+{{count}} eliminados)",
     "triggeredBy": "Activado por: {{user}}",
     "workflowSteps": "Pasos del flujo de trabajo",
     "loadDefinitionFailed": "No se pudo cargar la definición del flujo de trabajo",
+    "removedSteps": "Pasos eliminados",
+    "removedStepsHint": "Estos pasos se ejecutaron en esta ejecución y luego se eliminaron del workflow.",
+    "stepErrors": {
+      "rule_where_evaluation_failed": "No se pudo evaluar la cláusula WHERE de la política '{{policyName}}' en {{entityType}} {{entityId}}",
+      "approval_rejected": "Solicitud denegada",
+      "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
+      "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",
+      "rule_entity_load_failed": "No se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
+      "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla"
+    },
     "states": {
       "pending": "Pendiente",
       "running": "En ejecución",
@@ -370,6 +502,14 @@
       "failed": "Fallido",
       "skipped": "Omitido",
       "waiting": "En espera"
+    },
+    "executionStates": {
+      "pending": "Pendiente",
+      "running": "En ejecución",
+      "paused": "En pausa",
+      "succeeded": "Completada",
+      "failed": "Fallida",
+      "cancelled": "Cancelada"
     },
     "summary": {
       "entity": "Entidad",
@@ -393,6 +533,8 @@
     "policyLabel": "Política: {{name}}",
     "idLabel": "ID: {{id}}",
     "noPolicySelected": "Ninguna política seleccionada",
+    "policyHint": "Sugerida: {{name}}",
+    "policyUnknown": "Política desconocida o inactiva: {{id}}",
     "reviewerLabel": "Revisor:",
     "notSet": "Sin establecer",
     "connectionLabel": "Conexión: {{name}}",
@@ -431,6 +573,25 @@
     "endpointHint": "Endpoint de backend que devuelve JSON",
     "addField": "Añadir campo"
   },
+  "runDialog": {
+    "menuLabel": "Ejecutar",
+    "title": "Ejecutar \"{{name}}\"",
+    "description": "Inicia este flujo de trabajo manual para una entidad. Se ejecuta ahora, como tú.",
+    "entityType": "Tipo de entidad",
+    "entity": "Entidad",
+    "selectEntity": "Selecciona una entidad",
+    "loading": "Cargando...",
+    "noEntities": "No hay nada que seleccionar.",
+    "listFailed": "No se pudo cargar la lista; introduce el ID.",
+    "entityId": "ID de la entidad",
+    "entityIdPlaceholder": "p. ej., main.sales.orders",
+    "entityIdHelp": "El ID o nombre completo de la entidad para la que se ejecutará el flujo de trabajo.",
+    "run": "Ejecutar",
+    "failed": "No se pudo iniciar el flujo de trabajo.",
+    "resultStatus": "Resultado",
+    "viewExecution": "Ver ejecución",
+    "resultEntity": "{{type}}: {{name}}"
+  },
   "templateVars": {
     "copiedToClipboard": "{{placeholder}} copiado al portapapeles.",
     "copyFailed": "Error al copiar",
@@ -452,6 +613,16 @@
     "matches_one": "{{count}} coincidencia",
     "matches_other": "{{count}} coincidencias",
     "noMatch": "Ninguna variable coincide"
+  },
+  "triggerEntityChecks": {
+    "unknownBadge": "Tipo de entidad desconocido: {{type}}",
+    "removeUnknown": "Quitar {{type}}",
+    "unknownNotice_one": "Este desencadenador incluye un tipo de entidad que ya no existe. No coincide con nada: quítelo para cambiar el desencadenador.",
+    "unknownNotice_other": "Este desencadenador incluye {{count}} tipos de entidad que ya no existen. No coinciden con nada: quítelos para cambiar el desencadenador.",
+    "unknownOnSave": "El desencadenador incluye el tipo de entidad desconocido \"{{type}}\": quítelo en la configuración del desencadenador para cambiarlo.",
+    "unsupportedOnSave": "\"{{trigger}}\" nunca se activa para {{type}}: elija un tipo de entidad que este desencadenador admita.",
+    "pickKnownType": "Elija al menos un tipo de entidad. Sin ninguno, este workflow se activaría para todas las entidades.",
+    "requiredOnSave": "Elija al menos un tipo de entidad para el desencadenador: ninguno de sus tipos lo activa (ya no existen o este desencadenador nunca se activa para ellos), y una lista vacía haría que se activara para todas las entidades."
   },
   "triggerPicker": {
     "label": "Se activa con",
@@ -552,7 +723,12 @@
       "duplicateTitle": "Duplicar flujo de trabajo",
       "duplicateDescription": "Crea una copia de \"{{name}}\" con un nombre nuevo.",
       "deleteExecutionTitle": "Eliminar ejecución",
-      "deleteExecutionDescription": "¿Seguro que quieres eliminar esta ejecución del flujo de trabajo? Esta acción no se puede deshacer."
+      "deleteExecutionDescription": "¿Seguro que quieres eliminar esta ejecución del flujo de trabajo? Esta acción no se puede deshacer.",
+      "activationOverlapTitle": "Otro flujo de trabajo coincide con el mismo evento",
+      "activationOverlapDescription": "Los flujos de trabajo de abajo también se ejecutarían con el mismo evento. Revísalos y cancela o activa de todos modos.",
+      "activationOverlapDetails": "Disparador: {{trigger}} · Entidades: {{entities}}",
+      "allEntities": "todas las entidades",
+      "activateAnyway": "Activar de todos modos"
     },
     "placeholders": {
       "newWorkflowName": "Nombre del nuevo flujo de trabajo"

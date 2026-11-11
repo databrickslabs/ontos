@@ -71,4 +71,8 @@ class CostsManager:
         ym = f"{month.year:04d}-{month.month:02d}"
         return CostSummary(month=ym, currency=currency, total_cents=total, items_count=count, by_center=by_center)
 
+    def remove_all_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> int:
+        """Delete every cost item of an entity, in the caller's transaction (no commit)."""
+        return self._repo.remove_all_for_entity(db, entity_type=entity_type, entity_id=entity_id)
+
 

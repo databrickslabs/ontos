@@ -158,5 +158,71 @@
     "metadataLoadFailed": "Échec du chargement des métadonnées",
     "couldNotLoadMetadata": "Impossible de charger les métadonnées.",
     "editTeamLoadError": "Échec du chargement des détails de l'équipe pour modification."
+  },
+  "sync": {
+    "title": "Synchroniser les domaines",
+    "description": "Importez les domaines Unity Catalog dans Ontos, ou exportez vos domaines vers Unity Catalog. UC prend en charge deux niveaux (domaines et sous-domaines) ; les domaines plus profonds sont ignorés.",
+    "direction": {
+      "title": "Direction",
+      "description": "Dans quel sens synchroniser",
+      "importLabel": "Importer depuis Unity Catalog",
+      "importHint": "Créer/lier des domaines Ontos depuis UC",
+      "exportLabel": "Exporter vers Unity Catalog",
+      "exportHint": "Publier les domaines Ontos dans UC"
+    },
+    "target": {
+      "importTitle": "Placer sous",
+      "exportTitle": "Ancre",
+      "importHint": "Domaine Ontos sous lequel placer les racines UC importées.",
+      "exportHint": "Ses enfants deviennent des racines UC ; ses petits-enfants deviennent des sous-domaines.",
+      "importTopLevel": "Niveau supérieur (sans parent)",
+      "exportTopLevel": "Domaines de niveau supérieur"
+    },
+    "actions": {
+      "preview": "Prévisualiser",
+      "apply": "Appliquer"
+    },
+    "panel": {
+      "resultTitle": "Résultat de la synchronisation",
+      "previewTitle": "Aperçu",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "Choisissez une direction et cliquez sur <b>Prévisualiser</b> pour voir ce qui changerait.",
+    "warnings": "Avertissements",
+    "errorsTitle": "Erreurs",
+    "nothingToSync": "Rien à synchroniser.",
+    "level": "N{{level}}",
+    "actionLabels": {
+      "create": "Créer",
+      "match": "Lier",
+      "skip": "Ignorer",
+      "error": "Erreur"
+    },
+    "toasts": {
+      "previewFailed": "Échec de l'aperçu",
+      "syncFailed": "Échec de la synchronisation",
+      "syncComplete": "Synchronisation terminée"
+    },
+    "summary": "Créés : {{created}}, liés : {{matched}}, ignorés : {{skipped}}.",
+    "summaryWithErrors": "Créés : {{created}}, liés : {{matched}}, ignorés : {{skipped}}, erreurs : {{errors}}.",
+    "plan": {
+      "toCreate_one": "{{count}} à créer",
+      "toCreate_other": "{{count}} à créer",
+      "toMatch_one": "{{count}} à lier",
+      "toMatch_other": "{{count}} à lier",
+      "toSkip_one": "{{count}} à ignorer",
+      "toSkip_other": "{{count}} à ignorer"
+    },
+    "result": {
+      "created_one": "{{count}} créé",
+      "created_other": "{{count}} créés",
+      "matched_one": "{{count}} lié",
+      "matched_other": "{{count}} liés",
+      "skipped_one": "{{count}} ignoré",
+      "skipped_other": "{{count}} ignorés",
+      "errors_one": "{{count}} erreur",
+      "errors_other": "{{count}} erreurs"
+    }
   }
 }

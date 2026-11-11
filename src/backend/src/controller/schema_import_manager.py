@@ -15,9 +15,13 @@ from src.common.logging import get_logger
 from src.connectors.base import AssetConnector, ListAssetsOptions
 from src.controller.connections_manager import ConnectionsManager
 from src.controller.assets_manager import AssetsManager
+from src.controller.metric_view_consistency_manager import (
+    STORE_KEY as METRIC_VIEW_PROPERTY, build_stored_metric_view, store_metric_view,
+)
 from src.db_models.assets import AssetDb
 from src.db_models.connections import ConnectionDb
 from src.models.assets import (
+    METRIC_VIEW_ASSET_TYPE,
     AssetCreate,
     AssetRelationshipCreate,
     AssetStatus,
@@ -62,6 +66,7 @@ _TYPE_MAP: Dict[str, tuple] = {
     UnifiedAssetType.UC_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_VIEW.value: ("View", "hasView"),
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: ("View", "hasView"),
+    UnifiedAssetType.UC_METRIC.value: (METRIC_VIEW_ASSET_TYPE, "hasView"),
     UnifiedAssetType.UC_STREAMING_TABLE.value: ("Table", "hasTable"),
     UnifiedAssetType.UC_FUNCTION.value: ("System", "hasPart"),
     UnifiedAssetType.UC_MODEL.value: ("ML Model", "hasPart"),
@@ -104,6 +109,7 @@ _LEAF_ASSET_TYPES = {
     UnifiedAssetType.UC_TABLE.value,
     UnifiedAssetType.UC_VIEW.value,
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+    UnifiedAssetType.UC_METRIC.value,
     UnifiedAssetType.UC_STREAMING_TABLE.value,
     UnifiedAssetType.BQ_TABLE.value,
     UnifiedAssetType.BQ_VIEW.value,
@@ -400,6 +406,36 @@ class SchemaImportManager:
                 continue
 
             if not item.will_create:
+                if item.asset_type == METRIC_VIEW_ASSET_TYPE and item.existing_asset_id:
+                    # Unity Catalog reports a metric view here: convert a legacy View
+                    # asset (no-op when it already is a Metric View). In a savepoint and
+                    # without committing, so a failure drops only this conversion and the
+                    # import goes on; the conversion is committed with the import.
+                    try:
+                        with db.begin_nested():
+                            self._assets.retype_asset(
+                                db, asset_id=item.existing_asset_id, from_type="View",
+                                to_type=METRIC_VIEW_ASSET_TYPE, current_user_id=current_user_id,
+                                commit=False,
+                            )
+                    except Exception:
+                        logger.error("Failed to convert the View asset at %s to a Metric View",
+                                     item.path, exc_info=True)
+                        message = "The existing View asset could not be converted to a Metric View."
+                        result.errors += 1
+                        result.error_messages.append(f"{item.path}: {message}")
+                        result.items.append(ImportResultItem(
+                            path=item.path,
+                            name=item.name,
+                            asset_type=item.asset_type,
+                            action="error",
+                            asset_id=item.existing_asset_id,
+                            error=message,
+                            parent_path=item.parent_path,
+                        ))
+                        # Still a View: no relationships are wired to it as a Metric View
+                        continue
+                    self._refresh_metric_view(db, connector, item)
                 result.skipped += 1
                 result.items.append(ImportResultItem(
                     path=item.path,
@@ -535,6 +571,24 @@ class SchemaImportManager:
                         logger.debug(f"Entity relationship System -> {item.path}: {exc}")
 
         return result
+
+    def _refresh_metric_view(
+        self, db: Session, connector: AssetConnector, item: ImportPreviewItem,
+    ) -> None:
+        """Store the current spec and fingerprints on a re-imported Metric View (#1263).
+
+        In a savepoint: a failure is logged and leaves the stored ones as they were.
+        """
+        try:
+            meta = connector.get_asset_metadata(item.path)
+            spec = (meta.properties or {}).get(METRIC_VIEW_PROPERTY) if meta else None
+            asset = asset_repo.get(db, id=item.existing_asset_id)
+            if spec and asset is not None:
+                with db.begin_nested():
+                    store_metric_view(db, asset, spec)
+        except Exception:
+            logger.warning("Could not refresh the metric view fingerprints of %s",
+                           item.path, exc_info=True)
 
     # ------------------------------------------------------------------
     # Ancestor expansion
@@ -724,6 +778,18 @@ class SchemaImportManager:
                         db, name=metadata.name, asset_type_id=at_db.id,
                         platform=platform, location=path,
                     )
+                if existing is None and ontos_type_name == METRIC_VIEW_ASSET_TYPE:
+                    # A metric view imported as a View before the Metric View type
+                    # existed is reused, and execute_import converts it. Without the
+                    # seeded Metric View type it stays (or is imported as) a View.
+                    view_db = _get_asset_type_db("View")
+                    legacy = view_db and asset_repo.get_by_identity(
+                        db, name=metadata.name, asset_type_id=view_db.id,
+                        platform=platform, location=path,
+                    )
+                    existing = legacy or None
+                    if not at_db:
+                        ontos_type_name = "View"
 
                 items.append(ImportPreviewItem(
                     path=path,
@@ -884,6 +950,12 @@ class SchemaImportManager:
                         properties["source_tags"] = meta.tags
                     properties["source_path"] = item.path
                     properties["connector_type"] = connector.connector_type
+                    if item.asset_type == METRIC_VIEW_ASSET_TYPE:
+                        # The parsed spec and its measure fingerprints (#1263)
+                        stored = build_stored_metric_view(
+                            (meta.properties or {}).get(METRIC_VIEW_PROPERTY))
+                        if stored:
+                            properties[METRIC_VIEW_PROPERTY] = stored
             except Exception as exc:
                 logger.debug(f"Could not fetch metadata for '{item.path}': {exc}")
 
@@ -930,6 +1002,7 @@ class SchemaImportManager:
             "Schema": "hasSchema",
             "Table": "hasTable",
             "View": "hasView",
+            METRIC_VIEW_ASSET_TYPE: "hasView",
             "Column": "hasColumn",
             "Dataset": "hasDataset",
             "ML Model": "hasPart",
@@ -957,6 +1030,7 @@ _DISPLAY_TYPE_MAP: Dict[str, str] = {
     UnifiedAssetType.UC_TABLE.value: "table",
     UnifiedAssetType.UC_VIEW.value: "view",
     UnifiedAssetType.UC_MATERIALIZED_VIEW.value: "view",
+    UnifiedAssetType.UC_METRIC.value: "metric",
     UnifiedAssetType.UC_STREAMING_TABLE.value: "table",
     UnifiedAssetType.UC_FUNCTION.value: "function",
     UnifiedAssetType.UC_MODEL.value: "model",
@@ -1022,6 +1096,7 @@ def _has_children(asset_type: Optional[UnifiedAssetType]) -> bool:
         UnifiedAssetType.UC_TABLE.value,
         UnifiedAssetType.UC_VIEW.value,
         UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+        UnifiedAssetType.UC_METRIC.value,
         UnifiedAssetType.UC_STREAMING_TABLE.value,
         UnifiedAssetType.UC_FUNCTION.value,
         # BigQuery leaves with column-bearing metadata

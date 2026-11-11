@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Wand2, Loader2, Copy, Download, Save, XCircle, Clock, CheckCircle2, AlertCircle, History, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -56,6 +58,10 @@ interface GenerateResponse {
   iterations: number;
   error: string;
   usage: { prompt_tokens: number; completion_tokens: number };
+  tables_resolved?: number;
+  tables_used?: number;
+  caps_hit?: boolean;
+  caps_note?: string;
 }
 
 interface RunParams {
@@ -107,8 +113,11 @@ export default function OntologyGeneratorView() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
-  // Generation options
-  const [guidelines, setGuidelines] = useState('');
+  // Generation options. Guidelines can be pre-filled from ?guidelines= when the
+  // user arrives via the Define > Generate guided dialog (which composes a prompt
+  // from a few questions), so they land on the generator with the prompt ready.
+  const [searchParams] = useSearchParams();
+  const [guidelines, setGuidelines] = useState(() => searchParams.get('guidelines') || '');
   const [baseUri, setBaseUri] = useState('http://ontos.example.org/ontology#');
   const [includeDataProperties, setIncludeDataProperties] = useState(true);
   const [includeRelationships, setIncludeRelationships] = useState(true);
@@ -135,8 +144,13 @@ export default function OntologyGeneratorView() {
   const [showRecentRuns, setShowRecentRuns] = useState(false);
 
   useEffect(() => {
-    setStaticSegments([]);
-    setDynamicTitle(t('semantic-models:ontologyGenerator.title'));
+    // Generator is reached from Define, so anchor the trail there:
+    // Concepts > Define > Ontology Generator.
+    setStaticSegments([
+      { label: 'Concepts', path: '/concepts/browser' },
+      { label: 'Define', path: '/concepts/define' },
+    ]);
+    setDynamicTitle('Ontology Generator');
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
@@ -264,6 +278,30 @@ export default function OntologyGeneratorView() {
   const selectedConnection = connections.find((c) => c.id === selectedConnectionId);
   const isRunning = !!activeRunId;
   const canGenerate = selectedPaths.size > 0 && !isRunning && !isStarting;
+
+  // Backend processes at most this many tables per run (see MAX_TABLES_IN_METADATA
+  // in ontology_generator_manager.py). We surface the limit as a quiet always-on
+  // caption, and only escalate to an amber skip-count warning when the user has
+  // selected more than the cap in INDIVIDUAL tables (a count we can trust). We do
+  // NOT try to guess a container's table count client-side: selecting a schema or
+  // catalog resolves to an unknown number of tables server-side, so any pre-run
+  // "this expands into many tables" guess is just as likely to cry wolf on a small
+  // schema (e.g. a 3-table schema) as to catch a real overflow. The accurate
+  // post-run banner (result.caps_note) reports the REAL resolved count instead.
+  // A path with 3+ dot-segments (catalog.schema.table) is an individual table.
+  const MAX_TABLES_PER_RUN = 50;
+  const selectedTableCount = (() => {
+    let n = 0;
+    for (const path of selectedPaths) {
+      if (path.split('.').length >= 3) n += 1;
+    }
+    return n;
+  })();
+  // Only an honest, countable overflow triggers the amber warning.
+  const capWarning =
+    selectedTableCount > MAX_TABLES_PER_RUN
+      ? `${selectedTableCount} tables selected. This generator processes up to ${MAX_TABLES_PER_RUN} per run, so ${selectedTableCount - MAX_TABLES_PER_RUN} will be skipped. Narrow your selection or split it into multiple runs.`
+      : null;
 
   const handleGenerate = async () => {
     if (!selectedConnectionId || selectedPaths.size === 0) return;
@@ -531,13 +569,24 @@ export default function OntologyGeneratorView() {
                 </Button>
               </div>
             ) : (
-              <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full">
-                {isStarting ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('semantic-models:ontologyGenerator.progress.starting')}</>
-                ) : (
-                  <><Wand2 className="h-4 w-4 mr-2" /> {t('semantic-models:ontologyGenerator.generateOntology', { count: selectedPaths.size })}</>
+              <>
+                {capWarning && (
+                  <Alert className="border-amber-200 bg-amber-50 py-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-xs text-amber-800">{capWarning}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
+                <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full">
+                  {isStarting ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Starting...</>
+                  ) : (
+                    <><Wand2 className="h-4 w-4 mr-2" /> Generate Ontology ({selectedPaths.size} selected)</>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center px-1">
+                  Processes up to {MAX_TABLES_PER_RUN} tables per run. For large schemas, split your selection into multiple runs.
+                </p>
+              </>
             )}
           </div>
 
@@ -680,6 +729,17 @@ export default function OntologyGeneratorView() {
           {/* Results tabs */}
           {result && (
             <Tabs defaultValue="classes">
+              {result.success && (result.classes.length > 0 || result.properties.length > 0) && (
+                <div className="flex items-center justify-between gap-3 mb-3 rounded-md border bg-muted/40 px-3 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Generated <span className="font-medium text-foreground">{result.classes.length}</span> classes and{' '}
+                    <span className="font-medium text-foreground">{result.properties.length}</span> properties. Save them to a concept scheme to keep and use them.
+                  </p>
+                  <Button size="sm" className="shrink-0" onClick={() => setIsSaveDialogOpen(true)}>
+                    <Save className="h-3.5 w-3.5 mr-1" /> Save to scheme
+                  </Button>
+                </div>
+              )}
               <TabsList className="w-full">
                 <TabsTrigger value="classes">{t('semantic-models:ontologyGenerator.tabs.classes', { count: result.classes.length })}</TabsTrigger>
                 <TabsTrigger value="properties">{t('semantic-models:ontologyGenerator.tabs.properties', { count: result.properties.length })}</TabsTrigger>
@@ -771,9 +831,8 @@ export default function OntologyGeneratorView() {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm">{t('semantic-models:ontologyGenerator.generatedTurtle')}</CardTitle>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={copyTurtle}><Copy className="h-3.5 w-3.5 mr-1" /> {t('common:actions.copy')}</Button>
-                        <Button variant="outline" size="sm" onClick={downloadTurtle}><Download className="h-3.5 w-3.5 mr-1" /> {t('common:actions.download')}</Button>
-                        <Button size="sm" onClick={() => setIsSaveDialogOpen(true)}><Save className="h-3.5 w-3.5 mr-1" /> {t('semantic-models:ontologyGenerator.saveToCollection')}</Button>
+                        <Button variant="outline" size="sm" onClick={copyTurtle}><Copy className="h-3.5 w-3.5 mr-1" /> Copy</Button>
+                        <Button variant="outline" size="sm" onClick={downloadTurtle}><Download className="h-3.5 w-3.5 mr-1" /> Download</Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -821,6 +880,14 @@ export default function OntologyGeneratorView() {
             </Tabs>
           )}
 
+          {result && result.caps_hit && result.caps_note && (
+            <Alert className="border-amber-200 bg-amber-50">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-900">Capacity Limit</AlertTitle>
+              <AlertDescription className="text-amber-800">{result.caps_note}</AlertDescription>
+            </Alert>
+          )}
+
           {result && !result.success && result.error && (
             <Card className="border-destructive">
               <CardContent className="pt-4">
@@ -831,21 +898,21 @@ export default function OntologyGeneratorView() {
         </div>
       </div>
 
-      {/* Save to Collection dialog */}
+      {/* Save to scheme dialog */}
       <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('semantic-models:ontologyGenerator.saveDialog.title')}</DialogTitle>
-            <DialogDescription>{t('semantic-models:ontologyGenerator.saveDialog.description')}</DialogDescription>
+            <DialogTitle>Save to concept scheme</DialogTitle>
+            <DialogDescription>Create a new ontology-type concept scheme and import the generated triples into the knowledge graph. Generated items are saved as Draft for review.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label htmlFor="collName">{t('semantic-models:ontologyGenerator.saveDialog.nameLabel')}</Label>
-              <Input id="collName" placeholder={t('semantic-models:ontologyGenerator.saveDialog.namePlaceholder')} value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="mt-1" />
+              <Label htmlFor="collName">Scheme name</Label>
+              <Input id="collName" placeholder="e.g., Customer Domain Ontology" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="collDesc">{t('semantic-models:ontologyGenerator.saveDialog.descriptionLabel')}</Label>
-              <Textarea id="collDesc" placeholder={t('semantic-models:ontologyGenerator.saveDialog.descriptionPlaceholder')} value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} rows={3} className="mt-1" />
+              <Label htmlFor="collDesc">Description (optional)</Label>
+              <Textarea id="collDesc" placeholder="Describe the purpose of this concept scheme..." value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} rows={3} className="mt-1" />
             </div>
             {result && (
               <p className="text-xs text-muted-foreground">

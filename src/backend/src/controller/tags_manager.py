@@ -168,7 +168,12 @@ class TagsManager(DeliveryMixin, SearchableAsset):
     def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
         return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
 
-    def set_tags_for_entity(self, db: Session, *, entity_id: str, entity_type: str, tags: List[AssignedTagCreate], user_email: Optional[str]) -> List[AssignedTag]:
+    def set_tags_for_entity(
+        self, db: Session, *, entity_id: str, entity_type: str,
+        tags: List[AssignedTagCreate], user_email: Optional[str], commit: bool = True,
+    ) -> List[AssignedTag]:
+        """Replace the tags of an entity. With ``commit=False`` (a batch import,
+        inside the savepoint of the entity) the change is only flushed."""
         ns_repo = self._namespace_repo
         assigned = self._entity_assoc_repo.set_tags_for_entity(
             db,
@@ -188,22 +193,32 @@ class TagsManager(DeliveryMixin, SearchableAsset):
                 tag_summary = ", ".join(tag_names)
                 if len(tags) > 5:
                     tag_summary += f", ... ({len(tags)} total)"
-                change_log_manager.log_change_with_details(
-                    db,
-                    entity_type=entity_type,
-                    entity_id=str(entity_id),
-                    action="TAGS_SET",
-                    username=user_email,
-                    details={
-                        "tag_count": len(tags),
-                        "tags": tag_summary,
-                        "summary": f"Tags updated: {tag_summary}" + (f" by {user_email}" if user_email else ""),
-                    },
-                )
+                details = {
+                    "tag_count": len(tags),
+                    "tags": tag_summary,
+                    "summary": f"Tags updated: {tag_summary}"
+                               + (f" by {user_email}" if user_email else ""),
+                }
+                if commit:
+                    change_log_manager.log_change_with_details(
+                        db, entity_type=entity_type, entity_id=str(entity_id),
+                        action="TAGS_SET", username=user_email, details=details,
+                    )
+                else:
+                    # A failed write mustn't abort the caller's transaction (Postgres)
+                    with db.begin_nested():
+                        change_log_manager.log_change_with_details(
+                            db, entity_type=entity_type, entity_id=str(entity_id),
+                            action="TAGS_SET", username=user_email, details=details,
+                            commit=False,
+                        )
             except Exception as log_err:
                 logger.warning(f"Failed to log change for tag set: {log_err}")
-        
-        db.commit()
+
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         return assigned
 
     def add_tag_to_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, assigned_value: Optional[str], user_email: Optional[str]) -> AssignedTag:

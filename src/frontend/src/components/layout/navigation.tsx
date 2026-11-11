@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { Home as HomeIcon, Loader2 } from 'lucide-react';
+import { useNavHiddenFeatures } from '@/hooks/use-nav-hidden-features';
 
 interface NavigationProps {
   isCollapsed: boolean;
@@ -25,8 +26,12 @@ export function Navigation({ isCollapsed }: NavigationProps) {
   const location = useLocation();
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
   const { permissions, isLoading: permissionsLoading, hasPermission } = usePermissions();
+  const hiddenFeatures = useNavHiddenFeatures();
 
-  const rawNavigationGroups = getNavigationGroups(allowedMaturities);
+  const rawNavigationGroups = React.useMemo(
+    () => getNavigationGroups(allowedMaturities, hiddenFeatures),
+    [allowedMaturities, hiddenFeatures],
+  );
 
   const ungroupedFeatureIds: string[] = [];
 

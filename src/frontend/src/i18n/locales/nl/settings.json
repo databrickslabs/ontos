@@ -140,6 +140,19 @@
         "placeholder": "app_files"
       }
     },
+    "instanceIdentity": {
+      "title": "Instantie-identiteit",
+      "id": {
+        "label": "Instantie-ID",
+        "help": "Vaste identifier van deze Ontos-instantie, die wordt opgenomen in geëxporteerde entiteiten. Standaard: {{default}}. Maak het veld leeg om de standaardwaarde te herstellen.",
+        "invalid": "Gebruik 1-128 letters, cijfers, \".\", \"_\", \":\" of \"-\", en begin met een letter of cijfer."
+      },
+      "name": {
+        "label": "Instantienaam",
+        "help": "Leesbare naam van deze instantie. Standaard: {{default}}. Maak het veld leeg om de standaardwaarde te herstellen.",
+        "invalid": "Gebruik maximaal 128 tekens, zonder besturingstekens."
+      }
+    },
     "auditLog": {
       "label": "Auditlog Directory",
       "placeholder": "audit_logs",
@@ -177,6 +190,13 @@
     "messages": {
       "saveSuccess": "Instellingen succesvol opgeslagen",
       "saveError": "Kon instellingen niet opslaan"
+    },
+    "schemaImporter": {
+      "title": "Schema-importeur",
+      "childLimit": {
+        "label": "Max. aantal opgehaalde objecten per niveau",
+        "help": "Maximaal aantal tabellen/views/objecten dat de importeur per catalogus of schema ophaalt tijdens het bladeren (1–10000). Verhoog dit voor grote omgevingen; voorbij deze limiet is er geen paginering."
+      }
     }
   },
   "databricks": {
@@ -210,7 +230,8 @@
       "repoUrl": "https://github.com/jouw-org/jouw-repo.git",
       "branch": "main",
       "token": "ghp_... of vergelijkbaar",
-      "username": "x-access-token"
+      "username": "x-access-token",
+      "tokenSaved": "Opgeslagen. Laat leeg om het te behouden."
     },
     "cloneButton": "Repository Klonen",
     "currentCommit": "Commit",
@@ -235,7 +256,8 @@
       "pushError": "Kon wijzigingen niet pushen",
       "pushSuccess": "Wijzigingen succesvol gepusht",
       "saveError": "Kon Git-instellingen niet opslaan",
-      "saveSuccess": "Git-instellingen opgeslagen"
+      "saveSuccess": "Git-instellingen opgeslagen",
+      "tokenRemoved": "Opgeslagen token verwijderd"
     },
     "pendingChanges": "Openstaande Wijzigingen",
     "pullButton": "Pullen",
@@ -250,7 +272,15 @@
       "notConfigured": "Niet Geconfigureerd"
     },
     "viewChangesButton": "Wijzigingen Bekijken",
-    "volumePath": "Volumepad"
+    "volumePath": "Volumepad",
+    "workingCopy": "Werkkopie",
+    "workingCopyNote": "Het volume is hier niet gekoppeld. De werkkopie staat daarom op de lokale schijf van de app en elk geëxporteerd bestand wordt ook naar het volume geschreven. Kloon de repository opnieuw nadat de app opnieuw is gestart: gepushte commits blijven in de remote bewaard.",
+    "volumeSyncWarningTitle": "Export niet naar het volume geschreven",
+    "errors": {
+      "git_volume_invalid": "De volume-instelling \"{{value}}\" verwijst niet naar een Unity Catalog-volume. Gebruik /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> of een volumenaam met de catalogus en het schema uit de algemene instellingen.",
+      "git_volume_sync_failed": "{{path}} kon niet naar het volume worden geschreven. De wijziging staat in de repository en wordt zoals gewoonlijk gepusht; controleer of de app naar het volume mag schrijven (WRITE VOLUME)."
+    },
+    "removeTokenButton": "Opgeslagen token verwijderen"
   },
   "nav": {
     "groups": {
@@ -409,6 +439,15 @@
         "title": "Functie Machtigingen",
         "description": "Configureer toegangsniveaus voor elke functie in de applicatie."
       },
+      "navigation": {
+        "help": "Niet-aangevinkte functies staan niet in de menu's van deze rol (zijbalk, snelle acties op de startpagina, Over). Verbergen verandert alleen wat de menu's tonen, niet de machtigingen: pagina's blijven via een link bereikbaar met hetzelfde toegangsniveau.",
+        "accessColumn": "Toegangsniveau",
+        "column": "Tonen in navigatie",
+        "showFeature": "{{feature}} tonen in de navigatie",
+        "noAccessHint": "Geen toegang: de functie staat niet in de menu's",
+        "adminHint": "De beheerdersrol toont altijd alle functies",
+        "unknownFeatures": "Onbekende functies kunnen niet uit de navigatie worden verborgen: {{features}}"
+      },
       "groups": {
         "discover": "Ontdekken",
         "build": "Bouwen",
@@ -547,7 +586,8 @@
       "actions": "Acties",
       "never": "Nooit",
       "moreScopes": "+{{count}} meer",
-      "createdBy": "door {{name}}"
+      "createdBy": "door {{name}}",
+      "keylessDefault": "Standaard zonder sleutel"
     },
     "status": {
       "active": "Actief",
@@ -555,13 +595,17 @@
       "expired": "Verlopen"
     },
     "tooltips": {
-      "revokeToken": "Token intrekken"
+      "revokeToken": "Token intrekken",
+      "setKeylessDefault": "Maak dit de standaardtoken voor toegang zonder sleutel",
+      "clearKeylessDefault": "Standaard zonder sleutel wissen (schakelt toegang zonder sleutel uit)",
+      "keylessDefaultBadge": "Via de app-gate geauthenticeerde MCP-verzoeken zonder X-API-Key krijgen de scopes van deze token, toegeschreven aan de aanroepende gebruiker. De scopes gelden voor elke geauthenticeerde app-gebruiker."
     },
     "info": {
       "title": "MCP Tokens Gebruiken",
       "description": "MCP tokens stellen AI assistenten in staat om te communiceren met je data governance platform. Elk token heeft specifieke scopes die bepalen welke tools toegankelijk zijn.",
       "endpoint": "Endpoint:",
-      "header": "Header:"
+      "header": "Header:",
+      "endpointAlias": "(verouderde alias: /api/mcp)"
     },
     "createDialog": {
       "title": "MCP Token Aanmaken",
@@ -576,7 +620,10 @@
       "selectedScopes": "Geselecteerd:",
       "cancel": "Annuleren",
       "create": "Token Aanmaken",
-      "creating": "Aanmaken..."
+      "creating": "Aanmaken...",
+      "keylessDefault": "Gebruiken als standaard zonder sleutel",
+      "keylessDefaultHelp": "Koppel via de app-gate geauthenticeerde MCP-verzoeken zonder X-API-Key aan deze token. Vervangt een eventuele bestaande standaard.",
+      "keylessDefaultWarning": "De scopes van deze token gelden voor ELKE app-gebruiker die /mcp zonder sleutel bereikt. Globaal zoeken omzeilt toegangscontroles per gebruiker, dus verleen alleen-lezen scopes (geen schrijfrechten, SPARQL of volledige toegang)."
     },
     "createdDialog": {
       "title": "Token Succesvol Aangemaakt",
@@ -603,7 +650,10 @@
       "createError": "Kon token niet aanmaken",
       "copied": "Token gekopieerd naar klembord",
       "revoked": "Token \"{{name}}\" is ingetrokken",
-      "revokeError": "Kon token niet intrekken"
+      "revokeError": "Kon token niet intrekken",
+      "keylessDefaultSet": "\"{{name}}\" is nu de standaardtoken zonder sleutel",
+      "keylessDefaultCleared": "Standaard zonder sleutel gewist — toegang zonder sleutel is uitgeschakeld",
+      "keylessDefaultError": "Bijwerken van standaard zonder sleutel mislukt"
     }
   },
   "uiCustomization": {
@@ -945,6 +995,13 @@
         "productName": "Productnaam",
         "productVersion": "Productversie",
         "productStatus": "Productstatus"
+      },
+      "lifecycle": {
+        "title": "Levenscyclusstatus-tag",
+        "descriptionProduct": "Geeft elke tabel de levenscyclusstatus van het dataproduct dat de tabel gebruikt. Bij een tabel die door meerdere producten wordt gebruikt, wint de beste status (active eerst, retired laatst).",
+        "descriptionContract": "Geeft elke tabel de levenscyclusstatus van het datacontract dat de tabel gebruikt. Bij een tabel die door meerdere contracten wordt gebruikt, wint de beste status (active eerst, retired laatst).",
+        "valueLabel": "Tagwaarde:",
+        "sharedKeyHint": "Als de statustags van het product en het contract allebei met dezelfde sleutel zijn ingeschakeld, wordt de status van het product geschreven."
       }
     },
     "entityPatterns": {

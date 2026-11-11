@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.controller.data_contracts_manager import DataContractsManager
+from src.controller.data_contracts_manager import DataContractsManager, InvalidVersionFormatError
 from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
@@ -50,13 +50,19 @@ from src.models.data_contracts_api import (
     DataContractCommentCreate,
     DataContractCommentRead,
 )
+from src.common.api_errors import CodedValueError
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.authorization import has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
+from src.common.api_errors import CodedValueError
 from src.common.features import FeatureAccessLevel
+from src.common.lifecycle_status import check_status_unchanged
+from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.models.data_products import DeprecationPayload
 from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
@@ -201,6 +207,101 @@ async def get_contract(
 
 # --- Lifecycle Transition Endpoints (minimal) ---
 
+def _decide_waiting_review_workflows(
+    db, contract_id: str, approved: bool, user_email: Optional[str],
+) -> int:
+    """Pass a review decided on the contract page on to its review workflows.
+
+    A review request starts the contract's ``on_request_review`` workflows,
+    which pause at an approval step. Approving or rejecting the contract on
+    its page decides the same review, so those executions are resumed with
+    that decision (their remaining steps, e.g. telling the requester, run)
+    and their approval notifications are marked handled. Otherwise they stay
+    paused and keep asking for an approval that was already given (#963).
+
+    Returns the number of executions resumed. A failure is logged and does
+    not undo the status change.
+    """
+    from src.common.workflow_executor import WorkflowExecutor
+    from src.db_models.process_workflows import WorkflowExecutionDb, WorkflowStepDb
+    from src.models.process_workflows import TriggerType
+    from src.routes.workflows_routes import _mark_step_notifications_handled
+
+    # The text filters (quoted values, so another id that contains this one
+    # doesn't match) and the join on the current approval step narrow the
+    # candidates in SQL; the JSON checks below are the exact ones.
+    paused = db.query(WorkflowExecutionDb).join(
+        WorkflowStepDb,
+        (WorkflowStepDb.workflow_id == WorkflowExecutionDb.workflow_id)
+        & (WorkflowStepDb.step_id == WorkflowExecutionDb.current_step_id),
+    ).filter(
+        WorkflowExecutionDb.status == 'paused',
+        WorkflowStepDb.step_type == 'approval',
+        WorkflowExecutionDb.trigger_context.contains(json.dumps(contract_id)),
+        WorkflowExecutionDb.trigger_context.contains(
+            json.dumps(TriggerType.ON_REQUEST_REVIEW.value)
+        ),
+    ).all()
+    waiting = []
+    for execution in paused:
+        try:
+            context = json.loads(execution.trigger_context or '{}')
+        except ValueError:
+            continue
+        if (
+            context.get('entity_type') == 'data_contract'
+            and context.get('entity_id') == contract_id
+            and context.get('trigger_type') == TriggerType.ON_REQUEST_REVIEW.value
+        ):
+            waiting.append((execution.id, execution.current_step_id))
+
+    resumed = 0
+    decision = 'approved' if approved else 'rejected'
+    for execution_id, step_id in waiting:
+        try:
+            WorkflowExecutor(db).resume_workflow(
+                execution_id=execution_id,
+                step_result=approved,
+                # `decided_on` is the stable code; the message is the English
+                # fallback shown where no translation exists.
+                result_data={
+                    'decision': decision,
+                    'decided_on': 'contract_page',
+                    'message': f'Review {decision} on the contract page',
+                    'reason': f'Review {decision} on the contract page',
+                },
+                user_email=user_email,
+            )
+            _mark_step_notifications_handled(db, execution_id, step_id, approved, user_email)
+            db.commit()
+            resumed += 1
+        except Exception:
+            # The status change is already committed; only this resume is undone.
+            db.rollback()
+            logger.exception(
+                "Could not resume review workflow execution %s of contract %s",
+                execution_id, contract_id,
+            )
+    return resumed
+
+
+class InvalidReviewDecisionError(CodedValueError):
+    """A contract approved or rejected while its status no longer allows it.
+
+    The message is the one these routes always answered with; the code and the
+    statuses let the UI say it in the user's language.
+    """
+
+    code = 'invalid_status_transition'
+
+    def __init__(self, from_status: Optional[str], to_status: str):
+        super().__init__(
+            f"Invalid transition from {from_status} to {to_status.upper()}",
+            fromStatus=(from_status or '').lower(),
+            toStatus=to_status,
+        )
+
+
 @router.post('/data-contracts/{contract_id}/approve')
 async def approve_contract(
     contract_id: str,
@@ -219,7 +320,7 @@ async def approve_contract(
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
         if from_status not in ('proposed', 'under_review'):
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to APPROVED")
+            raise InvalidReviewDecisionError(contract.status, 'approved')
         
         # Business logic now in manager
         updated = manager.transition_status(
@@ -227,6 +328,9 @@ async def approve_contract(
             contract_id=contract_id,
             new_status='approved',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, True, current_user.email if current_user else None,
         )
         
         # Audit
@@ -270,7 +374,7 @@ async def reject_contract(
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
         if from_status not in ('proposed', 'under_review'):
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to DRAFT")
+            raise InvalidReviewDecisionError(contract.status, 'draft')
         
         # Business logic now in manager (ODCS: rejected contracts return to draft)
         updated = manager.transition_status(
@@ -278,6 +382,9 @@ async def reject_contract(
             contract_id=contract_id,
             new_status='draft',
             current_user=current_user.username if current_user else None
+        )
+        _decide_waiting_review_workflows(
+            db, contract_id, False, current_user.email if current_user else None,
         )
         
         # Audit
@@ -301,7 +408,8 @@ async def reject_contract(
         raise HTTPException(status_code=500, detail="Failed to reject contract")
 
 
-class ChangeStatusPayload(BaseModel):
+class ChangeStatusPayload(DeprecationPayload):
+    """Target status; the deprecation fields are used when it is ``deprecated``."""
     new_status: str
 
 
@@ -319,15 +427,8 @@ async def change_contract_status(
     """
     Change contract status. Validates transition is allowed per ODCS lifecycle.
     
-    Valid transitions:
-    - draft → proposed, deprecated
-    - proposed → draft, under_review, deprecated
-    - under_review → draft, approved, deprecated
-    - approved → active, draft, deprecated
-    - active → certified, deprecated
-    - certified → deprecated, active
-    - deprecated → retired, active
-    - retired → (terminal state, no transitions)
+    Valid transitions: ``DATA_CONTRACT_TRANSITIONS`` (src.models.lifecycle).
+    Certification is a separate field (``/certify``), not a status.
     """
     try:
         contract = data_contract_repo.get(db, id=contract_id)
@@ -341,18 +442,25 @@ async def change_contract_status(
             db=db,
             contract_id=contract_id,
             new_status=new_status,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            deprecation=payload.deprecation_details(),
         )
         
         # Audit
+        lifecycle_audit = {
+            'deprecation_reason': updated.deprecation_reason,
+            'sunset_date': updated.sunset_date.isoformat() if updated.sunset_date else None,
+            'replacement_contract_id': updated.replacement_contract_id,
+        } if new_status == 'deprecated' else {}
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else 'anonymous',
             ip_address=request.client.host if request.client else None,
             feature='data-contracts',
-            action='CHANGE_STATUS',
+            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
-            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status}
+            details={'contract_id': contract_id, 'from': from_status, 'to': updated.status,
+                     **lifecycle_audit},
         )
         return {'status': updated.status, 'from': from_status, 'to': updated.status}
     except ValueError as e:
@@ -386,6 +494,9 @@ class RequestStatusChangePayload(BaseModel):
     target_status: str
     justification: str
     current_status: Optional[str] = None
+    # Requested deprecation: sunset date (YYYY-MM-DD, UTC) and replacement contract
+    sunset_date: Optional[str] = None
+    replacement_id: Optional[str] = None
 
 
 class HandleStatusChangePayload(BaseModel):
@@ -569,7 +680,9 @@ async def request_status_change(
             target_status=payload.target_status,
             justification=payload.justification,
             requester_email=current_user.email if current_user else None,
-            current_user=current_user.username if current_user else None
+            current_user=current_user.username if current_user else None,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         # Audit
@@ -589,6 +702,11 @@ async def request_status_change(
         
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. a replacement that doesn't exist): its
+        # code, never the 404 of a missing contract
+        logger.info("Refused status change request for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Request status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (403 if "denied" in str(e).lower() or "permission" in str(e).lower() else 409)
@@ -656,6 +774,10 @@ async def handle_steward_review_response(
         
     except ValueError as e:
         logger.error("Handle review validation error for contract_id=%s: %s", contract_id, e)
+        if isinstance(e, CodedValueError):
+            # e.g. a before_status_change gate refused the decision: send its
+            # code and parameters so the UI can explain it
+            raise HTTPException(status_code=409, detail=str(e))
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
         raise HTTPException(status_code=error_status, detail="Invalid review response")
     except HTTPException:
@@ -1145,18 +1267,42 @@ async def handle_status_change_response(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Handle a status change request decision (approve/deny/clarify)."""
+    """Handle a status change request decision (approve/deny/clarify).
+
+    Deprecating a certified contract this way needs Admin on data contracts
+    (certified guard).
+    """
+    from src.controller.certified_deprecation_guard import (
+        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
+    )
+    by_admin = await has_feature_permission(
+        'data-contracts', FeatureAccessLevel.ADMIN, current_user, request,
+    )
+    # Counts for the certified guard only as an admin's approval of a pending
+    # request made by someone else
+    refusal = handle_decision_refusal(
+        db, 'data_contract', contract_id, payload.target_status, by_admin,
+        current_user.email if current_user else None,
+        current_user.username if current_user else None,
+    )
+    request_id = pending_request_id(db, 'data_contract', contract_id)
     try:
-        result = manager.handle_status_change_response(
-            db=db,
-            notifications_manager=notifications,
-            contract_id=contract_id,
-            approver_email=current_user.email if current_user else None,
-            decision=payload.decision,
-            target_status=payload.target_status,
-            requester_email=payload.requester_email,
-            message=payload.message,
-            current_user=current_user.username if current_user else None
+        with approved_status_change('data_contract', contract_id, refusal):
+            result = manager.handle_status_change_response(
+                db=db,
+                notifications_manager=notifications,
+                contract_id=contract_id,
+                approver_email=current_user.email if current_user else None,
+                decision=payload.decision,
+                target_status=payload.target_status,
+                requester_email=payload.requester_email,
+                message=payload.message,
+                current_user=current_user.username if current_user else None
+            )
+        # The decision ends the request it was about
+        record_decision(
+            db, 'data_contract', contract_id, request_id, payload.decision,
+            current_user.username if current_user else None,
         )
         
         # Audit
@@ -1176,9 +1322,16 @@ async def handle_status_change_response(
         
         return result
         
+    except LifecycleFieldError as e:
+        # The requested deprecation no longer holds (e.g. its replacement is
+        # gone): 400 with the code, never the 404 of a missing contract
+        logger.info("Refused status change decision for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Handle status change validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
+        from src.controller.certified_deprecation_guard import guard_refusal_status
+        error_status = guard_refusal_status(e, error_status)
         raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise
@@ -1252,6 +1405,10 @@ async def create_contract(
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return manager._build_contract_api_model(db, created_with_relations)
 
+    except CodedValueError as e:
+        # A status that isn't a lifecycle status (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error creating contract: %s", e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
@@ -1302,6 +1459,10 @@ async def update_contract(
         db_obj = data_contract_repo.get(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
+
+        # Before the before_update workflows run: a status change goes through
+        # change-status (the manager checks it again for the other callers).
+        check_status_unchanged(db_obj.status, contract_data.status)
             
         if db_obj.project_id:
             from src.controller.projects_manager import projects_manager
@@ -1417,6 +1578,10 @@ async def update_contract(
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
         return manager._build_contract_api_model(db, updated_with_relations)
 
+    except CodedValueError as e:
+        # A status change sent with the update (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error updating contract %s: %s", contract_id, e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
@@ -1857,6 +2022,7 @@ async def get_schema_properties(
     Use limit=0 to return all properties without pagination (e.g. for the edit dialog).
     """
     from sqlalchemy import func as sa_func
+    from src.utils.property_custom_properties import SCHEMA_PROPERTY_ORDER
 
     schema_obj = (
         db.query(SchemaObjectDb)
@@ -1871,11 +2037,13 @@ async def get_schema_properties(
     query = (
         db.query(SchemaPropertyDb)
         .filter(SchemaPropertyDb.object_id == schema_obj.id)
-        .order_by(SchemaPropertyDb.name)
+        .order_by(*SCHEMA_PROPERTY_ORDER)  # the contract's column order
     )
     if limit > 0:
         query = query.offset(skip).limit(limit)
     props = query.all()
+    from src.utils.property_custom_properties import custom_properties_by_property
+    custom_props = custom_properties_by_property(db, [p.id for p in props])
 
     items = []
     for p in props:
@@ -1891,7 +2059,8 @@ async def get_schema_properties(
             "physicalType": p.physical_type,
             "required": p.required,
             "unique": p.unique,
-            "primaryKey": p.primary_key,
+            # Rows stored before `primary_key` was set only have the position
+            "primaryKey": bool(p.primary_key) or (p.primary_key_position is not None and p.primary_key_position >= 0),
             "primaryKeyPosition": p.primary_key_position,
             "partitioned": p.partitioned,
             "partitionKeyPosition": p.partition_key_position,
@@ -1904,6 +2073,7 @@ async def get_schema_properties(
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
             "encryptedName": p.encrypted_name,
+            "customProperties": custom_props.get(p.id, {}),
         }
         item.update(options)
         items.append(item)
@@ -1936,9 +2106,11 @@ async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContracts
                 'Content-Type': 'application/x-yaml; charset=utf-8'
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Failed to list versions for contract %s", contract_id)
-        raise HTTPException(status_code=500, detail="Failed to list versions")
+        logger.exception("Failed to export contract %s as ODCS", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to export the contract")
 
 @router.post('/data-contracts/{contract_id}/link-assets', response_model=dict)
 async def auto_link_contract_schema_to_assets(
@@ -3822,6 +3994,9 @@ async def clone_contract_for_new_version(
         from src.models.data_contracts_api import DataContractRead
         return DataContractRead.model_validate(new_contract, from_attributes=True).model_dump()
 
+    except InvalidVersionFormatError as e:
+        # Sent with its code and the version, so the page can say it in the user's language
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error cloning contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid contract data")

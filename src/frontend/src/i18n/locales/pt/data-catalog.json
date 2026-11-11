@@ -99,9 +99,40 @@
       "upstream": "Upstream",
       "both": "Ambos",
       "downstream": "Downstream",
-      "breadth": "Amplitude:",
-      "nesting": "Aninhamento:",
-      "entitiesEdges": "{{nodes}} entidades · {{edges}} arestas"
+      "entitiesEdges": "{{nodes}} entidades · {{edges}} arestas",
+      "view": "Visualização",
+      "layers": "Camadas",
+      "edges": "Relações",
+      "edgeLabels": "Rótulos das arestas",
+      "resetView": "Redefinir visualização",
+      "openEntity": "Abrir",
+      "clearSelection": "Limpar seleção",
+      "selectHint": "Clique num nó para rastrear o caminho · duplo clique para abrir",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Fluxo de dados",
+        "implementation": "Implementado por",
+        "crossContainment": "Contém (entre camadas)",
+        "governance": "Governança",
+        "semantic": "Semântica / conceitos"
+      },
+      "focusPath": "Focar caminho",
+      "showContext": "Mostrar tudo",
+      "minimap": "Minimapa",
+      "zoomIn": "Aproximar",
+      "zoomOut": "Afastar",
+      "fitView": "Ajustar à vista",
+      "depth": "Profundidade:",
+      "depthAll": "Tudo",
+      "depthHint": "Saltos de relação seguidos em cada direção. A contenção (portas, esquema, colunas) não conta.",
+      "detailHint": "Que linhas os cartões mostram. As linhas de um caminho selecionado são sempre mostradas.",
+      "detailLevels": {
+        "entities": "Entidades",
+        "structure": "Estrutura",
+        "fields": "Campos"
+      },
+      "truncated": "Truncado",
+      "truncatedHint": "Demasiadas entidades — a mostrar apenas uma parte. Reduza a profundidade ou abra uma entidade mais específica."
     },
     "legendPanel": {
       "entityTypes": "Tipos de Entidade",
@@ -109,7 +140,8 @@
       "dataFlow": "Fluxo de dados",
       "containment": "Contenção",
       "governance": "Governança",
-      "semantic": "Semântica"
+      "semantic": "Semântica",
+      "implementation": "Implementado por"
     },
     "dev": {
       "entityTypeLabel": "Tipo de Entidade:",
@@ -118,6 +150,31 @@
       "entityIdPlaceholder": "ex.: uuid",
       "load": "Carregar",
       "emptyHint": "Informe um tipo de entidade e um ID acima, depois clique em Carregar"
+    },
+    "relationships": {
+      "describes": "descreve",
+      "hasOutputPort": "tem porta de saída",
+      "portHasContract": "governado por",
+      "portHasAsset": "expõe",
+      "hasSchemaObject": "tem esquema",
+      "hasProperty": "tem propriedade",
+      "implementedBy": "implementado por",
+      "dependsOn": "depende de",
+      "hasDataset": "tem conjunto de dados",
+      "hasTable": "tem tabela",
+      "hasView": "tem vista",
+      "hasColumn": "tem coluna",
+      "governedBy": "governado por",
+      "implementsContract": "implementa contrato",
+      "consumesFrom": "consome de",
+      "producesTo": "produz para",
+      "derivedFrom": "derivado de",
+      "replacedBy": "substituído por",
+      "exposes": "expõe",
+      "relatesTo": "relaciona-se com",
+      "hasTerm": "tem termo",
+      "attachedPolicy": "política anexada",
+      "belongsToDomain": "pertence ao domínio"
     }
   },
   "hierarchy": {

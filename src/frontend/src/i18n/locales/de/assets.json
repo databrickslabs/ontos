@@ -149,6 +149,44 @@
       "relationships": "Beziehungen",
       "lineage": "Lineage",
       "impact": "Auswirkungsanalyse"
+    },
+    "metricView": {
+      "title": "Metric View",
+      "loading": "Metric View wird geladen",
+      "loadError": "Die Definition der Metric View konnte nicht geladen werden.",
+      "userTokenRequired": "Diese Metric View wird mit Ihrem eigenen Zugriff aus Unity Catalog gelesen, und Ihre Databricks-Anmeldung ist in dieser Sitzung nicht verfügbar.",
+      "state": {
+        "drift": {
+          "label": "Definition",
+          "in_sync": "Entspricht der Baseline",
+          "drifted": "Seit der Baseline geändert",
+          "unknown": "Nicht verglichen",
+          "driftedHint": "Die Definition in Unity Catalog weicht von der Baseline in Ontos ab. Ontos ändert sie nicht.",
+          "unknownHint": "Die Definition konnte nicht mit der Baseline verglichen werden."
+        },
+        "baseline": {
+          "recorded": "Baseline am {{date}} aus der ersten gelesenen Definition erfasst; noch keine Änderung genehmigt.",
+          "approved": "Baseline am {{date}} genehmigt.",
+          "none": "Noch keine Baseline.",
+          "digest": "Digest {{digest}}"
+        },
+        "lastChecked": "Geprüft am {{date}}",
+        "refresh": {
+          "label": "Aktualisierung",
+          "succeeded": "Erfolgreich",
+          "failed": "Fehlgeschlagen",
+          "running": "Läuft",
+          "canceled": "Abgebrochen",
+          "unknown": "Unbekannt",
+          "lastStarted": "Letzte Aktualisierung gestartet am {{date}}",
+          "schedule": "Zeitplan: {{schedule}}",
+          "noSchedule": "Kein Zeitplan: Aktualisierungen werden manuell gestartet.",
+          "openPipeline": "Pipeline öffnen",
+          "failedTitle": "Die letzte Aktualisierung ist fehlgeschlagen",
+          "failedHint": "Prüfen Sie die Pipeline auf die Ursache.",
+          "notAvailable": "Der Aktualisierungsstatus konnte nicht gelesen werden."
+        }
+      }
     }
   },
   "explorer": {

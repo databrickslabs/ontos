@@ -1,0 +1,42 @@
+{
+  "blocked": "A mudança de status de {{fromStatus}} para {{toStatus}} foi bloqueada por um workflow: {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "aguardando aprovação ({{step}})",
+    "entityLoadFailed": "não foi possível carregar {{entityType}} {{entityId}} para avaliar a regra",
+    "entityNotFound": "{{entityType}} {{entityId}} não foi encontrado, então a regra não pode ser avaliada",
+    "whereEvaluationFailed": "não foi possível avaliar a cláusula WHERE da política '{{policyName}}' em {{entityType}} {{entityId}}",
+    "validationFailed": "a validação do workflow falhou",
+    "status": {
+      "failed": "falhou",
+      "cancelled": "cancelado",
+      "pending": "pendente",
+      "running": "em execução"
+    }
+  },
+  "requiresTransition": "Uma edição não pode mudar o status de {{fromStatus}} para {{toStatus}}. Use Alterar status, que verifica a transição e executa os workflows de mudança de status.",
+  "certifiedIsNotAStatus": "Certificado não é um status: a certificação é definida com Certificar, numa entidade ativa.",
+  "invalidStatus": "{{status}} não é um status do ciclo de vida. Use um destes: {{allowed}}.",
+  "gateError": "A mudança de status de {{fromStatus}} para {{toStatus}} foi recusada: não foi possível avaliar o gate de workflow {{workflows}}. Peça a um administrador para verificar o workflow.",
+  "gateErrorUnnamed": "A mudança de status de {{fromStatus}} para {{toStatus}} foi recusada: não foi possível avaliar um gate de workflow. Peça a um administrador para verificar o workflow.",
+  "certifiedDeprecationRequiresApproval": "{{name}} é certificado, então só pode ser descontinuado por uma solicitação de mudança de status aprovada. Solicite a mudança de status.",
+  "requestInstead": "Solicitar a mudança de status",
+  "certifiedGuard": {
+    "title": "Proteção de descontinuação de certificados",
+    "description": "Um produto de dados ou contrato de dados certificado só pode ser descontinuado por uma solicitação de mudança de status aprovada. A proteção vale em todo lugar, a menos que você a desligue abaixo.",
+    "hint": "A proteção não vale para os domínios, produtos de dados e contratos de dados listados aqui (um domínio cobre seus produtos e contratos): os certificados deles são descontinuados diretamente. Cada vez que ela é pulada, isso fica no log e na auditoria.",
+    "saved": "Proteção de descontinuação de certificados salva",
+    "saveFailed": "Não foi possível salvar a proteção de descontinuação de certificados",
+    "loadFailed": "Não foi possível carregar a proteção de descontinuação de certificados",
+    "notFound": "{{id}} não existe mais. Remova-o e salve de novo.",
+    "missingOnSave_one": "A proteção está desligada para {{count}} item que não existe mais. Remova-o e salve de novo.",
+    "missingOnSave_other": "A proteção está desligada para {{count}} itens que não existem mais. Remova-os e salve de novo.",
+    "readOnly": "Só admins de níveis de certificação podem alterar a proteção."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} é certificado: só um admin desta funcionalidade pode aprovar a descontinuação.",
+    "no_pending_request": "{{name}} é certificado: aprovar exige uma solicitação de mudança de status pendente para esta mudança, e não há nenhuma.",
+    "target_mismatch": "{{name}} é certificado: a solicitação pendente pede outro status, então esta aprovação não vale para ela.",
+    "self_approval": "{{name}} é certificado: foi você quem fez esta solicitação, então outra pessoa precisa aprová-la.",
+    "no_approver": "{{name}} é certificado: a descontinuação precisa da decisão de um aprovador da solicitação."
+  }
+}

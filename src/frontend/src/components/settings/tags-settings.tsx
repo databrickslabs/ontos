@@ -48,6 +48,7 @@ import { useToast } from '@/hooks/use-toast';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { RelativeDate } from '@/components/common/relative-date';
 import { useAppSettingsStore } from '@/stores/app-settings-store';
+import { deleteOrThrow } from '@/lib/delete-or-throw';
 
 // Types based on backend models
 interface TagNamespace {
@@ -331,14 +332,14 @@ export default function TagsSettings() {
 
     try {
       if (deletingItem.type === 'namespace') {
-        await deleteApi(`/api/tags/namespaces/${deletingItem.id}`);
+        await deleteOrThrow(deleteApi, `/api/tags/namespaces/${deletingItem.id}`);
         fetchNamespaces();
         setSelectedNamespace('');
       } else if (deletingItem.type === 'tag') {
-        await deleteApi(`/api/tags/${deletingItem.id}`);
+        await deleteOrThrow(deleteApi, `/api/tags/${deletingItem.id}`);
         fetchTags();
       } else if (deletingItem.type === 'permission') {
-        await deleteApi(`/api/tags/namespaces/${selectedNamespace}/permissions/${deletingItem.id}`);
+        await deleteOrThrow(deleteApi, `/api/tags/namespaces/${selectedNamespace}/permissions/${deletingItem.id}`);
         fetchPermissions();
       }
       toast({ title: t('settings:tags.toasts.deleteSuccess', { type: deletingItem.type }) });

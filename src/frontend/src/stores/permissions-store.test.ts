@@ -18,6 +18,7 @@ describe('Permissions Store', () => {
         availableRoles: [],
         requestableRoles: [],
         appliedRoleId: null,
+        hiddenNavFeatures: [],
         _isInitializing: false,
         _initAttempted: false,
       });
@@ -237,6 +238,55 @@ describe('Permissions Store', () => {
     });
   });
 
+  describe('fetchNavigation', () => {
+    it('stores the hidden features the backend resolved', async () => {
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true, json: async () => ({ hidden_features: ['assets', 7, 'data-contracts'] }),
+      });
+      const { result } = renderHook(() => usePermissionsStore());
+
+      await act(async () => {
+        await result.current.fetchNavigation();
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/user/navigation', { cache: 'no-store' });
+      expect(result.current.hiddenNavFeatures).toEqual(['assets', 'data-contracts']);
+    });
+
+    it('hides nothing when the request fails', async () => {
+      act(() => {
+        usePermissionsStore.setState({ hiddenNavFeatures: ['assets'] });
+      });
+      (global.fetch as any).mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+      const { result } = renderHook(() => usePermissionsStore());
+
+      await act(async () => {
+        await result.current.fetchNavigation();
+      });
+      expect(result.current.hiddenNavFeatures).toEqual([]);
+
+      (global.fetch as any).mockRejectedValueOnce(new Error('offline'));
+      await act(async () => {
+        await result.current.fetchNavigation();
+      });
+      expect(result.current.hiddenNavFeatures).toEqual([]);
+    });
+
+    it('is refreshed when the role switcher changes the applied role', async () => {
+      (global.fetch as any).mockImplementation((url: string) => Promise.resolve({
+        ok: true,
+        json: async () => (url === '/api/user/navigation' ? { hidden_features: ['assets'] } : {}),
+      }));
+      const { result } = renderHook(() => usePermissionsStore());
+
+      await act(async () => {
+        await result.current.setRoleOverride('role-1');
+      });
+
+      expect(result.current.hiddenNavFeatures).toEqual(['assets']);
+    });
+  });
+
   describe('initializeStore', () => {
     it('fetches all data on initialization', async () => {
       // Arrange
@@ -299,8 +349,9 @@ describe('Permissions Store', () => {
         await Promise.all(promises);
       });
 
-      // Assert - Should only call fetch once per endpoint (5 total: permissions, actualPermissions, roles, requestableRoles, override)
-      expect(global.fetch).toHaveBeenCalledTimes(5);
+      // Assert - Should only call fetch once per endpoint (6 total: permissions,
+      // actualPermissions, roles, requestableRoles, override, navigation)
+      expect(global.fetch).toHaveBeenCalledTimes(6);
     });
 
     it('skips initialization if already loaded', async () => {

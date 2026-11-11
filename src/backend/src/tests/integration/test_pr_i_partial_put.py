@@ -46,13 +46,21 @@ class TestPartialPutPreservesUnmodifiedFields:
             "description": {"purpose": "exercise partial PUT semantics"},
             "version": "1.0.0",
             "productType": "sourceAligned",
+            "status": "draft",
             "owner": "test@example.com",
             "tags": ["pr-i"],
             "outputPorts": [port_payload],
         }
         resp = client.post("/api/data-products", json=product_payload)
         assert resp.status_code == 201, resp.text
-        return product_payload, resp.json()
+        # Every field assertion below reads the product with GET.
+        return product_payload, self._get(client, product_payload["id"])
+
+    @staticmethod
+    def _get(client, product_id):
+        resp = client.get(f"/api/data-products/{product_id}")
+        assert resp.status_code == 200, resp.text
+        return resp.json()
 
     # ---------------------------------------------------------------
     # Test 1: omitting outputPorts entirely preserves existing port fields
@@ -70,11 +78,12 @@ class TestPartialPutPreservesUnmodifiedFields:
             "name": "Renamed PR I Product",
             "version": "1.0.0",
             "productType": "sourceAligned",
+            "status": "draft",
             "owner": "test@example.com",
         }
         resp = client.put(f"/api/data-products/{product_id}", json=partial)
         assert resp.status_code == 200, resp.text
-        body = resp.json()
+        body = self._get(client, product_id)
 
         # Top-level change applied
         assert body["name"] == "Renamed PR I Product"
@@ -105,6 +114,7 @@ class TestPartialPutPreservesUnmodifiedFields:
             "name": "PR I Test Product",
             "version": "1.0.0",
             "productType": "sourceAligned",
+            "status": "draft",
             "owner": "test@example.com",
             "outputPorts": [
                 {
@@ -116,7 +126,7 @@ class TestPartialPutPreservesUnmodifiedFields:
         }
         resp = client.put(f"/api/data-products/{product_id}", json=partial)
         assert resp.status_code == 200, resp.text
-        body = resp.json()
+        body = self._get(client, product_id)
         port = body["outputPorts"][0]
 
         # The minimal-port path goes through the manager's model rebuild and
@@ -145,12 +155,13 @@ class TestPartialPutPreservesUnmodifiedFields:
             "name": created["name"],
             "version": created["version"],
             "productType": created.get("productType", "sourceAligned"),
+            "status": created["status"],
             "owner": created.get("owner"),
             "description": {"purpose": "updated purpose only"},
         }
         resp = client.put(f"/api/data-products/{product_id}", json=partial)
         assert resp.status_code == 200, resp.text
-        body = resp.json()
+        body = self._get(client, product_id)
 
         # Description updated
         assert body["description"]["purpose"] == "updated purpose only"
@@ -176,6 +187,7 @@ class TestRoutePartialDumpSemantics:
             "name": "minimal",
             "version": "1.0.0",
             "productType": "sourceAligned",
+            "status": "draft",
             "outputPorts": [
                 {"name": "p", "version": "1.0.0"}
             ],

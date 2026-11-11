@@ -117,11 +117,14 @@ export function useEntityMetadata(entityType: EntityKind, entityId: string | nul
     try {
       setLoading(true);
       setError(null);
+      // Metadata endpoints take the entity id as a query param (?entity_id=),
+      // not a path segment; the id may be an IRI so it must be URL-encoded.
+      const eid = encodeURIComponent(entityId);
       const [rt, li, docs, att] = await Promise.all([
-        fetch(`/api/entities/${entityType}/${entityId}/rich-texts`).then(r => r.ok ? r.json() : Promise.reject(new Error(`rich-texts ${r.status}`))),
-        fetch(`/api/entities/${entityType}/${entityId}/links`).then(r => r.ok ? r.json() : Promise.reject(new Error(`links ${r.status}`))),
-        fetch(`/api/entities/${entityType}/${entityId}/documents`).then(r => r.ok ? r.json() : Promise.reject(new Error(`documents ${r.status}`))),
-        fetch(`/api/entities/${entityType}/${entityId}/attachments`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/entities/${entityType}/rich-texts?entity_id=${eid}`).then(r => r.ok ? r.json() : Promise.reject(new Error(`rich-texts ${r.status}`))),
+        fetch(`/api/entities/${entityType}/links?entity_id=${eid}`).then(r => r.ok ? r.json() : Promise.reject(new Error(`links ${r.status}`))),
+        fetch(`/api/entities/${entityType}/documents?entity_id=${eid}`).then(r => r.ok ? r.json() : Promise.reject(new Error(`documents ${r.status}`))),
+        fetch(`/api/entities/${entityType}/attachments?entity_id=${eid}`).then(r => r.ok ? r.json() : []),
       ]);
       setRichTexts(Array.isArray(rt) ? rt : []);
       setLinks(Array.isArray(li) ? li : []);
@@ -181,8 +184,9 @@ export function useMergedMetadata(
         params.set('contract_ids', contractIds.join(','));
       }
       params.set('max_level', String(maxLevel));
+      params.set('entity_id', entityId);
       
-      const resp = await fetch(`/api/entities/${entityType}/${entityId}/metadata/merged?${params.toString()}`);
+      const resp = await fetch(`/api/entities/${entityType}/metadata/merged?${params.toString()}`);
       if (!resp.ok) throw new Error(`merged metadata ${resp.status}`);
       
       const data: MergedMetadataResponse = await resp.json();
@@ -269,7 +273,7 @@ export async function attachSharedAsset(
   assetId: string,
   levelOverride?: number
 ): Promise<MetadataAttachment> {
-  const resp = await fetch(`/api/entities/${entityType}/${entityId}/attachments`, {
+  const resp = await fetch(`/api/entities/${entityType}/attachments?entity_id=${encodeURIComponent(entityId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
@@ -291,7 +295,7 @@ export async function detachSharedAsset(
   assetType: 'rich_text' | 'link' | 'document',
   assetId: string
 ): Promise<void> {
-  const resp = await fetch(`/api/entities/${entityType}/${entityId}/attachments/${assetType}/${assetId}`, {
+  const resp = await fetch(`/api/entities/${entityType}/attachments/${assetType}/${encodeURIComponent(assetId)}?entity_id=${encodeURIComponent(entityId)}`, {
     method: 'DELETE',
   });
   if (!resp.ok && resp.status !== 404) throw new Error('Failed to detach shared asset');

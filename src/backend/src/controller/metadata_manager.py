@@ -1,11 +1,13 @@
 from typing import List, Optional, Dict, Any, Tuple
 
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import VolumeType
 
 from src.common.logging import get_logger
 from src.common.config import Settings, resolve_volume
+from src.common.workspace_client import get_workspace_client
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
     Link, LinkCreate, LinkUpdate,
@@ -25,6 +27,24 @@ logger = get_logger(__name__)
 
 # Constant for shared asset entity_id
 SHARED_ENTITY_ID = "__shared__"
+
+# Session.info keys of the document files to delete once the session commits.
+_PENDING_FILES_KEY = "ontos_pending_document_files"
+_PENDING_FILES_LISTENING = "ontos_pending_document_files_listening"
+
+
+def _drop_pending_files(session: Session, previous_transaction) -> None:
+    """On a rollback the document rows come back: keep their files.
+
+    ``after_soft_rollback`` also fires when the session's transaction is joined
+    to an outer one (``after_rollback`` doesn't); a savepoint rollback keeps
+    the paths, since they are queued only once their savepoint is released.
+    """
+    if previous_transaction.nested:
+        return
+    pending = session.info.pop(_PENDING_FILES_KEY, [])
+    if pending:
+        logger.info("Rolled back: %d document file(s) kept in the volume", len(pending))
 
 
 class MetadataManager:
@@ -218,6 +238,90 @@ class MetadataManager:
         }
         db_obj = repos[kind].get(db, id=id)
         return db_obj.entity_type if db_obj else None
+
+    # --- Entity deletion ---
+    def remove_all_for_entity(
+        self, db: Session, *, entity_type: str, entity_id: str,
+    ) -> Tuple[Dict[str, int], List[str]]:
+        """Delete the notes, links, documents and attachments stored for an entity.
+
+        Runs in the caller's transaction (no commit). Returns the number of rows
+        removed per kind, and the volume paths of the removed documents' files,
+        for ``delete_document_files``.
+        """
+        rich_texts = self._rich_text_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        links = self._link_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        paths = self._document_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        attachments = self._attachment_repo.remove_all_for_entity(
+            db, entity_type=entity_type, entity_id=entity_id,
+        )
+        counts = {
+            'rich_texts': rich_texts, 'links': links, 'documents': len(paths),
+            'attachments': attachments,
+        }
+        return counts, paths
+
+    def delete_document_files(
+        self, ws: Optional[WorkspaceClient], paths: List[str],
+    ) -> Tuple[int, int]:
+        """Delete document files from the volume, best effort: a failure is logged, not raised.
+
+        Without ``ws``, the app's workspace client is used. Returns (deleted, failed).
+        """
+        paths = [path for path in paths if path]
+        if paths and ws is None:
+            try:
+                ws = get_workspace_client()
+            except Exception:
+                logger.warning("No workspace client: %d document file(s) left in the volume",
+                               len(paths), exc_info=True)
+                return 0, len(paths)
+        deleted = failed = 0
+        for path in paths:
+            try:
+                ws.files.delete(path)
+                deleted += 1
+            except Exception:
+                logger.warning("Failed to delete document file %s from the volume", path,
+                               exc_info=True)
+                failed += 1
+        return deleted, failed
+
+    def delete_document_files_after_commit(
+        self, db: Session, paths: List[str], ws: Optional[WorkspaceClient] = None,
+    ) -> None:
+        """Delete document files from the volume once ``db`` commits, best effort.
+
+        The rows that point to the files are deleted in ``db``'s transaction;
+        deleting the files before the commit would leave rows pointing to
+        missing files if the transaction rolls back. The paths wait in
+        ``db.info`` and are deleted on the next commit, or dropped (the files
+        kept) on a rollback of the session's transaction. The counts are logged, never raised.
+        """
+        paths = [path for path in paths if path]
+        if not paths:
+            return
+        pending = db.info.setdefault(_PENDING_FILES_KEY, [])
+        pending.extend((path, ws) for path in paths)
+        if not db.info.get(_PENDING_FILES_LISTENING):
+            db.info[_PENDING_FILES_LISTENING] = True
+            event.listen(db, 'after_commit', self._delete_pending_files)
+            event.listen(db, 'after_soft_rollback', _drop_pending_files)
+
+    def _delete_pending_files(self, session: Session) -> None:
+        pending = session.info.pop(_PENDING_FILES_KEY, [])
+        if not pending:
+            return
+        ws = next((client for _, client in pending if client is not None), None)
+        deleted, failed = self.delete_document_files(ws, [path for path, _ in pending])
+        logger.info("Deleted %d document file(s) from the volume after commit, %d failed",
+                    deleted, failed)
 
     # =========================================================================
     # Shared Assets Management

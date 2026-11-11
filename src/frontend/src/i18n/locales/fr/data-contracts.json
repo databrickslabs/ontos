@@ -54,7 +54,9 @@
     "uploadError": "Échec du téléversement du contrat",
     "uploadFailed": "Échec du téléversement",
     "uploadOdpsHint": "\n\nAstuce : cette page concerne les contrats de données (format ODCS). Si vous essayez de téléverser un produit de données (format ODPS), veuillez plutôt utiliser la page Produits de données.",
-    "uploadSuccess": "Contrat téléversé avec succès"
+    "uploadSuccess": "Contrat téléversé avec succès",
+    "uploadSuccessCount_one": "{{count}} contrat importé avec succès",
+    "uploadSuccessCount_other": "{{count}} contrats importés avec succès"
   },
   "status": {
     "draft": "Brouillon",
@@ -69,6 +71,15 @@
     "retired": "Retiré",
     "published": "Publié",
     "archived": "Archivé"
+  },
+  "statusDescriptions": {
+    "draft": "En cours de développement, pas encore soumis à revue",
+    "proposed": "Soumis pour revue",
+    "under_review": "En cours de revue par le data steward",
+    "approved": "Approuvé par le steward, prêt à être activé",
+    "active": "En production, régit des actifs de données",
+    "deprecated": "Toujours disponible, mais marqué pour retrait",
+    "retired": "N'est plus utilisé, archivé"
   },
   "details": {
     "backToList": "Retour à la Liste",
@@ -187,7 +198,8 @@
     "validationErrorTitle": "Erreur de validation",
     "nameRequired": "Le nom du contrat est obligatoire",
     "versionRequired": "La version est obligatoire",
-    "saveError": "Échec de l'enregistrement du contrat"
+    "saveError": "Échec de l'enregistrement du contrat",
+    "statusChangeHint": "Le statut change avec Modifier le statut sur la page, qui vérifie la transition et exécute les workflows de changement de statut."
   },
   "import": {
     "title": "Importer un Contrat de Données",
@@ -209,7 +221,14 @@
     "importedTitle": "Importé",
     "importedSuccess": "JSON ODCS importé avec succès",
     "importOdcsError": "Échec de l'importation du JSON ODCS",
-    "importJsonButton": "Importer le JSON"
+    "importJsonButton": "Importer le JSON",
+    "uploadDescription": "Sélectionnez un ou plusieurs fichiers ODCS (YAML/JSON). Chaque fichier peut contenir un seul contrat ou un tableau.",
+    "createMissingDomains": "Créer les domaines manquants",
+    "createMissingDomainsHint": "Crée automatiquement les domaines qui n'existent pas encore. Désactivé : les domaines sans correspondance restent non attribués (l'original est conservé).",
+    "adoptIds": "Reprendre les ID du fichier",
+    "adoptIdsHint": "Réutilise un UUID valide et sans collision du fichier comme clé primaire, afin que les liens entre entités survivent à l'import.",
+    "duplicatesAsNew": "Importer les ID en double comme nouvelles copies",
+    "duplicatesAsNewHint": "Désactivé (par défaut) : une entité dont l'ID existe déjà est ignorée. Activé : elle est importée comme nouvelle copie avec un nouvel ID."
   },
   "editor": {
     "title": "Éditeur de Contrat",
@@ -266,6 +285,8 @@
       "domain": "Domaine",
       "project": "Projet",
       "projectIdTitle": "ID du projet : {{id}}",
+      "dataProduct": "Produit de données",
+      "dataProductIdTitle": "ID du produit : {{id}}",
       "tenant": "Tenant",
       "team": "Équipe",
       "teamIdTitle": "ID de l'équipe : {{id}}",
@@ -325,7 +346,7 @@
       "createProduct": "Créer un produit de données",
       "noneYet": "Aucun produit de données lié pour le moment",
       "emptyHint": "Créez un produit de données qui utilise ce contrat pour régir un livrable",
-      "statusRequirement": "Le contrat doit être au statut « actif », « approuvé » ou « certifié »",
+      "statusRequirement": "Le contrat doit être au statut « actif » ou « approuvé »",
       "unnamedProduct": "Produit sans nom",
       "deliverables_one": "Livrable : {{ports}}",
       "deliverables_other": "Livrables : {{ports}}"
@@ -496,11 +517,12 @@
       "deleteSchemaAuthDefFailed": "Échec de la suppression de la définition de référence de schéma",
       "createPropertyAuthDefFailed": "Échec de la création de la définition de référence de propriété",
       "updatePropertyAuthDefFailed": "Échec de la mise à jour de la définition de référence de propriété",
-      "approveFailedStatus": "Échec de l'approbation ({{status}})",
+      "invalidTransition": "Le contrat est maintenant {{fromStatus}} et ne peut plus être approuvé ni rejeté. Rechargez la page pour voir son statut actuel.",
       "approveFailed": "Échec de l'approbation",
-      "rejectFailedStatus": "Échec du rejet ({{status}})",
       "rejectFailed": "Échec du rejet",
-      "startProfilingFailed": "Échec du démarrage du profilage"
+      "startProfilingFailed": "Échec du démarrage du profilage",
+      "invalidVersionFormat": "« {{version}} » n'est pas une version valide : une nouvelle version suit le format X.Y.Z, par exemple 2.0.0.",
+      "draftVersionFormat": "La version « {{version}} » de ce contrat n'a pas le format X.Y.Z : impossible d'en créer un brouillon personnel. Créez plutôt une nouvelle version (par exemple 2.0.0)."
     }
   },
   "list": {
@@ -1062,7 +1084,7 @@
     "statusLabel": "Statut :",
     "requestTypeLabel": "Type de demande *",
     "notAvailableForStatus": "Non disponible pour le statut « {{status}} »",
-    "cannotRequest": "Impossible de demander {{type}} pour un contrat au statut « {{status}} »",
+    "cannotRequest": "« {{type}} » n'est pas disponible pour un contrat au statut {{status}}.",
     "messageOptionalLabel": "Message (facultatif)",
     "changingStatus": "Modification du statut...",
     "sendingRequest": "Envoi de la demande...",
@@ -1123,6 +1145,14 @@
       "requestDescription": "Demandez l'approbation pour changer le statut du cycle de vie de ce contrat.",
       "currentStatusLabel": "Statut actuel :",
       "recommendedLabel": "Recommandé :",
+      "recommended": {
+        "draft": "Soumettez-le à revue (Proposé) lorsqu'il est prêt",
+        "proposed": "Attendez que le steward le passe en revue",
+        "under_review": "Le steward approuvera ou demandera des modifications",
+        "approved": "Activez-le lorsqu'il est prêt à régir des données de production",
+        "active": "Rendez-le obsolète si vous prévoyez son retrait ; utilisez le panneau de certification pour certifier",
+        "deprecated": "Retirez-le lorsqu'il n'est plus utilisé"
+      },
       "selectTargetLabel": "Sélectionner le statut cible *",
       "chooseTargetPlaceholder": "Choisir le statut cible...",
       "terminalStateLabel": "État terminal :",
@@ -1145,11 +1175,24 @@
       "statusChangedTitle": "Statut modifié",
       "statusChangedDescription": "Le statut du contrat est passé de « {{from}} » à « {{to}} ».",
       "submittedTitle": "Demande envoyée",
-      "submittedDescription": "Votre demande de {{type}} a été envoyée et vous serez informé de la décision."
+      "submittedDescription": "Votre demande de {{type}} a été envoyée et vous serez informé de la décision.",
+      "workflowFailedTitle": "Demande envoyée, mais son workflow a échoué",
+      "workflowFailedDescription": "Personne n'a été sollicité pour décider de votre demande de {{type}} : le workflow « {{workflow}} » n'a pas pu démarrer. Contactez un administrateur.",
+      "requestTypes": {
+        "access": "accès",
+        "review": "revue",
+        "deploy": "déploiement",
+        "publish": "publication",
+        "certify": "certification",
+        "status_change": "changement de statut"
+      },
+      "workflowPartiallyFailedTitle": "Certains workflows de demande ont échoué",
+      "workflowPartiallyFailedDescription": "L'un des workflows de demande {{type}} a échoué : {{workflows}}. D'autres approbations peuvent être en attente."
     },
     "errors": {
       "submitFailed": "Échec de l'envoi de la demande",
-      "loadPolicyFailed": "Échec du chargement de la politique de déploiement"
+      "loadPolicyFailed": "Échec du chargement de la politique de déploiement",
+      "reviewSchemaRequired": "Un contrat doit avoir un schéma avant d'être proposé en revue."
     }
   },
   "deployRequest": {

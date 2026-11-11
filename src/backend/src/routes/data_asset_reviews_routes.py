@@ -20,9 +20,11 @@ from src.models.data_asset_reviews import (
 # Import Manager and other dependencies
 from src.controller.data_asset_reviews_manager import DataAssetReviewManager
 from src.controller.notifications_manager import NotificationsManager # Assuming manager is here
+from src.controller.semantic_links_manager import SemanticLinksManager
 from src.common.database import get_db
 from src.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
+from src.common.workspace_client import get_obo_workspace_client
 
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
@@ -52,7 +54,7 @@ def create_review_request(
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
-    """Create a new data asset review request."""
+    """Create a new data asset review request (Unity Catalog assets typed as the user)."""
     success = False
     details = {
         "params": {
@@ -64,7 +66,14 @@ def create_review_request(
 
     try:
         logger.info(f"Received request to create data asset review from {request_data.requester_email} for {request_data.reviewer_email}")
-        created_request = manager.create_review_request(request_data=request_data)
+        # Typed with the user's client, so a review doesn't reveal the type of an object
+        # they can't see. Resolved here, not as a dependency, so a refusal is audited.
+        user_client = None
+        if manager.reads_catalog(request_data.asset_fqns):
+            user_client = get_obo_workspace_client(request)
+        created_request = manager.create_review_request(
+            request_data=request_data, ws_client=user_client
+        )
         success = True
         details["request_id"] = created_request.id
         return created_request
@@ -213,7 +222,9 @@ def update_review_request_status(
 
     try:
         logger.info(f"Updating status for review request ID: {request_id} to {status_update.status}")
-        updated_request = manager.update_review_request_status(request_id=request_id, status_update=status_update)
+        updated_request = manager.update_review_request_status(
+            request_id=request_id, update_data=status_update,
+        )
         if updated_request is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
         success = True
@@ -349,21 +360,23 @@ async def get_asset_definition(
     asset_id: str,
     manager: DataAssetReviewManagerDep,
     # db: DBSessionDep # No longer needed here
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
-    """Get the definition (e.g., SQL) for a view or function asset."""
+    """Get the definition (e.g., SQL) for a view or function asset, read as the user."""
     logger.info(f"Getting definition for asset {asset_id} in request {request_id}")
     try:
         reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
         if not reviewed_asset:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
 
-        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset.asset_type.value}")
+        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.METRIC, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW, METRIC, FUNCTION, or NOTEBOOK types, not {reviewed_asset.asset_type.value}")
 
         definition = await manager.get_asset_definition(
             asset_fqn=reviewed_asset.asset_fqn,
-            asset_type=reviewed_asset.asset_type
+            asset_type=reviewed_asset.asset_type,
+            ws_client=user_client,
         )
 
         if definition is None:
@@ -379,6 +392,46 @@ async def get_asset_definition(
         logger.exception(f"Error getting definition for asset {asset_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting asset definition.")
 
+@router.get("/data-asset-reviews/{request_id}/assets/{asset_id}/metric-view")
+async def get_metric_view_definition(
+    request_id: str,
+    asset_id: str,
+    request: Request,
+    db: DBSessionDep,
+    manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
+):
+    """Get a metric view's definition: its YAML, its dimensions and measures, and the
+    concept links of the view and of each field (``links``)."""
+    try:
+        reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
+        if not reviewed_asset:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
+        if reviewed_asset.asset_type != AssetType.METRIC:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Only metric views have a metric view definition, not {reviewed_asset.asset_type.value}",
+            )
+        result = await manager.get_metric_view_definition(
+            reviewed_asset.asset_fqn, ws_client=user_client
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Metric view definition not found by the workspace client, or access denied.",
+            )
+        links_manager = SemanticLinksManager(
+            db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+        )
+        links = links_manager.list_for_metric_view(reviewed_asset.asset_fqn, result['metric_view'])
+        return {**result, 'links': links.model_dump()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting metric view definition for asset {asset_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting the metric view definition.")
+
 @router.get("/data-asset-reviews/{request_id}/assets/{asset_id}/preview")
 async def get_table_preview(
     request_id: str,
@@ -386,9 +439,10 @@ async def get_table_preview(
     # db: DBSessionDep, # No longer needed here
     manager: DataAssetReviewManagerDep,
     limit: int = Query(25, ge=1, le=100, description="Number of rows to preview"),
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
+    user_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ):
-    """Get a preview of data for a table asset."""
+    """Get a preview of data for a table asset, read as the user."""
     logger.info(f"Getting preview for asset {asset_id} (table) in request {request_id} (limit={limit})")
     try:
         reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
@@ -400,7 +454,8 @@ async def get_table_preview(
 
         preview_data = await manager.get_table_preview(
             table_fqn=reviewed_asset.asset_fqn, 
-            limit=limit
+            limit=limit,
+            ws_client=user_client,
         )
 
         if preview_data is None:
@@ -424,9 +479,9 @@ async def analyze_asset_with_llm(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
-    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Triggers LLM analysis for a specific asset's content."""
+    """Triggers LLM analysis for a specific asset's content (read as the user)."""
     success = False
     details = {
         "params": {
@@ -437,6 +492,8 @@ async def analyze_asset_with_llm(
 
     try:
         logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")
+        # Resolved here, not as a dependency, so a refusal is audited like other failures
+        user_client = get_obo_workspace_client(request)
 
         # Extract user token from request headers (Databricks Apps context)
         user_token = request.headers.get("x-forwarded-access-token")
@@ -456,7 +513,8 @@ async def analyze_asset_with_llm(
         # 2. Fetch the asset's definition (content) - this is an async call
         asset_content = await manager.get_asset_definition(
             asset_fqn=reviewed_asset_api.asset_fqn,
-            asset_type=reviewed_asset_api.asset_type
+            asset_type=reviewed_asset_api.asset_type,
+            ws_client=user_client,
         )
 
         if asset_content is None:

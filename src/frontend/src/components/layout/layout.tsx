@@ -11,12 +11,16 @@ import { useLayoutStore } from '@/stores/layout-store';
 import { useCopilotStore } from '@/stores/copilot-store';
 import CopilotPanel from '@/components/copilot/copilot-panel';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { healthIssueText, retryDetailText, type HealthIssue } from '@/lib/health-issue';
 
 interface HealthState {
   db_ok: boolean;
   ws_ok: boolean;
   warnings: string[];
+  // Codes of the warnings (the texts above are their English fallback)
+  warning_details?: HealthIssue[];
   db_error: string | null;
+  db_error_code?: string | null;
 }
 
 const HEALTH_POLL_INTERVAL_MS = 30_000;
@@ -55,28 +59,34 @@ export default function Layout({ children }: LayoutProps) {
   // Auto-poll while the DB is down so recovery is hands-free in dev too
   // (in prod, the FastAPI catch-all serves MAINTENANCE_HTML, which has its
   // own setInterval; this covers the Vite dev case where the SPA shell
-  // boots before the middleware can intercept).
+  // boots before the middleware can intercept). Also while the workspace is
+  // unreachable, so the warning clears once someone retries.
   useEffect(() => {
-    if (!health || health.db_ok) return;
+    if (!health || (health.db_ok && health.ws_ok)) return;
     const id = setInterval(() => {
       refreshHealth();
     }, HEALTH_POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [health, refreshHealth]);
 
-  const handleRetry = useCallback(async () => {
+  const handleRetry = useCallback(async (workspaceOnly = false) => {
     setIsRetrying(true);
     setRetryError(null);
     try {
       const r = await fetch('/api/health/retry', { method: 'POST' });
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
+        if (workspaceOnly && d?.health && !d.health.ws_ok) {
+          setHealth(d.health as HealthState);
+          setRetryError(t('navigation:warning.stillUnavailable'));
+          return;
+        }
         // Hard reload so permissions store, managers, search index, etc.
         // are re-fetched cleanly after recovery.
         window.location.reload();
         return;
       }
-      setRetryError(d?.detail || t('navigation:dbDown.retryFailed'));
+      setRetryError(retryDetailText(d?.detail, t) ?? t('navigation:dbDown.retryFailed'));
       await refreshHealth();
     } catch (e) {
       setRetryError(e instanceof Error ? e.message : t('common:errors.networkError'));
@@ -93,6 +103,13 @@ export default function Layout({ children }: LayoutProps) {
     !!health &&
     !isDbDown &&
     (!health.ws_ok || (health.warnings && health.warnings.length > 0));
+  const dbErrorText = health?.db_error_code
+    ? healthIssueText({ code: health.db_error_code, message: health.db_error ?? '' }, t)
+    : null;
+  // The banner's first line already says the workspace connection failed
+  const warningDetails = (health?.warning_details ?? []).filter(
+    (w) => health?.ws_ok || w.code !== 'workspace_client_unavailable',
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -118,13 +135,13 @@ export default function Layout({ children }: LayoutProps) {
               <AlertTitle>{t('navigation:dbDown.title')}</AlertTitle>
               <AlertDescription className="space-y-2">
                 <p>{t('navigation:dbDown.body')}</p>
-                {health?.db_error && (
+                {dbErrorText && (
                   <pre className="text-xs whitespace-pre-wrap break-words bg-muted/40 rounded p-2 max-h-32 overflow-auto">
-                    {health.db_error}
+                    {dbErrorText}
                   </pre>
                 )}
                 <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  <Button size="sm" onClick={handleRetry} disabled={isRetrying}>
+                  <Button size="sm" onClick={() => handleRetry()} disabled={isRetrying}>
                     {isRetrying ? t('navigation:dbDown.retrying') : t('navigation:dbDown.retryConnection')}
                   </Button>
                   {retryError && (
@@ -143,11 +160,19 @@ export default function Layout({ children }: LayoutProps) {
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>{t('navigation:warning.title')}</AlertTitle>
-              <AlertDescription>
+              <AlertDescription className="space-y-2">
                 {!health.ws_ok && (
                   <p>{t('navigation:warning.workspaceFailed')}</p>
                 )}
-                {health.warnings?.map((w, i) => <p key={i}>{w}</p>)}
+                {warningDetails.map((w, i) => <p key={i}>{healthIssueText(w, t)}</p>)}
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <Button size="sm" variant="outline" onClick={() => handleRetry(true)} disabled={isRetrying}>
+                    {isRetrying ? t('navigation:dbDown.retrying') : t('navigation:dbDown.retryConnection')}
+                  </Button>
+                  {retryError && (
+                    <span className="text-xs text-destructive">{retryError}</span>
+                  )}
+                </div>
               </AlertDescription>
             </Alert>
           </div>

@@ -28,6 +28,7 @@ class TestDataProductRoutes:
             "description": {"purpose": "Test product via API"},
             "version": "1.0.0",
             "productType": "sourceAligned",
+            "status": "draft",
             "owner": "test@example.com",
             "tags": ["api-test"],
         }
@@ -122,16 +123,26 @@ class TestDataProductRoutes:
         assert response.status_code == 422
 
     def test_create_product_duplicate_id(self, client, sample_product_data):
-        """Test that duplicate ID returns 409 conflict."""
-        # Arrange - Create first product
-        client.post("/api/data-products", json=sample_product_data)
+        """A payload id that is already taken is not adopted (#853).
 
-        # Act - Try to create duplicate
+        The first product keeps the id; the second gets a fresh server-side one.
+        """
+        # Arrange - Create first product
+        first = client.post("/api/data-products", json=sample_product_data)
+        assert first.status_code == 201
+        assert first.json()["id"] == sample_product_data["id"]
+
+        # Act - Post the same id again
         response = client.post("/api/data-products", json=sample_product_data)
 
         # Assert
-        assert response.status_code == 409
-        assert "already exists" in response.json()["detail"]
+        assert response.status_code == 201
+        second_id = response.json()["id"]
+        assert second_id != sample_product_data["id"]
+        uuid.UUID(second_id)
+        listed = client.get(f"/api/data-products/{sample_product_data['id']}")
+        assert listed.status_code == 200
+        assert listed.json()["name"] == sample_product_data["name"]
 
     def test_create_product_requires_write_permission(
         self, client, mock_test_user, sample_product_data
@@ -227,7 +238,7 @@ class TestDataProductRoutes:
 
         # Assert
         assert response.status_code == 400
-        assert "mismatch" in response.json()["detail"].lower()
+        assert "does not match" in response.json()["detail"].lower()
 
     def test_update_product_requires_write_permission(
         self, client, mock_test_user, sample_product_data
@@ -360,14 +371,20 @@ class TestDataProductRoutes:
 
         assert response.status_code == 202
 
-    def test_publish_product_success(self, client, sample_product_data):
+    def test_publish_product_success(self, client, db_session, sample_product_data):
         """Test POST /api/data-products/{id}/publish."""
-        # Arrange
-        sample_product_data["status"] = "proposed"
+        from src.db_models.data_contracts import DataContractDb
+
+        # Arrange - publishing needs every output port's contract approved or active
+        contract = DataContractDb(name="Publish Contract", version="1.0.0", status="active")
+        db_session.add(contract)
+        db_session.flush()
+        # ODPS lifecycle: only an approved product is published (approved -> active)
+        sample_product_data["status"] = "approved"
         sample_product_data["outputPorts"] = [{
             "name": "test-output",
             "version": "1.0.0",
-            "contractId": "test-contract"
+            "contractId": contract.id
         }]
         create_response = client.post("/api/data-products", json=sample_product_data)
         product_id = create_response.json()["id"]
@@ -402,27 +419,43 @@ class TestDataProductRoutes:
         product_id = create_response.json()["id"]
 
         # Act
-        response = client.post(f"/api/data-products/{product_id}/deprecate")
+        response = client.post(
+            f"/api/data-products/{product_id}/deprecate",
+            json={"deprecation_reason": "Replaced by v2"},
+        )
 
         # Assert
         assert response.status_code == 200
         assert response.json()["status"] == "deprecated"
 
+    def test_deprecate_product_requires_a_reason(self, client, sample_product_data):
+        """POST /deprecate without a reason is rejected."""
+        sample_product_data["status"] = "active"
+        create_response = client.post("/api/data-products", json=sample_product_data)
+        product_id = create_response.json()["id"]
+
+        response = client.post(f"/api/data-products/{product_id}/deprecate")
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "deprecation_reason_required"
+
     # =================================================================
     # Utility Endpoints
     # =================================================================
 
-    def test_get_statuses(self, client):
-        """Test GET /api/data-products/statuses returns all status values."""
+    def test_get_statuses(self, client, sample_product_data):
+        """Test GET /api/data-products/statuses returns the statuses in use."""
+        # Arrange - the route lists the distinct statuses of stored products
+        for status in ("draft", "proposed", "draft"):
+            data = {**sample_product_data, "id": str(uuid.uuid4()), "status": status}
+            assert client.post("/api/data-products", json=data).status_code == 201
+
         # Act
         response = client.get("/api/data-products/statuses")
 
         # Assert
         assert response.status_code == 200
-        statuses = response.json()
-        assert isinstance(statuses, list)
-        assert "draft" in statuses
-        assert "active" in statuses
+        assert response.json() == ["draft", "proposed"]
 
     def test_get_types(self, client):
         """Test GET /api/data-products/types returns product types."""
@@ -435,21 +468,23 @@ class TestDataProductRoutes:
 
     def test_get_owners(self, client, sample_product_data):
         """Test GET /api/data-products/owners returns distinct owners."""
-        # Arrange - Create products with different owners
-        for owner in ["owner1@test.com", "owner2@test.com"]:
+        # Arrange - owners are the names of the ODPS team members with role "owner"
+        for owner in ["owner1@test.com", "owner2@test.com", "owner1@test.com"]:
             data = sample_product_data.copy()
             data["id"] = str(uuid.uuid4())
-            data["owner"] = owner
-            client.post("/api/data-products", json=data)
+            data["team"] = {"members": [
+                {"username": owner, "name": owner, "role": "owner"},
+                {"username": "steward@test.com", "name": "steward@test.com",
+                 "role": "data steward"},
+            ]}
+            assert client.post("/api/data-products", json=data).status_code == 201
 
         # Act
         response = client.get("/api/data-products/owners")
 
         # Assert
         assert response.status_code == 200
-        owners = response.json()
-        assert "owner1@test.com" in owners
-        assert "owner2@test.com" in owners
+        assert response.json() == ["owner1@test.com", "owner2@test.com"]
 
     def test_get_published_products(self, client, db_session):
         """GET /api/data-products/published returns products with publication_scope != none."""
@@ -643,3 +678,74 @@ class TestDataProductRoutes:
         )
         assert response.status_code == 403, response.text
         assert "data-domains" in response.json().get("detail", "")
+
+
+class TestUnpublishRoute:
+    """POST /api/data-products/{id}/unpublish fires on_unpublish only on a real change."""
+
+    @staticmethod
+    def _product(db_session, scope):
+        from src.db_models.data_products import DataProductDb
+
+        product = DataProductDb(
+            id=str(uuid.uuid4()), api_version='v1.0.0', kind='DataProduct',
+            status='active', name='unpublish-test', version='1.0.0',
+            publication_scope=scope,
+            published_by='alice@example.com' if scope != 'none' else None,
+        )
+        db_session.add(product)
+        db_session.commit()
+        return product
+
+    def test_unpublishing_a_published_product_fires_on_unpublish(self, client, db_session):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'organization')
+        registry = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        registry.on_unpublish.assert_called_once()
+        assert registry.on_unpublish.call_args.args[1] == product.id
+        db_session.refresh(product)
+        assert product.publication_scope == 'none'
+        assert product.published_by is None
+
+    def test_unpublishing_an_unpublished_product_fires_nothing(self, client, db_session):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'none')
+        registry = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        registry.on_unpublish.assert_not_called()
+
+    def test_a_failing_on_unpublish_trigger_keeps_the_unpublish_and_answers_200(
+        self, client, db_session, caplog
+    ):
+        from unittest.mock import MagicMock, patch
+
+        product = self._product(db_session, 'organization')
+        registry = MagicMock()
+        registry.on_unpublish.side_effect = RuntimeError('workflow engine down')
+        audit = MagicMock()
+
+        with patch('src.routes.data_product_routes.get_trigger_registry', return_value=registry), \
+                patch('src.controller.audit_manager.AuditManager.log_action', audit), \
+                caplog.at_level('ERROR'):
+            response = client.post(f"/api/data-products/{product.id}/unpublish")
+
+        assert response.status_code == 200, response.text
+        db_session.refresh(product)
+        assert product.publication_scope == 'none'
+        # The unpublish is still audited, and the trigger error is logged
+        assert [c.kwargs.get('action') for c in audit.call_args_list] == ['UNPUBLISH']
+        assert any(
+            f'on_unpublish trigger failed for data product {product.id}' in r.getMessage()
+            for r in caplog.records
+        )

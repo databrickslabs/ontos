@@ -36,6 +36,19 @@ test.beforeAll(async ({ request }) => {
   // The publish request wizard (for_request_publish) is a default workflow
   const resp = await request.post(`${BACKEND_URL}/api/workflows/load-defaults?update_existing=false`)
   expect(resp.ok()).toBeTruthy()
+  // Default workflows are created inactive; the dialog only runs the wizard
+  // when it is active
+  const list = await (await request.get(`${BACKEND_URL}/api/workflows`)).json()
+  const workflows: { id: string; is_active: boolean; trigger?: { type?: string } }[] =
+    Array.isArray(list) ? list : list.workflows ?? []
+  const wizard = workflows.find((w) => w.trigger?.type === 'for_request_publish')
+  expect(wizard, 'the default publish request wizard').toBeTruthy()
+  if (!wizard!.is_active) {
+    const toggled = await request.post(
+      `${BACKEND_URL}/api/workflows/${wizard!.id}/toggle-active?is_active=true`,
+    )
+    expect(toggled.ok()).toBeTruthy()
+  }
 })
 
 test.describe('Approval wizard request submit', () => {
@@ -60,7 +73,8 @@ test.describe('Approval wizard request submit', () => {
     await expect(page.getByText('Request Submitted').first()).toBeVisible()
 
     // Closing the wizard doesn't send it again
-    await page.locator('[role="dialog"]').last().getByRole('button', { name: 'Close' }).first().click()
+    // By test id: the button's accessible name is translated.
+    await page.locator('[role="dialog"]').last().getByTestId('dialog-close').first().click()
     await expect(page.locator('[role="dialog"]')).toHaveCount(0)
     await page.waitForTimeout(1000)
     expect(sent).toEqual([202])

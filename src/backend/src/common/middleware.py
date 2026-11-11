@@ -5,6 +5,7 @@ from fastapi import Request, Response, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import HTMLResponse, JSONResponse
 
+from src.common.health_status import health_issue
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
@@ -68,10 +69,11 @@ MAINTENANCE_HTML = """<!DOCTYPE html>
     try{
       const r=await fetch('/api/health/retry',{method:'POST'});
       const d=await r.json();
+      const detail=(d.detail&&d.detail.message)||d.detail;
       if(r.ok){msg.className='status ok';msg.textContent='Connected! Reloading\u2026';
         setTimeout(()=>location.reload(),1000);
-      }else{msg.className='status err';msg.textContent=d.detail||'Retry failed';
-        err.textContent=d.detail||err.textContent;btn.disabled=false;}
+      }else{msg.className='status err';msg.textContent=detail||'Retry failed';
+        err.textContent=detail||err.textContent;btn.disabled=false;}
     }catch(e){msg.className='status err';msg.textContent='Network error';btn.disabled=false;}
   }
   setInterval(()=>{if(!btn.disabled)retry();},30000);
@@ -121,9 +123,9 @@ class MaintenanceMiddleware(BaseHTTPMiddleware):
             accept = request.headers.get('accept', '')
             if 'text/html' in accept:
                 return HTMLResponse(MAINTENANCE_HTML, status_code=503)
-            detail = health.get("db_error") if not db_ok else health.get("seed_error")
+            code = "database_unavailable" if not db_ok else "seeding_failed"
             return JSONResponse(
-                {"error": "maintenance", "detail": detail},
+                {"error": "maintenance", "detail": health_issue(code)},
                 status_code=503,
             )
         return await call_next(request)

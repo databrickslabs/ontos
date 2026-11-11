@@ -11,6 +11,12 @@ from src.models.assets import (
     DeletePreviewItem, CascadeDeleteRequest, CascadeDeleteResult,
 )
 from src.controller.assets_manager import assets_manager
+from src.controller.metric_views_manager import (
+    MetricViewNotFoundError, MetricViewsManager, UserClientUnavailableError, UserTokenRequiredError,
+)
+from src.common.workspace_client import get_obo_workspace_client
+from src.controller.semantic_links_manager import SemanticLinksManager
+from src.models.metric_views import MetricViewRead
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
@@ -72,6 +78,32 @@ def _user_has_assets_feature(request: Request, current_user, level: FeatureAcces
     except Exception:
         logger.exception("Failed to check assets feature for user")
         return False
+
+
+def _ensure_asset_readable(request: Request, db, current_user, manager, asset_id: UUID) -> None:
+    """Raise 403 unless the user may read the asset (issue #347).
+
+    Users with ``assets:READ_WRITE`` or higher read every asset; others only
+    assets linked (directly or via an OutputPort) to a Data Product they can
+    access.
+    """
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication required.",
+        )
+
+    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
+
+    if not is_unscoped:
+        dpm = _get_data_products_manager(request)
+        if dpm is None or not manager.is_asset_accessible(
+            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Asset is not linked to a Data Product accessible to this user.",
+            )
 
 
 # ===================== Asset Types =====================
@@ -376,23 +408,7 @@ def get_asset(
       the user can access. This enables Linked Assets navigation from a
       DP detail view even without the broader ``assets`` feature granted.
     """
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Authentication required.",
-        )
-
-    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
-
-    if not is_unscoped:
-        dpm = _get_data_products_manager(request)
-        if dpm is None or not manager.is_asset_accessible(
-            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Asset is not linked to a Data Product accessible to this user.",
-            )
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
 
     result = manager.get_asset(db=db, asset_id=asset_id)
     if not result:
@@ -552,6 +568,77 @@ def delete_asset(
             db=db, username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="DELETE_ASSET", success=success, details=details,
+        )
+
+
+def _user_workspace_client(request: Request):
+    """The workspace client of the requesting user, built from their OBO token.
+
+    Fails closed: ``get_obo_workspace_client`` falls back to the app's service
+    principal when the request has no ``x-forwarded-access-token``, so the token
+    is required here first, and a client that can't be built is an error rather
+    than a fallback.
+    """
+    if not request.headers.get('x-forwarded-access-token'):
+        raise UserTokenRequiredError(
+            "Reading Unity Catalog needs the user's Databricks token, and the request has none."
+        )
+    try:
+        return get_obo_workspace_client(request)
+    except Exception:
+        logger.warning("Could not build the user's workspace client", exc_info=True)
+        raise UserClientUnavailableError(
+            "The user's Databricks workspace client could not be created."
+        )
+
+
+@assets_router.get(
+    "/{asset_id}/metric-view",
+    response_model=MetricViewRead,
+)
+def get_asset_metric_view(
+    asset_id: UUID,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager=Depends(get_assets_manager),
+):
+    """The Unity Catalog metric view behind an asset: its YAML, its dimensions and
+    measures, the concept links of the view and of each field, and its baseline
+    and drift state (an unparseable definition is drift ``unknown``, not an error).
+
+    Unity Catalog is read as the user (on-behalf-of token), never as the app,
+    so the definition is only returned to users Unity Catalog lets read it.
+    403 ``user_token_required`` without the user's token (401 when Unity Catalog
+    refuses it), 503 ``user_client_unavailable`` when the user's client can't be
+    built, 404
+    ``metric_view_not_found`` when the asset isn't a metric view the user can
+    read. The asset itself must be readable by the user.
+    """
+    _ensure_asset_readable(request, db, current_user, manager, asset_id)
+    try:
+        ws_client = _user_workspace_client(request)
+    except UserTokenRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except UserClientUnavailableError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+    links_manager = SemanticLinksManager(
+        db, semantic_models_manager=getattr(request.app.state, 'semantic_models_manager', None)
+    )
+    try:
+        return MetricViewsManager(db, links_manager).get_for_asset(
+            asset_id, ws_client, user_email=getattr(current_user, 'email', None),
+        )
+    except MetricViewNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except UserTokenRequiredError as e:
+        # Unity Catalog refused the user's token (expired or revoked)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+    except Exception:
+        logger.exception("Failed to read the metric view of asset %s", asset_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to read the metric view",
         )
 
 

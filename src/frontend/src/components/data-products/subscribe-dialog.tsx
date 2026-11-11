@@ -23,6 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Bell } from 'lucide-react';
 import { useUserStore } from '@/stores/user-store';
+import { subscribeErrorText } from '@/lib/subscribe-error';
 
 // subscribe on behalf of group / SP. The form picks one of:
 //   - "self": current user
@@ -102,7 +103,9 @@ export default function SubscribeDialog({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to subscribe (${response.status})`);
+        throw new Error(subscribeErrorText(
+          errorData.detail, t, `Failed to subscribe (${response.status})`,
+        ));
       }
 
       const successDescription = obo

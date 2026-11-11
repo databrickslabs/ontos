@@ -168,3 +168,34 @@ describe('DataProductCreateDialog — Consumer Groups picker wiring', () => {
     });
   });
 });
+
+describe('DataProductCreateDialog — status', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupFetchMock();
+  });
+
+  it('keeps the status read-only when editing, pointing to Change Status', () => {
+    renderWithProviders(
+      <DataProductCreateDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        onSuccess={vi.fn()}
+        product={{ ...baseProduct, status: 'active' }}
+        mode="edit"
+      />
+    );
+
+    expect(screen.getByRole('combobox', { name: /Status/ })).toBeDisabled();
+    expect(screen.getByText(/The status changes with Change Status on the page/)).toBeInTheDocument();
+  });
+
+  it('lets the status be chosen when creating', () => {
+    renderWithProviders(
+      <DataProductCreateDialog open={true} onOpenChange={vi.fn()} onSuccess={vi.fn()} mode="create" />
+    );
+
+    expect(screen.getByRole('combobox', { name: /Status/ })).not.toBeDisabled();
+    expect(screen.queryByText(/The status changes with Change Status on the page/)).not.toBeInTheDocument();
+  });
+});

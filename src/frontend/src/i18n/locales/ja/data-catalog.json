@@ -99,9 +99,40 @@
       "upstream": "上流",
       "both": "両方",
       "downstream": "下流",
-      "breadth": "幅:",
-      "nesting": "ネスト:",
-      "entitiesEdges": "{{nodes}} エンティティ · {{edges}} エッジ"
+      "entitiesEdges": "{{nodes}} エンティティ · {{edges}} エッジ",
+      "view": "表示",
+      "layers": "レイヤー",
+      "edges": "関係",
+      "edgeLabels": "エッジラベル",
+      "resetView": "表示をリセット",
+      "openEntity": "開く",
+      "clearSelection": "選択を解除",
+      "selectHint": "ノードをクリックしてパスを追跡 · ダブルクリックで開く",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "データフロー",
+        "implementation": "実装",
+        "crossContainment": "包含(レイヤー間)",
+        "governance": "ガバナンス",
+        "semantic": "セマンティック / 概念"
+      },
+      "focusPath": "パスに集中",
+      "showContext": "すべて表示",
+      "minimap": "ミニマップ",
+      "zoomIn": "ズームイン",
+      "zoomOut": "ズームアウト",
+      "fitView": "全体を表示",
+      "depth": "深さ:",
+      "depthAll": "すべて",
+      "depthHint": "各方向にたどる関係のホップ数。包含(ポート、スキーマ、列)は数えません。",
+      "detailHint": "カードに表示する行。選択したパス上の行は常に表示されます。",
+      "detailLevels": {
+        "entities": "エンティティ",
+        "structure": "構造",
+        "fields": "フィールド"
+      },
+      "truncated": "一部のみ",
+      "truncatedHint": "エンティティが多すぎるため一部のみ表示しています。深さを減らすか、より具体的なエンティティを開いてください。"
     },
     "legendPanel": {
       "entityTypes": "エンティティ種別",
@@ -109,7 +140,8 @@
       "dataFlow": "データフロー",
       "containment": "包含",
       "governance": "ガバナンス",
-      "semantic": "セマンティック"
+      "semantic": "セマンティック",
+      "implementation": "実装"
     },
     "dev": {
       "entityTypeLabel": "エンティティ種別:",
@@ -118,6 +150,31 @@
       "entityIdPlaceholder": "例: uuid",
       "load": "読み込み",
       "emptyHint": "上でエンティティ種別とIDを入力し、「読み込み」をクリックしてください"
+    },
+    "relationships": {
+      "describes": "説明",
+      "hasOutputPort": "出力ポートあり",
+      "portHasContract": "管理元",
+      "portHasAsset": "公開",
+      "hasSchemaObject": "スキーマあり",
+      "hasProperty": "プロパティあり",
+      "implementedBy": "実装",
+      "dependsOn": "依存",
+      "hasDataset": "データセットあり",
+      "hasTable": "テーブルあり",
+      "hasView": "ビューあり",
+      "hasColumn": "列あり",
+      "governedBy": "管理元",
+      "implementsContract": "契約を実装",
+      "consumesFrom": "取得元",
+      "producesTo": "出力先",
+      "derivedFrom": "派生元",
+      "replacedBy": "置換先",
+      "exposes": "公開",
+      "relatesTo": "関連",
+      "hasTerm": "用語あり",
+      "attachedPolicy": "ポリシー適用",
+      "belongsToDomain": "ドメインに属する"
     }
   },
   "hierarchy": {

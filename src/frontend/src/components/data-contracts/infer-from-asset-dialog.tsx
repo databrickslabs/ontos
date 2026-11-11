@@ -25,7 +25,9 @@ interface InferFromAssetDialogProps {
   onInfer: (schemas: InferredSchemaObject[]) => void;
 }
 
-const TARGET_ASSET_TYPES = ['Dataset', 'Table', 'View', 'Schema', 'Function', 'Metric'];
+const TARGET_ASSET_TYPES = [
+  'Dataset', 'Table', 'View', 'Metric View', 'Schema', 'Function', 'Metric',
+];
 
 export default function InferFromAssetDialog({
   isOpen,

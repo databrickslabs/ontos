@@ -23,5 +23,10 @@
     "title": "Fout",
     "message": "Er is een onverwachte fout opgetreden.",
     "retry": "Opnieuw Proberen"
+  },
+  "internalError": "Er is een onverwachte fout opgetreden. De details staan in het serverlogboek (fout-id {{errorId}}).",
+  "userTokenRequired": "Dit verzoek heeft uw Databricks-toegangstoken nodig, maar er is er geen ontvangen. Laad de pagina opnieuw; als dit blijft gebeuren, vraag een beheerder om gebruikersautorisatie voor de app in te schakelen.",
+  "subscription": {
+    "productNotSubscribable": "U kunt zich niet abonneren op '{{productName}}': de status is '{{status}}'. Alleen actieve producten accepteren nieuwe abonnementen."
   }
 }

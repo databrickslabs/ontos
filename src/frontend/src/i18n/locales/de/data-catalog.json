@@ -99,9 +99,40 @@
       "upstream": "Vorgelagert",
       "both": "Beide",
       "downstream": "Nachgelagert",
-      "breadth": "Breite:",
-      "nesting": "Verschachtelung:",
-      "entitiesEdges": "{{nodes}} Entitäten · {{edges}} Kanten"
+      "entitiesEdges": "{{nodes}} Entitäten · {{edges}} Kanten",
+      "view": "Ansicht",
+      "layers": "Ebenen",
+      "edges": "Beziehungen",
+      "edgeLabels": "Kantenbeschriftungen",
+      "resetView": "Ansicht zurücksetzen",
+      "openEntity": "Öffnen",
+      "clearSelection": "Auswahl aufheben",
+      "selectHint": "Knoten anklicken, um den Pfad zu verfolgen · Doppelklick zum Öffnen",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Datenfluss",
+        "implementation": "Implementiert durch",
+        "crossContainment": "Enthält (ebenenübergreifend)",
+        "governance": "Governance",
+        "semantic": "Semantik / Konzepte"
+      },
+      "focusPath": "Pfad fokussieren",
+      "showContext": "Alles zeigen",
+      "minimap": "Übersichtskarte",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "fitView": "An Ansicht anpassen",
+      "depth": "Tiefe:",
+      "depthAll": "Alle",
+      "depthHint": "Anzahl der verfolgten Beziehungsschritte je Richtung. Enthaltensein (Ports, Schema, Spalten) zählt nicht.",
+      "detailHint": "Welche Zeilen Karten zeigen. Zeilen auf einem ausgewählten Pfad werden immer angezeigt.",
+      "detailLevels": {
+        "entities": "Entitäten",
+        "structure": "Struktur",
+        "fields": "Felder"
+      },
+      "truncated": "Gekürzt",
+      "truncatedHint": "Zu viele Entitäten – nur ein Teil wird angezeigt. Tiefe verringern oder eine spezifischere Entität öffnen."
     },
     "legendPanel": {
       "entityTypes": "Entitätstypen",
@@ -109,7 +140,8 @@
       "dataFlow": "Datenfluss",
       "containment": "Enthalten in",
       "governance": "Governance",
-      "semantic": "Semantisch"
+      "semantic": "Semantisch",
+      "implementation": "Implementiert durch"
     },
     "dev": {
       "entityTypeLabel": "Entitätstyp:",
@@ -118,6 +150,31 @@
       "entityIdPlaceholder": "z. B. uuid",
       "load": "Laden",
       "emptyHint": "Geben Sie oben einen Entitätstyp und eine ID ein und klicken Sie dann auf Laden"
+    },
+    "relationships": {
+      "describes": "beschreibt",
+      "hasOutputPort": "hat Ausgabeport",
+      "portHasContract": "geregelt durch",
+      "portHasAsset": "stellt bereit",
+      "hasSchemaObject": "hat Schema",
+      "hasProperty": "hat Eigenschaft",
+      "implementedBy": "implementiert durch",
+      "dependsOn": "hängt ab von",
+      "hasDataset": "hat Datensatz",
+      "hasTable": "hat Tabelle",
+      "hasView": "hat Ansicht",
+      "hasColumn": "hat Spalte",
+      "governedBy": "geregelt durch",
+      "implementsContract": "implementiert Vertrag",
+      "consumesFrom": "konsumiert von",
+      "producesTo": "produziert nach",
+      "derivedFrom": "abgeleitet von",
+      "replacedBy": "ersetzt durch",
+      "exposes": "stellt bereit",
+      "relatesTo": "bezieht sich auf",
+      "hasTerm": "hat Begriff",
+      "attachedPolicy": "Richtlinie angehängt",
+      "belongsToDomain": "gehört zur Domäne"
     }
   },
   "hierarchy": {

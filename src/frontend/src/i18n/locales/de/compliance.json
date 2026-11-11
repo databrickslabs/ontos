@@ -50,7 +50,8 @@
     "loadPoliciesFailed": "Compliance-Richtlinien konnten nicht geladen werden",
     "loadRunResultsFailed": "Ausführungsergebnisse konnten nicht geladen werden",
     "policyNotFound": "Compliance-Richtlinie nicht gefunden.",
-    "runNotFound": "Ausführung nicht gefunden."
+    "runNotFound": "Ausführung nicht gefunden.",
+    "runningPolicy": "Fehler beim Ausführen der Richtlinie"
   },
   "results": {
     "passed": "Bestanden",
@@ -77,7 +78,8 @@
       "passedExamples": "Bestandene Beispiele",
       "failedExamples": "Fehlgeschlagene Beispiele",
       "noPassedExamples": "Keine bestandenen Beispiele in dieser Ausführung",
-      "noFailures": "Keine Fehler in dieser Ausführung"
+      "noFailures": "Keine Fehler in dieser Ausführung",
+      "errorLabel": "Fehler:"
     },
     "runsList": {
       "title": "Ausführungen",
@@ -100,7 +102,8 @@
     "scoreLabel": "Score:",
     "passedLabel": "Bestanden:",
     "failedLabel": "Fehlgeschlagen:",
-    "startedLabel": "Gestartet: {{date}}"
+    "startedLabel": "Gestartet: {{date}}",
+    "errorLabel": "Fehler:"
   },
   "toast": {
     "policySaved": "Richtlinie '{{name}}' erfolgreich gespeichert",
@@ -166,5 +169,17 @@
   "ruleWarnings": {
     "unsupported_match_type": "Der MATCH-Typ '{{type}}' wird nicht unterstützt, daher prüft die Regel keine Entitäten. Unterstützte Typen: {{supported}} oder Object für alle.",
     "missing_assert": "Die Regel hat keine ASSERT-Klausel, daher besteht jede Entität."
+  },
+  "runErrors": {
+    "entities_load_failed": "Die {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden.",
+    "rule_parse_failed": "Die Regel konnte nicht geparst werden: {{detail}}",
+    "workspace_client_unavailable": "Der Databricks-Workspace ist nicht verfügbar, und diese Regel prüft Unity-Catalog-Objekte; sie konnte daher nicht ausgeführt werden.",
+    "tags_load_failed": "Die Tags der {{entityType}}-Entitäten konnten nicht geladen werden; die Regel konnte daher nicht ausgewertet werden."
+  },
+  "saveErrors": {
+    "rule_trailing_input": "Die Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Alles ab dort würde ignoriert, die Regel würde also weniger prüfen, als sie angibt. Entfernen Sie den Text oder korrigieren Sie die Syntax."
+  },
+  "runWarnings": {
+    "rule_trailing_input": "Diese Regel enthält ungültigen Text ab Zeile {{line}}, Spalte {{column}} ('{{text}}'). Er wird bei der Ausführung ignoriert, die Regel prüft daher möglicherweise weniger, als sie angibt. Bearbeiten Sie die Regel, um das zu korrigieren."
   }
 }

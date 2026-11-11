@@ -19,6 +19,7 @@ from src.models.data_products import (
     SubscriptionResponse,
     SubscribersListResponse,
     ChangeStatusPayload,
+    DeprecationPayload,
     RequestStatusChangePayload,
     HandleStatusChangePayload,
     CommitDraftRequest,
@@ -29,8 +30,11 @@ from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.authorization import has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
+from src.common.api_errors import CodedValueError
+from src.controller.lifecycle_fields import LIFECYCLE_AUDIT_ACTIONS, LifecycleFieldError
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -41,7 +45,9 @@ from src.common.dependencies import (
     AuditCurrentUserDep,
     ChangeLogManagerDep,
 )
-from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
+from src.common.workflow_triggers import (
+    fire_trigger_safe, get_trigger_registry, request_submitted_message, request_workflow_outcome,
+)
 from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
 from src.models.import_results import BatchImportResult
@@ -52,6 +58,15 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Data Products"])
+
+
+def _deprecation_audit(payload: DeprecationPayload) -> dict:
+    """Deprecation details for the audit log."""
+    return {
+        'deprecation_reason': payload.deprecation_reason,
+        'sunset_date': payload.sunset_date.isoformat() if payload.sunset_date else None,
+        'replacement_id': payload.replacement_id,
+    }
 
 DATA_PRODUCTS_FEATURE_ID = "data-products"
 
@@ -74,11 +89,15 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
     Published products (active/deprecated) are readable by any caller with
     data-products READ_ONLY — that's the catalog/marketplace contract.
     Unpublished products (draft/proposed/under_review/approved/...) are only
-    readable by data-products admins (incl. via an in-app role override) and
-    by owners (draft_owner / owning team / project member). This stops a
-    consumer from reading an unpublished product by its id (ONT-NEG-011).
-    Fails closed on error.
+    readable by data-products admins and owners (``_caller_owns_product``) and
+    by whoever can decide an open review or approval of it
+    (``caller_is_pending_reviewer``, #1117).
+    This stops a consumer from reading an unpublished product by its id
+    (ONT-NEG-011). Fails closed on error; the database lookups run in
+    savepoints, so a failed one doesn't abort the caller's transaction (the
+    approvals queue checks row after row).
     """
+    product_id = str(getattr(product, "id", "") or "")
     try:
         from types import SimpleNamespace
         from src.common.version_visibility import is_visible_consumer
@@ -89,88 +108,126 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
         status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
         if is_visible_consumer(SimpleNamespace(status=status_str)):
             return True
-
-        product_id = str(getattr(product, "id", "") or "")
-        auth_manager = getattr(request.app.state, "authorization_manager", None)
-        settings_manager = getattr(request.app.state, "settings_manager", None)
-        caller_email = current_user.email if current_user else None
-        user_groups = current_user.groups if current_user else []
-
-        if auth_manager and current_user:
-            applied_role_id = (
-                settings_manager.get_applied_role_override_for_user(caller_email)
-                if settings_manager else None
-            )
-            if applied_role_id and settings_manager:
-                eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            else:
-                eff = auth_manager.get_user_effective_permissions(user_groups or [], None)
-            if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
-                return True
-
-        # Non-admin: grant only if the caller genuinely OWNS *this* product.
-        #
-        # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
-        # resolved the caller's scope via ``projects_manager.get_user_projects``
-        # and then checked membership of ``manager.list_products(...)``. But
-        # ``get_user_projects`` treats *any* group whose name merely contains
-        # the substring "admin" (e.g. the ubiquitous workspace ``admins``
-        # group) as a global admin and returns EVERY project. A Data Consumer
-        # in such a group therefore got ``caller_project_ids`` = all projects,
-        # which matched the draft's ``project_id`` in ``list_products`` and
-        # leaked the draft. We must NOT trust that broad, substring-admin
-        # scope. Instead resolve the three ownership facts against THIS product
-        # only, using membership-based checks (no substring-admin shortcut):
-        #   * draft_owner_id == caller (creator ownership)
-        #   * owner_team_id in caller's real team memberships
-        #   * project_id where the caller is a genuine project member
-        from src.controller.teams_manager import teams_manager
-        from src.controller.projects_manager import projects_manager
-
-        if not caller_email:
-            return False
-
-        owner_email = getattr(product, "draft_owner_id", None)
-        if owner_email and str(owner_email).lower() == str(caller_email).lower():
+        if _caller_owns_product_or_denies(request, db, current_user, product):
             return True
 
-        product_team_id = getattr(product, "owner_team_id", None)
-        if product_team_id:
-            try:
-                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-                if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
-                    return True
-            except Exception:
-                logger.exception(
-                    "Team-membership resolution failed for %s in product read gate",
-                    caller_email,
-                )
+        # Whoever can decide an open review or approval of this product can read
+        # it (#1117). Read only: no write route consults this gate.
+        from src.common.review_access import caller_is_pending_reviewer
 
-        product_project_id = getattr(product, "project_id", None)
-        if product_project_id:
-            try:
-                from src.common.config import get_settings
-                # ``is_user_project_member`` uses configured admin groups
-                # (is_user_admin), not a substring match, and verifies real
-                # team membership of the project — so it does not over-grant.
-                if projects_manager.is_user_project_member(
+        return caller_is_pending_reviewer(
+            db,
+            current_user,
+            "data_product",
+            product_id,
+            getattr(request.app.state, "notifications_manager", None),
+        )
+    except Exception:
+        logger.exception("Product read gate failed for %s; denying", product_id)
+        return False
+
+
+def _caller_owns_product_or_denies(request, db, current_user, product) -> bool:
+    """``_caller_owns_product``, False on error (fail closed)."""
+    try:
+        with db.begin_nested():
+            return _caller_owns_product(request, db, current_user, product)
+    except Exception:
+        logger.exception(
+            "Product ownership check failed for %s; denying", getattr(product, "id", None),
+        )
+        return False
+
+
+def _caller_owns_product(request, db, current_user, product) -> bool:
+    """Whether ``current_user`` is a data-products admin or an owner of ``product``.
+
+    Admin: data-products ADMIN, incl. via an in-app role override. Owner: the
+    draft owner, a member of the owning team, or a member of the product's
+    project. The read gate's ownership facts, also required to request a review
+    (whose named reviewer then reads the product, #1117). May raise: callers
+    fail closed.
+    """
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    settings_manager = getattr(request.app.state, "settings_manager", None)
+    caller_email = current_user.email if current_user else None
+    user_groups = current_user.groups if current_user else []
+
+    if auth_manager and current_user:
+        applied_role_id = (
+            settings_manager.get_applied_role_override_for_user(caller_email)
+            if settings_manager else None
+        )
+        if applied_role_id and settings_manager:
+            eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+        else:
+            eff = auth_manager.get_user_effective_permissions(user_groups or [], None)
+        if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
+            return True
+
+    # Non-admin: grant only if the caller genuinely OWNS *this* product.
+    #
+    # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
+    # resolved the caller's scope via ``projects_manager.get_user_projects``
+    # and then checked membership of ``manager.list_products(...)``. But
+    # ``get_user_projects`` treats *any* group whose name merely contains
+    # the substring "admin" (e.g. the ubiquitous workspace ``admins``
+    # group) as a global admin and returns EVERY project. A Data Consumer
+    # in such a group therefore got ``caller_project_ids`` = all projects,
+    # which matched the draft's ``project_id`` in ``list_products`` and
+    # leaked the draft. We must NOT trust that broad, substring-admin
+    # scope. Instead resolve the three ownership facts against THIS product
+    # only, using membership-based checks (no substring-admin shortcut):
+    #   * draft_owner_id == caller (creator ownership)
+    #   * owner_team_id in caller's real team memberships
+    #   * project_id where the caller is a genuine project member
+    from src.controller.teams_manager import teams_manager
+    from src.controller.projects_manager import projects_manager
+
+    if not caller_email:
+        return False
+
+    owner_email = getattr(product, "draft_owner_id", None)
+    if owner_email and str(owner_email).lower() == str(caller_email).lower():
+        return True
+
+    product_team_id = getattr(product, "owner_team_id", None)
+    if product_team_id:
+        try:
+            with db.begin_nested():
+                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
+            if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
+                return True
+        except Exception:
+            logger.exception(
+                "Team-membership resolution failed for %s in product read gate",
+                caller_email,
+            )
+
+    product_project_id = getattr(product, "project_id", None)
+    if product_project_id:
+        try:
+            from src.common.config import get_settings
+            # ``is_user_project_member`` uses configured admin groups
+            # (is_user_admin), not a substring match, and verifies real
+            # team membership of the project — so it does not over-grant.
+            with db.begin_nested():
+                is_member = projects_manager.is_user_project_member(
                     db=db,
                     user_identifier=caller_email,
                     user_groups=user_groups or [],
                     project_id=str(product_project_id),
                     settings=get_settings(),
-                ):
-                    return True
-            except Exception:
-                logger.exception(
-                    "Project-membership resolution failed for %s in product read gate",
-                    caller_email,
                 )
+            if is_member:
+                return True
+        except Exception:
+            logger.exception(
+                "Project-membership resolution failed for %s in product read gate",
+                caller_email,
+            )
 
-        return False
-    except Exception:
-        logger.exception("Product read gate failed for %s; denying", product_id)
-        return False
+    return False
 
 
 # --- Lifecycle transitions (minimal) ---
@@ -430,18 +487,25 @@ async def unpublish_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
+        was_published = (product_db.publication_scope or "none").lower() != "none"
         product_db.publication_scope = "none"
         product_db.published_at = None
         product_db.published_by = None
         db.add(product_db)
         db.commit()
 
-        get_trigger_registry(db).on_unpublish(
-            EntityType.DATA_PRODUCT,
-            product_id,
-            entity_name=product_db.name,
-            user_email=current_user.username,
-        )
+        # Same rule as set-publication-scope: unpublish workflows run only on a real change
+        if was_published:
+            try:
+                get_trigger_registry(db).on_unpublish(
+                    EntityType.DATA_PRODUCT,
+                    product_id,
+                    entity_name=product_db.name,
+                    user_email=current_user.username,
+                )
+            except Exception:
+                # The unpublish is committed; its on_unpublish workflows didn't run
+                logger.exception("on_unpublish trigger failed for data product %s", product_id)
 
         audit_manager.log_action(
             db=db,
@@ -791,7 +855,7 @@ async def request_publish_product(
             details={"scope": scope, "justification": justification},
         )
 
-        get_trigger_registry(db).on_request_publish(
+        executions = get_trigger_registry(db).on_request_publish(
             EntityType.DATA_PRODUCT,
             product_id,
             entity_name=product_db.name,
@@ -805,6 +869,7 @@ async def request_publish_product(
             user_email=username,
             blocking=True,
         )
+        outcome = request_workflow_outcome(executions)
 
         audit_manager.log_action(
             db=db,
@@ -816,9 +881,17 @@ async def request_publish_product(
             details={"product_id": product_id, "scope": scope},
         )
 
+        failed = outcome.get("workflow_status") == "failed"
         return JSONResponse(
             status_code=202,
-            content={"status": "requested", "message": "Publication request submitted"},
+            content={
+                "status": "requested",
+                "message": (
+                    request_submitted_message("Publication", outcome) if failed
+                    else "Publication request submitted"
+                ),
+                **{k: v for k, v in outcome.items() if k != "workflow_triggered"},
+            },
         )
     except HTTPException:
         raise
@@ -968,15 +1041,20 @@ async def deprecate_product(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    payload: DeprecationPayload = Body(default_factory=DeprecationPayload),
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
     Deprecate an active or certified product to signal it will be retired soon.
     ODPS lifecycle: active/certified → deprecated
+    Body: deprecation_reason (required), sunset_date, replacement_id.
     """
     try:
-        updated_product = manager.deprecate_product(product_id, current_user.username if current_user else None)
+        updated_product = manager.deprecate_product(
+            product_id, current_user.username if current_user else None,
+            deprecation=payload.deprecation_details(),
+        )
         
         audit_manager.log_action(
             db=db,
@@ -985,13 +1063,20 @@ async def deprecate_product(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action='DEPRECATE',
             success=True,
-            details={'product_id': product_id, 'status': updated_product.status}
+            details={'product_id': product_id, 'status': updated_product.status,
+                     **_deprecation_audit(payload)},
         )
         
         return {'status': updated_product.status}
+    except LifecycleFieldError as e:
+        # Missing reason, past sunset date, unusable replacement: 400 with the
+        # code, as on change-status (409 stays for a status that can't deprecate)
+        logger.info("Refused deprecation of product %s: %s", product_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error("Validation error deprecating product %s: %s", product_id, e)
-        raise HTTPException(status_code=409, detail=str(e))
+        from src.controller.certified_deprecation_guard import guard_refusal_status
+        raise HTTPException(status_code=guard_refusal_status(e, 409), detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -1012,21 +1097,42 @@ async def request_product_review(
     """
     Request a data steward review for a product.
     Transitions draft/sandbox → proposed → under_review with notifications.
+    The reviewer is optional: without one, the review workflow resolves it.
     """
     from pydantic import BaseModel
     
     class ReviewRequest(BaseModel):
-        reviewer_email: str
+        reviewer_email: Optional[str] = None
         message: Optional[str] = None
     
     try:
         body = await request.json()
         review_request = ReviewRequest(**body)
+
+        # The named reviewer reads the product while the review is open (#1117),
+        # so only its owners or an admin may request it. A caller who can't read
+        # the product gets the same 404 as reading it.
+        product = manager.get_product(product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Data product not found")
+        if not _caller_owns_product_or_denies(request, db, current_user, product):
+            if not _caller_can_read_product(request, db, current_user, manager, product):
+                raise HTTPException(status_code=404, detail="Data product not found")
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    'code': 'not_product_owner',
+                    'message': "Only the product's owners or an admin can request its review.",
+                },
+            )
         
         result = manager.request_review(
             product_id=product_id,
             reviewer_email=review_request.reviewer_email,
-            requester_email=current_user.username if current_user else "unknown",
+            # The review record needs an email; the username isn't always one
+            requester_email=(
+                (current_user.email or current_user.username) if current_user else "unknown"
+            ),
             message=review_request.message,
             current_user=current_user.username if current_user else None
         )
@@ -1053,11 +1159,16 @@ async def request_product_review(
 
 # --- Contract-Product Integration Endpoints ---
 
-@router.post('/data-products/from-contract', response_model=DataProduct, status_code=201)
+@router.post(
+    '/data-products/from-contract',
+    response_model=DataProduct,
+    response_model_by_alias=False,
+    status_code=201,
+)
 async def create_product_from_contract(
     contract_id: str = Body(..., embed=True),
     product_name: str = Body(..., embed=True),
-    product_type: str = Body(..., embed=True),
+    product_type: Optional[str] = Body(None, embed=True, deprecated=True),
     version: str = Body(..., embed=True),
     output_port_name: Optional[str] = Body(None, embed=True),
     request: Request = None,
@@ -1072,24 +1183,15 @@ async def create_product_from_contract(
 
     The contract governs one output port of the product. Inherits domain_id,
     owner_team_id, and project_id from the contract.
+
+    ``product_type`` is accepted and ignored: ODPS products have no type, and
+    older clients still send it.
     """
     try:
-        from src.models.data_products import DataProductType
-
-        # Convert product_type string to enum
-        try:
-            product_type_enum = DataProductType(product_type)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid product_type: {product_type}. Must be one of: {[t.value for t in DataProductType]}"
-            )
-
         # Create product via manager
         created_product = manager.create_from_contract(
             contract_id=contract_id,
             product_name=product_name,
-            product_type=product_type_enum,
             version=version,
             output_port_name=output_port_name
         )
@@ -1106,7 +1208,6 @@ async def create_product_from_contract(
                 'product_id': created_product.id,
                 'contract_id': contract_id,
                 'product_name': product_name,
-                'product_type': product_type
             }
         )
 
@@ -1118,9 +1219,9 @@ async def create_product_from_contract(
         raise HTTPException(status_code=400, detail="Invalid contract data for product creation")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception(f"Error creating product from contract {contract_id}")
-        raise HTTPException(status_code=500, detail=f"Failed to create product from contract: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create product from contract")
 
 
 @router.get('/data-products/by-contract/{contract_id}', response_model=List[DataProduct])
@@ -1766,7 +1867,12 @@ async def get_data_products(
         logger.exception(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.post('/data-products', response_model=DataProduct, status_code=201)
+@router.post(
+    '/data-products',
+    response_model=DataProduct,
+    response_model_by_alias=False,
+    status_code=201,
+)
 async def create_data_product(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -1837,6 +1943,10 @@ async def create_data_product(
         logger.info(f"Successfully created data product with ID: {created_product_response.id if created_product_response else payload.get('id')}")
         return created_product_response
 
+    except CodedValueError as e:
+        # A status that isn't a lifecycle status (src.common.lifecycle_status)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
@@ -1997,7 +2107,12 @@ async def get_product_family_latest(
     }
 
 
-@router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
+@router.post(
+    "/data-products/{product_id}/versions",
+    response_model=DataProduct,
+    response_model_by_alias=False,
+    status_code=201,
+)
 async def create_data_product_version(
     product_id: str, # This is the original product ID
     request: Request, 
@@ -2089,7 +2204,9 @@ async def compare_product_versions(
         logger.error("Error comparing products", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to compare products")
 
-@router.put('/data-products/{product_id}', response_model=DataProduct)
+@router.put(
+    '/data-products/{product_id}', response_model=DataProduct, response_model_by_alias=False
+)
 async def update_data_product(
     product_id: str,
     request: Request,
@@ -2654,7 +2771,11 @@ async def get_subscriber_count(
 
 # ==================== Versioned Editing Endpoints ====================
 
-@router.post('/data-products/{product_id}/clone-for-editing', response_model=DataProduct)
+@router.post(
+    '/data-products/{product_id}/clone-for-editing',
+    response_model=DataProduct,
+    response_model_by_alias=False,
+)
 async def clone_product_for_editing(
     product_id: str,
     request: Request,
@@ -2836,17 +2957,20 @@ async def change_product_status(
         updated_product = manager.transition_status(
             product_id=product_id,
             new_status=payload.new_status,
-            current_user=current_user.username
+            current_user=current_user.username,
+            deprecation=payload.deprecation_details(),
         )
         
+        new_status = payload.new_status.lower()
         audit_manager.log_action(
             db=db,
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action='CHANGE_STATUS',
+            action=LIFECYCLE_AUDIT_ACTIONS.get(new_status, 'CHANGE_STATUS'),
             success=True,
-            details={'product_id': product_id, 'new_status': payload.new_status}
+            details={'product_id': product_id, 'new_status': payload.new_status,
+                     **(_deprecation_audit(payload) if new_status == 'deprecated' else {})},
         )
         return {"message": f"Status changed to {payload.new_status}", "product": updated_product}
         
@@ -2881,8 +3005,10 @@ async def request_status_change(
             product_id=product_id,
             target_status=payload.target_status,
             justification=payload.justification,
-            requester_email=current_user.username,
-            current_user=current_user.username
+            requester_email=current_user.email or current_user.username,
+            current_user=current_user.username,
+            sunset_date=payload.sunset_date,
+            replacement_id=payload.replacement_id,
         )
         
         audit_manager.log_action(
@@ -2896,6 +3022,11 @@ async def request_status_change(
         )
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. a replacement that doesn't exist): its
+        # code, never the 404 of a missing product
+        logger.info("Refused status change request for product %s: %s", product_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error(f"Request status change validation error for product {product_id}: {e}")
         error_status = 404 if "not found" in str(e).lower() else 400
@@ -2918,19 +3049,38 @@ async def handle_status_change_response(
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """Handle a status change request decision (approve/deny/clarify).
-    
-    Only admins/owners can approve or deny status change requests.
+
+    Only admins/owners can approve or deny status change requests. Deprecating
+    a certified product this way needs Admin on data products (certified guard).
     """
+    from src.controller.certified_deprecation_guard import (
+        approved_status_change, handle_decision_refusal, pending_request_id, record_decision,
+    )
+    by_admin = await has_feature_permission(
+        DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN, current_user, request,
+    )
+    # Counts for the certified guard only as an admin's approval of a pending
+    # request made by someone else
+    refusal = handle_decision_refusal(
+        db, 'data_product', product_id, payload.target_status, by_admin,
+        current_user.email, current_user.username,
+    )
+    request_id = pending_request_id(db, 'data_product', product_id)
     try:
-        result = manager.handle_status_change_response(
-            db=db,
-            notifications_manager=notifications,
-            product_id=product_id,
-            approver_email=current_user.username,
-            decision=payload.decision,
-            target_status=payload.target_status,
-            message=payload.message,
-            current_user=current_user.username
+        with approved_status_change('data_product', product_id, refusal):
+            result = manager.handle_status_change_response(
+                db=db,
+                notifications_manager=notifications,
+                product_id=product_id,
+                approver_email=current_user.username,
+                decision=payload.decision,
+                target_status=payload.target_status,
+                message=payload.message,
+                current_user=current_user.username
+            )
+        # The decision ends the request it was about
+        record_decision(
+            db, 'data_product', product_id, request_id, payload.decision, current_user.username,
         )
         
         audit_manager.log_action(
@@ -2944,6 +3094,11 @@ async def handle_status_change_response(
         )
         return result
         
+    except CodedValueError as e:
+        # The app's own refusal (e.g. the requested replacement is gone): its
+        # code, never the 404 of a missing product
+        logger.info("Refused status change decision for product %s: %s", product_id, e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         logger.error(f"Handle status change validation error for product {product_id}: {e}")
         error_status = 404 if "not found" in str(e).lower() else 400

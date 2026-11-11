@@ -63,6 +63,26 @@
     "previewFailed": "Preview failed",
     "importFailed": "Import failed",
     "importComplete": "Import complete",
-    "importCompleteSummary": "Created {{created}}, skipped {{skipped}}, errors {{errors}}"
+    "importCompleteSummary": "Created {{created}}, skipped {{skipped}}, errors {{errors}}",
+    "async": {
+      "started": "Import started",
+      "startedDescription": "Running in the background. Progress appears here and in your notifications.",
+      "startFailed": "Could not start background import",
+      "seeRunDetails": "See the run details.",
+      "progress": "{{processed}} of {{total}} processed (created: {{created}}, skipped: {{skipped}})",
+      "progressWithErrors": "{{processed}} of {{total}} processed (created: {{created}}, skipped: {{skipped}}, errors: {{errors}})",
+      "starting": "Starting…",
+      "closeHint": "You can close this dialog. The import keeps running, and its completion is reported in your notifications.",
+      "cancel": "Cancel import",
+      "closeKeepRunning": "Close (keep running)",
+      "runInBackground": "Run in background",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      }
+    }
   }
 }

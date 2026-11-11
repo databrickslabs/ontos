@@ -158,5 +158,71 @@
     "metadataLoadFailed": "Caricamento dei metadati non riuscito",
     "couldNotLoadMetadata": "Impossibile caricare i metadati.",
     "editTeamLoadError": "Impossibile caricare i dettagli del team per la modifica."
+  },
+  "sync": {
+    "title": "Sincronizza domini",
+    "description": "Importa i domini di Unity Catalog in Ontos oppure esporta i tuoi domini in Unity Catalog. UC supporta due livelli (domini e sottodomini); i domini più profondi vengono saltati.",
+    "direction": {
+      "title": "Direzione",
+      "description": "In quale direzione sincronizzare",
+      "importLabel": "Importa da Unity Catalog",
+      "importHint": "Crea/collega domini Ontos da UC",
+      "exportLabel": "Esporta in Unity Catalog",
+      "exportHint": "Pubblica i domini Ontos in UC"
+    },
+    "target": {
+      "importTitle": "Posiziona sotto",
+      "exportTitle": "Ancora",
+      "importHint": "Dominio Ontos sotto cui posizionare le radici UC importate.",
+      "exportHint": "I suoi figli diventano radici in UC; i nipoti diventano sottodomini.",
+      "importTopLevel": "Livello superiore (nessun padre)",
+      "exportTopLevel": "Domini di livello superiore"
+    },
+    "actions": {
+      "preview": "Visualizza anteprima",
+      "apply": "Applica"
+    },
+    "panel": {
+      "resultTitle": "Risultato della sincronizzazione",
+      "previewTitle": "Anteprima",
+      "importFlow": "Unity Catalog → Ontos",
+      "exportFlow": "Ontos → Unity Catalog"
+    },
+    "emptyHint": "Scegli una direzione e fai clic su <b>Visualizza anteprima</b> per vedere cosa cambierebbe.",
+    "warnings": "Avvisi",
+    "errorsTitle": "Errori",
+    "nothingToSync": "Niente da sincronizzare.",
+    "level": "L{{level}}",
+    "actionLabels": {
+      "create": "Crea",
+      "match": "Collega",
+      "skip": "Salta",
+      "error": "Errore"
+    },
+    "toasts": {
+      "previewFailed": "Anteprima non riuscita",
+      "syncFailed": "Sincronizzazione non riuscita",
+      "syncComplete": "Sincronizzazione completata"
+    },
+    "summary": "Creati: {{created}}, collegati: {{matched}}, saltati: {{skipped}}.",
+    "summaryWithErrors": "Creati: {{created}}, collegati: {{matched}}, saltati: {{skipped}}, errori: {{errors}}.",
+    "plan": {
+      "toCreate_one": "{{count}} da creare",
+      "toCreate_other": "{{count}} da creare",
+      "toMatch_one": "{{count}} da collegare",
+      "toMatch_other": "{{count}} da collegare",
+      "toSkip_one": "{{count}} da saltare",
+      "toSkip_other": "{{count}} da saltare"
+    },
+    "result": {
+      "created_one": "{{count}} creato",
+      "created_other": "{{count}} creati",
+      "matched_one": "{{count}} collegato",
+      "matched_other": "{{count}} collegati",
+      "skipped_one": "{{count}} saltato",
+      "skipped_other": "{{count}} saltati",
+      "errors_one": "{{count}} errore",
+      "errors_other": "{{count}} errori"
+    }
   }
 }

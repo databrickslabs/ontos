@@ -25,15 +25,15 @@
   },
   "concepts": {
     "name": "Concepten",
-    "description": "Blader, zoek en beheer bedrijfsconcepten, collecties en hiërarchieën."
+    "description": "Blader, zoek en beheer bedrijfsconcepten, conceptschema's en hiërarchieën."
   },
   "semantic-models": {
     "name": "Conceptbrowser",
     "description": "Verken business glossary termen, concepten en hun relaties."
   },
   "collections": {
-    "name": "Conceptcollecties",
-    "description": "Organiseer concepten en assets in logische collecties."
+    "name": "Conceptschema's",
+    "description": "Organiseer concepten en assets in logische schema's."
   },
   "process-workflows": {
     "name": "Workflows",

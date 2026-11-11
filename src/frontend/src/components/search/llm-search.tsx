@@ -35,6 +35,7 @@ import type {
   SessionSummary,
 } from '@/types/llm-search';
 import { fetchLLMStatus, fetchSessions, sendMessage, deleteSession } from './llm-search-api';
+import { chatMessageText } from '@/lib/chat-message-text';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 
 
@@ -126,7 +127,7 @@ function Message({ message, debugInfo, onRerun, onCopyToInput }: MessageProps) {
                   },
                 }}
               >
-                {message.content || ''}
+                {chatMessageText(message, t)}
               </ReactMarkdown>
             </div>
           )}

@@ -45,7 +45,10 @@ type BasicFormProps = {
   }
 }
 
-const statuses = ['draft', 'active', 'deprecated', 'archived']
+// The lifecycle statuses of a contract (src.models.lifecycle). Certification
+// is a separate field, and an existing contract's status changes only through
+// Change Status.
+const statuses = ['draft', 'proposed', 'under_review', 'approved', 'active', 'deprecated', 'retired']
 
 export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSubmit, initial }: BasicFormProps) {
   const { t } = useTranslation(['data-contracts', 'common'])
@@ -53,6 +56,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+  const isEdit = Boolean(initial)
 
   // Form state
   const [name, setName] = useState('')
@@ -283,18 +287,23 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
             </div>
             <div className="space-y-2">
               <Label htmlFor="status">{t('data-contracts:form.status', 'Status')}</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={setStatus} disabled={isEdit}>
                 <SelectTrigger id="status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {statuses.map((s) => (
+                  {(statuses.includes(status) ? statuses : [status, ...statuses]).map((s) => (
                     <SelectItem key={s} value={s}>
                       {t(`data-contracts:status.${s}`, s)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {isEdit && (
+                <p className="text-xs text-muted-foreground">
+                  {t('data-contracts:form.statusChangeHint')}
+                </p>
+              )}
             </div>
           </div>
 

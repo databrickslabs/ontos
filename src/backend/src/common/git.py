@@ -1,22 +1,104 @@
 """Git service for managing YAML file exports in a Git repository.
 
 This service supports the Indirect delivery mode by persisting governance changes
-as YAML files in a Git repository cloned to a Unity Catalog Volume.
+as YAML files in a Git repository whose exports also land in a Unity Catalog Volume.
+
+Git needs a real filesystem for its working copy. A Unity Catalog volume is
+only a directory when it is mounted under ``/Volumes`` (clusters, local
+mounts); inside the Databricks Apps runtime it isn't, so ``mkdir`` there fails
+with ``EACCES``. In that case the working copy lives on local disk
+(``GIT_WORK_DIR``, or a directory under the system temp dir) and every file the
+app exports is also written to ``{volume}/git-export/`` with the Files API.
 """
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import git
 import yaml
 
-from .config import get_settings, Settings
+from .api_errors import CodedValueError
+from .config import get_settings, resolve_volume, Settings
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+GIT_EXPORT_SUBDIR = "git-export"
+
+
+class GitVolumeInvalidError(CodedValueError):
+    """``DATABRICKS_VOLUME`` names neither a Unity Catalog volume nor a local directory."""
+
+    code = 'git_volume_invalid'
+
+
+# Code of the warning shown when an exported file couldn't be written to the volume
+GIT_VOLUME_SYNC_FAILED = 'git_volume_sync_failed'
+
+
+@dataclass(frozen=True)
+class GitPaths:
+    """Where the working copy lives, and the volume directory exports are copied to."""
+
+    repo_dir: Path
+    # /Volumes/<catalog>/<schema>/<volume>/git-export when exports go through the
+    # Files API; None when repo_dir already is that directory or a local one
+    volume_export_path: Optional[str] = None
+
+
+def _volume_mounted(mount: Path) -> bool:
+    """Whether a /Volumes/... directory exists here and can be written to."""
+    return mount.is_dir() and os.access(mount, os.W_OK)
+
+
+def resolve_git_paths(settings: Settings) -> GitPaths:
+    """The working copy directory and the volume export path for ``settings``.
+
+    ``DATABRICKS_VOLUME`` may be the path Databricks Apps injects
+    (``/Volumes/<catalog>/<schema>/<volume>``), a three-part name, or a volume
+    name in ``DATABRICKS_CATALOG`` / ``DATABRICKS_SCHEMA``; a path outside
+    ``/Volumes`` is a local directory (development).
+
+    Raises:
+        GitVolumeInvalidError: If the value has none of these forms
+    """
+    raw = (settings.DATABRICKS_VOLUME or '').strip().rstrip('/')
+    if not raw:
+        return GitPaths(repo_dir=Path("data") / GIT_EXPORT_SUBDIR)
+    if raw.startswith('/') and not raw.startswith('/Volumes/'):
+        return GitPaths(repo_dir=Path(raw) / GIT_EXPORT_SUBDIR)
+
+    try:
+        resolved = resolve_volume(settings)
+    except ValueError:
+        resolved = None
+    if not resolved or not all(resolved):
+        raise GitVolumeInvalidError(
+            "The volume setting must be /Volumes/<catalog>/<schema>/<volume>, "
+            "<catalog>.<schema>.<volume>, or a volume name with the catalog and "
+            f"schema set; got {raw!r}",
+            value=raw,
+        )
+
+    catalog, schema, volume = resolved
+    mount = Path('/Volumes') / catalog / schema / volume
+    if _volume_mounted(mount):
+        return GitPaths(repo_dir=mount / GIT_EXPORT_SUBDIR)
+
+    work_root = (
+        Path(settings.GIT_WORK_DIR) if settings.GIT_WORK_DIR
+        else Path(tempfile.gettempdir()) / 'ontos' / GIT_EXPORT_SUBDIR
+    )
+    return GitPaths(
+        repo_dir=work_root / f"{catalog}.{schema}.{volume}",
+        volume_export_path=f"{mount.as_posix()}/{GIT_EXPORT_SUBDIR}",
+    )
 
 
 class GitCloneStatus(str, Enum):
@@ -48,6 +130,14 @@ class GitStatus:
     changed_files: List[GitFileChange] = field(default_factory=list)
     error_message: Optional[str] = None
     current_commit: Optional[str] = None
+    # Code and parameters of error_message, for the UI to translate
+    error_code: Optional[str] = None
+    error_params: Optional[Dict[str, Any]] = None
+    # Local working copy, when it isn't the volume directory itself
+    working_copy_path: Optional[str] = None
+    # Last failure to copy an exported file to the volume
+    volume_sync_error_code: Optional[str] = None
+    volume_sync_error_params: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response."""
@@ -64,17 +154,23 @@ class GitStatus:
             ],
             "error_message": self.error_message,
             "current_commit": self.current_commit,
+            "error_code": self.error_code,
+            "error_params": self.error_params,
+            "working_copy_path": self.working_copy_path,
+            "volume_sync_error_code": self.volume_sync_error_code,
+            "volume_sync_error_params": self.volume_sync_error_params,
         }
 
 
 class GitService:
     """Service for managing YAML files in a Git repository.
-    
-    The repository is cloned to a Unity Catalog Volume for persistence.
-    Path structure: {DATABRICKS_VOLUME}/git-export/{repo-contents}
+
+    Path structure: {DATABRICKS_VOLUME}/git-export/{repo-contents}, with the
+    working copy on local disk when the volume isn't mounted (see the module
+    docstring).
     """
 
-    GIT_EXPORT_SUBDIR = "git-export"
+    GIT_EXPORT_SUBDIR = GIT_EXPORT_SUBDIR
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         """Initialize the Git service.
@@ -87,9 +183,15 @@ class GitService:
         self._clone_status = GitCloneStatus.NOT_CONFIGURED
         self._last_sync: Optional[datetime] = None
         self._error_message: Optional[str] = None
-        
+        self._error_code: Optional[str] = None
+        self._error_params: Optional[Dict[str, Any]] = None
+        # Volume paths whose last write or delete failed, with the error. A path
+        # leaves the set only when that same path is written or deleted.
+        self._volume_sync_failures: Dict[str, str] = {}
+
         # Determine repo directory based on volume configuration
         self._repo_dir: Optional[Path] = None
+        self._volume_export_path: Optional[str] = None
         self._init_paths()
 
     def _init_paths(self) -> None:
@@ -98,15 +200,22 @@ class GitService:
             self._clone_status = GitCloneStatus.NOT_CONFIGURED
             logger.info("Git repository URL not configured")
             return
-        
-        # Use UC Volume path if configured, otherwise fall back to local path
-        if self._settings.DATABRICKS_VOLUME:
-            # DATABRICKS_VOLUME contains full path like /Volumes/catalog/schema/volume
-            self._repo_dir = Path(self._settings.DATABRICKS_VOLUME) / self.GIT_EXPORT_SUBDIR
-        else:
-            # Fallback for local development
-            self._repo_dir = Path("data/git-export")
-        
+
+        try:
+            paths = resolve_git_paths(self._settings)
+        except GitVolumeInvalidError as e:
+            self._clone_status = GitCloneStatus.ERROR
+            self._set_error(str(e), e.code, e.params)
+            logger.error(f"Git export location is not valid: {e}")
+            return
+        self._repo_dir = paths.repo_dir
+        self._volume_export_path = paths.volume_export_path
+        if self._volume_export_path:
+            logger.info(
+                f"Volume not mounted here: Git working copy at {self._repo_dir}, "
+                f"exports copied to {self._volume_export_path}"
+            )
+
         # Check if already cloned
         if self._repo_dir.exists() and (self._repo_dir / '.git').exists():
             try:
@@ -115,11 +224,44 @@ class GitService:
                 logger.info(f"Found existing Git repository at {self._repo_dir}")
             except Exception as e:
                 self._clone_status = GitCloneStatus.ERROR
-                self._error_message = str(e)
+                self._set_error(str(e))
                 logger.error(f"Error opening existing Git repository: {e}")
         else:
             self._clone_status = GitCloneStatus.NOT_CLONED
             logger.info(f"Git repository not yet cloned to {self._repo_dir}")
+
+    def _set_error(
+        self,
+        message: Optional[str],
+        code: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self._error_message = message
+        self._error_code = code
+        self._error_params = params
+
+    def _location_fields(self) -> Dict[str, Optional[str]]:
+        """``volume_path`` and ``working_copy_path`` of a status."""
+        if self._repo_dir is None:
+            return {"volume_path": None, "working_copy_path": None}
+        if self._volume_export_path:
+            return {
+                "volume_path": self._volume_export_path,
+                "working_copy_path": str(self._repo_dir),
+            }
+        return {"volume_path": str(self._repo_dir), "working_copy_path": None}
+
+    def _error_status(self) -> GitStatus:
+        """A status carrying the current error (and its code)."""
+        return GitStatus(
+            clone_status=self._clone_status,
+            repo_url=self._settings.GIT_REPO_URL,
+            branch=self._settings.GIT_BRANCH,
+            error_message=self._error_message,
+            error_code=self._error_code,
+            error_params=self._error_params,
+            **self._location_fields(),
+        )
 
     def reinitialize(self, settings: Optional[Settings] = None) -> None:
         """Reinitialize the Git service with updated settings.
@@ -129,12 +271,18 @@ class GitService:
         Args:
             settings: Updated settings. If None, will reload from global settings.
         """
+        previous_location = (self._repo_dir, self._volume_export_path)
         self._settings = settings or get_settings()
         self._repo = None
         self._clone_status = GitCloneStatus.NOT_CONFIGURED
-        self._error_message = None
+        self._set_error(None)
         self._repo_dir = None
+        self._volume_export_path = None
         self._init_paths()
+        # Pending volume writes still apply while the working copy and the
+        # volume stay where they were.
+        if (self._repo_dir, self._volume_export_path) != previous_location:
+            self._volume_sync_failures = {}
         logger.info(f"Git service reinitialized (status: {self._clone_status.value}, repo_dir: {self._repo_dir})")
 
     @property
@@ -178,7 +326,7 @@ class GitService:
         return url
 
     def clone(self) -> GitStatus:
-        """Clone the Git repository to the UC Volume.
+        """Clone the Git repository to the export location (see the module docstring).
         
         This is an explicit action triggered by admin.
         
@@ -192,12 +340,15 @@ class GitService:
             )
         
         if self._repo_dir is None:
+            if self._error_code:
+                return self._error_status()
             return GitStatus(
                 clone_status=GitCloneStatus.ERROR,
                 error_message="Repository directory not configured"
             )
         
         self._clone_status = GitCloneStatus.CLONING
+        self._volume_sync_failures = {}
         
         try:
             # Create parent directory if needed
@@ -245,22 +396,16 @@ class GitService:
             
             self._clone_status = GitCloneStatus.CLONED
             self._last_sync = datetime.utcnow()
-            self._error_message = None
+            self._set_error(None)
             
             logger.info(f"Successfully cloned repository to {self._repo_dir}")
             return self.get_status()
             
         except Exception as e:
             self._clone_status = GitCloneStatus.ERROR
-            self._error_message = str(e)
+            self._set_error(str(e))
             logger.error(f"Error cloning repository: {e}")
-            return GitStatus(
-                clone_status=GitCloneStatus.ERROR,
-                repo_url=self._settings.GIT_REPO_URL,
-                branch=self._settings.GIT_BRANCH,
-                volume_path=str(self._repo_dir) if self._repo_dir else None,
-                error_message=str(e)
-            )
+            return self._error_status()
 
     def pull(self) -> GitStatus:
         """Pull latest changes from remote.
@@ -289,7 +434,7 @@ class GitService:
             return self.get_status()
             
         except Exception as e:
-            self._error_message = str(e)
+            self._set_error(str(e))
             logger.error(f"Error pulling changes: {e}")
             return GitStatus(
                 clone_status=self._clone_status,
@@ -309,13 +454,7 @@ class GitService:
             return GitStatus(clone_status=GitCloneStatus.NOT_CONFIGURED)
         
         if not self.is_cloned:
-            return GitStatus(
-                clone_status=self._clone_status,
-                repo_url=self._settings.GIT_REPO_URL,
-                branch=self._settings.GIT_BRANCH,
-                volume_path=str(self._repo_dir) if self._repo_dir else None,
-                error_message=self._error_message
-            )
+            return self._error_status()
         
         try:
             # Get changed files
@@ -377,15 +516,18 @@ class GitService:
             except Exception:
                 pass
             
+            sync_error = self._volume_sync_error() or {}
             return GitStatus(
                 clone_status=GitCloneStatus.CLONED,
                 repo_url=self._settings.GIT_REPO_URL,
                 branch=self._settings.GIT_BRANCH,
-                volume_path=str(self._repo_dir) if self._repo_dir else None,
                 last_sync=self._last_sync,
                 pending_changes_count=len(changed_files),
                 changed_files=changed_files,
-                current_commit=current_commit
+                current_commit=current_commit,
+                volume_sync_error_code=sync_error.get('code'),
+                volume_sync_error_params=sync_error.get('params'),
+                **self._location_fields(),
             )
             
         except Exception as e:
@@ -394,8 +536,8 @@ class GitService:
                 clone_status=self._clone_status,
                 repo_url=self._settings.GIT_REPO_URL,
                 branch=self._settings.GIT_BRANCH,
-                volume_path=str(self._repo_dir) if self._repo_dir else None,
-                error_message=str(e)
+                error_message=str(e),
+                **self._location_fields(),
             )
 
     def commit_and_push(self, commit_message: Optional[str] = None) -> GitStatus:
@@ -444,7 +586,7 @@ class GitService:
             return self.get_status()
             
         except Exception as e:
-            self._error_message = str(e)
+            self._set_error(str(e))
             logger.error(f"Error committing/pushing changes: {e}")
             return GitStatus(
                 clone_status=self._clone_status,
@@ -485,6 +627,7 @@ class GitService:
                 yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
             logger.info(f"Saved YAML file: {file_path}")
+            self._copy_to_volume(file_path)
             return True
 
         except Exception as e:
@@ -544,6 +687,7 @@ class GitService:
             if file_path.exists():
                 file_path.unlink()
                 logger.info(f"Deleted file: {file_path}")
+                self._delete_from_volume(file_path)
                 return True
             else:
                 logger.warning(f"File not found: {file_path}")
@@ -552,6 +696,68 @@ class GitService:
         except Exception as e:
             logger.error(f"Error deleting file: {e}")
             return False
+
+    def _volume_file_path(self, file_path: Path) -> str:
+        """The volume path of a file in the working copy."""
+        relative = file_path.relative_to(self._repo_dir).as_posix()
+        return f"{self._volume_export_path}/{relative}"
+
+    def _record_volume_sync_failure(self, volume_path: str, error: Exception) -> None:
+        # The export is in the working copy (and reaches the remote on push);
+        # only the volume copy is missing, so this is a warning, not a failure.
+        logger.warning(f"Could not write {volume_path} to the volume: {error}")
+        self._volume_sync_failures[volume_path] = type(error).__name__
+
+    # Paths listed in the warning; the rest are counted.
+    MAX_LISTED_SYNC_FAILURES = 5
+
+    def _volume_sync_error(self) -> Optional[Dict[str, Any]]:
+        """The warning for volume writes still pending, or None when all landed."""
+        if not self._volume_sync_failures:
+            return None
+        paths = list(self._volume_sync_failures)
+        listed = ', '.join(paths[:self.MAX_LISTED_SYNC_FAILURES])
+        hidden = len(paths) - self.MAX_LISTED_SYNC_FAILURES
+        if hidden > 0:
+            listed = f"{listed} (+{hidden})"
+        return {
+            'code': GIT_VOLUME_SYNC_FAILED,
+            'params': {'path': listed, 'paths': paths, 'count': len(paths)},
+        }
+
+    def _copy_to_volume(self, file_path: Path) -> None:
+        """Write an exported file to the volume when the working copy is elsewhere."""
+        if not self._volume_export_path:
+            return
+        volume_path = self._volume_file_path(file_path)
+        try:
+            # Imported here: only needed when the volume isn't mounted
+            from .workspace_client import get_workspace_client
+
+            get_workspace_client().files.upload(
+                volume_path, BytesIO(file_path.read_bytes()), overwrite=True
+            )
+            self._volume_sync_failures.pop(volume_path, None)
+        except Exception as e:
+            self._record_volume_sync_failure(volume_path, e)
+
+    def _delete_from_volume(self, file_path: Path) -> None:
+        """Remove a deleted export from the volume when the working copy is elsewhere."""
+        if not self._volume_export_path:
+            return
+        volume_path = self._volume_file_path(file_path)
+        try:
+            from databricks.sdk.errors import NotFound
+
+            from .workspace_client import get_workspace_client
+
+            try:
+                get_workspace_client().files.delete(volume_path)
+            except NotFound:
+                pass
+            self._volume_sync_failures.pop(volume_path, None)
+        except Exception as e:
+            self._record_volume_sync_failure(volume_path, e)
 
     def list_files(self, pattern: str = "*.yaml", subdir: Optional[str] = None) -> List[str]:
         """List files in the repository matching a pattern.

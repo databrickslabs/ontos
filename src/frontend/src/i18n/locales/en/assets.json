@@ -149,6 +149,44 @@
       "relationships": "Relationships",
       "lineage": "Lineage",
       "impact": "Impact Analysis"
+    },
+    "metricView": {
+      "title": "Metric view",
+      "loading": "Loading the metric view",
+      "loadError": "The metric view definition could not be loaded.",
+      "userTokenRequired": "This metric view is read from Unity Catalog with your own access, and your Databricks sign-in isn't available in this session.",
+      "state": {
+        "drift": {
+          "label": "Definition",
+          "in_sync": "Matches the baseline",
+          "drifted": "Changed since the baseline",
+          "unknown": "Not compared",
+          "driftedHint": "The definition in Unity Catalog differs from the baseline in Ontos. Ontos does not change it.",
+          "unknownHint": "The definition could not be compared with the baseline."
+        },
+        "baseline": {
+          "recorded": "Baseline recorded on {{date}} from the first definition read; no change has been approved yet.",
+          "approved": "Baseline approved on {{date}}.",
+          "none": "No baseline yet.",
+          "digest": "digest {{digest}}"
+        },
+        "lastChecked": "Checked {{date}}",
+        "refresh": {
+          "label": "Refresh",
+          "succeeded": "Succeeded",
+          "failed": "Failed",
+          "running": "Running",
+          "canceled": "Canceled",
+          "unknown": "Unknown",
+          "lastStarted": "Last refresh started {{date}}",
+          "schedule": "Schedule: {{schedule}}",
+          "noSchedule": "No schedule: refreshes are started manually.",
+          "openPipeline": "Open pipeline",
+          "failedTitle": "The last refresh failed",
+          "failedHint": "Check the pipeline for the cause.",
+          "notAvailable": "The refresh state could not be read."
+        }
+      }
     }
   },
   "explorer": {

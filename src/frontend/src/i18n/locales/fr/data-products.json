@@ -49,14 +49,32 @@
   },
   "upload": {
     "success": "Téléchargement Réussi",
-    "successMessage": "{{filename}} traité avec succès. {{count}} produit(s) traité(s).",
+    "successMessage_one": "{{filename}} traité avec succès. {{count}} produit traité.",
+    "successMessage_other": "{{filename}} traité avec succès. {{count}} produits traités.",
+    "successMessage_files_one": "{{files}} fichiers traités avec succès. {{count}} produit traité.",
+    "successMessage_files_other": "{{files}} fichiers traités avec succès. {{count}} produits traités.",
+    "partialSuccess": "Importé avec des problèmes",
     "failed": "Téléchargement Échoué",
     "unexpectedError": "Une erreur inattendue s'est produite lors du téléchargement.",
     "uploading": "Téléchargement...",
     "tooltipTitle": "Télécharger un Produit de Données (format ODPS)",
     "tooltipDescription": "Accepte les fichiers YAML ou JSON suivant le schéma ODPS (Open Data Product Standard).",
     "tooltipHint": "Pour les Contrats de Données (ODCS), utilisez la page Contrats de Données.",
-    "odcsHint": "Astuce : cette page concerne les Produits de Données (format ODPS). Si vous essayez de téléverser un Contrat de Données (format ODCS), veuillez utiliser la page Contrats de Données à la place."
+    "odcsHint": "Astuce : cette page concerne les Produits de Données (format ODPS). Si vous essayez de téléverser un Contrat de Données (format ODCS), veuillez utiliser la page Contrats de Données à la place.",
+    "dialogTitle": "Téléverser des produits de données",
+    "dialogDescription": "Sélectionnez un ou plusieurs fichiers ODPS (YAML/JSON). Chaque fichier peut contenir un seul produit ou un tableau.",
+    "createMissingDomains": "Créer les domaines manquants",
+    "createMissingDomainsHint": "Crée automatiquement les domaines qui n'existent pas encore. Désactivé : les domaines sans correspondance restent non attribués (l'original est conservé).",
+    "adoptIds": "Reprendre les ID du fichier",
+    "adoptIdsHint": "Réutilise un UUID valide et sans collision du fichier comme clé primaire, afin que les liens entre entités survivent à l'import.",
+    "duplicatesAsNew": "Importer les ID en double comme nouvelles copies",
+    "duplicatesAsNewHint": "Désactivé (par défaut) : un produit dont l'ID existe déjà est ignoré. Activé : il est importé comme nouvelle copie avec un nouvel ID.",
+    "dropActive": "Déposez le(s) fichier(s) ici",
+    "dropInactive": "Glissez-déposez ici des fichiers de produit, ou cliquez pour sélectionner",
+    "supportedFormats": "Formats pris en charge : JSON ou YAML (ODPS)",
+    "orPasteOdps": "Ou collez du JSON ODPS",
+    "pasteOdpsPlaceholder": "Collez ici le JSON du produit ODPS",
+    "importJsonButton": "Importer le JSON"
   },
   "genie": {
     "noSelection": "Aucune Sélection",
@@ -354,7 +372,8 @@
       "deleteSupportChannel": "Supprimer ce canal d'assistance ?",
       "unlinkContract": "Dissocier le contrat de ce livrable ?",
       "createGenieSpace": "Créer un Genie Space pour \"{{name}}\" ?"
-    }
+    },
+    "contractDangling": "Le contrat n'existe plus"
   },
   "form": {
     "createTitle": "Créer un Produit de Données",
@@ -522,7 +541,8 @@
       "failedToSerialize": "Échec de la sérialisation de l'état de l'interface en JSON.",
       "unexpectedError": "Une erreur inattendue s'est produite."
     },
-    "syntaxErrorLabel": "Erreur de syntaxe :"
+    "syntaxErrorLabel": "Erreur de syntaxe :",
+    "statusChangeHint": "Le statut change avec Changer le statut sur la page, qui vérifie la transition et exécute les workflows de changement de statut."
   },
   "import": {
     "title": "Importer un Produit de Données",
@@ -658,14 +678,26 @@
       "certLevelRequired": "Veuillez sélectionner un niveau de certification"
     },
     "errors": {
-      "cannotRequest": "Impossible de demander {{requestType}} pour un produit ayant le statut '{{productStatus}}'",
-      "failedToSubmit": "Échec de l'envoi de la demande"
+      "cannotRequest": "« {{requestType}} » n'est pas disponible pour un produit au statut {{productStatus}}.",
+      "failedToSubmit": "Échec de l'envoi de la demande",
+      "notProductOwner": "Seuls les propriétaires du produit ou un administrateur peuvent demander sa revue."
     },
     "toast": {
       "statusChanged": "Statut modifié",
       "statusChangedDesc": "Le statut du produit est passé de \"{{fromStatus}}\" à \"{{toStatus}}\".",
       "requestSubmitted": "Demande envoyée",
-      "requestSubmittedDesc": "Votre demande {{type}} a été envoyée et vous serez notifié de la décision."
+      "requestSubmittedDesc": "Votre demande {{type}} a été envoyée et vous serez notifié de la décision.",
+      "workflowFailed": "Demande envoyée, mais son workflow a échoué",
+      "workflowFailedDesc": "Personne n'a été sollicité pour décider de votre demande {{type}} : le workflow « {{workflow}} » n'a pas pu démarrer. Contactez un administrateur.",
+      "requestTypes": {
+        "access": "accès",
+        "review": "revue",
+        "publish": "publication",
+        "certify": "certification",
+        "status_change": "changement de statut"
+      },
+      "workflowPartiallyFailed": "Certains workflows de demande ont échoué",
+      "workflowPartiallyFailedDesc": "L'un des workflows de demande {{type}} a échoué : {{workflows}}. D'autres approbations peuvent être en attente."
     },
     "labels": {
       "requestType": "Type de demande",
@@ -899,7 +931,8 @@
       "createNewContract": "Créer un nouveau contrat",
       "linkContract": "Lier le contrat",
       "linking": "Liaison..."
-    }
+    },
+    "statusFilterNote": "Seuls les contrats au statut « actif » ou « approuvé » sont affichés. Choisissez une version précise : les contrats de même nom affichent leur version à côté."
   },
   "hierarchy": {
     "title": "Hiérarchie des données",
@@ -1056,8 +1089,10 @@
     "versionPlaceholder": "par ex. v1.1, v2.0-beta",
     "createButton": "Créer la version",
     "errors": {
-      "versionEmpty": "La chaîne de version ne peut pas être vide."
-    }
+      "versionEmpty": "La chaîne de version ne peut pas être vide.",
+      "versionFormat": "« {{version}} » n'est pas au format X.Y.Z (par exemple 2.0.0)."
+    },
+    "versionPlaceholderSemver": "p. ex. 2.0.0"
   },
   "graphView": {
     "unnamedProduct": "Produit sans nom",

@@ -24,7 +24,8 @@ from src.common.logging import get_logger
 from src.controller.audit_manager import AuditManager
 from src.controller.mcp_tokens_manager import MCPTokensManager, MCPTokenInfo
 from src.models.mcp import JSONRPCRequest, JSONRPCError, JSONRPCResponse
-from src.tools.base import ToolContext, ToolResult
+from src.common.api_errors import new_error_id
+from src.tools.base import ToolContext, ToolResult, tool_failed_message
 from src.tools.registry import create_default_registry
 
 logger = get_logger(__name__)
@@ -359,13 +360,17 @@ class MCPHandler:
                 }
                 
         except Exception as e:
-            logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
+            error_id = new_error_id()
+            logger.error(
+                "Error executing tool %s (error id %s): %s", tool_name, error_id, e, exc_info=True
+            )
             details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+            details_for_audit["error_id"] = error_id
             return {
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Tool execution failed: {str(e)}"
+                        "text": tool_failed_message(error_id)
                     }
                 ],
                 "isError": True

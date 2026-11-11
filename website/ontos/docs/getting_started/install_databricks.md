@@ -66,6 +66,20 @@ For a full reference and purpose of each environment configuration variable, ref
 
 ![Configure app](../assets/app_config.gif)
 
+### Advanced: shipping a prebuilt frontend {#dbsetup_prebuilt}
+
+By default the Databricks Apps builder runs the frontend build (`npm ci` + `vite build`) via `src/scripts/build_static.sh`. In constrained environments that build can exceed the Apps build-time deadline. You can instead build the frontend locally and ship the bundle:
+
+1. Build the frontend locally so that `src/backend/static` contains the compiled assets (including `index.html`) — e.g. run `src/scripts/build_static.sh` on your machine.
+2. Make the skip an **explicit** choice, so a normal deploy still rebuilds:
+   - set `SKIP_FRONTEND_BUILD=1` in `app.yaml`, **or**
+   - write an empty marker file at `src/backend/static/.prebuilt`.
+3. Upload `src/backend/static` into the app's source folder in the workspace.
+
+:::warning
+`src/backend/static` is in `.gitignore`, and both `databricks sync` and bundle deploys skip gitignored files — so the prebuilt bundle will **not** reach the builder through the normal Git-folder or bundle flow. You must copy `src/backend/static` into the deployed source folder yourself (for example via the workspace file browser). If the skip is requested but `index.html` is missing, the build fails rather than starting an app with no UI.
+:::
+
 ## Next Steps
 
 Congratulations! 🎉 

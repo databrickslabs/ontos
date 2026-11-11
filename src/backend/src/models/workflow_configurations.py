@@ -94,6 +94,13 @@ class TagSyncConfig(BaseModel):
     enabled: bool = Field(True, description="Whether syncing is enabled for this entity type")
     tag_key_format: str = Field(..., description="Format string for tag key with {VARIABLE} placeholders")
     tag_value_format: str = Field(..., description="Format string for tag value with {VARIABLE} placeholders")
+    mapping: Optional[str] = Field(
+        None,
+        description=(
+            "Id of a named mapping, e.g. 'lifecycle_status'. A YAML default entry with an id"
+            " is added to saved configurations without an entry of that entity type and id."
+        ),
+    )
 
     @staticmethod
     def validate_tag_key(key: str) -> None:

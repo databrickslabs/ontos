@@ -25,6 +25,7 @@ import { useCopilotQuestions } from '@/hooks/use-copilot-questions';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import type { LLMConfig } from '@/types/llm';
 import type { ChatMessage, LLMSearchStatus, SessionSummary } from '@/types/llm-search';
+import { chatMessageText } from '@/lib/chat-message-text';
 
 const WELCOME_DISMISSED_KEY = 'copilot-welcome-dismissed';
 
@@ -34,6 +35,7 @@ const WELCOME_DISMISSED_KEY = 'copilot-welcome-dismissed';
 // No need to prefix the user's message client-side anymore.
 
 function CopilotMessage({ message }: { message: ChatMessage }) {
+  const { t } = useTranslation(['search']);
   const isUser = message.role === 'user';
 
   return (
@@ -78,7 +80,7 @@ function CopilotMessage({ message }: { message: ChatMessage }) {
                 },
               }}
             >
-              {message.content || ''}
+              {chatMessageText(message, t)}
             </ReactMarkdown>
           </div>
         )}

@@ -79,6 +79,8 @@ export interface EntityTypeMultiselectProps {
    * GET /api/workflows/trigger-types. Empty list ⇒ "any entity".
    */
   supportedEntityTypes: string[];
+  /** Prefill the only supported type when nothing is selected (default true). */
+  autoFill?: boolean;
 }
 
 export function EntityTypeMultiselect({
@@ -86,13 +88,14 @@ export function EntityTypeMultiselect({
   value,
   onChange,
   supportedEntityTypes,
+  autoFill = true,
 }: EntityTypeMultiselectProps) {
   const { t } = useTranslation(['workflows', 'common']);
   // Auto-default: if there is exactly one supported entity type and the
   // user hasn't picked anything, prefill it. Keeps the picker visible so
   // the choice is auditable, but spares the user a redundant click.
   useEffect(() => {
-    if (supportedEntityTypes.length === 1 && value.length === 0) {
+    if (autoFill && supportedEntityTypes.length === 1 && value.length === 0) {
       onChange([supportedEntityTypes[0]]);
     }
     // Intentionally only react to trigger changes — re-prefilling on every

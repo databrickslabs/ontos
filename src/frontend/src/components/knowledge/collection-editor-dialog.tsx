@@ -17,9 +17,16 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   KnowledgeCollection,
   KnowledgeCollectionCreate,
@@ -28,6 +35,17 @@ import {
   ScopeLevel,
 } from '@/types/ontology';
 import { Loader2 } from 'lucide-react';
+import { buildSchemeOptionGroups } from '@/lib/scheme-select-options';
+import { SchemeSelectItems } from './scheme-select-items';
+
+// Marker the backend writes as `created_by` on sources it auto-registers as
+// collections (bundled / imported ontologies). These are also read-only.
+const SYSTEM_CREATED_BY = 'urn:user:system';
+
+/** True when a scheme may be offered as a parent: editable and not a system source. */
+export function isNestableParent(c: KnowledgeCollection): boolean {
+  return c.is_editable === true && c.created_by !== SYSTEM_CREATED_BY;
+}
 
 interface CollectionEditorDialogProps {
   open: boolean;
@@ -35,6 +53,9 @@ interface CollectionEditorDialogProps {
   collection?: KnowledgeCollection | null; // null = create mode
   collections?: KnowledgeCollection[]; // For parent selection
   onSave: (data: KnowledgeCollectionCreate | KnowledgeCollectionUpdate, isNew: boolean) => Promise<void>;
+  /** Create mode only: preselect the scheme Type (e.g. from a "no fitting
+   *  scheme" notice). Defaults to glossary. */
+  initialCollectionType?: CollectionType;
 }
 
 export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
@@ -43,6 +64,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
   collection,
   collections = [],
   onSave,
+  initialCollectionType,
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,13 +93,13 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
       setFormData({
         label: '',
         description: '',
-        collection_type: 'glossary',
+        collection_type: initialCollectionType || 'glossary',
         scope_level: 'enterprise',
         parent_collection_iri: '',
         is_editable: true,
       });
     }
-  }, [collection, open]);
+  }, [collection, open, initialCollectionType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,39 +120,26 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
     }
   };
 
-  // Filter out current collection from parent options
-  const parentOptions = collections.filter(
-    (c) => c.iri !== collection?.iri
-  );
-
-  // Flatten hierarchy for dropdown
-  const flattenCollections = (
-    colls: KnowledgeCollection[],
-    level = 0
-  ): Array<{ iri: string; label: string; level: number }> => {
-    let result: Array<{ iri: string; label: string; level: number }> = [];
-    for (const c of colls) {
-      result.push({ iri: c.iri, label: c.label, level });
-      if (c.child_collections && c.child_collections.length > 0) {
-        result = result.concat(flattenCollections(c.child_collections, level + 1));
-      }
-    }
-    return result;
-  };
-
-  const flatParentOptions = flattenCollections(parentOptions);
+  // Parent options. Only schemes the user can actually nest under are
+  // offered: editable, not system/bundled, and not the scheme being edited.
+  // Each scheme is judged on its own, so a qualifying child of a skipped
+  // parent is still listed.
+  const parentOptionGroups = buildSchemeOptionGroups(collections, {
+    include: (c) => isNestableParent(c) && c.iri !== collection?.iri,
+  });
 
   return (
+    <TooltipProvider>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {isNew ? t('semantic-models:actions.createCollection') : t('semantic-models:collectionEditor.editTitle')}
+            {isNew ? t('Create scheme', 'Create Scheme') : t('Edit scheme', 'Edit Scheme')}
           </DialogTitle>
           <DialogDescription>
             {isNew
-              ? t('semantic-models:collectionEditor.createDescription')
-              : t('semantic-models:collectionEditor.editDescription')}
+              ? t('Create a new concept scheme. Start simple as a glossary; you can add structure later.')
+              : t('Update scheme settings.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,7 +154,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, label: e.target.value }))
                 }
-                placeholder={t('semantic-models:collectionEditor.namePlaceholder')}
+                placeholder={t('semantic-models:collectionEditor.namePlaceholder', 'e.g., Finance Glossary')}
                 required
               />
             </div>
@@ -159,15 +168,28 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
-                placeholder={t('semantic-models:collectionEditor.descriptionPlaceholder')}
+                placeholder={t('semantic-models:collectionEditor.descriptionPlaceholder', 'Optional description...')}
                 rows={3}
               />
             </div>
 
-            {/* Collection Type (only for new) */}
+            {/* Scheme Type (only for new) */}
             {isNew && (
               <div className="grid gap-2">
-                <Label htmlFor="collection_type">{t('common:labels.type')}</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="collection_type">{t('Type')}</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help text-xs text-muted-foreground border rounded-full h-4 w-4 inline-flex items-center justify-center">i</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[280px]">
+                      {t(
+                        'collection.typeTooltip',
+                        'Glossary, taxonomy, and ontology are points on a maturity ladder, not different tools. Glossary = a flat list of agreed terms and definitions. Taxonomy = terms arranged in a broader/narrower hierarchy. Ontology = formal classes and properties a machine can reason over. Pick where you are today; you can add structure later.',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Select
                   value={formData.collection_type}
                   onValueChange={(value: CollectionType) =>
@@ -209,9 +231,9 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
               </Select>
             </div>
 
-            {/* Parent Collection */}
+            {/* Parent Scheme */}
             <div className="grid gap-2">
-              <Label htmlFor="parent">{t('semantic-models:collectionEditor.parentCollection')}</Label>
+              <Label htmlFor="parent">{t('semantic-models:collectionEditor.parentCollection', 'Parent Scheme')}</Label>
               <Select
                 value={formData.parent_collection_iri || '_none'}
                 onValueChange={(value) =>
@@ -222,15 +244,12 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t('semantic-models:collectionEditor.noneRootCollection')} />
+                  <SelectValue placeholder={t('semantic-models:collectionEditor.noneRootCollection', 'None (root scheme)')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">{t('semantic-models:collectionEditor.noneRootCollection')}</SelectItem>
-                  {flatParentOptions.map((opt) => (
-                    <SelectItem key={opt.iri} value={opt.iri}>
-                      {'—'.repeat(opt.level)} {opt.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="_none">{t('semantic-models:collectionEditor.noneRootCollection', 'None (root scheme)')}</SelectItem>
+                  {parentOptionGroups.length > 0 && <SelectSeparator />}
+                  <SchemeSelectItems groups={parentOptionGroups} />
                 </SelectContent>
               </Select>
             </div>
@@ -240,7 +259,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
               <div className="space-y-0.5">
                 <Label htmlFor="is_editable">{t('semantic-models:collectionEditor.editable')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('semantic-models:collectionEditor.editableHelp')}
+                  {t('semantic-models:collectionEditor.editableHelp', 'Allow creating and editing concepts in this scheme')}
                 </p>
               </div>
               <Switch
@@ -270,6 +289,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
         </form>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 };
 

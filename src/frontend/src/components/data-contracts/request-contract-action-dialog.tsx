@@ -9,14 +9,23 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { contractActionErrorText } from '@/lib/contract-action-error';
+import { needsStatusChangeRequest } from '@/lib/status-change-error';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Loader2, AlertCircle, FileText, Eye, Database, ShieldCheck, Info, RefreshCw, Rocket } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
 import AccessRequestFields from '@/components/access/access-request-fields';
+import DeprecationFields, {
+  DeprecationValues,
+  EMPTY_DEPRECATION,
+  deprecationPayload,
+  requestedDeprecationPayload,
+} from '@/components/common/deprecation-fields';
 import {
   getAllowedTransitions,
   getStatusConfig,
-  getRecommendedAction,
+  getStatusText,
+  getRecommendedActionText,
 } from '@/lib/odcs-lifecycle';
 
 type RequestType = 'access' | 'review' | 'deploy' | 'publish' | 'certify' | 'status_change';
@@ -46,12 +55,15 @@ export default function RequestContractActionDialog({
   contractName,
   contractStatus,
   onSuccess,
-  canDirectStatusChange = false
+  canDirectStatusChange: allowDirectStatusChange = false
 }: RequestContractActionDialogProps) {
   const { t } = useTranslation(['data-contracts', 'common']);
   const { post, get } = useApi();
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
+  // A contract status in the UI language (the API and the lifecycle use the raw value)
+  const statusLabel = (status?: string) =>
+    t(`data-contracts:status.${(status || '').toLowerCase()}`, { defaultValue: status || '' });
   
   const [requestType, setRequestType] = useState<RequestType>('deploy');
   const [message, setMessage] = useState('');
@@ -59,6 +71,7 @@ export default function RequestContractActionDialog({
   const [catalog, setCatalog] = useState('');
   const [schema, setSchema] = useState('');
   const [targetStatus, setTargetStatus] = useState('');
+  const [deprecation, setDeprecation] = useState<DeprecationValues>(EMPTY_DEPRECATION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number>(30);
@@ -70,6 +83,11 @@ export default function RequestContractActionDialog({
   const [certificationLevel, setCertificationLevel] = useState<number | null>(null);
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevelOption[]>([]);
   const [publicationScope, setPublicationScope] = useState('organization');
+  // A direct change the API refused because the contract is certified: the
+  // user can send it as a status change request instead (certified guard)
+  const [canRequestInstead, setCanRequestInstead] = useState(false);
+  const [requestInstead, setRequestInstead] = useState(false);
+  const canDirectStatusChange = allowDirectStatusChange && !requestInstead;
 
   useEffect(() => {
     get<CertificationLevelOption[]>('/api/certification-levels').then(({ data }) => {
@@ -81,6 +99,8 @@ export default function RequestContractActionDialog({
     if (isOpen) {
       setCertificationLevel(null);
       setPublicationScope('organization');
+      setCanRequestInstead(false);
+      setRequestInstead(false);
     }
   }, [isOpen]);
 
@@ -173,6 +193,14 @@ export default function RequestContractActionDialog({
         setError(t('data-contracts:requests.validation.targetStatusRequired', 'Please select a target status'));
         return false;
       }
+      if (
+        canDirectStatusChange &&
+        targetStatus === 'deprecated' &&
+        !deprecation.deprecationReason.trim()
+      ) {
+        setError(t('common:deprecation.reasonRequired'));
+        return false;
+      }
       // Justification is only required for approval requests, not direct changes
       if (!canDirectStatusChange) {
         if (!justification.trim()) {
@@ -203,11 +231,12 @@ export default function RequestContractActionDialog({
 
     const config = getRequestTypeConfig(requestType);
     if (!config.enabled) {
-      setError(t('data-contracts:requests.cannotRequest', "Cannot request {{type}} for a contract with status '{{status}}'", { type: requestType, status: contractStatus }));
+      setError(t('data-contracts:requests.cannotRequest', '"{{type}}" isn\'t available for a contract with status {{status}}.', { type: config.title, status: statusLabel(contractStatus) }));
       return;
     }
 
     setError(null);
+    setCanRequestInstead(false);
     setSubmitting(true);
 
     try {
@@ -252,6 +281,7 @@ export default function RequestContractActionDialog({
           // Direct status change - different payload format
           payload = {
             new_status: targetStatus,
+            ...(targetStatus === 'deprecated' ? deprecationPayload(deprecation) : {}),
           };
         } else {
           // Request for approval
@@ -259,6 +289,7 @@ export default function RequestContractActionDialog({
             target_status: targetStatus,
             justification: justification.trim(),
             current_status: contractStatus,
+            ...(targetStatus === 'deprecated' ? requestedDeprecationPayload(deprecation) : {}),
           };
         }
       }
@@ -266,19 +297,43 @@ export default function RequestContractActionDialog({
       const response = await post(config.endpoint, payload);
 
       if (response.error) {
-        throw new Error(response.error);
+        setCanRequestInstead(
+          requestType === 'status_change' && needsStatusChangeRequest(response),
+        );
+        throw new Error(contractActionErrorText(response, t));
       }
 
-      // Different success messages for direct changes vs requests
-      if (requestType === 'status_change' && canDirectStatusChange) {
+      // The request type as a word of the toasts' sentences, in the UI language
+      const requestTypeName = t(`data-contracts:requests.toast.requestTypes.${requestType}`, { defaultValue: requestType });
+      // The request was recorded; a failed workflow means nobody was asked to decide
+      const outcome = response.data as
+        | { workflow_status?: string; workflow_error_params?: { workflow?: string; failed_workflows?: string[] } }
+        | undefined;
+      if (outcome?.workflow_status === 'failed') {
+        // The step's own error stays with the execution (admins open it in Workflows)
+        toast({
+          title: t('data-contracts:requests.toast.workflowFailedTitle', 'Request sent, but its workflow failed'),
+          description: t('data-contracts:requests.toast.workflowFailedDescription', 'Nobody was asked to decide on your {{type}} request: its workflow "{{workflow}}" could not start. Please contact an administrator.', { type: requestTypeName, workflow: outcome.workflow_error_params?.workflow ?? '' }),
+          variant: 'destructive',
+        });
+      } else if (outcome?.workflow_status === 'partially_failed') {
+        // Some workflows succeeded/paused but at least one failed
+        const failedWorkflows = outcome.workflow_error_params?.failed_workflows ?? [];
+        toast({
+          title: t('data-contracts:requests.toast.workflowPartiallyFailedTitle', 'Some request workflows failed'),
+          description: t('data-contracts:requests.toast.workflowPartiallyFailedDescription', 'One of the {{type}} request workflows failed: {{workflows}}. Other approvals may still be pending.', { type: requestTypeName, workflows: failedWorkflows.join(', ') }),
+          variant: 'destructive',
+        });
+      } else if (requestType === 'status_change' && canDirectStatusChange) {
+        // Different success messages for direct changes vs requests
         toast({
           title: t('data-contracts:requests.toast.statusChangedTitle', 'Status Changed'),
-          description: t('data-contracts:requests.toast.statusChangedDescription', 'Contract status changed from "{{from}}" to "{{to}}".', { from: contractStatus, to: targetStatus })
+          description: t('data-contracts:requests.toast.statusChangedDescription', 'Contract status changed from "{{from}}" to "{{to}}".', { from: statusLabel(contractStatus), to: statusLabel(targetStatus) })
         });
       } else {
         toast({
           title: t('data-contracts:requests.toast.submittedTitle', 'Request Submitted'),
-          description: t('data-contracts:requests.toast.submittedDescription', 'Your {{type}} request has been submitted and you will be notified of the decision.', { type: requestType })
+          description: t('data-contracts:requests.toast.submittedDescription', 'Your {{type}} request has been submitted and you will be notified of the decision.', { type: requestTypeName })
         });
       }
 
@@ -296,6 +351,7 @@ export default function RequestContractActionDialog({
       setCatalog('');
       setSchema('');
       setTargetStatus('');
+      setDeprecation(EMPTY_DEPRECATION);
       setCertificationLevel(null);
       setPublicationScope('organization');
       onOpenChange(false);
@@ -318,6 +374,7 @@ export default function RequestContractActionDialog({
     setCatalog('');
     setSchema('');
     setTargetStatus('');
+    setDeprecation(EMPTY_DEPRECATION);
     setError(null);
     onOpenChange(false);
   };
@@ -362,7 +419,7 @@ export default function RequestContractActionDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {t('data-contracts:requests.dialogTitle', 'Request Action')}
@@ -384,7 +441,7 @@ export default function RequestContractActionDialog({
             )}
             {contractStatus && (
               <div className="text-xs text-muted-foreground mt-1">
-                {t('data-contracts:requests.statusLabel', 'Status:')} <span className="uppercase">{contractStatus}</span>
+                {t('data-contracts:requests.statusLabel', 'Status:')} <span className="uppercase">{getStatusText(contractStatus, t).label}</span>
               </div>
             )}
           </div>
@@ -428,7 +485,7 @@ export default function RequestContractActionDialog({
               <p className="text-muted-foreground">{currentConfig.description}</p>
               {!currentConfig.enabled && (
                 <p className="text-destructive mt-2 text-xs">
-                  {t('data-contracts:requests.notAvailableForStatus', "Not available for status '{{status}}'", { status: contractStatus })}
+                  {t('data-contracts:requests.notAvailableForStatus', "Not available for status '{{status}}'", { status: statusLabel(contractStatus) })}
                 </p>
               )}
             </div>
@@ -706,18 +763,18 @@ export default function RequestContractActionDialog({
                   <div className="flex items-center gap-2 mb-1">
                     <Label className="text-sm font-semibold">{t('data-contracts:requests.statusChange.currentStatusLabel', 'Current Status:')}</Label>
                     <span className="text-lg">{getStatusConfig(contractStatus).icon}</span>
-                    <span className="font-medium">{getStatusConfig(contractStatus).label}</span>
+                    <span className="font-medium">{getStatusText(contractStatus, t).label}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{getStatusConfig(contractStatus).description}</p>
+                  <p className="text-xs text-muted-foreground">{getStatusText(contractStatus, t).description}</p>
                 </div>
               )}
 
               {/* Recommended Action */}
-              {contractStatus && getRecommendedAction(contractStatus) && (
+              {contractStatus && getRecommendedActionText(contractStatus, t) && (
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    <strong>{t('data-contracts:requests.statusChange.recommendedLabel', 'Recommended:')}</strong> {getRecommendedAction(contractStatus)}
+                    <strong>{t('data-contracts:requests.statusChange.recommendedLabel', 'Recommended:')}</strong> {getRecommendedActionText(contractStatus, t)}
                   </AlertDescription>
                 </Alert>
               )}
@@ -732,7 +789,7 @@ export default function RequestContractActionDialog({
                         {targetStatus && (
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{getStatusConfig(targetStatus).icon}</span>
-                            <span>{getStatusConfig(targetStatus).label}</span>
+                            <span>{getStatusText(targetStatus, t).label}</span>
                           </div>
                         )}
                       </SelectValue>
@@ -744,7 +801,7 @@ export default function RequestContractActionDialog({
                           <SelectItem key={status} value={status}>
                             <div className="flex items-center gap-2">
                               <span className="text-lg">{config.icon}</span>
-                              <span>{config.label}</span>
+                              <span>{getStatusText(status, t).label}</span>
                             </div>
                           </SelectItem>
                         );
@@ -753,7 +810,7 @@ export default function RequestContractActionDialog({
                   </Select>
                   {targetStatus && (
                     <div className="p-3 bg-muted/50 rounded-lg border text-sm">
-                      <p className="text-muted-foreground">{getStatusConfig(targetStatus).description}</p>
+                      <p className="text-muted-foreground">{getStatusText(targetStatus, t).description}</p>
                     </div>
                   )}
                 </div>
@@ -761,9 +818,20 @@ export default function RequestContractActionDialog({
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>{t('data-contracts:requests.statusChange.terminalStateLabel', 'Terminal State:')}</strong> {t('data-contracts:requests.statusChange.noTransitions', 'No transitions available from {{status}} status.', { status: contractStatus ? getStatusConfig(contractStatus).label : 'current' })}
+                    <strong>{t('data-contracts:requests.statusChange.terminalStateLabel', 'Terminal State:')}</strong> {t('data-contracts:requests.statusChange.noTransitions', 'No transitions available from {{status}} status.', { status: contractStatus ? getStatusText(contractStatus, t).label : 'current' })}
                   </AlertDescription>
                 </Alert>
+              )}
+
+              {targetStatus === 'deprecated' && (
+                <DeprecationFields
+                  entityType="data_contract"
+                  entityId={contractId}
+                  value={deprecation}
+                  onChange={setDeprecation}
+                  disabled={submitting}
+                  hideReason={!canDirectStatusChange}
+                />
               )}
 
               {/* Justification - required for approval requests, optional for direct changes */}
@@ -782,6 +850,7 @@ export default function RequestContractActionDialog({
                   />
                   <div className="text-xs text-muted-foreground">
                     {t('data-contracts:requests.statusChange.justificationHint', 'Minimum 20 characters required. This will be reviewed by an admin.')}
+                    {targetStatus === 'deprecated' && ` ${t('common:deprecation.requestHint')}`}
                   </div>
                 </div>
               )}
@@ -800,8 +869,6 @@ export default function RequestContractActionDialog({
                   <span>→</span>
                   <span className={contractStatus?.toLowerCase() === 'active' ? 'font-bold text-primary' : ''}>active</span>
                   <span>→</span>
-                  <span className={contractStatus?.toLowerCase() === 'certified' ? 'font-bold text-primary' : ''}>certified</span>
-                  <span>→</span>
                   <span className={contractStatus?.toLowerCase() === 'deprecated' ? 'font-bold text-primary' : ''}>deprecated</span>
                   <span>→</span>
                   <span className={contractStatus?.toLowerCase() === 'retired' ? 'font-bold text-primary' : ''}>retired</span>
@@ -817,7 +884,28 @@ export default function RequestContractActionDialog({
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {canRequestInstead && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 block"
+                    onClick={() => {
+                      // The reason given for the direct change is the request's justification
+                      if (targetStatus === 'deprecated' && !justification.trim()) {
+                        setJustification(deprecation.deprecationReason.trim());
+                      }
+                      setRequestInstead(true);
+                      setCanRequestInstead(false);
+                      setError(null);
+                    }}
+                  >
+                    {t('workflow-gates:requestInstead')}
+                  </Button>
+                )}
+              </AlertDescription>
             </Alert>
           )}
         </div>

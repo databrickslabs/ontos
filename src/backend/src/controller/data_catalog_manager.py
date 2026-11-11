@@ -20,6 +20,7 @@ from databricks.sdk import WorkspaceClient
 from src.common.logging import get_logger
 from src.common.config import Settings
 from src.db_models.assets import AssetDb, AssetTypeDb, AssetRelationshipDb
+from src.models.assets import PHYSICAL_TABLE_ASSET_TYPES
 from src.db_models.data_contracts import DataContractDb, SchemaObjectDb, SchemaPropertyDb
 from src.models.data_catalog import (
     ColumnDictionaryEntry,
@@ -40,7 +41,7 @@ from src.controller.data_contracts_manager import DataContractsManager
 logger = get_logger(__name__)
 
 # Asset types that represent table-like containers with columns
-_TABLE_LIKE_TYPES = {"Table", "View", "Dataset"}
+_TABLE_LIKE_TYPES = {*PHYSICAL_TABLE_ASSET_TYPES, "Dataset"}
 _HIERARCHICAL_RELS = {"hasColumn", "hasTable", "hasView", "hasDataset", "hasPart",
                       "contains", "hasCatalog", "hasSchema"}
 

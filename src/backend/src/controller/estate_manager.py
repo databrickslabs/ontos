@@ -1,190 +1,187 @@
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import List, Optional
-from datetime import datetime
-import uuid # Import uuid for generating policy IDs
-from src.common.workspace_client import WorkspaceClient
-from src.common.config import Settings
-from src.models.estate import Estate, CloudType, SyncStatus, ConnectionType, SharingPolicy, SharingRule, SharingResourceType, SharingRuleOperator # Import new models
-import yaml
 
-# Configure logging
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
+from src.db_models.estates import EstateDb, SharingPolicyDb
+from src.models.estate import (
+    Estate, SharingPolicy, SharingPolicyDirection, SharingRule, SyncStatus,
+)
+from src.repositories.estates_repository import EstatesRepository, estates_repo
+
 logger = get_logger(__name__)
 
+
+class EstateNameConflictError(CodedValueError):
+    code = 'estate_name_conflict'
+
+
 class EstateManager:
-    def __init__(self, client: WorkspaceClient, settings: Settings, yaml_path: Optional[Path] = None):
-        """Initialize EstateManager.
-        
+    """Estates stored in the database (PRD #143, #146).
+
+    One instance lives on ``app.state.estate_manager``; every method takes the
+    request's session, like the other DB-backed managers.
+    """
+
+    def __init__(self, repository: Optional[EstatesRepository] = None):
+        self._repo = repository or estates_repo
+
+    # --- conversion ---------------------------------------------------------------
+
+    @staticmethod
+    def _policy_to_api(row: SharingPolicyDb) -> SharingPolicy:
+        return SharingPolicy(
+            id=row.id,
+            name=row.name,
+            description=row.description,
+            resource_type=row.resource_type,
+            rules=[
+                SharingRule(filter_type=r.filter_type, operator=r.operator, filter_value=r.filter_value)
+                for r in row.rules
+            ],
+            is_enabled=row.is_enabled,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    def _to_api(self, row: EstateDb) -> Estate:
+        policies = list(row.policies or [])
+        return Estate(
+            id=row.id,
+            name=row.name,
+            description=row.description or '',
+            workspace_url=row.workspace_url,
+            cloud_type=row.cloud_type,
+            metastore_name=row.metastore_name,
+            connection_type=row.connection_type,
+            export_policies=[
+                self._policy_to_api(p) for p in policies if p.direction == SharingPolicyDirection.EXPORT.value
+            ],
+            import_policies=[
+                self._policy_to_api(p) for p in policies if p.direction == SharingPolicyDirection.IMPORT.value
+            ],
+            is_enabled=row.is_enabled,
+            sync_schedule=row.sync_schedule,
+            last_sync_time=row.last_sync_time,
+            last_sync_status=row.last_sync_status,
+            last_sync_error=row.last_sync_error,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    def _check_name_free(self, db: Session, name: str, estate_id: Optional[str] = None) -> None:
+        other = self._repo.get_by_name(db, name)
+        if other is not None and other.id != estate_id:
+            raise EstateNameConflictError(f"An estate named '{name}' already exists.", name=name)
+
+    @staticmethod
+    def _is_name_conflict(error: IntegrityError) -> bool:
+        """Whether ``error`` is the unique constraint on ``estates.name``."""
+        message = str(getattr(error, 'orig', error)).lower()
+        # Postgres names the constraint estates_name_key; SQLite reports the column.
+        return 'estates_name_key' in message or 'estates.name' in message
+
+    def _commit(self, db: Session, name: str, commit: bool = True) -> None:
+        """Flush and optionally commit, turning a lost race on the unique name into the coded 409.
+
+        The pre-check can't see an estate another request creates in the
+        meantime; the database constraint then fails the commit. Other
+        integrity errors are re-raised unchanged.
+
         Args:
-            client: WorkspaceClient for SDK operations
-            settings: Application settings
-            yaml_path: Optional path to YAML file to load estates from.
-                      If not provided, attempts to load from default location
-                      (data/estates.yaml relative to controller directory).
+            db: Database session
+            name: Estate name for error reporting
+            commit: If True, commit after flush. If False, only flush (for batch operations).
         """
-        self.estates: List[Estate] = []
-        
-        # Auto-load from YAML if path provided or default exists
-        if yaml_path is None:
-            # Try default location
-            default_path = Path(__file__).parent.parent / 'data' / 'estates.yaml'
-            if default_path.exists():
-                yaml_path = default_path
-        
-        if yaml_path and yaml_path.exists():
-            try:
-                self.load_from_yaml(yaml_path)
-                logger.info(f"Successfully loaded estates from {yaml_path}")
-            except Exception as e:
-                logger.exception(f"Error loading estates from YAML: {e!s}")
-
-    def _parse_sharing_policies(self, policies_data: Optional[List[dict]]) -> List[SharingPolicy]:
-        if not policies_data:
-            return []
-        parsed_policies = []
-        for policy_data in policies_data:
-            rules_data = policy_data.get('rules', [])
-            parsed_rules = [
-                SharingRule(
-                    filter_type=rule_data['filter_type'],
-                    operator=SharingRuleOperator(rule_data['operator']),
-                    filter_value=rule_data['filter_value']
-                ) for rule_data in rules_data
-            ]
-            parsed_policies.append(
-                SharingPolicy(
-                    id=policy_data.get('id', str(uuid.uuid4())), # Generate ID if not present
-                    name=policy_data['name'],
-                    description=policy_data.get('description'),
-                    resource_type=SharingResourceType(policy_data['resource_type']),
-                    rules=parsed_rules,
-                    is_enabled=policy_data.get('is_enabled', True),
-                    created_at=datetime.fromisoformat(policy_data['created_at'].replace('Z', '+00:00')) if policy_data.get('created_at') else datetime.utcnow(),
-                    updated_at=datetime.fromisoformat(policy_data['updated_at'].replace('Z', '+00:00')) if policy_data.get('updated_at') else datetime.utcnow()
-                )
-            )
-        return parsed_policies
-
-    def load_from_yaml(self, yaml_path: Path) -> None:
-        """Load estates from a YAML file"""
         try:
-            with open(yaml_path) as f:
-                data = yaml.safe_load(f)
-                for estate_data in data:
-                    sharing_policies = self._parse_sharing_policies(estate_data.get('sharing_policies'))
-                    estate = Estate(
-                        id=estate_data['id'],
-                        name=estate_data['name'],
-                        description=estate_data['description'],
-                        workspace_url=estate_data['workspace_url'],
-                        cloud_type=CloudType(estate_data['cloud_type']),
-                        metastore_name=estate_data['metastore_name'],
-                        connection_type=ConnectionType(estate_data.get('connection_type', ConnectionType.DELTA_SHARE.value)), # Default to delta_share if not present
-                        sharing_policies=sharing_policies,
-                        is_enabled=estate_data['is_enabled'],
-                        sync_schedule=estate_data['sync_schedule'],
-                        last_sync_time=datetime.fromisoformat(estate_data['last_sync_time'].replace('Z', '+00:00')) if estate_data.get('last_sync_time') else None,
-                        last_sync_status=SyncStatus(estate_data['last_sync_status']) if estate_data.get('last_sync_status') else None,
-                        last_sync_error=estate_data.get('last_sync_error'),
-                        created_at=datetime.fromisoformat(estate_data['created_at'].replace('Z', '+00:00')) if estate_data.get('created_at') else datetime.utcnow(),
-                        updated_at=datetime.fromisoformat(estate_data['updated_at'].replace('Z', '+00:00')) if estate_data.get('updated_at') else datetime.utcnow()
-                    )
-                    self.estates.append(estate)
-            logger.info(f"Loaded {len(self.estates)} estates from {yaml_path}")
-        except Exception as e:
-            logger.exception(f"Error loading estates from {yaml_path}: {e}")
-            self.estates = []
+            db.flush()
+        except IntegrityError as e:
+            db.rollback()
+            if self._is_name_conflict(e):
+                raise EstateNameConflictError(
+                    f"An estate named '{name}' already exists.", name=name
+                ) from e
+            raise
+        if commit:
+            db.commit()
 
-    async def list_estates(self) -> List[Estate]:
-        """List all configured estates"""
-        logger.info(f"Returning {len(self.estates)} estates.")
-        return self.estates
+    # --- CRUD -----------------------------------------------------------------------
 
-    async def get_estate(self, estate_id: str) -> Optional[Estate]:
-        """Get a specific estate by ID"""
-        return next((estate for estate in self.estates if estate.id == estate_id), None)
+    def list_estates(self, db: Session) -> List[Estate]:
+        return [self._to_api(row) for row in self._repo.list_all(db)]
 
-    async def create_estate(self, estate: Estate) -> Estate:
-        """Create a new estate"""
-        # Ensure new policies get IDs if they don't have them
-        for policy in estate.sharing_policies:
-            if not policy.id:
-                policy.id = str(uuid.uuid4())
-            policy.created_at = datetime.utcnow()
-            policy.updated_at = datetime.utcnow()
+    def get_estate(self, db: Session, estate_id: str) -> Optional[Estate]:
+        row = self._repo.get(db, estate_id)
+        return self._to_api(row) if row else None
 
-        estate.id = str(uuid.uuid4()) # Ensure estate ID is unique
-        estate.created_at = datetime.utcnow()
-        estate.updated_at = datetime.utcnow()
-        self.estates.append(estate)
-        # TODO: Persist to YAML if git sync is enabled
-        return estate
+    def create_estate(self, db: Session, estate: Estate, user: Optional[str] = None) -> Estate:
+        self._check_name_free(db, estate.name)
+        row = self._repo.apply(db, EstateDb(), estate)
+        row.created_by = user
+        row.updated_by = user
+        db.add(row)
+        self._commit(db, estate.name)
+        db.refresh(row)
+        logger.info("Created estate %s (%s)", row.name, row.id)
+        return self._to_api(row)
 
-    async def update_estate(self, estate_id: str, estate_update: Estate) -> Optional[Estate]:
-        """Update an existing estate"""
-        for i, estate in enumerate(self.estates):
-            if estate.id == estate_id:
-                # Update sharing policies: assign IDs to new policies, update timestamps
-                for policy_update in estate_update.sharing_policies:
-                    if not policy_update.id:
-                        policy_update.id = str(uuid.uuid4())
-                        policy_update.created_at = datetime.utcnow()
-                    policy_update.updated_at = datetime.utcnow()
-                
-                estate_update.id = estate_id # Preserve original ID
-                estate_update.created_at = estate.created_at # Preserve original creation time
-                estate_update.updated_at = datetime.utcnow()
-                self.estates[i] = estate_update
-                # TODO: Persist to YAML if git sync is enabled
-                return estate_update
-        return None
+    def create_estate_batch(self, db: Session, estate: Estate, user: Optional[str] = None) -> EstateDb:
+        """Create an estate without committing (for batch operations like YAML import).
 
-    async def delete_estate(self, estate_id: str) -> bool:
-        """Delete an estate"""
-        for i, estate in enumerate(self.estates):
-            if estate.id == estate_id:
-                del self.estates[i]
-                # TODO: Persist to YAML if git sync is enabled
-                return True
-        return False
+        This is an internal method used by bulk import operations that need to
+        commit multiple estates atomically. It flushes to the session but does
+        not commit, allowing the caller to batch multiple creates and commit once.
 
-    async def sync_estate(self, estate_id: str) -> bool:
-        """Trigger a sync for a specific estate"""
-        estate = await self.get_estate(estate_id)
-        if not estate or not estate.is_enabled:
-            logger.warning(f"Sync attempt for disabled or non-existent estate: {estate_id}")
+        Returns the database row (not the API model), which must be refreshed
+        by the caller after commit.
+        """
+        self._check_name_free(db, estate.name)
+        row = self._repo.apply(db, EstateDb(), estate)
+        row.created_by = user
+        row.updated_by = user
+        db.add(row)
+        self._commit(db, estate.name, commit=False)
+        logger.info("Staged estate for batch import: %s", row.name)
+        return row
+
+    def update_estate(
+        self, db: Session, estate_id: str, estate: Estate, user: Optional[str] = None
+    ) -> Optional[Estate]:
+        row = self._repo.get(db, estate_id)
+        if row is None:
+            return None
+        self._check_name_free(db, estate.name, estate_id)
+        self._repo.apply(db, row, estate)
+        row.updated_by = user
+        row.updated_at = datetime.now(timezone.utc)
+        self._commit(db, estate.name)
+        db.refresh(row)
+        return self._to_api(row)
+
+    def delete_estate(self, db: Session, estate_id: str) -> bool:
+        row = self._repo.get(db, estate_id)
+        if row is None:
             return False
+        db.delete(row)
+        db.commit()
+        return True
 
-        # Update sync status
-        estate.last_sync_status = SyncStatus.RUNNING
-        estate.last_sync_error = None # Clear previous error
-        estate.updated_at = datetime.utcnow()
+    def sync_estate(self, db: Session, estate_id: str) -> bool:
+        """Record a sync of the estate.
 
-        logger.info(f"Attempting to sync estate: {estate.name} ({estate_id}) with connection type {estate.connection_type.value}")
-
-        try:
-            # TODO: Implement actual sync logic with Databricks API / Delta Sharing
-            # This will involve:
-            # 1. Identifying data to share based on estate.sharing_policies.
-            # 2. For DELTA_SHARE connection_type:
-            #    - Preparing local Delta tables.
-            #    - Managing Delta Shares (creating/updating shares, recipients).
-            #    - For incoming shares: Reading shared tables and making data available.
-            # 3. For DATABASE connection_type (future):
-            #    - Connecting to the remote database and exchanging data.
-            # 4. This entire process should likely be a Databricks job triggered by self.job_runner
-            
-            logger.info(f"Simulating sync for estate: {estate.name}")
-            # For now, just simulate a successful sync after a brief delay
-            # import asyncio
-            # await asyncio.sleep(2) # Simulate work
-
-            estate.last_sync_time = datetime.utcnow()
-            estate.last_sync_status = SyncStatus.SUCCESS
-            logger.info(f"Successfully synced estate: {estate.name}")
-            return True
-        except Exception as e:
-            logger.exception(f"Error during sync for estate {estate.name}: {e}")
-            estate.last_sync_status = SyncStatus.FAILED
-            estate.last_sync_error = str(e)
-            return False 
+        The transport (Git, Delta Sharing) isn't implemented yet (PRD #143), so the
+        sync only records its time and status, as it did before estates were stored.
+        """
+        row = self._repo.get(db, estate_id)
+        if row is None or not row.is_enabled:
+            logger.warning("Sync attempt for disabled or non-existent estate: %s", estate_id)
+            return False
+        logger.info("Recording sync for estate %s (%s), connection %s", row.name, estate_id, row.connection_type)
+        row.last_sync_time = datetime.now(timezone.utc)
+        row.last_sync_status = SyncStatus.SUCCESS.value
+        row.last_sync_error = None
+        db.commit()
+        return True

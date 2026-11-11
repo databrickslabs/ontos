@@ -9,7 +9,7 @@
   "searchPlaceholder": "Pesquisar termos...",
   "loading": "Carregando modelos semânticos...",
   "tabs": {
-    "collections": "Coleções",
+    "collections": "Esquemas de conceitos",
     "concepts": "Conceitos",
     "graph": "Grafo"
   },
@@ -51,14 +51,29 @@
     "none": "Nenhum",
     "groupBySource": "Agrupar por fonte",
     "showProperties": "Mostrar propriedades",
+    "showSystemSources": "Mostrar ontologias do sistema",
     "groupByDomain": "Agrupar por domínio",
+    "groupByNone": "Nenhum",
+    "groupByScheme": "Esquema",
+    "groupByDimSource": "Fonte",
+    "groupByDimDomain": "Domínio",
+    "noSourceFile": "Sem arquivo de origem",
     "allTypes": "Todos os tipos",
     "allScopes": "Todos os escopos",
-    "allCollections": "Todas as coleções",
+    "allCollections": "Todos os esquemas de conceitos",
+    "searchSchemes": "Pesquisar esquemas...",
+    "sortBy": "Ordenar por",
+    "sortName": "Nome",
+    "sortSize": "Tamanho",
+    "groupTypeGlossary": "GLOSSÁRIOS",
+    "groupTypeTaxonomy": "TAXONOMIAS",
+    "groupTypeOntology": "ONTOLOGIAS",
+    "groupTypeOther": "OUTROS",
+    "importedDisable": "Importado — não pode ser excluído",
     "labelLanguage": "Idioma do rótulo"
   },
   "groupBy": {
-    "collection": "Por coleção",
+    "collection": "Por esquema de conceitos",
     "type": "Por tipo",
     "flat": "Lista simples"
   },
@@ -84,22 +99,27 @@
     "deleteConfirm": "Tem certeza de que deseja excluir este termo?",
     "deleteSuccess": "Termo excluído com sucesso",
     "deleteError": "Falha ao excluir termo",
-    "collectionCreated": "Coleção criada com sucesso",
-    "collectionUpdated": "Coleção atualizada com sucesso",
-    "collectionDeleted": "Coleção excluída com sucesso",
-    "confirmDeleteCollection": "Tem certeza de que deseja excluir a coleção \"{{name}}\"? Isso excluirá todos os conceitos nela contidos.",
+    "collectionCreated": "Esquema de conceitos criado com sucesso",
+    "collectionUpdated": "Esquema de conceitos atualizado com sucesso",
+    "collectionDeleted": "Esquema de conceitos excluído com sucesso",
+    "confirmDeleteCollection": "Tem certeza de que deseja excluir o esquema de conceitos \"{{name}}\"? Isso excluirá todos os conceitos nele contidos.",
     "conceptCreated": "Conceito criado com sucesso",
     "conceptUpdated": "Conceito atualizado com sucesso",
     "conceptDeleted": "Conceito excluído com sucesso",
     "submittedForReview": "Conceito enviado para revisão",
+    "submitReview": "Enviado para revisão",
+    "submitReviewGoverned": "Enviado para revisão — aguardando aprovação.",
+    "changesRequested": "Devolvido ao proprietário com o seu comentário.",
+    "withdrawReview": "Retirado da revisão",
     "enterReviewerEmail": "Informe o e-mail do revisor:",
     "conceptPromoted": "Conceito promovido com sucesso",
     "conceptMigrated": "Conceito migrado com sucesso",
-    "noCollections": "Nenhuma coleção encontrada",
+    "noCollections": "Nenhum esquema de conceitos encontrado",
     "noConceptsFound": "Nenhum conceito encontrado",
     "selectConcept": "Selecione um conceito para ver os detalhes",
     "linkAdded": "Vínculo adicionado com sucesso",
     "linkRemoved": "Vínculo removido com sucesso",
+    "statusChanged": "Status atualizado",
     "saveFailed": "Falha ao salvar conceito",
     "deleteConceptFailed": "Falha ao excluir conceito"
   },
@@ -142,6 +162,7 @@
     "scope": "Escopo",
     "concepts": "Conceitos",
     "source": "Fonte",
+    "sourceFile": "Importado de",
     "sourceUrl": "URL da fonte"
   },
   "form": {
@@ -156,14 +177,14 @@
     "save": "Salvar"
   },
   "collections": {
-    "title": "Coleções",
+    "title": "Esquemas de conceitos",
     "glossary": "Glossário",
     "taxonomy": "Taxonomia",
     "ontology": "Ontologia"
   },
   "actions": {
     "createConcept": "Criar conceito",
-    "createCollection": "Criar coleção"
+    "createCollection": "Criar esquema de conceitos"
   },
   "badges": {
     "imported": "Importado",
@@ -197,6 +218,17 @@
     "linkEditor": {
       "title": "Criar vínculo",
       "description": "Defina um relacionamento entre dois conceitos"
+    },
+    "deleteScheme": {
+      "title": "Excluir esquema de conceitos",
+      "description": "Tem certeza de que deseja excluir \"{{label}}\"? Isso excluirá todos os conceitos deste esquema e não poderá ser desfeito."
+    },
+    "deprecate": {
+      "title": "Descontinuar conceito",
+      "description": "Opcionalmente, especifique um ou mais conceitos sucessores para indicar o que substituiu este conceito.",
+      "successors": "Conceitos sucessores",
+      "noSuccessors": "Nenhum selecionado",
+      "addSuccessor": "+ Adicionar sucessor"
     }
   },
   "rdfSources": {
@@ -230,13 +262,44 @@
   "import": {
     "chooseFile": "Escolher arquivo…",
     "file": "Arquivo",
-    "noEditableCollections": "Nenhuma coleção editável disponível. Crie uma primeiro.",
-    "selectCollection": "Selecione uma coleção…",
+    "noEditableCollections": "Nenhum esquema de conceitos editável disponível. Crie um primeiro.",
+    "reconcileNote": "Termos sobrepostos ou duplicados entre esquemas são conciliados posteriormente em Revisões de Ativos de Dados. A importação apenas traz o grafo.",
+    "summary": "{{files}} arquivo(s) importado(s), {{count}} triplas no total.",
+    "summaryPending": "Upload enviado para aprovação ({{files}} arquivo(s))",
+    "fileOk": "{{count}} triplas",
+    "filePending": "Aguardando aprovação",
+    "allFailed": "Nenhum arquivo pôde ser importado. Veja os erros de cada arquivo abaixo.",
+    "computingDiff": "Calculando alterações…",
+    "changelogTitle": "Alterações aplicadas de {{file}}",
+    "previewTitle": "Alterações de {{file}}",
+    "changelogSummary": "Modifica {{modified}}, adiciona {{added}}, remove {{removed}} ({{unchanged}} inalterados).",
+    "bucketModified": "Modificados (nova versão)",
+    "bucketNew": "Novos",
+    "bucketRemoved": "Removidos (descontinuados, não excluídos)",
+    "stillReferenced": "usado por {{count}}",
+    "submitMulti": "Importar {{count}} arquivo(s)",
+    "selectCollection": "Selecione um esquema de conceitos…",
+    "createNewScheme": "＋ Criar um novo esquema de conceitos…",
+    "newSchemeName": "Nome do novo esquema de conceitos (ex.: Ontologia de Finanças)",
     "submit": "Importar",
     "success": "Importação bem-sucedida",
     "supportedFormats": "Compatíveis: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
-    "targetCollection": "Coleção de destino",
-    "title": "Importar conceitos"
+    "howLand": "Como estes arquivos devem ser incorporados?",
+    "oneScheme": "Um esquema",
+    "oneSchemeDesc": "Mesclar todos os arquivos em um único esquema de conceitos.",
+    "oneSchemePerFile": "Um esquema por arquivo",
+    "oneSchemePerFileDesc": "Cada arquivo se torna seu próprio esquema de conceitos.",
+    "perFileTodo": "A opção um esquema por arquivo requer um backend que crie um esquema por arquivo; por enquanto, todos os arquivos são incorporados ao esquema abaixo.",
+    "targetCollection": "Esquema de conceitos de destino",
+    "title": "Importar conceitos",
+    "descriptionMulti": "Solte um ou mais arquivos de ontologia e escolha como eles serão incorporados. O arquivo é apenas um meio de transporte.",
+    "sourceFiles": "Arquivos de origem",
+    "addMoreFiles": "Adicionar mais arquivos…",
+    "chooseFiles": "Escolher arquivos…",
+    "readOnlyHint": "Somente esquemas de conceitos editáveis podem receber importações. Esquemas importados e do sistema são somente leitura.",
+    "conflict": {
+      "alreadyIn": "Já existe em {{scheme}}"
+    }
   },
   "propertyTypes": {
     "object": "Propriedade de objeto",
@@ -244,10 +307,10 @@
     "annotation": "Propriedade de anotação"
   },
   "conceptEditor": {
-    "editTitle": "Editar conceito",
-    "createDescription": "Crie um novo termo ou conceito na coleção.",
-    "collectionLabel": "Coleção",
-    "selectCollectionPlaceholder": "Selecionar coleção...",
+    "editTitle": "Editar entrada",
+    "createDescription": "Adicione uma nova entrada a um esquema de conceitos.",
+    "collectionLabel": "Esquema de conceitos",
+    "selectCollectionPlaceholder": "Selecionar esquema de conceitos...",
     "selectTypePlaceholder": "Selecionar tipo...",
     "label": "Rótulo",
     "labelPlaceholder": "ex.: Receita",
@@ -280,30 +343,41 @@
       "object": "Relaciona-se a outros conceitos",
       "datatype": "Relaciona-se a valores literais",
       "annotation": "Anotação de metadados"
-    }
+    },
+    "createTitle": "Criar entrada",
+    "noFittingScheme": "Ainda não há um esquema de conceitos editável para este tipo de entrada ({{kind}}). Crie um primeiro.",
+    "parentConcept": "Conceito pai",
+    "addParent": "Adicionar pai",
+    "subclassOf": "Subclasse de",
+    "selectClass": "Selecionar classe",
+    "removeParent": "Remover {{name}}",
+    "selectSuperclass": "Selecionar superclasse",
+    "selectParentConcept": "Selecionar conceito pai",
+    "searchClasses": "Pesquisar classes...",
+    "searchConceptsInScheme": "Pesquisar conceitos neste esquema de conceitos..."
   },
   "collectionEditor": {
-    "editTitle": "Editar coleção",
-    "createDescription": "Crie uma nova coleção de glossário, taxonomia ou ontologia.",
-    "editDescription": "Atualize as configurações da coleção.",
+    "editTitle": "Editar esquema de conceitos",
+    "createDescription": "Crie um novo esquema de conceitos de glossário, taxonomia ou ontologia.",
+    "editDescription": "Atualize as configurações do esquema de conceitos.",
     "namePlaceholder": "ex.: Glossário Financeiro",
     "descriptionPlaceholder": "Descrição opcional...",
-    "parentCollection": "Coleção pai",
-    "noneRootCollection": "Nenhuma (coleção raiz)",
+    "parentCollection": "Esquema de conceitos pai",
+    "noneRootCollection": "Nenhum (esquema de conceitos raiz)",
     "editable": "Editável",
-    "editableHelp": "Permitir criar e editar conceitos nesta coleção"
+    "editableHelp": "Permitir criar e editar conceitos neste esquema de conceitos"
   },
   "promotion": {
     "promoteConcept": "Promover conceito",
     "demoteConcept": "Rebaixar conceito",
     "migrateConcept": "Migrar conceito",
     "move": "Mover",
-    "toDifferentCollection": "para outra coleção",
+    "toDifferentCollection": "para outro esquema de conceitos",
     "actionLabel": "Ação",
     "promote": "Promover",
     "migrate": "Migrar",
     "currentLocation": "Localização atual",
-    "selectTargetPlaceholder": "Selecionar coleção de destino...",
+    "selectTargetPlaceholder": "Selecionar esquema de conceitos de destino...",
     "newIri": "Novo IRI",
     "sourceConcept": "Conceito de origem",
     "deprecateOriginal": "Descontinuar original (recomendado)",
@@ -312,8 +386,8 @@
     "promoteWarning": "Conceitos promovidos exigem nova aprovação no nível do novo escopo."
   },
   "collectionTree": {
-    "readOnly": "Coleção somente leitura",
-    "noCollectionsYet": "Ainda não há coleções"
+    "readOnly": "Esquema de conceitos somente leitura",
+    "noCollectionsYet": "Ainda não há esquemas de conceitos"
   },
   "knowledgeGraph": {
     "rootFilter": {
@@ -395,7 +469,7 @@
     "selectedCount": "{{count}} selecionados",
     "agentProgress": "Progresso do agente",
     "generatedTurtle": "Turtle gerado",
-    "saveToCollection": "Salvar na coleção",
+    "saveToCollection": "Salvar no esquema de conceitos",
     "empty": "(vazio)",
     "agentExecutionLog": "Log de execução do agente",
     "agentLogSummary": "{{iterations}} iteração(ões) · {{promptTokens}} tokens de prompt · {{completionTokens}} tokens de conclusão",
@@ -445,18 +519,113 @@
       "deleteFailed": "Falha ao excluir",
       "turtleCopied": "Conteúdo Turtle copiado para a área de transferência.",
       "saveFailed": "Falha ao salvar",
-      "savedTitle": "Salvo na coleção",
+      "savedTitle": "Salvo no esquema de conceitos",
       "savedDescription_one": "{{count}} tripla importada para \"{{name}}\".",
       "savedDescription_other": "{{count}} triplas importadas para \"{{name}}\"."
     },
     "saveDialog": {
-      "title": "Salvar na coleção de conceitos",
-      "description": "Crie uma nova coleção de ontologia e importe as triplas geradas para o grafo de conhecimento.",
-      "nameLabel": "Nome da coleção",
+      "title": "Salvar no esquema de conceitos",
+      "description": "Crie um novo esquema de conceitos de ontologia e importe as triplas geradas para o grafo de conhecimento.",
+      "nameLabel": "Nome do esquema de conceitos",
       "namePlaceholder": "ex.: Ontologia do Domínio de Clientes",
       "descriptionLabel": "Descrição (opcional)",
-      "descriptionPlaceholder": "Descreva a finalidade desta coleção de ontologia...",
+      "descriptionPlaceholder": "Descreva a finalidade deste esquema de conceitos de ontologia...",
       "importSummary": "{{classes}} classes e {{properties}} propriedades serão importadas."
     }
+  },
+  "conceptSelect": {
+    "includeOtherSchemes": "Incluir outros esquemas de conceitos",
+    "thisScheme": "Este esquema de conceitos: {{label}}",
+    "noScheme": "Sem esquema de conceitos",
+    "noMatchesInScheme": "Nenhuma correspondência neste esquema de conceitos.",
+    "noClassesInScheme": "Este esquema de conceitos ainda não tem classes.",
+    "noConceptsInScheme": "Este esquema de conceitos ainda não tem conceitos.",
+    "includeOtherSchemesHint": "Marque \"Incluir outros esquemas de conceitos\" para escolher de outro esquema."
+  },
+  "schemeSelect": {
+    "groupGlossary": "Glossários",
+    "groupTaxonomy": "Taxonomias",
+    "groupOntology": "Ontologias",
+    "inParent": "em {{parent}}"
+  },
+  "explore": {
+    "emptyTitle": "Ainda não há nada para explorar",
+    "emptyBody": "Importe arquivos ou crie conceitos na aba Definir.",
+    "emptyCta": "Ir para Definir"
+  },
+  "define": {
+    "requiresWrite": "Requer acesso de gravação"
+  },
+  "lifecycle": {
+    "changeStatus": "Alterar status",
+    "submitReview": "Enviar para revisão",
+    "withdrawReview": "Retirar da revisão",
+    "approve": "Aprovar",
+    "requestChanges": "Solicitar alterações",
+    "publish": "Publicar",
+    "certify": "Certificar",
+    "deprecate": "Descontinuar",
+    "archive": "Arquivar"
+  },
+  "requestChanges": {
+    "title": "Solicitar alterações",
+    "description": "Devolva este conceito ao proprietário como rascunho, com o seu comentário.",
+    "comment": "Comentário para o proprietário",
+    "placeholder": "O que deve mudar antes que isto possa ser aprovado?",
+    "submit": "Devolver"
+  },
+  "submitReview": {
+    "title": "Enviar para revisão",
+    "description": "Atribua um revisor opcional e adicione observações.",
+    "reviewer": "Revisor (opcional)",
+    "reviewerPlaceholder": "Selecione um revisor...",
+    "notes": "Notas (opcional)",
+    "notesPlaceholder": "Adicione contexto ou instruções...",
+    "submit": "Enviar",
+    "checking": "Verificando fluxo de aprovação…",
+    "governedBanner": "Este conceito é governado pelo fluxo de aprovação '{{workflow}}'. O envio iniciará essa aprovação — o conceito passa para Em revisão e aguarda a aprovação dos aprovadores.",
+    "governedBannerMulti": "Este conceito é governado por {{count}} fluxos de aprovação. O envio iniciará essa aprovação — o conceito passa para Em revisão e aguarda a aprovação dos aprovadores.",
+    "ungovernedBanner": "Nenhum fluxo de aprovação está associado. O envio move este conceito diretamente para Em revisão; qualquer usuário com acesso de escrita poderá então aprová-lo."
+  },
+  "concept": {
+    "inReview": "Em revisão",
+    "reviewerComment": "Comentário do revisor",
+    "sparql": "SPARQL",
+    "sparqlTitle": "Consulta SPARQL",
+    "sparqlDescription": "Consulte o grafo de conhecimento. Pré-preenchida com este conceito."
+  },
+  "hierarchy": {
+    "title": "Hierarquia",
+    "parent": "Pai",
+    "children": "Filhos",
+    "none": "Nenhum conceito mais amplo ou mais restrito.",
+    "viewLabel": "Visualização da hierarquia",
+    "list": "Lista",
+    "graph": "Grafo"
+  },
+  "versionDiff": {
+    "compare": "Comparar"
+  },
+  "versionHistory": {
+    "title": "Histórico de versões",
+    "saveNewVersion": "Salvar nova versão",
+    "saveDescription": "Edite a definição e salve-a como uma nova versão. A definição anterior é mantida no histórico.",
+    "willCreate": "Isso criará a v{{next}}.",
+    "whatChanged": "O que mudou?",
+    "notePlaceholder": "ex.: redação ajustada para maior clareza",
+    "saved": "Nova versão salva",
+    "current": "Atual",
+    "previous": "Versão anterior",
+    "previousDefinition": "Definição anterior:",
+    "noDefinition": "Nenhuma definição registrada para esta versão.",
+    "editedBy": "Editado por {{who}} em {{when}}",
+    "unknownEditor": "alguém",
+    "none": "Ainda não há versões anteriores.",
+    "unavailable": "O histórico de versões não está disponível.",
+    "replacedBy": "Substituído por {{label}}",
+    "saveNewVersionDraftLocked": "Disponível depois que este conceito for aprovado (a v1 precisa ser aprovada antes de uma nova versão)."
+  },
+  "columns": {
+    "fromFile": "de {{file}}"
   }
 }

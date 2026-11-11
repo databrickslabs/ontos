@@ -13,7 +13,10 @@
     "deletingEstate": "Error al Eliminar Estate",
     "triggeringSync": "Error al Iniciar Sincronización",
     "validationError": "Error de Validación",
-    "validationMessage": "Por favor complete todos los campos requeridos: Nombre, Descripción, URL del Workspace, Nombre del Metastore, Tipo de Nube y Tipo de Conexión."
+    "validationMessage": "Por favor complete todos los campos requeridos: Nombre, Descripción, URL del Workspace, Nombre del Metastore, Tipo de Nube y Tipo de Conexión.",
+    "codes": {
+      "estate_name_conflict": "Ya existe un estate llamado \"{{name}}\"."
+    }
   },
   "toast": {
     "estateCreated": "Estate creado correctamente",
@@ -102,7 +105,6 @@
     "backToEstateManager": "Volver al Gestor de Estates",
     "backToListButton": "Volver a la lista",
     "configureSyncJob": "Configurar tarea de sincronización",
-    "editNotImplemented": "La funcionalidad de edición de estates está pendiente de implementar",
     "syncEnabled": "Sincronización habilitada",
     "syncDisabled": "Sincronización deshabilitada",
     "never": "Nunca",
@@ -121,15 +123,16 @@
       "noEstateData": "No hay datos del estate disponibles para añadir una política."
     },
     "policies": {
-      "title": "Políticas de uso compartido",
       "add": "Añadir política",
-      "sectionDescription": "Define reglas para compartir Productos de Datos o términos de Modelos Semánticos específicos con este estate. Los recursos compartidos serán accesibles a través del tipo de conexión configurado.",
       "resourceTypeLabel": "Tipo de recurso:",
       "rulesLabel": "Reglas ({{count}}):",
-      "filterBy": "Filtrar por",
-      "whereValue": "donde el valor",
+      "ruleText": {
+        "equals": "Filtrar por <b>{{filterType}}</b> donde el valor es igual a <b>'{{value}}'</b>",
+        "contains": "Filtrar por <b>{{filterType}}</b> donde el valor contiene <b>'{{value}}'</b>",
+        "starts_with": "Filtrar por <b>{{filterType}}</b> donde el valor empieza por <b>'{{value}}'</b>",
+        "regex": "Filtrar por <b>{{filterType}}</b> donde el valor coincide con la expresión regular <b>'{{value}}'</b>"
+      },
       "noRules": "No hay reglas definidas para esta política.",
-      "emptyTitle": "No hay políticas de uso compartido definidas para este estate.",
       "emptyHint": "Haz clic en «Añadir política» para empezar a compartir recursos.",
       "editPolicyAlert": "Editar política: {{name}}",
       "deletePolicyAlert": "Eliminar política: {{name}}",
@@ -137,7 +140,17 @@
       "addedDescription": "La política de uso compartido \"{{name}}\" se ha añadido correctamente.",
       "addErrorTitle": "Error al añadir la política",
       "addErrorDescription": "No se pudo guardar la nueva política de uso compartido. Inténtalo de nuevo.",
-      "saveFailedNoData": "Error al guardar la política. El servidor no devolvió datos."
+      "saveFailedNoData": "Error al guardar la política. El servidor no devolvió datos.",
+      "export": {
+        "title": "Políticas de exportación",
+        "sectionDescription": "Lo que esta instancia comparte con este estate.",
+        "emptyTitle": "No hay políticas de exportación definidas para este estate."
+      },
+      "import": {
+        "title": "Políticas de importación",
+        "sectionDescription": "Lo que esta instancia acepta de este estate.",
+        "emptyTitle": "No hay políticas de importación definidas para este estate."
+      }
     },
     "overview": {
       "title": "Resumen del Estate",
@@ -181,6 +194,12 @@
       "filterType": "p. ej., etiqueta, dominio, estado",
       "value": "p. ej., finanzas, Activo"
     },
+    "operators": {
+      "equals": "Es igual a",
+      "contains": "Contiene",
+      "starts_with": "Empieza por",
+      "regex": "Coincide con la regex"
+    },
     "validation": {
       "nameMin": "El nombre de la política debe tener al menos 3 caracteres",
       "filterTypeRequired": "El tipo de filtro es obligatorio",
@@ -192,5 +211,12 @@
       "submittedDescription": "La política de uso compartido \"{{name}}\" se está procesando.",
       "addErrorDescription": "Error al añadir la política de uso compartido. Consulta la consola para más detalles."
     }
+  },
+  "resourceTypes": {
+    "data_product": "Producto de datos",
+    "data_contract": "Contrato de datos",
+    "business_term": "Término de negocio",
+    "data_domain": "Dominio de datos",
+    "concept": "Concepto"
   }
 }

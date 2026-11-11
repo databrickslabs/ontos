@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+import { appEntityAssetLink } from '@/lib/app-entity-asset';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from '@/components/ui/textarea';
@@ -7,12 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertCircle, SparklesIcon } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
+import { serverErrorText, USER_TOKEN_REQUIRED_CODE } from '@/lib/server-error-text';
 import { useToast } from "@/hooks/use-toast";
 import {
     ReviewedAsset,
     ReviewedAssetStatus,
     AssetType,
     AssetDefinition,
+    MetricViewDefinition,
     TablePreview,
     ReviewedAssetUpdate,
     AssetAnalysisResponse
@@ -30,6 +34,7 @@ import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import MetricViewDefinitionPanel from '@/components/data-asset-reviews/metric-view-definition';
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -50,7 +55,14 @@ interface AssetReviewEditorProps {
 }
 
 // Helper function to check API response
-const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
+const checkApiResponse = <T,>(
+    response: { data?: T | { detail?: string }, error?: string | null, errorCode?: string | null },
+    name: string,
+): T => {
+    // A missing user token is already in the user's language: show it as is
+    if (response.error && response.errorCode === USER_TOKEN_REQUIRED_CODE) {
+        throw new Error(response.error);
+    }
     if (response.error) throw new Error(`${name} fetch failed: ${response.error}`);
     if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
         throw new Error(`${name} fetch failed: ${response.data.detail}`);
@@ -79,6 +91,7 @@ export default function AssetReviewEditor({
     // Content State
     const [definition, setDefinition] = useState<AssetDefinition | null>(null);
     const [preview, setPreview] = useState<TablePreview | null>(null);
+    const [metricView, setMetricView] = useState<MetricViewDefinition | null>(null);
     const [isLoadingContent, setIsLoadingContent] = useState(false);
     const [contentError, setContentError] = useState<string | null>(null);
 
@@ -120,6 +133,7 @@ export default function AssetReviewEditor({
             setContentError(null);
             setDefinition(null);
             setPreview(null);
+            setMetricView(null);
             setAnalysisResult(null); // Reset analysis when asset changes
             setAnalysisError(null);
 
@@ -127,11 +141,16 @@ export default function AssetReviewEditor({
                 if (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) {
                     const response = await fetch(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/definition`);
                     if (!response.ok) {
-                        const errorText = await response.text();
+                        const errorBody = await response.text();
+                        const errorText = serverErrorText(errorBody) ?? errorBody;
                         throw new Error(errorText || t('data-asset-reviews:editor.messages.fetchDefinitionFailed', { status: response.status }));
                     }
                     const textDefinition = await response.text();
                     setDefinition(textDefinition);
+                } else if (asset.asset_type === AssetType.METRIC) {
+                    // A metric view: its source, dimensions and measures
+                    const response = await get<MetricViewDefinition>(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/metric-view`);
+                    setMetricView(checkApiResponse(response, 'Metric View Definition'));
                 } else if (asset.asset_type === AssetType.TABLE) {
                     // Fetch table preview
                     const response = await get<TablePreview>(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/preview?limit=50`);
@@ -218,8 +237,12 @@ export default function AssetReviewEditor({
         if (isLoadingContent) {
             return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
         }
-        if (contentError && !definition && !preview) { 
+        if (contentError && !definition && !preview && !metricView) { 
              return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{contentError}</AlertDescription></Alert>;
+        }
+
+        if (metricView !== null) {
+            return <MetricViewDefinitionPanel definition={metricView} />;
         }
 
         if (definition !== null) {
@@ -262,6 +285,20 @@ export default function AssetReviewEditor({
 
         if (asset.asset_type === AssetType.MODEL) {
             return <p className="text-sm text-muted-foreground">{t('data-asset-reviews:editor.modelReviewNotImplemented')}</p>;
+        }
+
+        // A data product or contract is reviewed on its own page
+        const entityLink = appEntityAssetLink(asset);
+        if (entityLink) {
+            return (
+                <Button asChild variant="outline" size="sm">
+                    <Link to={entityLink}>
+                        {asset.asset_type === AssetType.DATA_PRODUCT
+                            ? t('data-asset-reviews:editor.openDataProduct')
+                            : t('data-asset-reviews:editor.openDataContract')}
+                    </Link>
+                </Button>
+            );
         }
 
         return <p className="text-sm text-muted-foreground">{t('data-asset-reviews:editor.noPreviewAvailable')}</p>;

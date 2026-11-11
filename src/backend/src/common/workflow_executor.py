@@ -15,8 +15,10 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from functools import partial
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.db_models.process_workflows import WorkflowStepDb, WorkflowExecutionDb
@@ -32,7 +34,20 @@ from src.models.process_workflows import (
     WorkflowStepExecutionResult,
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
+
+if TYPE_CHECKING:
+    from src.controller.lifecycle_fields import DeprecationDetails
 from src.common.logging import get_logger
+from src.common.workflow_notification_texts import (
+    DEFAULT_TEMPLATE_MESSAGE,
+    DEFAULT_TEMPLATE_TITLE,
+    LIFECYCLE_TEMPLATES,
+    TEMPLATE_MESSAGES,
+    TEMPLATE_TITLES,
+    approval_notification_i18n,
+    lifecycle_notice,
+    notification_step_i18n,
+)
 
 logger = get_logger(__name__)
 
@@ -191,6 +206,280 @@ class StepHandler(ABC):
         pass
 
 
+# Step error code of an approval rejected without a reason
+APPROVAL_REJECTED = 'approval_rejected'
+
+
+class _ReviewStepRefused(Exception):
+    """A lifecycle step of a product review outcome was refused."""
+
+
+class RuleEntityLoadError(RuntimeError):
+    """The stored entity a rule needs could not be loaded.
+
+    Carries a stable code and parameters next to the English message, so the
+    UI can show the step's error in the user's language.
+    """
+
+    code = 'rule_entity_load_failed'
+
+    def __init__(self, entity_type: Optional[str], entity_id: Optional[str]):
+        self.params = {'entityType': entity_type, 'entityId': entity_id}
+        super().__init__(f"Could not load {entity_type} {entity_id} to evaluate the rule")
+
+
+class RuleEntityNotFoundError(RuntimeError):
+    """The entity a rule is about no longer exists (or never did).
+
+    Same shape as ``RuleEntityLoadError``: a stable code and parameters next
+    to the English message.
+    """
+
+    code = 'rule_entity_not_found'
+
+    def __init__(self, entity_type: Optional[str], entity_id: Optional[str]):
+        self.params = {'entityType': entity_type, 'entityId': entity_id}
+        super().__init__(f"{entity_type} {entity_id} was not found, so the rule can't be evaluated")
+
+
+class RuleWhereEvaluationError(RuntimeError):
+    """A policy's WHERE clause could not be evaluated on the step's entity.
+
+    In a compliance run such an entity is only left unchecked; in a workflow
+    "not applicable" would follow ``on_pass``, so a broken WHERE would let a
+    gate pass. The step fails instead. Same shape as ``RuleEntityLoadError``.
+    """
+
+    code = 'rule_where_evaluation_failed'
+
+    def __init__(
+        self, policy_name: Optional[str], entity_type: Optional[str], entity_id: Optional[str],
+    ):
+        self.params = {'policyName': policy_name, 'entityType': entity_type, 'entityId': entity_id}
+        super().__init__(
+            f"The WHERE clause of policy '{policy_name}' could not be evaluated "
+            f"on {entity_type} {entity_id}"
+        )
+
+
+def _rule_step_error(error: Exception, data: Optional[Dict[str, Any]] = None) -> 'StepResult':
+    """Failed result of a rule step (validation, conditional, policy check).
+
+    Errors with a code (``RuleEntityLoadError``) also put it in the result
+    data, as ``error_code`` / ``error_params``; the English text stays in
+    ``error``.
+    """
+    data = dict(data or {})
+    code = getattr(error, 'code', None)
+    if code:
+        data['error_code'] = code
+        data['error_params'] = getattr(error, 'params', {})
+    return StepResult(passed=False, error=str(error), data=data or None)
+
+
+def _rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """What workflow rules see as ``obj``: the stored entity plus the trigger payload.
+
+    Trigger payloads are small (often just name and status), so a rule on any
+    other field passed vacuously. For data products and data contracts the
+    entity is loaded with ``entity_dict_builder`` (the fields maturity gates
+    use); payload keys win, so request fields such as ``current_status`` keep
+    their meaning. Other entity types get the payload unchanged, and so do
+    ``before_update`` gates: their payload is the proposed change, and values
+    derived from the stored row (``has_owner``, counts) would describe the
+    entity before it.
+
+    Raises when the stored entity can't be loaded, or doesn't exist (deleted
+    while a workflow waited, or a wrong id): evaluating the rule on the payload
+    alone could let it pass on fields the payload doesn't carry, so the step
+    fails instead (its handler turns the error into a failed result).
+    ``before_create`` gates keep the payload: their entity isn't stored yet.
+    ``on_delete`` workflows keep it too: they fire after the row is deleted,
+    so there is nothing stored to load.
+    """
+    from src.controller.entity_dict_builder import (
+        build_data_contract_dict,
+        build_data_product_dict,
+    )
+
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    if getattr(trigger_type, 'value', trigger_type) in ('before_update', 'before_create', 'on_delete'):
+        return payload
+    builder = {
+        'data_product': build_data_product_dict,
+        'data_contract': build_data_contract_dict,
+    }.get((context.entity_type or '').lower())
+    if not builder or not context.entity_id:
+        return payload
+    try:
+        # Savepoint: a failed query must not leave the session that the
+        # workflow and its caller keep using in an aborted transaction.
+        with db.begin_nested():
+            stored = builder(db, context.entity_id)
+    except Exception as e:
+        # The database error stays in the server log; the step result shows
+        # only what failed.
+        raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+    if not stored:
+        raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
+    merged = {**stored, **payload}
+    # An assign-tag step puts only the tag it set in ``payload['tags']``: merge it into the
+    # stored tags, so later rules still see the others (``HAS_TAG``, ``TAG``)
+    if isinstance(stored.get('tags'), dict) and isinstance(payload.get('tags'), dict):
+        merged['tags'] = {**stored['tags'], **payload['tags']}
+    return merged
+
+
+# Workflow entity types under the name compliance rules (MATCH) and
+# AppEntityLoader give them, where the two differ.
+_COMPLIANCE_TYPES = {'data_asset_review': 'review'}
+
+
+def _proposed_tags(db: Session, tags: Any) -> Dict[str, Any]:
+    """Proposed tag assignments (``AssignedTagCreate`` dicts) as AppEntityLoader's tags.
+
+    Keyed by ``namespace/name`` and, when no other proposed tag has the same
+    name, by name; the value is the assigned value, or True when it has none.
+    """
+    from src.db_models.tags import TagDb
+    from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR as SEP
+
+    assigned = []
+    for tag in tags or []:
+        if not isinstance(tag, dict):
+            continue
+        fqn = tag.get('tag_fqn')
+        if tag.get('tag_id'):
+            # As in AssignedTagCreate, the id wins over the name
+            stored = db.get(TagDb, tag['tag_id'])
+            fqn = f"{stored.namespace_name}{SEP}{stored.name}" if stored else None
+        if not fqn:
+            continue
+        if SEP not in fqn:
+            fqn = f"{DEFAULT_NAMESPACE_NAME}{SEP}{fqn}"
+        value = tag.get('assigned_value')
+        assigned.append((fqn, fqn.split(SEP, 1)[1], True if value is None else value))
+    # As in _tags_by_entity: the name is a key when one namespace has it
+    names = [name for _, name in {(fqn, name) for fqn, name, _ in assigned}]
+    values: Dict[str, Any] = {}
+    for fqn, name, value in assigned:
+        values[fqn] = value
+        if names.count(name) == 1:
+            values[name] = value
+    return values
+
+
+def _proposed_values(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A before_update payload's values under AppEntityLoader's keys.
+
+    The payload is the data contract update request (ODCS field names). A
+    field the request clears stays cleared (None).
+    """
+    proposed = {}
+    if 'tags' in payload:
+        tags = payload['tags']
+        # An assign-tag step puts {name: value} there; the request has a list
+        proposed['tags'] = tags if isinstance(tags, dict) else _proposed_tags(db, tags)
+    if 'owner_team_id' in payload:
+        proposed['owner'] = payload['owner_team_id']
+    if 'descriptionPurpose' in payload or 'description' in payload:
+        # As DataContractsManager stores it: descriptionPurpose, else description.purpose
+        description = payload.get('description')
+        purpose = description.get('purpose') if isinstance(description, dict) else description
+        proposed['description'] = payload.get('descriptionPurpose') or purpose
+    return proposed
+
+
+def _policy_rule_object(db: Session, context: 'StepContext') -> Dict[str, Any]:
+    """What a policy check's rule sees as ``obj``: the entity as a compliance run sees it.
+
+    For the types AppEntityLoader reads, the dict it gives a run
+    (``description``, ``owner``, ``tags``...) over ``_rule_object``: the
+    other triggers fire on the stored entity, and their payload's
+    ``description`` / ``tags`` have the request's shape, not the run's.
+    Payload keys the loader doesn't have stay. ``before_update`` gates still
+    see only the proposed change (see ``_rule_object``), with its values
+    also under the loader's keys; ``before_create`` and ``on_delete`` have
+    no stored entity. As in ``_rule_object``, an entity the loader doesn't
+    find raises ``RuleEntityNotFoundError`` (the step fails) instead of
+    falling back to the payload.
+    """
+    obj = _rule_object(db, context)
+    payload = context.entity if isinstance(context.entity, dict) else {}
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    trigger_type = getattr(trigger_type, 'value', trigger_type)
+    if trigger_type == 'before_update':
+        try:
+            # Savepoint and coded error as in _rule_object (it may read tags)
+            with db.begin_nested():
+                proposed = _proposed_values(db, payload)
+        except Exception as e:
+            raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+        return {**obj, **proposed}
+    if trigger_type in ('before_create', 'on_delete'):
+        return obj
+    loaded = _compliance_entity(db, context)
+    if loaded is None:
+        return obj
+    merged = {**obj, **loaded}
+    # Tags an earlier assign-tag step set only in the context stay over the stored ones
+    if isinstance(payload.get('tags'), dict):
+        merged['tags'] = {**(loaded.get('tags') or {}), **payload['tags']}
+    return merged
+
+
+def _compliance_entity(db: Session, context: 'StepContext') -> Optional[Dict[str, Any]]:
+    """The stored entity as AppEntityLoader gives it to a run.
+
+    None for a type the loader doesn't read and a step without an entity id.
+    As in ``_rule_object``, a failed load raises ``RuleEntityLoadError`` and
+    a missing entity ``RuleEntityNotFoundError`` (the step fails): the
+    payload alone could let the rule pass.
+    """
+    from src.common.compliance_entities import AppEntityLoader
+
+    entity_type = (context.entity_type or '').lower()
+    entity_type = _COMPLIANCE_TYPES.get(entity_type, entity_type)
+    if entity_type not in AppEntityLoader.SUPPORTED_TYPES or not context.entity_id:
+        return None
+    try:
+        loaded = AppEntityLoader(db).load_entity(entity_type, str(context.entity_id))
+    except Exception as e:
+        # As in _rule_object: the cause stays in the server log
+        raise RuleEntityLoadError(context.entity_type, context.entity_id) from e
+    if not loaded:
+        raise RuleEntityNotFoundError(context.entity_type, context.entity_id)
+    return loaded
+
+
+def _policy_where_object(
+    db: Session, context: 'StepContext', rule_object: Dict[str, Any],
+) -> Dict[str, Any]:
+    """What a policy check's WHERE sees: the entity as it will be.
+
+    The rule object, except for ``before_update`` gates: their rule object is
+    only the proposed change, and a WHERE on a field the update doesn't carry
+    (``c.status = 'active'`` on an update of the description) would leave the
+    entity unselected and let the gate pass. Their WHERE sees the stored
+    entity with the proposed change over it; ASSERT still sees only the
+    change (#1019).
+    """
+    trigger_type = getattr(getattr(context, 'trigger_context', None), 'trigger_type', None)
+    if getattr(trigger_type, 'value', trigger_type) != 'before_update':
+        return rule_object
+    stored = _compliance_entity(db, context)
+    if stored is None:
+        return rule_object
+    merged = {**stored, **rule_object}
+    # A dict is what an assign-tag step adds to the context: it adds to the stored
+    # tags, while the request's list replaces them
+    payload_tags = context.entity.get('tags') if isinstance(context.entity, dict) else None
+    if isinstance(payload_tags, dict) and isinstance(stored.get('tags'), dict):
+        merged['tags'] = {**stored['tags'], **rule_object.get('tags', {})}
+    return merged
+
+
 class ValidationStepHandler(StepHandler):
     """Handler for validation steps using compliance DSL."""
 
@@ -202,18 +491,18 @@ class ValidationStepHandler(StepHandler):
             return StepResult(passed=False, error="No rule configured")
         
         try:
-            passed, message = evaluate_rule_on_object(rule, context.entity)
+            passed, message = evaluate_rule_on_object(rule, _rule_object(self._db, context))
+            # A failed rule's message is the step's error, so it is stored with
+            # the step and shown under it in the execution dialog.
             return StepResult(
                 passed=passed,
                 message=message,
+                error=None if passed else message,
                 data={'rule': rule}
             )
         except Exception as e:
             logger.exception(f"Validation step failed: {e}")
-            return StepResult(
-                passed=False,
-                error=str(e)
-            )
+            return _rule_step_error(e)
 
 
 # Trigger entities that stand in for the real entity owners are assigned to.
@@ -245,11 +534,107 @@ def _underlying_entity(context: 'StepContext') -> Tuple[str, str]:
     return underlying_type, underlying_id
 
 
+def _requester_email(context: 'StepContext') -> Optional[str]:
+    """The user who made the request the workflow handles.
+
+    After an approval, ``resume_workflow`` sets ``context.user_email`` to the
+    approver (the user acting now); the requester stays in the trigger context.
+    """
+    trigger_context = getattr(context, 'trigger_context', None)
+    requester = getattr(trigger_context, 'user_email', None)
+    if requester:
+        return requester
+    if context.user_email:
+        _log_requester_fallback(context)
+    return context.user_email
+
+
+def _log_requester_fallback(context: 'StepContext') -> None:
+    """Warn, once per step, that the acting user stands in for the requester.
+
+    The trigger context has no requester, so recipients, owner exclusion and
+    requester-sourced grants use the acting user, which may be someone else.
+    Emails are left out of the log; the ids locate the execution.
+    """
+    step_id = getattr(context, 'step_id', None)
+    if getattr(context, '_requester_fallback_step', None) == (step_id,):
+        return
+    context._requester_fallback_step = (step_id,)
+    logger.warning(
+        "No requester in the trigger context (workflow=%s, execution=%s, step=%s); "
+        "using the acting user as the requester",
+        getattr(context, 'workflow_id', None),
+        getattr(context, 'execution_id', None),
+        step_id,
+    )
+
+
 def _entity_owner_emails(db: Session, context: 'StepContext') -> List[str]:
     """Owners of the trigger entity (see ``resolve_owner_emails``)."""
     from src.repositories.entity_owners_repository import resolve_owner_emails
 
     return resolve_owner_emails(db, *_underlying_entity(context))
+
+
+# Approver tokens used by the default workflows that have no app role in a
+# default install (normalized: lowercase, no spaces or underscores).
+_OWNER_APPROVER_TOKENS = {
+    'domainowner': 'DomainOwner',
+    'domainowners': 'DomainOwner',
+    'contractapprover': 'ContractApprover',
+}
+
+
+def _owner_approvers(
+    db: Session, role_name: str, context: 'StepContext', token: Optional[str] = None,
+) -> List[tuple]:
+    """Approvers for the 'DomainOwner' / 'ContractApprover' tokens.
+
+    An app role with that name wins (an admin may have created one).
+    Otherwise 'DomainOwner' resolves to the owners of the entity's domain and
+    'ContractApprover' to the owners of the entity itself (the data
+    contract), leaving out the requester. When nobody is left, the request
+    goes to the Data Steward and Admin roles instead of a recipient no user
+    matches; handle-approval refuses the requester's own decision.
+    """
+    from src.db_models.settings import AppRoleDb
+    from src.repositories.entity_owners_repository import (
+        resolve_domain_owner_emails,
+        resolve_owner_emails,
+    )
+
+    role = db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
+    if role:
+        return [(role.name, role.id)]
+    # Also the token as written (e.g. an app role named 'Domain Owners')
+    names = {role_name.lower(), (token or '').lower().replace(' ', '').replace('_', '')}
+    for r in db.query(AppRoleDb).all():
+        if r.name.lower().replace(' ', '').replace('_', '') in names:
+            return [(r.name, r.id)]
+
+    entity_type, entity_id = _underlying_entity(context)
+    if role_name == 'DomainOwner':
+        emails = resolve_domain_owner_emails(db, entity_type, entity_id)
+    else:
+        emails = resolve_owner_emails(db, entity_type, entity_id)
+    # The requester is often an owner; they must not approve their own request.
+    requester = (_requester_email(context) or '').lower()
+    emails = [email for email in emails if email.lower() != requester]
+    if emails:
+        return [(email, None) for email in emails]
+
+    # Fallback: the Data Stewards, and the admins, who are told that no owner
+    # other than the requester was found. The requester may be a steward or an
+    # admin; handle-approval refuses their own decision on an owner approval.
+    logger.warning(
+        "No %s other than the requester found for %s %s; "
+        "requesting approval from Data Stewards and admins",
+        role_name, entity_type, entity_id,
+    )
+    return (
+        _resolve_role_to_users(db, 'data_stewards', context)
+        + _resolve_role_to_users(db, 'admins', context)
+    )
 
 
 def _resolve_role_to_users(
@@ -263,10 +648,12 @@ def _resolve_role_to_users(
     - 'requester' / 'trigger_user' → original user email
     - 'entity_owner' → owners of the trigger entity (``resolve_owner_emails``)
     - 'owner' → ``owner`` field of the trigger entity, else as 'entity_owner'
+    - 'reviewer' → entity reviewer_email (falls back to the Admin role)
+    - 'domain_owners' / 'DomainOwner' / 'ContractApprover' → see ``_owner_approvers``
     - 'business:<uuid>' → business role → look up entity owners from business_owners table
     - '<uuid>' → app role UUID
     - 'user@email.com' → direct email
-    - Legacy aliases like 'domain_owners', 'admins', etc.
+    - Legacy aliases like 'data_stewards', 'admins', etc.
     - **Comma-separated list of any of the above** → recurse on each
       segment, flatten results. This is what the Workflow Designer's
       "Custom principals" toggle emits: a role/literal token from the
@@ -297,7 +684,6 @@ def _resolve_role_to_users(
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
-        'domain_owners': 'DomainOwner',
         'project_owners': 'ProjectOwner',
         'data_stewards': 'DataSteward',
         'data_steward': 'DataSteward',
@@ -306,7 +692,8 @@ def _resolve_role_to_users(
 
     # 'trigger_user' is the name the default workflows use for the requester.
     if role_spec in ('requester', 'trigger_user'):
-        return [(context.user_email, None)] if context.user_email else []
+        requester = _requester_email(context)
+        return [(requester, None)] if requester else []
 
     if role_spec == 'entity_owner':
         return [(email, None) for email in _entity_owner_emails(db, context)]
@@ -318,6 +705,19 @@ def _resolve_role_to_users(
         if owner:
             return [(owner, None)]
         return [(email, None) for email in _entity_owner_emails(db, context)]
+
+    owner_approver = _OWNER_APPROVER_TOKENS.get(role_spec.lower().replace(' ', '').replace('_', ''))
+    if owner_approver:
+        return _owner_approvers(db, owner_approver, context, token=role_spec)
+
+    if role_spec == 'reviewer':
+        # Reviewer chosen by the requester (e.g. concept submit-for-review puts
+        # it on entity_data.reviewer_email). Without one, fall back to the
+        # Admin role so the approval is never left without an approver.
+        reviewer = context.entity.get('reviewer_email') if context.entity else None
+        if reviewer:
+            return [(reviewer, None)]
+        return _resolve_role_to_users(db, 'admins', context)
 
     if role_spec in role_aliases:
         role_name = role_aliases[role_spec]
@@ -395,6 +795,9 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
     "data_asset_review": "Data Asset Review",
     "access_grant": "Access Grant",
     "asset": "Asset",
+    "ontology_concept": "Concept",
+    "ontology_collection": "Concept Scheme",
+    "concept_changeset": "Concept Changeset",
 }
 
 
@@ -507,7 +910,7 @@ def _build_approval_subtitle(
             )
         # Fallback: no underlying entity resolved — at least avoid showing
         # the raw access_grant UUID.
-        return f"Access request from {context.user_email or 'unknown user'}"
+        return f"Access request from {_requester_email(context) or 'unknown user'}"
 
     return f"{_humanize_entity_type(context.entity_type)}: {entity_display}"
 
@@ -525,7 +928,7 @@ def _build_approval_description(
     """
     lines: List[str] = []
 
-    requester = context.user_email or "Unknown"
+    requester = _requester_email(context) or "Unknown"
     lines.append(f"Requester: {requester}")
 
     underlying_type = facets.get("underlying_entity_type")
@@ -599,7 +1002,17 @@ class ApprovalStepHandler(StepHandler):
         try:
             # Resolve approvers - returns list of (identifier, role_id or None)
             resolved_approvers = self._resolve_approvers(approvers, context)
-            
+
+            # An approver spec can legitimately resolve to nobody (e.g. a
+            # business role with no owner assigned on this entity). Route to
+            # the Admin role rather than dead-ending the request silently.
+            if not resolved_approvers and approvers != 'admins':
+                logger.warning(
+                    f"Approval step: no approvers resolved for '{approvers}' on "
+                    f"{context.entity_type}:{context.entity_id}; falling back to Admin role"
+                )
+                resolved_approvers = self._resolve_approvers('admins', context)
+
             if not resolved_approvers:
                 return StepResult(passed=False, error="Could not resolve any approvers")
             
@@ -628,6 +1041,12 @@ class ApprovalStepHandler(StepHandler):
                         facets=facets,
                         approval_message=approval_message,
                     )
+                    # Keys of its texts, so the bell shows them in the user's language
+                    i18n_data = approval_notification_i18n(
+                        description, self._config.get('message'), approval_message,
+                        lambda name: substitute_template('${' + name + '}', context),
+                        _ENTITY_TYPE_LABELS,
+                    )
 
                     notification = Notification(
                         id=str(uuid4()),
@@ -649,7 +1068,7 @@ class ApprovalStepHandler(StepHandler):
                             "entity_type": context.entity_type,
                             "entity_id": context.entity_id,
                             "entity_name": context.entity_name,
-                            "requester_email": context.user_email,
+                            "requester_email": _requester_email(context),
                             "timeout_days": timeout_days,
                             # Structured request context for the approval
                             # dialog. All optional; only access-grant
@@ -660,6 +1079,7 @@ class ApprovalStepHandler(StepHandler):
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,
+                        data=i18n_data,
                     )
                     notification_repo.create(db=self._db, obj_in=notification)
                     created_count += 1
@@ -719,6 +1139,19 @@ class NotificationStepHandler(StepHandler):
             raw_message = custom_message or self._get_template_message(template, context)
             message = substitute_template(raw_message, context)
             title = substitute_template(self._get_template_title(template, context), context)
+            # Keys of the built-in texts, so the bell shows them in the user's language
+            i18n_data = notification_step_i18n(
+                template, custom_message, context.entity_type,
+                context.entity_name or context.entity_id,
+                lambda name: substitute_template('${' + name + '}', context),
+            )
+            link = None
+            if not custom_message and template in LIFECYCLE_TEMPLATES:
+                # Reason, sunset date and replacement, each on its own line when set
+                message, i18n_data, link = lifecycle_notice(
+                    template, context.entity_type, context.entity_id,
+                    context.entity_name or context.entity_id, context.entity or {},
+                )
             
             # Determine notification type based on template
             notification_type = self._get_notification_type(template)
@@ -746,8 +1179,16 @@ class NotificationStepHandler(StepHandler):
                 )
                 channels = [c for c in channels if c != 'email']
             
+            # Typed-ID manual runs have no entity name: fall back to the id and
+            # leave the subtitle out when neither is known.
+            subtitle_ref = context.entity_name or context.entity_id
+            subtitle = f"{context.entity_type}: {subtitle_ref}" if subtitle_ref else None
+
             created_count = 0
             email_count = 0
+            # The in-app notices, so a later step can withdraw one (see
+            # WorkflowExecutor._withdraw_approval_notices)
+            notices: List[Dict[str, str]] = []
 
             # --- in_app channel ---
             if 'in_app' in channels:
@@ -758,17 +1199,20 @@ class NotificationStepHandler(StepHandler):
                             created_at=datetime.utcnow(),
                             type=notification_type,
                             title=title,
-                            subtitle=f"{context.entity_type}: {context.entity_name}",
+                            subtitle=subtitle,
                             description=message,
+                            link=link,
                             recipient=recipient_id,
                             recipient_role_id=role_uuid,
                             action_type=action_type,
                             action_payload=action_payload,
                             can_delete=can_delete,
                             read=False,
+                            data=i18n_data,
                         )
                         notification_repo.create(db=self._db, obj_in=notification)
                         created_count += 1
+                        notices.append({'id': notification.id, 'recipient': recipient_id})
                         logger.info(f"Notification created for {recipient_id}: {title}")
                     except Exception as e:
                         logger.warning(f"Failed to create notification for {recipient_id}: {e}")
@@ -836,6 +1280,7 @@ class NotificationStepHandler(StepHandler):
                     'created_count': created_count,
                     'email_count': email_count,
                     'channels': channels,
+                    'notices': notices,
                 }
             )
         except Exception as e:
@@ -861,37 +1306,14 @@ class NotificationStepHandler(StepHandler):
 
     def _get_template_title(self, template: str, context: StepContext) -> str:
         """Get notification title from template."""
-        entity_display = context.entity_name or context.entity_id
-        titles = {
-            'validation_failed': "Validation Failed",
-            'validation_passed': "Validation Passed",
-            'product_approved': "Data Product Approved",
-            'product_rejected': "Data Product Rejected",
-            'approval_requested': "Approval Requested",
-            'request_submitted': "Request Submitted",
-            'request_approved': "Request Approved",
-            'request_rejected': "Request Denied",
-            'dataset_updated': "Dataset Updated",
-            'pii_detected': "PII Detected",
-        }
-        return titles.get(template, "Workflow Notification")
+        return TEMPLATE_TITLES.get(template, DEFAULT_TEMPLATE_TITLE)
 
     def _get_template_message(self, template: str, context: StepContext) -> str:
         """Get message from template."""
         entity_display = context.entity_name or context.entity_id
-        templates = {
-            'validation_failed': f"Validation failed for {context.entity_type} '{entity_display}'",
-            'validation_passed': f"Validation passed for {context.entity_type} '{entity_display}'",
-            'product_approved': f"Data product '{entity_display}' has been approved",
-            'product_rejected': f"Data product '{entity_display}' has been rejected",
-            'approval_requested': f"Approval requested for {context.entity_type} '{entity_display}'",
-            'request_submitted': f"Your request for {context.entity_type} '{entity_display}' has been submitted and is pending review.",
-            'request_approved': f"Your request for {context.entity_type} '{entity_display}' has been approved.",
-            'request_rejected': f"Your request for {context.entity_type} '{entity_display}' has been denied.",
-            'dataset_updated': f"Dataset '{entity_display}' has been updated.",
-            'pii_detected': f"Potential PII detected in {context.entity_type} '{entity_display}'. Please review.",
-        }
-        return templates.get(template, f"Workflow notification for {entity_display}")
+        return TEMPLATE_MESSAGES.get(template, DEFAULT_TEMPLATE_MESSAGE).format(
+            entity_type=context.entity_type, entity_name=entity_display,
+        )
 
     def _get_notification_type(self, template: str) -> 'NotificationType':
         """Get notification type based on template."""
@@ -901,6 +1323,8 @@ class NotificationStepHandler(StepHandler):
             return NotificationType.ERROR
         elif template in ('approval_requested',):
             return NotificationType.ACTION_REQUIRED
+        elif template in LIFECYCLE_TEMPLATES:
+            return NotificationType.WARNING
         elif template in ('validation_passed', 'request_approved', 'product_approved'):
             return NotificationType.SUCCESS
         else:
@@ -1038,7 +1462,7 @@ class ConditionalStepHandler(StepHandler):
             tokens = lexer.tokenize()
             parser = Parser(tokens)
             ast = parser.parse_expression()
-            evaluator = Evaluator(context.entity)
+            evaluator = Evaluator(_rule_object(self._db, context))
             result = evaluator.evaluate(ast)
             
             return StepResult(
@@ -1048,7 +1472,7 @@ class ConditionalStepHandler(StepHandler):
             )
         except Exception as e:
             logger.exception(f"Conditional step failed: {e}")
-            return StepResult(passed=False, error=str(e))
+            return _rule_step_error(e)
 
 
 class ScriptStepHandler(StepHandler):
@@ -1279,13 +1703,22 @@ class DeliveryStepHandler(StepHandler):
 
 
 class PolicyCheckStepHandler(StepHandler):
-    """Handler for policy check steps - evaluates existing compliance policy by UUID."""
+    """Handler for policy check steps - evaluates existing compliance policy by UUID.
+
+    As a compliance run does, the policy's MATCH and WHERE select the
+    entities it applies to: a policy that doesn't select the step's entity
+    passes it with ``not_applicable`` and ``reason`` (``match_type`` /
+    ``where``) in the result data. Unlike a run, a WHERE that can't be
+    evaluated fails the step (``rule_where_evaluation_failed``).
+    """
 
     def execute(self, context: StepContext) -> StepResult:
         from src.db_models.compliance import CompliancePolicyDb
         from src.common.compliance_dsl import evaluate_rule_on_object
-        
-        policy_id = self._config.get('policy_id', '')
+        from src.common.workflow_step_config import policy_id_of
+
+        # Read as activation reads it (policy_reference_errors), so both agree
+        policy_id = policy_id_of(self._config)
         if not policy_id:
             return StepResult(passed=False, error="No policy_id configured")
         
@@ -1307,8 +1740,16 @@ class PolicyCheckStepHandler(StepHandler):
                     data={'policy_id': policy_id, 'policy_name': policy.name, 'skipped': True}
                 )
             
+            parsed = self._parsed_rule(policy)
+            if not self._match_selects(parsed, context):
+                return self._not_applicable(policy, context, 'match_type')
+            rule_object = _policy_rule_object(self._db, context)
+            where_object = partial(_policy_where_object, self._db, context, rule_object)
+            if not self._where_selects(parsed, policy, context, where_object):
+                return self._not_applicable(policy, context, 'where')
+
             # Evaluate the policy's rule against the entity
-            passed, technical_message = evaluate_rule_on_object(policy.rule, context.entity)
+            passed, technical_message = evaluate_rule_on_object(policy.rule, rule_object)
             
             # Combine human-readable failure message with technical details
             if passed:
@@ -1334,11 +1775,67 @@ class PolicyCheckStepHandler(StepHandler):
             )
         except Exception as e:
             logger.exception(f"Policy check step failed: {e}")
-            return StepResult(
-                passed=False, 
-                error=str(e),
-                data={'policy_id': policy_id}
-            )
+            return _rule_step_error(e, {'policy_id': policy_id})
+
+    # MATCH and WHERE select the entities a compliance run checks; a policy
+    # doesn't apply to an entity they don't select. A rule without MATCH
+    # applies to any entity, and so does MATCH (obj:Object).
+
+    @staticmethod
+    def _parsed_rule(policy) -> Optional[Dict[str, Any]]:
+        """The parsed rule, or None if it doesn't parse (ASSERT then fails it, as before)."""
+        from src.common.compliance_dsl import parse_rule
+
+        try:
+            return parse_rule(policy.rule, source=f"policy {policy.id}")
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _match_selects(parsed: Optional[Dict[str, Any]], context: StepContext) -> bool:
+        # Both names of a type select it (MATCH (r:data_asset_review) or (r:review))
+        match_type = ((parsed or {}).get('match_type') or '').lower()
+        match_type = _COMPLIANCE_TYPES.get(match_type, match_type)
+        entity_type = (context.entity_type or '').lower()
+        return match_type in ('', 'object', _COMPLIANCE_TYPES.get(entity_type, entity_type))
+
+    @staticmethod
+    def _where_selects(
+        parsed: Optional[Dict[str, Any]], policy, context: StepContext,
+        where_object: Callable[[], Dict[str, Any]],
+    ) -> bool:
+        """Whether WHERE selects the entity.
+
+        One it can't evaluate raises ``RuleWhereEvaluationError`` (the step
+        fails): a run only leaves such an entity unchecked, but here "not
+        applicable" would let the workflow follow ``on_pass``.
+        """
+        from src.common.compliance_dsl import Evaluator
+
+        where = (parsed or {}).get('where_clause')
+        if where is None:
+            return True
+        obj = where_object()  # Loaded only for a WHERE; its errors fail the step as coded
+        try:
+            return bool(Evaluator(obj).evaluate(where))
+        except Exception as e:
+            # The cause stays in the server log (execute logs it with the chain)
+            raise RuleWhereEvaluationError(
+                policy.name, context.entity_type, context.entity_id,
+            ) from e
+
+    @staticmethod
+    def _not_applicable(policy, context: StepContext, reason: str) -> StepResult:
+        return StepResult(
+            passed=True,
+            message=f"Policy '{policy.name}' does not apply to this {context.entity_type}",
+            data={
+                'policy_id': policy.id,
+                'policy_name': policy.name,
+                'not_applicable': True,
+                'reason': reason,
+            },
+        )
 
 
 class CreateAssetReviewStepHandler(StepHandler):
@@ -1348,7 +1845,10 @@ class CreateAssetReviewStepHandler(StepHandler):
     useful when workflows need to integrate with the data asset review system.
     
     Config options:
-        reviewer_role: Role name or UUID of the reviewer (default: 'DataSteward')
+        reviewer_role: Who reviews (default: 'DataSteward'): any approver
+            spec ``_resolve_role_to_users`` accepts (e.g. 'DomainOwner', an
+            email), or a role name / UUID whose group members are looked up.
+            A ``reviewer_email`` in the request wins.
         review_type: Type of review (default: 'standard')  
         notes: Additional notes for the review
         use_entity_as_asset: If true, uses the trigger entity as the asset to review
@@ -1369,21 +1869,26 @@ class CreateAssetReviewStepHandler(StepHandler):
             if not requester_email:
                 requester_email = 'system@app.local'
             
-            # Resolve reviewer email from role
-            reviewer_email = self._resolve_reviewer_from_role(reviewer_role)
-            used_fallback = False
+            reviewer_email = self._resolve_reviewer(reviewer_role, context, requester_email)
             if not reviewer_email:
-                # Fallback: use the requester as the reviewer (self-review placeholder)
-                # This allows the asset review to be created even if the role has no members
-                reviewer_email = requester_email
-                used_fallback = True
+                # Nobody but the requester: they must not review their own request.
+                # No asset review is created; the approval step that follows decides.
                 logger.warning(
-                    f"Could not resolve reviewer from role: {reviewer_role}. "
-                    f"Using requester ({requester_email}) as fallback reviewer."
+                    "No reviewer other than the requester found for role %s; "
+                    "no asset review created", reviewer_role,
+                )
+                return StepResult(
+                    passed=True,
+                    message=(
+                        f"No reviewer other than the requester found for {reviewer_role}; "
+                        "no asset review created"
+                    ),
+                    data={'review_id': None, 'reviewer_email': None},
                 )
             
             # Determine asset FQN
             asset_fqns = []
+            title = None
             if use_entity_as_asset:
                 # Try to get FQN from entity (TriggerContext attributes)
                 entity_type = tc.entity_type if tc else ''
@@ -1405,14 +1910,12 @@ class CreateAssetReviewStepHandler(StepHandler):
                            entity_name or entity_id)
                     if fqn:
                         asset_fqns.append(fqn)
-                elif entity_type == 'data_contract':
-                    fqn = context.entity.get('name') or entity_data.get('name') or entity_name or entity_id
-                    if fqn:
-                        asset_fqns.append(f"contract:{fqn}")
-                elif entity_type == 'data_product':
-                    fqn = context.entity.get('name') or entity_data.get('name') or entity_name or entity_id
-                    if fqn:
-                        asset_fqns.append(f"product:{fqn}")
+                elif entity_type in ('data_contract', 'data_product'):
+                    # App entities are reviewed by id (names change and aren't unique)
+                    prefix = 'contract' if entity_type == 'data_contract' else 'product'
+                    if entity_id:
+                        asset_fqns.append(f"{prefix}:{entity_id}")
+                        title = f"Review of {entity_name or entity_id}"[:200]
                 else:
                     # Generic fallback
                     fqn = entity_name or entity_id
@@ -1432,7 +1935,7 @@ class CreateAssetReviewStepHandler(StepHandler):
             from src.repositories.data_asset_reviews_repository import data_asset_review_repo
             from src.models.data_asset_reviews import (
                 DataAssetReviewRequest, ReviewedAsset, 
-                ReviewRequestStatus, ReviewedAssetStatus, AssetType
+                ReviewRequestStatus, ReviewedAssetStatus, AssetType, app_entity_asset_type,
             )
             from uuid import uuid4
             from datetime import datetime
@@ -1442,15 +1945,8 @@ class CreateAssetReviewStepHandler(StepHandler):
             # Build assets list
             assets_to_review = []
             for fqn in asset_fqns:
-                # Determine asset type from FQN prefix
-                if fqn.startswith('dataset:'):
-                    asset_type = AssetType.TABLE  # Datasets map to tables
-                elif fqn.startswith('contract:'):
-                    asset_type = AssetType.TABLE  # Contracts map to tables
-                elif fqn.startswith('product:'):
-                    asset_type = AssetType.TABLE  # Products map to tables
-                else:
-                    asset_type = AssetType.TABLE  # Default for UC assets
+                # Contracts and products by their prefix; datasets and UC assets are tables
+                asset_type = app_entity_asset_type(fqn) or AssetType.TABLE
                 
                 assets_to_review.append(ReviewedAsset(
                     id=str(uuid4()),
@@ -1465,6 +1961,7 @@ class CreateAssetReviewStepHandler(StepHandler):
                 id=review_id,
                 requester_email=requester_email,
                 reviewer_email=reviewer_email,
+                title=title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=full_notes,
                 created_at=datetime.utcnow(),
@@ -1475,18 +1972,16 @@ class CreateAssetReviewStepHandler(StepHandler):
             # Use repository to create
             review = data_asset_review_repo.create_with_assets(db=self._db, obj_in=full_request)
             
-            fallback_note = " (using requester as fallback reviewer)" if used_fallback else ""
-            logger.info(f"Created asset review {review.id} for {asset_fqns} by {reviewer_email}{fallback_note}")
+            logger.info(f"Created asset review {review.id} for {asset_fqns} by {reviewer_email}")
             
             return StepResult(
                 passed=True,
-                message=f"Asset review created: {review.id}{fallback_note}",
+                message=f"Asset review created: {review.id}",
                 data={
                     'review_id': review.id,
                     'reviewer_email': reviewer_email,
                     'asset_fqns': asset_fqns,
                     'review_type': review_type,
-                    'used_fallback': used_fallback,
                 }
             )
             
@@ -1494,11 +1989,44 @@ class CreateAssetReviewStepHandler(StepHandler):
             logger.exception(f"Failed to create asset review: {e}")
             return StepResult(passed=False, error=str(e))
     
-    def _resolve_reviewer_from_role(self, role_identifier: str) -> Optional[str]:
+    def _resolve_reviewer(
+        self, reviewer_role: str, context: StepContext, requester_email: str,
+    ) -> Optional[str]:
+        """The reviewer's email: the one named in the request, else the first
+        person ``reviewer_role`` resolves to other than the requester (as the
+        approval steps resolve it), else a member of the groups of the role it
+        resolves to (or of ``reviewer_role`` itself), else an admin."""
+        tc = context.trigger_context
+        requester = requester_email.lower()
+        requested = (tc.entity_data or {}).get('reviewer_email') if tc else None
+        if requested and requested.lower() != requester:
+            return requested
+        if requested:
+            logger.warning("Ignoring reviewer_email: the requester can't review their own request")
+        roles = []
+        for recipient, role_id in _resolve_role_to_users(self._db, reviewer_role, context):
+            if role_id is not None:
+                roles.append(recipient)
+            elif '@' in recipient and recipient.lower() != requester:
+                return recipient
+        # A role (e.g. Data Stewards when a domain has no owner): one of its members,
+        # and the admins last, as for owner approvals (``_owner_approvers``)
+        roles = roles or [reviewer_role]
+        if not any(r.lower().replace(' ', '').replace('_', '') == 'admin' for r in roles):
+            roles.append('Admin')
+        for role_name in roles:
+            reviewer = self._resolve_reviewer_from_role(role_name, exclude=requester_email)
+            if reviewer:
+                return reviewer
+        return None
+
+    def _resolve_reviewer_from_role(
+        self, role_identifier: str, exclude: Optional[str] = None,
+    ) -> Optional[str]:
         """Resolve a reviewer email from a role name or UUID.
         
-        Returns the email of the first user in the role's assigned groups,
-        or None if no users are found.
+        Returns the email of the first user in the role's assigned groups
+        other than ``exclude`` (the requester), or None if no users are found.
         """
         from src.db_models.settings import AppRoleDb
         from uuid import UUID
@@ -1547,7 +2075,10 @@ class CreateAssetReviewStepHandler(StepHandler):
                                     # Get user by ID
                                     try:
                                         user = ws.users.get(member.value)
-                                        if user and user.user_name:
+                                        if (
+                                            user and user.user_name
+                                            and user.user_name.lower() != (exclude or '').lower()
+                                        ):
                                             return user.user_name
                                     except Exception:
                                         continue
@@ -1987,6 +2518,13 @@ class EntityActionStepHandler(StepHandler):
         entity_type = context.entity_type
         entity_id = context.entity_id
 
+        # Concepts are NOT repo rows: they are RDF triples keyed by IRI, mutated
+        # via the SemanticModelsManager singleton (holds the in-memory graph).
+        # Route concept actions here BEFORE the repo-based _get_db_entity path,
+        # since concepts have no repo row. entity_id IS the concept IRI.
+        if entity_type == 'ontology_concept':
+            return self._handle_concept_action(action, entity_id, context)
+
         try:
             if action in ('certify', 'decertify'):
                 return self._handle_certification(action, entity_type, entity_id, context)
@@ -2038,6 +2576,55 @@ class EntityActionStepHandler(StepHandler):
             return asset_repo.get(db=self._db, id=entity_id), 'asset'
         return None, entity_type
 
+    def _handle_concept_action(self, action: str, entity_id: str, context: StepContext) -> StepResult:
+        """Act on a SKOS concept. Concepts route through the SemanticModelsManager
+        SINGLETON (which owns the in-memory RDF graph), NOT a repository row;
+        entity_id IS the concept IRI."""
+        from src.common.app_state import get_app_state_manager
+
+        smm = get_app_state_manager('semantic_models_manager')
+        if smm is None:
+            return StepResult(passed=False, error="SemanticModelsManager unavailable")
+
+        entity = context.entity or {}
+
+        if action == 'publish_version':
+            try:
+                changes = entity.get('changes') or entity.get('proposed') or None
+                result = smm.publish_concept_version(
+                    concept_iri=entity_id,
+                    changes=changes,
+                    published_by=context.user_email,
+                    bypass_editable_gate=True,
+                )
+                new_version = result.get('new_version') if isinstance(result, dict) else None
+                return StepResult(passed=True, data={'new_version': new_version})
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        elif action == 'deprecate':
+            try:
+                smm.deprecate_concept(
+                    concept_iri=entity_id,
+                    deprecated_by=context.user_email,
+                    replaced_by=entity.get('replaced_by') or None,
+                    bypass_editable_gate=True,
+                )
+                return StepResult(passed=True)
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        elif action == 'set_status':
+            try:
+                new_status = self._config.get('target_status') or entity.get('to_status')
+                smm.update_concept_status(
+                    concept_iri=entity_id,
+                    new_status=new_status,
+                    updated_by=context.user_email,
+                )
+                return StepResult(passed=True, data={'status': new_status})
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        return StepResult(passed=False, error=f"Unknown concept entity_action: {action}")
+
     def _handle_certification(self, action: str, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
         from datetime import datetime, timezone
         db_entity, resolved_type = self._get_db_entity(entity_type, entity_id)
@@ -2088,31 +2675,114 @@ class EntityActionStepHandler(StepHandler):
                 error=f"Cannot publish {resolved_type} in status '{status}' "
                       f"(allowed: {', '.join(sorted(allowed))})",
             )
+        if scope != 'none' and resolved_type == 'data_product':
+            # The same rule as set_publication_scope: every output port needs an
+            # approved / active contract (approval can come after the contract changed)
+            from src.common.output_port_contracts import validate_output_port_contracts
+            from src.common.api_errors import CodedValueError
+            try:
+                validate_output_port_contracts(db_entity, self._db)
+            except CodedValueError as e:
+                return _rule_step_error(e)
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = scope
         if scope == 'none':
             # Unpublishing: clear the publication metadata, as unpublish does
             db_entity.published_at = None
             db_entity.published_by = None
-        else:
+        elif not was_published:
+            # Only a real unpublished -> published change is stamped; a scope
+            # change keeps who published it and when
             db_entity.published_at = datetime.now(timezone.utc)
             db_entity.published_by = context.user_email
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: published {entity_type} {entity_id} with scope={scope}")
-        return StepResult(passed=True, message=f"Published with scope {scope}",
-                          data={'publication_scope': scope})
+        failed_trigger = self._fire_publication_trigger(
+            resolved_type, entity_id, db_entity, scope, was_published, context,
+        )
+        message = f"Published with scope {scope}"
+        data = {'publication_scope': scope}
+        if failed_trigger:
+            # The publication stands; say in the step result that its workflows didn't run
+            message += f"; the {failed_trigger} workflows did not run"
+            data['trigger_failed'] = failed_trigger
+        return StepResult(passed=True, message=message, data=data)
+
+    def _fire_publication_trigger(
+        self, entity_type: str, entity_id: str, db_entity: Any, scope: str,
+        was_published: bool, context: StepContext,
+    ) -> Optional[str]:
+        """Fire ``on_publish`` / ``on_unpublish`` when the publication changed.
+
+        Same rule as the set-publication-scope routes: ``on_publish`` only when
+        the entity wasn't published yet, ``on_unpublish`` only when it was.
+        The publication is already committed, so a trigger error doesn't undo
+        it; it is logged as an error because those workflows didn't run, and
+        the failed trigger (``'on_publish'`` / ``'on_unpublish'``) is returned
+        so the step result says so. Returns None otherwise.
+        """
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType as WFEntityType
+
+        wf_type = {
+            'data_product': WFEntityType.DATA_PRODUCT,
+            'data_contract': WFEntityType.DATA_CONTRACT,
+        }.get(entity_type)
+        publishing = scope != 'none'
+        if not wf_type or publishing == was_published:
+            return None
+        name = getattr(db_entity, 'name', None) or context.entity_name
+        try:
+            registry = get_trigger_registry(self._db)
+            if publishing:
+                registry.on_publish(
+                    entity_type=wf_type,
+                    entity_id=entity_id,
+                    entity_name=name,
+                    entity_data={
+                        'name': name,
+                        'status': getattr(db_entity, 'status', None),
+                        'publication_scope': scope,
+                        'published_by': context.user_email,
+                    },
+                    user_email=context.user_email,
+                )
+            else:
+                registry.on_unpublish(
+                    wf_type, entity_id, entity_name=name, user_email=context.user_email,
+                )
+        except Exception:
+            trigger = 'on_publish' if publishing else 'on_unpublish'
+            logger.exception(
+                "Publication trigger failed for %s %s; its %s workflows did not run",
+                entity_type, entity_id, trigger,
+            )
+            return trigger
+        return None
 
     def _handle_unpublish(self, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
         db_entity, resolved_type = self._get_db_entity(entity_type, entity_id)
         if not db_entity:
             return StepResult(passed=False, error=f"{entity_type} {entity_id} not found")
 
+        was_published = (getattr(db_entity, 'publication_scope', None) or 'none').lower() != 'none'
         db_entity.publication_scope = 'none'
         db_entity.published_at = None
         db_entity.published_by = None
         self._db.add(db_entity)
         self._db.commit()
         logger.info(f"entity_action: unpublished {entity_type} {entity_id}")
+        failed_trigger = self._fire_publication_trigger(
+            resolved_type, entity_id, db_entity, 'none', was_published, context,
+        )
+        if failed_trigger:
+            # The unpublish stands; say in the step result that its workflows didn't run
+            return StepResult(
+                passed=True,
+                message=f"Unpublished; the {failed_trigger} workflows did not run",
+                data={'trigger_failed': failed_trigger},
+            )
         return StepResult(passed=True, message="Unpublished")
 
 
@@ -2184,7 +2854,7 @@ class GrantPermissionsStepHandler(StepHandler):
         principal: Optional[str] = None
 
         if config.principal_source == 'requester':
-            principal = context.user_email
+            principal = _requester_email(context)
         elif config.principal_source == 'from_variable':
             if not config.principal_variable:
                 return StepResult(passed=False, error="principal_variable is required when principal_source=from_variable")
@@ -2467,6 +3137,8 @@ class WorkflowExecutor:
                 self._db,
                 execution_id=db_execution.id,
                 step_id=step.id,
+                step_key=step.step_id,
+                step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
                 result_data=result.data,
@@ -2582,18 +3254,28 @@ class WorkflowExecutor:
         current_step = steps_by_id[current_step_id]
         
         # Record the approval result for the paused step
+        denied_without_reason = not step_result and not (result_data or {}).get('reason')
         workflow_execution_repo.add_step_execution(
             self._db,
             execution_id=execution_id,
             step_id=current_step.id,
+            step_key=current_step.step_id,
+            step_name=current_step.name,
             status=StepExecutionStatus.SUCCEEDED.value if step_result else StepExecutionStatus.FAILED.value,
             passed=step_result,
             result_data={
                 'approval_result': 'approved' if step_result else 'rejected',
                 'responded_by': user_email,
                 **(result_data or {}),
+                # A rejection without a reason: the UI translates the code,
+                # the English text stays in error_message
+                **(
+                    {'error_code': APPROVAL_REJECTED, 'error_params': {}}
+                    if denied_without_reason else {}
+                ),
             },
-            error_message=None if step_result else (result_data or {}).get('reason', 'Request denied'),
+            # The approve routes send reason None when the approver wrote none
+            error_message=None if step_result else ((result_data or {}).get('reason') or 'Request denied'),
             duration_ms=0,  # Approval duration not tracked this way
         )
         
@@ -2611,7 +3293,7 @@ class WorkflowExecutor:
             try:
                 tc_data = json.loads(db_execution.trigger_context)
                 trigger_context = TriggerContext(**tc_data)
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         
         # Rebuild step context from execution
@@ -2645,6 +3327,36 @@ class WorkflowExecutor:
             }},
             on_behalf_of=on_behalf_of,
         )
+
+        # Concept review ping-pong (O2): when the resumed approval step gates an
+        # ontology_concept, the approver's decision drives the concept lifecycle
+        # directly — approve -> under_review->approved; reject -> ->draft +
+        # the reason as the reviewer comment for the owner. This makes the
+        # governing workflow the single source of truth for a governed concept
+        # (no separate DataAssetReview needed). Best-effort: a reflection failure
+        # must not sink the workflow resume.
+        if context.entity_type == 'ontology_concept' and context.entity_id:
+            try:
+                from src.common.app_state import get_app_state_manager
+                smm = get_app_state_manager('semantic_models_manager')
+                if smm is not None:
+                    decision = 'approved' if step_result else 'changes_requested'
+                    comments = (result_data or {}).get('reason') or (result_data or {}).get('message')
+                    smm.apply_review_decision(
+                        concept_iri=context.entity_id,
+                        decision=decision,
+                        decided_by=user_email,
+                        comments=comments,
+                    )
+                    logger.info(
+                        f"Concept {context.entity_id} {decision} via workflow "
+                        f"approval (execution {execution_id})"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to reflect workflow approval onto concept "
+                    f"{context.entity_id}: {e}", exc_info=True,
+                )
 
         # Cross-workflow variable propagation (#291):
         # When the approval step was backed by a wizard session (approval flow),
@@ -2680,7 +3392,12 @@ class WorkflowExecutor:
                         approval_entry = context.step_results.setdefault(
                             current_step_id, {}
                         )
-                        approval_entry.update(merged)
+                        # The wizard is the requester's: its fields never replace
+                        # the approver's decision (passed, decision, message,
+                        # reason), which ${step_results.<approval>.reason} names.
+                        for key, value in merged.items():
+                            if key not in approval_entry:
+                                approval_entry[key] = value
                         logger.info(
                             "Merged %d wizard field(s) into step_results.%s",
                             len(merged),
@@ -2698,14 +3415,23 @@ class WorkflowExecutor:
         success_count = db_execution.success_count
         failure_count = db_execution.failure_count
         
-        # Count the approval step
-        if step_result:
-            success_count += 1
-        else:
+        # Count the approval step. The pause already counted it as passed (the
+        # pending approval's result passes), so an approval keeps that count and
+        # a rejection moves it to the failures.
+        if not step_result:
+            success_count = max(success_count - 1, 0)
             failure_count += 1
         
         final_status = ExecutionStatus.RUNNING
         error_message = None
+        
+        # The approval was the last step for this decision: the execution ends here.
+        if not next_step_id:
+            if step_result:
+                final_status = ExecutionStatus.SUCCEEDED
+            else:
+                final_status = ExecutionStatus.FAILED
+                error_message = (result_data or {}).get('reason') or 'Request denied'
         
         while next_step_id:
             step = steps_by_id.get(next_step_id)
@@ -2725,6 +3451,8 @@ class WorkflowExecutor:
                 self._db,
                 execution_id=execution_id,
                 step_id=step.id,
+                step_key=step.step_id,
+                step_name=step.name,
                 status=step_status.value,
                 passed=result.passed,
                 result_data=result.data,
@@ -2792,11 +3520,190 @@ class WorkflowExecutor:
                 succeeded=(final_status == ExecutionStatus.SUCCEEDED),
                 responded_by=user_email,
                 approved=step_result,
+                execution_id=execution_id,
             )
         
         # Return updated execution
         db_execution = workflow_execution_repo.get(self._db, execution_id)
         return self._db_to_model(db_execution, workflow.name)
+
+    def _apply_contract_review_decision(
+        self,
+        trigger_context: TriggerContext,
+        contract_id: str,
+        approved: bool,
+        responded_by: Optional[str],
+        execution_id: Optional[str] = None,
+    ) -> None:
+        """Set a reviewed contract to ``approved`` or back to ``draft``.
+
+        Goes through ``transition_status``, so the lifecycle rules, the
+        before_status_change gates and the on_status_change trigger apply as on
+        the contract page. A contract that is no longer under review (decided
+        from the contract page meanwhile) is left alone. If the change can't be
+        applied, the approver is told: the workflow has already recorded the
+        decision.
+        """
+        from src.controller.data_contracts_manager import get_live_contracts_manager
+        from src.repositories.data_contracts_repository import data_contract_repo
+
+        target_status = 'approved' if approved else 'draft'
+        contract = data_contract_repo.get(db=self._db, id=contract_id)
+        if not contract:
+            return
+        current_status = (contract.status or '').lower()
+        if current_status == target_status:
+            return
+        if current_status not in ('proposed', 'under_review'):
+            reason = f"the contract is not under review (status '{current_status}')"
+            logger.warning(
+                "Review decision for data contract %s not applied: %s", contract_id, reason,
+            )
+            self._notify_status_not_changed(
+                trigger_context, target_status, reason, responded_by,
+                'notUnderReview', {'currentStatus': current_status},
+            )
+            return
+        try:
+            get_live_contracts_manager().transition_status(
+                db=self._db, contract_id=contract_id, new_status=target_status,
+                current_user=responded_by,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Review decision for data contract %s not applied: %s", contract_id, e,
+            )
+            self._notify_status_not_changed(
+                trigger_context, target_status, str(e), responded_by,
+                'notApplied', {'reason': str(e)}, error=e,
+            )
+            # The workflow has already told the requester the review was
+            # decided; say that the contract's status didn't follow. An
+            # "approved" notice of this run would contradict it, so it goes.
+            if approved:
+                self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+            self._notify_status_not_changed(
+                trigger_context, target_status, str(e), trigger_context.user_email,
+                'requesterNotApplied', {'reason': str(e)}, error=e,
+                description=(
+                    f"The review of your contract was decided, but the contract was not "
+                    f"set to '{target_status}': {e}"
+                ),
+            )
+            return
+        logger.info(
+            "Data contract %s moved to '%s' after its review was decided",
+            contract_id, target_status,
+        )
+
+    # Notification templates that tell the requester their request was approved
+    _APPROVAL_NOTICE_TEMPLATES = ('request_approved', 'product_approved')
+
+    def _withdraw_approval_notices(self, execution_id: Optional[str], recipient: Optional[str]) -> int:
+        """Delete the "approved" notices this run sent ``recipient``.
+
+        Used when the approved status change was refused afterwards (e.g. by a
+        status gate): the requester then gets only the "not applied" notice
+        instead of two that contradict each other. Runs recorded before the
+        notification steps kept their notice ids have nothing to withdraw.
+        """
+        if not execution_id or not recipient:
+            return 0
+        from src.db_models.notifications import NotificationDb
+        from src.db_models.process_workflows import WorkflowStepExecutionDb
+
+        ids = []
+        runs = (
+            self._db.query(WorkflowStepExecutionDb)
+            .filter(WorkflowStepExecutionDb.execution_id == execution_id)
+            .filter(WorkflowStepExecutionDb.passed.is_(True))
+            .all()
+        )
+        for run in runs:
+            try:
+                data = json.loads(run.result_data) if isinstance(run.result_data, str) else run.result_data
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(data, dict) or data.get('template') not in self._APPROVAL_NOTICE_TEMPLATES:
+                continue
+            ids.extend(
+                notice.get('id') for notice in data.get('notices') or []
+                if isinstance(notice, dict) and notice.get('recipient') == recipient and notice.get('id')
+            )
+        if not ids:
+            return 0
+        removed = (
+            self._db.query(NotificationDb)
+            .filter(NotificationDb.id.in_(ids))
+            .delete(synchronize_session=False)
+        )
+        self._db.commit()
+        logger.info("Withdrew %d approval notice(s) of execution %s", removed, execution_id)
+        return removed
+
+    @staticmethod
+    def _coded_error_i18n(error: Optional[Exception]) -> Dict[str, Any]:
+        """``data.i18n`` entries for the reason a status change was refused.
+
+        A refusal the app raises with a code (a blocking gate, a gate that
+        couldn't be evaluated, an invalid transition) is sent as
+        ``error = {code, message, params}``, so the bell can show the reason in
+        the user's language the same way the status change dialogs do. Any
+        other error keeps only its English text in ``params.reason``.
+        """
+        from src.common.api_errors import CodedValueError
+
+        if not isinstance(error, CodedValueError):
+            return {}
+        return {'error': {
+            'code': error.code, 'message': str(error), 'params': error.params or {},
+        }}
+
+    def _notify_status_not_changed(
+        self,
+        trigger_context: TriggerContext,
+        target_status: str,
+        reason: str,
+        responded_by: Optional[str],
+        description_key: str,
+        params: Dict[str, str],
+        error: Optional[Exception] = None,
+        description: Optional[str] = None,
+    ) -> None:
+        """Warn ``responded_by`` that a review decision didn't change the contract.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        frontend's ``notifications`` namespace so the bell can translate them,
+        the namespace of the contract status labels, and the coded error of a
+        refused transition (see ``_coded_error_i18n``).
+        """
+        if not responded_by:
+            return
+        from uuid import uuid4
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+
+        notification_repo.create(db=self._db, obj_in=Notification(
+            id=str(uuid4()),
+            created_at=datetime.utcnow(),
+            type=NotificationType.WARNING,
+            title="Contract status not changed",
+            subtitle=trigger_context.entity_name or trigger_context.entity_id,
+            description=description or (
+                f"Your review decision was recorded, but the contract was not set to "
+                f"'{target_status}': {reason}"
+            ),
+            recipient=responded_by,
+            can_delete=True,
+            data={'i18n': {
+                'title': 'notifications:contractStatusNotChanged.title',
+                'description': f'notifications:contractStatusNotChanged.{description_key}',
+                'params': {'toStatus': target_status, **params},
+                'statusNamespace': 'data-contracts',
+                **self._coded_error_i18n(error),
+            }},
+        ))
+        self._db.commit()
 
     def _handle_workflow_completion(
         self,
@@ -2805,6 +3712,7 @@ class WorkflowExecutor:
         succeeded: bool,
         responded_by: Optional[str] = None,
         approved: Optional[bool] = None,
+        execution_id: Optional[str] = None,
     ) -> None:
         """Handle entity status updates when a workflow completes.
         
@@ -2864,23 +3772,493 @@ class WorkflowExecutor:
                 )
                 self._db.commit()
                     
+            # Data contract review decided by an approver: approve the contract,
+            # or return it to draft, as the contract page's approve / reject
+            # endpoints do. A workflow without an approval step decides nothing.
+            elif (entity_type == 'data_contract'
+                  and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW')
+                  and approved is not None):
+                self._apply_contract_review_decision(
+                    trigger_context, entity_id, approved, responded_by,
+                    execution_id=execution_id,
+                )
+                    
             # Handle data product activation completion
             elif entity_type == 'data_product' and trigger_type in ('on_request_review', 'ON_REQUEST_REVIEW'):
-                from src.repositories.data_products_repository import data_product_repo
-                db_product = data_product_repo.get(db=self._db, id=entity_id)
-                if db_product:
-                    if succeeded:
-                        db_product.status = 'active'
-                        logger.info(f"Data product {entity_id} status updated to 'active' after approval")
-                    else:
-                        db_product.status = 'draft'
-                        logger.info(f"Data product {entity_id} status reverted to 'draft' after rejection")
-                    self._db.commit()
+                self._apply_product_review_outcome(
+                    trigger_context, entity_id, succeeded, responded_by,
+                    execution_id=execution_id,
+                )
+
+            # Approved status change request of a product or contract: apply
+            # the requested transition, with the same validation and gates as
+            # a direct status change
+            elif (entity_type in ('data_product', 'data_contract')
+                  and trigger_type in ('on_request_status_change', 'ON_REQUEST_STATUS_CHANGE')):
+                approved_request = succeeded if approved is None else approved
+                target_status = trigger_context.to_status or (
+                    trigger_context.entity_data or {}
+                ).get('target_status')
+                from src.controller.certified_deprecation_guard import (
+                    NO_PENDING_REQUEST, approved_status_change, close_request,
+                    request_is_closed, workflow_approval_refusal,
+                )
+                request_id = (trigger_context.entity_data or {}).get('request_id')
+                if approved_request and target_status:
+                    # A certified entity is deprecated only by an approver's
+                    # decision through handle-approval, not the requester's,
+                    # on a request still open (not decided elsewhere, no
+                    # transition since); a run without an approval step or a
+                    # plain resume doesn't count
+                    refusal = workflow_approval_refusal(approved, trigger_context.user_email)
+                    if refusal is None and request_id and request_is_closed(
+                        self._db, entity_type, entity_id, request_id,
+                    ):
+                        refusal = NO_PENDING_REQUEST
+                    apply = (
+                        self._apply_requested_contract_status_change
+                        if entity_type == 'data_contract'
+                        else self._apply_requested_status_change
+                    )
+                    with approved_status_change(entity_type, entity_id, refusal):
+                        apply(
+                            trigger_context, entity_id, target_status, responded_by,
+                            execution_id=execution_id,
+                        )
+                # The run decided the request (approved or rejected): it ends
+                # here, so nothing can approve it later
+                if request_id and not request_is_closed(
+                    self._db, entity_type, entity_id, request_id,
+                ):
+                    close_request(
+                        self._db, entity_type, entity_id, request_id,
+                        'workflow_approved' if approved_request else 'workflow_rejected',
+                        responded_by,
+                    )
                     
         except Exception as e:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    # A reviewed product goes active through the lifecycle steps it still
+    # needs, or back to draft; each step is a transition_status call.
+    _PRODUCT_ACTIVATION_STEPS = {
+        'proposed': ['under_review', 'approved', 'active'],
+        'under_review': ['approved', 'active'],
+        'approved': ['active'],
+    }
+
+    def _apply_product_review_outcome(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        succeeded: bool,
+        responded_by: Optional[str],
+        execution_id: Optional[str] = None,
+    ) -> None:
+        """Activate a reviewed data product, or return it to draft.
+
+        The outcome is the run's, as before: a succeeded review activates the
+        product, any other ending returns it to draft. Each status step goes
+        through ``transition_status``, so the lifecycle rules and the
+        before_status_change gates apply to each step as for a change from the
+        product page. on_status_change fires once for the whole change (e.g.
+        under_review -> active), not once per step, so a workflow on an
+        intermediate step (approved -> active, like the default Data Product
+        Publish Approval) doesn't start a second approval for a product its
+        review just activated. A product that is no longer in review (changed
+        meanwhile) is left alone. If a step is refused (e.g. a gate blocks),
+        the product stays where it got to (the trigger fires for the part that
+        was applied) and the requester is told, since the workflow has
+        already ended.
+        """
+        from src.common.app_state import get_app_state_manager
+        from src.controller.data_products_manager import DataProductsManager
+        from src.db_models.data_products import DataProductDb
+
+        product = self._db.get(DataProductDb, product_id)
+        if product is None:
+            return
+        current_status = (product.status or 'draft').lower()
+        target_status = 'active' if succeeded else 'draft'
+        if current_status == target_status:
+            return
+        if succeeded:
+            steps = self._PRODUCT_ACTIVATION_STEPS.get(current_status)
+        else:
+            steps = [target_status] if current_status in self._PRODUCT_ACTIVATION_STEPS else None
+        if not steps:
+            logger.warning(
+                "Review outcome of data product %s not applied: it is no longer in review "
+                "(status '%s')",
+                product_id, current_status,
+            )
+            return
+
+        manager = DataProductsManager(
+            db=self._db, notifications_manager=get_app_state_manager('notifications_manager'),
+        )
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager:
+            manager.set_search_manager(search_manager)
+        applied: List[str] = []
+        try:
+            self._run_product_review_steps(
+                manager, trigger_context, product_id, steps, target_status, responded_by, applied,
+            )
+        except _ReviewStepRefused:
+            # The requester was told the change wasn't applied; an "approved"
+            # notice of this run would contradict it, so it goes.
+            if succeeded:
+                self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+        except SQLAlchemyError:
+            # The steps before the failed one are committed; the session must
+            # be usable again to fire their trigger below
+            self._db.rollback()
+            raise
+        finally:
+            # Also after an unexpected error, for the steps already applied
+            reached_status = applied[-1] if applied else current_status
+            if reached_status != current_status:
+                manager.fire_status_change_trigger(
+                    product_id, product.name, current_status, reached_status, responded_by,
+                )
+        if reached_status == target_status:
+            logger.info(
+                "Data product %s moved to '%s' after its review",
+                product_id, target_status,
+            )
+
+    def _run_product_review_steps(
+        self,
+        manager,
+        trigger_context: TriggerContext,
+        product_id: str,
+        steps: List[str],
+        target_status: str,
+        responded_by: Optional[str],
+        applied: List[str],
+    ) -> None:
+        """Apply the review's lifecycle steps without per-step triggers.
+
+        Each applied step is appended to ``applied``. Raises
+        ``_ReviewStepRefused`` when a step is refused, after telling the
+        requester and the approver.
+        """
+        for step in steps:
+            try:
+                manager.transition_status(
+                    product_id, step, responded_by, fire_status_change_trigger=False,
+                )
+                applied.append(step)
+            except ValueError as e:
+                logger.warning(
+                    "Review outcome of data product %s: the change to '%s' was refused: %s",
+                    product_id, step, e,
+                )
+                self._notify_status_change_not_applied(
+                    trigger_context, product_id,
+                    f"The review of the data product was decided, but the change to "
+                    f"'{target_status}' could not be applied: {e}",
+                    recipients=[trigger_context.user_email, responded_by],
+                    description_key='reviewNotApplied',
+                    params={'toStatus': target_status, 'reason': str(e)},
+                    error=e,
+                )
+                raise _ReviewStepRefused() from e
+
+    def _apply_requested_status_change(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        target_status: str,
+        responded_by: Optional[str],
+        execution_id: Optional[str] = None,
+    ) -> None:
+        """Apply an approved status change request to a data product.
+
+        Uses the app's notifications and search managers, so subscribers are
+        notified and the search index is updated as for a direct status
+        change. The request is applied only while the product still has the
+        status it was made from: if the status changed meanwhile, the approval
+        was about a different situation, so nothing is applied and the
+        requester and approver are told. A product that already has the
+        requested status (e.g. the completion ran twice) is left as is. If the
+        transition is refused (e.g. a before_status_change gate blocks), the
+        requester is told, since the workflow has already reported the request
+        as approved.
+        """
+        from src.common.app_state import get_app_state_manager
+        from src.controller.data_products_manager import DataProductsManager
+        from src.db_models.data_products import DataProductDb
+
+        product = self._db.get(DataProductDb, product_id)
+        if product is None:
+            logger.warning(
+                "Approved status change of data product %s: the product no longer exists",
+                product_id,
+            )
+            return
+        current_status = (product.status or '').lower()
+        if current_status == target_status.lower():
+            logger.info(
+                "Data product %s already has status '%s'; approved status change not reapplied",
+                product_id, target_status,
+            )
+            return
+        if self._requested_status_changed(
+            trigger_context, product_id, current_status, target_status, responded_by,
+            execution_id,
+        ):
+            return
+
+        manager = DataProductsManager(
+            db=self._db, notifications_manager=get_app_state_manager('notifications_manager'),
+        )
+        search_manager = get_app_state_manager('search_manager')
+        if search_manager:
+            manager.set_search_manager(search_manager)
+        from src.controller.lifecycle_fields import audit_approved_lifecycle_change
+
+        request_id, deprecation = self._requested_deprecation(
+            trigger_context, 'data_product', product_id, target_status,
+        )
+        try:
+            manager.transition_status(
+                product_id, target_status, responded_by, deprecation=deprecation,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Approved status change of data product %s to '%s' could not be applied: %s",
+                product_id, target_status, e,
+            )
+            self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+            self._notify_status_change_not_applied(
+                trigger_context, product_id,
+                f"Your request to change the status to '{target_status}' was approved, "
+                f"but the change could not be applied: {e}",
+                recipients=[trigger_context.user_email],
+                description_key='refused',
+                params={'toStatus': target_status, 'reason': str(e)},
+                error=e,
+            )
+            return
+        audit_approved_lifecycle_change(
+            self._db, 'data_product', product_id, current_status, target_status,
+            request_id, responded_by,
+        )
+        logger.info(
+            "Data product %s moved to '%s' after its status change request was approved",
+            product_id, target_status,
+        )
+
+    def _requested_deprecation(
+        self,
+        trigger_context: TriggerContext,
+        entity_type: str,
+        entity_id: str,
+        target_status: str,
+    ) -> Tuple[Optional[str], 'DeprecationDetails']:
+        """Id of the approved request and the deprecation it asked for.
+
+        A requested deprecation uses the request's justification as its
+        reason, as handle-status-change does, and its sunset date and
+        replacement when the requester gave them. They come from the run's
+        payload, which carries the request's id: a run that completes at once
+        (no approval step) does so before the request's change log entry is
+        written, so only that request's own entry fills what the payload
+        lacks, never an earlier request's. A payload without an id (a run
+        started before requests had one) falls back to the latest request.
+        """
+        from src.controller.lifecycle_fields import (
+            DeprecationDetails, deprecation_details_from_strings, requested_deprecation,
+        )
+
+        entity_data = trigger_context.entity_data or {}
+        request_id, logged = requested_deprecation(
+            self._db, entity_type, entity_id, target_status,
+            request_id=entity_data.get('request_id') or None,
+        )
+        justification = entity_data.get('justification') or logged.reason
+        sunset_date = entity_data.get('sunset_date') or (
+            logged.sunset_date.isoformat() if logged.sunset_date else None
+        )
+        replacement_id = entity_data.get('replacement_id') or logged.replacement_id
+        try:
+            deprecation = deprecation_details_from_strings(
+                justification, sunset_date, replacement_id,
+            )
+        except ValueError:
+            deprecation = DeprecationDetails(
+                reason=justification or None, replacement_id=replacement_id or None,
+            )
+        return request_id, deprecation
+
+    def _requested_status_changed(
+        self,
+        trigger_context: TriggerContext,
+        entity_id: str,
+        current_status: str,
+        target_status: str,
+        responded_by: Optional[str],
+        execution_id: Optional[str],
+    ) -> bool:
+        """Whether the entity left the status its approved request was made from.
+
+        If so, the approval was about a different situation: nothing is
+        applied, this run's "approved" notice is withdrawn, and the requester
+        and approver are told.
+        """
+        requested_from = trigger_context.from_status or (
+            trigger_context.entity_data or {}
+        ).get('from_status')
+        if not requested_from or current_status == requested_from.lower():
+            return False
+        logger.warning(
+            "Approved status change of %s %s from '%s' to '%s' not applied: "
+            "its status is now '%s'",
+            trigger_context.entity_type, entity_id, requested_from, target_status,
+            current_status,
+        )
+        # The "approved" notice of this run would contradict the one below
+        self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+        self._notify_status_change_not_applied(
+            trigger_context, entity_id,
+            f"The request to change the status from '{requested_from}' to "
+            f"'{target_status}' was approved, but the status is now "
+            f"'{current_status}', so the change was not applied. "
+            f"Request it again if it is still needed.",
+            recipients=[trigger_context.user_email, responded_by],
+            description_key='statusChanged',
+            params={
+                'fromStatus': requested_from, 'toStatus': target_status,
+                'currentStatus': current_status,
+            },
+        )
+        return True
+
+    def _apply_requested_contract_status_change(
+        self,
+        trigger_context: TriggerContext,
+        contract_id: str,
+        target_status: str,
+        responded_by: Optional[str],
+        execution_id: Optional[str] = None,
+    ) -> None:
+        """Apply an approved status change request to a data contract.
+
+        As ``_apply_requested_status_change`` does for a product: through the
+        live ``DataContractsManager.transition_status`` (gates, certified
+        guard, on_status_change, search index), only while the contract still
+        has the status the request was made from, and a refusal is told to
+        the requester.
+        """
+        from src.controller.data_contracts_manager import get_live_contracts_manager
+        from src.db_models.data_contracts import DataContractDb
+
+        contract = self._db.get(DataContractDb, contract_id)
+        if contract is None:
+            logger.warning(
+                "Approved status change of data contract %s: the contract no longer exists",
+                contract_id,
+            )
+            return
+        current_status = (contract.status or '').lower()
+        target_status = target_status.lower()
+        if current_status == target_status:
+            logger.info(
+                "Data contract %s already has status '%s'; approved status change "
+                "not reapplied", contract_id, target_status,
+            )
+            return
+        if self._requested_status_changed(
+            trigger_context, contract_id, current_status, target_status, responded_by,
+            execution_id,
+        ):
+            return
+        from src.controller.lifecycle_fields import audit_approved_lifecycle_change
+
+        request_id, deprecation = self._requested_deprecation(
+            trigger_context, 'data_contract', contract_id, target_status,
+        )
+        try:
+            get_live_contracts_manager().transition_status(
+                db=self._db, contract_id=contract_id, new_status=target_status,
+                current_user=responded_by, deprecation=deprecation,
+            )
+        except ValueError as e:
+            logger.warning(
+                "Approved status change of data contract %s to '%s' could not be "
+                "applied: %s", contract_id, target_status, e,
+            )
+            self._withdraw_approval_notices(execution_id, trigger_context.user_email)
+            self._notify_status_change_not_applied(
+                trigger_context, contract_id,
+                f"Your request to change the status to '{target_status}' was approved, "
+                f"but the change could not be applied: {e}",
+                recipients=[trigger_context.user_email],
+                description_key='refused',
+                params={'toStatus': target_status, 'reason': str(e)},
+                error=e,
+            )
+            return
+        audit_approved_lifecycle_change(
+            self._db, 'data_contract', contract_id, current_status, target_status,
+            request_id, responded_by,
+        )
+        logger.info(
+            "Data contract %s moved to '%s' after its status change request was approved",
+            contract_id, target_status,
+        )
+
+    def _notify_status_change_not_applied(
+        self,
+        trigger_context: TriggerContext,
+        product_id: str,
+        description: str,
+        recipients: List[Optional[str]],
+        description_key: str,
+        params: Dict[str, Any],
+        error: Optional[Exception] = None,
+    ) -> None:
+        """Tell the given people that an approved status change was not applied.
+
+        The English texts are stored; ``data.i18n`` carries the keys of the
+        ``notifications`` namespace and their parameters, so the UI can show
+        them in the user's language.
+        """
+        from uuid import uuid4
+        from src.models.notifications import Notification, NotificationType
+        from src.repositories.notification_repository import notification_repo
+
+        sent = set()
+        for recipient in recipients:
+            if not recipient or recipient in sent:
+                continue
+            sent.add(recipient)
+            notification_repo.create(db=self._db, obj_in=Notification(
+                id=str(uuid4()),
+                created_at=datetime.utcnow(),
+                type=NotificationType.WARNING,
+                title="Status change not applied",
+                subtitle=trigger_context.entity_name or product_id,
+                description=description,
+                recipient=recipient,
+                can_delete=True,
+                data={'i18n': {
+                    'title': 'notifications:statusChangeNotApplied.title',
+                    'description': f'notifications:statusChangeNotApplied.{description_key}',
+                    'params': params,
+                    'statusNamespace': (
+                        'data-contracts' if trigger_context.entity_type == 'data_contract'
+                        else 'data-products'
+                    ),
+                    **self._coded_error_i18n(error),
+                }},
+            ))
+        if sent:
+            self._db.commit()
+
     def _execute_step(self, step: WorkflowStep, context: StepContext) -> StepResult:
         """Execute a single step."""
         step_type = step.step_type.value if hasattr(step.step_type, 'value') else step.step_type
@@ -2912,7 +4290,7 @@ class WorkflowExecutor:
             try:
                 tc_data = json.loads(db_execution.trigger_context)
                 trigger_context = TriggerContext(**tc_data)
-            except (json.JSONDecodeError, TypeError):
+            except (ValueError, TypeError):
                 pass
         
         step_executions = []
@@ -2920,6 +4298,8 @@ class WorkflowExecutor:
             step_executions.append(WorkflowStepExecutionResult(
                 id=se.id,
                 step_id=se.step_id,
+                step_key=se.step_key,
+                step_name=se.step_name,
                 status=StepExecutionStatus(se.status),
                 passed=se.passed,
                 result_data=json.loads(se.result_data) if se.result_data else None,
@@ -2943,5 +4323,8 @@ class WorkflowExecutor:
             triggered_by=db_execution.triggered_by,
             step_executions=step_executions,
             workflow_name=workflow_name,
+            entity_type=trigger_context.entity_type if trigger_context else None,
+            entity_id=trigger_context.entity_id if trigger_context else None,
+            entity_name=trigger_context.entity_name if trigger_context else None,
         )
 

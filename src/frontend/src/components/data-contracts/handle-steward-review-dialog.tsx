@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { contractActionErrorText } from '@/lib/contract-action-error';
 import { FileText } from 'lucide-react';
 
 type Props = {
@@ -39,7 +40,7 @@ export default function HandleStewardReviewDialog({
         message: message || undefined,
       };
       const res = await post(`/api/data-contracts/${contractId}/handle-review`, body);
-      if (res.error) throw new Error(res.error);
+      if (res.error) throw new Error(contractActionErrorText(res, t));
 
       const decisionLabels = {
         approve: t('data-contracts:stewardReview.decision.approved', 'approved'),

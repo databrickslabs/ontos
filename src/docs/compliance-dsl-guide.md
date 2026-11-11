@@ -43,6 +43,11 @@ ON_FAIL action
 | `UPPER(str)` | Convert to uppercase | `UPPER(obj.name)` |
 | `LOWER(str)` | Convert to lowercase | `LOWER(obj.name) = obj.name` |
 
+On data products, data contracts and domains, a tag key is the tag's
+`namespace/name` or its name; the name alone only works while no other namespace
+has a tag of that name on the entity (see the
+[DSL reference](compliance-dsl-reference.md#tag-functions)).
+
 ## Available Actions
 
 | Action | Syntax | Description |
@@ -193,6 +198,28 @@ ON_PASS ASSIGN_TAG documentation_status: 'complete'
 
 ---
 
+### Example 7: Column Documentation on Tables
+
+**Scenario**: At least 80% of the columns of every production table have a comment, and all
+partition columns do.
+
+```
+MATCH (t:table)
+WHERE t.catalog = 'production'
+ASSERT
+  t.column_comment_ratio >= 0.8 AND
+  t.partition_columns_without_comment_count = 0
+ON_FAIL FAIL 'Comment at least 80% of the columns and every partition column'
+```
+
+**What it checks**:
+- `column_comment_ratio` is the share of columns with a comment (blank comments count as
+  missing); it is null for a table with no columns, so such a table fails
+- `partition_columns_without_comment_count` counts partition columns without a comment
+- See the DSL reference for every column field
+
+---
+
 ## Entity Types
 
 You can write rules for these entity types:
@@ -201,7 +228,7 @@ You can write rules for these entity types:
 - `catalog` - Unity Catalog catalogs
 - `schema` - Database schemas
 - `table` - Data tables
-- `view` - Database views
+- `view` - Views, including materialized views and metric views
 - `function` - SQL/Python functions
 - `volume` - Volumes for file storage
 

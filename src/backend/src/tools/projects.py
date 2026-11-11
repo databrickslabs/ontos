@@ -10,7 +10,7 @@ from src.common.logging import get_logger
 from src.common.search_interfaces import SearchIndexItem
 from src.controller import search_scoring
 from src.models.search_config import SearchConfig
-from src.tools.base import BaseTool, ToolContext, ToolResult
+from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
 
 logger = get_logger(__name__)
 
@@ -91,8 +91,7 @@ class SearchProjectsTool(BaseTool):
             )
 
         except Exception as e:
-            logger.error(f"[search_projects] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"projects": []})
+            return ToolResult(success=False, **tool_failure("search_projects", e), data={"projects": []})
 
 
 class GetProjectTool(BaseTool):
@@ -155,8 +154,7 @@ class GetProjectTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[get_project] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("get_project", e))
 
 
 class CreateProjectTool(BaseTool):
@@ -244,8 +242,7 @@ class CreateProjectTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[create_project] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("create_project", e))
 
 
 class UpdateProjectTool(BaseTool):
@@ -342,8 +339,7 @@ class UpdateProjectTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[update_project] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("update_project", e))
 
 
 class DeleteProjectTool(BaseTool):
@@ -393,5 +389,4 @@ class DeleteProjectTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"[delete_project] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+            return ToolResult(success=False, **tool_failure("delete_project", e))

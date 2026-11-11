@@ -10,6 +10,8 @@ interface PermissionsState {
     availableRoles: AppRole[];    // List of all possible roles
     requestableRoles: AppRole[];  // List of roles the user can request
     appliedRoleId: string | null; // ID of the role currently being impersonated/applied
+    /** Feature ids the user's roles hide from the menus (#1325); visibility only. */
+    hiddenNavFeatures: string[];
     _isInitializing: boolean; // Internal flag to prevent concurrent initializations
     _initAttempted: boolean; // Prevents infinite retry on failure
     fetchPermissions: () => Promise<void>;
@@ -17,6 +19,7 @@ interface PermissionsState {
     fetchAvailableRoles: () => Promise<void>; // New action
     fetchRequestableRoles: () => Promise<void>; // Fetch roles the user can request
     fetchAppliedOverride: () => Promise<void>; // New action to read persisted override
+    fetchNavigation: () => Promise<void>; // Hidden menu features for the applied role(s)
     setRoleOverride: (roleId: string | null) => Promise<void>; // Returns Promise so callers can await
     hasPermission: (featureId: string, requiredLevel: FeatureAccessLevel) => boolean;
     getPermissionLevel: (featureId: string) => FeatureAccessLevel;
@@ -46,6 +49,7 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
     availableRoles: [],
     requestableRoles: [],
     appliedRoleId: null,
+    hiddenNavFeatures: [],
     _isInitializing: false,
     _initAttempted: false,
 
@@ -143,6 +147,24 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
         }
     },
 
+    fetchNavigation: async () => {
+        // Not critical: on failure the menus show every feature the user can access.
+        try {
+            const response = await fetch('/api/user/navigation', { cache: 'no-store' });
+            if (!response.ok) {
+                set({ hiddenNavFeatures: [] });
+                return;
+            }
+            const data: { hidden_features?: unknown } = await response.json();
+            const hidden = Array.isArray(data?.hidden_features)
+                ? data.hidden_features.filter((id): id is string => typeof id === 'string')
+                : [];
+            set({ hiddenNavFeatures: hidden });
+        } catch {
+            set({ hiddenNavFeatures: [] });
+        }
+    },
+
     initializeStore: async () => {
         // --- Guard 1: Already actively initializing? ---
         if (get()._isInitializing) {
@@ -170,7 +192,8 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
                 get().fetchActualPermissions(),
                 get().fetchAvailableRoles(),
                 get().fetchRequestableRoles(),
-                get().fetchAppliedOverride()
+                get().fetchAppliedOverride(),
+                get().fetchNavigation(),
             ]);
             // NOTE: isLoading and _isInitializing are reset in finally block
         } catch (error: any) {
@@ -197,7 +220,8 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
             await Promise.all([
                 get().fetchPermissions(),
                 get().fetchAvailableRoles(),
-                get().fetchAppliedOverride()
+                get().fetchAppliedOverride(),
+                get().fetchNavigation(),
             ]);
         } catch { /* ignore */ }
     },

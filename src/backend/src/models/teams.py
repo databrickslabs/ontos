@@ -32,6 +32,11 @@ class TeamMemberUpdate(BaseModel):
     app_role_override: Optional[str] = Field(None, description="Updated app role override")
 
 
+class TeamMembersReplace(BaseModel):
+    """Desired full member set for a team; applied atomically as a diff."""
+    members: List[TeamMemberCreate] = Field(default_factory=list)
+
+
 class TeamMemberRead(TeamMemberBase):
     """Model for reading team members"""
     id: str

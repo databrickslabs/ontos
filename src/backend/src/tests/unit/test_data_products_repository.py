@@ -7,11 +7,15 @@ Tests the repository layer CRUD operations and data mapping between:
 """
 import pytest
 import uuid
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from src.common.database import Base
 from sqlalchemy.orm import Session
 
 from src.repositories.data_products_repository import data_product_repo
 from src.models.data_products import DataProductCreate, DataProductUpdate, Description, OutputPort
-from src.db_models.data_products import DataProductDb
+from src.db_models.data_products import DataProductDb, DataProductSubscriptionDb
 
 
 class TestDataProductRepository:
@@ -368,6 +372,41 @@ class TestDataProductRepository:
 
         # Assert - Relationships should be deleted (cascade)
         # This is handled by SQLAlchemy cascade settings on the model
+
+    def test_delete_product_with_subscriptions(self, sample_create_model):
+        """Deleting a product with subscriptions must not null out product_id (#739).
+
+        Uses a dedicated SQLite engine with foreign keys enforced: the shared test
+        engine ignores them, and in production the database-level ON DELETE CASCADE
+        is what removes the subscription rows.
+        """
+        engine = create_engine("sqlite:///:memory:", poolclass=StaticPool)
+
+        @event.listens_for(engine, "connect")
+        def _enable_fk(dbapi_conn, _record):
+            dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+        Base.metadata.create_all(bind=engine)
+        db = sessionmaker(bind=engine)()
+        try:
+            created = data_product_repo.create(db=db, obj_in=sample_create_model)
+            product_id = created.id
+            for email in ("a@example.com", "b@example.com"):
+                db.add(DataProductSubscriptionDb(product_id=product_id, subscriber_email=email))
+            db.commit()
+            assert db.query(DataProductSubscriptionDb).filter_by(product_id=product_id).count() == 2
+
+            # Act - used to raise IntegrityError (UPDATE ... SET product_id = NULL)
+            result = data_product_repo.remove(db=db, id=product_id)
+            db.commit()
+
+            # Assert
+            assert result is not None
+            assert data_product_repo.get(db=db, id=product_id) is None
+            assert db.query(DataProductSubscriptionDb).filter_by(product_id=product_id).count() == 0
+        finally:
+            db.close()
+            engine.dispose()
 
     # =====================================================================
     # Query Methods Tests

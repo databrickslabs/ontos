@@ -1,0 +1,42 @@
+{
+  "blocked": "Un workflow a bloqué le changement de statut de {{fromStatus}} à {{toStatus}} : {{reasons}}",
+  "reasons": {
+    "waitingForApproval": "en attente d'approbation ({{step}})",
+    "entityLoadFailed": "impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
+    "entityNotFound": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée",
+    "whereEvaluationFailed": "la clause WHERE de la politique '{{policyName}}' n'a pas pu être évaluée sur {{entityType}} {{entityId}}",
+    "validationFailed": "la validation du workflow a échoué",
+    "status": {
+      "failed": "échoué",
+      "cancelled": "annulé",
+      "pending": "en attente",
+      "running": "en cours"
+    }
+  },
+  "requiresTransition": "Une modification ne peut pas changer le statut de {{fromStatus}} à {{toStatus}}. Utilisez Changer le statut, qui vérifie la transition et exécute les workflows de changement de statut.",
+  "certifiedIsNotAStatus": "Certifié n'est pas un statut : la certification se définit avec Certifier, sur une entité active.",
+  "invalidStatus": "{{status}} n'est pas un statut du cycle de vie. Utilisez l'un de : {{allowed}}.",
+  "gateError": "Le changement de statut de {{fromStatus}} à {{toStatus}} a été refusé : la porte de workflow {{workflows}} n'a pas pu être évaluée. Demandez à un administrateur de vérifier le workflow.",
+  "gateErrorUnnamed": "Le changement de statut de {{fromStatus}} à {{toStatus}} a été refusé : une porte de workflow n'a pas pu être évaluée. Demandez à un administrateur de vérifier le workflow.",
+  "certifiedDeprecationRequiresApproval": "{{name}} est certifié : il ne peut être rendu obsolète que par une demande de changement de statut approuvée. Demandez plutôt le changement de statut.",
+  "requestInstead": "Demander le changement de statut",
+  "certifiedGuard": {
+    "title": "Protection contre l'obsolescence des éléments certifiés",
+    "description": "Un produit de données ou un contrat de données certifié ne peut être rendu obsolète que par une demande de changement de statut approuvée. La protection s'applique partout, sauf si vous la désactivez ci-dessous.",
+    "hint": "La protection ne s'applique pas aux domaines, produits de données et contrats de données listés ici (un domaine couvre ses produits et contrats) : leurs éléments certifiés deviennent obsolètes directement. Chaque contournement est journalisé et audité.",
+    "saved": "Protection contre l'obsolescence des éléments certifiés enregistrée",
+    "saveFailed": "La protection contre l'obsolescence des éléments certifiés n'a pas pu être enregistrée",
+    "loadFailed": "La protection contre l'obsolescence des éléments certifiés n'a pas pu être chargée",
+    "notFound": "{{id}} n'existe plus. Retirez-le et enregistrez à nouveau.",
+    "missingOnSave_one": "La protection est désactivée pour {{count}} élément qui n'existe plus. Retirez-le et enregistrez à nouveau.",
+    "missingOnSave_other": "La protection est désactivée pour {{count}} éléments qui n'existent plus. Retirez-les et enregistrez à nouveau.",
+    "readOnly": "Seuls les administrateurs des niveaux de certification peuvent modifier la protection."
+  },
+  "certifiedApprovalRefused": {
+    "not_admin": "{{name}} est certifié : seul un administrateur de cette fonctionnalité peut approuver son obsolescence.",
+    "no_pending_request": "{{name}} est certifié : l'approbation demande une demande de changement de statut en attente pour ce changement, et il n'y en a aucune.",
+    "target_mismatch": "{{name}} est certifié : la demande en attente vise un autre statut, cette approbation ne s'y applique donc pas.",
+    "self_approval": "{{name}} est certifié : vous avez fait cette demande, quelqu'un d'autre doit donc l'approuver.",
+    "no_approver": "{{name}} est certifié : son obsolescence demande la décision d'un approbateur de la demande."
+  }
+}

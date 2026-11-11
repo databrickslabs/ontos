@@ -339,23 +339,76 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
-('01100001-0002-4000-8000-000000000001', 'BCBS 239 Data Lineage', 'Verify all risk data has documented end-to-end lineage per BCBS 239 Principle 4',
-'Risk dataset lacks documented data lineage. BCBS 239 requires complete, documented lineage from source to report for all material risk data.',
-'MATCH (d:Dataset) WHERE d.domain IN [''Risk Management'', ''Capital Markets''] ASSERT d.has_lineage = true AND d.lineage_validated = true', 'Governance', 'critical', true, NOW(), NOW()),
+('01100001-0002-4000-8000-000000000001', 'BCBS 239 Risk Tier Tagging', 'Verify that data products in BCBS 239 scope carry a risk tier, so material risk data is identified per BCBS 239',
+'Data product is in BCBS 239 scope but has no risk tier. Tag it risk-tier-1 (or the applicable tier) so its lineage and controls are reviewed with the material risk data.',
+'MATCH (p:data_product) WHERE HAS_TAG(''bcbs-239'') ASSERT HAS_TAG(''risk-tier-1'')', 'Governance', 'critical', true, NOW(), NOW()),
 
-('01100002-0002-4000-8000-000000000002', 'AML Transaction Monitoring Coverage', 'Ensure all customer accounts are covered by AML transaction monitoring',
-'Account not covered by AML monitoring. All retail and commercial accounts must be monitored for suspicious activity per BSA requirements.',
-'MATCH (a:Account) ASSERT a.aml_monitoring_enabled = true', 'Security', 'critical', true, NOW(), NOW()),
+('01100002-0002-4000-8000-000000000002', 'AML Monitoring Tagging', 'Ensure banking and regulatory compliance data products are tagged as covered by AML transaction monitoring',
+'Data product is not marked as AML-monitored. All banking and regulatory compliance products must be covered by AML transaction monitoring per BSA requirements.',
+'MATCH (p:data_product) WHERE p.domain IN [''Banking'', ''Regulatory Compliance''] ASSERT HAS_TAG(''aml-monitored'')', 'Security', 'critical', true, NOW(), NOW()),
 
-('01100003-0002-4000-8000-000000000003', 'KYC Periodic Review', 'Verify KYC profiles are reviewed within regulatory timelines based on risk rating',
-'KYC review overdue. High-risk customers must be reviewed annually, medium-risk every 2 years, and low-risk every 3 years.',
-'MATCH (c:Customer) ASSERT c.days_since_kyc_review <= CASE c.risk_rating WHEN ''high'' THEN 365 WHEN ''medium'' THEN 730 ELSE 1095 END', 'Governance', 'high', true, NOW(), NOW()),
+('01100003-0002-4000-8000-000000000003', 'KYC and Regulatory Contracts Active', 'Verify KYC and regulatory data contracts are active before use',
+'KYC or regulatory data contract is not active. Contracts for KYC and regulatory data must complete review and be active before consumers rely on them.',
+'MATCH (c:data_contract) WHERE c.name CONTAINS ''KYC'' OR c.name CONTAINS ''Regulatory'' ASSERT c.status = ''active''', 'Governance', 'high', true, NOW(), NOW()),
 
-('01100004-0002-4000-8000-000000000004', 'Market Data Timeliness', 'Ensure market data feeds are within acceptable staleness thresholds',
-'Market data feed is stale. Real-time feeds must be within 500ms and end-of-day feeds must be available by T+1 06:00 UTC.',
-'MATCH (f:MarketDataFeed) WHERE f.feed_type = ''realtime'' ASSERT f.latency_ms <= 500', 'Data Quality', 'high', true, NOW(), NOW())
+('01100004-0002-4000-8000-000000000004', 'Capital Markets Risk Classification', 'Ensure capital markets data products are classified for market risk',
+'Capital markets data product is not tagged market-risk. Market data products must be classified so their timeliness thresholds are monitored.',
+'MATCH (p:data_product) WHERE p.domain = ''Capital Markets'' ASSERT HAS_TAG(''market-risk'')', 'Data Quality', 'high', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
+
+-- Installs that loaded an earlier version of this preset keep their policy rows
+-- (ON CONFLICT DO NOTHING above). Upgrade those rows in place, but only while
+-- the rule is still the one shipped before, and only the texts that still have
+-- their shipped value, so policies an admin edited are left alone.
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'BCBS 239 Data Lineage'
+    THEN 'BCBS 239 Risk Tier Tagging' ELSE name END,
+  description = CASE WHEN description = 'Verify all risk data has documented end-to-end lineage per BCBS 239 Principle 4'
+    THEN 'Verify that data products in BCBS 239 scope carry a risk tier, so material risk data is identified per BCBS 239' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Risk dataset lacks documented data lineage. BCBS 239 requires complete, documented lineage from source to report for all material risk data.'
+    THEN 'Data product is in BCBS 239 scope but has no risk tier. Tag it risk-tier-1 (or the applicable tier) so its lineage and controls are reviewed with the material risk data.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE HAS_TAG(''bcbs-239'') ASSERT HAS_TAG(''risk-tier-1'')',
+  updated_at = NOW()
+WHERE id = '01100001-0002-4000-8000-000000000001'
+  AND rule = 'MATCH (d:Dataset) WHERE d.domain IN [''Risk Management'', ''Capital Markets''] ASSERT d.has_lineage = true AND d.lineage_validated = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'AML Transaction Monitoring Coverage'
+    THEN 'AML Monitoring Tagging' ELSE name END,
+  description = CASE WHEN description = 'Ensure all customer accounts are covered by AML transaction monitoring'
+    THEN 'Ensure banking and regulatory compliance data products are tagged as covered by AML transaction monitoring' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Account not covered by AML monitoring. All retail and commercial accounts must be monitored for suspicious activity per BSA requirements.'
+    THEN 'Data product is not marked as AML-monitored. All banking and regulatory compliance products must be covered by AML transaction monitoring per BSA requirements.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain IN [''Banking'', ''Regulatory Compliance''] ASSERT HAS_TAG(''aml-monitored'')',
+  updated_at = NOW()
+WHERE id = '01100002-0002-4000-8000-000000000002'
+  AND rule = 'MATCH (a:Account) ASSERT a.aml_monitoring_enabled = true';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'KYC Periodic Review'
+    THEN 'KYC and Regulatory Contracts Active' ELSE name END,
+  description = CASE WHEN description = 'Verify KYC profiles are reviewed within regulatory timelines based on risk rating'
+    THEN 'Verify KYC and regulatory data contracts are active before use' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'KYC review overdue. High-risk customers must be reviewed annually, medium-risk every 2 years, and low-risk every 3 years.'
+    THEN 'KYC or regulatory data contract is not active. Contracts for KYC and regulatory data must complete review and be active before consumers rely on them.' ELSE failure_message END,
+  rule = 'MATCH (c:data_contract) WHERE c.name CONTAINS ''KYC'' OR c.name CONTAINS ''Regulatory'' ASSERT c.status = ''active''',
+  updated_at = NOW()
+WHERE id = '01100003-0002-4000-8000-000000000003'
+  AND rule = 'MATCH (c:Customer) ASSERT c.days_since_kyc_review <= CASE c.risk_rating WHEN ''high'' THEN 365 WHEN ''medium'' THEN 730 ELSE 1095 END';
+
+UPDATE compliance_policies SET
+  name = CASE WHEN name = 'Market Data Timeliness'
+    THEN 'Capital Markets Risk Classification' ELSE name END,
+  description = CASE WHEN description = 'Ensure market data feeds are within acceptable staleness thresholds'
+    THEN 'Ensure capital markets data products are classified for market risk' ELSE description END,
+  failure_message = CASE WHEN failure_message = 'Market data feed is stale. Real-time feeds must be within 500ms and end-of-day feeds must be available by T+1 06:00 UTC.'
+    THEN 'Capital markets data product is not tagged market-risk. Market data products must be classified so their timeliness thresholds are monitored.' ELSE failure_message END,
+  rule = 'MATCH (p:data_product) WHERE p.domain = ''Capital Markets'' ASSERT HAS_TAG(''market-risk'')',
+  updated_at = NOW()
+WHERE id = '01100004-0002-4000-8000-000000000004'
+  AND rule = 'MATCH (f:MarketDataFeed) WHERE f.feed_type = ''realtime'' ASSERT f.latency_ms <= 500';
+
 
 
 -- ============================================================================
@@ -666,10 +719,10 @@ ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
 
 INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
 ('02a00101-0002-4000-8000-000000000001', 'BCBS 239 Pre-Publish Attestation',
- 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.',
+ 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.',
  '{"type": "before_publish", "entity_types": ["data_product"]}',
  '{"type": "domain", "ids": ["00000003-0002-4000-8000-000000000003"]}',
- true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+ false, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
 ('02a00102-0002-4000-8000-000000000002', 'AML Model Validation Gate',
  'Blocks deployment of AML monitoring updates without independent model validation.',
  '{"type": "before_update", "entity_types": ["data_product"]}',
@@ -678,7 +731,7 @@ INSERT INTO process_workflows (id, name, description, trigger_config, scope_conf
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
-('02b00101-0002-4000-8000-000000000001', '02a00101-0002-4000-8000-000000000001', 'lineage_check',     'BCBS 239 Lineage Coverage',
+('02b00101-0002-4000-8000-000000000001', '02a00101-0002-4000-8000-000000000001', 'lineage_check',     'BCBS 239 Risk Tier Tagged',
  'policy_check',
  '{"policy_id": "01100001-0002-4000-8000-000000000001"}',
  'cro_attest', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
@@ -692,20 +745,52 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  'approve', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- The pre-publish gates ship inactive (#996): their before_publish trigger does not
+-- exist yet, so they never run. In installs that still hold a shipped gate (its shipped
+-- name, trigger and description, still active), deactivate it, then add the note to the
+-- description of a shipped gate that is inactive. A gate an admin renamed, re-triggered,
+-- re-described, or re-activated after this change is left alone.
+UPDATE process_workflows SET is_active = false
+WHERE id = '02a00101-0002-4000-8000-000000000001'
+  AND name = 'BCBS 239 Pre-Publish Attestation'
+  AND trigger_config = '{"type": "before_publish", "entity_types": ["data_product"]}'
+  AND description = 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.'
+  AND is_active = true;
+
+UPDATE process_workflows SET description = 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles. Example only, inactive: the before_publish trigger it is written for does not exist yet (a blocking pre-publish gate is planned after signed manifests, issue #997), so the workflow never runs.'
+WHERE id = '02a00101-0002-4000-8000-000000000001'
+  AND description = 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.'
+  AND is_active = false;
+
+-- Installs that loaded an earlier version of this preset keep their workflow rows
+-- (ON CONFLICT DO NOTHING above). Rename those in place, but only the texts that
+-- still have their shipped value, so a step an admin renamed is left alone.
+UPDATE workflow_steps SET name = CASE
+  WHEN id = '02b00101-0002-4000-8000-000000000001' AND name = 'BCBS 239 Lineage Coverage' THEN 'BCBS 239 Risk Tier Tagged'
+  ELSE name END
+WHERE id IN ('02b00101-0002-4000-8000-000000000001');
+
 
 -- ============================================================================
 -- 19. COMPLIANCE RUNS + RESULTS (FSI)
 -- ============================================================================
 
 INSERT INTO compliance_runs (id, policy_id, status, started_at, finished_at, success_count, failure_count, score) VALUES
-('01200101-0002-4000-8000-000000000001', '01100001-0002-4000-8000-000000000001', 'completed', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days' + INTERVAL '15 minutes', 5, 1, 0.833),
-('01200102-0002-4000-8000-000000000002', '01100002-0002-4000-8000-000000000002', 'completed', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '6 minutes',  3, 0, 1.000)
-ON CONFLICT (id) DO NOTHING;
+('01200101-0002-4000-8000-000000000001', '01100001-0002-4000-8000-000000000001', 'succeeded', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days' + INTERVAL '15 minutes', 1, 1, 50),
+('01200102-0002-4000-8000-000000000002', '01100002-0002-4000-8000-000000000002', 'succeeded', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '6 minutes', 2, 1, 66.67)
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, success_count = EXCLUDED.success_count,
+  failure_count = EXCLUDED.failure_count, score = EXCLUDED.score;
+
+-- Sample results of a real run of each policy above. A load replaces the ones an earlier
+-- version of this preset inserted for the same sample runs.
+DELETE FROM compliance_results WHERE run_id IN ('01200101-0002-4000-8000-000000000001', '01200102-0002-4000-8000-000000000002');
 
 INSERT INTO compliance_results (id, run_id, object_type, object_id, object_name, passed, message, created_at) VALUES
-('01300101-0002-4000-8000-000000000001', '01200101-0002-4000-8000-000000000001', 'data_product', '00700002-0002-4000-8000-000000000002', 'Enterprise Risk Aggregation v1', true,  'Risk aggregation lineage covers all 11 BCBS 239 principles.', NOW() - INTERVAL '4 days'),
-('01300102-0002-4000-8000-000000000002', '01200101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'Trading Analytics Dashboard v1', false, 'Reconciliation lineage missing between FIX feed and EOD positions snapshot.', NOW() - INTERVAL '4 days'),
-('01300103-0002-4000-8000-000000000003', '01200102-0002-4000-8000-000000000002', 'data_product', '00700003-0002-4000-8000-000000000003', 'AML Transaction Monitoring v1', true,  'Sanctions screening cycle within 1-day SLA.', NOW() - INTERVAL '2 days')
+('01300101-0002-4000-8000-000000000001', '01200101-0002-4000-8000-000000000001', 'data_product', '00700002-0002-4000-8000-000000000002', 'Enterprise Risk Aggregation v1', true, NULL, NOW() - INTERVAL '4 days'),
+('01300102-0002-4000-8000-000000000002', '01200101-0002-4000-8000-000000000001', 'data_product', '00700004-0002-4000-8000-000000000004', 'Regulatory Reporting Hub v1', false, 'Assertion failed for data_product Regulatory Reporting Hub v1', NOW() - INTERVAL '4 days'),
+('01300103-0002-4000-8000-000000000003', '01200102-0002-4000-8000-000000000002', 'data_product', '00700003-0002-4000-8000-000000000003', 'AML Transaction Monitoring v1', true, NULL, NOW() - INTERVAL '2 days'),
+('01300104-0002-4000-8000-000000000004', '01200102-0002-4000-8000-000000000002', 'data_product', '00700005-0002-4000-8000-000000000005', 'Customer 360 Banking v1', true, NULL, NOW() - INTERVAL '2 days'),
+('01300105-0002-4000-8000-000000000005', '01200102-0002-4000-8000-000000000002', 'data_product', '00700004-0002-4000-8000-000000000004', 'Regulatory Reporting Hub v1', false, 'Assertion failed for data_product Regulatory Reporting Hub v1', NOW() - INTERVAL '2 days')
 ON CONFLICT (id) DO NOTHING;
 
 

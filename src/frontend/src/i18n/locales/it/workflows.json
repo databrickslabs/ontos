@@ -322,6 +322,12 @@
         "on_pass": "successo",
         "on_fail": "errore"
       }
+    },
+    "edgeLabels": {
+      "pass": "Superato",
+      "fail": "Fallito",
+      "true": "Vero",
+      "false": "Falso"
     }
   },
   "approvalResponse": {
@@ -515,6 +521,10 @@
       "failed": "Non riuscito",
       "skipped": "Saltato",
       "waiting": "In attesa"
+    },
+    "conditionalBranch": {
+      "true": "Condizione vera: seguito il ramo vero",
+      "false": "Condizione falsa: seguito il ramo falso"
     },
     "executionStates": {
       "pending": "In attesa",

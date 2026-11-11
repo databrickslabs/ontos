@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactFlow, {
   Node,
@@ -719,6 +720,16 @@ const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shie
 ];
 
 // Layout helper
+// Label and colour of a step's outgoing edge. A conditional's edges are its true and
+// false branches: a false condition is a branch, not a failure (#1418).
+export function branchEdgeLook(sourceType: string | undefined, handle: 'pass' | 'fail', t: TFunction) {
+  const isPass = handle === 'pass';
+  const color = isPass ? '#22c55e' : '#ef4444';
+  const key = sourceType === 'conditional' ? (isPass ? 'true' : 'false') : handle;
+  const label = t(`workflows:designer.edgeLabels.${key}`);
+  return { label, labelStyle: { fill: color, fontWeight: 500 }, style: { stroke: color } };
+}
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -754,7 +765,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
 // Convert workflow to React Flow elements
 const workflowToElements = (
   workflow: ProcessWorkflow | null,
-  rolesMap: Record<string, string> = {}
+  rolesMap: Record<string, string>,
+  t: TFunction,
 ) => {
   if (!workflow) return { nodes: [], edges: [] };
 
@@ -796,10 +808,8 @@ const workflowToElements = (
         sourceHandle: 'pass',
         target: step.on_pass,
         type: 'deletable',
-        label: 'Pass',
-        labelStyle: { fill: '#22c55e', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'pass', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#22c55e' },
       });
     }
     if (step.on_fail) {
@@ -809,10 +819,8 @@ const workflowToElements = (
         sourceHandle: 'fail',
         target: step.on_fail,
         type: 'deletable',
-        label: 'Fail',
-        labelStyle: { fill: '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(step.step_type, 'fail', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#ef4444' },
       });
     }
   });
@@ -980,6 +988,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  // Read by the connect handlers, so they aren't recreated on every node change
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
 
   // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
@@ -1188,7 +1199,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             
             // Convert to flow elements - rolesMap will be empty initially, but nodes will be updated
             // when availableRoles loads (via updateNodesWithRoles effect)
-            const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {});
+            const { nodes: flowNodes, edges: flowEdges } = workflowToElements(response.data, {}, t);
             setNodes(flowNodes);
             setEdges(flowEdges);
           }
@@ -1344,10 +1355,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         sourceHandle: handleType,
         target: newConnection.target!,
         type: 'deletable',
-        label: isPass ? 'Pass' : 'Fail',
-        labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+        ...branchEdgeLook(nodesRef.current.find(n => n.id === newConnection.source)?.type, isPass ? 'pass' : 'fail', t),
         markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: isPass ? '#22c55e' : '#ef4444' },
       };
       return [...filtered, reconnectedEdge];
     });
@@ -1359,7 +1368,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       }
       return s;
     }));
-  }, [setEdges]);
+  }, [setEdges, t]);
 
   // Handle manual edge creation (drag from handle to handle)
   const onConnect = useCallback((connection: Connection) => {
@@ -1385,10 +1394,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       sourceHandle: handleType,
       target: connection.target,
       type: 'deletable',
-      label: isPass ? 'Pass' : 'Fail',
-      labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+      ...branchEdgeLook(nodesRef.current.find(n => n.id === connection.source)?.type, isPass ? 'pass' : 'fail', t),
       markerEnd: { type: MarkerType.ArrowClosed },
-      style: { stroke: isPass ? '#22c55e' : '#ef4444' },
     };
     setEdges(prev => [...prev, newEdge]);
 
@@ -1398,7 +1405,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         ? { ...s, [isPass ? 'on_pass' : 'on_fail']: connection.target }
         : s
     ));
-  }, [setEdges]);
+  }, [setEdges, t]);
 
   // Add new step
   const addStep = (type: StepType) => {

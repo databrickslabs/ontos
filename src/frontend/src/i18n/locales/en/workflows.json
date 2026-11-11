@@ -322,6 +322,12 @@
         "on_pass": "pass",
         "on_fail": "fail"
       }
+    },
+    "edgeLabels": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "true": "True",
+      "false": "False"
     }
   },
   "approvalResponse": {
@@ -515,6 +521,10 @@
       "failed": "Failed",
       "skipped": "Skipped",
       "waiting": "Waiting"
+    },
+    "conditionalBranch": {
+      "true": "Condition was true: took the true branch",
+      "false": "Condition was false: took the false branch"
     },
     "executionStates": {
       "pending": "Pending",

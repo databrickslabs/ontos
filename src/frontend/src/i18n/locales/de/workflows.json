@@ -322,6 +322,12 @@
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
       }
+    },
+    "edgeLabels": {
+      "pass": "Bestanden",
+      "fail": "Fehlgeschlagen",
+      "true": "Wahr",
+      "false": "Falsch"
     }
   },
   "approvalResponse": {
@@ -515,6 +521,10 @@
       "failed": "Fehlgeschlagen",
       "skipped": "Übersprungen",
       "waiting": "Wartet"
+    },
+    "conditionalBranch": {
+      "true": "Bedingung war wahr: Wahr-Zweig ausgeführt",
+      "false": "Bedingung war falsch: Falsch-Zweig ausgeführt"
     },
     "executionStates": {
       "pending": "Ausstehend",

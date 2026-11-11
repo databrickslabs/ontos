@@ -322,6 +322,12 @@
         "on_pass": "succes",
         "on_fail": "fout"
       }
+    },
+    "edgeLabels": {
+      "pass": "Geslaagd",
+      "fail": "Mislukt",
+      "true": "Waar",
+      "false": "Onwaar"
     }
   },
   "approvalResponse": {
@@ -515,6 +521,10 @@
       "failed": "Mislukt",
       "skipped": "Overgeslagen",
       "waiting": "Wachtend"
+    },
+    "conditionalBranch": {
+      "true": "Voorwaarde was waar: ware tak gevolgd",
+      "false": "Voorwaarde was onwaar: onware tak gevolgd"
     },
     "executionStates": {
       "pending": "In afwachting",

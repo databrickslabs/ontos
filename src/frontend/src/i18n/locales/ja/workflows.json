@@ -322,6 +322,12 @@
         "on_pass": "成功時",
         "on_fail": "失敗時"
       }
+    },
+    "edgeLabels": {
+      "pass": "成功",
+      "fail": "失敗",
+      "true": "真",
+      "false": "偽"
     }
   },
   "approvalResponse": {
@@ -515,6 +521,10 @@
       "failed": "失敗",
       "skipped": "スキップ",
       "waiting": "待機中"
+    },
+    "conditionalBranch": {
+      "true": "条件は真でした: 真の分岐を実行しました",
+      "false": "条件は偽でした: 偽の分岐を実行しました"
     },
     "executionStates": {
       "pending": "保留中",

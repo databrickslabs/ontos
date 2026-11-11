@@ -37,6 +37,8 @@ from src.models.process_workflows import (
     TemplateVarDescriptor,
     TemplateVarGroup,
     TemplateVarsResponse,
+    ends_process_run,
+    is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
@@ -694,6 +696,31 @@ class WorkflowsManager:
                         'step_unknown_reference', step=step.step_id, target=target, field=field,
                     ))
         
+        # A Pass or Fail step ends a process run: a link out of it is never followed
+        # and is dropped on save (older designers stored one the canvas never drew)
+        for step in workflow.steps:
+            if not ends_process_run(workflow.workflow_type, step.step_type):
+                continue
+            for target in dict.fromkeys(t for t in (step.on_pass, step.on_fail) if t):
+                warnings.append(CodedMessage(
+                    f"Step '{step.step_id}' ends the workflow; its link to '{target}' is ignored and removed on save",
+                    'terminal_step_has_next', step=step.step_id, target=target,
+                ))
+
+        # A conditional whose branch has no step ends the run succeeded when it takes
+        # that branch, so a gate lets the change through (a false condition is not
+        # a failure). Warn, so a missing Fail step on a branch isn't overlooked.
+        for step in workflow.steps:
+            if not is_conditional_step_type(step.step_type):
+                continue
+            for branch, target in (('true', step.on_pass), ('false', step.on_fail)):
+                if not target:
+                    warnings.append(CodedMessage(
+                        f"Conditional step '{step.step_id}' has no step on its {branch} branch; "
+                        f"a {branch} condition ends the workflow as succeeded",
+                        'conditional_branch_missing', step=step.step_id, branch=branch,
+                    ))
+
         # Check for unreachable steps (warning only)
         reachable = set()
         if workflow.steps:
@@ -706,15 +733,18 @@ class WorkflowsManager:
                 reachable.add(current)
                 
                 step = next((s for s in workflow.steps if s.step_id == current), None)
-                if step:
+                if step and not ends_process_run(workflow.workflow_type, step.step_type):
                     if step.on_pass:
                         to_visit.append(step.on_pass)
                     if step.on_fail:
                         to_visit.append(step.on_fail)
             
-            unreachable = step_id_set - reachable
+            unreachable = sorted(step_id_set - reachable)
             if unreachable:
-                warnings.append(f"Unreachable steps: {', '.join(unreachable)}")
+                warnings.append(CodedMessage(
+                    f"Unreachable steps: {', '.join(unreachable)}",
+                    'unreachable_steps', steps=unreachable,
+                ))
         
         # Validate step configs based on type
         for step in workflow.steps:
@@ -883,6 +913,43 @@ class WorkflowsManager:
                  if w.code == 'stored_entity_type_unknown'],
                 [w.params['entityType'] for w in workflow.trigger_warnings
                  if w.code == 'stored_entity_type_unsupported'],
+            )
+        return warned
+
+    def log_branching_warnings(self) -> int:
+        """Warn once per stored process workflow whose branching changed meaning (#1417, #1418).
+
+        Run at startup. Two cases are logged, the workflows are not changed:
+        a Pass or Fail step with a link to a next step (ignored, dropped on the next
+        save), and a gate (``before_*`` trigger) whose conditional has no step on a
+        branch: a condition taking that branch now ends the run succeeded, which lets
+        the change through, where it used to fail the run. Returns how many workflows
+        were warned about.
+        """
+        warned = 0
+        for db_workflow in process_workflow_repo.list_all(self._db):
+            try:
+                workflow = self._db_to_model(db_workflow)
+            except Exception:
+                logger.warning("Could not check the steps of workflow %s", db_workflow.id, exc_info=True)
+                continue
+            linked = [
+                s.step_id for s in workflow.steps
+                if ends_process_run(workflow.workflow_type, s.step_type) and (s.on_pass or s.on_fail)
+            ]
+            open_branches = [
+                f"{s.step_id}:{branch}" for s in workflow.steps if is_conditional_step_type(s.step_type)
+                for branch, target in (('true', s.on_pass), ('false', s.on_fail)) if not target
+            ] if workflow.trigger.type.value.startswith('before_') else []
+            if not linked and not open_branches:
+                continue
+            warned += 1
+            logger.warning(
+                "Workflow %s (%r, %s, trigger %s): Pass/Fail steps with a next step, which is "
+                "ignored and removed on the next save: %s; gate conditionals with no step on a "
+                "branch, which now ends the run succeeded and lets the change through: %s",
+                workflow.id, workflow.name, 'active' if workflow.is_active else 'inactive',
+                workflow.trigger.type.value, linked, open_branches,
             )
         return warned
 

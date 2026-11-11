@@ -322,6 +322,12 @@
         "on_pass": "éxito",
         "on_fail": "fallo"
       }
+    },
+    "edgeLabels": {
+      "pass": "Aprobado",
+      "fail": "Fallido",
+      "true": "Verdadero",
+      "false": "Falso"
     }
   },
   "approvalResponse": {
@@ -515,6 +521,10 @@
       "failed": "Fallido",
       "skipped": "Omitido",
       "waiting": "En espera"
+    },
+    "conditionalBranch": {
+      "true": "La condición fue verdadera: se siguió la rama verdadera",
+      "false": "La condición fue falsa: se siguió la rama falsa"
     },
     "executionStates": {
       "pending": "Pendiente",

@@ -23,6 +23,7 @@ from src.models.process_workflows import (
     TriggerType,
     EntityType,
     WorkflowType,
+    ends_process_run,
 )
 from src.common.logging import get_logger
 
@@ -182,14 +183,16 @@ class ProcessWorkflowRepository:
         
         # Create steps
         for i, step in enumerate(workflow.steps):
+            # A Pass or Fail step ends a process run, so a link out of it is dropped
+            terminal = ends_process_run(db_workflow.workflow_type, step.step_type)
             db_step = WorkflowStepDb(
                 workflow_id=db_workflow.id,
                 step_id=step.step_id,
                 name=step.name,
                 step_type=step.step_type.value,
                 config=json.dumps(step.config) if step.config else None,
-                on_pass=step.on_pass,
-                on_fail=step.on_fail,
+                on_pass=None if terminal else step.on_pass,
+                on_fail=None if terminal else step.on_fail,
                 order=step.order if step.order else i,
                 position=step.position.model_dump_json() if step.position else None,
             )
@@ -266,8 +269,10 @@ class ProcessWorkflowRepository:
             db_step.name = step.name
             db_step.step_type = step.step_type.value
             db_step.config = json.dumps(step.config) if step.config else None
-            db_step.on_pass = step.on_pass
-            db_step.on_fail = step.on_fail
+            # A Pass or Fail step ends a process run, so a link out of it is dropped
+            terminal = ends_process_run(db_workflow.workflow_type, step.step_type)
+            db_step.on_pass = None if terminal else step.on_pass
+            db_step.on_fail = None if terminal else step.on_fail
             db_step.order = step.order if step.order else i
             db_step.position = step.position.model_dump_json() if step.position else None
 

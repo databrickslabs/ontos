@@ -400,6 +400,60 @@ def test_level_is_stored_again_once_the_table_reads(db_session):
     assert [s.achieved_level_order for s in snapshots] == [2, 2]
 
 
+def test_uc_read_failure_still_stores_a_drop_that_needs_no_uc_field(db_session):
+    asset = _asset(db_session, description='Orders placed in the store')
+    _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    _level(db_session, 2, 'Described', [
+        'ASSERT obj.column_count > 0',
+        'ASSERT obj.has_description = True',
+    ])
+    eid = str(asset.id)
+
+    with patch('src.common.workflow_triggers.TriggerRegistry') as registry:
+        MaturityEvaluator(_ws(_table([('id', 'Order id')]))).evaluate(
+            db_session, entity_type='Asset', entity_id=eid, persist=True,
+        )
+        events_before = registry.return_value.on_maturity_change.call_count
+        asset.description = None
+        db_session.flush()
+
+        report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+            db_session, entity_type='Asset', entity_id=eid, persist=True,
+        )
+
+        # Level 2 fails without a description, whatever the table holds
+        assert registry.return_value.on_maturity_change.call_count == events_before + 1
+
+    assert report.achieved_level_order == 1 and report.achieved_level_name == 'Named'
+    snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=eid).all()
+    assert sorted(s.achieved_level_order for s in snapshots) == [1, 2]
+
+
+def test_optional_uc_gate_does_not_hold_the_level(db_session):
+    asset = _asset(db_session)
+    level = _level(db_session, 1, 'Named', ["ASSERT obj.name != ''"])
+    policy = CompliancePolicyDb(
+        id=str(uuid.uuid4()), name='Has columns', rule='ASSERT obj.column_count > 0',
+        is_active=True,
+    )
+    db_session.add(policy)
+    db_session.flush()
+    maturity_repo.add_gate(db_session, maturity_level_id=level.id,
+                           compliance_policy_id=policy.id, required=False, display_order=1)
+    db_session.flush()
+    db_session.refresh(level)
+
+    report = MaturityEvaluator(_ws(error=NotFound('gone'))).evaluate(
+        db_session, entity_type='Asset', entity_id=str(asset.id), persist=True,
+    )
+
+    # An optional gate doesn't decide the level, so the read failure changes nothing
+    assert report.achieved_level_order == 1
+    assert report.levels[0].gates[1].message_code == 'maturity_uc_table_not_found'
+    snapshots = db_session.query(MaturitySnapshotDb).filter_by(entity_id=str(asset.id)).all()
+    assert [s.achieved_level_order for s in snapshots] == [1]
+
+
 def test_asset_level_change_fires_on_maturity_change_as_table(db_session):
     asset = _asset(db_session)
     _level(db_session, 1, 'Named', ['ASSERT obj.name != \'\''])

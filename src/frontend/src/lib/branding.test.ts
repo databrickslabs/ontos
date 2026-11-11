@@ -99,6 +99,25 @@ describe('branding assets and theme colors', () => {
     }
   });
 
+  it('applies the same rule as the backend to http(s) values and control characters', () => {
+    for (const bad of [
+      'http:foo', 'https:/foo', 'http://', 'http:///x.svg', 'https://cdn.example/a\tb.svg',
+      'https://cdn.example/a\nb.svg', 'https://cdn.example/a b.svg', 'https://cdn.example\\x.svg',
+      '/a\tb.svg', '/a/..?x=1',
+    ]) {
+      expect(isValidImageUrl(bad)).toBe(false);
+    }
+    expect(isValidImageUrl('  https://cdn.example/x.svg ')).toBe(true);
+    expect(isValidImageUrl('HTTPS://cdn.example/x.svg')).toBe(true);
+  });
+
+  it('refuses unsafe values instead of resolving them', () => {
+    for (const bad of ['javascript:alert(1)', 'data:image/svg+xml,<svg/>', '//evil.example/x.svg',
+      '/../x.svg', 'http:foo']) {
+      expect(resolveBrandingAssetUrl(bad)).toBeNull();
+    }
+  });
+
   it('converts hex colors to HSL triplets and rejects anything else', () => {
     expect(hexToHslTriplet('#ff0000')).toBe('0 100% 50%');
     expect(hexToHslTriplet('#fff')).toBe('0 0% 100%');

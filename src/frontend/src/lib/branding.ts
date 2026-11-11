@@ -101,29 +101,27 @@ export function resolveBrandingAssetUrl(url?: string | null): string | null {
   if (typeof url !== 'string') return null;
   const trimmed = url.trim();
   if (!trimmed) return null;
+  if (!isValidImageUrl(trimmed)) return null;
   const isAppAsset = trimmed.startsWith('/') && !trimmed.startsWith('//');
   if (!isAppAsset || /^\/(api|static)\//.test(trimmed)) return trimmed;
   return getAssetPath(trimmed);
 }
 
 /**
- * Image URL the backend accepts for branding images: an http(s) URL or a
- * root-relative app asset path (no `//host`, whitespace, backslashes or `..` segments).
- * Empty input is valid (unset).
+ * Image URL the backend accepts for branding images (same rule as
+ * `validate_branding_url`): after trimming, no whitespace, control characters
+ * or backslashes; then either a root-relative app asset path (no `//host`, no
+ * `..` segments) or an `http(s)://host...` URL. Empty input is valid (unset).
  */
-export function isValidImageUrl(url: string): boolean {
+export function isValidImageUrl(raw: string): boolean {
+  const url = raw.trim();
   if (!url) return true;
+  if (/[\s\\\u0000-\u001f\u007f-\u009f]/.test(url)) return false;
   if (url.startsWith('/') && !url.startsWith('//')) {
     const path = url.split(/[?#]/, 1)[0];
-    const climbs = path.split('/').some((seg) => /^(\.\.|%2e%2e|\.%2e|%2e\.)$/i.test(seg));
-    return !/[\s\\]/.test(url) && !climbs;
+    return !path.split('/').some((seg) => /^(\.\.|%2e%2e|\.%2e|%2e\.)$/i.test(seg));
   }
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return /^https?:\/\/[^/?#]/i.test(url);
 }
 
 /** Theme colors from the branding config, each `#rgb`/`#rrggbb` or unset. */

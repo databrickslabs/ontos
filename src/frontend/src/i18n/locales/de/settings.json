@@ -651,7 +651,6 @@
       "urlLabel": "Logo-URL",
       "urlPlaceholder": "https://beispiel.de/logo.svg",
       "help": "Geben Sie die URL Ihres benutzerdefinierten Logos ein. Unterstützt SVG, PNG oder JPG. Empfohlene Größe: 40x40 Pixel.",
-      "invalidUrl": "Bitte geben Sie eine gültige HTTP- oder HTTPS-URL ein",
       "preview": "Vorschau:",
       "loadError": "Bild konnte nicht geladen werden",
       "openInNewTab": "In neuem Tab öffnen",
@@ -678,6 +677,9 @@
       "help": "Geben Sie benutzerdefiniertes CSS ein, um das Standarddesign zu überschreiben. Sie können CSS-Variablen in :root ändern."
     },
     "saveButton": "UI-Einstellungen speichern",
+    "errorCodes": {
+      "brandingPathTraversal": "Der Pfad darf keine \"..\"-Segmente enthalten"
+    },
     "messages": {
       "saveSuccess": "UI-Anpassungseinstellungen gespeichert",
       "saveError": "UI-Anpassungseinstellungen konnten nicht gespeichert werden",
@@ -700,7 +702,6 @@
       "previewAlt": "Favicon-Vorschau",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Wird zur Laufzeit auf den Browser-Tab angewendet. Der statische <link rel=\"icon\"> in der ausgelieferten index.html und das PWA-Manifest werden durch diese Einstellung nicht aktualisiert.",
-      "invalidUrl": "Bitte geben Sie eine gültige HTTP- oder HTTPS-URL ein",
       "loadError": "Bild konnte nicht geladen werden",
       "openInNewTab": "In neuem Tab öffnen",
       "preview": "Vorschau:",

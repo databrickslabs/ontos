@@ -127,4 +127,32 @@ describe('UICustomizationSettings co-branding fields', () => {
     expect(screen.queryByText('Enter an HTTP or HTTPS URL, or an app path starting with /'))
       .toBeNull();
   });
+
+  it('shows a coded save error in the user language', async () => {
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url) === '/api/settings' && init?.method === 'PUT') {
+        return {
+          ok: false,
+          json: async () => ({
+            detail: {
+              code: 'branding_path_traversal',
+              message: 'custom logo URL must not contain ".." path segments',
+              params: { field: 'custom logo URL' },
+            },
+          }),
+        } as Response;
+      }
+      return (base as typeof fetch)(url, init);
+    }) as unknown as typeof fetch;
+
+    render(<UICustomizationSettings />);
+    await screen.findByLabelText('Tagline (optional)');
+    fireEvent.click(screen.getByRole('button', { name: 'Save UI Settings' }));
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(toast.mock.calls[0][0]).toMatchObject({
+      variant: 'destructive',
+      description: 'The path must not contain ".." segments',
+    });
+  });
 });

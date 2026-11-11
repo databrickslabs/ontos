@@ -651,7 +651,6 @@
       "urlLabel": "URL del logo",
       "urlPlaceholder": "https://ejemplo.com/logo.svg",
       "help": "Ingrese la URL de su logo personalizado. Formatos soportados: SVG, PNG, JPG.",
-      "invalidUrl": "Por favor ingrese una URL HTTP o HTTPS válida",
       "preview": "Vista previa:",
       "loadError": "Error al cargar la imagen",
       "openInNewTab": "Abrir en nueva pestaña",
@@ -678,6 +677,9 @@
       "help": "Ingrese CSS personalizado para sobrescribir el tema predeterminado."
     },
     "saveButton": "Guardar configuración UI",
+    "errorCodes": {
+      "brandingPathTraversal": "La ruta no puede contener segmentos \"..\""
+    },
     "messages": {
       "saveSuccess": "Configuración de personalización guardada",
       "saveError": "Error al guardar la configuración",
@@ -700,7 +702,6 @@
       "previewAlt": "Vista previa del favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Se aplica en tiempo de ejecución a la pestaña del navegador. El <link rel=\"icon\"> estático del index.html incluido y el manifiesto de la PWA no se actualizan con esta configuración.",
-      "invalidUrl": "Introduce una URL HTTP o HTTPS válida",
       "loadError": "No se pudo cargar la imagen",
       "openInNewTab": "Abrir en una pestaña nueva",
       "preview": "Vista previa:",

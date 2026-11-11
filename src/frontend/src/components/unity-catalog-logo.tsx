@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useTheme } from "@/components/theme/theme-provider";
 import { getAssetPath } from "@/utils/asset-path";
@@ -9,10 +9,26 @@ interface UnityCatalogLogoProps {
   className?: string;
 }
 
+const DARK_QUERY = '(prefers-color-scheme: dark)';
+
 function prefersDark(): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    && window.matchMedia(DARK_QUERY).matches;
+}
+
+/** The OS color scheme, kept current when it changes (used while the theme is "system"). */
+function useSystemPrefersDark(): boolean {
+  const [dark, setDark] = useState(prefersDark);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(DARK_QUERY);
+    const onChange = (e: { matches: boolean }) => setDark(e.matches);
+    setDark(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return dark;
 }
 
 /** Product logo: the configured branding logo (dark variant in dark mode) or the default. */
@@ -23,7 +39,8 @@ export function UnityCatalogLogo({ className }: UnityCatalogLogoProps) {
   const appName = useUICustomizationStore((state) => state.getAppName());
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  const isDark = theme === 'dark' || (theme === 'system' && prefersDark());
+  const systemDark = useSystemPrefersDark();
+  const isDark = theme === 'dark' || (theme === 'system' && systemDark);
   const configured = resolveBrandingAssetUrl(
     (isDark && customLogoDarkUrl) || customLogoUrl,
   );

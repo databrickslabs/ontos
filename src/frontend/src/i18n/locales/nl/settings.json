@@ -669,7 +669,6 @@
       "urlLabel": "Logo URL",
       "urlPlaceholder": "https://voorbeeld.nl/logo.svg",
       "help": "Voer de URL van uw aangepaste logo in. Ondersteunde formaten: SVG, PNG, JPG.",
-      "invalidUrl": "Voer een geldige HTTP of HTTPS URL in",
       "preview": "Voorbeeld:",
       "loadError": "Afbeelding kon niet worden geladen",
       "openInNewTab": "Open in nieuw tabblad",
@@ -696,6 +695,9 @@
       "help": "Voer aangepaste CSS in om het standaardthema te overschrijven."
     },
     "saveButton": "UI-instellingen opslaan",
+    "errorCodes": {
+      "brandingPathTraversal": "Het pad mag geen \"..\"-segmenten bevatten"
+    },
     "messages": {
       "saveSuccess": "UI-aanpassingsinstellingen opgeslagen",
       "saveError": "Kon instellingen niet opslaan",
@@ -718,7 +720,6 @@
       "previewAlt": "Favicon-voorbeeld",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Wordt tijdens runtime toegepast op het browsertabblad. De statische <link rel=\"icon\"> in de meegeleverde index.html en het PWA-manifest worden niet bijgewerkt door deze instelling.",
-      "invalidUrl": "Voer een geldige HTTP- of HTTPS-URL in",
       "loadError": "Kon afbeelding niet laden",
       "openInNewTab": "Openen in nieuw tabblad",
       "preview": "Voorbeeld:",

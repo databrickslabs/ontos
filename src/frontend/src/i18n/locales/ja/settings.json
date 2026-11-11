@@ -651,7 +651,6 @@
       "urlLabel": "ロゴURL",
       "urlPlaceholder": "https://example.com/logo.svg",
       "help": "カスタムロゴのURLを入力してください。SVG、PNG、JPG形式をサポート。推奨サイズ：40x40ピクセル。",
-      "invalidUrl": "有効なHTTPまたはHTTPS URLを入力してください",
       "preview": "プレビュー：",
       "loadError": "画像の読み込みに失敗しました",
       "openInNewTab": "新しいタブで開く",
@@ -678,6 +677,9 @@
       "help": "デフォルトテーマを上書きするカスタムCSSを入力してください。"
     },
     "saveButton": "UI設定を保存",
+    "errorCodes": {
+      "brandingPathTraversal": "パスに「..」セグメントを含めることはできません"
+    },
     "messages": {
       "saveSuccess": "UIカスタマイズ設定を保存しました",
       "saveError": "設定の保存に失敗しました",
@@ -700,7 +702,6 @@
       "previewAlt": "ファビコンのプレビュー",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "ブラウザのタブに実行時に適用されます。同梱の index.html 内の静的な <link rel=\"icon\"> と PWA マニフェストは、この設定では更新されません。",
-      "invalidUrl": "有効な HTTP または HTTPS の URL を入力してください",
       "loadError": "画像の読み込みに失敗しました",
       "openInNewTab": "新しいタブで開く",
       "preview": "プレビュー:",

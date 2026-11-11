@@ -669,7 +669,6 @@
       "urlLabel": "Logo URL",
       "urlPlaceholder": "https://example.com/logo.svg",
       "help": "Enter the URL of your custom logo. Supports SVG, PNG, or JPG formats. Recommended size: 40x40 pixels.",
-      "invalidUrl": "Please enter a valid HTTP or HTTPS URL",
       "preview": "Preview:",
       "loadError": "Failed to load image",
       "openInNewTab": "Open in new tab",
@@ -696,6 +695,9 @@
       "help": "Enter custom CSS to override the default theme. You can modify CSS variables defined in :root to change colors throughout the app."
     },
     "saveButton": "Save UI Settings",
+    "errorCodes": {
+      "brandingPathTraversal": "The path must not contain \"..\" segments"
+    },
     "messages": {
       "saveSuccess": "UI customization settings saved",
       "saveError": "Failed to save UI customization settings",
@@ -718,7 +720,6 @@
       "previewAlt": "Favicon preview",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Applied at runtime to the browser tab. The static <link rel=\"icon\"> in the shipped index.html and the PWA manifest are not updated by this setting.",
-      "invalidUrl": "Please enter a valid HTTP or HTTPS URL",
       "loadError": "Failed to load image",
       "openInNewTab": "Open in new tab",
       "preview": "Preview:",

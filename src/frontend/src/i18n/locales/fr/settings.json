@@ -651,7 +651,6 @@
       "urlLabel": "URL du logo",
       "urlPlaceholder": "https://exemple.com/logo.svg",
       "help": "Entrez l'URL de votre logo personnalisé. Formats supportés: SVG, PNG, JPG. Taille recommandée: 40x40 pixels.",
-      "invalidUrl": "Veuillez entrer une URL HTTP ou HTTPS valide",
       "preview": "Aperçu:",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
@@ -678,6 +677,9 @@
       "help": "Entrez du CSS personnalisé pour remplacer le thème par défaut."
     },
     "saveButton": "Enregistrer les paramètres UI",
+    "errorCodes": {
+      "brandingPathTraversal": "Le chemin ne doit pas contenir de segments \"..\""
+    },
     "messages": {
       "saveSuccess": "Paramètres de personnalisation enregistrés",
       "saveError": "Échec de l'enregistrement des paramètres",
@@ -700,7 +702,6 @@
       "previewAlt": "Aperçu du favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Appliqué à l'exécution à l'onglet du navigateur. La balise statique <link rel=\"icon\"> de l'index.html livré et le manifeste PWA ne sont pas mis à jour par ce paramètre.",
-      "invalidUrl": "Veuillez saisir une URL HTTP ou HTTPS valide",
       "loadError": "Échec du chargement de l'image",
       "openInNewTab": "Ouvrir dans un nouvel onglet",
       "preview": "Aperçu :",

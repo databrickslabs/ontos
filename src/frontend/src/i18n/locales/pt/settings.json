@@ -669,7 +669,6 @@
       "urlLabel": "URL do logo",
       "urlPlaceholder": "https://example.com/logo.svg",
       "help": "Insira a URL do seu logo personalizado. Suporta formatos SVG, PNG ou JPG. Tamanho recomendado: 40x40 pixels.",
-      "invalidUrl": "Insira uma URL HTTP ou HTTPS válida",
       "preview": "Pré-visualização:",
       "loadError": "Falha ao carregar a imagem",
       "openInNewTab": "Abrir em nova guia",
@@ -696,6 +695,9 @@
       "help": "Insira CSS personalizado para substituir o tema padrão. Você pode modificar as variáveis CSS definidas em :root para alterar cores em todo o aplicativo."
     },
     "saveButton": "Salvar configurações de interface",
+    "errorCodes": {
+      "brandingPathTraversal": "O caminho não pode conter segmentos \"..\""
+    },
     "messages": {
       "saveSuccess": "Configurações de personalização da interface salvas",
       "saveError": "Falha ao salvar as configurações de personalização da interface",
@@ -718,7 +720,6 @@
       "previewAlt": "Pré-visualização do favicon",
       "urlPlaceholder": "https://example.com/favicon.svg",
       "help": "Aplicado em tempo de execução à guia do navegador. O <link rel=\"icon\"> estático no index.html distribuído e o manifest PWA não são atualizados por esta configuração.",
-      "invalidUrl": "Insira uma URL HTTP ou HTTPS válida",
       "loadError": "Falha ao carregar a imagem",
       "openInNewTab": "Abrir em nova guia",
       "preview": "Pré-visualização:",

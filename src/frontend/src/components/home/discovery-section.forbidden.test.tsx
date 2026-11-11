@@ -1,10 +1,15 @@
-/** A 403 from published products is an empty card; other failures show the translated error. */
+/**
+ * A 403 from published products or from the selected domain is a neutral state;
+ * other failures show the translated error.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '@/test/utils';
 
+const domainsHook = vi.hoisted(() => ({ domains: [] as { id: string; name: string }[] }));
+
 vi.mock('@/hooks/use-domains', () => ({
-  useDomains: () => ({ domains: [], loading: false, getDomainName: () => '' }),
+  useDomains: () => ({ domains: domainsHook.domains, loading: false, getDomainName: () => '' }),
 }));
 
 vi.mock('@/hooks/use-approval-wizard-trigger', () => ({
@@ -21,6 +26,7 @@ const answer = (status: number, body: unknown = {}) => ({
 
 describe('DiscoverySection popular products', () => {
   beforeEach(() => {
+    domainsHook.domains = [];
     globalThis.fetch = vi.fn(async () => answer(200, [])) as any;
   });
 
@@ -49,6 +55,33 @@ describe('DiscoverySection popular products', () => {
     globalThis.fetch = vi.fn(async () => answer(500)) as any;
     renderWithProviders(<DiscoverySection />);
     expect(await screen.findByText('Failed to load data products')).toBeTruthy();
+    expect(screen.queryByText(/HTTP/)).toBeNull();
+  });
+});
+
+describe('DiscoverySection domain graph', () => {
+  const answerDomain = (status: number) => vi.fn(async (url: any) =>
+    String(url).includes('/api/data-domains/') ? answer(status) : answer(200, []),
+  );
+
+  beforeEach(() => {
+    domainsHook.domains = [{ id: 'd1', name: 'Core' }];
+  });
+
+  it('shows a neutral state, not the HTTP status, on 403', async () => {
+    globalThis.fetch = answerDomain(403) as any;
+    const { container } = renderWithProviders(<DiscoverySection />);
+    expect(
+      await screen.findByText('The domain hierarchy is not available for your role.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/HTTP/)).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('shows the translated error, not the HTTP status, on 500', async () => {
+    globalThis.fetch = answerDomain(500) as any;
+    renderWithProviders(<DiscoverySection />);
+    expect(await screen.findByText('Failed to load the domain hierarchy')).toBeTruthy();
     expect(screen.queryByText(/HTTP/)).toBeNull();
   });
 });

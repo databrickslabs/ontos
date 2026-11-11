@@ -27,7 +27,8 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [selectedDomainDetails, setSelectedDomainDetails] = useState<DataDomain | null>(null);
   const [domainLoading, setDomainLoading] = useState<boolean>(false);
-  const [domainError, setDomainError] = useState<string | null>(null);
+  // Translated at render, so a language switch updates it
+  const [domainError, setDomainError] = useState<'forbidden' | 'failed' | null>(null);
   const [exactMatchesOnly, setExactMatchesOnly] = useState<boolean>(false);
   const [matchSets, setMatchSets] = useState<{ ids: Set<string>; namesLower: Set<string> } | null>(null);
   const [graphFadeIn, setGraphFadeIn] = useState<boolean>(false);
@@ -131,16 +132,22 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
       setDomainLoading(true);
       setDomainError(null);
       const resp = await fetch(`/api/data-domains/${domainId}`);
-      if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+      // 403: the role cannot read data domains; a neutral state, not an error.
+      if (resp.status === 403) {
+        setDomainError('forbidden');
+        setSelectedDomainDetails(null);
+        return;
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data: DataDomain = await resp.json();
       setSelectedDomainDetails(data);
-    } catch (e: any) {
-      setDomainError(e.message || t('discoverySection.error'));
+    } catch {
+      setDomainError('failed');
       setSelectedDomainDetails(null);
     } finally {
       setDomainLoading(false);
     }
-  }, [t]);
+  }, []);
 
   // Load selected domain details whenever selection changes
   useEffect(() => {
@@ -270,10 +277,18 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
 
         {domainsLoading || domainLoading ? (
           <SkeletonBlock height="h-[220px]" className="rounded-lg" />
+        ) : domainError === 'forbidden' ? (
+          <div
+            style={{ height: 220, margin: 'auto' }}
+            className={'border rounded-lg overflow-hidden bg-muted/20 w-full flex items-center'
+              + ' justify-center text-muted-foreground'}
+          >
+            {t('discoveryDomainGraph.unavailable')}
+          </div>
         ) : domainError ? (
           <div style={{ height: 220, margin: 'auto' }} className="border rounded-lg overflow-hidden bg-muted/20 w-full flex items-center justify-center">
             <Alert variant="destructive" className="m-0 border-0 bg-transparent">
-              <AlertDescription>{domainError}</AlertDescription>
+              <AlertDescription>{t('discoveryDomainGraph.error')}</AlertDescription>
             </Alert>
           </div>
         ) : selectedDomainDetails ? (

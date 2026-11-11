@@ -1348,8 +1348,7 @@ class AssignTagStepHandler(StepHandler):
                 if not resolved_value:
                     return StepResult(passed=False, error="Could not resolve tag value")
             else:
-                # No fixed value assigns the tag key-only. None (not ''): the tag
-                # store keeps a value the entity already has for this tag.
+                # No fixed value assigns the tag key-only (None, not '').
                 resolved_value = value if value not in (None, '') else None
 
             logger.info(
@@ -1358,33 +1357,48 @@ class AssignTagStepHandler(StepHandler):
                 context.entity_type, context.entity_id,
             )
 
-            # Persist via TagsManager
+            # Persist via TagsManager. ``effective_value`` is what the entity holds
+            # afterwards: a key-only assign keeps a value the entity already has.
             persisted = False
+            effective_value = resolved_value
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
                 tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                 if tag:
-                    tags_mgr.add_tag_to_entity(
-                        db=self._db,
-                        entity_id=context.entity_id,
-                        entity_type=context.entity_type,
-                        tag_id=tag.id,
-                        assigned_value=resolved_value,
-                        user_email=context.user_email,
-                    )
+                    existing = None
+                    if resolved_value is None:
+                        existing = next(
+                            (t for t in tags_mgr.list_assigned_tags(
+                                self._db, entity_id=context.entity_id, entity_type=context.entity_type,
+                            ) if t.tag_id == tag.id),
+                            None,
+                        )
+                    if existing is not None:
+                        # Already assigned: nothing to write (and no change-log entry).
+                        effective_value = existing.assigned_value
+                    else:
+                        tags_mgr.add_tag_to_entity(
+                            db=self._db,
+                            entity_id=context.entity_id,
+                            entity_type=context.entity_type,
+                            tag_id=tag.id,
+                            assigned_value=resolved_value,
+                            user_email=context.user_email,
+                        )
                     persisted = True
                 else:
                     logger.warning(f"Tag '{key}' not found by FQN — context updated only")
             except Exception as e:
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
-            
+
             if 'tags' not in context.entity:
                 context.entity['tags'] = {}
-            if resolved_value is not None:
-                context.entity['tags'][key] = resolved_value
+            if effective_value is not None:
+                context.entity['tags'][key] = effective_value
             else:
-                # Key-only: rules see true, or the value the entity already had.
+                # Key-only, with no stored value: rules see the tag as true, like
+                # the compliance loader shows key-only tags.
                 context.entity['tags'].setdefault(key, True)
 
             label = f"{key}={resolved_value}" if resolved_value is not None else key

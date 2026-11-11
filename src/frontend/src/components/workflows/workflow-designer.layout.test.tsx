@@ -97,13 +97,22 @@ describe('WorkflowDesigner layout', () => {
     expect(saved.done!.y).toBeGreaterThan(saved.notify!.y);
   });
 
-  it('auto-arranges when only some steps have a position', async () => {
+  it('keeps the stored positions when a step has none, and places that step', async () => {
     renderDesigner({ notify: { x: 400, y: 40 }, done: null });
 
     const saved = await save();
 
-    expect(saved.notify).not.toEqual({ x: 400, y: 40 });
-    expect(saved.done).toEqual({ x: expect.any(Number), y: expect.any(Number) });
+    expect(saved.notify).toEqual({ x: 400, y: 40 });
+    expect(saved.done).toEqual({ x: 400, y: 190 });
+  });
+
+  it('auto-arranges a workflow whose stored positions overlap', async () => {
+    renderDesigner({ notify: { x: 400, y: 300 }, done: { x: 350, y: 340 } });
+
+    const saved = await save();
+
+    expect(saved.done!.x).toBe(saved.notify!.x);
+    expect(saved.done!.y).toBeGreaterThan(saved.notify!.y + 90);
   });
 
   it('keeps the layout when Rearrange is cancelled', async () => {

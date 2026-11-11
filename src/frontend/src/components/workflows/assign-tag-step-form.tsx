@@ -7,7 +7,7 @@
  * - no value: the tag is assigned key-only, and a value the entity already has
  *   for the tag is kept.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Input } from '@/components/ui/input';
@@ -56,32 +56,29 @@ interface AssignTagStepFormProps {
   onChange: (config: Partial<AssignTagStepConfig>) => void;
 }
 
-const LOOKUP_DELAY_MS = 300;
-
 export default function AssignTagStepForm({ config, onChange }: AssignTagStepFormProps) {
   const { t } = useTranslation(['workflows']);
   const { get } = useApi();
   // A fixed value being typed is '' for a moment: keep the mode the user chose.
   const [mode, setMode] = useState<AssignTagValueMode>(() => valueModeOf(config));
-  const [tag, setTag] = useState<TagInfo | null | undefined>(undefined);
+  // The tag catalog, loaded once; null if it couldn't be read (e.g. no tags access).
+  const [tags, setTags] = useState<TagInfo[] | null | undefined>(undefined);
   const key = (config.key || '').trim();
 
   useEffect(() => {
-    if (!key) {
-      setTag(undefined);
-      return;
-    }
     let cancelled = false;
-    const timer = setTimeout(async () => {
-      const path = key.split('/').map(encodeURIComponent).join('/');
-      const response = await get<TagInfo>(`/api/tags/fqn/${path}`);
-      if (!cancelled) setTag(response.data && !response.error ? response.data : null);
-    }, LOOKUP_DELAY_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [key, get]);
+    (async () => {
+      const response = await get<TagInfo[]>('/api/tags?limit=1000');
+      if (!cancelled) setTags(!response.error && Array.isArray(response.data) ? response.data : null);
+    })();
+    return () => { cancelled = true; };
+  }, [get]);
+
+  // undefined while unknown (no key, catalog loading or unreadable), null if no tag has the key.
+  const tag = useMemo(() => {
+    if (!key || !tags) return undefined;
+    return tags.find(t => t.fully_qualified_name === key) ?? null;
+  }, [key, tags]);
 
   const possibleValues = tag?.possible_values?.filter(v => v !== '') ?? [];
   const fixedValue = config.value ?? '';
@@ -100,7 +97,13 @@ export default function AssignTagStepForm({ config, onChange }: AssignTagStepFor
           value={config.key || ''}
           onChange={(e) => onChange({ ...config, key: e.target.value })}
           placeholder={t('workflows:designer.assignTag.tagKeyPlaceholder')}
+          list={tags && tags.length > 0 ? 'assign-tag-key-options' : undefined}
         />
+        {tags && tags.length > 0 && (
+          <datalist id="assign-tag-key-options">
+            {tags.map(option => <option key={option.fully_qualified_name} value={option.fully_qualified_name} />)}
+          </datalist>
+        )}
         {tag === null && (
           <p className="text-xs text-muted-foreground mt-1">{t('workflows:designer.assignTag.tagNotFound')}</p>
         )}
@@ -139,6 +142,9 @@ export default function AssignTagStepForm({ config, onChange }: AssignTagStepFor
               onChange={(e) => onChange({ ...config, value: e.target.value })}
               placeholder={t('workflows:designer.assignTag.fixedValuePlaceholder')}
             />
+          )}
+          {!fixedValue && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('workflows:designer.assignTag.fixedValueRequired')}</p>
           )}
         </div>
       )}

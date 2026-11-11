@@ -152,7 +152,7 @@ import { UnknownEntityTypesNotice } from './unknown-entity-types-notice';
 import {
   TRIGGER_NODE_ID, linksToNewStep, makeTriggerEdge, withEntryStep, withTriggerEdge,
 } from './workflow-entry-step';
-import { hasStoredLayout, triggerPositionFor, withNodePositions } from './workflow-layout';
+import { hasUsableLayout, placeMissingSteps, triggerPositionFor, withNodePositions } from './workflow-layout';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
@@ -773,6 +773,13 @@ const workflowToElements = (
     deletable: false,
   });
 
+  // Open as the user arranged it (steps without a position are placed next to the
+  // others); auto-arrange only when there is no usable stored layout.
+  const useStoredLayout = hasUsableLayout(workflow.steps);
+  const positionOf = new Map(
+    (useStoredLayout ? placeMissingSteps(workflow.steps) : workflow.steps).map(s => [s.step_id, s.position]),
+  );
+
   // Add step nodes (use 'default' for unregistered step_type so we never get an empty box)
   const stepNodeTypes = Object.keys(nodeTypes);
   workflow.steps.forEach((step, index) => {
@@ -781,7 +788,7 @@ const workflowToElements = (
       id: step.step_id,
       type: nodeType,
       data: { step, rolesMap },
-      position: step.position || { x: 0, y: (index + 1) * 120 },
+      position: positionOf.get(step.step_id) || { x: 0, y: (index + 1) * 120 },
     });
   });
 
@@ -820,9 +827,8 @@ const workflowToElements = (
     }
   });
 
-  // Open as the user arranged it; auto-arrange only workflows without a full stored layout.
-  if (hasStoredLayout(workflow.steps)) {
-    nodes[0] = { ...nodes[0], position: triggerPositionFor(workflow.steps[0].position!) };
+  if (useStoredLayout && workflow.steps.length > 0) {
+    nodes[0] = { ...nodes[0], position: triggerPositionFor(positionOf.get(workflow.steps[0].step_id)!) };
     return { nodes, edges };
   }
   return getLayoutedElements(nodes, edges);
@@ -985,8 +991,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [originalState, setOriginalState] = useState<OriginalState | null>(null);
 
   // React Flow state
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
+
+  // Wrap onNodesChange so moves without a drag (arrow keys on selected nodes) are
+  // copied onto the steps too; drags are handled by onNodeDragStop.
+  const onNodesChange = useCallback((changes: import('reactflow').NodeChange[]) => {
+    onNodesChangeBase(changes);
+    const moved = changes.flatMap(c => (
+      c.type === 'position' && c.position && !c.dragging ? [{ id: c.id, position: c.position }] : []
+    ));
+    if (moved.length > 0) setSteps(prev => withNodePositions(prev, moved));
+  }, [onNodesChangeBase]);
 
   // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
   const onEdgesChange = useCallback((changes: import('reactflow').EdgeChange[]) => {

@@ -1,19 +1,67 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  TRIGGER_GAP, hasStoredLayout, roundPosition, triggerPositionFor, withNodePositions,
+  TRIGGER_GAP, hasUsableLayout, placeMissingSteps, roundPosition, storedLayoutOverlaps,
+  triggerPositionFor, withNodePositions,
 } from './workflow-layout';
 
-describe('hasStoredLayout', () => {
-  it('needs a position on every step', () => {
-    expect(hasStoredLayout([{ position: { x: 0, y: 0 } }, { position: { x: 10, y: 200 } }])).toBe(true);
-    expect(hasStoredLayout([{ position: { x: 0, y: 0 } }, {}])).toBe(false);
-    expect(hasStoredLayout([{ position: { x: 0, y: Number.NaN } }])).toBe(false);
-    expect(hasStoredLayout([{ position: null }])).toBe(false);
+describe('hasUsableLayout', () => {
+  it('needs at least one stored position', () => {
+    expect(hasUsableLayout([{ position: { x: 0, y: 0 } }, {}])).toBe(true);
+    expect(hasUsableLayout([{}, { position: null }])).toBe(false);
+    expect(hasUsableLayout([{ position: { x: 0, y: Number.NaN } }])).toBe(false);
+    expect(hasUsableLayout([])).toBe(false);
   });
 
-  it('is false for a workflow without steps', () => {
-    expect(hasStoredLayout([])).toBe(false);
+  it('is false when stored positions overlap (e.g. hand-written seed data)', () => {
+    const seeded = [{ position: { x: 400, y: 300 } }, { position: { x: 350, y: 340 } }];
+    expect(storedLayoutOverlaps(seeded)).toBe(true);
+    expect(hasUsableLayout(seeded)).toBe(false);
+  });
+
+  it('accepts steps that are far enough apart', () => {
+    const spaced = [{ position: { x: 0, y: 0 } }, { position: { x: 0, y: 150 } }, { position: { x: 220, y: 0 } }];
+    expect(storedLayoutOverlaps(spaced)).toBe(false);
+    expect(hasUsableLayout(spaced)).toBe(true);
+  });
+});
+
+describe('placeMissingSteps', () => {
+  it('keeps the stored positions and puts a new step below the step that links to it', () => {
+    const result = placeMissingSteps([
+      { step_id: 'a', on_pass: 'b', position: { x: 400, y: 40 } },
+      { step_id: 'b' },
+    ]);
+
+    expect(result.map(s => s.position)).toEqual([{ x: 400, y: 40 }, { x: 400, y: 40 + TRIGGER_GAP }]);
+  });
+
+  it('moves a placed step sideways when the spot is taken', () => {
+    const result = placeMissingSteps([
+      { step_id: 'a', on_pass: 'b', on_fail: 'c', position: { x: 0, y: 0 } },
+      { step_id: 'b' },
+      { step_id: 'c' },
+    ]);
+
+    const [, b, c] = result.map(s => s.position!);
+    expect(b).toEqual({ x: 0, y: TRIGGER_GAP });
+    expect(c.y).toBe(TRIGGER_GAP);
+    expect(Math.abs(c.x - b.x)).toBeGreaterThanOrEqual(180);
+  });
+
+  it('places chains and unlinked steps', () => {
+    const result = placeMissingSteps([
+      { step_id: 'c' },
+      { step_id: 'a', on_pass: 'b', position: { x: 10, y: 10 } },
+      { step_id: 'b', on_pass: 'c' },
+      { step_id: 'lonely' },
+    ]);
+    const byId = Object.fromEntries(result.map(s => [s.step_id, s.position]));
+
+    expect(byId.b).toEqual({ x: 10, y: 10 + TRIGGER_GAP });
+    expect(byId.c).toEqual({ x: 10, y: 10 + 2 * TRIGGER_GAP });
+    expect(byId.lonely!.y).toBe(10 + 3 * TRIGGER_GAP);
+    expect(storedLayoutOverlaps(result)).toBe(false);
   });
 });
 

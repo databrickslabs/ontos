@@ -26,9 +26,15 @@ function renderForm(config: Record<string, unknown>) {
   return onChange;
 }
 
+const CATALOG = [
+  { fully_qualified_name: 'default/owner', possible_values: [] },
+  { fully_qualified_name: 'governance/classification', possible_values: ['public', 'confidential'] },
+  { fully_qualified_name: 'governance/pii' },
+];
+
 beforeEach(() => {
   api.get.mockReset();
-  api.get.mockResolvedValue({ data: null, error: 'Not found' });
+  api.get.mockResolvedValue({ data: CATALOG });
 });
 
 describe('valueModeOf / configForMode', () => {
@@ -50,7 +56,6 @@ describe('valueModeOf / configForMode', () => {
 
 describe('AssignTagStepForm', () => {
   it('sets a fixed value as free text when the tag has no possible values', async () => {
-    api.get.mockResolvedValue({ data: { fully_qualified_name: 'default/owner', possible_values: [] } });
     const onChange = renderForm({ key: 'default/owner', value: 'a' });
 
     fireEvent.change(await screen.findByLabelText('Tag value'), { target: { value: 'team-a' } });
@@ -59,12 +64,8 @@ describe('AssignTagStepForm', () => {
   });
 
   it('offers the possible values of the tag', async () => {
-    api.get.mockResolvedValue({
-      data: { fully_qualified_name: 'governance/classification', possible_values: ['public', 'confidential'] },
-    });
     const onChange = renderForm({ key: 'governance/classification', value: 'public' });
 
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/tags/fqn/governance/classification'));
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Tag value' })).toBeInTheDocument());
     openSelect('Tag value');
     fireEvent.click(await screen.findByRole('option', { name: 'confidential' }));
@@ -104,5 +105,26 @@ describe('AssignTagStepForm', () => {
     renderForm({ key: 'nope' });
 
     expect(await screen.findByText(/no tag has this name/i)).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not claim a tag is missing when the catalog cannot be read', async () => {
+    api.get.mockResolvedValue({ data: {}, error: 'Forbidden' });
+    renderForm({ key: 'governance/classification', value: 'public' });
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByText(/no tag has this name/i)).not.toBeInTheDocument();
+    // Without the catalog the value is free text.
+    expect(await screen.findByLabelText('Tag value')).toHaveValue('public');
+  });
+
+  it('shows the hint for an empty fixed value', async () => {
+    const onChange = renderForm({ key: 'owner', value_source: 'current_user' });
+
+    openSelect('Value');
+    fireEvent.click(await screen.findByRole('option', { name: 'Fixed value' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({ key: 'owner', value: '' });
+    expect(await screen.findByText(/enter a value, or choose/i)).toBeInTheDocument();
   });
 });

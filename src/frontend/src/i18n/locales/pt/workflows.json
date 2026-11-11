@@ -228,7 +228,8 @@
       "selectValue": "Selecione um valor",
       "noValueHelp": "A tag é atribuída sem valor. Um valor que a entidade já tenha para esta tag é mantido.",
       "sourceEntityName": "Nome da entidade",
-      "tagNotFound": "Nenhuma tag tem este nome. A etapa então só a define para as etapas seguintes da execução."
+      "tagNotFound": "Nenhuma tag tem este nome. A etapa então só a define para as etapas seguintes da execução.",
+      "fixedValueRequired": "Insira um valor ou escolha \"Sem valor\" para atribuir a tag sem valor."
     },
     "approval": {
       "approversRole": "Aprovadores (papel)",
@@ -333,7 +334,8 @@
       "branch": {
         "on_pass": "sucesso",
         "on_fail": "falha"
-      }
+      },
+      "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\"."
     }
   },
   "approvalResponse": {

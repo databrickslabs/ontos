@@ -228,7 +228,8 @@
       "selectValue": "Wert auswählen",
       "noValueHelp": "Das Tag wird ohne Wert zugewiesen. Ein Wert, den die Entität für dieses Tag bereits hat, bleibt erhalten.",
       "sourceEntityName": "Entitätsname",
-      "tagNotFound": "Kein Tag hat diesen Namen. Der Schritt setzt es dann nur für die folgenden Schritte des Laufs."
+      "tagNotFound": "Kein Tag hat diesen Namen. Der Schritt setzt es dann nur für die folgenden Schritte des Laufs.",
+      "fixedValueRequired": "Geben Sie einen Wert ein oder wählen Sie „Kein Wert“, um das Tag ohne Wert zuzuweisen."
     },
     "approval": {
       "approversRole": "Genehmiger (Rolle)",
@@ -333,7 +334,8 @@
       "branch": {
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
-      }
+      },
+      "assignTagValueSourceUnknown": "Schritt „{{step}}“ verwendet die unbekannte Wertquelle „{{source}}“."
     }
   },
   "approvalResponse": {

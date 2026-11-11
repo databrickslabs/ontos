@@ -228,7 +228,8 @@
       "selectValue": "Selecteer een waarde",
       "noValueHelp": "De tag wordt zonder waarde toegewezen. Een waarde die de entiteit al voor deze tag heeft, blijft behouden.",
       "sourceEntityName": "Entiteitsnaam",
-      "tagNotFound": "Geen tag heeft deze naam. De stap zet hem dan alleen voor de volgende stappen van de uitvoering."
+      "tagNotFound": "Geen tag heeft deze naam. De stap zet hem dan alleen voor de volgende stappen van de uitvoering.",
+      "fixedValueRequired": "Voer een waarde in, of kies \"Geen waarde\" om de tag zonder waarde toe te wijzen."
     },
     "approval": {
       "approversRole": "Goedkeurders (Rol)",
@@ -333,7 +334,8 @@
       "branch": {
         "on_pass": "succes",
         "on_fail": "fout"
-      }
+      },
+      "assignTagValueSourceUnknown": "Stap \"{{step}}\" gebruikt de onbekende waardebron \"{{source}}\"."
     }
   },
   "approvalResponse": {

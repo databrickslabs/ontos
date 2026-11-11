@@ -169,8 +169,74 @@ class TestAssignTagValidation:
 
         assert result.valid is True, result.errors
 
+    def test_an_empty_fixed_value_is_refused(self, db_session):
+        result = self._validate(db_session, {'key': 'governance/pii', 'value': ''})
+
+        assert result.valid is False
+        assert "empty 'value'" in str(result.errors[0])
+
+    def test_an_unknown_value_source_is_refused(self, db_session):
+        result = self._validate(db_session, {'key': 'owner', 'value_source': 'curent_user'})
+
+        assert result.valid is False
+        assert [(i.code, i.params.get('source')) for i in result.issues] == [
+            ('assign_tag_value_source_unknown', 'curent_user'),
+        ]
+
+    @pytest.mark.parametrize('source', ['current_user', 'project_name', 'entity_name', 'timestamp'])
+    def test_every_supported_value_source_is_valid(self, db_session, source):
+        assert self._validate(db_session, {'key': 'owner', 'value_source': source}).valid is True
+
     def test_the_key_is_still_required(self, db_session):
         result = self._validate(db_session, {'value': 'x'})
 
         assert result.valid is False
         assert len(result.errors) == 1 and "requires 'key'" in str(result.errors[0])
+
+
+class TestAssignTagKeepsStoredValues:
+    def test_key_only_on_an_assigned_tag_keeps_its_value_and_writes_nothing(self, db_session, tags_manager):
+        tag_id = tags_manager.get_tag_by_fqn.return_value.id
+        tags_manager.list_assigned_tags.return_value = [MagicMock(tag_id=tag_id, assigned_value='gold')]
+        context = _context()
+
+        result = AssignTagStepHandler(db=db_session, config={'key': 'tier'}).execute(context)
+
+        assert result.passed is True
+        tags_manager.add_tag_to_entity.assert_not_called()
+        # Later rule steps see the stored value, not true.
+        assert context.entity['tags']['tier'] == 'gold'
+
+    def test_with_the_real_tag_store_a_value_set_by_someone_else_survives(self, db_session):
+        from src.controller.tags_manager import TagsManager
+        from src.models.tags import TagCreate
+
+        mgr = TagsManager()
+        tag = mgr.create_tag(db_session, tag_in=TagCreate(name=f'tier{uuid.uuid4().hex[:6]}'), user_email='alice@example.com')
+        mgr.add_tag_to_entity(
+            db_session, entity_id='p-1', entity_type='data_product', tag_id=tag.id,
+            assigned_value='gold', user_email='alice@example.com',
+        )
+        context = _context(user_email='bob@example.com')
+
+        result = AssignTagStepHandler(db=db_session, config={'key': tag.fully_qualified_name}).execute(context)
+
+        assert result.passed is True, result.error
+        stored = [t for t in mgr.list_assigned_tags(db_session, entity_id='p-1', entity_type='data_product')
+                  if t.tag_id == tag.id]
+        assert [(t.assigned_value, t.assigned_by) for t in stored] == [('gold', 'alice@example.com')]
+        assert context.entity['tags'][tag.fully_qualified_name] == 'gold'
+
+    def test_with_the_real_tag_store_a_new_key_only_tag_is_assigned(self, db_session):
+        from src.controller.tags_manager import TagsManager
+        from src.models.tags import TagCreate
+
+        mgr = TagsManager()
+        tag = mgr.create_tag(db_session, tag_in=TagCreate(name=f'pii{uuid.uuid4().hex[:6]}'), user_email='alice@example.com')
+
+        result = AssignTagStepHandler(db=db_session, config={'key': tag.fully_qualified_name}).execute(_context())
+
+        assert result.passed is True, result.error
+        stored = [t for t in mgr.list_assigned_tags(db_session, entity_id='p-1', entity_type='data_product')
+                  if t.tag_id == tag.id]
+        assert [t.assigned_value for t in stored] == [None]

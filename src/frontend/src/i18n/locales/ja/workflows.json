@@ -228,7 +228,8 @@
       "selectValue": "値を選択",
       "noValueHelp": "タグは値なしで割り当てられます。エンティティがこのタグに既に持つ値は保持されます。",
       "sourceEntityName": "エンティティ名",
-      "tagNotFound": "この名前のタグはありません。このステップは実行の後続ステップに対してのみ設定します。"
+      "tagNotFound": "この名前のタグはありません。このステップは実行の後続ステップに対してのみ設定します。",
+      "fixedValueRequired": "値を入力するか、「値なし」を選択して値なしでタグを割り当ててください。"
     },
     "approval": {
       "approversRole": "承認者（ロール）",
@@ -333,7 +334,8 @@
       "branch": {
         "on_pass": "成功時",
         "on_fail": "失敗時"
-      }
+      },
+      "assignTagValueSourceUnknown": "ステップ「{{step}}」は不明な値ソース「{{source}}」を使用しています。"
     }
   },
   "approvalResponse": {

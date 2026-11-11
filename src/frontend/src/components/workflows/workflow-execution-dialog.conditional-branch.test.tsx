@@ -98,6 +98,11 @@ describe('getStepExecutionState of steps that never ran', () => {
     expect(getStepExecutionState(step, ex)).toBe('pending');
   });
 
+  it('is skipped in a finished run even if it is the stale current step', () => {
+    const ex = { status: 'succeeded', current_step_id: 'approve', step_executions: [] } as unknown as WorkflowExecution;
+    expect(getStepExecutionState(step, ex)).toBe('skipped');
+  });
+
   it('is pending while the execution is paused', () => {
     const ex = { status: 'paused', current_step_id: 'other', step_executions: [] } as unknown as WorkflowExecution;
     expect(getStepExecutionState(step, ex)).toBe('pending');

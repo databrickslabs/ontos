@@ -152,9 +152,8 @@ export function getStepExecutionState(
 
   // A finished execution never reached this step (e.g. the branch not taken).
   // The step a cancelled execution stopped at was reached, it just never ran.
-  if (FINISHED_EXECUTION_STATES.has(execution.status) && execution.current_step_id !== stepId) {
-    return 'skipped';
-  }
+  const stoppedHere = execution.status === 'cancelled' && execution.current_step_id === stepId;
+  if (FINISHED_EXECUTION_STATES.has(execution.status) && !stoppedHere) return 'skipped';
 
   return 'pending';
 }

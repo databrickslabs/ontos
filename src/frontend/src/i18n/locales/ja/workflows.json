@@ -317,6 +317,12 @@
         "on_pass": "成功時",
         "on_fail": "失敗時"
       }
+    },
+    "edgeLabels": {
+      "pass": "成功",
+      "fail": "失敗",
+      "true": "真",
+      "false": "偽"
     }
   },
   "approvalResponse": {

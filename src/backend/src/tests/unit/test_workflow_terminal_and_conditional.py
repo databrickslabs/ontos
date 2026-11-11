@@ -313,3 +313,38 @@ def test_a_failed_validation_rule_still_counts_as_a_failure(db_session):
     assert _ran(execution) == [('rule', 'failed'), ('notify', 'succeeded')]
     assert execution.failure_count == 1
     assert execution.status.value == 'succeeded'
+
+
+# --- startup scan, stored values, approval workflows -------------------------
+
+
+def test_startup_scan_logs_stored_terminal_links_and_open_gate_branches(db_session, caplog):
+    linked = _create(db_session, [_step('done', StepType.PASS), _step('stop', StepType.FAIL)])
+    _store_link(db_session, linked.id, 'done', on_pass='stop')
+    gate = process_workflow_repo.create(db_session, ProcessWorkflowCreate(
+        name='gate', trigger=WorkflowTrigger(type=TriggerType.BEFORE_UPDATE, entity_types=[EntityType.DATA_CONTRACT]),
+        steps=[_conditional('1 = 1', on_pass='done', on_fail=None), _step('done', StepType.PASS)],
+    ))
+    _create(db_session, [_conditional('1 = 1', on_pass='done', on_fail=None), _step('done', StepType.PASS)])
+
+    with caplog.at_level('WARNING'):
+        warned = WorkflowsManager(db_session).log_branching_warnings()
+
+    assert warned == 2
+    assert linked.id in caplog.text and "['done']" in caplog.text
+    assert gate.id in caplog.text and "check:false" in caplog.text
+
+
+def test_a_condition_that_returns_a_value_is_stored_as_text(db_session):
+    from datetime import datetime
+    from unittest.mock import patch
+
+    db_workflow = _create(db_session, [_conditional('obj.name', on_pass='done', on_fail='stop'),
+                                       _step('done', StepType.PASS), _step('stop', StepType.FAIL)])
+    with patch('src.common.compliance_dsl.Evaluator.evaluate', return_value=datetime(2026, 1, 2)):
+        execution = _run(db_session, db_workflow.id)
+
+    check = execution.step_executions[0]
+    assert check.result_data['result'] == '2026-01-02 00:00:00'
+    assert check.result_data['branch'] == 'true'
+    assert execution.status.value == 'succeeded'

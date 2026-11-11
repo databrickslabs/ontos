@@ -913,6 +913,7 @@ async def update_workflow(
             trigger=workflow.trigger or existing.trigger,
             scope=workflow.scope or existing.scope,
             is_active=workflow.is_active if workflow.is_active is not None else existing.is_active,
+            workflow_type=workflow.workflow_type or existing.workflow_type,
             steps=workflow.steps,
         )
         validation = manager.validate_workflow(full_workflow)

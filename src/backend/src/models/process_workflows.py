@@ -150,6 +150,11 @@ def is_terminal_step_type(step_type: Any) -> bool:
     return getattr(step_type, 'value', step_type) in TERMINAL_STEP_TYPES
 
 
+def is_conditional_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) is a conditional."""
+    return getattr(step_type, 'value', step_type) == StepType.CONDITIONAL.value
+
+
 def ends_process_run(workflow_type: Any, step_type: Any) -> bool:
     """Whether a step of a workflow of this type ends the run, so its links are dropped."""
     return (getattr(workflow_type, 'value', workflow_type) or WorkflowType.PROCESS.value) \

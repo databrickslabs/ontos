@@ -32,7 +32,8 @@ from src.models.process_workflows import (
     ExecutionStatus,
     StepExecutionStatus,
     WorkflowStepExecutionResult,
-    is_terminal_step_type,
+    ends_process_run,
+    is_conditional_step_type,
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
 
@@ -200,17 +201,22 @@ class StepResult:
         return entry
 
 
-def _next_step_id(step: 'WorkflowStep', result: StepResult) -> Optional[str]:
+def _next_step_id(workflow: 'ProcessWorkflow', step: 'WorkflowStep', result: StepResult) -> Optional[str]:
     """The step to run after ``step``: none after a Pass or Fail step, else its branch.
 
     A conditional's branches are its true and false results, so a condition that
     couldn't be evaluated has no branch: the run ends there, failed.
     """
-    if is_terminal_step_type(step.step_type):
+    if ends_process_run(getattr(workflow, 'workflow_type', None), step.step_type):
         return None
-    if getattr(step.step_type, 'value', step.step_type) == StepType.CONDITIONAL.value and result.branch is None:
+    if is_conditional_step_type(step.step_type) and result.branch is None:
         return None
     return step.on_pass if result.takes_pass_branch() else step.on_fail
+
+
+def _json_safe(value: Any) -> Any:
+    """``value`` if result data can store it as JSON, else its text."""
+    return value if value is None or isinstance(value, (bool, int, float, str)) else str(value)
 
 
 class StepHandler(ABC):
@@ -1499,7 +1505,7 @@ class ConditionalStepHandler(StepHandler):
                 passed=True,
                 branch=branch,
                 message=f"Condition evaluated to: {result}",
-                data={'condition': condition, 'result': result, 'branch': 'true' if branch else 'false'},
+                data={'condition': condition, 'result': _json_safe(result), 'branch': 'true' if branch else 'false'},
             )
         except Exception as e:
             logger.exception(f"Conditional step failed: {e}")
@@ -3200,7 +3206,7 @@ class WorkflowExecutor:
                 break
             
             # Determine next step
-            current_step_id = _next_step_id(step, result)
+            current_step_id = _next_step_id(workflow, step, result)
             
             # If no next step, we're done
             if not current_step_id:
@@ -3507,7 +3513,7 @@ class WorkflowExecutor:
                 break
             
             # Determine next step
-            next_step_id = _next_step_id(step, result)
+            next_step_id = _next_step_id(workflow, step, result)
             
             # If no next step, we're done
             if not next_step_id:

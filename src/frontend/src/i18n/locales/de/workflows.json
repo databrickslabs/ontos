@@ -317,6 +317,12 @@
         "on_pass": "Erfolgs",
         "on_fail": "Fehler"
       }
+    },
+    "edgeLabels": {
+      "pass": "Bestanden",
+      "fail": "Fehlgeschlagen",
+      "true": "Wahr",
+      "false": "Falsch"
     }
   },
   "approvalResponse": {

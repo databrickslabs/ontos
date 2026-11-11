@@ -17,8 +17,10 @@ from src.common.authorization import get_user_details_from_sdk
 from src.common.dependencies import get_current_user_details_for_audit, get_db
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.manager_dependencies import get_audit_manager, get_auth_manager, get_metadata_manager
-from src.models.costs import CostItem
-from src.models.metadata import RichText
+from src.controller.costs_manager import CostsManager
+from src.controller.metadata_manager import MetadataManager
+from src.models.costs import CostItem, CostItemCreate
+from src.models.metadata import METADATA_ENTITY_FEATURES, DocumentCreate, LinkCreate, RichText, RichTextCreate
 from src.models.users import UserInfo
 from src.routes import costs_routes, metadata_routes
 
@@ -113,10 +115,15 @@ class TestEntityRoutes:
         metadata_manager.create_rich_text.assert_called_once()
 
     @pytest.mark.parametrize("entity_type, feature", [
-        ("asset", "assets"),
-        ("concept", "semantic-models"),
-        ("compliance_policy", "compliance"),
+        ("data_product", "data-products"),
         ("data_contract", "data-contracts"),
+        ("asset", "assets"),
+        ("dataset", "assets"),
+        ("concept", "semantic-models"),
+        ("collection", "semantic-models"),
+        ("compliance_policy", "compliance"),
+        ("team", "teams"),
+        ("project", "projects"),
     ])
     def test_reads_need_the_owning_feature(self, make_client, metadata_manager, entity_type, feature):
         metadata_manager.list_links.return_value = []
@@ -199,3 +206,48 @@ class TestCostRoutes:
         costs_manager.get_entity_type.return_value = None
 
         assert make_client({"assets": RW}).delete(f"/api/cost-items/{uuid.uuid4()}").status_code == 404
+
+
+def test_every_metadata_kind_maps_to_a_known_feature():
+    from src.common.features import APP_FEATURES
+
+    assert set(METADATA_ENTITY_FEATURES.values()) <= set(APP_FEATURES)
+
+
+class TestRecordLookups:
+    """The id-addressed routes authorize by these lookups, so check them on a real session."""
+
+    def test_metadata_records_report_their_entity_kind(self, db_session):
+        manager = MetadataManager()
+        note = manager.create_rich_text(
+            db_session, data=RichTextCreate(entity_id="p1", entity_type="data_product", title="t", content_markdown="c"),
+            user_email="u@example.com",
+        )
+        link = manager.create_link(
+            db_session, data=LinkCreate(entity_id="a1", entity_type="asset", title="t", url="https://example.com"),
+            user_email="u@example.com",
+        )
+        doc = manager.create_document_record(
+            db_session, data=DocumentCreate(entity_id="c1", entity_type="concept", title="t"),
+            filename="f.txt", content_type="text/plain", size_bytes=1, storage_path="/x/f.txt",
+            user_email="u@example.com",
+        )
+
+        assert manager.get_record_entity_type(db_session, kind="rich_text", id=note.id) == "data_product"
+        assert manager.get_record_entity_type(db_session, kind="link", id=link.id) == "asset"
+        assert manager.get_record_entity_type(db_session, kind="document", id=doc.id) == "concept"
+        # A record of another kind with the same id space is not found under the wrong kind.
+        assert manager.get_record_entity_type(db_session, kind="link", id=note.id) is None
+        assert manager.get_record_entity_type(db_session, kind="rich_text", id=uuid.uuid4()) is None
+
+    def test_cost_items_report_their_entity_kind(self, db_session):
+        manager = CostsManager()
+        item = manager.create(
+            db_session,
+            data=CostItemCreate(entity_id="a1", entity_type="asset", cost_center="STORAGE",
+                                amount_cents=100, currency="USD", start_month="2026-10-01"),
+            user_email="u@example.com",
+        )
+
+        assert manager.get_entity_type(db_session, id=item.id) == "asset"
+        assert manager.get_entity_type(db_session, id=uuid.uuid4()) is None

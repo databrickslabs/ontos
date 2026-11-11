@@ -94,6 +94,13 @@
       "generate_pdf": "Genera PDF",
       "deliver": "Consegna"
     },
+    "layout": {
+      "rearrange": "Riorganizza",
+      "rearrangeHint": "Disponi automaticamente tutti i passaggi",
+      "confirmTitle": "Riorganizzare tutti i passaggi?",
+      "confirmDescription": "I passaggi vengono disposti automaticamente. Il layout attuale viene sostituito al salvataggio.",
+      "confirmAction": "Riorganizza"
+    },
     "discard": {
       "description": "Hai modifiche non salvate in questo workflow. Se esci ora, le tue modifiche andranno perse.",
       "stay": "Rimani",
@@ -212,7 +219,18 @@
       "selectSource": "Seleziona origine",
       "sourceCurrentUser": "Utente corrente",
       "sourceProjectName": "Nome progetto",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Valore",
+      "modeFixed": "Valore fisso",
+      "modeSource": "Valore dall’esecuzione",
+      "modeNone": "Nessun valore",
+      "fixedValue": "Valore del tag",
+      "fixedValuePlaceholder": "ad es. riservato",
+      "selectValue": "Seleziona un valore",
+      "noValueHelp": "Il tag viene assegnato senza valore. Un valore che l’entità ha già per questo tag viene mantenuto.",
+      "sourceEntityName": "Nome dell’entità",
+      "tagNotFound": "Nessun tag ha questo nome. Il passaggio lo imposta solo per i passaggi successivi dell’esecuzione.",
+      "fixedValueRequired": "Inserisci un valore o scegli «Nessun valore» per assegnare il tag senza valore."
     },
     "approval": {
       "approversRole": "Approvatori (ruolo)",
@@ -317,6 +335,7 @@
       "duplicateStepIds": "Due passaggi hanno lo stesso ID.",
       "stepUnknownReference": "Il passaggio \"{{step}}\" indirizza il ramo di {{branch}} a \"{{target}}\", che non è nel workflow.",
       "stepConfigMissing": "Al passaggio \"{{step}}\" mancano impostazioni obbligatorie: {{fields}}.",
+      "assignTagValueSourceUnknown": "Il passaggio «{{step}}» usa la sorgente di valore sconosciuta «{{source}}».",
       "policyCheckPolicyMissing": "Il passaggio \"{{step}}\" richiede un criterio di conformità esistente. Selezionarne uno nelle impostazioni del passaggio.",
       "branch": {
         "on_pass": "successo",

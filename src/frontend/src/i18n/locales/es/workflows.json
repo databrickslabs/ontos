@@ -94,6 +94,13 @@
       "generate_pdf": "Generar PDF",
       "deliver": "Entregar"
     },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todos los pasos automáticamente",
+      "confirmTitle": "¿Reorganizar todos los pasos?",
+      "confirmDescription": "Los pasos se organizan automáticamente. Su diseño actual se reemplaza al guardar.",
+      "confirmAction": "Reorganizar"
+    },
     "discard": {
       "description": "Tienes cambios sin guardar en este flujo de trabajo. Si sales ahora, se perderán tus cambios.",
       "stay": "Permanecer",
@@ -212,7 +219,18 @@
       "selectSource": "Selecciona el origen",
       "sourceCurrentUser": "Usuario actual",
       "sourceProjectName": "Nombre del proyecto",
-      "sourceTimestamp": "Marca de tiempo"
+      "sourceTimestamp": "Marca de tiempo",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fijo",
+      "modeSource": "Valor de la ejecución",
+      "modeNone": "Sin valor",
+      "fixedValue": "Valor de la etiqueta",
+      "fixedValuePlaceholder": "p. ej., confidencial",
+      "selectValue": "Seleccione un valor",
+      "noValueHelp": "La etiqueta se asigna sin valor. Se conserva el valor que la entidad ya tenga para esta etiqueta.",
+      "sourceEntityName": "Nombre de la entidad",
+      "tagNotFound": "Ninguna etiqueta tiene este nombre. El paso solo la establece para los pasos siguientes de la ejecución.",
+      "fixedValueRequired": "Introduzca un valor o elija «Sin valor» para asignar la etiqueta sin valor."
     },
     "approval": {
       "approversRole": "Aprobadores (rol)",
@@ -317,6 +335,7 @@
       "duplicateStepIds": "Dos pasos tienen el mismo ID.",
       "stepUnknownReference": "El paso \"{{step}}\" dirige su rama de {{branch}} a \"{{target}}\", que no está en el workflow.",
       "stepConfigMissing": "Al paso \"{{step}}\" le faltan ajustes obligatorios: {{fields}}.",
+      "assignTagValueSourceUnknown": "El paso «{{step}}» usa la fuente de valor desconocida «{{source}}».",
       "policyCheckPolicyMissing": "El paso \"{{step}}\" necesita una política de cumplimiento existente. Seleccione una en la configuración del paso.",
       "branch": {
         "on_pass": "éxito",

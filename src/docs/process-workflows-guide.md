@@ -632,9 +632,13 @@ Assigns a tag to the entity.
 
 | Config Key | Type | Description |
 |------------|------|-------------|
-| `key` | String | Tag key name |
-| `value` | String | Static tag value |
-| `value_source` | String | Dynamic value source |
+| `key` | String | Tag key: the tag's fully qualified name (`namespace/name`) |
+| `value` | String | Fixed tag value. Must not be empty when set |
+| `value_source` | String | Dynamic value source; wins over `value` |
+
+Without `value` and `value_source` the tag is assigned **without a value**. If the entity already has the tag, the step changes nothing: its value is kept, and later steps see that value (or `true` for a tag without one). An empty `value` and an unknown `value_source` are refused when the workflow is saved.
+
+In the designer, choose **Fixed value** (a list of the tag's possible values when it defines them), **Value from the run**, or **No value**.
 
 **Value Sources:**
 - `current_user` - Email of user who triggered workflow
@@ -1040,7 +1044,7 @@ Each step type has a corresponding visual node:
 1. **Drag-and-Drop**: Add steps from the toolbar
 2. **Edge Connections**: Connect steps with pass/fail branches
 3. **Configuration Panel**: Edit step settings in the side sheet
-4. **Auto-Layout**: Automatic DAG layout using Dagre
+4. **Layout**: the designer keeps the layout you arrange (step positions are saved with the workflow). A workflow without stored positions is auto-arranged once with Dagre; steps added later without a position are placed below the step that leads to them. **Rearrange** in the canvas toolbar auto-arranges all steps after a confirmation.
 5. **Validation**: Real-time workflow validation
 
 ### Accessing the Designer

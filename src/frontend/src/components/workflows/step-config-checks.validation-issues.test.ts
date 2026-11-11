@@ -35,6 +35,21 @@ describe('workflowValidationIssueText', () => {
     )).toBe('Etapa "check": Informe uma condição.');
   });
 
+  it('translates an assign tag step with an unknown value source', async () => {
+    const issue = {
+      code: 'assign_tag_value_source_unknown',
+      message: "Step 'tag': unknown value source 'curent_user'",
+      params: { step: 'tag', source: 'curent_user' },
+    };
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Step "tag" uses the unknown value source "curent_user".',
+    );
+    await i18n.changeLanguage('de');
+    expect(workflowValidationIssueText(issue, i18n.t)).toBe(
+      'Schritt „tag“ verwendet die unbekannte Wertquelle „curent_user“.',
+    );
+  });
+
   it('translates a policy check step without an existing policy', async () => {
     const issue = {
       code: 'policy_check_policy_missing',

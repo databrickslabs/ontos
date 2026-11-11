@@ -94,6 +94,13 @@
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver"
     },
+    "layout": {
+      "rearrange": "Rearrange",
+      "rearrangeHint": "Arrange all steps automatically",
+      "confirmTitle": "Rearrange all steps?",
+      "confirmDescription": "The steps are arranged automatically. Your current layout is replaced when you save.",
+      "confirmAction": "Rearrange"
+    },
     "discard": {
       "description": "You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
       "stay": "Stay",
@@ -212,7 +219,18 @@
       "selectSource": "Select source",
       "sourceCurrentUser": "Current User",
       "sourceProjectName": "Project Name",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Value",
+      "modeFixed": "Fixed value",
+      "modeSource": "Value from the run",
+      "modeNone": "No value",
+      "fixedValue": "Tag value",
+      "fixedValuePlaceholder": "e.g., confidential",
+      "selectValue": "Select a value",
+      "noValueHelp": "The tag is assigned without a value. A value the entity already has for this tag is kept.",
+      "sourceEntityName": "Entity Name",
+      "tagNotFound": "No tag has this name. The step then only sets it for the following steps of the run.",
+      "fixedValueRequired": "Enter a value, or choose \"No value\" to assign the tag without one."
     },
     "approval": {
       "approversRole": "Approvers (Role)",
@@ -317,6 +335,7 @@
       "duplicateStepIds": "Two steps have the same ID.",
       "stepUnknownReference": "Step \"{{step}}\" points its {{branch}} branch at \"{{target}}\", which is not in the workflow.",
       "stepConfigMissing": "Step \"{{step}}\" is missing required settings: {{fields}}.",
+      "assignTagValueSourceUnknown": "Step \"{{step}}\" uses the unknown value source \"{{source}}\".",
       "policyCheckPolicyMissing": "Step \"{{step}}\" needs an existing compliance policy. Select one in the step's settings.",
       "branch": {
         "on_pass": "pass",

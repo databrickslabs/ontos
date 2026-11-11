@@ -94,6 +94,13 @@
       "generate_pdf": "Gerar PDF",
       "deliver": "Entregar"
     },
+    "layout": {
+      "rearrange": "Reorganizar",
+      "rearrangeHint": "Organizar todas as etapas automaticamente",
+      "confirmTitle": "Reorganizar todas as etapas?",
+      "confirmDescription": "As etapas são organizadas automaticamente. Seu layout atual é substituído ao salvar.",
+      "confirmAction": "Reorganizar"
+    },
     "discard": {
       "description": "Você tem alterações não salvas neste fluxo de trabalho. Se sair agora, suas alterações serão perdidas.",
       "stay": "Permanecer",
@@ -212,7 +219,18 @@
       "selectSource": "Selecionar origem",
       "sourceCurrentUser": "Usuário atual",
       "sourceProjectName": "Nome do projeto",
-      "sourceTimestamp": "Timestamp"
+      "sourceTimestamp": "Timestamp",
+      "valueMode": "Valor",
+      "modeFixed": "Valor fixo",
+      "modeSource": "Valor da execução",
+      "modeNone": "Sem valor",
+      "fixedValue": "Valor da tag",
+      "fixedValuePlaceholder": "ex.: confidencial",
+      "selectValue": "Selecione um valor",
+      "noValueHelp": "A tag é atribuída sem valor. Um valor que a entidade já tenha para esta tag é mantido.",
+      "sourceEntityName": "Nome da entidade",
+      "tagNotFound": "Nenhuma tag tem este nome. A etapa então só a define para as etapas seguintes da execução.",
+      "fixedValueRequired": "Insira um valor ou escolha \"Sem valor\" para atribuir a tag sem valor."
     },
     "approval": {
       "approversRole": "Aprovadores (papel)",
@@ -317,6 +335,7 @@
       "duplicateStepIds": "Duas etapas têm o mesmo ID.",
       "stepUnknownReference": "A etapa \"{{step}}\" aponta o ramo de {{branch}} para \"{{target}}\", que não está no workflow.",
       "stepConfigMissing": "Faltam configurações obrigatórias na etapa \"{{step}}\": {{fields}}.",
+      "assignTagValueSourceUnknown": "A etapa \"{{step}}\" usa a fonte de valor desconhecida \"{{source}}\".",
       "policyCheckPolicyMissing": "A etapa \"{{step}}\" precisa de uma política de conformidade existente. Selecione uma nas configurações da etapa.",
       "branch": {
         "on_pass": "sucesso",

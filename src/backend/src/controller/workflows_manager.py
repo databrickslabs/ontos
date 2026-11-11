@@ -112,6 +112,10 @@ def _stored_trigger(trigger: WorkflowTrigger | Dict[str, Any] | None) -> Optiona
     return trigger
 
 
+# Value sources the assign_tag step resolves (AssignTagStepHandler._resolve_value_source).
+ASSIGN_TAG_VALUE_SOURCES = ('current_user', 'project_name', 'entity_name', 'timestamp')
+
+
 def _missing(step: WorkflowStepCreate, text: str, fields: List[str]) -> CodedMessage:
     """A step config error for required settings, with the step and fields as params."""
     return CodedMessage(f"Step '{step.step_id}': {text}", 'step_config_missing',
@@ -998,8 +1002,17 @@ class WorkflowsManager:
         elif step.step_type == StepType.ASSIGN_TAG:
             if not config.get('key'):
                 errors.append(_missing(step, "Assign tag step requires 'key' in config", ['key']))
-            if not config.get('value') and not config.get('value_source'):
-                errors.append(_missing(step, "Assign tag step requires 'value' or 'value_source' in config", ['value', 'value_source']))
+            # Neither 'value' nor 'value_source' assigns the tag key-only. An empty
+            # fixed value is an unfinished step, not "no value".
+            value_source = config.get('value_source')
+            if not value_source and 'value' in config and config.get('value') in ('', None):
+                errors.append(_missing(step, "Assign tag step has an empty 'value': enter one or remove it to assign the tag without a value", ['value']))
+            if value_source and value_source not in ASSIGN_TAG_VALUE_SOURCES:
+                errors.append(CodedMessage(
+                    f"Step '{step.step_id}': unknown value source '{value_source}'",
+                    'assign_tag_value_source_unknown',
+                    step=step.step_id, source=value_source, supported=list(ASSIGN_TAG_VALUE_SOURCES),
+                ))
 
         elif step.step_type == StepType.REMOVE_TAG:
             if not config.get('key'):
@@ -1081,8 +1094,8 @@ class WorkflowsManager:
                     "type": "object",
                     "properties": {
                         "key": {"type": "string", "description": "Tag key"},
-                        "value": {"type": "string", "description": "Static tag value"},
-                        "value_source": {"type": "string", "description": "Dynamic value source: current_user, project_name"}
+                        "value": {"type": "string", "description": "Static tag value; leave out (and value_source) to assign the tag without a value"},
+                        "value_source": {"type": "string", "description": "Dynamic value source: current_user, project_name, entity_name, timestamp (wins over value)"}
                     },
                     "required": ["key"]
                 },

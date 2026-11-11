@@ -1407,42 +1407,66 @@ class AssignTagStepHandler(StepHandler):
         try:
             if value_source:
                 resolved_value = self._resolve_value_source(value_source, context)
+                if not resolved_value:
+                    return StepResult(passed=False, error="Could not resolve tag value")
             else:
-                resolved_value = value
-            
-            if not resolved_value:
-                return StepResult(passed=False, error="Could not resolve tag value")
-            
-            logger.info(f"Assigning tag {key}={resolved_value} to {context.entity_type} {context.entity_id}")
+                # No fixed value assigns the tag key-only (None, not '').
+                resolved_value = value if value not in (None, '') else None
 
-            # Persist via TagsManager
+            logger.info(
+                "Assigning tag %s%s to %s %s", key,
+                f"={resolved_value}" if resolved_value is not None else " (no value)",
+                context.entity_type, context.entity_id,
+            )
+
+            # Persist via TagsManager. ``effective_value`` is what the entity holds
+            # afterwards: a key-only assign keeps a value the entity already has.
             persisted = False
+            effective_value = resolved_value
             try:
                 from src.controller.tags_manager import TagsManager
                 tags_mgr = TagsManager()
                 tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                 if tag:
-                    tags_mgr.add_tag_to_entity(
-                        db=self._db,
-                        entity_id=context.entity_id,
-                        entity_type=context.entity_type,
-                        tag_id=tag.id,
-                        assigned_value=resolved_value,
-                        user_email=context.user_email,
-                    )
+                    existing = None
+                    if resolved_value is None:
+                        existing = next(
+                            (t for t in tags_mgr.list_assigned_tags(
+                                self._db, entity_id=context.entity_id, entity_type=context.entity_type,
+                            ) if t.tag_id == tag.id),
+                            None,
+                        )
+                    if existing is not None:
+                        # Already assigned: nothing to write (and no change-log entry).
+                        effective_value = existing.assigned_value
+                    else:
+                        tags_mgr.add_tag_to_entity(
+                            db=self._db,
+                            entity_id=context.entity_id,
+                            entity_type=context.entity_type,
+                            tag_id=tag.id,
+                            assigned_value=resolved_value,
+                            user_email=context.user_email,
+                        )
                     persisted = True
                 else:
                     logger.warning(f"Tag '{key}' not found by FQN — context updated only")
             except Exception as e:
                 logger.warning(f"TagsManager integration failed (context still updated): {e}")
-            
+
             if 'tags' not in context.entity:
                 context.entity['tags'] = {}
-            context.entity['tags'][key] = resolved_value
-            
+            if effective_value is not None:
+                context.entity['tags'][key] = effective_value
+            else:
+                # Key-only, with no stored value: rules see the tag as true, like
+                # the compliance loader shows key-only tags.
+                context.entity['tags'].setdefault(key, True)
+
+            label = f"{key}={resolved_value}" if resolved_value is not None else key
             return StepResult(
                 passed=True,
-                message=f"Assigned tag {key}={resolved_value}" + (" (persisted)" if persisted else " (context only)"),
+                message=f"Assigned tag {label}" + (" (persisted)" if persisted else " (context only)"),
                 data={'key': key, 'value': resolved_value, 'persisted': persisted}
             )
         except Exception as e:

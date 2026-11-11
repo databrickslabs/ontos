@@ -215,11 +215,13 @@ ON_FAIL NOTIFY 'entity_owner'
 ```
 
 - **Recipients** resolve as in workflow notification steps:
-  - user emails and group names;
+  - user emails, and groups as `group:<name>`;
   - app role names or ids;
   - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity; on Unity Catalog objects `owner` is the object's UC owner;
     `domain_owners` (or `DomainOwner`) and `ContractApprover` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
   - a comma-separated list of these.
+
+  Keywords such as `owner`, `entity_owner` or `requester` match without case, spaces and underscores (`Owner`, `Entity Owner`). Any other name that is not an app role fails the action (*not a known recipient*); it doesn't become a recipient that no user matches.
 
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
 - **One notification per recipient per run.** A run can match many entities, so NOTIFY doesn't send one notification each. When the run ends, each recipient gets one notification:

@@ -227,3 +227,59 @@ class TestUnityCatalogOwner:
         notifier.flush(failed=1, passed=0)
 
         assert _failed_names(db_session, 'consumer@example.com')[1]['params'] == {'count': '1'}
+
+
+# --- 4. recipient keywords ignore case; unknown names fail --------------------------
+
+class TestRecipientTokens:
+    def test_keywords_match_without_case(self, db_session):
+        from src.db_models.business_owners import BusinessOwnerDb
+        from src.db_models.business_roles import BusinessRoleDb
+
+        role = BusinessRoleDb(id=uuid.uuid4(), name='Data Owner')
+        db_session.add(role)
+        db_session.flush()
+        db_session.add(BusinessOwnerDb(
+            id=uuid.uuid4(), object_type='data_domain', object_id='dom-1',
+            user_email='domain-owner@example.com', role_id=role.id, is_active=True,
+        ))
+        db_session.flush()
+        notifier = _notifier(db_session)
+        context = _context(notifier, entity_type='domain', entity_id='dom-1', name='Sales')
+
+        for token in ('Owner', 'Entity_Owner', 'ENTITY OWNER', 'Requester'):
+            assert NotifyAction(token).execute(context).success is True, token
+        notifier.flush(failed=1, passed=0)
+
+        assert _recipients(db_session) == ['domain-owner@example.com', RUN_USER]
+
+    def test_an_unknown_name_is_a_coded_failure(self, db_session):
+        notifier = _notifier(db_session)
+
+        result = NotifyAction('a@example.com, nobody-here').execute(_context(notifier))
+
+        assert (result.success, result.code) == (False, 'notify_unknown_recipient')
+        assert result.params == {'recipient': 'nobody-here'}
+        assert notifier.flush(failed=1, passed=0) == 0
+
+    def test_a_group_is_written_with_its_prefix(self, db_session):
+        notifier = _notifier(db_session)
+
+        assert NotifyAction('group:data-engineers').execute(_context(notifier)).success is True
+        notifier.flush(failed=1, passed=0)
+
+        assert _recipients(db_session) == ['data-engineers']
+
+    def test_an_app_role_name_still_resolves(self, db_session):
+        from src.db_models.settings import AppRoleDb
+
+        role = AppRoleDb(id=str(uuid.uuid4()), name='Data Readers')
+        db_session.add(role)
+        db_session.flush()
+        notifier = _notifier(db_session)
+
+        assert NotifyAction('data_readers').execute(_context(notifier)).success is True
+        notifier.flush(failed=1, passed=0)
+
+        row = db_session.query(NotificationDb).one()
+        assert (row.recipient, row.recipient_role_id) == ('Data Readers', role.id)

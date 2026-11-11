@@ -10,9 +10,12 @@ and links to the run's results page. Only the entities the recipient can read ar
 named (see ``_ReadChecks``); the others are only counted.
 
 Recipients resolve as in workflow notification steps (``_resolve_role_to_users``):
-emails, groups (stored as the recipient, as for workflows), app role names or ids,
-``entity_owner`` / ``domain_owners`` / ``business:<id>``, and comma-separated
-lists of these. ``domain_owners`` / ``DomainOwner`` and ``ContractApprover`` are the
+emails, ``group:<name>`` (the group is stored as the recipient, as for workflows),
+app role names or ids, ``entity_owner`` / ``domain_owners`` / ``business:<id>``, and
+comma-separated lists of these. Recipient keywords match without case, spaces and
+underscores (``Owner``, ``Entity Owner``). Any other name that is not an app role
+fails the action (``notify_unknown_recipient``) instead of becoming a recipient no
+user matches. ``domain_owners`` / ``DomainOwner`` and ``ContractApprover`` are the
 owners of the entity's domain / of the entity, without the approval rules of workflow
 steps: the run user is kept, and nobody is put in place of missing owners.
 ``owner`` means the entity's owners, as ``entity_owner``, for app entities (their
@@ -50,6 +53,22 @@ _OWNER_TOKENS = {
     'domainowners': 'DomainOwner',
     'contractapprover': 'ContractApprover',
 }
+
+
+# Recipient keywords of ``_resolve_role_to_users`` (normalized as above) -> its spelling
+_KEYWORDS = {
+    'requester': 'requester',
+    'triggeruser': 'trigger_user',
+    'entityowner': 'entity_owner',
+    'owner': 'owner',
+    'reviewer': 'reviewer',
+    'datastewards': 'data_stewards',
+    'datasteward': 'data_steward',
+    'admins': 'admins',
+    'projectowners': 'project_owners',
+}
+
+_GROUP_PREFIX = 'group:'
 
 
 def _normalized(token: str) -> str:
@@ -225,10 +244,37 @@ class ComplianceRunNotifier:
     def _resolve_token(self, token: str, step_context) -> List[Tuple[str, Optional[str]]]:
         from src.common.workflow_executor import _resolve_role_to_users
 
-        owner_role = _OWNER_TOKENS.get(_normalized(token))
+        def resolve(spec: str) -> List[Tuple[str, Optional[str]]]:
+            return [(i, r) for i, r in _resolve_role_to_users(self._db, spec, step_context) if i]
+
+        lowered = token.lower()
+        if lowered.startswith(_GROUP_PREFIX):
+            group = token[len(_GROUP_PREFIX):].strip()
+            return [(group, None)] if group else self._unknown(token)
+        normalized = _normalized(token)
+        owner_role = _OWNER_TOKENS.get(normalized)
         if owner_role:
             return self._owner_recipients(owner_role, token, step_context)
-        return [(i, r) for i, r in _resolve_role_to_users(self._db, token, step_context) if i]
+        if normalized in _KEYWORDS:
+            return resolve(_KEYWORDS[normalized])
+        bare = token[len('user:'):].strip() if lowered.startswith('user:') else token
+        if '@' in bare:
+            return [(bare, None)]
+        if lowered.startswith('business:'):
+            return resolve('business:' + token[len('business:'):].strip())
+        # An app role (by id or name); the resolver echoes any other name back as a
+        # recipient without a role, which no user would match
+        roles = [(i, r) for i, r in resolve(bare) if r]
+        return roles or self._unknown(token)
+
+    @staticmethod
+    def _unknown(token: str) -> List[Tuple[str, Optional[str]]]:
+        raise ActionError(
+            'notify_unknown_recipient',
+            f"NOTIFY recipient '{token}' is not an email, a group:<name>, an app role "
+            "or a recipient keyword",
+            recipient=token,
+        )
 
     def _resolve(self, recipients: str, context: ActionContext) -> List[Tuple[str, Optional[str]]]:
 

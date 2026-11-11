@@ -292,9 +292,12 @@ class TestNotifyAction:
 
     def test_entity_independent_recipients_are_resolved_once(self, db_session):
         notifier = ComplianceRunNotifier(db_session, policy_id='pol-1', policy_name='P', run_id='run-1')
-        with patch('src.common.workflow_executor._resolve_role_to_users', return_value=[('a@example.com', None)]) as resolve:
+        found = [('Readers', 'role-1')]  # an app role; emails don't need the resolver
+        resolver = 'src.common.workflow_executor._resolve_role_to_users'
+        with patch(resolver, return_value=found) as resolve:
             for i in range(5):
-                NotifyAction('a@example.com').execute(_context(notification_manager=notifier, entity_id=f'p{i}'))
+                context = _context(notification_manager=notifier, entity_id=f'p{i}')
+                NotifyAction('Readers').execute(context)
 
         assert resolve.call_count == 1
 

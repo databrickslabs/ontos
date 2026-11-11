@@ -552,7 +552,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         db: Session,
         *,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
         caller_email: Optional[str] = None,
@@ -577,7 +577,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         Args:
             db: Database session
             skip: Number of records to skip
-            limit: Maximum number of records to return
+            limit: Maximum number of records to return (``None`` = no limit)
             project_id: Optional query-param project filter (applied AFTER
                 scoping, as a narrowing filter). Ignored when ``is_admin``.
             is_admin: If True, return all products regardless of scope.
@@ -1159,7 +1159,7 @@ class DataProductSubscriptionRepository:
         *,
         product_id: str,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[DataProductSubscriptionDb]:
         """Get all subscribers for a product."""
         logger.debug(f"Fetching subscribers for product {product_id}")
@@ -1179,7 +1179,7 @@ class DataProductSubscriptionRepository:
         *,
         subscriber_email: str,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[DataProductSubscriptionDb]:
         """Get all subscriptions for a user."""
         logger.debug(f"Fetching subscriptions for user {subscriber_email}")

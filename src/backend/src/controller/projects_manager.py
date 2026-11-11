@@ -200,7 +200,7 @@ class ProjectsManager(SearchableAsset):
         self, 
         db: Session, 
         skip: int = 0, 
-        limit: int = 100,
+        limit: Optional[int] = None,
         user_identifier: Optional[str] = None,
         user_groups: Optional[List[str]] = None,
         is_admin: bool = False
@@ -221,7 +221,7 @@ class ProjectsManager(SearchableAsset):
                 db, user_identifier, user_groups
             )
             # Apply pagination to domain-filtered results
-            db_projects = db_projects[skip:skip+limit] if limit > 0 else db_projects[skip:]
+            db_projects = db_projects[skip:skip + limit] if limit else db_projects[skip:]
         else:
             # No user context, return empty list
             db_projects = []
@@ -231,7 +231,7 @@ class ProjectsManager(SearchableAsset):
     def get_projects_summary(self, db: Session) -> List[ProjectSummary]:
         """Gets a summary list of projects for dropdowns/selection."""
         logger.debug("Fetching projects summary")
-        db_projects = self.project_repo.get_multi_with_teams(db, limit=1000)
+        db_projects = self.project_repo.get_multi_with_teams(db)
         return [self._convert_db_to_summary_model(project) for project in db_projects]
 
     def visible_project_ids(

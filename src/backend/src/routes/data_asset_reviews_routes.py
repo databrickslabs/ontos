@@ -104,7 +104,7 @@ def list_review_requests(
     db: DBSessionDep,
     manager: DataAssetReviewManagerDep,
     skip: int = 0,
-    limit: int = 100,
+    limit: Optional[int] = None,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Retrieve a list of data asset review requests."""

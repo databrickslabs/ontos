@@ -517,7 +517,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def list_products(
         self,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
         caller_email: Optional[str] = None,
@@ -537,8 +537,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         intentionally return an empty list — fail-closed.
 
         Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
+            skip: Number of visible products to skip
+            limit: Maximum number of products to return (``None`` = all).
+                Applied after the visibility filter and family collapse, so
+                a page never comes back short because hidden rows or older
+                versions used up the limit (#1295).
             project_id: Optional project ID to filter by (ignored if is_admin=True)
             is_admin: If True, return all products regardless of scope
             caller_email: Caller email — matched against ``draft_owner_id``
@@ -551,8 +554,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             products_db = self._repo.get_multi(
                 db=self._db,
-                skip=skip,
-                limit=limit,
                 project_id=project_id,
                 is_admin=is_admin,
                 caller_email=caller_email,
@@ -640,6 +641,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     elevated_family_ids=elevated_families,
                     is_admin=is_admin,
                 )
+
+            if skip or limit is not None:
+                end = skip + limit if limit is not None else None
+                products_db = products_db[skip:end]
 
             # Batch-load domains once for the whole page (avoids N+1: every sibling
             # list path batches via get_domains_for_entities).
@@ -1800,7 +1805,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         return result
 
     def get_published_products(
-        self, skip: int = 0, limit: int = 100, scope: Optional[str] = None
+        self, skip: int = 0, limit: Optional[int] = None, scope: Optional[str] = None
     ) -> List[DataProductApi]:
         """
         Get data products published to the marketplace (by publication scope).
@@ -1808,8 +1813,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         Returns products with a non-none publication_scope. Optionally filter to one scope.
 
         Args:
-            skip: Number of products to skip (for pagination)
-            limit: Maximum number of products to return
+            skip: Number of published products to skip (for pagination)
+            limit: Maximum number of products to return (``None`` = all);
+                applied after the publication filter (#1295)
             scope: If set, only products whose publication_scope matches (case-insensitive)
 
         Returns:
@@ -1823,7 +1829,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # authoritative permission for these products, NOT the
             # per-user ownership cascade. Bypass the cascade so published
             # products surface regardless of who's asking.
-            all_products = self.list_products(skip=skip, limit=limit, is_admin=True)
+            all_products = self.list_products(is_admin=True)
             published_products = [
                 product for product in all_products
                 if product.publication_scope and product.publication_scope.lower() != 'none'
@@ -1833,6 +1839,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     p for p in published_products
                     if p.publication_scope and p.publication_scope.lower() == scope.lower()
                 ]
+            if skip or limit is not None:
+                end = skip + limit if limit is not None else None
+                published_products = published_products[skip:end]
             logger.info(
                 f"Retrieved {len(published_products)} published products (scope={scope or 'all'})"
             )
@@ -2927,7 +2936,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         System-level export — bypasses per-user ownership scope.
         """
         try:
-            all_products_api = self.list_products(limit=10000, is_admin=True)
+            all_products_api = self.list_products(is_admin=True)
             products_list = [p.model_dump(by_alias=True) for p in all_products_api]
 
             with open(yaml_path, 'w') as file:
@@ -3140,7 +3149,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         logger.info("Fetching ODPS products for search indexing...")
         items = []
         try:
-            products_api = self.list_products(limit=10000, is_admin=True)
+            products_api = self.list_products(is_admin=True)
             # Batch-load domains once for the whole index build (avoids N+1).
             domains_map = entity_domain_repo.get_domains_for_entities(
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_api]
@@ -4597,7 +4606,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         product_id: str,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         db: Optional[Session] = None
     ) -> SubscribersListResponse:
         """
@@ -4646,7 +4655,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         subscriber_email: str,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = None,
         db: Optional[Session] = None
     ) -> List[DataProductApi]:
         """
@@ -4675,7 +4684,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         
         # Fetch the actual products with pagination
         products = []
-        for pid in product_ids[skip:skip + limit]:
+        for pid in product_ids[skip:skip + limit if limit is not None else None]:
             product = self.get_product(pid)
             if product:
                 products.append(product)

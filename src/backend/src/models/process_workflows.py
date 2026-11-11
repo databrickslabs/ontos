@@ -137,6 +137,17 @@ class StepType(str, Enum):
     ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start ()
 
 
+# Steps that end a run with their own outcome. They have no next step: a stored
+# on_pass / on_fail (older designers saved one, the canvas never drew it) is
+# ignored when the workflow runs and dropped when it is saved.
+TERMINAL_STEP_TYPES = frozenset({StepType.PASS.value, StepType.FAIL.value})
+
+
+def is_terminal_step_type(step_type: Any) -> bool:
+    """Whether a step of this type (enum or stored string) ends the run."""
+    return getattr(step_type, 'value', step_type) in TERMINAL_STEP_TYPES
+
+
 class ExecutionStatus(str, Enum):
     """Workflow execution status."""
     PENDING = "pending"
@@ -925,18 +936,26 @@ class WorkflowValidationResult(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     # Same errors as ``errors``, with a code and parameters each.
     issues: List[WorkflowValidationIssue] = Field(default_factory=list)
+    # Same warnings as ``warnings``, with a code and parameters each.
+    warning_issues: List[WorkflowValidationIssue] = Field(default_factory=list)
+
+    @staticmethod
+    def _coded(messages: Any, default_code: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                'code': getattr(message, 'code', default_code),
+                'message': str(message),
+                'params': dict(getattr(message, 'params', {}) or {}),
+            }
+            for message in messages or []
+        ]
 
     @model_validator(mode='before')
     @classmethod
     def _issues_from_errors(cls, data: Any) -> Any:
         if isinstance(data, dict) and 'issues' not in data:
-            data = {**data, 'issues': [
-                {
-                    'code': getattr(error, 'code', 'workflow_validation_error'),
-                    'message': str(error),
-                    'params': dict(getattr(error, 'params', {}) or {}),
-                }
-                for error in data.get('errors') or []
-            ]}
+            data = {**data, 'issues': cls._coded(data.get('errors'), 'workflow_validation_error')}
+        if isinstance(data, dict) and 'warning_issues' not in data:
+            data = {**data, 'warning_issues': cls._coded(data.get('warnings'), 'workflow_validation_warning')}
         return data
 

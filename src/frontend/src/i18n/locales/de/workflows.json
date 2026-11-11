@@ -503,6 +503,10 @@
       "skipped": "Übersprungen",
       "waiting": "Wartet"
     },
+    "conditionalBranch": {
+      "true": "Bedingung war wahr: Wahr-Zweig ausgeführt",
+      "false": "Bedingung war falsch: Falsch-Zweig ausgeführt"
+    },
     "executionStates": {
       "pending": "Ausstehend",
       "running": "Läuft",

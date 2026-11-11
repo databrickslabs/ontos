@@ -503,6 +503,10 @@
       "skipped": "スキップ",
       "waiting": "待機中"
     },
+    "conditionalBranch": {
+      "true": "条件は真でした: 真の分岐を実行しました",
+      "false": "条件は偽でした: 偽の分岐を実行しました"
+    },
     "executionStates": {
       "pending": "保留中",
       "running": "実行中",

@@ -503,6 +503,10 @@
       "skipped": "Ignoré",
       "waiting": "En attente"
     },
+    "conditionalBranch": {
+      "true": "Condition vraie : branche vraie suivie",
+      "false": "Condition fausse : branche fausse suivie"
+    },
     "executionStates": {
       "pending": "En attente",
       "running": "En cours",

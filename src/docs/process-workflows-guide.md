@@ -686,6 +686,8 @@ config:
 
 **Handler:** `ConditionalStepHandler`
 
+A condition that could be evaluated makes the step succeed, true or false. True follows `on_pass`, false follows `on_fail`, and the step's result data records `result` and `branch` (`"true"` / `"false"`). A false condition doesn't count as a failure. Only a condition that can't be evaluated fails the step.
+
 #### 7. Script Step
 
 Executes custom Python or SQL code.

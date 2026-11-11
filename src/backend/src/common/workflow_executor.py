@@ -32,6 +32,7 @@ from src.models.process_workflows import (
     ExecutionStatus,
     StepExecutionStatus,
     WorkflowStepExecutionResult,
+    is_terminal_step_type,
 )
 from src.repositories.process_workflows_repository import workflow_execution_repo
 
@@ -184,6 +185,26 @@ class StepResult:
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     blocking: bool = False  # If True, workflow pauses (e.g., approval)
+    # Set by a Conditional that evaluated cleanly: the step passed, and its
+    # result picks on_pass (True) or on_fail (False). None: follow ``passed``.
+    branch: Optional[bool] = None
+
+    def takes_pass_branch(self) -> bool:
+        return self.passed if self.branch is None else self.branch
+
+    def context_entry(self) -> Dict[str, Any]:
+        """This result as later steps see it in ``step_results``."""
+        entry: Dict[str, Any] = {'passed': self.passed, 'message': self.message, 'data': self.data}
+        if self.branch is not None:
+            entry['branch'] = 'true' if self.branch else 'false'
+        return entry
+
+
+def _next_step_id(step: 'WorkflowStep', result: StepResult) -> Optional[str]:
+    """The step to run after ``step``: none after a Pass or Fail step, else its branch."""
+    if is_terminal_step_type(step.step_type):
+        return None
+    return step.on_pass if result.takes_pass_branch() else step.on_fail
 
 
 class StepHandler(ABC):
@@ -1465,10 +1486,14 @@ class ConditionalStepHandler(StepHandler):
             evaluator = Evaluator(_rule_object(self._db, context))
             result = evaluator.evaluate(ast)
             
+            # The condition was evaluated, so the step succeeded; its result only
+            # picks the branch. A false condition is not a failure.
+            branch = bool(result)
             return StepResult(
-                passed=bool(result),
+                passed=True,
+                branch=branch,
                 message=f"Condition evaluated to: {result}",
-                data={'condition': condition, 'result': result}
+                data={'condition': condition, 'result': branch, 'branch': 'true' if branch else 'false'},
             )
         except Exception as e:
             logger.exception(f"Conditional step failed: {e}")
@@ -3147,11 +3172,7 @@ class WorkflowExecutor:
             )
             
             # Store result in context for subsequent steps
-            context.step_results[step.step_id] = {
-                'passed': result.passed,
-                'message': result.message,
-                'data': result.data,
-            }
+            context.step_results[step.step_id] = result.context_entry()
             
             # Update counters
             if result.passed:
@@ -3173,10 +3194,7 @@ class WorkflowExecutor:
                 break
             
             # Determine next step
-            if result.passed:
-                current_step_id = step.on_pass
-            else:
-                current_step_id = step.on_fail
+            current_step_id = _next_step_id(step, result)
             
             # If no next step, we're done
             if not current_step_id:
@@ -3461,11 +3479,7 @@ class WorkflowExecutor:
             )
             
             # Store result in context for subsequent steps
-            context.step_results[step.step_id] = {
-                'passed': result.passed,
-                'message': result.message,
-                'data': result.data,
-            }
+            context.step_results[step.step_id] = result.context_entry()
             
             # Update counters
             if result.passed:
@@ -3487,10 +3501,7 @@ class WorkflowExecutor:
                 break
             
             # Determine next step
-            if result.passed:
-                next_step_id = step.on_pass
-            else:
-                next_step_id = step.on_fail
+            next_step_id = _next_step_id(step, result)
             
             # If no next step, we're done
             if not next_step_id:

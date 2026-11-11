@@ -503,6 +503,10 @@
       "skipped": "Omitido",
       "waiting": "En espera"
     },
+    "conditionalBranch": {
+      "true": "La condición fue verdadera: se siguió la rama verdadera",
+      "false": "La condición fue falsa: se siguió la rama falsa"
+    },
     "executionStates": {
       "pending": "Pendiente",
       "running": "En ejecución",

@@ -503,6 +503,10 @@
       "skipped": "Skipped",
       "waiting": "Waiting"
     },
+    "conditionalBranch": {
+      "true": "Condition was true: took the true branch",
+      "false": "Condition was false: took the false branch"
+    },
     "executionStates": {
       "pending": "Pending",
       "running": "Running",

@@ -44,7 +44,8 @@ The steps of one kind don't run in the other: a wizard step type put in a proces
 These rules explain most surprises:
 
 - **The first step is the entry step.** The executor starts at the first step of the workflow's step order. In the designer this is the step connected to the trigger. Through the API it is the first step of the `steps` list, unless you set `order` yourself.
-- **Steps don't run in list order.** After a step, the executor goes to its `on_pass` step if it passed, or to its `on_fail` step if it failed. A step with no next step for its outcome ends the execution, even if more steps follow it in the list.
+- **Steps don't run in list order.** After a step, the executor goes to its `on_pass` step if it passed, or to its `on_fail` step if it failed. A conditional step goes to `on_pass` when its condition is true and to `on_fail` when it is false (see below). A step with no next step for its outcome ends the execution, even if more steps follow it in the list.
+- **Pass and Fail steps end the execution.** They have no next step. A link out of one (older designers saved one that the canvas didn't show) is ignored when the workflow runs, reported by validation as `terminal_step_has_next`, and removed when the workflow is saved.
 - **The outcome is the last step's result.** When the execution ends on a step that passed, the execution is `succeeded`; when it ends on a step that failed, it is `failed`. A failure that is routed to a notification step, which passes, therefore ends as `succeeded`. End every failure branch with a **Fail** step if the execution should show as failed (and, for gates, if the change should be blocked).
 - **Execution is synchronous.** A workflow runs inside the request that fired it, until it ends or pauses. A slow webhook or script makes that request slow.
 - **Every matching workflow runs.** When several active workflows match the same trigger and entity type, all of them run, one after the other, in no fixed order. A request that reports "the" workflow (for example `execution_id` in the response of a status change request) reports the first one that ran. Two active workflows with an approval step on the same trigger send two approval requests.
@@ -55,7 +56,7 @@ An execution has one of these statuses:
 |--|--|
 | `running` | Steps are being executed (you rarely see it, since execution is synchronous) |
 | `paused` | Waiting at an approval step |
-| `succeeded` | Ended on a step that passed |
+| `succeeded` | Ended on a step that passed (a conditional step always passes when its condition could be evaluated) |
 | `failed` | Ended on a step that failed |
 | `cancelled` | Cancelled by an admin while running or paused |
 
@@ -109,12 +110,12 @@ Notes:
 
 ## Step Types and What Makes Them Pass
 
-Each step ends with a pass or a fail, which picks the next step. A step that raises an error fails, with the error text as its error.
+Each step ends with a pass or a fail, which picks the next step. A step that raises an error fails, with the error text as its error. A conditional step is the exception: its result only picks the branch.
 
 | Step | Passes when | Fails when |
 |--|--|--|
-| `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated |
-| `conditional` | The `condition` expression is true | It is false, or can't be evaluated |
+| `validation` | The rule's `ASSERT` holds | The assertion is false, or the rule or the entity can't be evaluated. A failed assertion is a step failure even when `on_fail` leads to another step |
+| `conditional` | The `condition` expression could be evaluated, true or false. True follows `on_pass`, false follows `on_fail`; the step shows the branch it took and a false condition doesn't count as a failure | It can't be evaluated (then it follows `on_fail`) |
 | `policy_check` | The referenced compliance policy's rule holds, or the policy is inactive | The rule fails, or the policy doesn't exist |
 | `approval` | The approver approves (the step pauses first) | The approver rejects, or no approver could be resolved |
 | `notification` | At least one notification was created | None could be created |
@@ -166,7 +167,8 @@ Both `${name}` and `{{name}}` work. A variable that can't be resolved is left as
 | `${user_email}` | The user who fired the trigger; after an approval, the approver |
 | `${workflow_name}`, `${workflow_id}`, `${execution_id}` | The running workflow and execution |
 | `${entity.<field>}` | A field of the **trigger payload** (not of the stored entity). Nested paths work: `${entity.a.b}` |
-| `${step_results.<step_id>.passed}` | Whether an earlier step passed (rendered as `True` / `False`) |
+| `${step_results.<step_id>.passed}` | Whether an earlier step passed (rendered as `True` / `False`). A conditional step passes whenever its condition could be evaluated; use `branch` for its result |
+| `${step_results.<conditional_step_id>.branch}` | After a conditional step: `true` or `false` |
 | `${step_results.<step_id>.message}` | An earlier step's message |
 | `${step_results.<step_id>.data.<field>}` | A field of an earlier step's result data, for example a script's `data` |
 | `${step_results.<approval_step_id>.decision}` | After an approval: `approved` or `rejected` |

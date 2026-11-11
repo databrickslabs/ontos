@@ -120,6 +120,14 @@ export function getStepErrorText(
   });
 }
 
+// The branch a Conditional step took ('true' / 'false'), from its last run
+export function getConditionalBranch(
+  run: Pick<WorkflowStepExecutionResult, 'result_data'> | undefined
+): 'true' | 'false' | undefined {
+  const branch = run?.result_data?.branch;
+  return branch === 'true' || branch === 'false' ? branch : undefined;
+}
+
 export function getStepExecutionState(
   step: Pick<WorkflowStep, 'id' | 'step_id'>,
   execution: WorkflowExecution
@@ -141,9 +149,14 @@ export function getStepExecutionState(
     if (stepExecution.status === 'failed') return 'failed';
     if (stepExecution.status === 'running') return 'running';
   }
-  
+
+  // A finished execution never reached this step (e.g. the branch not taken)
+  if (FINISHED_EXECUTION_STATES.has(execution.status)) return 'skipped';
+
   return 'pending';
 }
+
+const FINISHED_EXECUTION_STATES = new Set<string>(['succeeded', 'failed', 'cancelled']);
 
 // Custom node component for execution view (kept for future graph-based visualization)
 // interface ExecutionStepNodeProps {
@@ -196,8 +209,9 @@ function SimpleWorkflowFlow({
       {/* Steps */}
       {workflow.steps.map((step, index) => {
         const state = getStepExecutionState(step, execution);
-        const run = state === 'failed' ? getLastStepRun(step, execution) : undefined;
-        const errorText = run ? getStepErrorText(run, t) : undefined;
+        const lastRun = state === 'failed' || state === 'succeeded' ? getLastStepRun(step, execution) : undefined;
+        const errorText = state === 'failed' && lastRun ? getStepErrorText(lastRun, t) : undefined;
+        const branch = state === 'succeeded' ? getConditionalBranch(lastRun) : undefined;
         const Icon = getStepIcon(step.step_type);
         const color = getStepColor(step.step_type);
         
@@ -232,6 +246,11 @@ function SimpleWorkflowFlow({
                 </div>
                 {errorText && (
                   <div className="text-xs text-destructive mt-1 break-words">{errorText}</div>
+                )}
+                {branch && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {t(`workflows:execution.conditionalBranch.${branch}`)}
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-2">

@@ -37,6 +37,7 @@ from src.models.process_workflows import (
     TemplateVarDescriptor,
     TemplateVarGroup,
     TemplateVarsResponse,
+    is_terminal_step_type,
 )
 from src.repositories.process_workflows_repository import process_workflow_repo
 from src.common.logging import get_logger
@@ -694,6 +695,16 @@ class WorkflowsManager:
                         'step_unknown_reference', step=step.step_id, target=target, field=field,
                     ))
         
+        # A Pass or Fail step ends the run: a link out of it is never followed and
+        # is dropped on save (older designers stored one the canvas never drew)
+        for step in workflow.steps:
+            if is_terminal_step_type(step.step_type) and (step.on_pass or step.on_fail):
+                warnings.append(CodedMessage(
+                    f"Step '{step.step_id}' ends the workflow; its link to the next step is ignored and removed on save",
+                    'terminal_step_has_next', step=step.step_id,
+                    target=step.on_pass or step.on_fail,
+                ))
+
         # Check for unreachable steps (warning only)
         reachable = set()
         if workflow.steps:
@@ -706,7 +717,7 @@ class WorkflowsManager:
                 reachable.add(current)
                 
                 step = next((s for s in workflow.steps if s.step_id == current), None)
-                if step:
+                if step and not is_terminal_step_type(step.step_type):
                     if step.on_pass:
                         to_visit.append(step.on_pass)
                     if step.on_fail:

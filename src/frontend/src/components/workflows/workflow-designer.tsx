@@ -1081,6 +1081,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   useEffect(() => {
     // A newer run (StrictMode, or id change) supersedes this one: its late results are dropped
     let cancelled = false;
+    // A superseded edit load no longer clears it: a new workflow must not stay "loading"
+    if (isNew) setIsLoading(false);
     const loadData = async () => {
       // Load step types
       try {

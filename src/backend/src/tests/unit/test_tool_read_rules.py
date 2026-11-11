@@ -816,3 +816,22 @@ class TestPublishedContractWithADraftOwner:
                               else None))
         readable = read_access.readable_contract_rows(ctx, rows.values())
         assert [r.id for r in readable] == [rows['active'].id, rows['deprecated'].id]
+
+    def test_a_failing_rule_lookup_leaves_the_session_usable(self, db_session):
+        """The contract rule's lookups run in a savepoint: a failed one denies the
+        read without aborting the transaction (Postgres) the tool uses after it."""
+        from sqlalchemy import text
+
+        from src.tests.helpers import postgres_aborts
+        from src.tools import read_access
+
+        class _FailingManager:
+            def readable_contracts(self, db, rows, **kwargs):
+                db.execute(text('SELECT * FROM no_such_table'))
+
+        row = self._rows(db_session)['personal_draft']
+        ctx = ToolContext(db=db_session, settings=MagicMock(), caller=CONSUMER,
+                          data_contracts_manager=_FailingManager())
+        with postgres_aborts(db_session):
+            assert read_access.can_read_contract(ctx, row) is False
+            assert db_session.execute(text('SELECT 1')).scalar() == 1

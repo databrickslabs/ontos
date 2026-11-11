@@ -19,7 +19,9 @@ by default.
 | Primary / accent color, dark mode | `UI_THEME_PRIMARY_DARK`, `UI_THEME_ACCENT_DARK` | When empty, derived from the light color |
 | Show "Powered by Ontos" | `UI_SHOW_POWERED_BY` | `true` by default; the sidebar footer only appears while a custom name or logo is set |
 
-A value saved in Settings overrides the environment variable. Saving an empty value clears it.
+A value saved in Settings overrides the environment variable. Saving an empty value clears the saved
+value; the environment variable applies again after the next restart (as for the other settings).
+A save is all or nothing: if one branding value is invalid, none of the branding values in that request is stored.
 
 ## Image values
 
@@ -28,6 +30,9 @@ itself, for example `/branding/acme/logo.svg`. Other schemes (`javascript:`, `da
 `//host/...` URLs, spaces, backslashes and `..` segments are refused. The app does not ship the
 files for a root-relative path: whoever builds or deploys it places them in the frontend `public`
 folder.
+
+The same rules apply to the environment variables: an unsafe image value there is ignored (a warning
+is logged) and the default image is used.
 
 A logo of any shape keeps its aspect ratio, also in the collapsed sidebar.
 

@@ -340,7 +340,8 @@
       "for_request_access": "Request Access (Wizard)",
       "for_request_publish": "Request Publish (Wizard)",
       "for_request_certify": "Request Certification (Wizard)",
-      "for_request_status_change": "Request Status Change (Wizard)"
+      "for_request_status_change": "Request Status Change (Wizard)",
+      "on_request_definition_change": "Definition Change Request"
     },
     "entityTypes": {
       "catalog": "Catalog",
@@ -360,7 +361,8 @@
       "user": "User",
       "ontology_concept": "Concept",
       "ontology_collection": "Collection",
-      "concept_changeset": "Concept Changeset"
+      "concept_changeset": "Concept Changeset",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validation",

@@ -74,6 +74,15 @@ import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog'
 import { RelativeDate } from '@/components/common/relative-date';
 import { WorkflowRunDialog } from '@/components/workflows/workflow-run-dialog';
 
+interface CancelExecutionResponse {
+  execution_id: string;
+  status: string;
+  /** `cancelled_by_admin`: a paused approval was cancelled and followed its failure path. */
+  code?: string;
+  params?: { status?: string };
+  message?: string;
+}
+
 interface WorkflowExecutionsResponse {
   executions: WorkflowExecution[];
   total: number;
@@ -464,11 +473,19 @@ export default function Workflows() {
     
     setIsActionInProgress(true);
     try {
-      const response = await apiPost<{ message: string }>(`/api/workflows/executions/${execution.id}/cancel`, {});
-      if (response.data) {
+      const response = await apiPost<CancelExecutionResponse>(
+        `/api/workflows/executions/${execution.id}/cancel`, {}
+      );
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: t('workflows:view.messages.cancelFailed'),
+          variant: 'destructive',
+        });
+      } else {
         toast({
           title: t('common:toast.success'),
-          description: t('workflows:view.messages.cancelSuccess'),
+          description: cancelSuccessText(response.data),
         });
         loadExecutions();
       }
@@ -482,6 +499,22 @@ export default function Workflows() {
       setIsActionInProgress(false);
     }
   };
+
+  // An approval step cancelled by an admin follows its failure path (#1119):
+  // the status it ended with, translated
+  const cancelSuccessText = (data: CancelExecutionResponse | undefined): string => {
+    if (data?.code !== 'cancelled_by_admin') return t('workflows:view.messages.cancelSuccess');
+    const status = String(data.params?.status ?? data.status ?? '');
+    return t('workflows:view.messages.approvalCancelled', {
+      status: t(`workflows:execution.executionStates.${status}`, { defaultValue: status }),
+    });
+  };
+
+  // A refused force approve / reject: with require_all only the approvers decide
+  const forceDecisionErrorText = (errorCode: string | null | undefined, fallbackKey: string) =>
+    errorCode === 'approval_not_an_approver'
+      ? t('workflows:view.messages.forceDecisionRequireAll')
+      : t(fallbackKey);
 
   const handleRetryExecution = async (execution: WorkflowExecution) => {
     if (!canEdit) {
@@ -560,7 +593,15 @@ export default function Workflows() {
         `/api/workflows/executions/${execution.id}/resume`,
         { approved: true, message: t('workflows:view.messages.forceApprovedByAdmin') }
       );
-      if (response.data) {
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: forceDecisionErrorText(
+            response.errorCode, 'workflows:view.messages.approveFailed'
+          ),
+          variant: 'destructive',
+        });
+      } else {
         toast({
           title: t('common:toast.success'),
           description: t('workflows:view.messages.approveResumeSuccess'),
@@ -594,7 +635,15 @@ export default function Workflows() {
         `/api/workflows/executions/${execution.id}/resume`,
         { approved: false, message: t('workflows:view.messages.forceRejectedByAdmin') }
       );
-      if (response.data) {
+      if (response.error) {
+        toast({
+          title: t('common:toast.error'),
+          description: forceDecisionErrorText(
+            response.errorCode, 'workflows:view.messages.rejectFailed'
+          ),
+          variant: 'destructive',
+        });
+      } else {
         toast({
           title: t('common:toast.success'),
           description: t('workflows:view.messages.rejectResumeSuccess'),
@@ -763,8 +812,9 @@ export default function Workflows() {
       const results = await Promise.allSettled(
         cancellable.map(e => apiPost<{ message: string }>(`/api/workflows/executions/${e.id}/cancel`, {}))
       );
-      const successes = results.filter(r => r.status === 'fulfilled').length;
-      const failures = results.filter(r => r.status === 'rejected').length;
+      // An error response is a failure too (the API hook doesn't throw)
+      const successes = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
+      const failures = results.length - successes;
 
       if (successes > 0) {
         toast({

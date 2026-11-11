@@ -186,6 +186,11 @@
       "concept-review-approval": {
         "notify-approved": "O seu conceito '{{entity_name}}' foi aprovado.",
         "notify-rejected": "O seu conceito '{{entity_name}}' foi devolvido para alterações. Leia o comentário do revisor e envie novamente."
+      },
+      "metric-view-change-request": {
+        "notify-requester": "A sua alteração na metric view '{{entity_name}}' foi enviada para aprovação.",
+        "notify-approved": "A sua alteração na metric view '{{entity_name}}' foi aprovada e está sendo entregue.",
+        "notify-rejected": "A sua alteração na metric view '{{entity_name}}' foi rejeitada."
       }
     },
     "approval": {
@@ -213,7 +218,8 @@
         "entity": "Entidade",
         "ontology_concept": "Conceito",
         "ontology_collection": "Esquema de conceitos",
-        "concept_changeset": "Conjunto de alterações de conceitos"
+        "concept_changeset": "Conjunto de alterações de conceitos",
+        "metric_view": "Metric View"
       }
     },
     "approvalMessages": {
@@ -250,5 +256,13 @@
       "retiredVersion": "{{entity_type}} '{{entity_name}}' (versão {{version}}) foi aposentado.",
       "replacementVersion": "Substituto: {{replacementName}} (versão {{replacementVersion}})"
     }
+  },
+  "metricViewChangeManual": {
+    "title": "Aplique a alteração da metric view",
+    "description": "A solicitação de alteração da metric view {{fqn}} foi aprovada. Execute este comando para aplicá-la:\n\n{{ddl}}"
+  },
+  "metricViewChangeFailed": {
+    "title": "Alteração da metric view não entregue",
+    "description": "Não foi possível entregar a solicitação de alteração aprovada da metric view {{fqn}}."
   }
 }

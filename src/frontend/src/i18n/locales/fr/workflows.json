@@ -35,7 +35,8 @@
       "contractApprovers": "Approbateurs du contrat",
       "appRoles": "Rôles d'application",
       "businessRoles": "Rôles métier",
-      "noGroups": "Aucun groupe"
+      "noGroups": "Aucun groupe",
+      "assetOwners": "Propriétaires de l’actif"
     },
     "messages": {
       "loadWorkflowFailed": "Échec du chargement du workflow",
@@ -217,7 +218,11 @@
       "approversRole": "Approbateurs (rôle)",
       "selectRole": "Sélectionner un rôle",
       "additionalApproversAria": "Approbateurs supplémentaires",
-      "timeoutDays": "Délai d'expiration (jours)"
+      "timeoutDays": "Délai d'expiration (jours)",
+      "timeoutDaysHelp": "0 signifie aucun délai ; laissez vide pour la valeur par défaut (7 jours).",
+      "requireAll": "Exiger tous les approbateurs",
+      "requireAllHelp": "Chaque approbateur décide : un utilisateur pour lui-même, n'importe quel membre pour un groupe ou un rôle. Tout refus fait échouer l'étape.",
+      "timeoutNotEnforced": "Pas encore appliqué : une approbation en attente n'expire pas."
     },
     "assetReview": {
       "reviewerRole": "Rôle du réviseur",
@@ -346,10 +351,17 @@
       "processFailed": "Échec du traitement de l'approbation.",
       "processFailedRetry": "Échec du traitement de l'approbation. Veuillez réessayer.",
       "entityApproved": "{{name}} a été approuvé.",
-      "entityRejected": "{{name}} a été rejeté."
+      "entityRejected": "{{name}} a été rejeté.",
+      "decisionRecorded": "Décision enregistrée",
+      "waitingForApprovers_one": "En attente de {{count}} autre approbateur.",
+      "waitingForApprovers_other": "En attente de {{count}} autres approbateurs."
     },
     "errors": {
-      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande."
+      "own_owner_approval": "Cette approbation revient aux propriétaires ; vous ne pouvez pas approuver votre propre demande.",
+      "own_change_request_approval": "Vous ne pouvez pas approuver votre propre demande de modification.",
+      "approval_already_decided": "Vous avez déjà pris une décision sur cette approbation.",
+      "approval_not_an_approver": "Seuls les approbateurs de cette étape peuvent en décider.",
+      "approval_no_longer_pending": "Cette approbation a déjà été décidée."
     },
     "entityTypes": {
       "entity": "Entité",
@@ -493,7 +505,8 @@
       "output_port_contracts_missing": "Publication impossible : les ports de sortie {{ports}} doivent avoir des contrats de données assignés",
       "output_port_contracts_unapproved": "Publication impossible : ces ports de sortie ont des contrats non approuvés : {{ports}}. Les contrats doivent d'abord être approuvés.",
       "rule_entity_load_failed": "Impossible de charger {{entityType}} {{entityId}} pour évaluer la règle",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} est introuvable, la règle ne peut pas être évaluée",
+      "cancelled_by_admin": "Annulé par un administrateur ({{by}})"
     },
     "states": {
       "pending": "En attente",
@@ -775,6 +788,7 @@
       "loadDefaultsFailed": "Échec du chargement des workflows par défaut",
       "cancelSuccess": "Exécution annulée avec succès",
       "cancelFailed": "Échec de l'annulation de l'exécution",
+      "approvalCancelled": "Approbation annulée. Le workflow a suivi son chemin de rejet ; statut : {{status}}.",
       "retryStarted": "Nouvelle tentative d'exécution démarrée",
       "retryFailed": "Échec de la nouvelle tentative d'exécution",
       "executionDeleteSuccess": "Exécution supprimée avec succès",
@@ -785,6 +799,7 @@
       "approveFailed": "Échec de l'approbation du workflow",
       "rejectResumeSuccess": "Workflow rejeté et repris",
       "rejectFailed": "Échec du rejet du workflow",
+      "forceDecisionRequireAll": "Seuls les approbateurs peuvent décider de cette étape (tous doivent décider). Vous pouvez plutôt annuler l'exécution.",
       "noChanges": "Aucune modification",
       "allAlreadyEnabled": "Tous les workflows sélectionnés sont déjà activés.",
       "allAlreadyDisabled": "Tous les workflows sélectionnés sont déjà désactivés.",

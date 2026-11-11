@@ -133,6 +133,7 @@ export default function RequiredActionsSection() {
   const handleOpenWfApproval = (payload: Record<string, any>) => {
     setWfApprovalPayload({
       execution_id: payload.execution_id ?? '',
+      step_id: payload.step_id,
       entity_name: payload.entity_name,
       requester_email: payload.requester_email,
       entity_type: payload.entity_type,

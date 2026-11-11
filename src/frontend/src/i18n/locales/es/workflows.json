@@ -35,7 +35,8 @@
       "contractApprovers": "Aprobadores del contrato",
       "appRoles": "Roles de la aplicación",
       "businessRoles": "Roles de negocio",
-      "noGroups": "Sin grupos"
+      "noGroups": "Sin grupos",
+      "assetOwners": "Propietarios del activo"
     },
     "messages": {
       "loadWorkflowFailed": "No se pudo cargar el flujo de trabajo",
@@ -217,7 +218,11 @@
       "approversRole": "Aprobadores (rol)",
       "selectRole": "Selecciona el rol",
       "additionalApproversAria": "Aprobadores adicionales",
-      "timeoutDays": "Tiempo de espera (días)"
+      "timeoutDays": "Tiempo de espera (días)",
+      "timeoutDaysHelp": "0 significa sin tiempo de espera; déjalo vacío para el valor predeterminado (7 días).",
+      "requireAll": "Requerir a todos los aprobadores",
+      "requireAllHelp": "Cada aprobador decide: un usuario por sí mismo, cualquier miembro por un grupo o rol. Cualquier rechazo hace fallar el paso.",
+      "timeoutNotEnforced": "Aún no se aplica: una aprobación pendiente no caduca."
     },
     "assetReview": {
       "reviewerRole": "Rol de revisor",
@@ -346,10 +351,17 @@
       "processFailed": "No se pudo procesar la aprobación.",
       "processFailedRetry": "No se pudo procesar la aprobación. Inténtalo de nuevo.",
       "entityApproved": "{{name}} se ha aprobado.",
-      "entityRejected": "{{name}} se ha rechazado."
+      "entityRejected": "{{name}} se ha rechazado.",
+      "decisionRecorded": "Decisión registrada",
+      "waitingForApprovers_one": "Falta {{count}} aprobador más.",
+      "waitingForApprovers_other": "Faltan {{count}} aprobadores más."
     },
     "errors": {
-      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud."
+      "own_owner_approval": "Esta aprobación corresponde a los propietarios; no puedes aprobar tu propia solicitud.",
+      "own_change_request_approval": "No puedes aprobar tu propia solicitud de cambio.",
+      "approval_already_decided": "Ya has decidido esta aprobación.",
+      "approval_not_an_approver": "Solo los aprobadores de este paso pueden decidirlo.",
+      "approval_no_longer_pending": "Esta aprobación ya se ha decidido."
     },
     "entityTypes": {
       "entity": "Entidad",
@@ -493,7 +505,8 @@
       "output_port_contracts_missing": "No se puede publicar: los puertos de salida {{ports}} deben tener contratos de datos asignados",
       "output_port_contracts_unapproved": "No se puede publicar: estos puertos de salida tienen contratos no aprobados: {{ports}}. Primero hay que aprobar los contratos.",
       "rule_entity_load_failed": "No se pudo cargar {{entityType}} {{entityId}} para evaluar la regla",
-      "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla"
+      "rule_entity_not_found": "No se encontró {{entityType}} {{entityId}}, por lo que no se puede evaluar la regla",
+      "cancelled_by_admin": "Cancelado por un administrador ({{by}})"
     },
     "states": {
       "pending": "Pendiente",
@@ -775,6 +788,7 @@
       "loadDefaultsFailed": "No se pudieron cargar los flujos de trabajo predeterminados",
       "cancelSuccess": "Ejecución cancelada correctamente",
       "cancelFailed": "No se pudo cancelar la ejecución",
+      "approvalCancelled": "Aprobación cancelada. El flujo de trabajo siguió su camino de rechazo; estado: {{status}}.",
       "retryStarted": "Reintento de ejecución iniciado",
       "retryFailed": "No se pudo reintentar la ejecución",
       "executionDeleteSuccess": "Ejecución eliminada correctamente",
@@ -785,6 +799,7 @@
       "approveFailed": "No se pudo aprobar el flujo de trabajo",
       "rejectResumeSuccess": "Flujo de trabajo rechazado y reanudado",
       "rejectFailed": "No se pudo rechazar el flujo de trabajo",
+      "forceDecisionRequireAll": "Solo los aprobadores pueden decidir este paso (todos deben decidir). En su lugar, puedes cancelar la ejecución.",
       "noChanges": "Sin cambios",
       "allAlreadyEnabled": "Todos los flujos de trabajo seleccionados ya están habilitados.",
       "allAlreadyDisabled": "Todos los flujos de trabajo seleccionados ya están deshabilitados.",

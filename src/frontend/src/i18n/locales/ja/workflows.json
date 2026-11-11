@@ -35,7 +35,8 @@
       "contractApprovers": "契約承認者",
       "appRoles": "アプリロール",
       "businessRoles": "ビジネスロール",
-      "noGroups": "グループがありません"
+      "noGroups": "グループがありません",
+      "assetOwners": "アセット所有者"
     },
     "messages": {
       "loadWorkflowFailed": "ワークフローの読み込みに失敗しました",
@@ -217,7 +218,11 @@
       "approversRole": "承認者（ロール）",
       "selectRole": "ロールを選択",
       "additionalApproversAria": "追加の承認者",
-      "timeoutDays": "タイムアウト（日）"
+      "timeoutDays": "タイムアウト（日）",
+      "timeoutDaysHelp": "0 はタイムアウトなしを意味します。空欄にすると既定値（7 日）になります。",
+      "requireAll": "すべての承認者を必須にする",
+      "requireAllHelp": "各承認者が判断します。ユーザーは本人が、グループまたはロールはそのメンバーの誰か 1 人が判断します。1 件でも却下されるとステップは失敗します。",
+      "timeoutNotEnforced": "まだ適用されません: 保留中の承認は期限切れになりません。"
     },
     "assetReview": {
       "reviewerRole": "レビュー担当者ロール",
@@ -346,10 +351,17 @@
       "processFailed": "承認の処理に失敗しました。",
       "processFailedRetry": "承認の処理に失敗しました。もう一度お試しください。",
       "entityApproved": "{{name}} が承認されました。",
-      "entityRejected": "{{name}} が却下されました。"
+      "entityRejected": "{{name}} が却下されました。",
+      "decisionRecorded": "判断を記録しました",
+      "waitingForApprovers_one": "あと {{count}} 人の承認者を待っています。",
+      "waitingForApprovers_other": "あと {{count}} 人の承認者を待っています。"
     },
     "errors": {
-      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。"
+      "own_owner_approval": "この承認は所有者が行います。ご自身のリクエストは承認できません。",
+      "own_change_request_approval": "自分の変更リクエストは承認できません。",
+      "approval_already_decided": "この承認はすでにあなたが判断済みです。",
+      "approval_not_an_approver": "このステップは承認者だけが判断できます。",
+      "approval_no_longer_pending": "この承認はすでに判断済みです。"
     },
     "entityTypes": {
       "entity": "エンティティ",
@@ -493,7 +505,8 @@
       "output_port_contracts_missing": "公開できません: 出力ポート {{ports}} にはデータコントラクトを割り当てる必要があります",
       "output_port_contracts_unapproved": "公開できません: 次の出力ポートには未承認のコントラクトがあります: {{ports}}。先にコントラクトを承認してください。",
       "rule_entity_load_failed": "ルールを評価するために {{entityType}} {{entityId}} を読み込めませんでした",
-      "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません"
+      "rule_entity_not_found": "{{entityType}} {{entityId}} が見つからないため、ルールを評価できません",
+      "cancelled_by_admin": "管理者によりキャンセルされました（{{by}}）"
     },
     "states": {
       "pending": "保留中",
@@ -775,6 +788,7 @@
       "loadDefaultsFailed": "デフォルトワークフローの読み込みに失敗しました",
       "cancelSuccess": "実行を正常にキャンセルしました",
       "cancelFailed": "実行のキャンセルに失敗しました",
+      "approvalCancelled": "承認をキャンセルしました。ワークフローは却下時の経路に進みました。ステータス: {{status}}。",
       "retryStarted": "実行のリトライを開始しました",
       "retryFailed": "実行のリトライに失敗しました",
       "executionDeleteSuccess": "実行を正常に削除しました",
@@ -785,6 +799,7 @@
       "approveFailed": "ワークフローの承認に失敗しました",
       "rejectResumeSuccess": "ワークフローを却下して再開しました",
       "rejectFailed": "ワークフローの却下に失敗しました",
+      "forceDecisionRequireAll": "このステップは承認者だけが判断できます（全員の判断が必要です）。代わりに実行をキャンセルできます。",
       "noChanges": "変更なし",
       "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
       "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",

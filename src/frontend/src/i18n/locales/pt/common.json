@@ -340,7 +340,8 @@
       "for_request_access": "Solicitar acesso (assistente)",
       "for_request_publish": "Solicitar publicação (assistente)",
       "for_request_certify": "Solicitar certificação (assistente)",
-      "for_request_status_change": "Solicitar alteração de status (assistente)"
+      "for_request_status_change": "Solicitar alteração de status (assistente)",
+      "on_request_definition_change": "Solicitação de alteração de definição"
     },
     "entityTypes": {
       "catalog": "Catálogo",
@@ -360,7 +361,8 @@
       "user": "Usuário",
       "ontology_concept": "Conceito",
       "ontology_collection": "Esquema de conceitos",
-      "concept_changeset": "Conjunto de alterações de conceitos"
+      "concept_changeset": "Conjunto de alterações de conceitos",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validação",

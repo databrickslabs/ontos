@@ -6,6 +6,7 @@ Tools for searching, creating, updating, and deleting data contracts.
 
 import json
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
@@ -129,6 +130,7 @@ class CreateDraftDataContractTool(BaseTool):
     }
     required_params = ["name", "description", "domain"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -253,6 +255,7 @@ class UpdateDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -701,6 +704,7 @@ class DeleteDataContractTool(BaseTool):
     }
     required_params = ["contract_id"]
     required_scope = "contracts:write"
+    required_permission = ("data-contracts", FeatureAccessLevel.READ_WRITE)
     
     async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
         """Delete a data contract."""

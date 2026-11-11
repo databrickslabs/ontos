@@ -279,6 +279,7 @@ class WorkflowsManager:
                     from_status=trigger_data.get('from_status'),
                     to_status=trigger_data.get('to_status'),
                     schedule=trigger_data.get('schedule'),
+                    timezone=trigger_data.get('timezone'),
                     on_error=self._safe_gate_error_mode(trigger_data.get('on_error')),
                     disabled_for=self._safe_gate_exemptions(trigger_data.get('disabled_for')),
                 )

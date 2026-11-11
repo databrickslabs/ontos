@@ -11,8 +11,11 @@ and links to the run's results page.
 Recipients resolve as in workflow notification steps (``_resolve_role_to_users``):
 emails, groups (stored as the recipient, as for workflows), app role names or ids,
 ``entity_owner`` / ``domain_owners`` / ``business:<id>``, and comma-separated
-lists of these. ``owner`` means the entity's owners, as ``entity_owner``: the
-compliance ``owner`` field holds a team id, which is no recipient. Recipients
+lists of these. ``domain_owners`` / ``DomainOwner`` and ``ContractApprover`` are the
+owners of the entity's domain / of the entity, without the approval rules of workflow
+steps: the run user is kept, and nobody is put in place of missing owners.
+``owner`` means the entity's owners, as ``entity_owner``: the compliance ``owner``
+field holds a team id, which is no recipient. Recipients
 that don't depend on the entity are resolved once per run. ``requester`` /
 ``trigger_user`` is the user who started the run, so it resolves to nobody for
 scheduled runs of the compliance-checks job.
@@ -37,6 +40,18 @@ logger = get_logger(__name__)
 # Recipient tokens whose users depend on the entity (resolved per entity, not cached),
 # compared without case, spaces and underscores
 _ENTITY_TOKENS = {'entityowner', 'owner', 'reviewer', 'domainowner', 'domainowners', 'contractapprover'}
+
+
+# Owner tokens resolved without the approval rules (normalized as above)
+_OWNER_TOKENS = {
+    'domainowner': 'DomainOwner',
+    'domainowners': 'DomainOwner',
+    'contractapprover': 'ContractApprover',
+}
+
+
+def _normalized(token: str) -> str:
+    return token.strip().lower().replace(' ', '').replace('_', '')
 
 
 def _entity_dependent(token: str) -> bool:
@@ -97,8 +112,43 @@ class ComplianceRunNotifier:
             step_results={},
         )
 
-    def _resolve(self, recipients: str, context: ActionContext) -> List[Tuple[str, Optional[str]]]:
+    def _owner_recipients(
+        self, owner_role: str, token: str, step_context,
+    ) -> List[Tuple[str, Optional[str]]]:
+        """'DomainOwner' / 'ContractApprover' for a notice: an app role of that name, or of
+        the token as written, wins (as in workflows), else the owners of the entity's
+        domain / of the entity.
+
+        Not ``_owner_approvers``: its approval rules drop the requester and put the Data
+        Stewards and admins in place of missing owners, which a notice must not do.
+        """
+        from src.common.workflow_executor import _underlying_entity
+        from src.db_models.settings import AppRoleDb
+        from src.repositories.entity_owners_repository import (
+            resolve_domain_owner_emails,
+            resolve_owner_emails,
+        )
+
+        names = {owner_role.lower(), _normalized(token)}
+        for role in self._db.query(AppRoleDb).all():
+            if _normalized(role.name) in names:
+                return [(role.name, role.id)]
+        entity_type, entity_id = _underlying_entity(step_context)
+        if owner_role == 'DomainOwner':
+            emails = resolve_domain_owner_emails(self._db, entity_type, entity_id)
+        else:
+            emails = resolve_owner_emails(self._db, entity_type, entity_id)
+        return [(email, None) for email in emails if email]
+
+    def _resolve_token(self, token: str, step_context) -> List[Tuple[str, Optional[str]]]:
         from src.common.workflow_executor import _resolve_role_to_users
+
+        owner_role = _OWNER_TOKENS.get(_normalized(token))
+        if owner_role:
+            return self._owner_recipients(owner_role, token, step_context)
+        return [(i, r) for i, r in _resolve_role_to_users(self._db, token, step_context) if i]
+
+    def _resolve(self, recipients: str, context: ActionContext) -> List[Tuple[str, Optional[str]]]:
 
         resolved: List[Tuple[str, Optional[str]]] = []
         step_context = None
@@ -113,7 +163,7 @@ class ComplianceRunNotifier:
                 step_context = self._step_context(context)
             # A failed lookup must not abort the run's transaction (Postgres)
             with self._db.begin_nested():
-                users = [(i, r) for i, r in _resolve_role_to_users(self._db, token, step_context) if i]
+                users = self._resolve_token(token, step_context)
             if cacheable:
                 self._cache[token] = users
             resolved.extend(users)

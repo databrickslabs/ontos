@@ -218,6 +218,7 @@ ON_FAIL NOTIFY 'entity_owner'
   - user emails and group names;
   - app role names or ids;
   - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity;
+    `domain_owners` (or `DomainOwner`) and `ContractApprover` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
   - a comma-separated list of these.
 
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.

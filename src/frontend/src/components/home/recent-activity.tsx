@@ -5,8 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowRightCircle } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
-import { usePermissions } from '@/stores/permissions-store';
-import { FeatureAccessLevel } from '@/types/settings';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Entry {
@@ -25,9 +23,8 @@ interface RecentActivityProps {
 
 export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
   const { t } = useTranslation('home');
-  const { isLoading: permissionsLoading, hasPermission } = usePermissions();
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -50,14 +47,17 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
 
   useEffect(() => {
     const load = async () => {
-      if (permissionsLoading || !hasPermission('audit', FeatureAccessLevel.READ_ONLY)) {
-        setEntries([]);
-        return;
-      }
+      // No client-side gate: /api/user/permissions misses team role overrides, which
+      // the change log's own audit check applies. Its 403 is an empty card.
       try {
         setLoading(true);
         const resp = await fetch(`/api/change-log?limit=${limit}`);
-        if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+        if (resp.status === 403) {
+          setEntries([]);
+          setError(null);
+          return;
+        }
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         setEntries(Array.isArray(data) ? data : []);
         setError(null);
@@ -69,7 +69,7 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
       }
     };
     load();
-  }, [permissionsLoading, hasPermission, limit, t]);
+  }, [limit, t]);
 
   return (
     <div>

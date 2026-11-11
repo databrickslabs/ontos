@@ -15,7 +15,7 @@ from src.models.teams import (
 from src.controller.teams_manager import InvalidMemberSetError, TeamsManager, teams_manager
 from src.common.database import get_db
 from sqlalchemy.orm import Session
-from src.common.authorization import PermissionChecker, resolve_effective_permissions
+from src.common.authorization import PermissionChecker, effective_permissions_for_request
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
@@ -491,7 +491,7 @@ def _ensure_no_override_escalation(
     auth_manager = getattr(request.app.state, "authorization_manager", None)
     if auth_manager is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authorization service not configured.")
-    caller = resolve_effective_permissions(
+    caller = effective_permissions_for_request(
         request, current_user.email, current_user.groups or [], auth_manager,
     )
     names = sorted(set(changes) | {p for prevs in changes.values() for p in prevs if p})

@@ -7,7 +7,8 @@ normalized (``common/metric_view_normalization.py``) with its digest.
   definition"; approvals arrive with change requests (phase 3). Until then the
   first definition Ontos parses for the metric view becomes its baseline,
   without ``approved_at`` or ``request_id``, so it is never shown as approved.
-  An approved change request will replace it.
+  A delivered change request replaces it, with its decision time and id,
+  once Unity Catalog is read back with its definition (``_adopt_applied_request``).
 - **When drift is checked.** Each time the metric view behind an asset is read
   (``GET /api/assets/{id}/metric-view``): the definition just read is
   normalized and its digest compared with the baseline's.
@@ -93,7 +94,8 @@ class MetricViewBaselinesManager:
                 self._db, fqn=key, definition=normalized, digest=digest, checked_at=now,
                 created_by=user_email,
             )
-        state = 'in_sync' if digest == baseline.digest else 'drifted'
+        self._adopt_applied_request(key, normalized, digest, baseline)
+        state ='in_sync' if digest == baseline.digest else 'drifted'
         changed = self._repo.record_observation(
             self._db, baseline, observed_digest=digest, drift_state=state, checked_at=now,
         )
@@ -102,6 +104,30 @@ class MetricViewBaselinesManager:
         return _baseline(baseline), MetricViewDrift(
             state=state, current_digest=digest, last_checked_at=now,
         )
+
+    def _adopt_applied_request(
+        self, key: str, normalized: Dict[str, Any], digest: str,
+        baseline: MetricViewBaselineDb,
+    ) -> None:
+        """Make the definition just read the baseline when it is a delivered request's.
+
+        Ontos doesn't apply change requests (Indirect and Manual delivery), so
+        an approval alone doesn't move the baseline: it moves when Unity Catalog
+        is read back with exactly the approved definition.
+        """
+        from src.controller.metric_view_change_requests_manager import adopt_applied_request
+
+        applied = adopt_applied_request(self._db, key, digest)
+        if applied is None:
+            return
+        request, _ = applied
+        baseline.definition = normalized
+        baseline.digest = digest
+        baseline.approved_at = request.decided_at
+        baseline.request_id = str(request.id)
+        self._db.flush()
+        logger.info("Metric view %s: the definition of change request %s is the new baseline",
+                    key, request.id)
 
     def _notify_owners(self, fqn: str, asset_id: UUID) -> None:
         """One notification to each owner of the asset that the definition changed."""

@@ -20,8 +20,8 @@ from fastapi.testclient import TestClient
 from src.common import authorization
 from src.common.authorization import (
     PermissionChecker,
+    effective_permissions_for_request,
     get_user_details_from_sdk,
-    resolve_effective_permissions,
 )
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel, get_feature_config
 from src.common.manager_dependencies import get_auth_manager, get_settings_manager
@@ -171,7 +171,7 @@ class TestResolver:
         team = _team(("data-consumers", "Data Steward"))
         request = _request({"data-consumers": [team]})
 
-        perms = resolve_effective_permissions(request, "alice@example.com", ["data-consumers"], auth)
+        perms = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
 
         assert perms["data-domains"] == L.READ_WRITE
 
@@ -180,7 +180,7 @@ class TestResolver:
         consumer = next(r for r in ROLES if r.name == "Data Consumer")
         request = _request({"alice@example.com": [team]}, applied=str(consumer.id))
 
-        perms = resolve_effective_permissions(request, "alice@example.com", ["admins"], auth)
+        perms = effective_permissions_for_request(request, "alice@example.com", ["admins"], auth)
 
         assert perms.get("settings", L.NONE) == L.NONE
         assert perms["teams"] == L.READ_ONLY
@@ -190,7 +190,7 @@ class TestResolver:
         consumer = next(r for r in ROLES if r.name == "Data Consumer")
         request = _request({"alice@example.com": [team]}, applied=str(consumer.id))
 
-        perms = resolve_effective_permissions(
+        perms = effective_permissions_for_request(
             request, "alice@example.com", [], auth, apply_role_override=False,
         )
 
@@ -198,8 +198,8 @@ class TestResolver:
 
     def test_resolved_once_per_request(self, auth):
         request = _request({})
-        first = resolve_effective_permissions(request, "alice@example.com", ["data-consumers"], auth)
-        second = resolve_effective_permissions(request, "alice@example.com", ["data-consumers"], auth)
+        first = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
+        second = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
 
         assert first is second
         assert request.app.state.teams_manager.get_team_rows_for_user.call_count == 1
@@ -208,7 +208,7 @@ class TestResolver:
         request = _request({})
         request.app.state.teams_manager.get_team_rows_for_user.side_effect = RuntimeError("db down")
 
-        perms = resolve_effective_permissions(request, "alice@example.com", ["data-consumers"], auth)
+        perms = effective_permissions_for_request(request, "alice@example.com", ["data-consumers"], auth)
 
         assert perms["data-products"] == L.READ_ONLY
 

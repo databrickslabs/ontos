@@ -7,6 +7,7 @@ Tools for searching, creating, updating, and deleting data products.
 import json
 import uuid
 from typing import Any, Dict, List, Optional
+from src.common.features import FeatureAccessLevel
 
 from src.common.api_errors import CodedValueError
 from src.common.logging import get_logger
@@ -293,6 +294,7 @@ class CreateDraftDataProductTool(BaseTool):
     }
     required_params = ["name", "description", "domain"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -411,6 +413,7 @@ class UpdateDataProductTool(BaseTool):
     }
     required_params = ["product_id"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.READ_WRITE)
     
     async def execute(
         self,
@@ -705,6 +708,7 @@ class DeleteDataProductTool(BaseTool):
     }
     required_params = ["product_id"]
     required_scope = "data-products:write"
+    required_permission = ("data-products", FeatureAccessLevel.ADMIN)
     
     async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
         """Delete a data product."""

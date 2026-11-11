@@ -339,7 +339,8 @@
       "for_request_access": "Demande d'accès (Assistant)",
       "for_request_publish": "Demande de publication (Assistant)",
       "for_request_certify": "Demande de certification (Assistant)",
-      "for_request_status_change": "Demande de changement de statut (Assistant)"
+      "for_request_status_change": "Demande de changement de statut (Assistant)",
+      "on_request_definition_change": "Demande de modification de définition"
     },
     "entityTypes": {
       "catalog": "Catalogue",
@@ -356,7 +357,8 @@
       "data_asset_review": "Révision d'actif",
       "job": "Job",
       "subscription": "Abonnement",
-      "user": "Utilisateur"
+      "user": "Utilisateur",
+      "metric_view": "Metric View"
     },
     "stepTypes": {
       "validation": "Validation",

@@ -34,6 +34,8 @@ class TriggerType(str, Enum):
     ON_REQUEST_PUBLISH = "on_request_publish"  # Marketplace publication requested
     ON_REQUEST_DEPLOY = "on_request_deploy"  # Deployment to Unity Catalog requested (contracts)
     ON_REQUEST_STATUS_CHANGE = "on_request_status_change"  # When status change is requested
+    # A metric view definition change request was submitted (#1124)
+    ON_REQUEST_DEFINITION_CHANGE = "on_request_definition_change"
     
     # Job lifecycle triggers
     ON_JOB_SUCCESS = "on_job_success"  # When a background job completes successfully
@@ -94,6 +96,7 @@ class EntityType(str, Enum):
     ONTOLOGY_CONCEPT = "ontology_concept"  # A SKOS concept (RDF triples keyed by IRI)
     ONTOLOGY_COLLECTION = "ontology_collection"  # A concept scheme / collection
     CONCEPT_CHANGESET = "concept_changeset"  # A bulk RDF-upload changeset awaiting approval
+    METRIC_VIEW = "metric_view"  # The asset of a Unity Catalog metric view (#1124)
 
 
 class ScopeType(str, Enum):

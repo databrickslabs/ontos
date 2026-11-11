@@ -54,8 +54,8 @@ async def search_items(
     try:
         # The same permissions every check uses: applied role override, else groups,
         # email and team roles (#1245)
-        effective_permissions = resolve_effective_permissions(
-            request, current_user.email, current_user.groups or [], auth_manager,
+        effective_permissions = await resolve_effective_permissions(
+            current_user.email, current_user.groups or [], request, auth_manager,
         )
         results = manager.search(
             search_term, auth_manager, current_user, effective_permissions=effective_permissions,

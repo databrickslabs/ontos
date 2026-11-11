@@ -138,8 +138,8 @@ async def get_current_user_permissions(
     # to the previous behavior for truly-unprivileged users.
 
     try:
-        return resolve_effective_permissions(
-            request, user_details.email, user_details.groups or [], auth_manager,
+        return await resolve_effective_permissions(
+            user_details.email, user_details.groups or [], request, auth_manager,
         )
 
     except HTTPException:

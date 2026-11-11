@@ -30,7 +30,7 @@ from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
 from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
-from src.common.authorization import has_feature_permission, resolve_effective_permissions
+from src.common.authorization import effective_permissions_for_request, has_feature_permission
 from src.common.manager_dependencies import get_auth_manager
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.api_errors import CodedValueError
@@ -153,7 +153,7 @@ def _caller_owns_product(request, db, current_user, product) -> bool:
     user_groups = current_user.groups if current_user else []
 
     if auth_manager and current_user:
-        eff = resolve_effective_permissions(request, caller_email, user_groups or [], auth_manager)
+        eff = effective_permissions_for_request(request, caller_email, user_groups or [], auth_manager)
         if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
             return True
 
@@ -220,6 +220,23 @@ def _caller_owns_product(request, db, current_user, product) -> bool:
             )
 
     return False
+
+
+def readable_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+):
+    """The path's product, when the caller may read it (the rule of the product page).
+
+    A product the caller can't read answers the same 404 as a missing one.
+    """
+    product = manager.get_product(product_id)
+    if product is None or not _caller_can_read_product(request, db, current_user, manager, product):
+        raise HTTPException(status_code=404, detail="Data product not found")
+    return product
 
 
 # --- Lifecycle transitions (minimal) ---
@@ -1324,7 +1341,7 @@ async def get_product_linked_assets(
     is_dp_admin = False
     try:
         if auth_manager and current_user:
-            eff = resolve_effective_permissions(
+            eff = effective_permissions_for_request(
                 request, current_user.email, current_user.groups or [], auth_manager,
             )
             is_dp_admin = auth_manager.has_permission(
@@ -2330,7 +2347,7 @@ async def update_data_product(
         try:
             auth_manager = getattr(request.app.state, "authorization_manager", None)
             if auth_manager and current_user:
-                eff = resolve_effective_permissions(
+                eff = effective_permissions_for_request(
                     request, current_user.email, user_groups or [], auth_manager,
                 )
                 is_feature_admin = auth_manager.has_permission(

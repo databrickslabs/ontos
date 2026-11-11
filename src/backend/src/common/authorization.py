@@ -55,6 +55,28 @@ def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
         return "admins" in [g.lower() for g in user_groups]
 
 
+async def resolve_effective_permissions(
+    user_email: Optional[str],
+    user_groups: Optional[List[str]],
+    request: Request,
+    auth_manager: Optional[AuthorizationManager] = None,
+) -> Dict[str, FeatureAccessLevel]:
+    """The caller's effective feature levels, as every feature check resolves them.
+
+    Precedence: an applied role override, else the user's group and email roles and
+    every team role override that applies to them, combined by the highest level
+    per feature. Shared by :class:`PermissionChecker`, :func:`is_user_feature_admin`,
+    :func:`enforce_feature_permission`, ``/api/user/permissions`` and the assistant
+    tools (``src.tools.caller``), which check levels outside ``Depends``. Synchronous
+    callers use :func:`effective_permissions_for_request`, which this wraps.
+
+    ``auth_manager`` defaults to the one in ``request.app.state``
+    (``PermissionChecker`` passes its injected one).
+    Raises ``RuntimeError`` when no ``AuthorizationManager`` is configured.
+    """
+    return effective_permissions_for_request(request, user_email, user_groups, auth_manager)
+
+
 async def is_user_feature_admin(
     user_email: Optional[str],
     user_groups: Optional[List[str]],
@@ -97,14 +119,9 @@ async def is_user_feature_admin(
     if not user_email:
         return False
     try:
-        auth_manager: Optional[AuthorizationManager] = getattr(
-            request.app.state, "authorization_manager", None
-        )
-        if auth_manager is None:
+        if getattr(request.app.state, "authorization_manager", None) is None:
             return False
-
-        effective = resolve_effective_permissions(request, user_email, user_groups or [], auth_manager)
-
+        effective = await resolve_effective_permissions(user_email, user_groups, request)
         return effective.get(feature_id) == FeatureAccessLevel.ADMIN
     except Exception:
         logger.exception(
@@ -486,7 +503,7 @@ def effective_permissions_for(
 _PERMISSIONS_CACHE_ATTR = "_ontos_effective_permissions"
 
 
-def resolve_effective_permissions(
+def effective_permissions_for_request(
     request: Request,
     user_email: Optional[str],
     user_groups: Optional[List[str]],
@@ -494,7 +511,7 @@ def resolve_effective_permissions(
     *,
     apply_role_override: bool = True,
 ) -> Dict[str, FeatureAccessLevel]:
-    """The user's effective feature permissions: the one resolver behind every check.
+    """The user's effective feature permissions (synchronous form of ``resolve_effective_permissions``).
 
     Precedence: an applied role override replaces everything; otherwise group and
     email roles and every applying team role override combine by highest level per
@@ -503,8 +520,8 @@ def resolve_effective_permissions(
     """
     if auth_manager is None:
         auth_manager = getattr(request.app.state, "authorization_manager", None)
-        if auth_manager is None:
-            raise HTTPException(status_code=503, detail="Authorization service not configured.")
+    if auth_manager is None:
+        raise RuntimeError("AuthorizationManager not found in app state")
 
     key = (
         (user_email or "").strip().lower(),
@@ -629,9 +646,9 @@ async def enforce_feature_permission(
         raise HTTPException(status_code=503, detail="Authorization service not configured.")
 
     try:
-        # Same resolution as PermissionChecker.__call__.
-        effective_permissions = resolve_effective_permissions(
-            request, user_details.email, user_details.groups or [], auth_manager,
+        # Mirror PermissionChecker.__call__: team override → applied role override → group merge.
+        effective_permissions = await resolve_effective_permissions(
+            user_details.email, user_details.groups, request
         )
 
         if not auth_manager.has_permission(effective_permissions, feature_id, required_level):
@@ -745,9 +762,9 @@ class PermissionChecker:
             )
 
         try:
-            # Applied role override, else groups + email + every team role (#1245)
-            effective_permissions = resolve_effective_permissions(
-                request, user_details.email, user_details.groups or [], auth_manager,
+            # Applied role override, else team role override + group/email roles.
+            effective_permissions = await resolve_effective_permissions(
+                user_details.email, user_details.groups, request, auth_manager=auth_manager
             )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,

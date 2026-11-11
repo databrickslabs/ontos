@@ -802,6 +802,49 @@ class TriggerRegistry:
         )
         return self.fire_trigger(event, blocking=blocking)
 
+    def on_request_definition_change(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        entity_name: Optional[str] = None,
+        entity_data: Optional[Dict[str, Any]] = None,
+        user_email: Optional[str] = None,
+        scope_type: Optional[str] = None,
+        scope_id: Optional[str] = None,
+        *,
+        blocking: bool = True,
+    ) -> List[WorkflowExecution]:
+        """Fire when a change to a metric view's definition is submitted for review (#1124).
+
+        Args:
+            entity_type: Type of entity (metric_view: the metric view's asset)
+            entity_id: ID of the asset
+            entity_name: The metric view's ``catalog.schema.view``
+            entity_data: The request (request_id, digests, proposed YAML, justification)
+            user_email: User requesting the change
+            scope_type: Scope type
+            scope_id: Scope ID
+            blocking: Execute synchronously
+
+        Returns:
+            List of workflow executions
+        """
+        event = TriggerEvent(
+            trigger_type=TriggerType.ON_REQUEST_DEFINITION_CHANGE,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=entity_data,
+            user_email=user_email,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        logger.info(
+            "on_request_definition_change fired for %s '%s' by %s",
+            entity_type.value, entity_id, user_email,
+        )
+        return self.fire_trigger(event, blocking=blocking)
+
     # =========================================================================
     # Job Lifecycle Triggers
     # =========================================================================

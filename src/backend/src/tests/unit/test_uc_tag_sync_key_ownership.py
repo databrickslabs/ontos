@@ -420,6 +420,9 @@ def test_a_partial_run_keeps_the_placeholder_records_it_cannot_clean_up(tag_sync
             extra_args=("--limit", "5"))
 
     assert job.state["TABLE"][ORDERS]["ontos_semantic_old"] == "stale"
+    # The partial run removes nothing: the tag is still on the table.
+    assert job.store[("TABLE", ORDERS)]["ontos_semantic_old"] == "stale"
+    assert ("TABLE", ORDERS, "ontos_semantic_old") not in job.unassigned
 
     job.run([DOMAIN_CFG, SEMANTIC_CFG], [_table(tag_sync, domain="Finance")])
 

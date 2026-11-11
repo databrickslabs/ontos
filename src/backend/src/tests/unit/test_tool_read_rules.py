@@ -899,3 +899,18 @@ class TestAdminGroupsReadEveryProject:
         assert _refusal(ALL_PROJECTS) is None
         assert _refusal({'p1'}) is None
         assert _refusal(set()).error_code == PROJECT_MEMBERSHIP_CODE
+
+
+def test_a_failing_product_rule_denies_the_read(world, monkeypatch):
+    """The product rule fails closed: the product is answered as not found."""
+    from src.tools import read_access
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError('rule failed')
+
+    monkeypatch.setattr(read_access, '_can_read_product_rule', _boom)
+    draft = world.p['own_draft']
+    assert read_access.can_read_product(_ctx(world, OWNER), draft) is False
+    res = _call(world, 'owner', 'get_data_product', product_id=draft.id)
+    assert res.success is False and res.error.endswith('not found')
+    assert res.denied_reason == NOT_READABLE

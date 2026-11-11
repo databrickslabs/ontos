@@ -53,11 +53,8 @@ class _FakeSemanticModels:
         rows = [c for c in self._concepts if needle in c["label"].lower() or needle in c["value"].lower()]
         return rows[:limit]
 
-    def get_collections(self):
-        return [
-            {"iri": "urn:glossary:retail", "label": "Retail Glossary", "source_key": "retail"},
-            {"iri": "urn:taxonomy:ontos-ontology", "label": "Ontos Ontology", "source_key": "ontos-ontology"},
-        ]
+    def _scheme_labels_by_source_key(self):
+        return {"retail": "Retail Glossary", "ontos-ontology": "Ontos Ontology"}
 
 
 CONCEPTS = [
@@ -158,6 +155,24 @@ class TestConcepts:
         assert len(data["candidates"]) == 2
         _, types, _ = app.state.semantic_models_manager.calls[-1]
         assert "property" not in types
+
+    def test_the_best_match_survives_the_page_cut(self, make_client):
+        concepts = [
+            {"value": f"urn:glossary:retail/{n}", "label": label, "type": "concept", "source_context": "retail"}
+            for n, label in (("a", "Active Customer"), ("b", "B2B Customer"), ("c", "Customer"))
+        ]
+        client, _ = make_client(concepts=concepts)
+
+        data = _candidates(client, target_type="OntologyConcept", query="customer", limit=1)
+
+        assert [c["name"] for c in data["candidates"]] == ["Customer"]
+
+    @pytest.mark.parametrize("spelling", ["Data Domain", "http://ontos.app/ontology#DataDomain"])
+    def test_other_spellings_of_a_target_type(self, make_client, db_session, spelling):
+        _domains(db_session, "Sales")
+        client, _ = make_client(permissions={"data-domains": RO})
+
+        assert [c["name"] for c in _candidates(client, target_type=spelling)["candidates"]] == ["Sales"]
 
     def test_total_counts_every_match_not_the_page(self, make_client):
         client, _ = make_client()

@@ -249,6 +249,70 @@ describe('AddRelationshipDialog target sources (#956, #957, #959)', () => {
     expect(urls().some(url => url.startsWith('/api/assets?asset_type_id=la'))).toBe(true);
   });
 
+  it('links an "Asset" range with the picked asset\'s own type', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/ontology/entity-types/relationships')) {
+        return { data: { ...LOGICAL_ENTITY_RELS, outgoing: [rel('consumesFrom', 'consumes from', 'Asset', 'Asset')] } };
+      }
+      if (url.startsWith('/api/asset-types')) {
+        return { data: [{ id: 'mv', name: 'Metric View', category: 'data', status: 'active', asset_count: 1 }] };
+      }
+      if (url.startsWith('/api/assets')) {
+        return { data: { items: [{ id: 'v1', name: 'revenue_metrics', asset_type_name: 'Metric View' }], total: 1 } };
+      }
+      return { data: null };
+    });
+    await open(/consumes from/i);
+
+    fireEvent.click(await screen.findByText('revenue_metrics'));
+    fireEvent.click(screen.getByRole('button', { name: /create relationship/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/api/entity-relationships', expect.objectContaining({
+        target_type: 'MetricView', target_id: 'v1', relationship_type: 'consumesFrom',
+      }));
+    });
+  });
+
+  it('drops an answer that arrives after the relationship type changed', async () => {
+    let releaseDomains: (v: unknown) => void = () => {};
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/ontology/entity-types/relationships')) return { data: LOGICAL_ENTITY_RELS };
+      if (url.startsWith('/api/asset-types')) return { data: [] };
+      if (url.startsWith('/api/suggestions/link-candidates')) {
+        if (url.includes('target_type=DataDomain')) {
+          await new Promise(resolve => { releaseDomains = resolve; });
+          return { data: { candidates: DOMAINS, total: 2 } };
+        }
+        return { data: { candidates: CONCEPTS, total: 1 } };
+      }
+      return { data: null };
+    });
+    await open(/belongs to domain/i);
+    const option = await screen.findByRole('option', { name: /has concepts/i });
+    fireEvent.change(screen.getByRole('combobox', { name: 'relationship type' }), {
+      target: { value: (option as HTMLOptionElement).value },
+    });
+    await screen.findByText('Customer');
+
+    releaseDomains(undefined);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Sales')).toBeNull();
+    expect(screen.getByText('Customer')).toBeInTheDocument();
+  });
+
+  it('falls back to an asset search when the asset types fail to load', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/ontology/entity-types/relationships')) return { data: LOGICAL_ENTITY_RELS };
+      if (url.startsWith('/api/asset-types')) return { error: 'boom' };
+      return { data: { items: [], total: 0 } };
+    });
+    await open(/has owner/i);
+
+    await waitFor(() => expect(screen.queryByText(/can't be picked here/i)).toBeNull());
+  });
+
   it('says when a target type is managed elsewhere', async () => {
     await open(/has owner/i);
 

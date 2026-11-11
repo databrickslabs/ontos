@@ -7,7 +7,7 @@ and resolves entity names for display.
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Deque, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Any, Callable, Deque, Dict, List, Optional, Set, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -132,16 +132,27 @@ class EntityRelationshipsManager:
         db: Session,
         rel_in: EntityRelationshipCreate,
         current_user_id: str,
+        concept_label: Optional[Callable[[str], Optional[str]]] = None,
     ) -> EntityRelationshipRead:
         """Create a new entity relationship, validated against the ontology.
 
         Entity types are stored as ontology local names, whichever spelling the
-        caller sent ('Logical Entity' is stored as 'LogicalEntity').
+        caller sent ('Logical Entity' is stored as 'LogicalEntity'; the model does
+        it). A link to an ontology concept stores the concept's label in
+        ``properties.target_label``, looked up with ``concept_label(iri)`` when
+        given, else the label the caller sent: concepts have no table to resolve
+        a name from later.
         """
-        rel_in = rel_in.model_copy(update={
-            "source_type": canonical_type_name(rel_in.source_type),
-            "target_type": canonical_type_name(rel_in.target_type),
-        })
+        properties = rel_in.properties
+        if canonical_type_name(rel_in.target_type) == ONTOLOGY_CONCEPT_TYPE:
+            label = None
+            try:
+                label = concept_label(rel_in.target_id) if concept_label else None
+            except Exception:
+                logger.warning("Concept label lookup failed for %s", rel_in.target_id, exc_info=True)
+            label = label or (properties or {}).get("target_label")
+            if label:
+                properties = {**(properties or {}), "target_label": label}
         rel_label = self._validate_relationship(
             rel_in.source_type, rel_in.target_type, rel_in.relationship_type
         )
@@ -167,7 +178,7 @@ class EntityRelationshipsManager:
             target_type=rel_in.target_type,
             target_id=rel_in.target_id,
             relationship_type=rel_in.relationship_type,
-            properties=rel_in.properties,
+            properties=properties,
             created_by=current_user_id,
         )
 

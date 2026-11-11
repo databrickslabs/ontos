@@ -130,3 +130,31 @@ def test_a_concept_link_without_a_label_falls_back_to_the_concept_name(db_sessio
     # Resolved like a lineage concept node: semantic-link label, else the IRI's last segment.
     assert link.target_name == "customer-address"
     assert manager._resolve_entity(db_session, "OntologyConcept", iri)["name"] == "customer-address"
+
+
+def test_the_backend_names_a_concept_link_from_the_semantic_models(db_session, osm):
+    manager = EntityRelationshipsManager(osm)
+
+    created = manager.create_relationship(db_session, EntityRelationshipCreate(
+        source_type="LogicalEntity", source_id="le1", target_type="OntologyConcept",
+        target_id="urn:glossary:retail/customer", relationship_type="hasSemanticConcept",
+        properties={"target_label": "stale client label"},
+    ), current_user_id="u@example.com", concept_label=lambda iri: "Customer")
+
+    assert created.properties["target_label"] == "Customer"
+    assert created.target_name == "Customer"
+
+
+def test_a_failing_concept_lookup_keeps_the_client_label(db_session, osm):
+    manager = EntityRelationshipsManager(osm)
+
+    def broken(_iri):
+        raise RuntimeError("graph not loaded")
+
+    created = manager.create_relationship(db_session, EntityRelationshipCreate(
+        source_type="LogicalEntity", source_id="le1", target_type="OntologyConcept",
+        target_id="urn:glossary:retail/customer", relationship_type="hasSemanticConcept",
+        properties={"target_label": "Customer"},
+    ), current_user_id="u@example.com", concept_label=broken)
+
+    assert created.properties["target_label"] == "Customer"

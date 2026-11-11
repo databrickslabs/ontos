@@ -11,14 +11,13 @@ from src.common.authorization import enforce_feature_permission, get_user_detail
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import DBSessionDep
 from src.common.logging import get_logger
+from src.common.ontology_type_names import ONTOS_NS, canonical_type_name
 from src.models.users import UserInfo
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/suggestions", tags=["Suggestions"])
 FEATURE_ID = "assets"
-
-ONTOS_NS = "http://ontos.app/ontology#"
 
 # Non-asset target types and the feature whose read access lists them. Every other
 # target type is matched against the asset types and needs asset read access.
@@ -59,7 +58,7 @@ async def _require_target_read_access(
     user_details: UserInfo = Depends(get_user_details_from_sdk),
 ) -> None:
     """Read access to the feature that owns ``target_type`` (assets for asset types)."""
-    feature_id = DEDICATED_TARGET_FEATURES.get(target_type, FEATURE_ID)
+    feature_id = DEDICATED_TARGET_FEATURES.get(canonical_type_name(target_type), FEATURE_ID)
     await enforce_feature_permission(feature_id, FeatureAccessLevel.READ_ONLY, user_details, request)
 
 
@@ -87,6 +86,7 @@ def get_link_candidates(
     type needs read access to the feature that owns it. Types that have no list
     here (e.g. ``Ownership``) return no candidates.
     """
+    target_type = canonical_type_name(target_type)  # 'Data Domain', IRIs -> 'DataDomain'
     search_term = query or source_name or ""
     try:
         if target_type == "OntologyConcept":
@@ -112,11 +112,10 @@ def _asset_types(db: Session, target_type: str) -> Dict:
     from src.db_models.assets import AssetTypeDb
 
     types = db.query(AssetTypeDb.id, AssetTypeDb.name).all()
-    wanted = target_type.replace(" ", "")
     return {
-        t.id: t.name.replace(" ", "")
+        t.id: canonical_type_name(t.name)
         for t in types
-        if target_type == GENERIC_ASSET_TYPE or t.name.replace(" ", "") == wanted
+        if target_type == GENERIC_ASSET_TYPE or canonical_type_name(t.name) == target_type
     }
 
 
@@ -164,10 +163,7 @@ def _search_concepts(request: Request, search_term: str, limit: int) -> Tuple[Li
     # right after the metamodel classes are dropped.
     rows = manager.search_concepts_by_type(search_term, LINKABLE_CONCEPT_TYPES, limit=MAX_CONCEPT_MATCHES)
     rows = [r for r in rows if not str(r.get("value", "")).startswith(ONTOS_NS)]
-    collection_labels: Dict[str, str] = {}
-    for collection in manager.get_collections() or []:
-        if collection.get("source_key"):
-            collection_labels[collection["source_key"]] = collection.get("label") or collection["source_key"]
+    collection_labels: Dict[str, str] = manager._scheme_labels_by_source_key()
 
     candidates = [
         LinkCandidate(
@@ -179,6 +175,8 @@ def _search_concepts(request: Request, search_term: str, limit: int) -> Tuple[Li
         )
         for row in rows
     ]
+    # Best matches first before the page is cut, as the route sorts the page.
+    candidates.sort(key=lambda c: (-c.score, c.name.lower()))
     return candidates[:limit], len(candidates)
 
 

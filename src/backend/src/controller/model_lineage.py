@@ -112,7 +112,7 @@ HIDDEN_LINEAGE_TYPES = {"LogicalEntity", "LogicalAttribute"}
 # Asset type names ('Metric View') and the local names relationship rows store
 # ('MetricView'): a node's type can come from either.
 PHYSICAL_TABLE_TYPES = tuple(dict.fromkeys(
-    PHYSICAL_TABLE_ASSET_TYPES + tuple(t.replace(" ", "") for t in PHYSICAL_TABLE_ASSET_TYPES)
+    PHYSICAL_TABLE_ASSET_TYPES + tuple(canonical_type_name(t) for t in PHYSICAL_TABLE_ASSET_TYPES)
 ))
 MAX_CONCEPT_FANOUT = 30
 

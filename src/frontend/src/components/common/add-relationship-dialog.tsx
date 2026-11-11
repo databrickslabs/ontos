@@ -25,7 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useFormatLabel } from '@/lib/format-label';
 import { getTargetTypeName } from '@/lib/relationship-type';
-import { relationshipTargetSource } from '@/lib/relationship-target-source';
+import { assetTypeLocalName, GENERIC_ASSET_TARGET, relationshipTargetSource } from '@/lib/relationship-target-source';
 import { AssetTypeRead } from '@/types/asset';
 import type { RelationshipDefinition } from '@/types/ontology-schema';
 
@@ -201,6 +201,9 @@ export function AddRelationshipDialog({
   // Browse state
   const [assetTypes, setAssetTypes] = useState<AssetTypeRead[]>([]);
   const [typesLoading, setTypesLoading] = useState(false);
+  const [typesLoaded, setTypesLoaded] = useState(false);
+  // Bumped whenever the relationship type changes: answers to older requests are dropped.
+  const requestSeq = useRef(0);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [browseResults, setBrowseResults] = useState<TargetEntity[]>([]);
   const [browseTotal, setBrowseTotal] = useState(0);
@@ -225,10 +228,16 @@ export function AddRelationshipDialog({
   // Where the targets come from: assets, link candidates (domains, concepts, ...)
   // or nowhere (managed on another page). Asset types are matched by local name,
   // since target_type_label is translated.
-  const targetSource = useMemo(
-    () => (targetTypeName ? relationshipTargetSource(targetTypeName, assetTypes.map(at => at.name)) : null),
-    [targetTypeName, assetTypes],
-  );
+  const targetSource = useMemo(() => {
+    if (!targetTypeName) return null;
+    const source = relationshipTargetSource(targetTypeName, assetTypes.map(at => at.name));
+    // Without the asset type list (failed load) a type can't be ruled out: search
+    // assets by the target's label, as before.
+    if (source.kind === 'unsupported' && !typesLoaded) {
+      return { kind: 'asset' as const, assetTypeNames: targetTypeLabel ? [targetTypeLabel] : null };
+    }
+    return source;
+  }, [targetTypeName, targetTypeLabel, assetTypes, typesLoaded]);
   const usesCandidates = targetSource?.kind === 'candidates';
   const isUnsupported = targetSource?.kind === 'unsupported' && !typesLoading;
   const isConceptTarget = targetTypeName === 'OntologyConcept';
@@ -289,20 +298,23 @@ export function AddRelationshipDialog({
   const fetchAssetTypes = useCallback(async () => {
     setTypesLoading(true);
     try {
-      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?limit=100');
+      const response = await apiGet<AssetTypeRead[]>('/api/asset-types?limit=1000');
       if (!response.error && Array.isArray(response.data)) {
         setAssetTypes(response.data.filter(t => t.status === 'active'));
+        setTypesLoaded(true);
       }
     } catch { /* silent */ }
     finally { setTypesLoading(false); }
   }, [apiGet]);
 
-  const fetchCandidates = useCallback(async (query: string): Promise<{ items: TargetEntity[]; total: number }> => {
+  const fetchCandidates = useCallback(async (query: string): Promise<{ items: TargetEntity[]; total: number } | null> => {
+    const seq = requestSeq.current;
     const params = new URLSearchParams({ target_type: targetTypeName, limit: String(CANDIDATE_LIMIT) });
     if (query) params.set('query', query);
     const response = await apiGet<{ candidates: LinkCandidate[]; total: number }>(
       `/api/suggestions/link-candidates?${params}`,
     );
+    if (seq !== requestSeq.current) return null; // the relationship type changed meanwhile
     const candidates = response.data?.candidates;
     if (response.error || !Array.isArray(candidates)) return { items: [], total: 0 };
     return {
@@ -321,9 +333,10 @@ export function AddRelationshipDialog({
   const fetchBrowseCandidates = useCallback(async (nameFilter?: string) => {
     setBrowseLoading(true);
     try {
-      const { items, total } = await fetchCandidates(nameFilter && nameFilter.length >= 2 ? nameFilter : '');
-      setBrowseResults(items);
-      setBrowseTotal(total);
+      const result = await fetchCandidates(nameFilter && nameFilter.length >= 2 ? nameFilter : '');
+      if (!result) return;
+      setBrowseResults(result.items);
+      setBrowseTotal(result.total);
     } catch {
       setBrowseResults([]);
       setBrowseTotal(0);
@@ -340,14 +353,17 @@ export function AddRelationshipDialog({
     setSearchLoading(true);
     try {
       if (usesCandidates) {
-        setSearchResults((await fetchCandidates(query)).items);
+        const result = await fetchCandidates(query);
+        if (result) setSearchResults(result.items);
         return;
       }
+      const seq = requestSeq.current;
       let url = `/api/assets?name=${encodeURIComponent(query)}&limit=20`;
       if (targetAssetTypes.length > 0) {
         url += `&asset_type_names=${encodeURIComponent(targetAssetTypes.join(','))}`;
       }
       const response = await apiGet<{ items: any[]; total: number }>(url);
+      if (seq !== requestSeq.current) return;
       const items = response.data?.items;
       if (!response.error && Array.isArray(items)) {
         setSearchResults(items.map(a => ({
@@ -369,11 +385,13 @@ export function AddRelationshipDialog({
   const fetchBrowseAssets = useCallback(async (typeId: string, nameFilter?: string) => {
     setBrowseLoading(true);
     try {
+      const seq = requestSeq.current;
       let url = `/api/assets?asset_type_id=${typeId}&limit=50`;
       if (nameFilter && nameFilter.length >= 2) {
         url += `&name=${encodeURIComponent(nameFilter)}`;
       }
       const response = await apiGet<{ items: any[]; total: number }>(url);
+      if (seq !== requestSeq.current) return;
       const items = response.data?.items;
       if (!response.error && Array.isArray(items)) {
         setBrowseResults(items.map(a => ({
@@ -432,6 +450,9 @@ export function AddRelationshipDialog({
   };
 
   const handleRelTypeChange = (val: string) => {
+    requestSeq.current += 1;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (browseDebounceRef.current) clearTimeout(browseDebounceRef.current);
     setSelectedRelType(val);
     setSelectedTarget(null);
     setSearchQuery('');
@@ -449,7 +470,10 @@ export function AddRelationshipDialog({
     if (!selectedTarget || !selectedRelType || !selectedRelDef) return;
     setCreateLoading(true);
     try {
-      const tType = getTargetTypeName(selectedRelDef) || selectedTarget.type;
+      // An "Asset" range takes the picked asset's own type, which its page looks up by.
+      const tType = targetTypeName === GENERIC_ASSET_TARGET
+        ? assetTypeLocalName(selectedTarget.type)
+        : getTargetTypeName(selectedRelDef) || selectedTarget.type;
       const payload: Record<string, unknown> = {
         source_type: entityType,
         source_id: entityId,

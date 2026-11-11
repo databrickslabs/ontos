@@ -24,8 +24,6 @@ METADATA_ENTITY_FEATURES = {
     "concept": "semantic-models",
     "collection": "semantic-models",
     "compliance_policy": "compliance",
-    "team": "teams",
-    "project": "projects",
 }
 METADATA_ENTITY_TYPES = tuple(METADATA_ENTITY_FEATURES)
 ENTITY_TYPE_PATTERN = rf"^({'|'.join(METADATA_ENTITY_TYPES)})$"

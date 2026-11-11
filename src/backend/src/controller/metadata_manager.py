@@ -229,15 +229,32 @@ class MetadataManager:
             return None
         return Document.from_orm(db_obj)
 
-    def get_record_entity_type(self, db: Session, *, kind: str, id: str) -> Optional[str]:
-        """Entity kind a rich text, link or document belongs to, or None if it doesn't exist."""
-        repos = {
+    def _repo_for(self, kind: str):
+        return {
             "rich_text": self._rich_text_repo,
             "link": self._link_repo,
             "document": self._document_repo,
-        }
-        db_obj = repos[kind].get(db, id=id)
-        return db_obj.entity_type if db_obj else None
+        }[kind]
+
+    @staticmethod
+    def _is_shared(db_obj) -> bool:
+        return bool(db_obj.is_shared) or db_obj.entity_id == SHARED_ENTITY_ID
+
+    def get_record_scope(self, db: Session, *, kind: str, id: str) -> Optional[Tuple[str, bool]]:
+        """``(entity_type, is_shared)`` of a rich text, link or document, or None if it doesn't exist.
+
+        Shared library records keep the entity type they were created from, so
+        callers authorize them by the shared flag, not by that type.
+        """
+        db_obj = self._repo_for(kind).get(db, id=id)
+        if not db_obj:
+            return None
+        return db_obj.entity_type, self._is_shared(db_obj)
+
+    def is_shared_asset(self, db: Session, *, kind: str, id: str) -> bool:
+        """True if ``id`` is a shared library asset of that kind (only those can be attached)."""
+        db_obj = self._repo_for(kind).get(db, id=id)
+        return bool(db_obj) and self._is_shared(db_obj)
 
     # --- Entity deletion ---
     def remove_all_for_entity(
@@ -369,7 +386,13 @@ class MetadataManager:
         data: MetadataAttachmentCreate,
         user_email: Optional[str]
     ) -> MetadataAttachment:
-        """Attach a shared asset to an entity."""
+        """Attach a shared asset to an entity.
+
+        Raises ValueError if ``asset_id`` is not a shared library asset: attaching an
+        entity's own note would expose it through the target's merged metadata.
+        """
+        if not self.is_shared_asset(db, kind=data.asset_type, id=data.asset_id):
+            raise ValueError("Only shared library assets can be attached")
         # Check if attachment already exists
         existing = self._attachment_repo.get_attachment(
             db, entity_type=entity_type, entity_id=entity_id,

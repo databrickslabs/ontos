@@ -20,7 +20,9 @@ from src.common.manager_dependencies import get_audit_manager, get_auth_manager,
 from src.controller.costs_manager import CostsManager
 from src.controller.metadata_manager import MetadataManager
 from src.models.costs import CostItem, CostItemCreate
-from src.models.metadata import METADATA_ENTITY_FEATURES, DocumentCreate, LinkCreate, RichText, RichTextCreate
+from src.models.metadata import (
+    METADATA_ENTITY_FEATURES, DocumentCreate, LinkCreate, MetadataAttachmentCreate, RichText, RichTextCreate,
+)
 from src.models.users import UserInfo
 from src.routes import costs_routes, metadata_routes
 
@@ -122,8 +124,6 @@ class TestEntityRoutes:
         ("concept", "semantic-models"),
         ("collection", "semantic-models"),
         ("compliance_policy", "compliance"),
-        ("team", "teams"),
-        ("project", "projects"),
     ])
     def test_reads_need_the_owning_feature(self, make_client, metadata_manager, entity_type, feature):
         metadata_manager.list_links.return_value = []
@@ -143,19 +143,17 @@ class TestEntityRoutes:
 class TestRecordRoutes:
     def test_update_checks_the_records_entity_feature(self, make_client, metadata_manager):
         record_id = str(uuid.uuid4())
-        metadata_manager.get_record_entity_type.return_value = "data_contract"
+        metadata_manager.get_record_scope.return_value = ("data_contract", False)
         client = make_client({"data-domains": RW})
 
         resp = client.put(f"/api/rich-texts/{record_id}", json={"title": "x"})
 
         assert resp.status_code == 403
-        metadata_manager.get_record_entity_type.assert_called_once_with(
-            metadata_manager.get_record_entity_type.call_args.args[0], kind="rich_text", id=record_id,
-        )
+        assert metadata_manager.get_record_scope.call_args.kwargs == {"kind": "rich_text", "id": record_id}
         metadata_manager.update_rich_text.assert_not_called()
 
     def test_delete_with_the_owning_feature_goes_through(self, make_client, metadata_manager):
-        metadata_manager.get_record_entity_type.return_value = "asset"
+        metadata_manager.get_record_scope.return_value = ("asset", False)
         metadata_manager.delete_link.return_value = True
         client = make_client({"assets": RW})
 
@@ -163,13 +161,45 @@ class TestRecordRoutes:
         metadata_manager.delete_link.assert_called_once()
 
     def test_missing_record_is_404(self, make_client, metadata_manager):
-        metadata_manager.get_record_entity_type.return_value = None
+        metadata_manager.get_record_scope.return_value = None
         client = make_client({"data-domains": FeatureAccessLevel.ADMIN})
 
         resp = client.get(f"/api/documents/{uuid.uuid4()}")
 
         assert resp.status_code == 404
         assert resp.json()["detail"] == "Document not found"
+
+    def test_shared_records_are_authorized_by_the_library_feature(self, make_client, metadata_manager):
+        # A shared note created from a product page keeps entity_type data_product.
+        metadata_manager.get_record_scope.return_value = ("data_product", True)
+        metadata_manager.delete_rich_text.return_value = True
+
+        assert make_client({"data-products": RW}).delete(f"/api/rich-texts/{uuid.uuid4()}").status_code == 403
+        assert make_client({"data-domains": RW}).delete(f"/api/rich-texts/{uuid.uuid4()}").status_code == 204
+
+    def test_a_non_uuid_id_is_404_without_a_lookup(self, make_client, metadata_manager):
+        assert make_client({"data-domains": RW}).put("/api/links/not-a-uuid", json={"title": "x"}).status_code == 404
+        metadata_manager.get_record_scope.assert_not_called()
+
+    def test_merged_metadata_with_contracts_needs_contract_access(self, make_client, metadata_manager):
+        metadata_manager.get_merged_metadata.return_value = {
+            "entity_id": "e1", "entity_type": "data_product", "rich_texts": [], "links": [], "documents": [],
+        }
+        url = "/api/entities/data_product/metadata/merged?entity_id=e1&contract_ids=c1"
+
+        assert make_client({"data-products": FeatureAccessLevel.READ_ONLY}).get(url).status_code == 403
+        metadata_manager.get_merged_metadata.assert_not_called()
+
+    def test_attaching_a_non_shared_asset_is_refused(self, make_client, metadata_manager):
+        metadata_manager.attach_shared_asset.side_effect = ValueError("Only shared library assets can be attached")
+        client = make_client({"data-products": RW})
+
+        resp = client.post(
+            "/api/entities/data_product/attachments?entity_id=e1",
+            json={"asset_type": "rich_text", "asset_id": str(uuid.uuid4())},
+        )
+
+        assert resp.status_code == 400
 
     def test_shared_library_keeps_the_domain_feature(self, make_client, metadata_manager):
         metadata_manager.list_shared_assets.return_value = SimpleNamespace(
@@ -202,6 +232,10 @@ class TestCostRoutes:
             f"/api/cost-items/{uuid.uuid4()}", json={"title": "x"},
         ).status_code == 200
 
+    def test_non_uuid_cost_item_is_404(self, make_client, costs_manager):
+        assert make_client({"assets": RW}).put("/api/cost-items/nope", json={"title": "x"}).status_code == 404
+        costs_manager.get_entity_type.assert_not_called()
+
     def test_missing_cost_item_is_404(self, make_client, costs_manager):
         costs_manager.get_entity_type.return_value = None
 
@@ -233,12 +267,35 @@ class TestRecordLookups:
             user_email="u@example.com",
         )
 
-        assert manager.get_record_entity_type(db_session, kind="rich_text", id=note.id) == "data_product"
-        assert manager.get_record_entity_type(db_session, kind="link", id=link.id) == "asset"
-        assert manager.get_record_entity_type(db_session, kind="document", id=doc.id) == "concept"
+        assert manager.get_record_scope(db_session, kind="rich_text", id=note.id) == ("data_product", False)
+        assert manager.get_record_scope(db_session, kind="link", id=link.id) == ("asset", False)
+        assert manager.get_record_scope(db_session, kind="document", id=doc.id) == ("concept", False)
         # A record of another kind with the same id space is not found under the wrong kind.
-        assert manager.get_record_entity_type(db_session, kind="link", id=note.id) is None
-        assert manager.get_record_entity_type(db_session, kind="rich_text", id=uuid.uuid4()) is None
+        assert manager.get_record_scope(db_session, kind="link", id=note.id) is None
+        assert manager.get_record_scope(db_session, kind="rich_text", id=uuid.uuid4()) is None
+
+    def test_shared_records_and_attachments(self, db_session):
+        manager = MetadataManager()
+        shared = manager.create_shared_rich_text(
+            db_session, data=RichTextCreate(entity_id="p1", entity_type="data_product", title="t", content_markdown="c"),
+            user_email="u@example.com",
+        )
+        private = manager.create_rich_text(
+            db_session, data=RichTextCreate(entity_id="x1", entity_type="compliance_policy", title="t", content_markdown="c"),
+            user_email="u@example.com",
+        )
+
+        assert manager.get_record_scope(db_session, kind="rich_text", id=shared.id) == ("data_product", True)
+        attached = manager.attach_shared_asset(
+            db_session, entity_type="data_product", entity_id="p2",
+            data=MetadataAttachmentCreate(asset_type="rich_text", asset_id=str(shared.id)), user_email="u@example.com",
+        )
+        assert attached.asset_id == str(shared.id)
+        with pytest.raises(ValueError):
+            manager.attach_shared_asset(
+                db_session, entity_type="data_product", entity_id="p2",
+                data=MetadataAttachmentCreate(asset_type="rich_text", asset_id=str(private.id)), user_email="u@example.com",
+            )
 
     def test_cost_items_report_their_entity_kind(self, db_session):
         manager = CostsManager()
@@ -251,3 +308,16 @@ class TestRecordLookups:
 
         assert manager.get_entity_type(db_session, id=item.id) == "asset"
         assert manager.get_entity_type(db_session, id=uuid.uuid4()) is None
+
+
+@pytest.mark.parametrize("entity_id, expected_safe", [
+    ("e1b2", True),
+    ("http://ontos.app/concept/Customer", False),
+    ("urn:glossary:child", True),
+])
+def test_document_storage_segment(entity_id, expected_safe):
+    segment = metadata_routes._storage_segment(entity_id)
+
+    assert "/" not in segment and ".." not in segment
+    assert (segment == entity_id) is expected_safe
+    assert metadata_routes._storage_segment(entity_id) == segment  # stable for later uploads

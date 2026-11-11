@@ -241,10 +241,14 @@ Then guard each panel:
 
 ### Backend – Pydantic models
 
-Update `entity_type` validators to accept the expanded set where appropriate.
-For example, `CostItemBase.entity_type` currently only allows
-`data_domain|data_product|data_contract` — extend it to include `asset` when
-the cost tracking is expanded.
+Metadata and costs accept exactly the kinds listed in `METADATA_ENTITY_FEATURES`
+(`models/metadata.py`) and `COST_ENTITY_FEATURES` (`models/costs.py`). Each kind is
+mapped to the feature that authorizes it, and the routes check that feature, so a
+new kind needs its feature, not just an allow-list entry. Costs accept
+`data_domain|data_product|data_contract|asset`. Shared library records are
+authorized with the domain feature whatever kind they were created from, and only
+shared records can be attached to an entity. Entity ids that aren't a safe path
+segment (concept and collection IRIs) are hashed for the document upload path.
 
 ### Adding a New Entity or Asset Type
 

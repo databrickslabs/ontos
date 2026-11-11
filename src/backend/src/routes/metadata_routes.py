@@ -1,3 +1,5 @@
+import hashlib
+import uuid
 from io import BytesIO
 from typing import Annotated, List, Optional
 
@@ -12,6 +14,7 @@ from src.common.authorization import (
     EntityTypePermissionChecker,
     PermissionChecker,
     check_entity_permission,
+    check_feature_permission,
     get_user_details_from_sdk,
 )
 from src.common.logging import get_logger
@@ -36,14 +39,33 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Metadata"])
 
-# Shared library assets (/metadata/shared...) are stored under data_domain and keep
-# the domain feature. Routes on one entity's metadata check the feature that owns
-# that entity's kind (METADATA_ENTITY_FEATURES).
+# Shared library assets (/metadata/shared..., and records flagged shared) keep the
+# domain feature. Routes on one entity's metadata check the feature that owns that
+# entity's kind (METADATA_ENTITY_FEATURES).
 FEATURE_ID = "data-domains"
 
 
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def _storage_segment(entity_id: str) -> str:
+    """Volume path segment for an entity id. IRIs (concepts, collections) contain '/', so they're hashed."""
+    if is_safe_path_component(entity_id):
+        return entity_id
+    return "iri-" + hashlib.sha256(entity_id.encode("utf-8")).hexdigest()[:32]
+
+
 def _record_permission(kind: str, required_level: FeatureAccessLevel, not_found_detail: str):
-    """Dependency for routes addressed by record id: check the feature of the record's entity kind."""
+    """Dependency for routes addressed by record id: check the feature of the record's entity kind.
+
+    Shared library records are checked against the library's feature, whatever
+    entity kind they were created from.
+    """
     async def dependency(
         id: str,
         request: Request,
@@ -52,9 +74,13 @@ def _record_permission(kind: str, required_level: FeatureAccessLevel, not_found_
         auth_manager: AuthorizationManager = Depends(get_auth_manager),
         manager: MetadataManager = Depends(get_metadata_manager),
     ) -> None:
-        entity_type = manager.get_record_entity_type(db, kind=kind, id=id)
-        if entity_type is None:
+        scope = manager.get_record_scope(db, kind=kind, id=id) if _is_uuid(id) else None
+        if scope is None:
             raise HTTPException(status_code=404, detail=not_found_detail)
+        entity_type, is_shared = scope
+        if is_shared:
+            await check_feature_permission(request, user_details, auth_manager, FEATURE_ID, required_level)
+            return
         await check_entity_permission(
             request, user_details, auth_manager, METADATA_ENTITY_FEATURES, entity_type, required_level,
         )
@@ -284,11 +310,11 @@ async def upload_document(
 ):
     try:
         # Validate path components to prevent directory traversal
-        if not is_safe_path_component(entity_type) or not is_safe_path_component(entity_id):
+        if not is_safe_path_component(entity_type):
             raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
         
         # Ensure volume/path
-        base_dir = f"uploads/{entity_type}/{entity_id}"
+        base_dir = f"uploads/{entity_type}/{_storage_segment(entity_id)}"
         volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
 
         # Read file content
@@ -581,6 +607,8 @@ async def attach_shared_asset(
         )
         
         return result
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Only shared library assets can be attached")
     except Exception as e:
         logger.exception("Failed attaching shared asset to %s/%s", entity_type, entity_id)
         raise HTTPException(status_code=500, detail="Failed to attach shared asset")
@@ -642,8 +670,11 @@ async def get_merged_metadata(
     entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
+    request: Request = None,
     db: DBSessionDep = None,
     manager: MetadataManager = Depends(get_metadata_manager),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: None = Depends(EntityTypePermissionChecker(METADATA_ENTITY_FEATURES, FeatureAccessLevel.READ_ONLY)),
 ):
     """
@@ -652,7 +683,13 @@ async def get_merged_metadata(
     For Data Products and Datasets, pass contract_ids to include inherited metadata.
     Only metadata with level <= max_level and inheritable=True will be inherited.
     """
-    contract_id_list = [cid.strip() for cid in contract_ids.split(",")] if contract_ids else None
+    contract_id_list = [cid.strip() for cid in contract_ids.split(",") if cid.strip()] if contract_ids else None
+    if contract_id_list:
+        # Inherited metadata is the contracts' own, so reading it needs contract access too.
+        await check_feature_permission(
+            request, user_details, auth_manager,
+            METADATA_ENTITY_FEATURES["data_contract"], FeatureAccessLevel.READ_ONLY,
+        )
     return manager.get_merged_metadata(
         db, entity_type=entity_type, entity_id=entity_id,
         contract_ids=contract_id_list, max_level_inheritance=max_level

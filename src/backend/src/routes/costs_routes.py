@@ -1,4 +1,5 @@
 from __future__ import annotations
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -30,6 +31,14 @@ def get_costs_manager() -> CostsManager:
     return CostsManager()
 
 
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
 def _cost_item_permission(required_level: FeatureAccessLevel):
     """Dependency for /cost-items/{id}: check the feature of the item's entity kind."""
     async def dependency(
@@ -40,7 +49,7 @@ def _cost_item_permission(required_level: FeatureAccessLevel):
         auth_manager: AuthorizationManager = Depends(get_auth_manager),
         manager: CostsManager = Depends(get_costs_manager),
     ) -> None:
-        entity_type = manager.get_entity_type(db, id=id)
+        entity_type = manager.get_entity_type(db, id=id) if _is_uuid(id) else None
         if entity_type is None:
             raise HTTPException(status_code=404, detail="Cost item not found")
         await check_entity_permission(

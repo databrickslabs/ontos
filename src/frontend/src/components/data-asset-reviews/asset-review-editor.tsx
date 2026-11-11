@@ -58,6 +58,8 @@ interface AssetReviewEditorProps {
 // `editor.aiNotices`, and whether the notice replaces the summary text.
 const AI_NOTICES: Record<string, { key: string; replacesSummary: boolean }> = {
     llm_analysis_refused: { key: 'analysisRefused', replacesSummary: false },
+    // The refusal itself is never shown: it can quote the security-check prompt
+    llm_safety_check_refused: { key: 'safetyCheckRefused', replacesSummary: true },
 };
 
 // Helper function to check API response

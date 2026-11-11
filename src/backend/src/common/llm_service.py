@@ -15,6 +15,8 @@ from dataclasses import dataclass
 
 from src.common.config import Settings, get_settings
 from src.common.llm_content import (
+    REFUSAL_DISPLAY_MAX_CHARS,
+    REFUSAL_LOG_MAX_CHARS,
     block_types,
     coerce_message_text,
     refusal_text,
@@ -31,11 +33,12 @@ logger = get_logger(__name__)
 PHASE1_MAX_TOKENS = 2048
 # Output budget of the Phase 2 content analysis.
 PHASE2_MAX_TOKENS = 2048
-# Longest refusal text shown to users, and logged server-side.
-REFUSAL_DISPLAY_MAX_CHARS = 1000
-REFUSAL_LOG_MAX_CHARS = 200
-# ``notice_code`` of a Phase 2 refusal; the frontend shows a localized notice for it.
+# ``notice_code`` of a refusal; the frontend shows a localized notice for each.
+PHASE1_REFUSED_CODE = "llm_safety_check_refused"
 PHASE2_REFUSED_CODE = "llm_analysis_refused"
+# Fixed reason of a Phase 1 refusal: the refusal itself can quote the
+# injection-check prompt, so it is only logged (truncated), never returned.
+PHASE1_REFUSED_REASON = "Security check failed: the model refused to check the content"
 # The Phase 1 verdict must open the reply ("SAFE" / "UNSAFE: reason"); a
 # substring match passed "NOT SAFE" and "SAFEGUARDS MISSING".
 _PHASE1_VERDICT_RE = re.compile(r"^\s*(UNSAFE|SAFE)\b", re.IGNORECASE)
@@ -191,8 +194,11 @@ class LLMService:
 
         if reply is not None and reply.refusal:
             # A refusal is not a verdict: fail closed, even next to a "SAFE" text block.
-            logger.warning("Phase 1 FAILED: the model refused the security check")
-            return False, reply.refusal
+            logger.warning(
+                "Phase 1 FAILED: the model refused the security check: %s",
+                truncate_text(reply.refusal, REFUSAL_LOG_MAX_CHARS),
+            )
+            return False, PHASE1_REFUSED_REASON
 
         if reply is None or not reply.text:
             logger.error("Phase 1 security check failed: No response from LLM")
@@ -213,7 +219,11 @@ class LLMService:
         if verdict == "SAFE" and "UNSAFE" not in response.upper():
             logger.info("Phase 1 PASSED: Content deemed safe")
             return True, None
-        reason = response if verdict == "UNSAFE" else "Content flagged as potentially unsafe"
+        reason = (
+            truncate_text(response, REFUSAL_DISPLAY_MAX_CHARS)
+            if verdict == "UNSAFE"
+            else "Content flagged as potentially unsafe"
+        )
         logger.warning(f"Phase 1 FAILED: {reason}")
         return False, reason
 
@@ -297,6 +307,7 @@ class LLMService:
         phase1_passed, security_reason = self._phase1_security_check(content, user_token=user_token)
 
         if not phase1_passed:
+            refused = security_reason == PHASE1_REFUSED_REASON
             # Return security failure - content should be displayed as plain text
             warning_message = (
                 f"⚠️ SECURITY WARNING ⚠️\n\n"
@@ -310,7 +321,9 @@ class LLMService:
                 phase1_passed=False,
                 render_as_markdown=False,  # Must display as plain text
                 llm_model_used=endpoint,
-                error_message=security_reason
+                error_message=security_reason,
+                refused=refused,
+                notice_code=PHASE1_REFUSED_CODE if refused else None,
             )
 
         # Phase 2: Content Analysis

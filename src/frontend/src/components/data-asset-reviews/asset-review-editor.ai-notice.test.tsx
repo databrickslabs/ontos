@@ -68,6 +68,21 @@ describe('AssetReviewEditor AI analysis notices', () => {
     expect(screen.getByText('**I cannot help with that.**')).toBeInTheDocument();
   });
 
+  it('shows a refused security check as a localized notice only', async () => {
+    const english = 'Security check failed: the model refused to check the content';
+    await runAnalysis(analysis({
+      analysis_summary: english,
+      phase1_passed: false, render_as_markdown: false, notice_code: 'llm_safety_check_refused',
+    }));
+
+    expect(
+      await screen.findByText(i18n.t('data-asset-reviews:editor.aiNotices.safetyCheckRefused')),
+    ).toBeInTheDocument();
+    const badge = i18n.t('data-asset-reviews:editor.securityWarning');
+    expect(screen.getByText(badge)).toBeInTheDocument();
+    expect(screen.queryByText(english)).toBeNull();
+  });
+
   it('shows no notice for a normal analysis', async () => {
     await runAnalysis(analysis({
       analysis_summary: 'No sensitive data found.',

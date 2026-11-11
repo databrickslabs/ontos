@@ -108,6 +108,11 @@ def refusal_text(message: Any) -> str:
     return "\n\n".join(parts)
 
 
+# Longest refusal text shown to users (Phase 2, Ask Ontos), and logged server-side.
+REFUSAL_DISPLAY_MAX_CHARS = 1000
+REFUSAL_LOG_MAX_CHARS = 200
+
+
 def truncate_text(text: str, limit: int) -> str:
     """``text`` cut to at most ``limit`` characters, ending in "…" when cut."""
     if len(text) <= limit:

@@ -283,3 +283,10 @@ def test_refusal_text_reads_field_and_blocks_only():
     assert refusal_text(NS(content=[refusal], refusal="No.")) == "No."
     assert refusal_text(NS(content=[_Block(type="refusal", refusal="Nope")])) == "Nope"
     assert coerce_message_text([refusal]) == ""
+
+
+@pytest.mark.asyncio
+async def test_long_refusal_is_capped(chat_manager):
+    response = await _chat(chat_manager, [{"type": "refusal", "refusal": "No. " * 2000}])
+    assert response.message.error_code is None
+    assert 0 < len(response.message.content) <= 1000

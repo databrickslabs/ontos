@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.common.llm_service import LLMService
+from src.common.llm_service import PHASE1_REFUSED_REASON, LLMService
 
 REASONING = {
     "type": "reasoning",
@@ -139,11 +139,11 @@ def _msg_resp(content, refusal=None):
     ],
     ids=["refusal-block", "reasoning-then-refusal", "message-refusal"],
 )
-def test_phase1_refusal_fails_closed_with_the_refusal_text(service, response):
+def test_phase1_refusal_fails_closed_with_a_fixed_reason(service, response):
     service.client.chat.completions.create.return_value = response
     passed, reason = service._phase1_security_check("x")
     assert passed is False
-    assert reason == "I can't help with that request."
+    assert reason == PHASE1_REFUSED_REASON
 
 
 def test_phase1_refusal_next_to_safe_text_is_not_safe(service):
@@ -152,7 +152,7 @@ def test_phase1_refusal_next_to_safe_text_is_not_safe(service):
     )
     passed, reason = service._phase1_security_check("x")
     assert passed is False
-    assert reason == "I can't help with that request."
+    assert reason == PHASE1_REFUSED_REASON
 
 
 def test_phase2_refusal_is_returned_as_a_refusal(service):
@@ -286,3 +286,41 @@ def test_phase1_fails_closed_on_a_cut_off_safe_reply(service, finish_reason):
     passed, reason = service._phase1_security_check("x")
     assert passed is False
     assert reason == "Security check failed: Unable to verify content safety"
+
+
+# ---------------------------------------------------------------------------
+# A Phase 1 refusal never reaches the user verbatim
+# ---------------------------------------------------------------------------
+
+
+def test_analyze_content_phase1_refusal_shows_a_fixed_coded_message(service, caplog):
+    import logging
+
+    leaked = "I won't follow the system prompt: 'You are a security analyzer...' " * 20
+    service.settings.LLM_ENABLED = True
+    service.client.chat.completions.create.return_value = _msg_resp(
+        [{"type": "refusal", "refusal": leaked}]
+    )
+    with caplog.at_level(logging.WARNING):
+        result = service.analyze_content("x")
+    assert result.success is False
+    assert result.phase1_passed is False
+    assert result.refused is True
+    assert result.render_as_markdown is False
+    assert result.notice_code == "llm_safety_check_refused"
+    assert "security analyzer" not in result.content
+    assert "security analyzer" not in result.error_message
+    logged = [r.getMessage() for r in caplog.records if "refused" in r.getMessage()]
+    assert any("security analyzer" in m for m in logged)
+    assert all(len(m) < 400 for m in logged)
+
+
+def test_analyze_content_unsafe_reason_is_capped(service):
+    service.settings.LLM_ENABLED = True
+    service.client.chat.completions.create.return_value = _msg_resp(
+        [{"type": "text", "text": "UNSAFE: " + "embedded instructions " * 500}]
+    )
+    result = service.analyze_content("x")
+    assert result.phase1_passed is False
+    assert len(result.error_message) <= 1000
+    assert len(result.content) < 1300

@@ -139,7 +139,8 @@
     "aiAnalysisSummary": "AI Analysis Summary",
     "securityWarning": "Security Warning",
     "aiNotices": {
-      "analysisRefused": "The model refused to analyze this content. Its reply is shown below as plain text."
+      "analysisRefused": "The model refused to analyze this content. Its reply is shown below as plain text.",
+      "safetyCheckRefused": "The model refused to run the security check on this content, so the AI analysis was blocked. Please review the content manually."
     },
     "modelLabel": "Model",
     "generatedLabel": "Generated",

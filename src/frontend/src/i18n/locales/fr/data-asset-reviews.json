@@ -139,7 +139,8 @@
     "aiAnalysisSummary": "Résumé de l'analyse IA",
     "securityWarning": "Avertissement de sécurité",
     "aiNotices": {
-      "analysisRefused": "Le modèle a refusé d'analyser ce contenu. Sa réponse est affichée ci-dessous en texte brut."
+      "analysisRefused": "Le modèle a refusé d'analyser ce contenu. Sa réponse est affichée ci-dessous en texte brut.",
+      "safetyCheckRefused": "Le modèle a refusé d'effectuer le contrôle de sécurité de ce contenu, l'analyse IA a donc été bloquée. Veuillez examiner le contenu manuellement."
     },
     "modelLabel": "Modèle",
     "generatedLabel": "Généré",

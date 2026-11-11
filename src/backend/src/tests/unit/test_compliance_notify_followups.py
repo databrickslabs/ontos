@@ -78,6 +78,21 @@ class TestOwnerRecipients:
         assert (result.success, result.code) == (False, 'notify_no_recipients')
         assert notifier.flush(failed=1, passed=0) == 0
 
+    def test_an_app_role_of_that_name_wins(self, db_session):
+        from src.db_models.settings import AppRoleDb
+
+        role = AppRoleDb(id=str(uuid.uuid4()), name='Domain Owners')
+        db_session.add(role)
+        db_session.flush()
+        _domain_owners(db_session, 'data_product', 'p1', ['other@example.com'])
+        notifier = _notifier(db_session)
+
+        assert NotifyAction('domain_owners').execute(_context(notifier)).success is True
+        notifier.flush(failed=1, passed=0)
+
+        row = db_session.query(NotificationDb).one()
+        assert (row.recipient, row.recipient_role_id) == ('Domain Owners', role.id)
+
     def test_domain_owners_without_owners_fails(self, db_session):
         notifier = _notifier(db_session)
 
@@ -176,6 +191,21 @@ class TestListedNamesAreReadable:
 
         assert _failed_names(db_session, 'me@example.com')[1] == {'text': 'My draft'}
         assert _failed_names(db_session, 'consumer@example.com')[1]['params'] == {'count': '1'}
+
+    def test_a_failed_read_check_names_nothing_and_keeps_the_session(self, db_session):
+        from unittest.mock import patch
+
+        active = _product(db_session, 'active')
+        with patch(
+            'src.routes.business_lineage_routes.build_lineage_access',
+            side_effect=RuntimeError('gate broke'),
+        ):
+            _notify_products(db_session, 'consumer@example.com', [(active, 'Orders')])
+
+        row, names = _failed_names(db_session, 'consumer@example.com')
+        assert names['params'] == {'count': '1'}  # readable, but the check failed
+        assert 'Orders' not in row.description
+        assert db_session.query(NotificationDb).count() == 1  # the session still works
 
     def test_contracts_use_the_contract_list_visibility(self, db_session):
         from src.db_models.data_contracts import DataContractDb

@@ -453,6 +453,7 @@ class WorkflowExecutionRepository:
         duration_ms: Optional[float] = None,
         step_key: Optional[str] = None,
         step_name: Optional[str] = None,
+        message: Optional[str] = None,
     ) -> WorkflowStepExecutionDb:
         """Add a step execution result.
 
@@ -475,6 +476,7 @@ class WorkflowExecutionRepository:
             passed=passed,
             result_data=json.dumps(result_data) if result_data else None,
             error_message=error_message,
+            message=message,
             duration_ms=duration_ms,
         )
         db.add(db_step_exec)

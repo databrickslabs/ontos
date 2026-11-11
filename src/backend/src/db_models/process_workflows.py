@@ -179,6 +179,10 @@ class WorkflowStepExecutionDb(Base):
     
     # Error message if failed
     error_message = Column(Text, nullable=True)
+
+    # The step's message (StepResult.message), so a resumed run gives later
+    # steps the same ``step_results`` entry as before the pause
+    message = Column(Text, nullable=True)
     
     # Duration in milliseconds
     duration_ms = Column(Float, nullable=True)

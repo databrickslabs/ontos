@@ -510,3 +510,18 @@ def test_a_partial_run_does_not_clean_up_objects_it_did_not_read(tag_sync, job):
     assert job.store[("TABLE", OTHER)] == {DOMAIN_KEY: "Finance"}
     assert ("TABLE", OTHER, DOMAIN_KEY) not in job.unassigned
     assert job.state["TABLE"][OTHER] == {DOMAIN_KEY: "Finance"}
+
+
+def test_a_corrupt_stored_state_reads_as_nothing_delivered_and_is_repaired(tag_sync):
+    """A stored value that doesn't parse is read as {} so a full run overwrites it;
+    a state that can't be read at all stays None."""
+    import sqlalchemy
+
+    corrupt = _sqlite_engine(sqlalchemy, "not json")
+    assert tag_sync.read_delivery_state(corrupt) == {}
+    assert tag_sync.save_delivery_state(
+        corrupt, {"TABLE": {ORDERS: {DOMAIN_KEY: "Finance"}}}, "p") is None
+    assert _stored_objects(corrupt)["TABLE"] == {ORDERS: {DOMAIN_KEY: "Finance"}}
+
+    no_table = sqlalchemy.create_engine("sqlite://")
+    assert tag_sync.read_delivery_state(no_table) is None

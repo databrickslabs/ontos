@@ -1256,14 +1256,19 @@ def read_delivery_state(engine: Engine) -> Optional[DeliveryState]:
                     "'uc_tag_sync_delivery_state'"
                 )
             ).first()
-            if not row or not row[0]:
-                return {}
-            data = json.loads(row[0])
-            return data.get("objects", {})
     except Exception as e:
         msg = f"Failed to read UC tag delivery state: {e}"
         print(f"[WARN] {msg}")
         return None
+    if not row or not row[0]:
+        return {}
+    try:
+        return json.loads(row[0]).get("objects", {})
+    except Exception as e:
+        # A stored value that doesn't parse can't be read again: read it as nothing
+        # delivered, so a full run overwrites it and repairs the record.
+        print(f"[WARN] UC tag delivery state is not valid, it will be replaced: {e}")
+        return {}
 
 
 def save_delivery_state(

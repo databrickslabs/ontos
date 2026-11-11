@@ -91,6 +91,7 @@ def job(tag_sync, monkeypatch):
                 env.state.setdefault(object_type, {}).update(objects)
         return None
 
+    env.real_read = tag_sync.read_delivery_state
     monkeypatch.setattr(tag_sync, "get_existing_prefixed_tags", existing)
     monkeypatch.setattr(tag_sync, "assign_tag", assign)
     monkeypatch.setattr(tag_sync, "unassign_tag", unassign)
@@ -525,3 +526,27 @@ def test_a_corrupt_stored_state_reads_as_nothing_delivered_and_is_repaired(tag_s
 
     no_table = sqlalchemy.create_engine("sqlite://")
     assert tag_sync.read_delivery_state(no_table) is None
+
+
+def test_a_corrupt_stored_state_is_replaced_but_does_not_open_the_legacy_cleanup(
+    tag_sync, job, monkeypatch
+):
+    """A corrupt record is repaired by the main sync, but with no delivery history the
+    legacy cleanup still sees an unavailable state and skips."""
+    import sqlalchemy
+
+    corrupt = _sqlite_engine(sqlalchemy, "not json")
+    monkeypatch.setattr(tag_sync, "read_delivery_state", job.real_read)
+    monkeypatch.setattr(tag_sync, "create_engine_from_params", lambda *_a, **_k: corrupt)
+    legacy, saves = [], []
+    monkeypatch.setattr(tag_sync, "handle_legacy_tag_cleanup",
+                        lambda *_a, **kwargs: legacy.append(kwargs) or (0, []))
+    monkeypatch.setattr(tag_sync, "save_delivery_state",
+                        lambda _e, _state, _p, replace=True: saves.append(replace))
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")],
+            extra_args=["--cleanup_legacy_tags", "true"])
+
+    assert saves == [True]
+    assert legacy[0]["previous"] is None
+    assert legacy[0]["cleanup_enabled"] is True

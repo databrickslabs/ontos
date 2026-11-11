@@ -1242,6 +1242,14 @@ DeliveryState = Dict[str, Dict[str, Dict[str, Optional[str]]]]
 DELIVERY_OBJECT_TYPES = ("TABLE", "COLUMN", "SCHEMA", "CATALOG")
 
 
+class CorruptDeliveryState(dict):
+    """An empty state read from a stored value that did not parse.
+
+    A full run replaces the record, but there is no delivery history behind it, so the
+    legacy cleanup treats it like an unreadable state.
+    """
+
+
 def read_delivery_state(engine: Engine) -> Optional[DeliveryState]:
     """Read the tags the previous run delivered from app_settings.
 
@@ -1268,7 +1276,7 @@ def read_delivery_state(engine: Engine) -> Optional[DeliveryState]:
         # A stored value that doesn't parse can't be read again: read it as nothing
         # delivered, so a full run overwrites it and repairs the record.
         print(f"[WARN] UC tag delivery state is not valid, it will be replaced: {e}")
-        return {}
+        return CorruptDeliveryState()
 
 
 def save_delivery_state(
@@ -2201,7 +2209,8 @@ def main() -> None:
         datasets,
         direct,
         legacy_cleanup_gate_prefix(tag_sync_configs, args.prefix),
-        previous=None if is_partial_read else previous,
+        previous=None if is_partial_read or isinstance(previous, CorruptDeliveryState)
+        else previous,
         cleanup_enabled=cleanup_legacy,
         is_partial_read=is_partial_read,
         dry_run=dry_run,

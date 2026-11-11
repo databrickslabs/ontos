@@ -159,6 +159,13 @@ class TestConcepts:
         _, types, _ = app.state.semantic_models_manager.calls[-1]
         assert "property" not in types
 
+    def test_total_counts_every_match_not_the_page(self, make_client):
+        client, _ = make_client()
+
+        data = _candidates(client, target_type="OntologyConcept", limit=1)
+
+        assert (len(data["candidates"]), data["total"]) == (1, 2)
+
     def test_concept_candidates_need_concept_read_access(self, make_client):
         client, _ = make_client(permissions={"assets": RO})
 

@@ -34,6 +34,7 @@ DEDICATED_TARGET_FEATURES = {
 GENERIC_ASSET_TYPE = "Asset"
 # Concept types a "Has Concepts" link can point to (properties are not concepts).
 LINKABLE_CONCEPT_TYPES = ["concept", "class", "term", "individual"]
+MAX_CONCEPT_MATCHES = 10000
 
 
 class LinkCandidate(BaseModel):
@@ -148,8 +149,9 @@ def _search_concepts(request: Request, search_term: str, limit: int) -> Tuple[Li
     if manager is None:
         raise RuntimeError("Semantic models manager not configured")
 
-    # Over-fetch so dropping metamodel classes still leaves ``limit`` rows.
-    rows = manager.search_concepts_by_type(search_term, LINKABLE_CONCEPT_TYPES, limit=limit * 3)
+    # The search reads the cached concept list: take every match, so the total is
+    # right after the metamodel classes are dropped.
+    rows = manager.search_concepts_by_type(search_term, LINKABLE_CONCEPT_TYPES, limit=MAX_CONCEPT_MATCHES)
     rows = [r for r in rows if not str(r.get("value", "")).startswith(ONTOS_NS)]
     collection_labels: Dict[str, str] = {}
     for collection in manager.get_collections() or []:

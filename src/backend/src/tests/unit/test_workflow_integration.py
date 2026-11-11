@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from src.common.workflow_triggers import TriggerRegistry
+from src.repositories.tags_repository import seed_default_tags
 from src.common.workflow_executor import WorkflowExecutor
 from src.controller.workflows_manager import WorkflowsManager
 from src.models.process_workflows import (
@@ -216,6 +217,8 @@ class TestTagAssignmentFlow:
 
     def test_tag_step_updates_context_for_subsequent_steps(self, db_session):
         """Tag step assigns a value, subsequent step can see it in context."""
+        # An Assign Tag step fails for a tag that is not in the catalog
+        seed_default_tags(db_session)
         _create_workflow_in_db(
             db_session,
             trigger_config=json.dumps({
@@ -458,6 +461,7 @@ class TestMultiStepPipelineFlow:
 
     def test_three_step_pipeline_succeeds(self, db_session):
         """Validate → assign_tag → notification — all pass in sequence."""
+        seed_default_tags(db_session)
         _create_workflow_in_db(
             db_session,
             trigger_config=json.dumps({

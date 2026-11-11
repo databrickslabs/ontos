@@ -1779,9 +1779,9 @@ def sync_tags(
     """Reconcile UC tags for every linked object, then clean up lost links.
 
     ownership says which tag keys the job manages by pattern (see TagOwnership); it
-    applies to tables only: a column or a schema gets its tags from semantic links, and
-    the aggregate it is built from is not the whole truth on a partial read. previous is
-    what the last run delivered (None when it can't be read).
+    applies to full-run tables only: a column or a schema gets its tags from semantic
+    links, and a partial read is not the whole truth. previous is what the last run
+    delivered (None when it can't be read).
 
     A full run removes what previous says was delivered to an object, and cleans up the
     objects that lost their links. A partial run (``partial``, a --limit read) removes
@@ -1795,7 +1795,11 @@ def sync_tags(
     ) -> Tuple[int, int]:
         recorded = (previous or {}).get(object_type, {}).get(fqn, {})
         delivered_before = {} if partial else recorded
-        object_ownership = ownership if object_type == "TABLE" else TagOwnership()
+        # A partial read may miss a table's contract or domain rows: its desired tags are
+        # then incomplete, so nothing is removed by pattern.
+        object_ownership = (
+            ownership if object_type == "TABLE" and not partial else TagOwnership()
+        )
         still_present: Dict[str, Optional[str]] = {}
         u, r, errs = reconcile_tags(ws, spark, object_type, fqn, desired, object_ownership,
                                     dry_run=dry_run,

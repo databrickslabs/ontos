@@ -484,3 +484,29 @@ def test_a_save_that_does_not_replace_leaves_an_unreadable_state_alone(tag_sync)
             "SELECT value FROM app_settings WHERE key = 'uc_tag_sync_delivery_state'"
         )).scalar()
     assert value == "not json"
+
+
+def test_a_partial_run_removes_no_owned_table_tag(tag_sync, job):
+    """--limit: a linked table whose domain row wasn't read keeps its owned domain tag."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance", STATUS_KEY: "active"})
+    job.state = _previous(ORDERS, {STATUS_KEY: "active"})
+
+    job.run([DOMAIN_CFG, STATUS_CFG], [_table(tag_sync, status="active")],
+            extra_args=("--limit", "5"))
+
+    assert job.store[("TABLE", ORDERS)] == {DOMAIN_KEY: "Finance", STATUS_KEY: "active"}
+    assert job.unassigned == []
+
+
+def test_a_partial_run_does_not_clean_up_objects_it_did_not_read(tag_sync, job):
+    """--limit: a recorded table that wasn't read is still linked; its tags stay."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Finance"})
+    _seed(job, OTHER, {DOMAIN_KEY: "Finance"})
+    job.state = {"TABLE": {ORDERS: {DOMAIN_KEY: "Finance"},
+                           OTHER: {DOMAIN_KEY: "Finance"}}}
+
+    job.run([DOMAIN_CFG], [_table(tag_sync, domain="Finance")], extra_args=("--limit", "5"))
+
+    assert job.store[("TABLE", OTHER)] == {DOMAIN_KEY: "Finance"}
+    assert ("TABLE", OTHER, DOMAIN_KEY) not in job.unassigned
+    assert job.state["TABLE"][OTHER] == {DOMAIN_KEY: "Finance"}

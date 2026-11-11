@@ -224,7 +224,7 @@ ON_FAIL NOTIFY 'entity_owner'
   `requester` / `trigger_user` is the user who started the run, so scheduled runs of the compliance-checks job have none. A recipient list that resolves to nobody for an entity fails the action for that entity.
 - **One notification per recipient per run.** A run can match many entities, so NOTIFY doesn't send one notification each. When the run ends, each recipient gets one notification:
   - it gives the run's totals of failed and passed entities;
-  - it names up to 10 of the entities its NOTIFY actions ran for (each once), and counts the rest;
+  - it names up to 10 of the entities its NOTIFY actions ran for (each once), and counts the rest. It only names entities the recipient can read: a user is told the names of the data products and contracts they could open (the same checks as the product page and the contract list), a role or group only those every reader sees (published ones), and the names of Unity Catalog objects go only to their owner. The others are only counted;
   - it links to the run's results.
 
   The notification is created even if the run is a scheduled job, and also for the entities evaluated before a run that stops with an error.

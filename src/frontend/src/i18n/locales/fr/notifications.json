@@ -271,5 +271,8 @@
   "metricViewChangeFailed": {
     "title": "Modification de la metric view non livrée",
     "description": "La demande de modification approuvée de la metric view {{fqn}} n’a pas pu être livrée."
+  },
+  "complianceRunVisibility": {
+    "notShown": "{{count}} que vous ne pouvez pas voir"
   }
 }

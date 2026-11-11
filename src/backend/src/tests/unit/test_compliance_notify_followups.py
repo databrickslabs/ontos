@@ -85,3 +85,115 @@ class TestOwnerRecipients:
 
         assert (result.success, result.code) == (False, 'notify_no_recipients')
         assert _recipients(db_session) == []
+
+
+# --- 2. names only of the entities the recipient can read ------------------------
+
+def _product(db, status, draft_owner=None, name=None):
+    from src.db_models.data_products import DataProductDb
+
+    product_id = str(uuid.uuid4())
+    db.add(DataProductDb(
+        id=product_id, name=name or f'{status}-{product_id[:4]}', version='1.0.0',
+        status=status, draft_owner_id=draft_owner, version_family_id=product_id,
+    ))
+    db.flush()
+    return product_id
+
+
+def _failed_names(db, recipient):
+    import json
+
+    row = db.query(NotificationDb).filter_by(recipient=recipient).one()
+    lines = json.loads(row.data)['i18n']['descriptionLines']
+    return row, lines[1]['params']['names']
+
+
+def _notify_products(db, recipients, products, run_user=RUN_USER):
+    notifier = _notifier(db, run_user=run_user)
+    for product_id, name in products:
+        result = NotifyAction(recipients).execute(
+            _context(notifier, entity_id=product_id, name=name),
+        )
+        assert result.success is True
+    notifier.flush(failed=len(products), passed=0)
+
+
+class TestListedNamesAreReadable:
+    def test_a_consumer_sees_published_names_and_a_count_of_the_rest(self, db_session):
+        active = _product(db_session, 'active')
+        draft = _product(db_session, 'draft')
+        personal = _product(db_session, 'draft', draft_owner='someone@example.com')
+
+        _notify_products(db_session, 'consumer@example.com', [
+            (active, 'Orders'), (draft, 'Secret draft'), (personal, 'Personal draft'),
+        ])
+
+        row, names = _failed_names(db_session, 'consumer@example.com')
+        assert names['key'] == 'notifications:complianceRun.namesWithMore'
+        assert names['params'] == {'names': 'Orders', 'count': '2'}
+        assert 'Secret draft' not in row.description and 'Personal draft' not in row.description
+        assert row.link == '/compliance/runs/run-1'
+
+    def test_the_draft_owner_sees_their_draft(self, db_session):
+        mine = _product(db_session, 'draft', draft_owner='me@example.com')
+
+        _notify_products(db_session, 'me@example.com', [(mine, 'My draft')])
+
+        _, names = _failed_names(db_session, 'me@example.com')
+        assert names == {'text': 'My draft'}
+
+    def test_only_hidden_entities_are_only_counted(self, db_session):
+        draft = _product(db_session, 'draft')
+
+        _notify_products(db_session, 'consumer@example.com', [(draft, 'Secret draft')])
+
+        row, names = _failed_names(db_session, 'consumer@example.com')
+        assert names['key'] == 'notifications:complianceRunVisibility.notShown'
+        assert names['params'] == {'count': '1'}
+        assert 'Secret draft' not in row.description
+
+    def test_a_role_recipient_sees_only_what_every_reader_sees(self, db_session):
+        from src.db_models.settings import AppRoleDb
+
+        role = AppRoleDb(id=str(uuid.uuid4()), name=f'Readers {uuid.uuid4().hex[:4]}')
+        db_session.add(role)
+        db_session.flush()
+        active = _product(db_session, 'active')
+        draft = _product(db_session, 'draft')
+
+        _notify_products(db_session, role.name, [(active, 'Orders'), (draft, 'Secret draft')])
+
+        _, names = _failed_names(db_session, role.name)
+        assert names['params'] == {'names': 'Orders', 'count': '1'}
+
+    def test_each_resolved_user_is_checked_on_their_own(self, db_session):
+        mine = _product(db_session, 'draft', draft_owner='me@example.com')
+
+        _notify_products(
+            db_session, 'me@example.com, consumer@example.com', [(mine, 'My draft')],
+        )
+
+        assert _failed_names(db_session, 'me@example.com')[1] == {'text': 'My draft'}
+        assert _failed_names(db_session, 'consumer@example.com')[1]['params'] == {'count': '1'}
+
+    def test_contracts_use_the_contract_list_visibility(self, db_session):
+        from src.db_models.data_contracts import DataContractDb
+
+        ids = {}
+        for status in ('active', 'draft'):
+            ids[status] = str(uuid.uuid4())
+            db_session.add(DataContractDb(
+                id=ids[status], name=status, version='1.0.0', status=status,
+                version_family_id=ids[status],
+            ))
+        db_session.flush()
+        notifier = _notifier(db_session)
+        for status, name in (('active', 'Orders contract'), ('draft', 'Draft contract')):
+            assert NotifyAction('consumer@example.com').execute(
+                _context(notifier, entity_type='data_contract', entity_id=ids[status], name=name),
+            ).success is True
+        notifier.flush(failed=2, passed=0)
+
+        _, names = _failed_names(db_session, 'consumer@example.com')
+        assert names['params'] == {'names': 'Orders contract', 'count': '1'}

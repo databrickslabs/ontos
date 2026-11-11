@@ -6,7 +6,8 @@ recipient, the entities the action ran for during one run, and ``flush`` creates
 **one notification per recipient per run** when the run ends. It gives the run's
 failed and passed totals, names up to ``MAX_LISTED`` of the recipient's entities
 (each once, however many NOTIFY actions reached the recipient), counts the rest,
-and links to the run's results page.
+and links to the run's results page. Only the entities the recipient can read are
+named (see ``_ReadChecks``); the others are only counted.
 
 Recipients resolve as in workflow notification steps (``_resolve_role_to_users``):
 emails, groups (stored as the recipient, as for workflows), app role names or ids,
@@ -63,11 +64,88 @@ def _entity_dependent(token: str) -> bool:
 
 
 class _Bucket:
-    """The entities one recipient is notified about, each once (id -> name), by outcome."""
+    """The entities one recipient is notified about, each once, by outcome: id -> name,
+    or None when the recipient can't read the entity (counted, not named)."""
 
     def __init__(self) -> None:
-        self.failed: Dict[str, str] = {}
-        self.passed: Dict[str, str] = {}
+        self.failed: Dict[str, Optional[str]] = {}
+        self.passed: Dict[str, Optional[str]] = {}
+
+
+class _ReadChecks:
+    """Whether a recipient can read an entity, so that a notification may name it.
+
+    Data products and contracts use the read gates of the lineage routes
+    (``build_lineage_access``: the gate of ``GET /data-products/{id}`` and the
+    visibility of the contract list), checked for each user recipient. A role or a
+    group is many users, so it is only told the names every reader sees: published
+    (active or deprecated) products and contracts. Domains are named to everyone, as
+    the domain list shows them all; other entity types (Unity Catalog objects,
+    reviews) only to their owner. The recipient's groups and app roles are not known
+    here, so admin rights that come from them don't count. Fails closed.
+    """
+
+    def __init__(self, db: Session):
+        self._db = db
+        self._rows: Dict[Tuple[str, str], object] = {}
+        self._access: Dict[str, object] = {}
+        self._checked: Dict[Tuple[str, Optional[str], str, str], bool] = {}
+
+    def can_read(self, recipient: str, role_id: Optional[str], context: ActionContext) -> bool:
+        key = (recipient, role_id, context.entity_type, str(context.entity_id))
+        if key not in self._checked:
+            try:
+                with self._db.begin_nested():
+                    self._checked[key] = self._check(recipient, role_id, context)
+            except Exception:
+                logger.exception(
+                    "Read check of %s %s for a NOTIFY recipient failed; not naming it",
+                    context.entity_type, context.entity_id,
+                )
+                self._checked[key] = False
+        return self._checked[key]
+
+    def _check(self, recipient: str, role_id: Optional[str], context: ActionContext) -> bool:
+        entity_type = context.entity_type
+        if entity_type == 'domain':
+            return True
+        if entity_type in ('data_product', 'data_contract'):
+            from src.common.version_visibility import is_admin_only_status, is_visible_consumer
+
+            row = self._row(entity_type, str(context.entity_id))
+            if row is None:
+                return False
+            if role_id or '@' not in recipient:
+                return not is_admin_only_status(row) and is_visible_consumer(row)
+            access = self._access_for(recipient)
+            if entity_type == 'data_product':
+                return bool(access.can_read_product(row))
+            return bool(access.can_read_contract(row))
+        owner = (context.entity or {}).get('owner')
+        return bool(owner) and str(owner).strip().lower() == recipient.strip().lower()
+
+    def _row(self, entity_type: str, entity_id: str):
+        key = (entity_type, entity_id)
+        if key not in self._rows:
+            from src.db_models.data_contracts import DataContractDb
+            from src.db_models.data_products import DataProductDb
+
+            model = DataProductDb if entity_type == 'data_product' else DataContractDb
+            self._rows[key] = self._db.query(model).filter(model.id == entity_id).first()
+        return self._rows[key]
+
+    def _access_for(self, email: str):
+        if email not in self._access:
+            from types import SimpleNamespace
+
+            from src.models.users import UserInfo
+            from src.routes.business_lineage_routes import build_lineage_access
+
+            user = UserInfo(email=email, username=email, user=email, ip=None, groups=[])
+            # No request: the gates find no app-level managers and use the database only
+            request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+            self._access[email] = build_lineage_access(request, self._db, user, False)
+        return self._access[email]
 
 
 class ComplianceRunNotifier:
@@ -91,6 +169,7 @@ class ComplianceRunNotifier:
         self._run_user = run_user
         self._buckets: Dict[Tuple[str, Optional[str]], _Bucket] = {}
         self._cache: Dict[str, List[Tuple[str, Optional[str]]]] = {}
+        self._reads = _ReadChecks(db)
 
     def _step_context(self, context: ActionContext):
         from src.common.workflow_executor import StepContext
@@ -182,12 +261,25 @@ class ComplianceRunNotifier:
         name = (context.entity or {}).get('name') or entity_id
         for key in resolved:
             bucket = self._buckets.setdefault(key, _Bucket())
-            (bucket.passed if context.passed else bucket.failed)[entity_id] = name
+            readable = self._reads.can_read(key[0], key[1], context)
+            (bucket.passed if context.passed else bucket.failed)[entity_id] = (
+                name if readable else None
+            )
 
-    def _listed(self, names: List[str]) -> Tuple[str, Dict[str, object]]:
-        """The names as English text, and as an i18n param ("…, and N more" translated)."""
-        shown = ', '.join(names[: self.MAX_LISTED])
-        rest = len(names) - self.MAX_LISTED
+    def _listed(self, names: List[Optional[str]]) -> Tuple[str, Dict[str, object]]:
+        """The readable names as English text, and as an i18n param ("…, and N more"
+        translated); None stands for an entity the recipient can't read, only counted."""
+        readable = [name for name in names if name is not None]
+        hidden = len(names) - len(readable)
+        if not readable:
+            text = f"{hidden} you can't see"
+            return text, {
+                'key': 'notifications:complianceRunVisibility.notShown',
+                'text': text,
+                'params': {'count': str(hidden)},
+            }
+        shown = ', '.join(readable[: self.MAX_LISTED])
+        rest = len(names) - min(len(readable), self.MAX_LISTED)
         if rest <= 0:
             return shown, {'text': shown}
         text = f"{shown} and {rest} more"

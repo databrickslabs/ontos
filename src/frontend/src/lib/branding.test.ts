@@ -89,7 +89,7 @@ describe('branding assets and theme colors', () => {
   it('converts hex colors to HSL triplets and rejects anything else', () => {
     expect(hexToHslTriplet('#ff0000')).toBe('0 100% 50%');
     expect(hexToHslTriplet('#fff')).toBe('0 0% 100%');
-    expect(hexToHslTriplet('#2563eb')).toBe('4 67% 51%');
+    expect(hexToHslTriplet('#2563eb')).toBe('221 83% 53%');
     expect(hexToHslTriplet('red')).toBeNull();
     expect(hexToHslTriplet('#fff;}body{')).toBeNull();
   });
@@ -104,26 +104,26 @@ describe('branding assets and theme colors', () => {
     expect(buildThemeCss(null)).toBe('');
     expect(buildThemeCss({ primary: 'nope' })).toBe('');
     const css = buildThemeCss({ primary: '#2563eb', accentDark: '#1e293b' });
-    expect(css).toContain(':root {\n  --primary: 4 67% 51%;');
+    expect(css).toContain(':root {\n  --primary: 221 83% 53%;');
     const derived = hexToHslTriplet(deriveDarkColor('#2563eb', 'primary'));
-    expect(derived).not.toBe('4 67% 51%');
+    expect(derived).not.toBe('221 83% 53%');
     expect(css).toContain(`.dark {\n  --primary: ${derived};`);
-    expect(css).toMatch(/\.dark \{[\s\S]*--accent: 14 17% 20%;/);
+    expect(css).toMatch(/\.dark \{[\s\S]*--accent: 217 33% 17%;/);
     // A configured dark color wins over the derived one
     expect(buildThemeCss({ primary: '#2563eb', primaryDark: '#93c5fd' }))
-      .toContain('.dark {\n  --primary: 18 85% 62%;');
+      .toContain('.dark {\n  --primary: 212 96% 78%;');
   });
 
   it('computes WCAG contrast and the text color for a background', () => {
     expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 5);
     expect(contrastRatio('#fff', '#fff')).toBeCloseTo(1, 5);
     expect(contrastRatio('red', '#fff')).toBeNull();
-    const darkRed = describeContrast('#1d4ed8');
-    expect(darkRed).toMatchObject({ foreground: 'light', foregroundHex: '#fafafa', meetsAA: true });
-    // Light text still reads best on this red, but it falls just short of AA
-    const red = describeContrast('#2563eb');
-    expect(red).toMatchObject({ foreground: 'light', meetsAA: false });
-    expect(red!.ratio).toBeGreaterThan(4.3);
+    const darkBlue = describeContrast('#1d4ed8');
+    expect(darkBlue).toMatchObject({ foreground: 'light', foregroundHex: '#fafafa', meetsAA: true });
+    // Light text still reads best on this blue, but it falls just short of AA
+    const blue = describeContrast('#2f6fed');
+    expect(blue).toMatchObject({ foreground: 'light', meetsAA: false });
+    expect(blue!.ratio).toBeGreaterThan(4.3);
     // Mid-tone yellow: neither text color reaches AA with the light one; dark text wins
     const yellow = describeContrast('#f5b400');
     expect(yellow).toMatchObject({ foreground: 'dark', meetsAA: true });
@@ -140,13 +140,13 @@ describe('branding assets and theme colors', () => {
     expect(primary).toMatch(/^#[0-9a-f]{6}$/);
     expect(contrastRatio(primary, darkBackground)!).toBeGreaterThanOrEqual(4.5);
     // Same hue, only lighter
-    expect(hexToHslTriplet(primary)!.split(' ')[0]).toBe('4');
+    expect(hexToHslTriplet(primary)!.split(' ')[0]).toBe('221');
     // An already light primary is kept
     expect(deriveDarkColor('#93c5fd', 'primary')).toBe('#93c5fd');
     // Accent becomes a dark, muted surface of the same hue
     const accent = deriveDarkColor('#dbeafe', 'accent')!;
     // (hex rounding moves hue/saturation by a point)
-    expect(hexToHslTriplet(accent)).toMatch(/^2[23] (29|30)% 20%$/);
+    expect(hexToHslTriplet(accent)).toMatch(/^21[34] (29|30)% 20%$/);
     expect(deriveDarkColor('nope', 'accent')).toBeNull();
     expect(resolveDarkTheme({ primary: '#2563eb', accentDark: '#ABC' })).toEqual({
       primary,

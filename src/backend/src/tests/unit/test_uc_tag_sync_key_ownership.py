@@ -245,36 +245,93 @@ SEMANTIC_CFG = {
 }
 
 
-def test_ownership_of_a_placeholder_key_is_its_literal_prefix(tag_sync):
-    """A placeholder key owns its literal prefix; a key starting with one owns nothing."""
+def test_a_placeholder_key_owns_no_tag_by_pattern(tag_sync):
+    """A placeholder key (even a short literal like 'x_') claims no tag by pattern."""
     owned = tag_sync.TagOwnership.from_configs([SEMANTIC_CFG])
-    assert owned.prefixes == ("ontos_semantic_",)
-    assert owned.owns("ontos_semantic_pii")
+    assert owned.prefixes == ()
+    assert not owned.owns("ontos_semantic_pii")
     assert not owned.owns("owner")
 
-    nothing = tag_sync.TagOwnership.from_configs(
-        [dict(SEMANTIC_CFG, tag_key_format="{LINK.SLUG}_x")])
-    assert nothing.prefixes == ()
-    assert not nothing.owns("owner")
-    assert not nothing.owns("anything_x")
+    short = tag_sync.TagOwnership.from_configs(
+        [dict(SEMANTIC_CFG, tag_key_format="x_{LINK.SLUG}")])
+    assert not short.owns("x_owner")
 
 
-def test_a_placeholder_key_with_an_exact_key_manages_both(tag_sync):
+def test_a_placeholder_key_does_not_widen_an_exact_key(tag_sync):
     owned = tag_sync.TagOwnership.from_configs([DOMAIN_CFG, SEMANTIC_CFG])
     assert owned.owns(DOMAIN_KEY)
-    assert owned.owns("ontos_semantic_pii")
+    assert not owned.owns("ontos_semantic_pii")
     assert not owned.owns("owner")
 
 
-def test_an_unrecorded_placeholder_tag_is_removed_and_user_tags_kept(tag_sync, job):
-    """A tag under a placeholder-owned prefix that the state never recorded is removed."""
-    _seed(job, ORDERS, {"ontos_semantic_old": "stale", "owner": "finance"})
-    job.state = {}
+def test_a_recorded_placeholder_tag_is_removed_and_an_unrecorded_one_kept(tag_sync, job):
+    """Placeholder tags are removed only when the delivery state recorded them."""
+    _seed(job, ORDERS, {"ontos_semantic_old": "stale", "ontos_semantic_new": "x",
+                        "owner": "finance"})
+    job.state = _previous(ORDERS, {"ontos_semantic_old": "stale"})
 
     job.run([DOMAIN_CFG, SEMANTIC_CFG],
             [_table(tag_sync, domain="Finance")])
 
-    assert job.store[("TABLE", ORDERS)] == {"owner": "finance", DOMAIN_KEY: "Finance"}
+    assert job.store[("TABLE", ORDERS)] == {
+        "ontos_semantic_new": "x", "owner": "finance", DOMAIN_KEY: "Finance",
+    }
+
+
+def test_a_numbered_domain_key_is_owned_only_for_a_data_domain_base(tag_sync):
+    owned = tag_sync.TagOwnership.from_configs([DOMAIN_CFG, STATUS_CFG])
+    assert owned.owns("ontos_domain_1")
+    assert owned.owns("ontos_domain_12")
+    assert not owned.owns("agent_readable_2")
+    assert not owned.owns("ontos_domain_x")
+
+
+def test_an_unrecorded_numbered_domain_tag_is_removed_and_a_user_numbered_tag_kept(
+    tag_sync, job
+):
+    """ontos_domain_2 is the job's numbered key; agent_readable_2 is not, so it stays."""
+    _seed(job, ORDERS, {"ontos_domain_2": "Sales", "agent_readable_2": "mine"})
+    job.state = {}
+
+    job.run([DOMAIN_CFG, STATUS_CFG],
+            [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {
+        "agent_readable_2": "mine", DOMAIN_KEY: "Finance",
+    }
+
+
+def test_a_disabled_config_does_not_own_its_key(tag_sync):
+    owned = tag_sync.TagOwnership.from_configs([dict(STATUS_CFG, enabled=False)])
+    assert not owned.owns(STATUS_KEY)
+
+
+def test_an_unrecorded_tag_of_a_disabled_config_is_kept(tag_sync, job):
+    """A user's agent_readable stays when its config is disabled and nothing was recorded."""
+    _seed(job, ORDERS, {STATUS_KEY: "mine"})
+    job.state = {}
+
+    job.run([DOMAIN_CFG, dict(STATUS_CFG, enabled=False)],
+            [_table(tag_sync, domain="Finance")])
+
+    assert job.store[("TABLE", ORDERS)] == {STATUS_KEY: "mine", DOMAIN_KEY: "Finance"}
+
+
+def test_a_sanitized_key_owns_the_stored_key(tag_sync):
+    owned = tag_sync.TagOwnership.from_configs([dict(DOMAIN_CFG, tag_key_format="ontos-domain")])
+    assert owned.owns(DOMAIN_KEY)
+
+
+def test_an_unrecorded_sanitized_key_is_removed_from_a_linked_table(tag_sync, job):
+    """Key 'ontos-domain' is stored as ontos_domain: an unrecorded copy with no value
+    desired any more is removed from the still-linked table."""
+    _seed(job, ORDERS, {DOMAIN_KEY: "Old", STATUS_KEY: "active"})
+    job.state = {}
+
+    job.run([dict(DOMAIN_CFG, tag_key_format="ontos-domain"), STATUS_CFG],
+            [_table(tag_sync, status="active")])
+
+    assert job.store[("TABLE", ORDERS)] == {STATUS_KEY: "active"}
 
 
 def test_legacy_cleanup_is_gated_on_the_prefix_it_always_was(tag_sync, job, monkeypatch):

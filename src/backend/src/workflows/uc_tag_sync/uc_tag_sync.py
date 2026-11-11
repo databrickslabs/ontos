@@ -897,14 +897,14 @@ def sanitize_tag_key(key: str) -> str:
 
 @dataclass(frozen=True)
 class TagOwnership:
-    """The tag keys this job manages: the keys its enabled configs produce.
+    """The tag keys this job manages by pattern: the exact keys its enabled configs produce.
 
     A config without a placeholder owns its exact key (a data_domain key also owns its
     numbered additional keys, ``<key>_1``, ``<key>_2``...). A config whose key has a
-    placeholder owns its literal prefix (``ontos_{CONTRACT.ID}`` owns ``ontos_*``). A key
-    that starts with a placeholder owns nothing by pattern. Tags the job delivered
-    before are matched through the delivery state instead, so a key can stop being
-    managed when its config is disabled and still be cleaned up.
+    placeholder owns no tag by pattern: the keys it produces are only known from the
+    current links and from the delivery state, so those are the only ones removed. A
+    literal such as ``x_`` would otherwise claim every user tag under it. ``prefixes``
+    stays for callers that pass a plain prefix string (see as_ownership).
     """
     exact: FrozenSet[str] = frozenset()
     numbered: FrozenSet[str] = frozenset()
@@ -926,15 +926,11 @@ class TagOwnership:
     def from_configs(cls, tag_sync_configs: List[Dict[str, Any]]) -> "TagOwnership":
         exact = set()
         numbered = set()
-        prefixes = set()
         for config in tag_sync_configs:
             if not config.get("enabled", True):
                 continue
             key_format = config.get("tag_key_format", "") or ""
             if "{" in key_format:
-                literal = sanitize_tag_key(key_format.split("{")[0])
-                if literal:
-                    prefixes.add(literal)
                 continue
             key = sanitize_tag_key(key_format)
             if not key:
@@ -942,7 +938,7 @@ class TagOwnership:
             exact.add(key)
             if config.get("entity_type") == "data_domain":
                 numbered.add(key)
-        return cls(frozenset(exact), frozenset(numbered), tuple(sorted(prefixes)))
+        return cls(frozenset(exact), frozenset(numbered))
 
 
 def legacy_cleanup_gate_prefix(tag_sync_configs: List[Dict[str, Any]], default: str) -> str:

@@ -480,7 +480,8 @@ def _proposed_values(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     The payload is the data contract update request (ODCS field names). As
     ``update_contract_with_relations`` does, a null leaves the stored value
-    (the key is omitted here). Tags: ``_future_tags``.
+    (the key is omitted here); a domain field replaces the primary domain
+    (``domain``). Tags: ``_future_tags``.
     """
     proposed = {}
     if payload.get('owner_team_id') is not None:
@@ -491,7 +492,27 @@ def _proposed_values(payload: Dict[str, Any]) -> Dict[str, Any]:
     purpose = payload.get('descriptionPurpose') or purpose
     if purpose is not None:
         proposed['description'] = purpose
+    if any(payload.get(key) is not None for key in _DOMAIN_FIELDS):
+        proposed['domain'] = _proposed_primary_domain(payload)
     return proposed
+
+
+# The update fields that replace a contract's domains (as update_contract_with_relations
+# reads them; DataContractUpdate dumps them under these names).
+_DOMAIN_FIELDS = ('domainIds', 'primaryDomainId', 'domainId')
+
+
+def _proposed_primary_domain(payload: Dict[str, Any]) -> Optional[str]:
+    """The primary domain id an update leaves, as ``_resolve_domain_assignment`` picks it.
+
+    ``domainIds`` with ``primaryDomainId`` (else the first id), else the legacy
+    ``domainId``; None when neither has an id (the update unassigns the contract).
+    """
+    ids = payload.get('domainIds')
+    if isinstance(ids, list) and ids:
+        primary = payload.get('primaryDomainId')
+        return primary if primary in ids else ids[0]
+    return payload.get('domainId') or None
 
 
 def _before_update_object(db: Session, context: 'StepContext') -> Dict[str, Any]:

@@ -210,6 +210,26 @@ class TestDataProductRoutes:
         # Verify audit log
         verify_audit_log("data-products", "UPDATE", success=True)
 
+    def test_update_product_get_body_roundtrip_ignores_publication_fields(
+        self, client, sample_product_data
+    ):
+        """PUT of a whole GET body stays 200; publication fields stay server-managed."""
+        product_id = client.post("/api/data-products", json=sample_product_data).json()["id"]
+        body = client.get(f"/api/data-products/{product_id}").json()
+        body["publication_scope"] = "organization"
+        body["published_by"] = "someone@example.com"
+
+        response = client.put(f"/api/data-products/{product_id}", json=body)
+
+        assert response.status_code == 200
+        assert response.json()["publication_scope"] == "none"
+        assert response.json()["published_by"] is None
+
+    def test_openapi_marks_publication_fields_read_only(self, client):
+        schema = client.get("/openapi.json").json()["components"]["schemas"]["DataProduct"]
+        for name in ("publication_scope", "published_at", "published_by"):
+            assert schema["properties"][name]["readOnly"] is True
+
     def test_update_product_not_found(self, client, sample_product_data):
         """Test updating non-existent product returns 404."""
         # Arrange

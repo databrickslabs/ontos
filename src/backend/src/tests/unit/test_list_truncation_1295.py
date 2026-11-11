@@ -85,6 +85,25 @@ class TestReferenceLists:
         assert len(manager.get_all_projects(db_session, is_admin=True)) == COUNT
         assert len(manager.get_projects_summary(db_session)) == COUNT
 
+    def test_projects_list_all_for_non_admin(self, db_session: Session):
+        from src.controller.projects_manager import ProjectsManager
+        projects = []
+        for i in range(COUNT):
+            project = ProjectDb(
+                id=str(uuid.uuid4()), name=f"project-{i:03d}", project_type="TEAM",
+                created_by="admin@example.com", updated_by="admin@example.com",
+            )
+            db_session.add(project)
+            projects.append(project)
+        db_session.commit()
+        manager = ProjectsManager()
+        manager.project_repo = MagicMock()
+        manager.project_repo.get_projects_by_domain_relationship.return_value = projects
+        kwargs = dict(user_identifier="user@example.com", user_groups=["users"])
+        assert len(manager.get_all_projects(db_session, **kwargs)) == COUNT
+        page = manager.get_all_projects(db_session, skip=1, limit=2, **kwargs)
+        assert [p.id for p in page] == [projects[1].id, projects[2].id]
+
 
 class TestProductsList:
     def test_lists_every_product_by_default(self, db_session: Session):

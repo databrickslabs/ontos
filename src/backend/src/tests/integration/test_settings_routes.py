@@ -189,6 +189,21 @@ def test_ui_customization_extra_branding_round_trip(client: TestClient):
     assert boot["theme"]["primary_dark"] == "#93c5fd"
 
 
+@pytest.mark.parametrize(
+    "key", ["ui_custom_logo_url", "ui_custom_logo_dark_url", "ui_favicon_url"]
+)
+@pytest.mark.parametrize("value", [
+    "javascript:alert(1)", "data:image/svg+xml,<svg/>", "//evil.example/x.svg",
+    "/../etc/x.svg", "/branding/%2e%2e/x.svg", "/a b.svg",
+])
+def test_branding_images_reject_unsafe_values(client: TestClient, key: str, value: str):
+    """Image fields take http(s) URLs or clean root-relative paths, nothing else."""
+    response = client.put("/api/settings", json={key: value})
+    assert response.status_code == 400
+    boot = client.get("/api/settings/ui-customization").json()
+    assert boot.get(key.removeprefix("ui_")) != value
+
+
 def test_ui_customization_ignores_invalid_env_color(client: TestClient, test_settings):
     """A malformed color coming from the environment is dropped, not injected."""
     test_settings.UI_THEME_PRIMARY = "#fff;}body{display:none"

@@ -158,3 +158,27 @@ def test_a_failing_concept_lookup_keeps_the_client_label(db_session, osm):
     ), current_user_id="u@example.com", concept_label=broken)
 
     assert created.properties["target_label"] == "Customer"
+
+
+def test_a_legacy_link_already_stored_is_listed_once(db_session, osm):
+    from src.db_models.assets import AssetDb, AssetRelationshipDb, AssetTypeDb
+
+    metric_type = AssetTypeDb(name="Metric View", category="data")
+    column_type = AssetTypeDb(name="Column", category="data")
+    db_session.add_all([metric_type, column_type])
+    db_session.flush()
+    view = AssetDb(name="revenue", asset_type_id=metric_type.id, status="active")
+    column = AssetDb(name="region", asset_type_id=column_type.id, status="active")
+    db_session.add_all([view, column])
+    db_session.flush()
+    # The same link in the legacy table and as a stored row.
+    db_session.add(AssetRelationshipDb(
+        source_asset_id=view.id, target_asset_id=column.id, relationship_type="hasColumn"))
+    db_session.add(EntityRelationshipDb(
+        source_type="Metric View", source_id=str(view.id), target_type="Column",
+        target_id=str(column.id), relationship_type="hasColumn"))
+    db_session.flush()
+
+    summary = EntityRelationshipsManager(osm).get_all_for_entity(db_session, "MetricView", str(view.id))
+
+    assert [(r.source_type, r.target_id) for r in summary.outgoing] == [("MetricView", str(column.id))]

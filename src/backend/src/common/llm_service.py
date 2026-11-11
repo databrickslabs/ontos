@@ -13,7 +13,12 @@ from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
 from src.common.config import Settings, get_settings
-from src.common.llm_content import block_types, coerce_message_text, refusal_text
+from src.common.llm_content import (
+    block_types,
+    coerce_message_text,
+    refusal_text,
+    truncate_text,
+)
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,6 +30,11 @@ logger = get_logger(__name__)
 PHASE1_MAX_TOKENS = 2048
 # Output budget of the Phase 2 content analysis.
 PHASE2_MAX_TOKENS = 2048
+# Longest refusal text shown to users, and logged server-side.
+REFUSAL_DISPLAY_MAX_CHARS = 1000
+REFUSAL_LOG_MAX_CHARS = 200
+# ``notice_code`` of a Phase 2 refusal; the frontend shows a localized notice for it.
+PHASE2_REFUSED_CODE = "llm_analysis_refused"
 
 
 @dataclass
@@ -44,6 +54,8 @@ class LLMAnalysisResult:
     llm_model_used: Optional[str] = None
     error_message: Optional[str] = None
     timestamp: datetime = None
+    refused: bool = False  # True if the model refused (shown as plain text, never markdown)
+    notice_code: Optional[str] = None  # Code of the localized notice the UI shows
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -191,7 +203,9 @@ class LLMService:
             logger.warning(f"Phase 1 FAILED: {reason}")
             return False, reason
 
-    def _phase2_content_analysis(self, content: str, user_token: Optional[str] = None) -> Optional[str]:
+    def _phase2_content_analysis(
+        self, content: str, user_token: Optional[str] = None
+    ) -> Optional[_LLMReply]:
         """
         Phase 2: Content analysis with configurable system prompt.
 
@@ -200,7 +214,7 @@ class LLMService:
             user_token: Per-user access token (for Databricks Apps)
 
         Returns:
-            Analysis result or None on failure
+            The reply (answer text and refusal text) or None on failure
         """
         logger.info("Running Phase 2: Content analysis")
 
@@ -218,15 +232,17 @@ class LLMService:
         ]
 
         reply = self._complete(messages, max_tokens=PHASE2_MAX_TOKENS, user_token=user_token)
-        # A refusal is the model's reply to the analysis: show it instead of failing.
-        response = (reply.text or reply.refusal) if reply is not None else None
 
-        if response:
-            logger.info("Phase 2 COMPLETED: Content analysis successful")
-        else:
+        if reply is None:
             logger.error("Phase 2 FAILED: No response from LLM")
+        elif reply.refusal:
+            logger.warning(
+                "Phase 2 REFUSED: %s", truncate_text(reply.refusal, REFUSAL_LOG_MAX_CHARS)
+            )
+        else:
+            logger.info("Phase 2 COMPLETED: Content analysis successful")
 
-        return response
+        return reply
 
     def analyze_content(self, content: str, user_token: Optional[str] = None) -> LLMAnalysisResult:
         """
@@ -286,7 +302,21 @@ class LLMService:
         # Phase 2: Content Analysis
         analysis = self._phase2_content_analysis(content, user_token=user_token)
 
-        if analysis is None:
+        if analysis is not None and analysis.refusal:
+            # A refusal is not a vetted analysis, also next to a text block:
+            # return it as a refused result, capped and shown as plain text.
+            return LLMAnalysisResult(
+                success=False,
+                content=truncate_text(analysis.refusal, REFUSAL_DISPLAY_MAX_CHARS),
+                phase1_passed=True,
+                render_as_markdown=False,
+                llm_model_used=endpoint,
+                error_message="The model refused to analyze the content",
+                refused=True,
+                notice_code=PHASE2_REFUSED_CODE,
+            )
+
+        if analysis is None or not analysis.text:
             return LLMAnalysisResult(
                 success=False,
                 content="",
@@ -299,7 +329,7 @@ class LLMService:
         # Success: Both phases passed
         return LLMAnalysisResult(
             success=True,
-            content=analysis,
+            content=analysis.text,
             phase1_passed=True,
             render_as_markdown=True,  # Safe to render as markdown
             llm_model_used=endpoint

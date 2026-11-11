@@ -729,18 +729,22 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             # Call the two-phased analysis with user token
             result = llm_service.analyze_content(asset_content, user_token=user_token)
 
-            if not result.success and not result.phase1_passed:
-                # Phase 1 failed - return with security warning
-                # The result.content contains the security warning message
-                logger.warning(f"Phase 1 security check failed for asset {asset_id}: {result.error_message}")
+            if not result.success and (not result.phase1_passed or result.refused):
+                # Phase 1 failed or the model refused: result.content holds the
+                # security warning or the capped refusal, shown as plain text.
+                logger.warning(
+                    f"LLM analysis blocked or refused for asset {asset_id}: "
+                    f"{result.error_message}"
+                )
                 return AssetAnalysisResponse(
                     request_id=request_id,
                     asset_id=asset_id,
-                    analysis_summary=sanitize_markdown_input(result.content),  # Sanitize security warning
+                    analysis_summary=sanitize_markdown_input(result.content),
                     llm_model_used=result.llm_model_used,
                     timestamp=result.timestamp,
-                    phase1_passed=False,
-                    render_as_markdown=False  # Must display as plain text
+                    phase1_passed=result.phase1_passed,
+                    render_as_markdown=False,  # Must display as plain text
+                    notice_code=result.notice_code,
                 )
 
             if not result.success:

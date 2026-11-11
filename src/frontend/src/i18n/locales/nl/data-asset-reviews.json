@@ -138,6 +138,9 @@
     "runAiAnalysis": "AI-analyse uitvoeren",
     "aiAnalysisSummary": "Samenvatting AI-analyse",
     "securityWarning": "Beveiligingswaarschuwing",
+    "aiNotices": {
+      "analysisRefused": "Het model weigerde deze inhoud te analyseren. Het antwoord staat hieronder als platte tekst."
+    },
     "modelLabel": "Model",
     "generatedLabel": "Gegenereerd",
     "modelReviewNotImplemented": "Modelbeoordelingsdetails nog niet geïmplementeerd.",

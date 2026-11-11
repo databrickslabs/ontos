@@ -138,6 +138,9 @@
     "runAiAnalysis": "Run AI Analysis",
     "aiAnalysisSummary": "AI Analysis Summary",
     "securityWarning": "Security Warning",
+    "aiNotices": {
+      "analysisRefused": "The model refused to analyze this content. Its reply is shown below as plain text."
+    },
     "modelLabel": "Model",
     "generatedLabel": "Generated",
     "modelReviewNotImplemented": "Model review details not yet implemented.",

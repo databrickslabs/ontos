@@ -138,6 +138,9 @@
     "runAiAnalysis": "Esegui analisi IA",
     "aiAnalysisSummary": "Riepilogo analisi IA",
     "securityWarning": "Avviso di sicurezza",
+    "aiNotices": {
+      "analysisRefused": "Il modello si è rifiutato di analizzare questo contenuto. La sua risposta è mostrata sotto come testo semplice."
+    },
     "modelLabel": "Modello",
     "generatedLabel": "Generato",
     "modelReviewNotImplemented": "Dettagli della revisione del modello non ancora implementati.",

@@ -106,3 +106,10 @@ def refusal_text(message: Any) -> str:
         if text and text not in parts:
             parts.append(text)
     return "\n\n".join(parts)
+
+
+def truncate_text(text: str, limit: int) -> str:
+    """``text`` cut to at most ``limit`` characters, ending in "…" when cut."""
+    if len(text) <= limit:
+        return text
+    return text[: max(limit - 1, 0)].rstrip() + "…"

@@ -10,6 +10,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+import { toTagAssignment } from '@/lib/tag-assignment';
 
 interface Props {
   /** Stable identifier of the entity the tags are assigned to (e.g. a table's full path). */
@@ -53,14 +54,18 @@ const EntityTagsPanel: React.FC<Props> = ({ entityId, entityType }) => {
   React.useEffect(() => { fetchTags(); }, [fetchTags]);
 
   const startEditing = () => {
-    setDraft(assignedTags.map(tag => tag.fully_qualified_name));
+    // Keep the assigned tags as objects so their values are saved with them.
+    setDraft(assignedTags);
     setEditing(true);
   };
 
   const handleSave = async () => {
     try {
-      // The backend accepts a list of FQN strings or {tag_fqn} objects.
-      const payload = draft.map(tag => (typeof tag === 'string' ? { tag_fqn: tag } : { tag_fqn: tag.fully_qualified_name }));
+      // {tag_fqn} objects; tags that were already assigned keep their assigned_value.
+      const payload = draft.map(tag => {
+        const assignment = toTagAssignment(tag);
+        return typeof assignment === 'string' ? { tag_fqn: assignment } : assignment;
+      });
       const resp = await post<AssignedTag[]>(`/api/entities/${entityType}/${encodeURIComponent(entityId)}/tags:set`, payload);
       if (resp.error) throw new Error(resp.error);
       setAssignedTags(Array.isArray(resp.data) ? resp.data : []);

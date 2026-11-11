@@ -37,6 +37,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
 import { TeamSummary } from '@/types/team';
+import { toTagAssignments } from '@/lib/tag-assignment';
 
 // Form schema
 const tagSchema = z.union([
@@ -129,15 +130,8 @@ export function ProjectFormDialog({
 
   // Normalize tags for backend submission (supports both string and AssignedTag)
   // Use fully_qualified_name so backend can look up existing tags by FQN
-  const normalizeTagsForSubmission = (tags: any[]): (string | { tag_id: string; assigned_value?: string })[] => {
-    if (!tags || tags.length === 0) return [];
-
-    return tags.map((tag) => {
-      if (typeof tag === 'string') return tag;
-      // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-      return tag.fully_qualified_name || { tag_id: tag.tag_id || tag.id, assigned_value: tag.assigned_value };
-    });
-  };
+  // Assigned tags keep their value (#1420).
+  const normalizeTagsForSubmission = (tags: any[]) => toTagAssignments(tags);
 
   const handleSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);

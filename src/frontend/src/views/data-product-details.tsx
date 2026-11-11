@@ -67,6 +67,7 @@ import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/di
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { ApprovalEntity } from '@/types/settings';
+import { toTagAssignments } from '@/lib/tag-assignment';
 
 /**
  * ODPS v1.0.0 Data Product Details View
@@ -1232,9 +1233,7 @@ export default function DataProductDetails() {
       updatedPorts[portIndex] = { ...updatedPorts[portIndex], contractId: undefined };
       
       // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = product.tags?.map((tag: any) => 
-        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
-      );
+      const normalizedTags = product.tags ? toTagAssignments(product.tags as any[]) : undefined;
       
       const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',

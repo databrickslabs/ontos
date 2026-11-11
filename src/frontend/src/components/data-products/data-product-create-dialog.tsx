@@ -36,6 +36,7 @@ import TagSelector from '@/components/ui/tag-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 import { apiErrorOf, statusChangeErrorText } from '@/lib/status-change-error';
+import { toTagAssignments } from '@/lib/tag-assignment';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -188,13 +189,9 @@ export default function DataProductCreateDialog({
 
       if (mode === 'edit' && product) {
         // Edit mode - prepare update payload
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
+        // FQNs for picked tags; assigned tags keep their value (#1420)
+        // The payload carries tag assignments (FQN or {tag_fqn, assigned_value}), not read-model AssignedTags
+        const normalizedTags = toTagAssignments(data.tags as any[]) as unknown as NonNullable<DataProduct['tags']>;
 
         const updateData: Partial<DataProduct> = {
           ...product,
@@ -253,13 +250,9 @@ export default function DataProductCreateDialog({
         onSuccess(updatedProduct);
       } else {
         // Create mode - construct new product
-        // Normalize tags to FQNs (strings) for backend compatibility
-        // Use fully_qualified_name so backend can look up existing tags by FQN
-        const normalizedTags = (data.tags || []).map((tag: any) => {
-          if (typeof tag === 'string') return tag;
-          // Prefer fully_qualified_name for existing tags, fallback to tag_id object
-          return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
-        });
+        // FQNs for picked tags; assigned tags keep their value (#1420)
+        // The payload carries tag assignments (FQN or {tag_fqn, assigned_value}), not read-model AssignedTags
+        const normalizedTags = toTagAssignments(data.tags as any[]) as unknown as NonNullable<DataProduct['tags']>;
 
         const productData: Partial<DataProduct> = {
           apiVersion: 'v1.0.0',

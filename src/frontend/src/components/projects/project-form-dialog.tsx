@@ -37,7 +37,6 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
 import { TeamSummary } from '@/types/team';
-import { toTagAssignments } from '@/lib/tag-assignment';
 
 // Form schema
 const tagSchema = z.union([
@@ -99,8 +98,8 @@ export function ProjectFormDialog({
           name: project.name,
           title: project.title || '',
           description: project.description || '',
-          // Keep the assigned tags as objects: the selector shows them by FQN and the
-          // save sends them with their value (#1420).
+          // Keep the assigned tags as objects: AssignedTag has no `name`, so mapping
+          // them to strings turned every tag into '' (#1420).
           tags: project.tags || [],
           team_ids: project.teams?.map(team => team.id) || [],
           project_type: (project.project_type as any) || 'TEAM',
@@ -132,8 +131,15 @@ export function ProjectFormDialog({
 
   // Normalize tags for backend submission (supports both string and AssignedTag)
   // Use fully_qualified_name so backend can look up existing tags by FQN
-  // Assigned tags keep their value (#1420).
-  const normalizeTagsForSubmission = (tags: any[]) => toTagAssignments(tags);
+  const normalizeTagsForSubmission = (tags: any[]): (string | { tag_id: string; assigned_value?: string })[] => {
+    if (!tags || tags.length === 0) return [];
+
+    return tags.map((tag) => {
+      if (typeof tag === 'string') return tag;
+      // Prefer fully_qualified_name for existing tags, fallback to tag_id object
+      return tag.fully_qualified_name || { tag_id: tag.tag_id || tag.id, assigned_value: tag.assigned_value };
+    });
+  };
 
   const handleSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);

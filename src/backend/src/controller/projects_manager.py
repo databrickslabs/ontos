@@ -6,7 +6,6 @@ from sqlalchemy import func
 
 from src.repositories.projects_repository import project_repo
 from src.repositories.teams_repository import team_repo
-from src.repositories.tags_repository import entity_tag_repo
 from src.controller.tags_manager import TagsManager
 from src.models.projects import (
     ProjectCreate,
@@ -236,9 +235,15 @@ class ProjectsManager(SearchableAsset):
             # No user context, return empty list
             db_projects = []
         
-        tags_by_project = entity_tag_repo.get_assigned_tags_for_entities(
-            db, entity_ids=[p.id for p in db_projects], entity_type="project",
-        )
+        try:
+            tags_by_project = self.tags_manager.list_assigned_tags_for_entities(
+                db, entity_ids=[p.id for p in db_projects], entity_type="project",
+            )
+        except Exception as e:
+            # Load them one by one instead: a project listed without its tags would be
+            # saved with ``tags: []`` by the edit dialog
+            logger.warning(f"Failed to batch-load tags for the project list: {e}")
+            return [self._convert_db_to_read_model(project, db) for project in db_projects]
         return [
             self._convert_db_to_read_model(project, tags=tags_by_project.get(project.id, []))
             for project in db_projects

@@ -9,7 +9,6 @@ import { Loader2, Plus } from 'lucide-react';
 import type { OutputPort, DataProduct } from '@/types/data-product';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
 import EntityVersionPicker, { type ScopeValue } from '@/components/common/entity-version-picker';
-import { toTagAssignments } from '@/lib/tag-assignment';
 
 type LinkContractToPortDialogProps = {
   isOpen: boolean;
@@ -91,7 +90,9 @@ export default function LinkContractToPortDialog({
       }
 
       // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = productData.tags ? toTagAssignments(productData.tags as any[]) : undefined;
+      const normalizedTags = productData.tags?.map((tag: any) => 
+        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
+      );
 
       // Update product
       const updateResponse = await fetch(`/api/data-products/${productId}`, {

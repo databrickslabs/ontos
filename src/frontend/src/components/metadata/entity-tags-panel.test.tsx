@@ -137,7 +137,10 @@ describe('EntityTagsPanel', () => {
     })
   })
 
-  it('keeps the value of an assigned tag when another tag is added', async () => {
+  // The panel can't edit values (#1421), so it sends assigned tags without one and the
+  // backend keeps the stored value (#1420). Re-sending the loaded value would overwrite
+  // a change made after the panel was opened.
+  it('sends an assigned tag without its loaded value when another tag is added', async () => {
     mockGet.mockResolvedValue({ data: [classified] })
     mockPost.mockResolvedValue({ data: [classified, sampleTags[0]] })
     renderPanel()
@@ -149,15 +152,12 @@ describe('EntityTagsPanel', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith(
         '/api/entities/catalog-object/samples.nyctaxi.trips/tags:set',
-        [
-          { tag_fqn: 'governance.classification', assigned_value: 'confidential' },
-          { tag_fqn: 'governance.pii' },
-        ],
+        [{ tag_fqn: 'governance.classification' }, { tag_fqn: 'governance.pii' }],
       )
     })
   })
 
-  it('keeps the value when the tags are saved without changes', async () => {
+  it('sends an assigned tag without its loaded value when saved without changes', async () => {
     mockGet.mockResolvedValue({ data: [classified] })
     mockPost.mockResolvedValue({ data: [classified] })
     renderPanel()
@@ -168,7 +168,7 @@ describe('EntityTagsPanel', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith(
         '/api/entities/catalog-object/samples.nyctaxi.trips/tags:set',
-        [{ tag_fqn: 'governance.classification', assigned_value: 'confidential' }],
+        [{ tag_fqn: 'governance.classification' }],
       )
     })
   })

@@ -10,7 +10,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import type { DataProduct, OutputPort } from '@/types/data-product';
-import { toTagAssignments } from '@/lib/tag-assignment';
 
 type LinkProductToContractDialogProps = {
   isOpen: boolean;
@@ -171,7 +170,9 @@ export default function LinkProductToContractDialog({
       }
 
       // Normalize tags to FQN strings or tag_id objects for backend compatibility
-      const normalizedTags = selectedProduct.tags ? toTagAssignments(selectedProduct.tags as any[]) : undefined;
+      const normalizedTags = selectedProduct.tags?.map((tag: any) =>
+        typeof tag === 'string' ? tag : (tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value })
+      );
 
       // Update product
       const updateResponse = await fetch(`/api/data-products/${selectedProductId}`, {

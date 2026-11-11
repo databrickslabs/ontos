@@ -197,7 +197,56 @@ class TestProjectReadsCarryTags:
         from src.controller.projects_manager import ProjectsManager
         self._tag_project(db_session, project, tags[0])
 
-        listed = ProjectsManager().get_all_projects(db_session, is_admin=True)
+        listed = ProjectsManager().get_all_projects(db_session, is_admin=True, limit=10_000)
 
         by_id = {p.id: p for p in listed}
         assert [(t.tag_id, t.assigned_value) for t in by_id[project.id].tags] == [(tags[0].id, 'confidential')]
+
+    def test_list_falls_back_to_one_by_one_when_the_batch_fails(self, db_session, tags, project, monkeypatch):
+        """A listed project without its tags would be saved with ``tags: []``."""
+        from src.controller.projects_manager import ProjectsManager
+        self._tag_project(db_session, project, tags[0])
+        manager = ProjectsManager()
+
+        def boom(*args, **kwargs):
+            raise RuntimeError('batch failed')
+
+        monkeypatch.setattr(manager.tags_manager, 'list_assigned_tags_for_entities', boom)
+        listed = manager.get_all_projects(db_session, is_admin=True, limit=10_000)
+
+        by_id = {p.id: p for p in listed}
+        assert [t.tag_id for t in by_id[project.id].tags] == [tags[0].id]
+
+
+class TestAddTagChangeLog:
+    def _entries(self, db_session):
+        from src.db_models.change_log import ChangeLogDb
+        return (
+            db_session.query(ChangeLogDb)
+            .filter_by(entity_type=ENTITY['entity_type'], entity_id=ENTITY['entity_id'], action='TAG_ASSIGN')
+            .all()
+        )
+
+    def test_re_adding_without_a_value_writes_no_entry(self, manager, db_session, tags):
+        classification, _ = tags
+        _assign(db_session, classification, 'confidential')
+        before = len(self._entries(db_session))
+
+        manager.add_tag_to_entity(
+            db_session, tag_id=classification.id, assigned_value=None, user_email='admin@example.com', **ENTITY,
+        )
+
+        assert len(self._entries(db_session)) == before
+
+    def test_a_value_change_logs_the_stored_value(self, manager, db_session, tags):
+        import json
+        classification, _ = tags
+        _assign(db_session, classification, 'confidential')
+
+        manager.add_tag_to_entity(
+            db_session, tag_id=classification.id, assigned_value='public', user_email='admin@example.com', **ENTITY,
+        )
+
+        latest = self._entries(db_session)[-1]
+        details = json.loads(latest.details_json)
+        assert details['assigned_value'] == 'public'

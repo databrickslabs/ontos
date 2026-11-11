@@ -23,7 +23,6 @@ import type { TeamSummary } from '@/types/team'
 import TagSelector from '@/components/ui/tag-selector'
 import type { AssignedTag } from '@/components/ui/tag-chip'
 import { useProjectContext } from '@/stores/project-store'
-import { toTagAssignments } from '@/lib/tag-assignment';
 
 type BasicFormProps = {
   isOpen: boolean
@@ -199,8 +198,13 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     
     setIsSubmitting(true)
     try {
-      // FQNs for picked tags; assigned tags keep their value (#1420)
-      const normalizedTags = toTagAssignments(tags as any[]);
+      // Normalize tags to FQNs (strings) for backend compatibility
+      // Use fully_qualified_name so backend can look up existing tags by FQN
+      const normalizedTags = tags.map((tag: any) => {
+        if (typeof tag === 'string') return tag;
+        // Prefer fully_qualified_name for existing tags, fallback to tag_id object
+        return tag.fully_qualified_name || { tag_id: tag.tag_id, assigned_value: tag.assigned_value };
+      });
 
       const payload: DataContractCreate = {
         name: name.trim(),

@@ -42,6 +42,7 @@ import { ThemeColorField } from '@/components/settings/theme-color-field';
 const APP_DISPLAY_NAME_MAX_LEN = 64;
 const APP_SHORT_NAME_MAX_LEN = 16;
 const APP_TAGLINE_MAX_LEN = 80;
+const BRANDING_PATH_TRAVERSAL_CODE = 'branding_path_traversal';
 
 interface UICustomizationState {
   i18nEnabled: boolean;
@@ -163,8 +164,15 @@ export default function UICustomizationSettings() {
         refreshBranding();
       } else {
         const detail = await response.json().catch(() => null);
+        const coded = detail && typeof detail.detail === 'object' ? detail.detail : null;
         const message =
           (detail && typeof detail.detail === 'string' && detail.detail) ||
+          (coded?.code === BRANDING_PATH_TRAVERSAL_CODE
+            ? t(
+              'settings:uiCustomization.errorCodes.brandingPathTraversal',
+              { defaultValue: coded.message },
+            )
+            : coded?.message) ||
           t(
             'settings:uiCustomization.messages.saveError',
             'Failed to save UI customization settings',

@@ -21,7 +21,7 @@ from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.errors import ConflictError, NotFoundError
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
-from src.common.team_role_override import pick_team_role_override
+from src.common.team_role_override import team_role_overrides
 from src.common.database import get_session_factory
 
 from src.common.logging import get_logger
@@ -558,39 +558,32 @@ class TeamsManager(SearchableAsset):
         )
         return self.get_team_members(db, team_id)
 
-    def team_role_override_with_members(
+    def team_roles_with_members(
         self,
         db: Session,
         team_id: str,
         members: List[TeamMemberCreate],
         user_identifier: str,
         user_groups: Optional[List[str]] = None,
-    ) -> Optional[str]:
-        """The team role override the user would resolve to if ``team_id`` had ``members``.
+    ) -> List[str]:
+        """The team role overrides that would apply to the user if ``team_id`` had ``members``.
 
-        Mirrors request authorization: only teams the user is a direct member of count, in the
-        repository's team order, with ``team_id``'s members swapped in place.
+        Mirrors request authorization (``lookup_user_team_roles``): the teams the user
+        belongs to directly or through a group, with ``team_id``'s members swapped in
+        (or added, when the user isn't in it yet).
         """
-        is_direct_member = any(
-            m.member_identifier.lower() == user_identifier.lower() for m in members
-        )
+        groups = list(user_groups or [])
         teams = []
         replaced = False
-        for team in self.team_repo.get_teams_for_user(db, user_identifier):
-            if team.id != team_id:
-                teams.append(team.members)
-                continue
-            replaced = True
-            if is_direct_member:
-                teams.append(members)
-        if is_direct_member and not replaced:
-            # Joining a new team: its position among the user's teams is unknown here, so it goes
-            # last; that only matters when the user holds conflicting overrides in several teams.
-            teams.append(members)
-
-        return pick_team_role_override(
-            [SimpleNamespace(members=m) for m in teams], user_identifier, user_groups or []
-        )
+        for team in self.team_repo.get_teams_for_user(db, user_identifier, groups):
+            if team.id == team_id:
+                replaced = True
+                teams.append(SimpleNamespace(members=members))
+            else:
+                teams.append(team)
+        if not replaced:
+            teams.append(SimpleNamespace(members=members))
+        return team_role_overrides(teams, user_identifier, groups)
 
 
 

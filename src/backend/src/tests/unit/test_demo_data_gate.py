@@ -1,6 +1,6 @@
 """Unit tests for the demo-data route gate (settings ADMIN or DEMO_SETUP_TOKEN)."""
 import inspect
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -27,7 +27,7 @@ async def _call(*, token=None, configured=None, level=FeatureAccessLevel.NONE):
         lambda perms, feat, req: perms.get(feat) == FeatureAccessLevel.ADMIN
     )
     with patch(
-        "src.common.authorization.get_user_team_role_overrides", AsyncMock(return_value=None)
+        "src.common.authorization.lookup_user_team_roles", MagicMock(return_value=[])
     ):
         return await require_demo_admin_or_setup_token(request, token, settings, user, auth_manager)
 

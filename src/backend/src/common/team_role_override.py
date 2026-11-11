@@ -2,23 +2,33 @@
 from typing import Iterable, List, Optional
 
 
-def pick_team_role_override(teams: Iterable, user_identifier: str, user_groups: List[str]) -> Optional[str]:
-    """Pick the team role override for a user from the teams they are a direct member of.
+def team_role_overrides(teams: Iterable, user_identifier: str, user_groups: List[str]) -> List[str]:
+    """Every app role override from team entries that apply to the user, in team order, once each.
 
-    Direct entries win over the user's group entries in those same teams; within each kind the
-    first match in team order wins (there is no role hierarchy yet).
+    An entry applies when its identifier is the user's (case-insensitive) or one of the
+    user's groups, in any of the given teams. The roles are combined with the user's
+    other roles by highest level per feature, so their order doesn't change the result.
     """
-    user_groups_lower = {g.lower() for g in user_groups or []}
-    teams = list(teams)
-    direct = [
-        member.app_role_override
-        for team in teams for member in team.members
-        if member.app_role_override and member.member_identifier == user_identifier
-    ]
-    via_group = [
-        member.app_role_override
-        for team in teams for member in team.members
-        if member.app_role_override and member.member_identifier.lower() in user_groups_lower
-    ]
-    overrides = direct + via_group
-    return overrides[0] if overrides else None
+    identifier = (user_identifier or "").strip().lower()
+    groups = {g.strip().lower() for g in user_groups or [] if g}
+    roles: List[str] = []
+    for team in teams:
+        for member in team.members:
+            role = (member.app_role_override or "").strip()
+            if not role:
+                continue
+            member_identifier = (member.member_identifier or "").strip().lower()
+            if (identifier and member_identifier == identifier) or member_identifier in groups:
+                if role not in roles:
+                    roles.append(role)
+    return roles
+
+
+def pick_team_role_override(teams: Iterable, user_identifier: str, user_groups: List[str]) -> Optional[str]:
+    """The first applying team role override, for callers that need a single role name.
+
+    Permission checks use every override (``team_role_overrides``); this is kept for
+    role-name matching such as comment audiences (``role:<name>``).
+    """
+    roles = team_role_overrides(teams, user_identifier, user_groups)
+    return roles[0] if roles else None

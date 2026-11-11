@@ -15,8 +15,8 @@ from src.models.teams import (
 from src.controller.teams_manager import InvalidMemberSetError, TeamsManager, teams_manager
 from src.common.database import get_db
 from sqlalchemy.orm import Session
-from src.common.authorization import PermissionChecker
-from src.common.features import FeatureAccessLevel
+from src.common.authorization import PermissionChecker, resolve_effective_permissions
+from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
@@ -348,6 +348,12 @@ def add_team_member(
 
     logger.info(f"User '{current_user.email}' adding member {member_in.member_identifier} to team {team_id}")
     try:
+        if (member_in.app_role_override or "").strip():
+            _ensure_no_override_escalation(
+                request, db, manager, team_id,
+                manager.current_member_set(db, team_id) + [member_in],
+                current_user, details_for_audit,
+            )
         member = manager.add_team_member(
             db=db,
             team_id=team_id,
@@ -358,6 +364,9 @@ def add_team_member(
         success = True
         created_member_id = str(member.id) if hasattr(member, 'id') else None
         return member
+    except HTTPException:
+        db.rollback()
+        raise
     except NotFoundError as e:
         db.rollback()
         logger.error("Team not found for adding member %s: %s", team_id, e)
@@ -392,6 +401,11 @@ SELF_LOCKOUT_DETAIL = (
     "Keep your own membership or role, or ask another administrator."
 )
 INVALID_MEMBER_SET_DETAIL = "Each member needs an identifier and may be listed only once."
+OVERRIDE_ESCALATION_DETAIL = (
+    "You can't assign a role that grants more access than you have. "
+    "Ask an administrator to assign it."
+)
+UNKNOWN_ROLE_DETAIL = "The role override must name an existing app role."
 
 
 def _would_lose_team_write_access(
@@ -417,16 +431,73 @@ def _would_lose_team_write_access(
             logger.debug("Could not read applied role override for %s", current_user.email, exc_info=True)
 
     groups = current_user.groups or []
-    override_after = manager.team_role_override_with_members(
+    roles_after = manager.team_roles_with_members(
         db=db, team_id=team_id, members=members_after,
         user_identifier=current_user.email, user_groups=groups,
     )
+    # Team roles add to the caller's other roles (#1245), so a change only locks the
+    # caller out when no remaining source grants teams Read/Write.
     permissions_after = auth_manager.get_user_effective_permissions(
-        groups, override_after, user_email=current_user.email
+        groups, roles_after, user_email=current_user.email
     )
     return not auth_manager.has_permission(
         permissions_after, TEAMS_FEATURE_ID, FeatureAccessLevel.READ_WRITE
     )
+
+
+def _override_key(member) -> str:
+    return (member.member_identifier or "").strip().lower()
+
+
+def _ensure_no_override_escalation(
+    request: Request,
+    db: Session,
+    manager: TeamsManager,
+    team_id: str,
+    members_after: List[TeamMemberCreate],
+    current_user: UserInfo,
+    details_for_audit: dict,
+) -> None:
+    """Refuse assigning a role override that grants more than the caller holds.
+
+    Team role overrides add to their members' roles, and a group entry applies to
+    every member of that group (#1245). So assigning one is granting that role, and
+    only levels the caller holds themselves may be granted. Overrides that stay as
+    they are, and removing or lowering one, are always allowed.
+    """
+    current = {
+        _override_key(m): (m.app_role_override or "").strip() or None
+        for m in manager.current_member_set(db, team_id)
+    }
+    granted = sorted({
+        (m.app_role_override or "").strip()
+        for m in members_after
+        if (m.app_role_override or "").strip()
+        and (m.app_role_override or "").strip() != current.get(_override_key(m))
+    })
+    if not granted:
+        return
+
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    if auth_manager is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authorization service not configured.")
+    caller = resolve_effective_permissions(
+        request, current_user.email, current_user.groups or [], auth_manager,
+    )
+    for role_name in granted:
+        role_permissions = auth_manager.get_role_permissions_by_name(role_name)
+        if role_permissions is None:
+            details_for_audit["exception"] = {"type": "UnknownRoleOverride", "role": role_name}
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=UNKNOWN_ROLE_DETAIL)
+        exceeding = sorted(
+            feature for feature, level in role_permissions.items()
+            if ACCESS_LEVEL_ORDER[level] > ACCESS_LEVEL_ORDER[caller.get(feature, FeatureAccessLevel.NONE)]
+        )
+        if exceeding:
+            details_for_audit["exception"] = {
+                "type": "RoleOverrideEscalation", "role": role_name, "features": exceeding,
+            }
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=OVERRIDE_ESCALATION_DETAIL)
 
 
 def _ensure_keeps_team_access(
@@ -474,6 +545,9 @@ def replace_team_members(
     )
     try:
         members_after = manager.validate_member_set(body.members)
+        _ensure_no_override_escalation(
+            request, db, manager, team_id, members_after, current_user, details_for_audit
+        )
         _ensure_keeps_team_access(
             request, db, manager, team_id, members_after, current_user, details_for_audit
         )
@@ -561,6 +635,9 @@ def update_team_member(
                 if m.member_identifier == target.member_identifier else m
                 for m in manager.current_member_set(db, team_id)
             ]
+            _ensure_no_override_escalation(
+                request, db, manager, team_id, members_after, current_user, details_for_audit
+            )
             _ensure_keeps_team_access(
                 request, db, manager, team_id, members_after, current_user, details_for_audit
             )

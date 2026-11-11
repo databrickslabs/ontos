@@ -5,7 +5,7 @@ from src.controller.search_manager import SearchManager
 # Import the search interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 # Import Permission Checker class (not the non-existent getter)
-from src.common.authorization import PermissionChecker # Keep PermissionChecker class import if needed elsewhere, but remove getter
+from src.common.authorization import PermissionChecker, resolve_effective_permissions
 # Import correct dependencies using Annotated types from dependencies.py
 from src.common.dependencies import (
     CurrentUserDep, 
@@ -41,6 +41,7 @@ async def get_search_manager(
 @router.get("/search", response_model=List[SearchIndexItem])
 async def search_items(
     search_term: str,
+    request: Request,
     # Reorder parameters: non-defaults first
     auth_manager: AuthorizationManagerDep,
     current_user: CurrentUserDep,
@@ -51,11 +52,14 @@ async def search_items(
     if not search_term:
         raise HTTPException(status_code=400, detail="Query parameter (search_term) is required")
     try:
-        # Get role override name for user (if impersonation is active)
-        override_role_name = settings_manager.get_role_override_name_for_user(current_user.email)
-        
-        # Perform search with authorization filtering
-        results = manager.search(search_term, auth_manager, current_user, team_role_override=override_role_name)
+        # The same permissions every check uses: applied role override, else groups,
+        # email and team roles (#1245)
+        effective_permissions = resolve_effective_permissions(
+            request, current_user.email, current_user.groups or [], auth_manager,
+        )
+        results = manager.search(
+            search_term, auth_manager, current_user, effective_permissions=effective_permissions,
+        )
         return results
     except Exception as e:
         logger.exception(f"Error during search for query '{search_term}': {e}")

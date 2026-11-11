@@ -18,7 +18,7 @@ from src.controller.settings_manager import SettingsManager
 from pydantic import BaseModel
 from src.controller.notifications_manager import NotificationsManager
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import get_user_details_from_sdk, _try_resolve_test_override
+from src.common.authorization import get_user_details_from_sdk, _try_resolve_test_override, lookup_user_team_roles, resolve_effective_permissions
 from sqlalchemy.orm import Session # Import Session
 
 from src.common.logging import get_logger
@@ -125,8 +125,11 @@ async def get_current_user_permissions(
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
     settings_manager: SettingsManager = Depends(get_settings_manager)
 ) -> Dict[str, FeatureAccessLevel]:
-    """Get the effective feature permissions for the current user based on their groups
-    and any direct email assignment (#196/#760)."""
+    """Get the effective feature permissions for the current user.
+
+    Resolved exactly as the server enforces them (``resolve_effective_permissions``):
+    an applied role override, else groups, direct email assignment (#196/#760) and
+    every applying team role override (#1245), combined by highest level."""
     logger.info(f"Request received for /api/user/permissions for user '{user_details.user or user_details.email}'")
 
     # No-groups early-exit removed (#196/#760): a user with no groups but a direct
@@ -135,15 +138,8 @@ async def get_current_user_permissions(
     # to the previous behavior for truly-unprivileged users.
 
     try:
-        # Apply override if set for this user
-        applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
-        if applied_role_id:
-            role_perms = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
-            return role_perms
-        # Otherwise compute from groups + email
-        return auth_manager.get_user_effective_permissions(
-            user_details.groups,
-            user_email=user_details.email,
+        return resolve_effective_permissions(
+            request, user_details.email, user_details.groups or [], auth_manager,
         )
 
     except HTTPException:
@@ -161,21 +157,22 @@ async def get_actual_user_permissions(
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager)
 ) -> Dict[str, FeatureAccessLevel]:
-    """Get actual feature permissions based on user groups, ignoring any role overrides.
+    """Get the user's actual feature permissions, ignoring an applied role override.
 
-    This endpoint always returns permissions computed from the user's group memberships,
-    never applying role overrides. It's used for UI authorization decisions like determining
-    if a user should be able to switch roles, regardless of their current role override.
+    Computed from the user's groups, direct email assignment and team role overrides
+    (#1245), never applying the role switcher's override. It's used for UI
+    authorization decisions like determining if a user should be able to switch
+    roles, regardless of their current role override.
     """
     logger.info(f"Request received for /api/user/actual-permissions for user '{user_details.user or user_details.email}'")
 
     # No-groups early-exit removed (#196/#760) — see /api/user/permissions for rationale.
 
     try:
-        # Always compute from groups + email, never apply overrides
-        return auth_manager.get_user_effective_permissions(
-            user_details.groups,
-            user_email=user_details.email,
+        # Groups + email + team roles, never the applied role override
+        return resolve_effective_permissions(
+            request, user_details.email, user_details.groups or [], auth_manager,
+            apply_role_override=False,
         )
 
     except HTTPException:
@@ -189,6 +186,7 @@ async def get_actual_user_permissions(
 
 @router.get("/user/navigation", response_model=UserNavigation)
 async def get_current_user_navigation(
+    request: Request,
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
     settings_manager: SettingsManager = Depends(get_settings_manager),
@@ -205,6 +203,7 @@ async def get_current_user_navigation(
             user_details.groups,
             applied_role_override_id=applied_role_id,
             user_email=user_details.email,
+            team_role_names=lookup_user_team_roles(request, user_details.email, user_details.groups or []),
         )
         return UserNavigation(hidden_features=hidden)
     except Exception:

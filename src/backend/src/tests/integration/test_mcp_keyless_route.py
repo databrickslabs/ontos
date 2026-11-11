@@ -196,6 +196,24 @@ class TestKeylessEnabled:
         )
         assert audit is not None and audit.details['reason'] == 'caller_unresolved'
 
+    @pytest.mark.parametrize("method", ["GET", "DELETE"])
+    def test_the_stream_and_delete_endpoints_reject_the_email_alone(
+        self, mcp_client, keyless_default_token, db_session: Session, method
+    ):
+        headers = {FWD_EMAIL_HEADER: CALLER, "Accept": "text/event-stream",
+                   "MCP-Session-Id": "s-1"}
+        resp = mcp_client.request(method, "/api/mcp", headers=headers)
+        assert resp.status_code == 401, resp.text
+        assert resp.json()["detail"] == "The caller's identity could not be verified."
+        audit = (
+            db_session.query(AuditLogDb)
+            .filter_by(feature="mcp", action="IDENTITY_REJECTED")
+            .first()
+        )
+        assert audit is not None and audit.success is False
+        assert audit.details["reason"] == "forwarded_token_missing"
+        assert audit.details["endpoint"] == method
+
 
 class TestKeylessDisabled:
     def test_no_key_no_email_rejected_as_anonymous(self, mcp_client, db_session: Session):

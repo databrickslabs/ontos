@@ -786,6 +786,33 @@ class TestReadLevelThroughMcp:
         assert {p['id'] for p in data['products']} == {pub}
         assert self._call(consumer, 'get_data_product', product_id=pub)[0] is False
 
+    def _tool_call_audit(self, handler):
+        calls = [c.kwargs for c in handler._audit_manager.log_action.call_args_list
+                 if c.kwargs.get('action') == 'TOOL_CALL']
+        assert len(calls) == 1
+        return calls[0]
+
+    def test_the_audit_entry_records_a_read_rule_denial(self, world, monkeypatch):
+        """A tool call the read rule limited is audited as not a success, with the
+        reason; a fully readable one has neither."""
+        draft = world.p['other_draft'].id
+        pub = world.p['published'].id
+        cases = [
+            ('get_data_product', {'product_id': draft}, True),
+            ('get_data_products', {'product_ids': [pub, draft]}, True),
+            ('get_data_product', {'product_id': pub}, False),
+        ]
+        for tool, args, limited in cases:
+            handler = self._handler(world, monkeypatch, READ)
+            self._call(handler, tool, **args)
+            entry = self._tool_call_audit(handler)
+            if limited:
+                assert entry['success'] is False, tool
+                assert entry['details']['denied_reason'] == NOT_READABLE, tool
+            else:
+                assert entry['success'] is True
+                assert 'denied_reason' not in entry['details']
+
 
 class TestPublishedContractWithADraftOwner:
     """An owner stamp hides only a personal draft; a published row stays readable."""
@@ -835,3 +862,40 @@ class TestPublishedContractWithADraftOwner:
         with postgres_aborts(db_session):
             assert read_access.can_read_contract(ctx, row) is False
             assert db_session.execute(text('SELECT 1')).scalar() == 1
+
+
+class TestAdminGroupsReadEveryProject:
+    """Configured admin groups are members of every project (``ALL_PROJECTS``)."""
+
+    def test_the_lookup_returns_all_projects_for_admin_groups(self, monkeypatch, db_session):
+        import src.common.authorization as authorization
+        from src.common.product_read_rule import ALL_PROJECTS, lookup_member_project_ids
+
+        monkeypatch.setattr(authorization, 'is_user_admin', lambda groups, settings: True)
+        assert lookup_member_project_ids(db_session, 'ann@example.com', ['admins']) \
+            is ALL_PROJECTS
+        monkeypatch.setattr(authorization, 'is_user_admin', lambda groups, settings: False)
+        assert lookup_member_project_ids(db_session, 'ann@example.com', ['admins']) == set()
+
+    def test_all_projects_reads_and_edits_in_any_project(self, db_session):
+        from src.common.product_read_rule import ALL_PROJECTS, caller_owns_product
+        from src.tools.read_access import PROJECT_MEMBERSHIP_CODE, project_refusal
+
+        draft = SimpleNamespace(draft_owner_id=None, owner_team_id=None, project_id='p1')
+        owns = [
+            caller_owns_product(db_session, draft, caller_email='ann@example.com',
+                                caller_groups=[], caller_team_ids=set(),
+                                caller_project_ids=ids)
+            for ids in (ALL_PROJECTS, set(), {'p1'})
+        ]
+        assert owns == [True, False, True]
+
+        def _refusal(project_ids):
+            caller = ToolCaller(email='ann@example.com', auth_path='test', permissions=READ,
+                                project_ids=project_ids)
+            ctx = ToolContext(db=db_session, settings=MagicMock(), caller=caller)
+            return project_refusal(ctx, 'p1', 'data contract')
+
+        assert _refusal(ALL_PROJECTS) is None
+        assert _refusal({'p1'}) is None
+        assert _refusal(set()).error_code == PROJECT_MEMBERSHIP_CODE

@@ -70,4 +70,78 @@ describe('WorkflowDesigner overlapping loads', () => {
     });
     expect(nodes()).toHaveLength(2);
   });
+
+  function workflowFixture(id: string, name: string) {
+    return {
+      id, name, description: '', is_active: true, workflow_type: 'process',
+      trigger: { type: 'on_create', entity_types: ['table'] },
+      steps: [{
+        step_id: `${id}-s1`, name: `${name} step`, step_type: 'conditional',
+        config: { condition: 'true' }, order: 0,
+      }],
+    };
+  }
+
+  // Answers the preload requests at once; workflow requests are held until released
+  function holdWorkflows(held: Record<string, () => void>, data: Record<string, unknown>) {
+    api.get.mockImplementation(async (url: string) => {
+      if (url === '/api/workflows/step-types') return { data: STEP_TYPES };
+      const match = /^\/api\/workflows\/(wf-\d)$/.exec(url);
+      if (!match) return { data: [] };
+      await new Promise<void>(resolve => { held[match[1]] = resolve; });
+      return { data: data[match[1]] };
+    });
+  }
+
+  function renderWith(workflowId: string) {
+    const ui = (idValue: string) => (
+      <MemoryRouter initialEntries={['/workflows/x?type=process']}>
+        <WorkflowDesigner workflowId={idValue} />
+      </MemoryRouter>
+    );
+    const view = render(ui(workflowId));
+    return { ...view, show: (idValue: string) => view.rerender(ui(idValue)) };
+  }
+
+  it('drops the response of an edit load that was superseded by another workflow', async () => {
+    const held: Record<string, () => void> = {};
+    holdWorkflows(held, {
+      'wf-1': workflowFixture('wf-1', 'First'),
+      'wf-2': workflowFixture('wf-2', 'Second'),
+    });
+    const { container, show } = renderWith('wf-1');
+    await waitFor(() => expect(held['wf-1']).toBeDefined());
+
+    show('wf-2');
+    await waitFor(() => expect(held['wf-2']).toBeDefined());
+    await act(async () => { held['wf-2'](); });
+    const nameInput = await screen.findByPlaceholderText(/workflow name/i);
+    await waitFor(() => expect(nameInput).toHaveValue('Second'));
+
+    // The superseded first response arrives last: it must not replace the second workflow
+    await act(async () => {
+      held['wf-1']();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    expect(screen.getByPlaceholderText(/workflow name/i)).toHaveValue('Second');
+    expect(container.querySelectorAll('.react-flow__node')).toHaveLength(2);
+    expect(screen.queryByText('First step')).toBeNull();
+  });
+
+  it('does not stay loading when a new workflow replaces a pending edit load', async () => {
+    const held: Record<string, () => void> = {};
+    holdWorkflows(held, { 'wf-1': workflowFixture('wf-1', 'First') });
+    const { show } = renderWith('wf-1');
+    await waitFor(() => expect(held['wf-1']).toBeDefined());
+    expect(screen.queryByPlaceholderText(/workflow name/i)).toBeNull(); // spinner
+
+    show('new');
+    expect(await screen.findByPlaceholderText(/workflow name/i)).toHaveValue('');
+
+    await act(async () => {
+      held['wf-1']();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    expect(screen.getByPlaceholderText(/workflow name/i)).toHaveValue('');
+  });
 });

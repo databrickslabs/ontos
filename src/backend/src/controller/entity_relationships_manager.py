@@ -26,7 +26,9 @@ from src.models.entity_relationships import (
     LineageGraphEdge,
 )
 from src.common.errors import ConflictError, NotFoundError
+from src.common.ontology_type_names import canonical_type_name
 from src.controller.model_lineage import (
+    CONCEPT,
     DEFAULT_LAYER,
     HIDDEN_LINEAGE_TYPES,
     LAYER_RANK,
@@ -51,6 +53,8 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 ONTOS_NS = "http://ontos.app/ontology#"
+# Range of hasSemanticConcept: rows point at a concept IRI.
+ONTOLOGY_CONCEPT_TYPE = "OntologyConcept"
 
 DEDICATED_TYPE_RESOLVERS: Dict[str, str] = {
     "DataProduct": "data_products",
@@ -129,7 +133,15 @@ class EntityRelationshipsManager:
         rel_in: EntityRelationshipCreate,
         current_user_id: str,
     ) -> EntityRelationshipRead:
-        """Create a new entity relationship, validated against the ontology."""
+        """Create a new entity relationship, validated against the ontology.
+
+        Entity types are stored as ontology local names, whichever spelling the
+        caller sent ('Logical Entity' is stored as 'LogicalEntity').
+        """
+        rel_in = rel_in.model_copy(update={
+            "source_type": canonical_type_name(rel_in.source_type),
+            "target_type": canonical_type_name(rel_in.target_type),
+        })
         rel_label = self._validate_relationship(
             rel_in.source_type, rel_in.target_type, rel_in.relationship_type
         )
@@ -227,6 +239,7 @@ class EntityRelationshipsManager:
         Also merges relationships from the legacy asset_relationships table
         so that schema-imported links are visible.
         """
+        entity_type = canonical_type_name(entity_type)
         rows = entity_relationship_repo.get_for_entity(
             db, entity_type=entity_type, entity_id=entity_id,
         )
@@ -356,8 +369,12 @@ class EntityRelationshipsManager:
 
         ``req`` (lineage requests) shares row caches with the derived-link lookups.
         """
+        entity_type = canonical_type_name(entity_type)
         if entity_type in SYNTHETIC_TYPES:
             return self._model_lineage.resolve(db, entity_type, entity_id, req)
+        if entity_type == ONTOLOGY_CONCEPT_TYPE:
+            # Concepts live in the semantic graph, not a table: resolve by IRI.
+            return self._model_lineage.resolve(db, CONCEPT, entity_id, req)
         table_name = DEDICATED_TYPE_RESOLVERS.get(entity_type)
         if table_name:
             return self._resolve_dedicated_entity(db, table_name, entity_id)
@@ -444,6 +461,8 @@ class EntityRelationshipsManager:
 
         Uses ontology-defined hierarchical relationships to find children.
         """
+        # Rows store local names; the visited set must use the same spelling.
+        entity_type = canonical_type_name(entity_type)
         info = self._resolve_entity(db, entity_type, entity_id)
         if not info:
             return None
@@ -684,6 +703,8 @@ class EntityRelationshipsManager:
             access: Caller's read checks; entities the caller can't read (and
                     their sub-entities) are left out. None = no filtering.
         """
+        # Node keys are compared with the types rows store (local names).
+        entity_type = canonical_type_name(entity_type)
         graph = LineageGraph(
             center_entity_type=entity_type,
             center_entity_id=entity_id,
@@ -1035,6 +1056,10 @@ class EntityRelationshipsManager:
             tgt_info = self._resolve_entity(db, db_obj.target_type, db_obj.target_id)
             if tgt_info:
                 target_name = tgt_info["name"]
+        if db_obj.target_type == ONTOLOGY_CONCEPT_TYPE:
+            # The picker stores the concept's label; the semantic-link label lookup
+            # only knows concepts that are also linked through semantic links.
+            target_name = (db_obj.properties or {}).get("target_label") or target_name
 
         return EntityRelationshipRead(
             id=db_obj.id,

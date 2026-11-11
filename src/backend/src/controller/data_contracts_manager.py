@@ -62,6 +62,7 @@ def _upsert_custom_property(data: dict, prop: str, value) -> None:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.common.ontology_type_names import canonical_type_name
 from src.models.import_results import BatchImportResult, ImportItemResult
 from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.common.api_errors import CodedValueError
@@ -875,7 +876,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             existing = (
                 db_session.query(EntityRelationshipDb)
                 .filter(
-                    EntityRelationshipDb.source_type.in_(PHYSICAL_TABLE_ASSET_TYPES),
+                    EntityRelationshipDb.source_type.in_([canonical_type_name(t) for t in PHYSICAL_TABLE_ASSET_TYPES]),
                     EntityRelationshipDb.source_id == str(asset.id),
                     EntityRelationshipDb.target_type == "DataContract",
                     EntityRelationshipDb.target_id == contract_id,

@@ -1271,6 +1271,18 @@ Link individual columns to business properties.
 - Supports data lineage and impact analysis
 - Facilitates cross-domain data discovery
 
+#### Linked Business Concepts vs. the "Has Concepts" relationship
+
+There are two ways to connect an item to a concept, stored in different places:
+
+| | Linked Business Concepts | "Has Concepts" relationship |
+|---|---|---|
+| Where you add it | The *Linked Business Concepts* field in an item's details (assets, products, contracts, domains) and on schema objects and properties | **Add Relationship** on the item's *Relationships* tab |
+| What it stores | A semantic link (item → concept IRI) | A relationship record `hasSemanticConcept` (item → concept) |
+| Where it shows | The item's details, the concept's *Linked Entities* panel, concept mapping status, search and business lineage | The item's *Relationships* tab and its lineage |
+
+Use **Linked Business Concepts** to say what an item *means*. That's the link the concept's page, search and the glossary coverage read. The "Has Concepts" relationship shows only on the item's side: the concept's page doesn't list it.
+
 ### Contract Lifecycle
 
 #### 1. Draft

@@ -108,7 +108,11 @@ def is_forward_flow(relationship_type: str, source_layer: Optional[str], target_
 # Hidden from lineage unless they are the center entity.
 HIDDEN_LINEAGE_TYPES = {"LogicalEntity", "LogicalAttribute"}
 
-PHYSICAL_TABLE_TYPES = PHYSICAL_TABLE_ASSET_TYPES
+# Asset type names ('Metric View') and the local names relationship rows store
+# ('MetricView'): a node's type can come from either.
+PHYSICAL_TABLE_TYPES = tuple(dict.fromkeys(
+    PHYSICAL_TABLE_ASSET_TYPES + tuple(t.replace(" ", "") for t in PHYSICAL_TABLE_ASSET_TYPES)
+))
 MAX_CONCEPT_FANOUT = 30
 
 # Semantic-link entity_type for dedicated types

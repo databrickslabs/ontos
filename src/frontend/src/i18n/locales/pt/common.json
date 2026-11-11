@@ -477,7 +477,9 @@
     "selectRelTypePrompt": "Selecione um tipo de relacionamento para encontrar entidades de destino",
     "createRelationship": "Criar relacionamento",
     "relationshipCreated": "Relacionamento criado",
-    "assetFallback": "Ativo"
+    "assetFallback": "Ativo",
+    "conceptRelationshipHint": "“{{relationship}}” liga este item a um conceito como relação: ela aparece em Relações e na linhagem. Para mostrar o conceito nos detalhes deste item e em {{conceptSection}} na página do conceito, use {{section}}.",
+    "targetNotPickable": "{{type}} não pode ser escolhido aqui. É gerido na sua própria página."
   },
   "assetForm": {
     "groups": {

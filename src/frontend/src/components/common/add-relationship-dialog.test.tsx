@@ -67,10 +67,10 @@ describe('AddRelationshipDialog create', () => {
           }],
         };
       }
-      if (url.startsWith('/api/assets')) {
+      if (url.startsWith('/api/suggestions/link-candidates')) {
         return {
           data: {
-            items: [{ id: 'p1', name: 'Sales Product', asset_type_name: 'Data Product' }],
+            candidates: [{ id: 'p1', name: 'Sales Product', entity_type: 'DataProduct' }],
             total: 1,
           },
         };
@@ -96,7 +96,7 @@ describe('AddRelationshipDialog create', () => {
       target: { value: (relType as HTMLOptionElement).value },
     });
 
-    // The only matching asset type is auto-selected and its assets are listed.
+    // Products aren't assets: they are listed from the link candidates.
     fireEvent.click(await screen.findByText('Sales Product'));
     fireEvent.click(screen.getByRole('button', { name: /create relationship/i }));
 
@@ -109,5 +109,150 @@ describe('AddRelationshipDialog create', () => {
         relationship_type: 'hasProduct',
       });
     });
+  });
+});
+
+const rel = (name: string, label: string, target: string, targetLabel: string, sourceLabel = 'Logical Entity') => ({
+  property_iri: `${ONTOS}${name}`, property_name: name, label,
+  source_type_iri: `${ONTOS}LogicalEntity`, source_type_label: sourceLabel,
+  target_type_iri: `${ONTOS}${target}`, target_type_label: targetLabel,
+  cardinality: '0..*', display_context: 'tab', direction: 'outgoing',
+});
+
+const LOGICAL_ENTITY_RELS = {
+  type_iri: `${ONTOS}LogicalEntity`,
+  outgoing: [
+    rel('belongsToDomain', 'belongs to domain', 'DataDomain', 'Data Domain'),
+    rel('hasSemanticConcept', 'has concepts', 'OntologyConcept', 'Ontology Concept'),
+    // Translated labels: the asset type must still be found by its local name.
+    rel('hasLogicalAttribute', 'has logical attribute', 'LogicalAttribute', 'Logisches Attribut', 'Logische Entität'),
+    rel('hasOwner', 'has owner', 'Ownership', 'Ownership'),
+  ],
+  incoming: [],
+};
+
+const DOMAINS = [
+  { id: 'd1', name: 'Finance', entity_type: 'DataDomain' },
+  { id: 'd2', name: 'Sales', entity_type: 'DataDomain' },
+];
+const CONCEPTS = [
+  { id: 'urn:glossary:retail/customer', name: 'Customer', entity_type: 'OntologyConcept', context: 'Retail Glossary' },
+];
+
+describe('AddRelationshipDialog target sources (#956, #957, #959)', () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/ontology/entity-types/relationships')) return { data: LOGICAL_ENTITY_RELS };
+      if (url.startsWith('/api/asset-types')) {
+        return { data: [{ id: 'la', name: 'Logical Attribute', category: 'data', status: 'active', asset_count: 1 }] };
+      }
+      if (url.startsWith('/api/assets')) {
+        return { data: { items: [{ id: 'a1', name: 'customer_id', asset_type_name: 'Logical Attribute' }], total: 1 } };
+      }
+      if (url.startsWith('/api/suggestions/link-candidates')) {
+        const params = new URLSearchParams(url.split('?')[1]);
+        const pool = params.get('target_type') === 'OntologyConcept' ? CONCEPTS : DOMAINS;
+        const q = (params.get('query') || '').toLowerCase();
+        const candidates = pool.filter(c => c.name.toLowerCase().includes(q));
+        return { data: { candidates, total: candidates.length } };
+      }
+      return { data: null };
+    });
+    postMock.mockResolvedValue({ data: { id: 'r1' } });
+  });
+
+  const open = async (relLabel: RegExp) => {
+    renderWithProviders(
+      <AddRelationshipDialog
+        isOpen
+        onOpenChange={() => {}}
+        entityType="LogicalEntity"
+        entityId="le1"
+        onRelationshipCreated={() => {}}
+      />,
+    );
+    const option = await screen.findByRole('option', { name: relLabel });
+    fireEvent.change(screen.getByRole('combobox', { name: 'relationship type' }), {
+      target: { value: (option as HTMLOptionElement).value },
+    });
+  };
+
+  const urls = () => getMock.mock.calls.map(([url]) => url as string);
+  const candidateCalls = () => urls().filter(url => url.startsWith('/api/suggestions/link-candidates'));
+
+  it('browses domains from the link candidates and creates the link', async () => {
+    await open(/belongs to domain/i);
+
+    fireEvent.click(await screen.findByText('Sales'));
+    fireEvent.click(screen.getByRole('button', { name: /create relationship/i }));
+
+    expect(candidateCalls()[0]).toContain('target_type=DataDomain');
+    expect(urls().some(url => url.startsWith('/api/assets'))).toBe(false);
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/api/entity-relationships', {
+        source_type: 'LogicalEntity', source_id: 'le1',
+        target_type: 'DataDomain', target_id: 'd2',
+        relationship_type: 'belongsToDomain',
+      });
+    });
+  });
+
+  it('filters domains by name in browse mode', async () => {
+    await open(/belongs to domain/i);
+    await screen.findByText('Finance');
+
+    fireEvent.change(screen.getByPlaceholderText(/filter/i), { target: { value: 'fin' } });
+
+    await waitFor(() => expect(candidateCalls().some(url => url.includes('query=fin'))).toBe(true));
+    await waitFor(() => expect(screen.queryByText('Sales')).toBeNull());
+    expect(screen.getByText('Finance')).toBeInTheDocument();
+  });
+
+  it('searches domains in search mode', async () => {
+    await open(/belongs to domain/i);
+    await screen.findByText('Finance');
+    const searchTab = screen.getByRole('tab', { name: /search/i });
+    fireEvent.mouseDown(searchTab);
+    fireEvent.click(searchTab);
+
+    fireEvent.change(await screen.findByPlaceholderText(/by name/i), { target: { value: 'sal' } });
+
+    await waitFor(() => expect(candidateCalls().some(url => url.includes('query=sal'))).toBe(true));
+    expect(await screen.findByText('Sales')).toBeInTheDocument();
+  });
+
+  it('lists concepts with their collection and explains the two kinds of concept links', async () => {
+    await open(/has concepts/i);
+
+    fireEvent.click(await screen.findByText('Customer'));
+    expect(screen.getByText(/Retail Glossary/)).toBeInTheDocument();
+    expect(screen.getByText(/Linked Business Concepts/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /create relationship/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/api/entity-relationships', {
+        source_type: 'LogicalEntity', source_id: 'le1',
+        target_type: 'OntologyConcept', target_id: 'urn:glossary:retail/customer',
+        relationship_type: 'hasSemanticConcept',
+        properties: { target_label: 'Customer' },
+      });
+    });
+  });
+
+  it('finds the asset type by its local name when the label is translated', async () => {
+    await open(/has logical attribute/i);
+
+    fireEvent.click(await screen.findByText('customer_id'));
+
+    expect(urls().some(url => url.startsWith('/api/assets?asset_type_id=la'))).toBe(true);
+  });
+
+  it('says when a target type is managed elsewhere', async () => {
+    await open(/has owner/i);
+
+    expect(await screen.findByText(/can't be picked here/i)).toBeInTheDocument();
+    expect(candidateCalls()).toEqual([]);
   });
 });

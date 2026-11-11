@@ -477,7 +477,9 @@
     "selectRelTypePrompt": "Select a relationship type to find target entities",
     "createRelationship": "Create Relationship",
     "relationshipCreated": "Relationship created",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "\"{{relationship}}\" links this item to a concept as a relationship: it shows under Relationships and in lineage. To show the concept in this item's details and under {{conceptSection}} on the concept's page, use {{section}} instead.",
+    "targetNotPickable": "{{type}} can't be picked here. It is managed on its own page."
   },
   "assetForm": {
     "groups": {

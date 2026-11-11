@@ -473,7 +473,9 @@
     "selectRelTypePrompt": "Seleziona un tipo di relazione per trovare le entità di destinazione",
     "createRelationship": "Crea relazione",
     "relationshipCreated": "Relazione creata",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "«{{relationship}}» collega questo elemento a un concetto come relazione: compare in Relazioni e nella lineage. Per mostrare il concetto nei dettagli di questo elemento e in {{conceptSection}} nella pagina del concetto, usa invece {{section}}.",
+    "targetNotPickable": "{{type}} non può essere scelto qui. Si gestisce nella sua pagina."
   },
   "assetForm": {
     "groups": {

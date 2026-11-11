@@ -477,7 +477,9 @@
     "selectRelTypePrompt": "Selecteer een relatietype om doelentiteiten te vinden",
     "createRelationship": "Relatie aanmaken",
     "relationshipCreated": "Relatie aangemaakt",
-    "assetFallback": "Asset"
+    "assetFallback": "Asset",
+    "conceptRelationshipHint": "'{{relationship}}' koppelt dit item als relatie aan een concept: die verschijnt onder Relaties en in de lineage. Gebruik {{section}} om het concept in de details van dit item en onder {{conceptSection}} op de conceptpagina te tonen.",
+    "targetNotPickable": "{{type}} kan hier niet worden gekozen. Het wordt op een eigen pagina beheerd."
   },
   "assetForm": {
     "groups": {

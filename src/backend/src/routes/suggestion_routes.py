@@ -1,20 +1,39 @@
 """API routes for link candidate suggestions (fuzzy name/tag matching)."""
 
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from src.common.authorization import PermissionChecker
+from src.common.authorization import enforce_feature_permission, get_user_details_from_sdk
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import DBSessionDep
 from src.common.logging import get_logger
+from src.models.users import UserInfo
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/suggestions", tags=["Suggestions"])
 FEATURE_ID = "assets"
+
+ONTOS_NS = "http://ontos.app/ontology#"
+
+# Non-asset target types and the feature whose read access lists them. Every other
+# target type is matched against the asset types and needs asset read access.
+DEDICATED_TARGET_FEATURES = {
+    "DataDomain": "data-domains",
+    "DataProduct": "data-products",
+    "DataContract": "data-contracts",
+    "Team": "teams",
+    "Project": "projects",
+    "OntologyConcept": "semantic-models",
+}
+# Ontology superclass of every asset type: a relationship to "Asset" accepts any asset.
+GENERIC_ASSET_TYPE = "Asset"
+# Concept types a "Has Concepts" link can point to (properties are not concepts).
+LINKABLE_CONCEPT_TYPES = ["concept", "class", "term", "individual"]
 
 
 class LinkCandidate(BaseModel):
@@ -24,6 +43,7 @@ class LinkCandidate(BaseModel):
     entity_type: str
     description: Optional[str] = None
     status: Optional[str] = None
+    context: Optional[str] = Field(None, description="Where the entity lives, e.g. a concept's collection")
     score: float = Field(0.0, description="Relevance score (higher = better match)")
 
 
@@ -32,12 +52,8 @@ class LinkCandidatesResponse(BaseModel):
     total: int = 0
 
 
-@router.get(
-    "/link-candidates",
-    response_model=LinkCandidatesResponse,
-    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
-)
-def get_link_candidates(
+@router.get("/link-candidates", response_model=LinkCandidatesResponse)
+async def get_link_candidates(
     db: DBSessionDep,
     request: Request,
     source_type: Optional[str] = Query(None, description="Source entity type for context"),
@@ -45,76 +61,112 @@ def get_link_candidates(
     target_type: str = Query(..., description="Target entity type to search for candidates"),
     query: Optional[str] = Query(None, description="Additional search query"),
     limit: int = Query(20, ge=1, le=100),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
 ):
     """Find candidate entities for linking, ranked by name/tag similarity.
 
-    Supports fuzzy matching against assets and dedicated entity types.
+    ``target_type`` is an ontology type: an asset type (local name ``LogicalEntity``
+    or label ``Logical Entity``), ``Asset`` for any asset, or one of the dedicated
+    types in ``DEDICATED_TARGET_FEATURES``. Without ``query`` (and ``source_name``)
+    the first ``limit`` entities by name are returned, for browsing. Each target
+    type needs read access to the feature that owns it. Types that have no list
+    here (e.g. ``Ownership``) return no candidates.
     """
-    from src.db_models.assets import AssetDb, AssetTypeDb
-    from sqlalchemy import func, or_
+    feature_id = DEDICATED_TARGET_FEATURES.get(target_type, FEATURE_ID)
+    await enforce_feature_permission(feature_id, FeatureAccessLevel.READ_ONLY, user_details, request)
 
-    candidates: List[LinkCandidate] = []
     search_term = query or source_name or ""
-
     try:
-        # Asset-backed types
-        asset_type = db.query(AssetTypeDb).filter(AssetTypeDb.name == target_type).first()
-        if not asset_type:
-            label_map = {
-                "Table": "Table",
-                "View": "View",
-                "MetricView": "Metric View",
-                "Column": "Column",
-                "Schema": "Schema",
-                "BusinessTerm": "Business Term",
-                "LogicalEntity": "Logical Entity",
-                "LogicalAttribute": "Logical Attribute",
-                "DeliveryChannel": "Delivery Channel",
-                "APIEndpoint": "API Endpoint",
-                "MLModel": "ML Model",
-            }
-            label = label_map.get(target_type, target_type)
-            asset_type = db.query(AssetTypeDb).filter(AssetTypeDb.name == label).first()
-
-        if asset_type:
-            q = db.query(AssetDb).filter(
-                AssetDb.asset_type_id == asset_type.id,
-                AssetDb.status != 'retired',
-            )
-
-            if search_term:
-                term_lower = search_term.lower()
-                parts = term_lower.replace('.', ' ').split()
-                conditions = []
-                for part in parts:
-                    conditions.append(func.lower(AssetDb.name).contains(part))
-                    conditions.append(func.lower(AssetDb.description).contains(part))
-                if conditions:
-                    q = q.filter(or_(*conditions))
-
-            results = q.order_by(AssetDb.name).limit(limit).all()
-
-            for asset in results:
-                score = _compute_score(asset.name, asset.description, asset.tags, search_term)
-                candidates.append(LinkCandidate(
-                    id=str(asset.id),
-                    name=asset.name,
-                    entity_type=target_type,
-                    description=asset.description,
-                    status=asset.status,
-                    score=score,
-                ))
+        if target_type == "OntologyConcept":
+            candidates, total = _search_concepts(request, search_term, limit)
+        elif target_type in DEDICATED_TARGET_FEATURES:
+            candidates, total = _search_dedicated_type(db, target_type, search_term, limit)
         else:
-            # Dedicated types
-            dedicated_candidates = _search_dedicated_type(db, target_type, search_term, limit)
-            candidates.extend(dedicated_candidates)
+            candidates, total = _search_assets(db, target_type, search_term, limit)
+    except Exception:
+        logger.error("Error fetching link candidates for %s", target_type, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch link candidates")
 
-    except Exception as e:
-        logger.error(f"Error fetching link candidates: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    candidates.sort(key=lambda c: (-c.score, c.name.lower()))
+    return LinkCandidatesResponse(candidates=candidates[:limit], total=total)
 
-    candidates.sort(key=lambda c: c.score, reverse=True)
-    return LinkCandidatesResponse(candidates=candidates[:limit], total=len(candidates))
+
+def _asset_types(db: Session, target_type: str) -> Dict:
+    """``{asset_type_id: ontology local name}`` for a target type; empty if it isn't one.
+
+    Matches the type name as stored ('Logical Entity') and its ontology local name
+    ('LogicalEntity'). ``Asset`` matches every asset type.
+    """
+    from src.db_models.assets import AssetTypeDb
+
+    types = db.query(AssetTypeDb.id, AssetTypeDb.name).all()
+    wanted = target_type.replace(" ", "")
+    return {
+        t.id: t.name.replace(" ", "")
+        for t in types
+        if target_type == GENERIC_ASSET_TYPE or t.name.replace(" ", "") == wanted
+    }
+
+
+def _search_assets(
+    db: Session, target_type: str, search_term: str, limit: int,
+) -> Tuple[List[LinkCandidate], int]:
+    from src.db_models.assets import AssetDb
+
+    type_names = _asset_types(db, target_type)
+    if not type_names:
+        return [], 0
+
+    q = db.query(AssetDb).filter(AssetDb.asset_type_id.in_(list(type_names)), AssetDb.status != 'retired')
+    if search_term:
+        conditions = []
+        for part in search_term.lower().replace('.', ' ').split():
+            conditions.append(func.lower(AssetDb.name).contains(part))
+            conditions.append(func.lower(AssetDb.description).contains(part))
+        if conditions:
+            q = q.filter(or_(*conditions))
+
+    total = q.count()
+    candidates = [
+        LinkCandidate(
+            id=str(asset.id),
+            name=asset.name,
+            entity_type=type_names.get(asset.asset_type_id, target_type),
+            description=asset.description,
+            status=asset.status,
+            context=asset.location,
+            score=_compute_score(asset.name, asset.description, asset.tags, search_term),
+        )
+        for asset in q.order_by(AssetDb.name).limit(limit).all()
+    ]
+    return candidates, total
+
+
+def _search_concepts(request: Request, search_term: str, limit: int) -> Tuple[List[LinkCandidate], int]:
+    """Concepts of every collection, except the app's own metamodel classes."""
+    manager = getattr(request.app.state, "semantic_models_manager", None)
+    if manager is None:
+        raise RuntimeError("Semantic models manager not configured")
+
+    # Over-fetch so dropping metamodel classes still leaves ``limit`` rows.
+    rows = manager.search_concepts_by_type(search_term, LINKABLE_CONCEPT_TYPES, limit=limit * 3)
+    rows = [r for r in rows if not str(r.get("value", "")).startswith(ONTOS_NS)]
+    collection_labels: Dict[str, str] = {}
+    for collection in manager.get_collections() or []:
+        if collection.get("source_key"):
+            collection_labels[collection["source_key"]] = collection.get("label") or collection["source_key"]
+
+    candidates = [
+        LinkCandidate(
+            id=row["value"],
+            name=row.get("label") or row["value"],
+            entity_type="OntologyConcept",
+            context=collection_labels.get(row.get("source_context") or "", row.get("source_context")),
+            score=_compute_score(row.get("label") or "", None, None, search_term),
+        )
+        for row in rows
+    ]
+    return candidates[:limit], len(candidates)
 
 
 def _compute_score(name: str, description: Optional[str], tags: Optional[list], search_term: str) -> float:
@@ -152,55 +204,41 @@ def _search_dedicated_type(
     target_type: str,
     search_term: str,
     limit: int,
-) -> List[LinkCandidate]:
-    """Search dedicated entity types (DataProduct, DataDomain, etc.)."""
+) -> Tuple[List[LinkCandidate], int]:
+    """Search dedicated entity types (DataProduct, DataDomain, ...) by name."""
+    from src.db_models.data_contracts import DataContractDb
+    from src.db_models.data_domains import DataDomain
+    from src.db_models.data_products import DataProductDb
+    from src.db_models.projects import ProjectDb
+    from src.db_models.teams import TeamDb
+
+    models = {
+        "DataProduct": DataProductDb,
+        "DataDomain": DataDomain,
+        "DataContract": DataContractDb,
+        "Team": TeamDb,
+        "Project": ProjectDb,
+    }
+    model = models.get(target_type)
+    if model is None:
+        return [], 0
+
+    q = db.query(model)
+    if search_term:
+        q = q.filter(model.name.ilike(f"%{search_term}%"))
+    total = q.count()
     candidates = []
-    term_lower = (search_term or "").lower()
-
-    try:
-        if target_type == "DataProduct":
-            from src.db_models.data_products import DataProductDb
-            q = db.query(DataProductDb)
-            if term_lower:
-                q = q.filter(DataProductDb.name.ilike(f"%{term_lower}%"))
-            for obj in q.limit(limit).all():
-                candidates.append(LinkCandidate(
-                    id=str(obj.id),
-                    name=obj.name or str(obj.id),
-                    entity_type="DataProduct",
-                    status=obj.status,
-                    score=_compute_score(obj.name or "", None, None, search_term),
-                ))
-        elif target_type == "DataDomain":
-            from src.db_models.data_domains import DataDomain
-            q = db.query(DataDomain)
-            if term_lower:
-                q = q.filter(DataDomain.name.ilike(f"%{term_lower}%"))
-            for obj in q.limit(limit).all():
-                candidates.append(LinkCandidate(
-                    id=str(obj.id),
-                    name=obj.name,
-                    entity_type="DataDomain",
-                    description=obj.description,
-                    score=_compute_score(obj.name, obj.description, None, search_term),
-                ))
-        elif target_type == "DataContract":
-            from src.db_models.data_contracts import DataContractDb
-            q = db.query(DataContractDb)
-            if term_lower:
-                q = q.filter(DataContractDb.name.ilike(f"%{term_lower}%"))
-            for obj in q.limit(limit).all():
-                candidates.append(LinkCandidate(
-                    id=str(obj.id),
-                    name=obj.name or str(obj.id),
-                    entity_type="DataContract",
-                    status=obj.status,
-                    score=_compute_score(obj.name or "", None, None, search_term),
-                ))
-    except Exception as e:
-        logger.warning(f"Error searching dedicated type {target_type}: {e}")
-
-    return candidates
+    for obj in q.order_by(model.name).limit(limit).all():
+        description = getattr(obj, "description", None)
+        candidates.append(LinkCandidate(
+            id=str(obj.id),
+            name=obj.name or str(obj.id),
+            entity_type=target_type,
+            description=description if isinstance(description, str) else None,
+            status=getattr(obj, "status", None),
+            score=_compute_score(obj.name or "", None, None, search_term),
+        ))
+    return candidates, total
 
 
 def register_routes(app):

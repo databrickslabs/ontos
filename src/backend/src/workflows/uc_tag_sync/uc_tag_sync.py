@@ -1057,12 +1057,19 @@ def format_tag_string(format_str: str, variables: Dict[str, Optional[str]]) -> O
     return result
 
 
-def resolve_maturity_at_least(format_str: str, level_order: Optional[str]) -> str:
+def resolve_maturity_at_least(
+    format_str: str, level_order: Optional[str], applies: bool = True,
+) -> Optional[str]:
     """Replace each valid {ASSET.MATURITY_AT_LEAST:<order>} with "true" or "false".
 
     "true" when the asset's level number (``level_order``, as text) is at least <order>;
-    "false" when the asset has no level. Malformed variables are left for format_tag_string.
+    "false" when the asset has no level. With ``applies`` False (an asset type without
+    maturity levels) a format that uses the variable resolves to None: there is nothing
+    to say about the asset, so no tag. Malformed variables are left for format_tag_string.
     """
+    if not applies and _MATURITY_AT_LEAST_RE.search(format_str):
+        return None
+
     def _resolve(match: "re.Match[str]") -> str:
         if level_order is None:
             return "false"
@@ -2056,10 +2063,14 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
             if d.asset_type_name:
                 variables = build_variables_for_dataset(d)
                 order = variables["ASSET.MATURITY_ORDER"]
-                tag_key = format_tag_string(
-                    resolve_maturity_at_least(tag_key_format, order), variables)
-                tag_value = format_tag_string(
-                    resolve_maturity_at_least(tag_value_format, order), variables)
+                # Asset types without levels (e.g. metric views): no threshold tag, so
+                # the "not rated" case is not published as "false" and a tag written
+                # before is removed by reconcile_tags like any tag no longer desired.
+                applies = d.asset_type_name in MATURITY_ASSET_TYPES
+                key_fmt = resolve_maturity_at_least(tag_key_format, order, applies)
+                value_fmt = resolve_maturity_at_least(tag_value_format, order, applies)
+                tag_key = format_tag_string(key_fmt, variables) if key_fmt else None
+                tag_value = format_tag_string(value_fmt, variables) if value_fmt else None
 
                 if tag_key and tag_value:
                     tag_key = sanitize_tag_key(tag_key)

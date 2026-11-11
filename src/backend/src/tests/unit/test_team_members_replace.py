@@ -7,7 +7,7 @@ import pytest
 
 from src.common.errors import NotFoundError
 from src.common.features import ACCESS_LEVEL_ORDER, FeatureAccessLevel
-from src.common.team_role_override import pick_team_role_override, team_role_overrides
+from src.common.team_role_override import team_role_overrides
 from src.controller.teams_manager import InvalidMemberSetError, TeamsManager
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.models.teams import TeamMemberCreate
@@ -171,10 +171,6 @@ class TestTeamRoleOverrides:
         teams = self._teams(("alice@example.com", None))
         assert team_role_overrides(teams, "alice@example.com", []) == []
 
-    def test_pick_returns_the_first(self):
-        teams = self._teams(("alice@example.com", "Admin"), ("admins", "Data Steward"))
-        assert pick_team_role_override(teams, "alice@example.com", ["admins"]) == "Admin"
-
 
 class TestTeamRolesWithMembers:
     def test_group_only_membership_counts(self, manager, db_session):
@@ -321,14 +317,18 @@ class TestOverrideEscalationGuard:
     """Assigning a team role override can't grant more than the caller holds (#1245)."""
 
     ROLE_PERMS = {
-        "Admin": {"teams": FeatureAccessLevel.ADMIN, "settings": FeatureAccessLevel.ADMIN},
+        "Admin": {"teams": FeatureAccessLevel.ADMIN, "settings": FeatureAccessLevel.ADMIN,
+                  "data-products": FeatureAccessLevel.ADMIN},
         "Data Producer": {"teams": FeatureAccessLevel.READ_WRITE, "settings": FeatureAccessLevel.NONE},
-        "Data Consumer": {"teams": FeatureAccessLevel.READ_ONLY, "settings": FeatureAccessLevel.NONE},
+        "Data Consumer": {"teams": FeatureAccessLevel.READ_ONLY, "settings": FeatureAccessLevel.NONE,
+                          "data-products": FeatureAccessLevel.READ_ONLY},
     }
 
     def _request(self, caller_role):
         auth_manager = MagicMock()
-        auth_manager.get_role_permissions_by_name.side_effect = lambda name: self.ROLE_PERMS.get(name)
+        auth_manager.get_role_permissions_by_name.side_effect = (
+            lambda names: {n: self.ROLE_PERMS.get(n) for n in names}
+        )
         auth_manager.get_user_effective_permissions.side_effect = (
             lambda groups, team_roles, user_email=None: dict(self.ROLE_PERMS[caller_role])
         )
@@ -367,10 +367,23 @@ class TestOverrideEscalationGuard:
     def test_producer_can_grant_roles_within_their_own(self, manager, db_session):
         team = _team(db_session)
 
-        self._check(manager, db_session, team, [
-            _create("bob@example.com", override="Data Consumer"),
-            _create("carol@example.com", override="Data Producer"),
-        ], "Data Producer")
+        self._check(manager, db_session, team, [_create("carol@example.com", override="Data Producer")], "Data Producer")
+
+    def test_a_role_with_a_level_the_caller_lacks_is_refused(self, manager, db_session):
+        # Data Consumer grants data-products Read-only, which the producer here doesn't hold.
+        team = _team(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            self._check(manager, db_session, team, [_create("bob@example.com", override="Data Consumer")], "Data Producer")
+
+        assert exc.value.status_code == 403
+
+    def test_lowering_is_allowed_even_to_a_level_the_caller_lacks(self, manager, db_session):
+        # Admin -> Data Consumer keeps data-products Read-only, which the previous role covered.
+        team = _team(db_session)
+        _member(db_session, team, "boss@example.com", override="Admin")
+
+        self._check(manager, db_session, team, [_create("boss@example.com", override="Data Consumer")], "Data Producer")
 
     def test_unchanged_and_lowered_overrides_are_allowed(self, manager, db_session):
         team = _team(db_session)
@@ -487,3 +500,21 @@ class TestMemberRoutesRefuseEscalation:
         resp = client.put(f"/api/teams/{team_id}/members/{member_id}", json={"app_role_override": "Admin"})
 
         assert resp.status_code == 403
+
+    def test_duplicate_member_is_409_not_403(self, client, db_session):
+        team = _team(db_session)
+        _member(db_session, team, "boss@example.com", override="Admin")
+        team_id = team.id
+
+        resp = client.post(f"/api/teams/{team_id}/members", json={
+            "member_type": "user", "member_identifier": "boss@example.com", "app_role_override": "Admin",
+        })
+
+        assert resp.status_code == 409
+
+    def test_missing_team_is_404_not_422(self, client):
+        resp = client.post("/api/teams/missing/members", json={
+            "member_type": "user", "member_identifier": "x@example.com", "app_role_override": "Typo",
+        })
+
+        assert resp.status_code == 404

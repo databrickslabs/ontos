@@ -228,8 +228,9 @@ class SearchManager:
                     match_quality=1.0,
                 ))
 
-        # Filter based on permissions using AuthorizationManager
-        if not user.groups:
+        # Filter based on permissions using AuthorizationManager. Resolved permissions
+        # also cover email and team roles, so only the group-based fallback needs groups.
+        if effective_permissions is None and not user.groups:
              logger.warning(f"User {user.username} has no groups, returning empty search results.")
              return []
              
@@ -274,7 +275,7 @@ class SearchManager:
         REST_CANDIDATE_LIMIT = 200
         candidates = self._backend.search_items(query, limit=REST_CANDIDATE_LIMIT)
 
-        if not user.groups:
+        if effective_permissions is None and not user.groups:
             logger.warning(f"User {user.username} has no groups, returning empty search results.")
             return []
         try:

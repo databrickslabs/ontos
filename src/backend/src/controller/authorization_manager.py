@@ -66,7 +66,7 @@ class AuthorizationManager:
         feature_config = get_feature_config()
 
         if isinstance(team_role_override, str):
-            team_role_names = [team_role_override]
+            team_role_names = [team_role_override] if team_role_override.strip() else []
         else:
             team_role_names = [n for n in (team_role_override or []) if n]
 
@@ -211,13 +211,17 @@ class AuthorizationManager:
                 return True
         return False
 
-    def get_role_permissions_by_name(self, role_name: str) -> Optional[Dict[str, FeatureAccessLevel]]:
-        """Feature levels the named role grants, or None if no role has that name."""
-        role = next((r for r in self._settings_manager.list_app_roles() if r.name == role_name), None)
-        if role is None:
-            return None
+    def get_role_permissions_by_name(self, role_names: Sequence[str]) -> Dict[str, Optional[Dict[str, FeatureAccessLevel]]]:
+        """Feature levels each named role grants (None for a name no role has), in one role read."""
+        roles = {r.name: r for r in self._settings_manager.list_app_roles()}
         feature_config = get_feature_config()
-        return {f: lvl for f, lvl in (role.feature_permissions or {}).items() if f in feature_config}
+        result: Dict[str, Optional[Dict[str, FeatureAccessLevel]]] = {}
+        for name in role_names:
+            role = roles.get(name)
+            result[name] = None if role is None else {
+                f: lvl for f, lvl in (role.feature_permissions or {}).items() if f in feature_config
+            }
+        return result
 
     def get_user_effective_role_ids(
         self,

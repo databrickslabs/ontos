@@ -348,7 +348,16 @@ def add_team_member(
 
     logger.info(f"User '{current_user.email}' adding member {member_in.member_identifier} to team {team_id}")
     try:
-        if (member_in.app_role_override or "").strip():
+        if (
+            (member_in.app_role_override or "").strip()
+            and manager.team_repo.get(db, team_id) is not None
+            # The same duplicate check the manager makes: it then answers 409
+            and manager.team_member_repo.get_by_team_and_member(
+                db, team_id=team_id, member_identifier=member_in.member_identifier
+            ) is None
+        ):
+            # A missing team (404) and a duplicate member (409) are reported by the
+            # manager below, so only a member that will be added is checked.
             _ensure_no_override_escalation(
                 request, db, manager, team_id,
                 manager.current_member_set(db, team_id) + [member_in],
@@ -461,21 +470,22 @@ def _ensure_no_override_escalation(
     """Refuse assigning a role override that grants more than the caller holds.
 
     Team role overrides add to their members' roles, and a group entry applies to
-    every member of that group (#1245). So assigning one is granting that role, and
-    only levels the caller holds themselves may be granted. Overrides that stay as
-    they are, and removing or lowering one, are always allowed.
+    every member of that group (#1245). So assigning one is granting that role: per
+    feature, the new role may grant at most what the caller holds, or what the
+    entry's previous role already granted. Overrides that stay as they are, removing
+    one, and lowering one are always allowed.
     """
     current = {
         _override_key(m): (m.app_role_override or "").strip() or None
         for m in manager.current_member_set(db, team_id)
     }
-    granted = sorted({
-        (m.app_role_override or "").strip()
-        for m in members_after
-        if (m.app_role_override or "").strip()
-        and (m.app_role_override or "").strip() != current.get(_override_key(m))
-    })
-    if not granted:
+    changes = {}
+    for m in members_after:
+        role = (m.app_role_override or "").strip()
+        previous = current.get(_override_key(m))
+        if role and role != previous:
+            changes.setdefault(role, []).append(previous)
+    if not changes:
         return
 
     auth_manager = getattr(request.app.state, "authorization_manager", None)
@@ -484,15 +494,24 @@ def _ensure_no_override_escalation(
     caller = resolve_effective_permissions(
         request, current_user.email, current_user.groups or [], auth_manager,
     )
-    for role_name in granted:
-        role_permissions = auth_manager.get_role_permissions_by_name(role_name)
+    names = sorted(set(changes) | {p for prevs in changes.values() for p in prevs if p})
+    permissions_by_role = auth_manager.get_role_permissions_by_name(names)
+    for role_name in sorted(changes):
+        role_permissions = permissions_by_role.get(role_name)
         if role_permissions is None:
             details_for_audit["exception"] = {"type": "UnknownRoleOverride", "role": role_name}
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=UNKNOWN_ROLE_DETAIL)
-        exceeding = sorted(
-            feature for feature, level in role_permissions.items()
-            if ACCESS_LEVEL_ORDER[level] > ACCESS_LEVEL_ORDER[caller.get(feature, FeatureAccessLevel.NONE)]
-        )
+        exceeding = set()
+        for previous in changes[role_name]:
+            previous_permissions = permissions_by_role.get(previous) or {}
+            exceeding |= {
+                feature for feature, level in role_permissions.items()
+                if ACCESS_LEVEL_ORDER[level] > max(
+                    ACCESS_LEVEL_ORDER[caller.get(feature, FeatureAccessLevel.NONE)],
+                    ACCESS_LEVEL_ORDER[previous_permissions.get(feature, FeatureAccessLevel.NONE)],
+                )
+            }
+        exceeding = sorted(exceeding)
         if exceeding:
             details_for_audit["exception"] = {
                 "type": "RoleOverrideEscalation", "role": role_name, "features": exceeding,

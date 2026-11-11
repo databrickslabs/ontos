@@ -387,15 +387,43 @@ async def require_ontos_admin(
     return user_details
 
 
+_TEAM_ROLES_CACHE_ATTR = "_ontos_team_roles"
+
+
+def _request_cache(request: Request, attr: str) -> dict:
+    """A dict on ``request.state`` that lives for the request (a throwaway one without state)."""
+    state = getattr(request, "state", None)
+    cache = getattr(state, attr, None) if state is not None else None
+    if not isinstance(cache, dict):
+        cache = {}
+        if state is not None:
+            try:
+                setattr(state, attr, cache)
+            except Exception:
+                pass
+    return cache
+
+
 def lookup_user_team_roles(request: Request, user_identifier: Optional[str], user_groups: List[str]) -> List[str]:
     """Every team role override that applies to the user, through their own entry or a group's.
 
     Teams are found by the user's identifier and by each of their groups, so a team
-    the user belongs to only through a group counts too (#1245). A failed lookup
-    grants nothing: it returns no roles.
+    the user belongs to only through a group counts too (#1245). The user's own
+    entries come first. A failed lookup grants nothing: it returns no roles. Cached
+    on ``request.state`` for the rest of the request.
     """
     if not user_identifier and not user_groups:
         return []
+    key = ((user_identifier or "").strip().lower(), tuple(sorted({(g or "").lower() for g in user_groups or []})))
+    cache = _request_cache(request, _TEAM_ROLES_CACHE_ATTR)
+    if key in cache:
+        return cache[key]
+    roles = _load_user_team_roles(request, user_identifier, user_groups)
+    cache[key] = roles
+    return roles
+
+
+def _load_user_team_roles(request: Request, user_identifier: Optional[str], user_groups: List[str]) -> List[str]:
     try:
         teams_manager = getattr(request.app.state, 'teams_manager', None)
         if not teams_manager:
@@ -404,7 +432,8 @@ def lookup_user_team_roles(request: Request, user_identifier: Optional[str], use
         db_gen = get_db()
         db = next(db_gen)
         try:
-            user_teams = teams_manager.get_teams_for_user(db, user_identifier or "", list(user_groups or []))
+            # Team rows with their members only; no read-model conversion per team.
+            user_teams = teams_manager.get_team_rows_for_user(db, user_identifier or "", list(user_groups or []))
             roles = team_role_overrides(user_teams, user_identifier or "", user_groups or [])
             if roles:
                 logger.debug("Team role overrides for user %s: %s", user_identifier, roles)
@@ -414,11 +443,6 @@ def lookup_user_team_roles(request: Request, user_identifier: Optional[str], use
     except Exception as e:
         logger.warning("Error checking team role overrides for user %s: %s", user_identifier, e)
         return []
-
-
-async def get_user_team_roles(user_identifier: str, user_groups: List[str], request: Request) -> List[str]:
-    """Async wrapper of ``lookup_user_team_roles``."""
-    return lookup_user_team_roles(request, user_identifier, user_groups)
 
 
 async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
@@ -488,15 +512,7 @@ def resolve_effective_permissions(
         apply_role_override,
         id(auth_manager),
     )
-    state = getattr(request, "state", None)
-    cache = getattr(state, _PERMISSIONS_CACHE_ATTR, None) if state is not None else None
-    if not isinstance(cache, dict):
-        cache = {}
-        if state is not None:
-            try:
-                setattr(state, _PERMISSIONS_CACHE_ATTR, cache)
-            except Exception:
-                pass
+    cache = _request_cache(request, _PERMISSIONS_CACHE_ATTR)
     if key in cache:
         return cache[key]
 

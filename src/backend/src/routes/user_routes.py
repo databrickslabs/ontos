@@ -157,22 +157,24 @@ async def get_actual_user_permissions(
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     auth_manager: AuthorizationManager = Depends(get_auth_manager)
 ) -> Dict[str, FeatureAccessLevel]:
-    """Get the user's actual feature permissions, ignoring an applied role override.
+    """Get actual feature permissions based on user groups, ignoring any role overrides.
 
-    Computed from the user's groups, direct email assignment and team role overrides
-    (#1245), never applying the role switcher's override. It's used for UI
-    authorization decisions like determining if a user should be able to switch
-    roles, regardless of their current role override.
+    This endpoint always returns permissions computed from the user's group memberships
+    and direct email assignment, never applying role overrides or team role overrides.
+    It's used for UI authorization decisions like determining if a user should be able
+    to switch roles, which the server checks against the user's groups
+    (``SettingsManager.set_applied_role_override``), regardless of their current role
+    override.
     """
     logger.info(f"Request received for /api/user/actual-permissions for user '{user_details.user or user_details.email}'")
 
     # No-groups early-exit removed (#196/#760) — see /api/user/permissions for rationale.
 
     try:
-        # Groups + email + team roles, never the applied role override
-        return resolve_effective_permissions(
-            request, user_details.email, user_details.groups or [], auth_manager,
-            apply_role_override=False,
+        # Always compute from groups + email, never apply overrides
+        return auth_manager.get_user_effective_permissions(
+            user_details.groups,
+            user_email=user_details.email,
         )
 
     except HTTPException:
@@ -203,7 +205,11 @@ async def get_current_user_navigation(
             user_details.groups,
             applied_role_override_id=applied_role_id,
             user_email=user_details.email,
-            team_role_names=lookup_user_team_roles(request, user_details.email, user_details.groups or []),
+            # An applied override pins one role, so team roles only matter without it
+            team_role_names=(
+                [] if applied_role_id
+                else lookup_user_team_roles(request, user_details.email, user_details.groups or [])
+            ),
         )
         return UserNavigation(hidden_features=hidden)
     except Exception:

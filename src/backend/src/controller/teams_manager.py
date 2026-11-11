@@ -310,6 +310,16 @@ class TeamsManager(SearchableAsset):
         db_teams = self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
         return self._convert_many_to_read_models(db, db_teams)
 
+    def get_team_rows_for_user(
+        self, db: Session, user_identifier: str, user_groups: Optional[List[str]] = None
+    ) -> List[TeamDb]:
+        """Team rows (members loaded) where the user is a member directly or via a group.
+
+        For permission resolution, which only reads the members' role overrides: no
+        read-model conversion, so no per-team tag or domain queries.
+        """
+        return self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
+
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:
         """Updates an existing team."""
         logger.debug(f"Attempting to update team with id: {team_id}")

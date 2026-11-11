@@ -313,6 +313,21 @@ class TestSearchManager:
         assert results and all(r.feature_id == "data-products" for r in results)
         mock_auth_manager.get_user_effective_permissions.assert_not_called()
 
+    def test_resolved_permissions_cover_users_without_groups(self, mock_searchable_manager, mock_auth_manager):
+        """Email or team roles can grant access without any group (#1245)."""
+        manager = SearchManager(searchable_managers=[mock_searchable_manager])
+        mock_auth_manager.has_permission.side_effect = (
+            lambda perms, feature_id, level: perms.get(feature_id) == FeatureAccessLevel.READ_ONLY
+        )
+        user = UserInfo(username="t", email="t@example.com", user="T", ip="127.0.0.1", groups=[])
+
+        results = manager.search(
+            "product", mock_auth_manager, user,
+            effective_permissions={"data-products": FeatureAccessLevel.READ_ONLY},
+        )
+
+        assert results
+
     def test_search_with_team_role_override(self, mock_searchable_manager, mock_auth_manager, sample_user):
         """Test search with team role override."""
         manager = SearchManager(searchable_managers=[mock_searchable_manager])

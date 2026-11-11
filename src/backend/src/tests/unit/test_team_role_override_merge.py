@@ -121,7 +121,13 @@ class TestTeamRoleOverrides:
             _team(("data-consumers", "Data Producer"), ("bob@example.com", "Admin")),
         ]
 
+        # The user's own entries first, then the group entries.
         assert team_role_overrides(teams, "alice@example.com", ["Data-Consumers"]) == ["Data Producer", "Data Steward"]
+
+    def test_own_entry_comes_before_group_entries(self):
+        teams = [_team(("eng", "Data Consumer")), _team(("alice@example.com", "Data Steward"))]
+
+        assert team_role_overrides(teams, "alice@example.com", ["eng"]) == ["Data Steward", "Data Consumer"]
 
     def test_entries_without_override_or_for_others_are_ignored(self):
         teams = [_team(("alice@example.com", None), ("other-group", "Admin"), ("bob@example.com", "Admin"))]
@@ -143,7 +149,7 @@ def _request(teams_by_user, applied=None):
                     out.append(team)
         return out
 
-    teams_manager.get_teams_for_user.side_effect = get_teams_for_user
+    teams_manager.get_team_rows_for_user.side_effect = get_teams_for_user
     settings_manager = MagicMock()
     settings_manager.get_applied_role_override_for_user.return_value = applied
     settings_manager.get_feature_permissions_for_role_id.side_effect = (
@@ -196,11 +202,11 @@ class TestResolver:
         second = resolve_effective_permissions(request, "alice@example.com", ["data-consumers"], auth)
 
         assert first is second
-        assert request.app.state.teams_manager.get_teams_for_user.call_count == 1
+        assert request.app.state.teams_manager.get_team_rows_for_user.call_count == 1
 
     def test_team_lookup_failure_grants_nothing_extra(self, auth):
         request = _request({})
-        request.app.state.teams_manager.get_teams_for_user.side_effect = RuntimeError("db down")
+        request.app.state.teams_manager.get_team_rows_for_user.side_effect = RuntimeError("db down")
 
         perms = resolve_effective_permissions(request, "alice@example.com", ["data-consumers"], auth)
 

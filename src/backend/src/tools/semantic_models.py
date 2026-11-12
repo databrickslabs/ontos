@@ -7,6 +7,7 @@ Tools for searching glossary terms and managing semantic links.
 from typing import Any, Dict, Optional
 from src.common.features import FeatureAccessLevel
 from src.tools import read_access
+from src.tools import visibility as vis
 
 from src.common.logging import get_logger
 from src.tools.base import BaseTool, ToolContext, ToolResult, tool_failure
@@ -207,7 +208,10 @@ class ListSemanticLinksTool(BaseTool):
     
     name = "list_semantic_links"
     category = "semantic"
-    description = "List semantic links (business term associations) for a data product or contract."
+    description = (
+        "List semantic links (business term associations) for a data product or contract. "
+        + vis.VISIBILITY_DESCRIPTION
+    )
     parameters = {
         "entity_type": {
             "type": "string",
@@ -217,7 +221,8 @@ class ListSemanticLinksTool(BaseTool):
         "entity_id": {
             "type": "string",
             "description": "ID of the entity"
-        }
+        },
+        "visibility": vis.VISIBILITY_PARAM,
     }
     required_params = ["entity_type", "entity_id"]
     required_scope = "semantic:read"
@@ -226,7 +231,8 @@ class ListSemanticLinksTool(BaseTool):
         self,
         ctx: ToolContext,
         entity_type: str,
-        entity_id: str
+        entity_id: str,
+        visibility: Optional[str] = None,
     ) -> ToolResult:
         """List semantic links for an entity."""
         logger.info(f"[list_semantic_links] Starting - entity_type={entity_type}, entity_id={entity_id}")
@@ -240,10 +246,17 @@ class ListSemanticLinksTool(BaseTool):
                 semantic_models_manager=ctx.semantic_models_manager
             )
             
-            # An entity the caller can't read is answered like a missing one (no links).
+            applied = vis.applied_visibility(ctx, visibility)
+            if applied is None:
+                return vis.invalid_visibility(visibility, links=[])
+            # An entity the caller can't read, or outside the visibility, is
+            # answered like a missing one (no links).
             unreadable = read_access.entity_is_unreadable(ctx, entity_type, entity_id)
+            outside = unreadable or vis.entity_is_hidden(
+                ctx, entity_type, entity_id, visibility=applied
+            )
             links = (
-                [] if unreadable
+                [] if outside
                 else manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
             )
             
@@ -269,7 +282,8 @@ class ListSemanticLinksTool(BaseTool):
                     "links": link_list,
                     "total_found": len(link_list),
                     "entity_type": entity_type,
-                    "entity_id": entity_id
+                    "entity_id": entity_id,
+                    "visibility": applied,
                 }
             )
             return read_access.denied(ctx, self.name, result, [entity_id] if unreadable else [])
@@ -362,12 +376,18 @@ class FindEntitiesByConceptTool(BaseTool):
     
     name = "find_entities_by_concept"
     category = "semantic"
-    description = "Given a concept IRI from the knowledge graph, find all data products, contracts, and other entities that are semantically linked to it. Use search_glossary_terms first to find the concept IRI."
+    description = (
+        "Given a concept IRI from the knowledge graph, find all data products, contracts, "
+        "and other entities that are semantically linked to it. Use search_glossary_terms "
+        "first to find the concept IRI. For data products and contracts: "
+        + vis.VISIBILITY_DESCRIPTION
+    )
     parameters = {
         "concept_iri": {
             "type": "string",
             "description": "IRI of the concept from the knowledge graph (from search_glossary_terms results)"
-        }
+        },
+        "visibility": vis.VISIBILITY_PARAM,
     }
     required_params = ["concept_iri"]
     required_scope = "semantic:read"
@@ -375,7 +395,8 @@ class FindEntitiesByConceptTool(BaseTool):
     async def execute(
         self,
         ctx: ToolContext,
-        concept_iri: str
+        concept_iri: str,
+        visibility: Optional[str] = None,
     ) -> ToolResult:
         """Find all entities linked to a concept IRI."""
         logger.info(f"[find_entities_by_concept] Starting - concept_iri={concept_iri}")
@@ -390,15 +411,19 @@ class FindEntitiesByConceptTool(BaseTool):
             )
             
             # Get all entities linked to this concept (explicit + inferred)
+            applied = vis.applied_visibility(ctx, visibility)
+            if applied is None:
+                return vis.invalid_visibility(visibility, entities=[])
             links = manager.list_for_iri(iri=concept_iri)
             # Products and contracts (and their schemas and properties) the
-            # caller can't read are left out.
+            # caller can't read, or outside the visibility, are left out.
             dropped = [link.entity_id for link in links
                        if read_access.entity_is_unreadable(ctx, link.entity_type, link.entity_id)]
             
             entities = []
             for link in links:
-                if read_access.entity_is_unreadable(ctx, link.entity_type, link.entity_id):
+                if vis.entity_is_hidden(ctx, link.entity_type, link.entity_id,
+                                        visibility=applied):
                     continue
                 entities.append({
                     "entity_type": link.entity_type,
@@ -408,13 +433,15 @@ class FindEntitiesByConceptTool(BaseTool):
                     "is_inferred": link.id.startswith("inferred:") if link.id else False
                 })
             
+            vis.annotate(ctx, entities, type_key="entity_type", id_key="entity_id")
             logger.info(f"[find_entities_by_concept] SUCCESS: Found {len(entities)} entities linked to concept")
             result = ToolResult(
                 success=True,
                 data={
                     "entities": entities,
                     "total_found": len(entities),
-                    "concept_iri": concept_iri
+                    "concept_iri": concept_iri,
+                    "visibility": applied,
                 }
             )
             return read_access.denied(ctx, self.name, result, dropped)

@@ -352,6 +352,27 @@ def _project_fields(result: Dict[str, Any], fields: Optional[List[str]]) -> Dict
     return {k: v for k, v in result.items() if k in allowed}
 
 
+def match_ids(
+    items: Iterable[SearchIndexItem],
+    query: str,
+    config: SearchConfig,
+    *,
+    type_filter: Optional[str] = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    allowed_ids_by_type: Optional[Dict[str, Iterable[str]]] = None,
+) -> List[str]:
+    """Ids of the items ``search_index`` would match (unpaginated, no result rows)."""
+    allowed = {t: set(ids) for t, ids in (allowed_ids_by_type or {}).items()}
+    candidates = [
+        it for it in items
+        if (it.type not in allowed or it.id in allowed[it.type])
+        and _passes_filters(it, type_filter, filters)
+    ]
+    if is_list_query(query):
+        return [it.id for it in candidates]
+    return [s.item.id for s in score_and_rank(candidates, query, config)]
+
+
 def search_index(
     items: Iterable[SearchIndexItem],
     query: str,

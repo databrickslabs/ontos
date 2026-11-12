@@ -104,8 +104,9 @@ class UcDescriptionSyncManager:
         Writes when the setting is on, the asset is a Unity Catalog table, view
         or column, and the update sent a description that differs from
         ``previous_description`` (or the asset is already out of sync, so
-        saving again retries). With the setting off, a save drops the mark. ``user_client`` builds the user's workspace
-        client; a ``CodedValueError`` from it (no user token) is a warning.
+        saving again retries). With the setting off, a save drops the mark.
+        ``user_client`` builds the user's workspace client; a
+        ``CodedValueError`` from it (no user token) is a warning.
         The sync state is the one stored on the asset afterwards.
         """
         asset = db.get(AssetDb, asset_id)

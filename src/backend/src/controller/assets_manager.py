@@ -389,6 +389,8 @@ class AssetsManager(SearchableAsset):
             self._validate_properties(db, effective_type_id, asset_in.properties)
 
         update_data = asset_in.model_dump(exclude_unset=True)
+        description_changed = (
+            'description' in update_data and update_data['description'] != db_asset.description)
         if update_data.get('properties') is not None:
             # Clients never see the internal keys, so they can't send them back
             update_data['properties'] = with_internal_properties(
@@ -407,6 +409,8 @@ class AssetsManager(SearchableAsset):
                     domain_ids=domain_ids, primary_domain_id=primary_domain_id,
                     assigned_by=current_user_id,
                 )
+            if description_changed:
+                self._update_table_column_snapshot(db, updated)
             updated = self._asset_repo.get_with_relationships(db, updated.id)
             logger.info(f"Updated asset '{updated.name}' (id: {asset_id})")
             try:
@@ -427,6 +431,41 @@ class AssetsManager(SearchableAsset):
             if "unique constraint" in str(e).lower():
                 raise ConflictError("Asset identity conflict.")
             raise
+
+    def _update_table_column_snapshot(self, db: Session, column: AssetDb) -> None:
+        """Copy a Column asset's new description into its table's ``properties.schema``.
+
+        An imported table or view keeps a snapshot of its columns; the table is
+        the asset on the same platform located at the column's location minus
+        the column name.
+        """
+        if getattr(column.asset_type, 'name', None) != 'Column' or not column.location:
+            return
+        table_location, _, column_name = column.location.rpartition('.')
+        if not table_location or not column_name:
+            return
+        tables = db.query(AssetDb).filter(
+            AssetDb.location == table_location, AssetDb.platform == column.platform,
+            AssetDb.id != column.id,
+        ).all()
+        for table in tables:
+            schema = (table.properties or {}).get('schema')
+            columns = schema.get('columns') if isinstance(schema, dict) else None
+            if not isinstance(columns, list):
+                continue
+            changed = False
+            new_columns = []
+            for entry in columns:
+                if isinstance(entry, dict) and entry.get('name') == column_name \
+                        and entry.get('description') != column.description:
+                    entry = {**entry, 'description': column.description}
+                    changed = True
+                new_columns.append(entry)
+            if changed:
+                # New dicts, so the JSON column is seen as changed
+                new_schema = {**schema, 'columns': new_columns}
+                table.properties = {**table.properties, 'schema': new_schema}
+        db.flush()
 
     def retype_asset(
         self, db: Session, *, asset_id: UUID, from_type: str, to_type: str,

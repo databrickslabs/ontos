@@ -1,6 +1,7 @@
 from io import BytesIO
 from typing import Annotated, List, Optional
 
+from src.common.api_errors import CodedValueError
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Request, Query
 from fastapi.responses import StreamingResponse
 from fastapi import Response
@@ -319,6 +320,9 @@ async def upload_document(
         return result
     except HTTPException:
         raise
+    except CodedValueError as e:
+        # e.g. volume_invalid: the UI shows it translated from the code and params
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed uploading document for %s/%s", entity_type, entity_id)
         raise HTTPException(status_code=500, detail="Failed to upload document")
@@ -519,6 +523,8 @@ async def upload_shared_document(
         return result
     except HTTPException:
         raise
+    except CodedValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed uploading shared document")
         raise HTTPException(status_code=500, detail="Failed to upload shared document")

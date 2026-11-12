@@ -106,7 +106,8 @@
     },
     "messages": {
       "deleteFailed": "Error al eliminar",
-      "uploadFailed": "Error al subir"
+      "uploadFailed": "Error al subir",
+      "volume_invalid": "«{{value}}» no indica un volumen de Unity Catalog. Usa /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> o el nombre de un volumen; un nombre simple necesita un catálogo y un esquema sin puntos, barras ni espacios. Pide a un administrador que lo corrija en Configuración > General."
     }
   },
   "sharedAssets": {

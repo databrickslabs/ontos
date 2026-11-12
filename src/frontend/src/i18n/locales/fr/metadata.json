@@ -106,7 +106,8 @@
     },
     "messages": {
       "deleteFailed": "Échec de la suppression",
-      "uploadFailed": "Échec du téléchargement"
+      "uploadFailed": "Échec du téléchargement",
+      "volume_invalid": "« {{value}} » ne désigne pas un volume Unity Catalog. Utilisez /Volumes/<catalog>/<schema>/<volume>, <catalog>.<schema>.<volume> ou un nom de volume ; un nom simple nécessite un catalogue et un schéma sans point, barre oblique ni espace. Demandez à un administrateur de le corriger dans Paramètres > Général."
     }
   },
   "sharedAssets": {

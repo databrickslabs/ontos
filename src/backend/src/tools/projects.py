@@ -121,7 +121,11 @@ class GetProjectTool(BaseTool):
     ) -> ToolResult:
         """Get a project by ID."""
         logger.info(f"[get_project] Starting - project_id={project_id}")
-        
+        # Read-only on projects and the project list's visibility, as search_projects.
+        if not read_access.visible_project_ids(ctx, [project_id]):
+            not_found = ToolResult(success=False, error=f"Project '{project_id}' not found")
+            return read_access.denied(ctx, self.name, not_found, [str(project_id)])
+
         try:
             from src.controller.projects_manager import projects_manager
             

@@ -7,6 +7,11 @@
 - ``global_search``: ``/api/search`` drops the ``project`` rows the list hides
   (``SearchManager._apply_project_visibility``).
 
+The get tools and the domain and tag read tools need the Read-only level of
+their REST GET routes (``teams``, ``projects``, ``data-domains``, ``tags``);
+``get_project`` also applies the project list's visibility. Without it, the
+answer is the tool's empty or "not found" one, as for a missing item.
+
 The admin sees everything on both paths, so the cases are for non-admins.
 """
 import asyncio
@@ -24,6 +29,7 @@ from src.db_models.domain_associations import EntityDomainAssociationDb
 from src.db_models.projects import ProjectDb
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.tools.base import ToolCaller, ToolContext
+from src.tools.read_access import NOT_READABLE
 from src.tools.caller import mcp_api_key_caller
 from src.tools.registry import create_default_registry
 
@@ -38,6 +44,9 @@ ADMIN = ToolCaller(email='ann@example.com', auth_path='test', permissions=LEVELS
                    project_ids=None)
 # No level on either feature (e.g. no role).
 NO_LEVEL = ToolCaller(email='tom@example.com', auth_path='test')
+# Read-only on domains and tags too.
+READER = ToolCaller(email='carl@example.com', auth_path='test',
+                    permissions={**LEVELS, 'data-domains': RO, 'tags': RO})
 
 
 def _run(coro):
@@ -79,7 +88,22 @@ def world(db_session):
         for p in (private, public)
     ] + [SearchIndexItem(id=f'team::{team.id}', type='team', feature_id='teams',
                          title=team.name, description='customer team', link='/x', tags=[])]
+    from src.controller.tags_manager import TagsManager
+    from src.models.tags import TagCreate
+
+    tags = TagsManager()
+    tag = tags.create_tag(db_session, tag_in=TagCreate(name=f't{uuid.uuid4().hex[:6]}'),
+                          user_email='x')
+    tags.add_tag_to_entity(db_session, entity_id=team.id, entity_type='team', tag_id=tag.id,
+                           assigned_value=None, user_email='x')
+    items += [
+        SearchIndexItem(id=f'domain::{domain.id}', type='data-domain', feature_id='data-domains',
+                        title=domain.name, description='customer domain', link='/x', tags=[]),
+        SearchIndexItem(id=f'tag::{tag.id}', type='tag', feature_id='tags', title=tag.name,
+                        description='customer tag', link='/x', tags=[], extra_data={}),
+    ]
     return SimpleNamespace(db=db_session, team=team, private=private, public=public,
+                           domain=domain, tag=tag,
                            search=SearchManager(searchable_managers=[_Index(items)]))
 
 
@@ -89,6 +113,17 @@ def _call(world, caller, tool, **args):
     res = _run(create_default_registry().execute(tool, ctx, {'query': '*', **args}))
     assert res.success is True, res.error
     return res.data
+
+
+def _exec(world, caller, tool, **args):
+    ctx = ToolContext(db=world.db, settings=MagicMock(), caller=caller,
+                      search_manager=world.search)
+    return _run(create_default_registry().execute(tool, ctx, args))
+
+
+def _assert_not_found(res):
+    assert res.success is False and 'not found' in res.error, res.error
+    assert res.denied_reason == NOT_READABLE
 
 
 def _ids(rows):
@@ -166,6 +201,66 @@ class TestGlobalSearch:
         mcp = self._projects(_call(world, OUTSIDER, 'global_search', query='customer',
                                    limit=100))
         assert rest == mcp == {world.public.id}
+
+
+class TestGetTeam:
+    def test_without_the_level_it_is_not_found(self, world):
+        _assert_not_found(_exec(world, NO_LEVEL, 'get_team', team_id=world.team.id))
+        _assert_not_found(_exec(world, None, 'get_team', team_id=world.team.id))
+
+    def test_with_the_level_it_is_returned(self, world):
+        res = _exec(world, OUTSIDER, 'get_team', team_id=world.team.id)
+        assert res.success is True and res.data['id'] == world.team.id
+
+
+class TestGetProject:
+    def test_a_non_member_does_not_get_a_project_the_list_hides(self, world):
+        _assert_not_found(_exec(world, OUTSIDER, 'get_project', project_id=world.private.id))
+        res = _exec(world, OUTSIDER, 'get_project', project_id=world.public.id)
+        assert res.success is True and res.data['id'] == world.public.id
+
+    def test_a_member_and_an_admin_get_it(self, world):
+        for caller in (MEMBER, ADMIN):
+            res = _exec(world, caller, 'get_project', project_id=world.private.id)
+            assert res.success is True and res.data['id'] == world.private.id
+
+    def test_without_the_level_it_is_not_found(self, world):
+        _assert_not_found(_exec(world, NO_LEVEL, 'get_project', project_id=world.public.id))
+
+
+class TestDomainTools:
+    def test_without_the_level_nothing_is_returned(self, world):
+        res = _exec(world, OUTSIDER, 'search_domains', query='*')
+        assert res.success is True and res.data['domains'] == []
+        assert res.data['total_found'] == 0
+        _assert_not_found(_exec(world, OUTSIDER, 'get_domain', domain_id=world.domain.id))
+
+    def test_with_the_level_the_domain_is_returned(self, world):
+        res = _exec(world, READER, 'search_domains', query='*')
+        assert _ids(res.data['domains']) == {world.domain.id}
+        res = _exec(world, READER, 'get_domain', domain_id=world.domain.id)
+        assert res.success is True and res.data['id'] == world.domain.id
+
+
+class TestTagTools:
+    def test_without_the_level_nothing_is_returned(self, world):
+        res = _exec(world, OUTSIDER, 'search_tags', query='*')
+        assert res.success is True and res.data['tags'] == []
+        assert res.data['total_found'] == 0
+        _assert_not_found(_exec(world, OUTSIDER, 'get_tag', tag_id=str(world.tag.id)))
+        res = _exec(world, OUTSIDER, 'list_entity_tags', entity_type='team',
+                    entity_id=world.team.id)
+        assert res.success is True and res.data['tags'] == []
+        assert res.denied_reason == NOT_READABLE
+
+    def test_with_the_level_the_tag_is_returned(self, world):
+        res = _exec(world, READER, 'search_tags', query='*')
+        assert _ids(res.data['tags']) == {str(world.tag.id)}
+        res = _exec(world, READER, 'get_tag', tag_id=str(world.tag.id))
+        assert res.success is True and res.data['id'] == str(world.tag.id)
+        res = _exec(world, READER, 'list_entity_tags', entity_type='team',
+                    entity_id=world.team.id)
+        assert res.data['total_count'] == 1
 
 
 class _NoClose:

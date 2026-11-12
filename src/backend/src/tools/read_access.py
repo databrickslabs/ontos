@@ -194,6 +194,8 @@ def allowed_ids_by_type(ctx: ToolContext, type_filter: Optional[str] = None) -> 
 
 TEAMS_FEATURE = "teams"
 PROJECTS_FEATURE = "projects"
+DOMAINS_FEATURE = "data-domains"
+TAGS_FEATURE = "tags"
 PROJECT_TYPE = "project"
 PROJECT_ITEM_PREFIX = "project::"
 
@@ -201,6 +203,16 @@ PROJECT_ITEM_PREFIX = "project::"
 def has_feature_read_level(ctx: ToolContext, feature_id: str) -> bool:
     """Whether the caller has Read-only on ``feature_id``, as the REST GETs require."""
     return _caller(ctx).has_level(feature_id, FeatureAccessLevel.READ_ONLY)
+
+
+def without_read_level(
+    ctx: ToolContext, tool_name: str, feature_id: str, result: ToolResult, item_id: Any
+) -> Optional[ToolResult]:
+    """For a get tool: ``result`` (its own "not found" answer) when the caller lacks
+    Read-only on ``feature_id`` (the REST GET answers 403), else None."""
+    if has_feature_read_level(ctx, feature_id):
+        return None
+    return denied(ctx, tool_name, result, [str(item_id)])
 
 
 def _sees_every_project(ctx: ToolContext) -> bool:

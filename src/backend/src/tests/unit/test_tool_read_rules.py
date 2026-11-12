@@ -6,6 +6,7 @@ team, a feature admin, a context without a caller, and the MCP API-key policy
 search drops it before pagination, counts and facets.
 """
 import asyncio
+import dataclasses
 import uuid
 from datetime import date
 from pathlib import Path
@@ -235,9 +236,15 @@ class TestByPersona:
         for row in world.c.values():
             tags.add_tag_to_entity(world.db, entity_id=row.id, entity_type='data_contract',
                                    tag_id=tag.id, assigned_value=None, user_email='x')
+        # GET /api/entities/{type}/{id}/tags needs Read-only on tags too.
+        caller = PERSONAS[persona]
+        if caller is not None:
+            caller = dataclasses.replace(
+                caller, permissions={**caller.permissions, 'tags': FeatureAccessLevel.READ_ONLY})
         for key, row in world.c.items():
-            res = _call(world, persona, 'list_entity_tags',
-                        entity_type='data_contract', entity_id=row.id)
+            res = _run(create_default_registry().execute(
+                'list_entity_tags', _ctx(world, caller),
+                {'entity_type': 'data_contract', 'entity_id': row.id}))
             assert res.data['total_count'] == (1 if key in READABLE[persona] else 0), key
 
     def test_costs(self, world, persona):

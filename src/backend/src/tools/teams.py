@@ -136,7 +136,13 @@ class GetTeamTool(BaseTool):
     ) -> ToolResult:
         """Get a team by ID."""
         logger.info(f"[get_team] Starting - team_id={team_id}")
-        
+        not_found = ToolResult(success=False, error=f"Team '{team_id}' not found")
+        hidden = read_access.without_read_level(
+            ctx, self.name, read_access.TEAMS_FEATURE, not_found, team_id
+        )
+        if hidden:
+            return hidden
+
         try:
             from src.controller.teams_manager import teams_manager
             

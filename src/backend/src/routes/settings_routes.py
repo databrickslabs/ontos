@@ -95,6 +95,9 @@ async def update_settings(
             details['allow_job_enablement_requests'] = settings_payload.get('allow_job_enablement_requests')
         if 'schema_import_child_limit' in settings_payload:
             details['schema_import_child_limit'] = settings_payload.get('schema_import_child_limit')
+        if 'uc_description_writeback_enabled' in settings_payload:
+            details['uc_description_writeback_enabled'] = settings_payload.get(
+                'uc_description_writeback_enabled')
         # The Git token itself never goes to the audit log, only what happened to it.
         if settings_payload.get('git_password'):
             details['git_password'] = 'set'

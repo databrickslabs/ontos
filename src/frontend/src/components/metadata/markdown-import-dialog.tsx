@@ -143,7 +143,7 @@ const MarkdownImportDialog: React.FC<Props> = ({ open, onOpenChange, onImported 
           <div className="space-y-3" data-testid="markdown-import-result">
             <div className="flex flex-wrap gap-2">
               {STATUSES.map(status => (
-                <Badge key={status} variant={STATUS_VARIANT[status]}>
+                <Badge key={status} variant={result[status] ? STATUS_VARIANT[status] : 'outline'}>
                   {t(`markdownImport.summary.${status}`, { count: result[status] })}
                 </Badge>
               ))}

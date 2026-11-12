@@ -46,7 +46,8 @@
       "title": "Tabellen onder het eerste niveau",
       "description": "Uw tabellen en views waarvan de laatste volwassenheidsbeoordeling geen niveau bereikte.",
       "empty": "Geen van uw beoordeelde tabellen zit onder het eerste niveau.",
-      "more": "{{shown}} van {{total}} getoond."
+      "more": "{{shown}} van {{total}} getoond.",
+      "error": "Je tabellen onder het eerste niveau konden niet worden geladen."
     },
     "maintain": {
       "title": "Onderhouden",

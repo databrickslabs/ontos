@@ -46,7 +46,8 @@
       "title": "Tabelas abaixo do primeiro nível",
       "description": "Suas tabelas e views cuja última avaliação de maturidade não alcançou nenhum nível.",
       "empty": "Nenhuma das suas tabelas avaliadas está abaixo do primeiro nível.",
-      "more": "Mostrando {{shown}} de {{total}}."
+      "more": "Mostrando {{shown}} de {{total}}.",
+      "error": "Não foi possível carregar suas tabelas abaixo do primeiro nível."
     },
     "maintain": {
       "title": "Manter",

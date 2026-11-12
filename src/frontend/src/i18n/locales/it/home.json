@@ -46,7 +46,8 @@
       "title": "Tabelle sotto il primo livello",
       "description": "Le tue tabelle e viste la cui ultima valutazione di maturità non ha raggiunto alcun livello.",
       "empty": "Nessuna delle tue tabelle valutate è sotto il primo livello.",
-      "more": "Visualizzate {{shown}} di {{total}}."
+      "more": "Visualizzate {{shown}} di {{total}}.",
+      "error": "Impossibile caricare le tue tabelle sotto il primo livello."
     },
     "maintain": {
       "title": "Mantenere",

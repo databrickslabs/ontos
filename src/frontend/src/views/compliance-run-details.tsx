@@ -22,6 +22,7 @@ import {
   complianceActionLabel,
   complianceActionOutcomes,
 } from '@/lib/compliance-action-outcome';
+import { llmCheckText, parseLlmChecks } from '@/lib/compliance-llm-checks';
 
 interface Run {
   id: string; // UUID
@@ -75,9 +76,30 @@ export default function ComplianceRunDetails() {
         {row.original.passed ? t('compliance:results.passed') : t('compliance:results.failed')}
       </Badge>
     ) },
-    { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground break-words">{row.original.message || t('compliance:results.empty')}</span>
-    ) },
+    { accessorKey: 'message', header: t('common:labels.message'), cell: ({ row }) => {
+      // The LLM_CHECKs that failed, with the model's reason or the translated code
+      const failedChecks = row.original.passed
+        ? []
+        : parseLlmChecks(row.original.details_json).filter((c) => !c.passed);
+      return (
+        <div className="space-y-1">
+          <span className="text-sm text-muted-foreground break-words">
+            {row.original.message || t('compliance:results.empty')}
+          </span>
+          {failedChecks.length > 0 && (
+            <ul className="text-xs text-muted-foreground" data-testid="llm-check-reasons">
+              {failedChecks.map((check, i) => (
+                <li key={i}>
+                  {t('compliance:llmCheck.failedReason', {
+                    criterion: check.criterion, reason: llmCheckText(t, check),
+                  })}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    } },
     { id: 'actions', header: t('compliance:results.actions'), cell: ({ row }) => {
       const outcomes = complianceActionOutcomes(row.original.details_json);
       if (outcomes.length === 0) {

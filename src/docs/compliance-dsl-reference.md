@@ -164,10 +164,11 @@ The reason of a failed check is shown next to the result. Before saving, use
 
 - Only evaluated in compliance runs, in `ASSERT`. In `WHERE`, in maturity gates
   and in workflow policy checks the check fails (`llm_check_not_available`).
-- Fails closed: with LLM features off (`llm_check_disabled`), no endpoint
-  (`llm_check_no_endpoint`), a refusal, an empty or unfinished reply, or a reply
-  whose first line is not `PASS: <reason>` or `FAIL: <reason>`, the rule fails
-  for that entity, also under `NOT`. An empty text fails without a call.
+- Fails closed: with an empty text (no call), LLM features off
+  (`llm_check_disabled`), no endpoint (`llm_check_no_endpoint`), a refusal, an
+  empty or unfinished reply, or a reply whose first line is not `PASS: <reason>`
+  or `FAIL: <reason>`, the rule fails for that entity, also under `NOT`, and its
+  `ON_PASS` / `ON_FAIL` actions don't run for it. Each call times out after 60 s.
 - Cached: a verdict is stored per text, criterion and endpoint, so a run over
   unchanged text makes no call.
 - Budget: a run makes at most `COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN` calls

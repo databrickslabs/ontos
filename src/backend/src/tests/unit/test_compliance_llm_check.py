@@ -121,12 +121,19 @@ def test_reasoning_blocks_are_not_read_as_the_verdict():
     assert result is False
 
 
-def test_empty_text_fails_without_a_call():
+@pytest.mark.parametrize('rule', [
+    f"ASSERT LLM_CHECK(t.comment, '{GRAIN}')",
+    f"ASSERT NOT LLM_CHECK(t.comment, '{GRAIN}')",
+])
+@pytest.mark.parametrize('comment', ['  ', None])
+def test_empty_text_fails_without_a_call_also_under_not(rule, comment):
     fake = FakeLlm(_reply('PASS: ok'))
+    evaluator = Evaluator({'comment': comment}, llm_checker=_checker(fake))
 
-    evaluator, result = _assert({'comment': '  '}, _checker(fake))
+    with pytest.raises(llm.LlmCheckError) as raised:
+        evaluator.evaluate(parse_rule(rule)['assert_clause'])
 
-    assert result is False
+    assert raised.value.code == llm.EMPTY_TEXT
     assert evaluator.llm_checks[0].code == llm.EMPTY_TEXT
     assert fake.calls == []
 
@@ -206,6 +213,18 @@ def test_budget_exceeded_fails_the_remaining_checks():
     assert (checker.calls, checker.budget_exceeded) == (2, 2)
     # A cached verdict is still answered
     assert checker.check('text 1', GRAIN).cached is True
+
+
+def test_calls_have_a_short_timeout(monkeypatch):
+    fake = FakeLlm(_reply('PASS: ok'))
+    monkeypatch.setattr('src.common.llm_client.create_openai_client', lambda settings: fake)
+
+    llm.LlmChecker(_settings()).check('One row per order.', GRAIN)
+
+    assert fake.options == {
+        'timeout': llm.LLM_CHECK_TIMEOUT_SECONDS, 'max_retries': llm.LLM_CHECK_MAX_RETRIES,
+    }
+    assert len(fake.calls) == 1
 
 
 def test_default_budget_comes_from_the_settings():

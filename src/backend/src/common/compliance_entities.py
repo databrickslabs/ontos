@@ -569,9 +569,19 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
         ``code`` and ``params`` (for the UI to translate) and an English
         ``message``.
     """
-    from src.common.compliance_dsl import parse_rule
+    from src.common.compliance_dsl import (
+        LlmCheckCriterionError, llm_check_criterion, parse_rule,
+    )
 
     parsed = parse_rule(rule, strict=True)
+    for call in _function_calls(parsed.get('where_clause'), 'LLM_CHECK') + _function_calls(
+        parsed.get('assert_clause'), 'LLM_CHECK'
+    ):
+        if llm_check_criterion(call) is None:
+            raise LlmCheckCriterionError(
+                "LLM_CHECK takes a text and a criterion written as a string literal, "
+                "for example LLM_CHECK(t.comment, 'states the grain of the table')"
+            )
     warnings: List[Dict[str, Any]] = []
     entity_filter = parse_entity_filter(rule, parsed=parsed)
     known = UnityCatalogLoader.SUPPORTED_TYPES + AppEntityLoader.SUPPORTED_TYPES
@@ -592,7 +602,7 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
             'params': {},
             'message': "The rule has no ASSERT clause, so every entity passes.",
         })
-    if _calls(parsed.get('where_clause'), 'LLM_CHECK'):
+    if _function_calls(parsed.get('where_clause'), 'LLM_CHECK'):
         warnings.append({
             'code': 'llm_check_in_where',
             'params': {},
@@ -602,17 +612,18 @@ def validate_rule(rule: str) -> List[Dict[str, Any]]:
     return warnings
 
 
-def _calls(node: Any, name: str) -> bool:
-    """Whether a rule expression (AST node) calls the DSL function ``name``."""
+def _function_calls(node: Any, name: str) -> list:
+    """The calls of the DSL function ``name`` in a rule expression (AST node)."""
     from src.common.compliance_dsl import FunctionCall
 
     if node is None:
-        return False
-    if isinstance(node, FunctionCall) and node.name == name:
-        return True
+        return []
     if isinstance(node, (list, tuple)):
-        return any(_calls(n, name) for n in node)
-    if hasattr(node, '__dataclass_fields__'):
-        return any(_calls(getattr(node, f), name) for f in node.__dataclass_fields__)
-    return False
+        return [c for n in node for c in _function_calls(n, name)]
+    if not hasattr(node, '__dataclass_fields__'):
+        return []
+    found = [node] if isinstance(node, FunctionCall) and node.name == name else []
+    return found + [
+        c for f in node.__dataclass_fields__ for c in _function_calls(getattr(node, f), name)
+    ]
 

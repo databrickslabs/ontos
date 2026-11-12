@@ -558,6 +558,22 @@ class Parser:
         return self.parse_or_expression()
 
 
+def llm_check_criterion(node: 'FunctionCall') -> Optional[str]:
+    """The criterion of an LLM_CHECK call: its 2nd argument if a non-empty string literal."""
+    if len(node.args) != 2:
+        return None
+    arg = node.args[1]
+    if isinstance(arg, Literal) and isinstance(arg.value, str) and arg.value.strip():
+        return arg.value.strip()
+    return None
+
+
+class LlmCheckCriterionError(CodedValueError):
+    """An LLM_CHECK whose criterion isn't a string literal (rejected on save)."""
+
+    code = 'llm_check_criterion_not_literal'
+
+
 class Evaluator:
     """Evaluate AST against an object.
 
@@ -651,11 +667,12 @@ class Evaluator:
 
         if len(node.args) != 2:
             raise self.error("LLM_CHECK expects 2 arguments: a text and a criterion")
+        criterion = llm_check_criterion(node)
+        if criterion is None:
+            # Only the rule author writes the criterion: it goes in the system
+            # prompt, so it can't come from entity data (an expression)
+            raise self.error("LLM_CHECK expects the criterion as a non-empty string literal")
         text = self.evaluate(node.args[0])
-        criterion = self.evaluate(node.args[1])
-        if not isinstance(criterion, str) or not criterion.strip():
-            raise self.error("LLM_CHECK expects the criterion as a non-empty string")
-        criterion = criterion.strip()
         try:
             if self.llm_checker is None:
                 raise LlmCheckError(LlmCheckResult(criterion, False, code=NOT_AVAILABLE))

@@ -27,14 +27,14 @@ def _domain(i, description):
     return {'type': 'domain', 'id': f'd{i}', 'name': f'domain_{i}', 'description': description}
 
 
-def _run(db, policy, entities, fake, settings=None):
+def _run(db, policy, entities, fake, settings=None, llm_checker=None):
     iterator = MagicMock()
     iterator.iterate.side_effect = lambda *a, **k: iter(entities)
     with patch('src.controller.compliance_manager.create_entity_iterator', return_value=iterator), \
             patch('src.common.workspace_client.get_workspace_client', return_value=MagicMock()), \
             patch('src.common.config.get_settings', return_value=settings or _settings()), \
             patch('src.common.llm_client.create_openai_client', return_value=fake):
-        return ComplianceManager().run_policy_inline(db, policy=policy)
+        return ComplianceManager().run_policy_inline(db, policy=policy, llm_checker=llm_checker)
 
 
 def _results(db, run):
@@ -143,14 +143,14 @@ def test_budget_exceeded_is_counted_in_the_run(db_session):
 
     run = _run(
         db_session, policy, entities, fake,
-        settings=_settings(COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN=2),
+        settings=_settings(COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN=4),
     )
 
     assert len(fake.calls) == 2
     # NOT does not turn a check that was not run into a pass
     assert (run.success_count, run.failure_count) == (2, 3)
     assert run.warning_code == 'llm_check_budget_exceeded'
-    assert json.loads(run.warning_params) == {'count': 3, 'budget': 2}
+    assert json.loads(run.warning_params) == {'count': 3, 'budget': 4}
     codes = [
         json.loads(r.details_json)['llm_checks'][0]['code']
         for r in _results(db_session, run).values() if not r.passed
@@ -167,3 +167,25 @@ def test_rules_without_llm_check_make_no_call_and_no_details(db_session):
     assert fake.calls == []
     assert run.warning_code is None
     assert all(r.details_json is None for r in _results(db_session, run).values())
+
+
+def test_a_job_run_shares_one_budget_across_its_policies(db_session):
+    from src.common.compliance_llm_check import DbLlmCheckCache, LlmChecker
+
+    fake = _grain_llm()
+    checker = LlmChecker(
+        _settings(COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN=6),  # 3 checks
+        cache=DbLlmCheckCache(db_session), client_factory=lambda: fake,
+    )
+    first, second = _policy(db_session), _policy(db_session)
+
+    run_1 = _run(db_session, first, [_domain(1, 'a per b'), _domain(2, 'c')], fake,
+                 llm_checker=checker)
+    run_2 = _run(db_session, second, [_domain(3, 'd per e'), _domain(4, 'f')], fake,
+                 llm_checker=checker)
+
+    assert len(fake.calls) == 3
+    assert run_1.warning_code is None
+    # The second policy gets the one check left; the run counts only its own overrun
+    assert run_2.warning_code == 'llm_check_budget_exceeded'
+    assert json.loads(run_2.warning_params) == {'count': 1, 'budget': 6}

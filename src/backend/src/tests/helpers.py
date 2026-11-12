@@ -344,17 +344,21 @@ def llm_reply(content, finish_reason='stop', refusal=None):
 class FakeLlm:
     """An OpenAI-like client for LLM tests.
 
-    ``chat.completions.create`` records its arguments in ``calls`` and answers
-    with the given replies in turn (the last one repeats), or with
-    ``answer(kwargs)`` when given. An exception reply is raised.
+    ``chat.completions.create`` answers the LLM_CHECK injection scan (a call
+    without the text markers of the verdict prompt) with ``scan`` (default
+    ``SAFE``) and records it in ``scans``. Other calls are recorded in
+    ``calls`` and answered with the given replies in turn (the last one
+    repeats), or with ``answer(kwargs)`` when given. An exception is raised.
     """
 
-    def __init__(self, *replies, answer=None):
+    def __init__(self, *replies, answer=None, scan=None):
         from types import SimpleNamespace
 
         self.replies = list(replies)
         self.answer = answer
+        self.scan = scan if scan is not None else llm_reply('SAFE')
         self.calls: List[Dict[str, Any]] = []
+        self.scans: List[Dict[str, Any]] = []
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def with_options(self, **options):
@@ -362,11 +366,18 @@ class FakeLlm:
         self.options = options
         return self
 
+    @staticmethod
+    def _raise_or_return(reply):
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
     def _create(self, **kwargs):
+        if '<<<TEXT ' not in kwargs['messages'][-1]['content']:
+            self.scans.append(kwargs)
+            return self._raise_or_return(self.scan)
         self.calls.append(kwargs)
         if self.answer is not None:
             return self.answer(kwargs)
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
-        if isinstance(reply, Exception):
-            raise reply
-        return reply
+        return self._raise_or_return(reply)

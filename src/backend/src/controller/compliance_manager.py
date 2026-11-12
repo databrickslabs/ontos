@@ -719,8 +719,15 @@ class ComplianceManager:
         return objs
 
     @staticmethod
-    def _llm_checker(db: Session, max_calls: Optional[int] = None) -> LlmChecker:
-        """The LLM_CHECK runner of one run: the configured endpoint and budget, the DB cache."""
+    def llm_checker(
+        db: Session, max_calls: Optional[int] = None, *, purge_expired: bool = False,
+    ) -> LlmChecker:
+        """The LLM_CHECK runner of a run: the configured endpoint and budget, the DB cache.
+
+        ``purge_expired`` deletes the cached verdicts past their max age first
+        (when a run starts). A Compliance Checks job run makes one and passes it
+        to every policy run, so the budget covers the whole job run.
+        """
         from src.common.config import get_settings
 
         try:
@@ -728,7 +735,15 @@ class ComplianceManager:
         except RuntimeError:
             # Not initialized: LLM_CHECK then fails closed (llm_check_disabled)
             settings = None
-        return LlmChecker(settings, cache=DbLlmCheckCache(db), max_calls=max_calls)
+        cache = DbLlmCheckCache(
+            db, max_age_days=getattr(settings, 'COMPLIANCE_LLM_CHECK_CACHE_MAX_AGE_DAYS', 30),
+        )
+        if purge_expired:
+            try:
+                cache.purge_expired()
+            except Exception as e:
+                logger.warning("Could not delete expired LLM_CHECK verdicts: %s", e)
+        return LlmChecker(settings, cache=cache, max_calls=max_calls)
 
     def test_rule_on_sample(
         self, db: Session, *, rule: str, entity: Optional[str] = None,
@@ -766,7 +781,7 @@ class ComplianceManager:
                 f"No entity the rule matches was found{named}", entity=wanted,
             )
 
-        evaluator = Evaluator(sample, llm_checker=self._llm_checker(db, max_calls=TEST_MAX_CALLS))
+        evaluator = Evaluator(sample, llm_checker=self.llm_checker(db, max_calls=TEST_MAX_CALLS))
         passed, error_code = True, None
         if parsed.get('assert_clause') is not None:
             try:
@@ -843,6 +858,7 @@ class ComplianceManager:
         policy: CompliancePolicyDb, 
         limit: Optional[int] = None,
         current_user: Optional[str] = None,
+        llm_checker: Optional[LlmChecker] = None,
     ) -> ComplianceRunDb:
         """Run a compliance policy with enhanced DSL support.
 
@@ -858,8 +874,11 @@ class ComplianceManager:
         notifier = ComplianceRunNotifier(
             db, policy_id=policy.id, policy_name=policy.name, run_id=run.id, run_user=current_user,
         )
-        # LLM_CHECK calls of this run: one budget, verdicts cached across runs
-        llm_checker = self._llm_checker(db)
+        # LLM_CHECK calls: one budget for this run (or the job run that passes
+        # its checker), verdicts cached across runs
+        if llm_checker is None:
+            llm_checker = self.llm_checker(db, purge_expired=True)
+        budget_exceeded_before = llm_checker.budget_exceeded
 
         try:
             # Parse the rule using enhanced DSL
@@ -960,9 +979,10 @@ class ComplianceManager:
             warning_code, warning_params = None, None
             if trailing:
                 warning_code, warning_params = 'rule_trailing_input', trailing
-            elif llm_checker.budget_exceeded:
+            elif llm_checker.budget_exceeded > budget_exceeded_before:
                 warning_code, warning_params = BUDGET_EXCEEDED, {
-                    'count': llm_checker.budget_exceeded, 'budget': llm_checker.max_calls,
+                    'count': llm_checker.budget_exceeded - budget_exceeded_before,
+                    'budget': llm_checker.max_calls,
                 }
             elif not notified:
                 warning_code, warning_params = 'notifications_failed', {}

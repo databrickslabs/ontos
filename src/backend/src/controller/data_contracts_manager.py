@@ -2326,8 +2326,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not tag_creates:
             logger.warning("No readable tag in the create payload of contract %s", contract_id)
             return
-        from src.models.tags import DEFAULT_NAMESPACE_NAME, TagNamespaceCreate
+        from src.models.tags import DEFAULT_NAMESPACE_NAME, TAG_NAMESPACE_SEPARATOR, TagNamespaceCreate
         from src.repositories.tags_repository import tag_namespace_repo
+
+        # A name in a namespace that doesn't exist can't be created and would fail
+        # the whole set, so skip just that entry.
+        known_namespaces: dict = {DEFAULT_NAMESPACE_NAME: True}  # created below if missing
+        resolvable = []
+        for tag in tag_creates:
+            if not tag.tag_id and tag.tag_fqn and TAG_NAMESPACE_SEPARATOR in tag.tag_fqn:
+                namespace = tag.tag_fqn.split(TAG_NAMESPACE_SEPARATOR, 1)[0]
+                if namespace not in known_namespaces:
+                    known_namespaces[namespace] = tag_namespace_repo.get_by_name(db, name=namespace) is not None
+                if not known_namespaces[namespace]:
+                    logger.warning("Skipping tag %r of new contract %s: namespace %r doesn't exist",
+                                   tag.tag_fqn, contract_id, namespace)
+                    continue
+            resolvable.append(tag)
+        if not resolvable:
+            return
+        tag_creates = resolvable
 
         try:
             with db.begin_nested():

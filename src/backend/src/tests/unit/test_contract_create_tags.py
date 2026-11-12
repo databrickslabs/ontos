@@ -17,6 +17,7 @@ from src.controller.tags_manager import TagsManager
 from src.db_models.data_contracts import DataContractDb, DataContractTagDb
 from src.db_models.tags import EntityTagAssociationDb, TagDb
 from src.models.data_contracts_api import DataContractCreate
+from src.models.tags import DEFAULT_NAMESPACE_NAME
 from src.repositories.tags_repository import tag_namespace_repo
 
 
@@ -93,6 +94,32 @@ class TestCreateWithRelations:
             db=db_session, contract_data={"name": _name(), "tags": [name]}, current_user="alice@example.com",
         )
 
+        assert _assigned(db_session, created.id) == {name: None}
+
+    def test_a_tag_in_an_unknown_namespace_is_skipped_alone(self, db_session: Session, tags):
+        classification, region = tags
+
+        created = _manager().create_contract_with_relations(
+            db=db_session,
+            contract_data={
+                "name": _name(),
+                "tags": [_fqn(classification), f"nowhere_{uuid.uuid4().hex[:6]}/x", _fqn(region)],
+            },
+            current_user="alice@example.com",
+        )
+
+        assert set(_assigned(db_session, created.id)) == {classification.name, region.name}
+
+    def test_a_missing_default_namespace_is_created_in_the_create(self, db_session: Session):
+        assert tag_namespace_repo.get_by_name(db_session, name=DEFAULT_NAMESPACE_NAME) is None
+        name = f"brand_new_{uuid.uuid4().hex[:6]}"
+
+        created = _manager().create_contract_with_relations(
+            db=db_session, contract_data={"name": _name(), "tags": [name]}, current_user="alice@example.com",
+        )
+
+        assert db_session.get(DataContractDb, created.id) is not None
+        assert tag_namespace_repo.get_by_name(db_session, name=DEFAULT_NAMESPACE_NAME) is not None
         assert _assigned(db_session, created.id) == {name: None}
 
     def test_an_unknown_tag_id_is_skipped(self, db_session: Session, tags):

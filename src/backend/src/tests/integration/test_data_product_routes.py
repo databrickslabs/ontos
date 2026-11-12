@@ -210,6 +210,59 @@ class TestDataProductRoutes:
         # Verify audit log
         verify_audit_log("data-products", "UPDATE", success=True)
 
+    @staticmethod
+    def _active_product_with_ports(client, sample_product_data, names):
+        sample_product_data["status"] = "active"
+        sample_product_data["outputPorts"] = [
+            {"name": n, "version": "1.0.0", "contractId": f"contract-{n}"} for n in names
+        ]
+        response = client.post("/api/data-products", json=sample_product_data)
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    def test_update_active_product_removing_output_port_requires_new_version(
+        self, client, sample_product_data
+    ):
+        """Removing an output port is a breaking change: the edit needs a new version."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a", "b"])
+        kept = sample_product_data["outputPorts"][:1]
+        update = {**sample_product_data, "id": product_id, "outputPorts": kept}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["requires_versioning"] is True
+        assert any("b" in c for c in detail["change_analysis"]["breaking_changes"])
+
+    def test_update_active_product_adding_output_port_is_not_breaking(
+        self, client, sample_product_data
+    ):
+        """Adding an output port is not breaking: the edit applies in place."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a"])
+        ports = sample_product_data["outputPorts"] + [
+            {"name": "b", "version": "1.0.0", "contractId": "contract-b"}
+        ]
+        update = {**sample_product_data, "id": product_id, "outputPorts": ports}
+
+        response = client.put(f"/api/data-products/{product_id}", json=update)
+
+        assert response.status_code == 200, response.text
+        assert len(response.json()["outputPorts"]) == 2
+
+    def test_update_active_product_without_ports_in_body_keeps_ports(
+        self, client, sample_product_data
+    ):
+        """A partial update that omits ports is not read as removing them."""
+        product_id = self._active_product_with_ports(client, sample_product_data, ["a"])
+
+        body = {k: v for k, v in sample_product_data.items() if k != "outputPorts"}
+        body.update(id=product_id, name="Renamed")
+
+        response = client.put(f"/api/data-products/{product_id}", json=body)
+
+        assert response.status_code == 200, response.text
+
     def test_update_product_get_body_roundtrip_ignores_publication_fields(
         self, client, sample_product_data
     ):

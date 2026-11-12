@@ -161,15 +161,33 @@ def test_other_errors_still_fail_the_object(tag_sync):
     assert any("TABLE main.a.three SET" in s for s in spark.sets())
 
 
-def test_unlinked_object_that_was_dropped_is_skipped_and_forgotten(tag_sync):
+def _previous(fqn):
+    return {"TABLE": {fqn: {KEY: PII}}, "COLUMN": {}, "SCHEMA": {}, "CATALOG": {}}
+
+
+def test_unlinked_missing_object_is_skipped_and_its_record_kept(tag_sync):
+    """UC also says not found for an object the job can't see: keep the record."""
     spark = FakeSpark({"`gone`": "[CATALOG_NOT_FOUND] Catalog 'gone' was not found."})
-    previous = {"TABLE": {"gone.crm.old": {KEY: PII}}, "COLUMN": {}, "SCHEMA": {},
-                "CATALOG": {}}
-    result = _run(tag_sync, spark, ["main.a.one"], previous=previous)
+    result = _run(tag_sync, spark, ["main.a.one"], previous=_previous("gone.crm.old"))
 
     assert result.errors == []
     assert len(result.skipped) == 1 and "gone.crm.old" in result.skipped[0]
-    assert "gone.crm.old" not in result.delivered["TABLE"]
+    assert result.delivered["TABLE"]["gone.crm.old"] == {KEY: PII}
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_linked_missing_object_with_a_record_is_skipped_once_and_kept(tag_sync, partial):
+    spark = FakeSpark({"table_name = 'customers'": "[TABLE_OR_VIEW_NOT_FOUND] x"})
+    direct = tag_sync.build_direct_link_infos([], None, None)
+    result = tag_sync.sync_tags(
+        MagicMock(), spark, [_dataset(tag_sync, "gone.crm.customers")], direct, CFG,
+        tag_sync.TagOwnership(), previous=_previous("gone.crm.customers"),
+        partial=partial,
+    )
+
+    assert result.errors == []
+    assert len(result.skipped) == 1
+    assert result.delivered["TABLE"]["gone.crm.customers"] == {KEY: PII}
 
 
 def test_skip_warning_names_the_object_not_the_error(tag_sync, capsys):

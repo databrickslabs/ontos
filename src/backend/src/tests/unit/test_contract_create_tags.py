@@ -382,6 +382,18 @@ class TestNewVersions:
 
         assert _assigned(db_session, new.id) == expected
 
+    @pytest.mark.parametrize("method", ["create_new_version", "clone_contract_for_new_version"])
+    def test_a_tag_copy_failure_still_creates_the_version(self, db_session: Session, tagged_contract, method):
+        manager, cid, _ = tagged_contract
+        with patch(
+            "src.repositories.tags_repository.entity_tag_repo.add_tag_to_entity",
+            side_effect=SQLAlchemyError("boom"),
+        ):
+            new = getattr(manager, method)(db_session, cid, "2.0.0", current_user="bob")
+
+        assert db_session.get(DataContractDb, new.id) is not None
+        assert _assigned(db_session, new.id) == {}
+
     def test_a_new_version_records_who_copied_the_tags(self, db_session: Session, tagged_contract):
         manager, cid, _ = tagged_contract
 

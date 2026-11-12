@@ -1539,15 +1539,22 @@ class SettingsManager:
         """Give the installed compliance job the new LLM settings (best effort).
 
         Scheduled runs read them from the job's defaults, where they are written
-        when the job is installed or updated (LLM_CHECK rules). A full update, so
-        a job installed before the job took LLM settings gets their task
-        arguments too.
+        when the job is installed or updated (LLM_CHECK rules). A job installed
+        before the job took LLM settings also gets their code and task arguments.
         """
         if not getattr(self, '_jobs', None):
             return
+        # Placeholder values mean "not set" (serverless), as when jobs are installed
+        cluster_id = self._settings.job_cluster_id
+        if cluster_id in ('cluster-id', ''):
+            cluster_id = None
+        from src.controller.jobs_manager import LLM_TASK_ARGUMENTS
+
         try:
-            self._jobs.update_installed_workflow(
-                'compliance_checks', job_cluster_id=self._settings.job_cluster_id,
+            self._jobs.sync_installed_workflow(
+                'compliance_checks',
+                required_arguments=LLM_TASK_ARGUMENTS,
+                job_cluster_id=cluster_id,
             )
         except Exception as e:
             logger.warning(

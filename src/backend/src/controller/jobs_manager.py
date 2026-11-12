@@ -60,6 +60,10 @@ def add_missing_mapped_entries(
 
 
 
+# Task arguments of the LLM job parameters (a job installed before them lacks them)
+LLM_TASK_ARGUMENTS = ['--llm_enabled', '--llm_endpoint', '--llm_check_max_calls_per_run']
+
+
 def _llm_job_parameters(settings: Any) -> Dict[str, str]:
     """The LLM settings a job needs, as job parameters (the job sets them as env vars)."""
     return {
@@ -114,10 +118,8 @@ class JobsManager:
         # Sort by name alphabetically
         return sorted(items, key=lambda x: x["name"].lower())
 
-    def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
-        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
-
-        # Deploy workflow code to workspace if deployer is configured
+    def _deploy_workflow_code(self, workflow_id: str, wf_def: Dict[str, Any]) -> None:
+        """Deploy the workflow's code to the workspace if a deployer is configured."""
         if self._workspace_deployer:
             workflow_dir = self._workflows_root / workflow_id
             if workflow_dir.exists():
@@ -138,6 +140,10 @@ class JobsManager:
                 f"but WorkspaceDeployer is not initialized. Workflow files will NOT be uploaded. "
                 f"The job will be created but will fail at runtime."
             )
+
+    def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
+        self._deploy_workflow_code(workflow_id, wf_def)
 
         # Build job settings kwargs from workflow definition
         tasks = self._build_tasks_from_definition(wf_def)
@@ -525,13 +531,45 @@ class JobsManager:
         )
         return True
 
+    def sync_installed_workflow(
+        self,
+        workflow_id: str,
+        *,
+        required_arguments: List[str],
+        job_cluster_id: Optional[str] = None,
+    ) -> bool:
+        """Give the installed job the current parameters, and its tasks if they're old.
+
+        A job installed by an older version lacks the task arguments the
+        definition added since (``required_arguments``): then its code is
+        redeployed and its tasks and parameters rewritten
+        (:meth:`update_installed_workflow`). Otherwise only the parameters are.
+        Returns whether an installed job was updated.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None:
+            return False
+        job = self._client.jobs.get(job_id=int(installation.job_id))
+        arguments = {
+            argument
+            for task in (getattr(job.settings, 'tasks', None) or [])
+            for argument in (
+                getattr(getattr(task, 'spark_python_task', None), 'parameters', None) or []
+            )
+        }
+        if all(a in arguments for a in required_arguments):
+            return self.refresh_installed_job_parameters(workflow_id)
+        return self.update_installed_workflow(workflow_id, job_cluster_id=job_cluster_id)
+
     def update_installed_workflow(
         self, workflow_id: str, *, job_cluster_id: Optional[str] = None,
     ) -> bool:
-        """Write the current definition's tasks and parameters into the installed job.
+        """Redeploy the workflow's code and write its tasks and parameters into the job.
 
         Unlike :meth:`refresh_installed_job_parameters`, this also gives a job
-        installed by an older version the task arguments the definition added.
+        installed by an older version the code and task arguments added since.
         Only tasks and parameters change: the schedule (and whether it is
         paused), notifications and the rest of the job are kept. Returns whether
         an installed job was updated.
@@ -542,6 +580,7 @@ class JobsManager:
         if installation is None:
             return False
         wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
+        self._deploy_workflow_code(workflow_id, wf_def)
         self._client.jobs.update(
             job_id=int(installation.job_id),
             new_settings=jobs.JobSettings(

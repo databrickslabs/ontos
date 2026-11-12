@@ -491,7 +491,7 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             feature_id="data-domains",
             title=db_domain.name,
             description=getattr(db_domain, 'description', '') or "",
-            link=f"/data-domains/{db_domain.id}",
+            link=f"/settings/data-domains/{db_domain.id}",  # the detail route (app.tsx)
             tags=[],
             extra_data=extra_data,
         )

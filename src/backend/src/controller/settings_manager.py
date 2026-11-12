@@ -1539,12 +1539,16 @@ class SettingsManager:
         """Give the installed compliance job the new LLM settings (best effort).
 
         Scheduled runs read them from the job's defaults, where they are written
-        when the job is installed or updated (LLM_CHECK rules).
+        when the job is installed or updated (LLM_CHECK rules). A full update, so
+        a job installed before the job took LLM settings gets their task
+        arguments too.
         """
         if not getattr(self, '_jobs', None):
             return
         try:
-            self._jobs.refresh_installed_job_parameters('compliance_checks')
+            self._jobs.update_installed_workflow(
+                'compliance_checks', job_cluster_id=self._settings.job_cluster_id,
+            )
         except Exception as e:
             logger.warning(
                 "Could not update the LLM settings of the installed compliance job: %s", e,

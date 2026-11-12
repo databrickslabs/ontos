@@ -525,6 +525,32 @@ class JobsManager:
         )
         return True
 
+    def update_installed_workflow(
+        self, workflow_id: str, *, job_cluster_id: Optional[str] = None,
+    ) -> bool:
+        """Write the current definition's tasks and parameters into the installed job.
+
+        Unlike :meth:`refresh_installed_job_parameters`, this also gives a job
+        installed by an older version the task arguments the definition added.
+        Only tasks and parameters change: the schedule (and whether it is
+        paused), notifications and the rest of the job are kept. Returns whether
+        an installed job was updated.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None:
+            return False
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
+        self._client.jobs.update(
+            job_id=int(installation.job_id),
+            new_settings=jobs.JobSettings(
+                tasks=self._build_tasks_from_definition(wf_def),
+                parameters=self._build_persisted_job_parameters(workflow_id, wf_def),
+            ),
+        )
+        return True
+
     def _build_persisted_job_parameters(
         self, workflow_id: str, wf_def: Dict[str, Any]
     ) -> Any:

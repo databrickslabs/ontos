@@ -119,7 +119,39 @@ def test_changing_the_llm_settings_refreshes_the_installed_job(db_session, monke
 
     manager.update_settings({'llm_endpoint': 'new-endpoint'})
 
-    manager._jobs.refresh_installed_job_parameters.assert_called_once_with(WORKFLOW)
+    manager._jobs.update_installed_workflow.assert_called_once_with(
+        WORKFLOW, job_cluster_id='test-cluster',
+    )
+
+
+def test_a_job_installed_before_gets_the_llm_task_arguments(db_session, llm_settings, monkeypatch):
+    manager = _manager(db_session, llm_settings)
+    monkeypatch.setattr(
+        workflow_installation_repo, 'get_by_workflow_id',
+        MagicMock(return_value=SimpleNamespace(job_id=789)),
+    )
+
+    assert manager.update_installed_workflow(WORKFLOW) is True
+
+    update = manager._client.jobs.update.call_args.kwargs
+    assert update['job_id'] == 789
+    [task] = update['new_settings'].tasks
+    args = task.spark_python_task.parameters
+    assert args[args.index('--llm_endpoint') + 1] == '{{job.parameters.llm_endpoint}}'
+    defaults = {p.name: p.default for p in update['new_settings'].parameters}
+    assert defaults['llm_endpoint'] == 'db-endpoint'
+    # The schedule (and its pause status) is not rewritten
+    assert update['new_settings'].schedule is None
+
+
+def test_nothing_to_update_when_the_job_is_not_installed(db_session, llm_settings, monkeypatch):
+    manager = _manager(db_session, llm_settings)
+    monkeypatch.setattr(
+        workflow_installation_repo, 'get_by_workflow_id', MagicMock(return_value=None),
+    )
+
+    assert manager.update_installed_workflow(WORKFLOW) is False
+    manager._client.jobs.update.assert_not_called()
 
 
 def test_refresh_updates_the_installed_job_defaults(db_session, llm_settings, monkeypatch):

@@ -434,25 +434,22 @@ def update_asset(
     asset_id: UUID,
     request: Request,
     asset_in: AssetUpdate,
-    db: DBSessionDep,
     settings: SettingsDep,
+    db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager=Depends(get_assets_manager),
 ):
-    """Updates an existing asset.
-
-    With the "write asset descriptions to Unity Catalog" setting on, a changed
-    description of a Databricks table, view or column is also written to Unity
-    Catalog as the user. A failed write doesn't fail the save: the response
-    carries a coded warning and the asset's ``description_sync`` state.
-    """
+    """Updates an existing asset."""
     success = False
     details = {"params": {"asset_id": str(asset_id)}}
     try:
         existing = db.get(AssetDb, asset_id)
         previous_description = existing.description if existing is not None else None
         result = manager.update_asset(db=db, asset_id=asset_id, asset_in=asset_in, current_user_id=current_user.email)
+        # With the setting on, a changed table, view or column description is also
+        # written to Unity Catalog as the user. A failed write doesn't fail the save:
+        # the response carries a coded warning and the asset's description_sync state.
         warning, sync_state = UcDescriptionSyncManager(settings).sync_after_update(
             db, asset_id,
             description_sent='description' in asset_in.model_fields_set,

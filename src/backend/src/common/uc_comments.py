@@ -85,14 +85,18 @@ def execute_statement(
     """
     from databricks.sdk.service.sql import StatementState
 
+    deadline = time.monotonic() + timeout_seconds
     resp = ws.statement_execution.execute_statement(
         statement=statement,
         warehouse_id=warehouse_id,
         wait_timeout=f'{min(max(timeout_seconds, 5), 50)}s',
     )
-    deadline = time.monotonic() + timeout_seconds
     while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
         if time.monotonic() > deadline:
+            try:
+                ws.statement_execution.cancel_execution(resp.statement_id)
+            except Exception:
+                pass  # Best effort: the timeout is what the caller hears about
             raise TimeoutError('Timed out waiting for a SQL statement')
         time.sleep(1)
         resp = ws.statement_execution.get_statement(resp.statement_id)

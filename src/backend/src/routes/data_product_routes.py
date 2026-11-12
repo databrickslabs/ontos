@@ -1162,7 +1162,7 @@ async def get_product_linked_assets(
     ``assets`` feature is not granted to them. The caller's access to the
     Data Product itself is the implicit authorization here.
     """
-    from src.controller.assets_manager import assets_manager
+    from src.routes.assets_routes import get_assets_manager
 
     # The PermissionChecker decorator above already verifies the caller has
     # data-products:READ_ONLY at minimum. To prevent a Consumer from peeking
@@ -1242,7 +1242,7 @@ async def get_product_linked_assets(
     asset_ids = list(dpm.list_linked_asset_ids_for_products(
         db, product_ids=[product_id],
     ))
-    return assets_manager.get_all_assets(
+    return get_assets_manager(request).get_all_assets(
         db=db, skip=skip, limit=limit, restrict_to_ids=asset_ids,
     )
 

@@ -313,3 +313,106 @@ class TestRecipientTokens:
 
         row = db_session.query(NotificationDb).one()
         assert (row.recipient, row.recipient_role_id) == ('Data Readers', role.id)
+
+
+# --- 3. AssetOwner / ContractApprover with owners, business roles --------------------
+
+def _entity_owners(db, entity_type, entity_id, emails):
+    from src.db_models.business_owners import BusinessOwnerDb
+    from src.db_models.business_roles import BusinessRoleDb
+
+    role = db.query(BusinessRoleDb).filter(BusinessRoleDb.name == 'Data Owner').first()
+    if role is None:
+        role = BusinessRoleDb(id=uuid.uuid4(), name='Data Owner')
+        db.add(role)
+        db.flush()
+    for email in emails:
+        db.add(BusinessOwnerDb(
+            id=uuid.uuid4(), object_type=entity_type, object_id=entity_id,
+            user_email=email, role_id=role.id, is_active=True,
+        ))
+    db.flush()
+
+
+class TestOwnerTokensWithOwners:
+    def test_contract_approver_notifies_the_owners_run_user_included(self, db_session):
+        _entity_owners(db_session, 'data_contract', 'c1', [RUN_USER, 'owner@example.com'])
+        notifier = _notifier(db_session)
+
+        result = NotifyAction('ContractApprover').execute(
+            _context(notifier, entity_type='data_contract', entity_id='c1'),
+        )
+        notifier.flush(failed=1, passed=0)
+
+        assert result.success is True
+        assert _recipients(db_session) == ['owner@example.com', RUN_USER]
+
+    def test_an_app_role_named_contract_approver_wins(self, db_session):
+        from src.db_models.settings import AppRoleDb
+
+        role = AppRoleDb(id=str(uuid.uuid4()), name='ContractApprover')
+        db_session.add(role)
+        db_session.flush()
+        _entity_owners(db_session, 'data_contract', 'c1', ['owner@example.com'])
+        notifier = _notifier(db_session)
+
+        NotifyAction('ContractApprover').execute(
+            _context(notifier, entity_type='data_contract', entity_id='c1'),
+        )
+        notifier.flush(failed=1, passed=0)
+
+        row = db_session.query(NotificationDb).one()
+        assert (row.recipient, row.recipient_role_id) == ('ContractApprover', role.id)
+
+    def test_asset_owner_is_the_owners_run_user_included(self, db_session):
+        _entity_owners(db_session, 'data_contract', 'c1', [RUN_USER, 'owner@example.com'])
+        notifier = _notifier(db_session)
+
+        result = NotifyAction('AssetOwner').execute(
+            _context(notifier, entity_type='data_contract', entity_id='c1'),
+        )
+        notifier.flush(failed=1, passed=0)
+
+        assert result.success is True
+        assert _recipients(db_session) == ['owner@example.com', RUN_USER]
+
+    def test_asset_owner_without_owners_fails_without_a_fallback(self, db_session):
+        notifier = _notifier(db_session)
+
+        result = NotifyAction('asset_owners').execute(
+            _context(notifier, entity_type='data_contract', entity_id='c1'),
+        )
+
+        assert (result.success, result.code) == (False, 'notify_no_recipients')
+        assert notifier.flush(failed=1, passed=0) == 0
+
+    def test_asset_owner_is_resolved_for_each_entity(self, db_session):
+        _entity_owners(db_session, 'data_contract', 'c1', ['one@example.com'])
+        _entity_owners(db_session, 'data_contract', 'c2', ['two@example.com'])
+        notifier = _notifier(db_session)
+
+        for entity_id in ('c1', 'c2'):
+            NotifyAction('AssetOwner').execute(
+                _context(notifier, entity_type='data_contract', entity_id=entity_id),
+            )
+        notifier.flush(failed=1, passed=0)
+
+        assert _recipients(db_session) == ['one@example.com', 'two@example.com']
+
+    def test_a_business_role_token_notifies_the_holder(self, db_session):
+        # The business-role lookup itself filters a UUID column by string, which the
+        # SQLite test database can't run (see test_business_role_approvers.py)
+        from unittest.mock import patch
+
+        notifier = _notifier(db_session)
+        resolved = [('custodian@example.com', 'role-1')]
+
+        with patch(
+            'src.common.workflow_executor._resolve_role_to_users', return_value=resolved,
+        ) as resolver:
+            result = NotifyAction('business:role-1').execute(_context(notifier))
+        notifier.flush(failed=1, passed=0)
+
+        assert result.success is True
+        assert resolver.call_args.args[1] == 'business:role-1'
+        assert _recipients(db_session) == ['custodian@example.com']

@@ -218,7 +218,7 @@ ON_FAIL NOTIFY 'entity_owner'
   - user emails, and groups as `group:<name>`;
   - app role names or ids;
   - `entity_owner` (or `owner`), `domain_owners`, `business:<role id>`, resolved for each entity; on Unity Catalog objects `owner` is the object's UC owner;
-    `domain_owners` (or `DomainOwner`) and `ContractApprover` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
+    `domain_owners` (or `DomainOwner`) and `ContractApprover` and `AssetOwner` are the owners of the entity's domain / of the entity, the user who started the run included; unlike workflow approvals, nobody else is notified when there are none;
   - a comma-separated list of these.
 
   Keywords such as `owner`, `entity_owner` or `requester` match without case, spaces and underscores (`Owner`, `Entity Owner`). Any other name that is not an app role fails the action (*not a known recipient*); it doesn't become a recipient that no user matches.

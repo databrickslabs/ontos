@@ -44,7 +44,10 @@ logger = get_logger(__name__)
 
 # Recipient tokens whose users depend on the entity (resolved per entity, not cached),
 # compared without case, spaces and underscores
-_ENTITY_TOKENS = {'entityowner', 'owner', 'reviewer', 'domainowner', 'domainowners', 'contractapprover'}
+_ENTITY_TOKENS = {
+    'entityowner', 'owner', 'reviewer', 'domainowner', 'domainowners', 'contractapprover',
+    'assetowner', 'assetowners',
+}
 
 
 # Owner tokens resolved without the approval rules (normalized as above)
@@ -52,6 +55,8 @@ _OWNER_TOKENS = {
     'domainowner': 'DomainOwner',
     'domainowners': 'DomainOwner',
     'contractapprover': 'ContractApprover',
+    'assetowner': 'AssetOwner',
+    'assetowners': 'AssetOwner',
 }
 
 
@@ -216,9 +221,9 @@ class ComplianceRunNotifier:
     def _owner_recipients(
         self, owner_role: str, token: str, step_context,
     ) -> List[Tuple[str, Optional[str]]]:
-        """'DomainOwner' / 'ContractApprover' for a notice: an app role of that name, or of
-        the token as written, wins (as in workflows), else the owners of the entity's
-        domain / of the entity.
+        """'DomainOwner' / 'ContractApprover' / 'AssetOwner' for a notice: an app role of
+        that name, or of the token as written, wins (as in workflows), else the owners of
+        the entity's domain / of the entity.
 
         Not ``_owner_approvers``: its approval rules drop the requester and put the Data
         Stewards and admins in place of missing owners, which a notice must not do.

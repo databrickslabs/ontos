@@ -227,15 +227,18 @@ def test_sdk_already_exists_error_code_is_not_an_error(tag_sync):
     assert result.errors == []
 
 
-def test_tag_key_creation_failure_is_counted_but_the_tag_is_still_set(tag_sync):
-    ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] cannot create tag key")
+def test_tag_key_creation_failure_is_a_warning_when_the_tag_is_set(tag_sync, capsys):
+    ws = _ws_creating_tag_keys_fails("[PERMISSION_DENIED] /secret/path")
     spark = FakeSpark()
     direct = tag_sync.build_direct_link_infos([], None, None)
     result = tag_sync.sync_tags(ws, spark, [_dataset(tag_sync, "main.a.one")],
                                 direct, CFG, tag_sync.TagOwnership(), previous=None)
-    assert any("TABLE main.a.one" in e for e in result.errors)
+    assert result.errors == []
+    assert result.failed_objects == []
     assert any("TABLE main.a.one SET" in q for q in spark.sets())
-    assert result.failed_objects.count("TABLE main.a.one") == 1
+    assert any("TABLE main.a.one" in w for w in result.warnings)
+    out = capsys.readouterr().out
+    assert "TABLE main.a.one" in out and "/secret/path" not in out
 
 
 def test_tag_key_and_write_both_failing_fail_the_object_once(tag_sync):

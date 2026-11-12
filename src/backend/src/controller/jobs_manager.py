@@ -59,6 +59,17 @@ def add_missing_mapped_entries(
     return result
 
 
+
+def _llm_job_parameters(settings: Any) -> Dict[str, str]:
+    """The LLM settings a job needs, as job parameters (the job sets them as env vars)."""
+    return {
+        'llm_enabled': 'true' if getattr(settings, 'LLM_ENABLED', False) else 'false',
+        'llm_endpoint': str(getattr(settings, 'LLM_ENDPOINT', None) or ''),
+        'llm_check_max_calls_per_run': str(
+            getattr(settings, 'COMPLIANCE_LLM_CHECK_MAX_CALLS_PER_RUN', 200)
+        ),
+    }
+
 class JobsManager:
     def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
@@ -483,28 +494,36 @@ class JobsManager:
         )
         self._db.commit()
 
-        # A Databricks schedule starts the job directly and therefore does not pass
-        # through run_job(), where Ontos normally injects saved configuration and
-        # app database parameters. Keep the installed job defaults in sync so
-        # scheduled runs receive the same effective parameters as manual runs.
-        installation = workflow_installation_repo.get_by_workflow_id(
-            self._db, workflow_id=workflow_id
-        )
-        if installation is not None:
-            wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
-            if 'parameters' in wf_def:
-                self._client.jobs.update(
-                    job_id=int(installation.job_id),
-                    new_settings=jobs.JobSettings(
-                        parameters=self._build_persisted_job_parameters(
-                            workflow_id, wf_def
-                        )
-                    ),
-                )
+        self.refresh_installed_job_parameters(workflow_id)
         
         # Return as Pydantic model
         config_dict = workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
         return WorkflowConfiguration(workflow_id=workflow_id, configuration=config_dict or {})
+
+    def refresh_installed_job_parameters(self, workflow_id: str) -> bool:
+        """Write the effective parameters into the installed job's defaults.
+
+        A Databricks schedule starts the job directly and therefore does not pass
+        through run_job(), where Ontos normally injects saved configuration and
+        app parameters. Keeping the installed job defaults in sync gives scheduled
+        runs the same effective parameters as manual runs. Returns whether an
+        installed job was updated.
+        """
+        installation = workflow_installation_repo.get_by_workflow_id(
+            self._db, workflow_id=workflow_id
+        )
+        if installation is None:
+            return False
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
+        if 'parameters' not in wf_def:
+            return False
+        self._client.jobs.update(
+            job_id=int(installation.job_id),
+            new_settings=jobs.JobSettings(
+                parameters=self._build_persisted_job_parameters(workflow_id, wf_def)
+            ),
+        )
+        return True
 
     def _build_persisted_job_parameters(
         self, workflow_id: str, wf_def: Dict[str, Any]
@@ -585,6 +604,9 @@ class JobsManager:
                 # Telemetry parameters for WorkspaceClient identification
                 'product_name': 'ontos',
                 'product_version': __version__,
+                # The app's effective LLM settings (Settings > LLM over the env), for
+                # the LLM_CHECK rules of compliance runs
+                **_llm_job_parameters(self._settings),
             }
             # Only inject if workflow YAML defines these parameters
             try:

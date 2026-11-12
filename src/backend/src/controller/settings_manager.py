@@ -1535,6 +1535,21 @@ class SettingsManager:
             error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
             raise RuntimeError(error_summary)
 
+    def _refresh_llm_job_parameters(self) -> None:
+        """Give the installed compliance job the new LLM settings (best effort).
+
+        Scheduled runs read them from the job's defaults, where they are written
+        when the job is installed or updated (LLM_CHECK rules).
+        """
+        if not getattr(self, '_jobs', None):
+            return
+        try:
+            self._jobs.refresh_installed_job_parameters('compliance_checks')
+        except Exception as e:
+            logger.warning(
+                "Could not update the LLM settings of the installed compliance job: %s", e,
+            )
+
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
         git_values_before = self._git_setting_values()
@@ -1647,6 +1662,9 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'LLM_ENDPOINT', value)
             self._settings.LLM_ENDPOINT = value
             logger.info(f"Updated LLM_ENDPOINT to: {value}")
+
+        if 'llm_enabled' in settings or 'llm_endpoint' in settings:
+            self._refresh_llm_job_parameters()
         
         if 'llm_system_prompt' in settings:
             value = settings.get('llm_system_prompt') or None

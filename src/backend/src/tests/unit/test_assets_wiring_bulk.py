@@ -83,3 +83,19 @@ def test_bulk_import_updates_the_search_index_for_updates_by_identity():
 
     assert result.updated == 1, result.items
     wired._update_search_index.assert_called_once_with(updated)
+
+
+def test_bulk_import_keeps_going_when_indexing_fails():
+    wired = MagicMock(spec=AssetsManager)
+    wired._update_search_index.side_effect = RuntimeError("index down")
+    manager = AssetBulkManager(assets_manager=wired)
+    asset = MagicMock()
+    asset.id = "11111111-1111-1111-1111-111111111111"
+
+    manager._index_asset(asset)
+
+    wired._update_search_index.assert_called_once_with(asset)
+
+
+def test_bulk_manager_without_assets_manager_skips_indexing():
+    AssetBulkManager()._index_asset(MagicMock())
